@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from dataclasses import dataclass, replace
 
 from a2a.types import (
     APIKeySecurityScheme,
@@ -17,101 +17,146 @@ from a2a.types import (
 )
 
 
-def bearer_scheme(*, bearer_format: str = "JWT", description: str = "") -> SecurityScheme:
+@dataclass(frozen=True, slots=True)
+class Scheme:
+    """A named security scheme: binds a card-level identifier to a proto scheme
+    and optional OAuth2/OIDC scopes. Use the ``*_scheme(name=...)`` factories
+    below to construct one; pass ``Scheme`` objects to ``require(...)`` to
+    build a :class:`Requirement`. ``with_scopes(...)`` returns a copy with the
+    given scopes attached."""
+
+    name: str
+    scheme: SecurityScheme
+    scopes: tuple[str, ...] = ()
+
+    def with_scopes(self, *scopes: str) -> "Scheme":
+        """Return a copy of this scheme with the given OAuth2/OIDC scopes."""
+        return replace(self, scopes=scopes)
+
+
+@dataclass(frozen=True, slots=True)
+class Requirement:
+    """A single ``AgentCard.security_requirements`` entry: an AND-set of named
+    schemes that must all be presented together. Multiple ``Requirement``s on
+    a card are OR-ed (any one suffices). Built via ``require(...)``."""
+
+    schemes: tuple[Scheme, ...]
+
+    def to_proto(self) -> SecurityRequirement:
+        """Render this requirement as a raw a2a-sdk ``SecurityRequirement``."""
+        return SecurityRequirement(
+            schemes={s.name: StringList(list=list(s.scopes)) for s in self.schemes},
+        )
+
+
+def bearer_scheme(*, name: str, bearer_format: str = "JWT", description: str = "") -> Scheme:
     """HTTP Bearer auth declaration (``Authorization: Bearer <token>``)."""
-    return SecurityScheme(
-        http_auth_security_scheme=HTTPAuthSecurityScheme(
-            scheme="bearer",
-            bearer_format=bearer_format,
-            description=description,
+    return Scheme(
+        name=name,
+        scheme=SecurityScheme(
+            http_auth_security_scheme=HTTPAuthSecurityScheme(
+                scheme="bearer",
+                bearer_format=bearer_format,
+                description=description,
+            ),
         ),
     )
 
 
-def http_auth_scheme(*, scheme: str, bearer_format: str = "", description: str = "") -> SecurityScheme:
+def http_auth_scheme(*, name: str, scheme: str, bearer_format: str = "", description: str = "") -> Scheme:
     """HTTP authentication declaration (basic, digest, bearer with custom format, ...)."""
-    return SecurityScheme(
-        http_auth_security_scheme=HTTPAuthSecurityScheme(
-            scheme=scheme,
-            bearer_format=bearer_format,
-            description=description,
+    return Scheme(
+        name=name,
+        scheme=SecurityScheme(
+            http_auth_security_scheme=HTTPAuthSecurityScheme(
+                scheme=scheme,
+                bearer_format=bearer_format,
+                description=description,
+            ),
         ),
     )
 
 
-def api_key_scheme(*, name: str, location: str = "header", description: str = "") -> SecurityScheme:
-    """API key auth declaration. ``location`` is ``"header"``, ``"query"``, or ``"cookie"``."""
-    return SecurityScheme(
-        api_key_security_scheme=APIKeySecurityScheme(
-            name=name,
-            location=location,
-            description=description,
+def api_key_scheme(*, name: str, key_name: str, location: str = "header", description: str = "") -> Scheme:
+    """API key auth declaration. ``key_name`` is the header/query/cookie key
+    sent by the client; ``location`` is ``"header"``, ``"query"``, or ``"cookie"``."""
+    return Scheme(
+        name=name,
+        scheme=SecurityScheme(
+            api_key_security_scheme=APIKeySecurityScheme(
+                name=key_name,
+                location=location,
+                description=description,
+            ),
         ),
     )
 
 
 def oauth2_scheme(
     *,
+    name: str,
     flows: OAuthFlows,
     oauth2_metadata_url: str = "",
     description: str = "",
-) -> SecurityScheme:
+) -> Scheme:
     """OAuth2 auth declaration wrapping a pre-built ``OAuthFlows``."""
-    return SecurityScheme(
-        oauth2_security_scheme=OAuth2SecurityScheme(
-            flows=flows,
-            oauth2_metadata_url=oauth2_metadata_url,
-            description=description,
+    return Scheme(
+        name=name,
+        scheme=SecurityScheme(
+            oauth2_security_scheme=OAuth2SecurityScheme(
+                flows=flows,
+                oauth2_metadata_url=oauth2_metadata_url,
+                description=description,
+            ),
         ),
     )
 
 
-def open_id_connect_scheme(*, url: str, description: str = "") -> SecurityScheme:
+def open_id_connect_scheme(*, name: str, url: str, description: str = "") -> Scheme:
     """OpenID Connect discovery URL declaration."""
-    return SecurityScheme(
-        open_id_connect_security_scheme=OpenIdConnectSecurityScheme(
-            open_id_connect_url=url,
-            description=description,
+    return Scheme(
+        name=name,
+        scheme=SecurityScheme(
+            open_id_connect_security_scheme=OpenIdConnectSecurityScheme(
+                open_id_connect_url=url,
+                description=description,
+            ),
         ),
     )
 
 
-def mtls_scheme(*, description: str = "") -> SecurityScheme:
+def mtls_scheme(*, name: str, description: str = "") -> Scheme:
     """Mutual TLS declaration (client-cert auth)."""
-    return SecurityScheme(
-        mtls_security_scheme=MutualTlsSecurityScheme(description=description),
+    return Scheme(
+        name=name,
+        scheme=SecurityScheme(
+            mtls_security_scheme=MutualTlsSecurityScheme(description=description),
+        ),
     )
 
 
-def require(*schemes_no_scopes: str, **schemes_with_scopes: Iterable[str]) -> SecurityRequirement:
-    """Build a ``SecurityRequirement`` from named schemes.
+def require(*schemes: Scheme) -> Requirement:
+    """Build a :class:`Requirement` from one or more ``Scheme`` objects.
 
-    Positional ``str`` arguments list schemes that don't need scopes
-    (Bearer, API-key, mTLS, etc.). Keyword arguments carry scopes for
-    schemes that do (OAuth2 / OIDC). Scheme names that aren't valid
-    Python identifiers (e.g. ``"X-My-Scheme"``) can be passed
-    positionally.
-
-    All schemes in a single ``require()`` call must be satisfied
-    together (AND); multiple ``SecurityRequirement`` entries on the card
-    are OR-ed (any one suffices).
+    All schemes in a single ``require()`` call must be presented together
+    (AND). Multiple ``Requirement`` entries on a card are OR-ed (any one
+    suffices). Attach OAuth2/OIDC scopes via :meth:`Scheme.with_scopes`.
 
     Example::
 
-        require("bearer")  # bearer alone, no scopes
-        require("bearer", "x_api_key")  # AND of bearer + x_api_key
-        require(oauth2=["read", "write"])  # oauth2 with two scopes
-        require("bearer", oauth2=["read"])  # AND: bearer (no scopes) + oauth2 (with scopes)
-        require("X-My-Scheme")  # non-identifier name
+        bearer = bearer_scheme(name="bearer")
+        oauth = oauth2_scheme(name="oauth", flows=...)
+
+        require(bearer)  # bearer alone
+        require(bearer, oauth.with_scopes("read"))  # AND
+        require(oauth.with_scopes("read", "write"))  # scoped oauth alone
     """
-    combined: dict[str, list[str]] = {name: [] for name in schemes_no_scopes}
-    combined.update({name: list(scopes) for name, scopes in schemes_with_scopes.items()})
-    return SecurityRequirement(
-        schemes={name: StringList(list=v) for name, v in combined.items()},
-    )
+    return Requirement(schemes=schemes)
 
 
 __all__ = (
+    "Requirement",
+    "Scheme",
     "api_key_scheme",
     "bearer_scheme",
     "http_auth_scheme",

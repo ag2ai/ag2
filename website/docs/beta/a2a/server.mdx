@@ -166,15 +166,15 @@ await asyncio.gather(
 | `#!python push_notifications` | Toggles `#!python capabilities.push_notifications` on the card |
 | `#!python provider` | `#!python AgentProvider` block (organization, URL) |
 | `#!python documentation_url` / `#!python icon_url` | Discovery metadata |
-| `#!python security_schemes` / `#!python security_requirements` | Auth declarations — see below |
+| `#!python security` | Auth declarations — see below |
 | `#!python tenants` | `#!python Mapping[TransportName, str]` — surface a per-transport tenant on the corresponding `#!python AgentInterface.tenant` |
 | `#!python rest_url` / `#!python rest_path_prefix` / `#!python grpc_url` | Per-transport URL overrides for multi-transport cards |
 
 ### Declaring Authentication
 
-`#!python autogen.beta.a2a.security` ships factories for every A2A-recognised scheme. Combine them with `#!python require()` to publish auth declarations on the card.
+`#!python autogen.beta.a2a.security` ships factories for every A2A-recognised scheme. Each factory returns a typed `#!python Scheme` object that carries its card-level binding name. Pass them to `#!python require(...)` to build `#!python Requirement` entries; `#!python build_card` auto-derives the card's `#!python security_schemes` from the schemes referenced in `#!python security=` — no duplicate declarations.
 
-```python linenums="1" hl_lines="3 7-13 15-16"
+```python linenums="1" hl_lines="3 7-8 12-15"
 from autogen.beta.a2a import A2AServer, build_card
 from autogen.beta.a2a.security import (
     bearer_scheme,
@@ -182,40 +182,35 @@ from autogen.beta.a2a.security import (
     require,
 )
 
-schemes = {
-    "bearer": bearer_scheme(bearer_format="JWT"),
-    "x_api_key": api_key_scheme(name="X-API-Key", location="header"),
-}
+bearer = bearer_scheme(name="bearer", bearer_format="JWT")
+api_key = api_key_scheme(name="x_api_key", key_name="X-API-Key", location="header")
 
 card = build_card(
     agent,
     url="http://127.0.0.1:8000",
-    security_schemes=schemes,
-    security_requirements=[require("bearer"), require("x_api_key")],
+    security=[require(bearer), require(api_key)],
 )
 ```
 
 | Helper | Scheme |
 |---|---|
-| `#!python bearer_scheme(bearer_format=..., description=...)` | HTTP Bearer (e.g. JWT) |
-| `#!python http_auth_scheme(scheme=..., ...)` | Any other HTTP auth scheme (basic, digest, custom bearer formats) |
-| `#!python api_key_scheme(name=..., location=...)` | API key in header / query / cookie |
-| `#!python oauth2_scheme(flows=..., oauth2_metadata_url=...)` | OAuth2 wrapping a pre-built `#!python OAuthFlows` |
-| `#!python open_id_connect_scheme(url=...)` | OpenID Connect discovery URL |
-| `#!python mtls_scheme()` | Mutual TLS client-cert auth |
+| `#!python bearer_scheme(name=..., bearer_format=..., description=...)` | HTTP Bearer (e.g. JWT) |
+| `#!python http_auth_scheme(name=..., scheme=..., ...)` | Any other HTTP auth scheme (basic, digest, custom bearer formats) |
+| `#!python api_key_scheme(name=..., key_name=..., location=...)` | API key in header / query / cookie. `#!python name` is the card binding; `#!python key_name` is the header/query/cookie key sent by the client. |
+| `#!python oauth2_scheme(name=..., flows=..., oauth2_metadata_url=...)` | OAuth2 wrapping a pre-built `#!python OAuthFlows` |
+| `#!python open_id_connect_scheme(name=..., url=...)` | OpenID Connect discovery URL |
+| `#!python mtls_scheme(name=...)` | Mutual TLS client-cert auth |
 
 #### Combining requirements: AND vs OR
 
-The `#!python security_requirements` list holds independent rules — clients only need to satisfy **one** of them (rules are OR-ed). Inside a single `#!python require(...)` call, **all** named schemes must be presented together (arguments are AND-ed).
-
-Schemes that don't need scopes (Bearer, API-key, mTLS) go as positional `#!python str` args; schemes with scopes (OAuth2 / OIDC) go as kwargs.
+The `#!python security=` list holds independent rules — clients only need to satisfy **one** of them (entries are OR-ed). Inside a single `#!python require(...)` call, **all** passed schemes must be presented together (arguments are AND-ed). Attach OAuth2/OIDC scopes via `#!python scheme.with_scopes(...)`.
 
 **Example A — accept Bearer OR API-key** (two separate `#!python require()` calls):
 
 ```python linenums="1"
-security_requirements=[
-    require("bearer"),
-    require("x_api_key"),
+security=[
+    require(bearer),
+    require(api_key),
 ]
 ```
 
@@ -229,8 +224,8 @@ security_requirements=[
 **Example B — require Bearer AND API-key together** (one `#!python require()` with two args):
 
 ```python linenums="1"
-security_requirements=[
-    require("bearer", "x_api_key"),
+security=[
+    require(bearer, api_key),
 ]
 ```
 
@@ -243,15 +238,16 @@ security_requirements=[
 **Example C — mixing scopes** (OAuth2 needs scopes, Bearer doesn't):
 
 ```python linenums="1"
-security_requirements=[
-    require("bearer", oauth2=["read", "write"]),
+security=[
+    require(bearer, oauth.with_scopes("read", "write")),
 ]
 ```
 
-Scheme names that aren't valid Python identifiers (e.g. `#!python "X-My-Scheme"`) work as positional args too:
+Scheme binding names are arbitrary strings — pass any value to `#!python name=`, including non-identifier forms like `#!python "X-My-Scheme"`:
 
 ```python linenums="1"
-require("X-My-Scheme")
+custom = bearer_scheme(name="X-My-Scheme")
+require(custom)
 ```
 
 !!! note

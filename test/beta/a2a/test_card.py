@@ -57,13 +57,10 @@ class TestSecurity:
         assert dict(card.security_schemes) == {}
         assert list(card.security_requirements) == []
 
-    def test_security_schemes_and_requirements(self) -> None:
-        card = build_card(
-            _agent(),
-            url="http://test",
-            security_schemes={"bearer": bearer_scheme(description="JWT auth")},
-            security_requirements=[require(bearer=[])],
-        )
+    def test_schemes_auto_derived_from_requirements(self) -> None:
+        bearer = bearer_scheme(name="bearer", description="JWT auth")
+
+        card = build_card(_agent(), url="http://test", security=[require(bearer)])
 
         assert dict(card.security_schemes) == {
             "bearer": SecurityScheme(
@@ -74,15 +71,12 @@ class TestSecurity:
                 ),
             ),
         }
-        assert list(card.security_requirements) == [require(bearer=[])]
+        assert list(card.security_requirements) == [require(bearer).to_proto()]
 
     def test_round_trip_preserves_schemes(self) -> None:
-        card = build_card(
-            _agent(),
-            url="http://test",
-            security_schemes={"bearer": bearer_scheme()},
-            security_requirements=[require(bearer=[])],
-        )
+        bearer = bearer_scheme(name="bearer")
+
+        card = build_card(_agent(), url="http://test", security=[require(bearer)])
 
         decoded = AgentCard.FromString(card.SerializeToString())
 
@@ -90,15 +84,33 @@ class TestSecurity:
 
     def test_oauth2_scoped_requirement(self) -> None:
         flows = OAuthFlows(client_credentials=ClientCredentialsOAuthFlow(token_url="https://x/token"))
+        oauth = oauth2_scheme(name="oauth", flows=flows)
+
         card = build_card(
             _agent(),
             url="http://test",
-            security_schemes={"oauth": oauth2_scheme(flows=flows)},
-            security_requirements=[require(oauth=["read", "write"])],
+            security=[require(oauth.with_scopes("read", "write"))],
         )
 
-        assert list(card.security_requirements) == [require(oauth=["read", "write"])]
-        assert dict(card.security_schemes) == {"oauth": oauth2_scheme(flows=flows)}
+        assert list(card.security_requirements) == [require(oauth.with_scopes("read", "write")).to_proto()]
+        assert dict(card.security_schemes) == {"oauth": oauth.scheme}
+
+    def test_scheme_deduped_across_requirements(self) -> None:
+        bearer = bearer_scheme(name="bearer")
+        oauth = oauth2_scheme(name="oauth", flows=OAuthFlows())
+
+        card = build_card(
+            _agent(),
+            url="http://test",
+            security=[
+                require(bearer),
+                require(oauth.with_scopes("read")),
+                require(bearer, oauth.with_scopes("write")),
+            ],
+        )
+
+        assert set(card.security_schemes.keys()) == {"bearer", "oauth"}
+        assert len(card.security_requirements) == 3
 
 
 class TestProviderAndBranding:

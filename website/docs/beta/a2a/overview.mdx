@@ -65,7 +65,7 @@ Sub-modules:
 |---|---|
 | `#!python autogen.beta.a2a.tasks` | `#!python list_tasks`, `#!python get_task`, `#!python cancel_task`, `#!python ListedTasks` |
 | `#!python autogen.beta.a2a.push` | `#!python A2APushConfig`, `#!python A2APushAuthentication`, CRUD helpers |
-| `#!python autogen.beta.a2a.security` | Security-scheme factories (`#!python bearer_scheme`, `#!python api_key_scheme`, `#!python oauth2_scheme`, `#!python mtls_scheme`, `#!python http_auth_scheme`, `#!python open_id_connect_scheme`) and the `#!python require()` builder for `#!python AgentCard` auth declarations |
+| `#!python autogen.beta.a2a.security` | `#!python Scheme` / `#!python Requirement` types, scheme factories (`#!python bearer_scheme`, `#!python api_key_scheme`, `#!python oauth2_scheme`, `#!python mtls_scheme`, `#!python http_auth_scheme`, `#!python open_id_connect_scheme`) and the `#!python require()` builder for `#!python AgentCard` auth declarations |
 | `#!python autogen.beta.a2a.events` | Typed `#!python A2AEvent` wrappers surfaced into the AG2 stream — `#!python A2ATaskSnapshot`, `#!python A2ATaskStatusUpdate`, `#!python A2ATaskArtifactUpdate`, `#!python A2ATextArtifact`, `#!python A2AToolCallArtifact`, `#!python A2AMessage` |
 | `#!python autogen.beta.a2a.errors` | Exception hierarchy — `#!python A2AError`, `#!python A2ATaskTerminalError`, `#!python A2AReconnectError`, `#!python A2AInvalidCardError`, `#!python A2AClientToolsNotSupportedError` |
 | `#!python autogen.beta.a2a.transports` | `#!python TransportName` — `#!python Literal["jsonrpc", "rest", "grpc"]` — plus low-level `#!python build_*` builders |

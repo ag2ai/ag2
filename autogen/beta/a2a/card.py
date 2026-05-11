@@ -12,8 +12,6 @@ from a2a.types import (
     AgentInterface,
     AgentProvider,
     AgentSkill,
-    SecurityRequirement,
-    SecurityScheme,
 )
 from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
 
@@ -21,6 +19,7 @@ from autogen.beta.agent import Agent
 from autogen.beta.tools.skills.local_skills import SkillsToolkit
 
 from .extension import EXTENSION_URI
+from .security import Requirement, Scheme
 from .transports import TransportName
 
 _DEFAULT_VERSION = "1.0.0"
@@ -40,8 +39,7 @@ def build_card(
     description: str | None = None,
     push_notifications: bool = False,
     skills: Sequence[AgentSkill] | None = None,
-    security_schemes: Mapping[str, SecurityScheme] | None = None,
-    security_requirements: Sequence[SecurityRequirement] = (),
+    security: Sequence[Requirement] = (),
     provider: AgentProvider | None = None,
     documentation_url: str | None = None,
     icon_url: str | None = None,
@@ -66,9 +64,13 @@ def build_card(
     back to a single skill derived from ``agent.name`` /
     ``agent._system_prompt`` so the card stays spec-compliant.
 
-    ``security_schemes`` / ``security_requirements`` advertise auth
-    declarations. ``tenants`` maps a transport name to a tenant string
-    surfaced on the corresponding ``AgentInterface.tenant``.
+    ``security`` is a sequence of :class:`Requirement` objects built via
+    ``require(scheme, ...)``. Each entry is an AND-set of schemes; the
+    list itself is OR-ed (any one requirement suffices). Underlying
+    ``security_schemes`` on the card are auto-derived from the schemes
+    referenced in ``security`` — no duplicate declarations needed.
+    ``tenants`` maps a transport name to a tenant string surfaced on the
+    corresponding ``AgentInterface.tenant``.
     """
     if "grpc" in transports and grpc_url is None:
         raise ValueError("grpc_url is required when 'grpc' is in transports")
@@ -103,10 +105,13 @@ def build_card(
             tenants=tenants,
         ),
     }
-    if security_schemes:
-        card_kwargs["security_schemes"] = dict(security_schemes)
-    if security_requirements:
-        card_kwargs["security_requirements"] = list(security_requirements)
+    if security:
+        seen: dict[str, Scheme] = {}
+        for req in security:
+            for scheme in req.schemes:
+                seen[scheme.name] = scheme
+        card_kwargs["security_schemes"] = {name: s.scheme for name, s in seen.items()}
+        card_kwargs["security_requirements"] = [r.to_proto() for r in security]
     if provider is not None:
         card_kwargs["provider"] = provider
     if documentation_url is not None:
