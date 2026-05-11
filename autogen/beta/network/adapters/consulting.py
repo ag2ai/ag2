@@ -44,7 +44,9 @@ from ..views.base import ViewPolicy
 from ..views.builtin import FullTranscript
 from .base import (
     AdapterResult,
+    default_build_packet_envelope,
     default_build_round_envelope,
+    default_build_text_envelope,
     default_extract_turn_input,
     default_render_envelope,
 )
@@ -234,3 +236,51 @@ class ConsultingAdapter:
 
     def render_envelope(self, envelope):
         return default_render_envelope(envelope)
+
+    def tools_for(self, client, metadata, state, participant_id):
+        """Consulting offers ``say`` to the participant whose turn it is.
+
+        State gating: the initiator has the floor until they send the
+        prompt; the respondent has the floor after the prompt lands and
+        before they reply. Once the respondent replies the channel
+        auto-closes — no further turns.
+        """
+        # Late import to avoid a client→adapters→client cycle at module
+        # import time. Tools live in client/ because they bind to
+        # ``AgentClient``; adapters live one layer lower in the import
+        # graph.
+        from ..client.tools.say import make_say_tool  # noqa: PLC0415
+
+        initiator_id = next(
+            (p.agent_id for p in metadata.participants if p.role == ParticipantRole.INITIATOR),
+            None,
+        )
+        if participant_id == initiator_id and not state.initiator_sent:
+            return [make_say_tool(client)]
+        if participant_id != initiator_id and state.initiator_sent and not state.respondent_replied:
+            return [make_say_tool(client)]
+        return []
+
+    def build_text_envelope(self, channel_id, sender_id, text, *, audience=None, causation_id=None):
+        return default_build_text_envelope(channel_id, sender_id, text, audience=audience, causation_id=causation_id)
+
+    def build_packet_envelope(
+        self,
+        channel_id,
+        sender_id,
+        body,
+        *,
+        handoff=None,
+        context_set=None,
+        audience=None,
+        causation_id=None,
+    ):
+        return default_build_packet_envelope(
+            channel_id,
+            sender_id,
+            body,
+            handoff=handoff,
+            context_set=context_set,
+            audience=audience,
+            causation_id=causation_id,
+        )

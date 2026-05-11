@@ -38,7 +38,9 @@ from ..views.base import ViewPolicy
 from ..views.builtin import WindowedSummary
 from .base import (
     AdapterResult,
+    default_build_packet_envelope,
     default_build_round_envelope,
+    default_build_text_envelope,
     default_extract_turn_input,
     default_render_envelope,
 )
@@ -209,3 +211,36 @@ class DiscussionAdapter:
 
     def render_envelope(self, envelope):
         return default_render_envelope(envelope)
+
+    def tools_for(self, client, metadata, state, participant_id):
+        """Discussion offers ``say`` only when it is this participant's
+        round (round-robin ordering)."""
+        from ..client.tools.say import make_say_tool  # noqa: PLC0415
+
+        if state.expected_next_speaker == participant_id:
+            return [make_say_tool(client)]
+        return []
+
+    def build_text_envelope(self, channel_id, sender_id, text, *, audience=None, causation_id=None):
+        return default_build_text_envelope(channel_id, sender_id, text, audience=audience, causation_id=causation_id)
+
+    def build_packet_envelope(
+        self,
+        channel_id,
+        sender_id,
+        body,
+        *,
+        handoff=None,
+        context_set=None,
+        audience=None,
+        causation_id=None,
+    ):
+        return default_build_packet_envelope(
+            channel_id,
+            sender_id,
+            body,
+            handoff=handoff,
+            context_set=context_set,
+            audience=audience,
+            causation_id=causation_id,
+        )

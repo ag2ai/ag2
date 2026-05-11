@@ -13,6 +13,20 @@ Key invariants:
 * ``fold`` is called once per WAL append by the hub, and called
   repeatedly during ``Hub.hydrate()`` to rebuild state from disk. It
   must be a pure function.
+
+Three layers of surface per adapter:
+
+* **Capabilities** — what the hub calls (``validate_create`` /
+  ``validate_send`` / ``fold`` / ``on_accepted`` / ``initial_state``).
+* **Envelope helpers** (``build_text_envelope`` /
+  ``build_packet_envelope``) — pure constructors any client uses to
+  produce correctly-shaped envelopes for this adapter's protocol.
+  Framework-agnostic; not LLM-specific.
+* **LLM tools** (``tools_for``) — the AG2-LLM-facing presentation
+  layer. The default notify handler resolves these per turn and merges
+  them with the identity-level cross-cutting tools attached by
+  :class:`NetworkPlugin`. Adapters that take no LLM input (e.g.
+  workflow, where handoff tools are user-authored) return ``[]``.
 """
 
 from dataclasses import dataclass
@@ -21,22 +35,28 @@ from typing import TYPE_CHECKING, Protocol
 from autogen.beta.events import Input
 
 from ..channel import ChannelManifest, ChannelMetadata, ChannelState
-from ..envelope import EV_TEXT, Envelope
+from ..envelope import EV_PACKET, EV_TEXT, Envelope
+from ..handoff import Handoff
 from ..views.base import ViewPolicy
 
 if TYPE_CHECKING:
     from autogen.beta.agent import AgentReply
     from autogen.beta.events import BaseEvent
+    from autogen.beta.tools import Tool
 
+    from ..client.agent_client import AgentClient
     from ..hub.core import Hub
 
 __all__ = (
     "AdapterResult",
     "AdapterState",
     "ChannelAdapter",
+    "default_build_packet_envelope",
     "default_build_round_envelope",
+    "default_build_text_envelope",
     "default_extract_turn_input",
     "default_render_envelope",
+    "default_tools_for",
 )
 
 
@@ -171,6 +191,67 @@ class ChannelAdapter(Protocol):
         """
         ...
 
+    def tools_for(
+        self,
+        client: "AgentClient",
+        metadata: ChannelMetadata,
+        state: AdapterState,
+        participant_id: str,
+    ) -> "list[Tool]":
+        """Return the LLM tools this adapter offers a participant.
+
+        Resolved per turn by the default notify handler and merged
+        into the per-call ``tools=`` override passed to ``agent.ask``.
+        Adapters that take no LLM input (e.g. workflow, where handoff
+        tools are user-authored) return ``[]``.
+
+        Adapters gate on ``state`` and ``participant_id`` — e.g. the
+        discussion adapter offers ``say`` only when it is this
+        participant's round; consulting offers ``say`` only to the
+        participant whose turn it is in the 1Q1R handshake.
+        """
+        ...
+
+    def build_text_envelope(
+        self,
+        channel_id: str,
+        sender_id: str,
+        text: str,
+        *,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
+        """Construct an ``EV_TEXT`` envelope shaped for this adapter.
+
+        Layer-2 helper — any client (AG2 ``AgentClient``, ``HumanClient``,
+        non-AG2 bridge) uses this to build correctly-shaped envelopes
+        without going through the LLM tool decorator system. Default
+        impl (``default_build_text_envelope``) is what consulting /
+        conversation / discussion adapters use; workflow overrides to
+        wrap text in ``EV_PACKET``.
+        """
+        ...
+
+    def build_packet_envelope(
+        self,
+        channel_id: str,
+        sender_id: str,
+        body: str,
+        *,
+        handoff: "Handoff | None" = None,
+        context_set: dict | None = None,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
+        """Construct an ``EV_PACKET`` envelope shaped for this adapter.
+
+        Layer-2 helper. Workflow uses ``handoff`` / ``context_set`` to
+        encode routing + variable mutations into one atomic round
+        capture; other adapters typically delegate to
+        ``default_build_packet_envelope`` (no handoff, no context_set).
+        """
+        ...
+
 
 def default_extract_turn_input(envelope: Envelope) -> str | None:
     """Default ``extract_turn_input``: decode ``EV_TEXT`` only.
@@ -222,3 +303,71 @@ def default_render_envelope(envelope: Envelope) -> str | None:
         text = envelope.event_data.get("text", "")
         return text if isinstance(text, str) else None
     return None
+
+
+def default_tools_for(
+    client: "AgentClient",
+    metadata: ChannelMetadata,
+    state: AdapterState,
+    participant_id: str,
+) -> "list[Tool]":
+    """Default ``tools_for``: return ``[]``.
+
+    Adapters that accept LLM-driven sends override to return the
+    appropriate per-channel tool set (e.g. ``[make_say_tool(client)]``
+    for free-form text channels).
+    """
+    return []
+
+
+def default_build_text_envelope(
+    channel_id: str,
+    sender_id: str,
+    text: str,
+    *,
+    audience: list[str] | None = None,
+    causation_id: str | None = None,
+) -> Envelope:
+    """Default ``build_text_envelope``: emit ``EV_TEXT(text)``."""
+    return Envelope(
+        channel_id=channel_id,
+        sender_id=sender_id,
+        audience=audience,
+        event_type=EV_TEXT,
+        event_data={"text": text},
+        causation_id=causation_id,
+    )
+
+
+def default_build_packet_envelope(
+    channel_id: str,
+    sender_id: str,
+    body: str,
+    *,
+    handoff: "Handoff | None" = None,
+    context_set: dict | None = None,
+    audience: list[str] | None = None,
+    causation_id: str | None = None,
+) -> Envelope:
+    """Default ``build_packet_envelope``: emit ``EV_PACKET`` with body +
+    optional routing.
+
+    ``routing`` carries ``{"kind": "handoff", "target": ..., "reason": ...}``
+    when ``handoff`` is set. ``context_set`` populates ``context``.
+    """
+    event_data: dict[str, object] = {"body": body}
+    if handoff is not None:
+        routing: dict[str, object] = {"kind": "handoff", "target": handoff.target}
+        if handoff.reason:
+            routing["reason"] = handoff.reason
+        event_data["routing"] = routing
+    if context_set:
+        event_data["context"] = dict(context_set)
+    return Envelope(
+        channel_id=channel_id,
+        sender_id=sender_id,
+        audience=audience,
+        event_type=EV_PACKET,
+        event_data=event_data,
+        causation_id=causation_id,
+    )

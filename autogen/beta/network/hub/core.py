@@ -31,7 +31,7 @@ import contextlib
 import fnmatch
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 
 from autogen.beta.knowledge import KnowledgeStore
@@ -245,6 +245,13 @@ class Hub:
 
         self._ttl_sweeper: _IntervalSweeper | None = None
         self._expectation_sweeper: _IntervalSweeper | None = None
+        # Subclass-registered periodic workers. Keyed by name so a
+        # subclass can replace a sweeper at the same name (e.g. via a
+        # config reload) by unregister + re-register.
+        self._custom_sweepers: dict[str, _IntervalSweeper] = {}
+        # Set True by ``start()`` so ``register_sweeper`` knows whether
+        # to spawn the new sweeper immediately or queue it for ``start()``.
+        self._started = False
         self._closed = False
 
         # Observability + decision-making seams. Audit log is registered
@@ -354,10 +361,13 @@ class Hub:
             await self._load_task(task_id)
 
     async def start(self) -> None:
-        """Spawn the TTL + expectation sweepers. Idempotent.
+        """Spawn the TTL + expectation + custom sweepers. Idempotent.
 
         ``ttl_sweep_interval=0`` disables the TTL sweeper;
-        ``expectation_sweep_interval=0`` disables the expectation sweeper.
+        ``expectation_sweep_interval=0`` disables the expectation
+        sweeper. Custom sweepers attached via
+        :meth:`register_sweeper` start here too (registered before
+        ``start()``) or immediately at registration (after ``start()``).
         """
         if self._ttl_sweep_interval > 0 and self._ttl_sweeper is None:
             self._ttl_sweeper = _IntervalSweeper(
@@ -373,6 +383,9 @@ class Hub:
                 fn=self._expectation_tick,
             )
             self._expectation_sweeper.start()
+        for sweeper in self._custom_sweepers.values():
+            sweeper.start()
+        self._started = True
 
     async def close(self) -> None:
         """Cancel sweepers + endpoint tasks; drain queues. Idempotent."""
@@ -385,11 +398,50 @@ class Hub:
         if self._expectation_sweeper is not None:
             await self._expectation_sweeper.stop()
             self._expectation_sweeper = None
+        for sweeper in list(self._custom_sweepers.values()):
+            await sweeper.stop()
+        self._custom_sweepers.clear()
         for task in list(self._endpoint_tasks):
             task.cancel()
         if self._endpoint_tasks:
             await asyncio.gather(*self._endpoint_tasks, return_exceptions=True)
         self._endpoint_tasks.clear()
+
+    # ── Sweeper extension ───────────────────────────────────────────────────
+
+    def register_sweeper(
+        self,
+        name: str,
+        interval_seconds: float,
+        fn: Callable[[], "Awaitable[None]"],
+    ) -> None:
+        """Attach a custom periodic worker.
+
+        ``fn`` is called every ``interval_seconds``. Subclasses use this
+        for protocol-specific background work (e.g. polling a chat
+        platform's presence list, refreshing an auth token).
+
+        If ``Hub.start()`` has already run, the sweeper starts immediately.
+        Otherwise it's queued and starts when ``start()`` runs.
+
+        Re-registering at the same ``name`` raises ``ValueError`` — use
+        :meth:`unregister_sweeper` first if you mean to replace.
+        """
+        if name in self._custom_sweepers:
+            raise ValueError(f"sweeper already registered: {name!r}")
+        if interval_seconds <= 0:
+            raise ValueError(f"interval_seconds must be positive: {interval_seconds}")
+        sweeper = _IntervalSweeper(name=name, interval=interval_seconds, fn=fn)
+        self._custom_sweepers[name] = sweeper
+        if self._started:
+            # ``start()`` has already run — start this sweeper immediately.
+            sweeper.start()
+
+    async def unregister_sweeper(self, name: str) -> None:
+        """Stop and remove a custom sweeper. No-op if absent."""
+        sweeper = self._custom_sweepers.pop(name, None)
+        if sweeper is not None:
+            await sweeper.stop()
 
     async def __aenter__(self) -> "Hub":
         return self
@@ -539,12 +591,27 @@ class Hub:
         }
 
     async def _fan_out(self, method_name: str, *args: object) -> None:
-        """Call ``method_name(*args)`` on every registered listener.
+        """Call ``method_name(*args)`` on every registered listener
+        AND on the hub itself (so subclasses can override hooks
+        directly without registering themselves).
 
         Per-listener try/except — a single bad listener cannot stall
         the hub. Exceptions log at ``ERROR`` with the listener's
         class name so the offending hook is identifiable.
         """
+        # Subclass override path. Bound methods on this instance.
+        own_method = getattr(self, method_name, None)
+        # Avoid recursing — only treat it as an override if the bound
+        # method is NOT the same _fan_out method itself.
+        if own_method is not None and not method_name.startswith("_") and own_method != self._fan_out:
+            try:
+                await own_method(*args)
+            except Exception:
+                logger.exception(
+                    "%s.%s raised",
+                    type(self).__name__,
+                    method_name,
+                )
         for listener in self._listeners:
             method = getattr(listener, method_name, None)
             if method is None:
@@ -557,6 +624,51 @@ class Hub:
                     type(listener).__name__,
                     method_name,
                 )
+
+    # ── Subclass hooks ──────────────────────────────────────────────────────
+    #
+    # Default no-op implementations of the listener method set so
+    # subclasses can override directly without registering themselves
+    # as listeners. The base ``Hub`` provides empty bodies; subclass
+    # overrides run alongside any externally-registered listeners.
+
+    async def on_envelope_posted(self, envelope: Envelope, metadata: ChannelMetadata) -> None:  # noqa: ARG002
+        return None
+
+    async def on_envelope_rejected(self, envelope: Envelope, reason: NetworkError) -> None:  # noqa: ARG002
+        return None
+
+    async def on_dispatch_failed(
+        self,
+        envelope: Envelope,
+        recipient_id: str,
+        reason: BaseException,
+    ) -> None:  # noqa: ARG002
+        return None
+
+    async def on_channel_event(self, channel_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+        return None
+
+    async def on_agent_event(self, agent_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+        return None
+
+    async def on_expectation_fired(self, channel_id: str, expectation: object, violation: object) -> None:  # noqa: ARG002
+        return None
+
+    async def on_turn_failed(
+        self,
+        channel_id: str,
+        agent_id: str,
+        envelope_id: str,
+        exc: BaseException,
+    ) -> None:  # noqa: ARG002
+        return None
+
+    async def on_task_event(self, task_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+        return None
+
+    async def on_inbox_pressure(self, agent_id: str, pending: int, cap: int) -> None:  # noqa: ARG002
+        return None
 
     # ── Expectation registry ────────────────────────────────────────────────
 
@@ -1609,8 +1721,10 @@ class Hub:
             if endpoint is None:
                 continue
             if substantive:
-                new_count = self._inbox_pending.get(recipient_id, 0) + 1
+                prev_count = self._inbox_pending.get(recipient_id, 0)
+                new_count = prev_count + 1
                 self._inbox_pending[recipient_id] = new_count
+                await self._maybe_fire_inbox_pressure(recipient_id, prev_count, new_count)
             try:
                 await endpoint.send_frame(NotifyFrame(envelope=envelope, recipient_id=recipient_id))
             except Exception as exc:
@@ -1622,6 +1736,30 @@ class Hub:
                     envelope.event_type,
                     exc,
                 )
+
+    async def _maybe_fire_inbox_pressure(self, recipient_id: str, prev: int, new: int) -> None:
+        """Fire ``on_inbox_pressure`` when crossing the high-water mark.
+
+        Fires exactly once per crossing — does not re-fire on every
+        subsequent envelope while above the mark. Resolves ``high_water``:
+        explicit value → that; ``None`` → 80% of ``max_pending``;
+        ``max_pending == 0`` → no signal.
+        """
+        rule = self._rules.get(recipient_id)
+        if rule is None:
+            return
+        cap = rule.limits.inbox.max_pending
+        if cap <= 0:
+            return
+        hw_config = rule.limits.inbox.high_water
+        if hw_config is None:
+            high_water = max(1, int(cap * 0.8))
+        elif hw_config <= 0:
+            return
+        else:
+            high_water = hw_config
+        if prev < high_water <= new:
+            await self._fan_out("on_inbox_pressure", recipient_id, new, cap)
 
     def _endpoint_for(self, agent_id: str) -> LinkEndpoint | None:
         endpoint_id = self._agent_to_endpoint.get(agent_id)

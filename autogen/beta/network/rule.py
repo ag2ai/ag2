@@ -84,10 +84,16 @@ class InboxBlock:
     Only ``reject`` is enforced today; ``drop_oldest`` / ``drop_newest``
     are recognised but treated as ``reject`` until the dispatch path
     grows the alternate behaviours.
+
+    ``high_water`` is a soft threshold for backpressure signalling
+    (fires :meth:`HubListener.on_inbox_pressure`). Defaults to ``None``
+    which auto-resolves to 80% of ``max_pending`` when the hub
+    evaluates pressure. ``0`` disables the signal.
     """
 
     max_pending: int = 1000
     overflow: str = "reject"  # "reject" | "drop_oldest" | "drop_newest"
+    high_water: int | None = None
 
 
 @dataclass(slots=True)
