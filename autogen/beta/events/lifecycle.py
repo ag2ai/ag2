@@ -7,7 +7,7 @@
 These events are emitted by Agent (framework core) during execution. They are
 not network-specific — any Agent emits them regardless of Hub registration.
 
-Task-subagent lifecycle events live in ``autogen.beta.events.task_events``
+Task-subagent lifecycle events live in ``autogen.beta.events``
 (``TaskStarted`` / ``TaskProgress`` / ``TaskCompleted`` / ``TaskFailed``).
 """
 

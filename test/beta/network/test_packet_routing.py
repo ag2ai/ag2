@@ -12,9 +12,7 @@ wins across both static (``ToolCalled`` graph rule) and dynamic
 
 import json
 
-from autogen.beta.events import ToolCallEvent, ToolResultEvent
-from autogen.beta.events.input_events import DataInput
-from autogen.beta.events.tool_events import ToolResult
+from autogen.beta.events import DataInput, ToolCallEvent, ToolResult, ToolResultEvent
 from autogen.beta.network import (
     AgentTarget,
     Handoff,

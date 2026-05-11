@@ -8,9 +8,16 @@ from uuid import uuid4
 
 from google.genai import types
 
-from autogen.beta.events import BinaryType, BuiltinToolCallEvent, BuiltinToolResultEvent, Input, TextInput, UrlInput
-from autogen.beta.events.base import Field
-from autogen.beta.events.tool_events import ToolResult
+from autogen.beta.events import (
+    BinaryType,
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
+    Field,
+    Input,
+    TextInput,
+    ToolResult,
+    UrlInput,
+)
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 
 

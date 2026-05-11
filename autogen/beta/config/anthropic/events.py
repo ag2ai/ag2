@@ -35,13 +35,13 @@ from autogen.beta.events import (
     BinaryType,
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
+    Field,
     FileIdInput,
     Input,
     TextInput,
+    ToolResult,
     UrlInput,
 )
-from autogen.beta.events.base import Field
-from autogen.beta.events.tool_events import ToolResult
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME

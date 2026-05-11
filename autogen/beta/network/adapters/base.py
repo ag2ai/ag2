@@ -18,7 +18,7 @@ Key invariants:
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from autogen.beta.events.input_events import Input
+from autogen.beta.events import Input
 
 from ..channel import ChannelManifest, ChannelMetadata, ChannelState
 from ..envelope import EV_TEXT, Envelope

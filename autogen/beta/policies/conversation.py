@@ -6,8 +6,10 @@
 
 from autogen.beta.compact import CompactionSummary
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse
-from autogen.beta.events.tool_events import (
+from autogen.beta.events import (
+    BaseEvent,
+    ModelRequest,
+    ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
     ToolErrorEvent,

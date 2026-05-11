@@ -15,8 +15,7 @@ Key behaviors preserved from the old system:
 """
 
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import BaseEvent
-from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
+from autogen.beta.events import BaseEvent, HaltEvent, ObserverAlert, Severity
 
 
 class AlertPolicy:
