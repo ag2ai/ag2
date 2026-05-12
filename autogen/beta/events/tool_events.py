@@ -68,7 +68,6 @@ class ToolCallEvent(ToolEvent):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str = Field(kw_only=False)
     arguments: str = "{}"
-    provider_data: dict[str, Any] = Field(default_factory=dict, compare=False)
 
     _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False, compare=False)
 
