@@ -27,6 +27,12 @@ from .adapters import (
     DiscussionState,
     WorkflowAdapter,
     WorkflowState,
+    default_build_packet_envelope,
+    default_build_round_envelope,
+    default_build_text_envelope,
+    default_extract_turn_input,
+    default_render_envelope,
+    default_tools_for,
 )
 from .auth import AuthAdapter, AuthRegistry, NoAuth
 from .channel import (
@@ -342,9 +348,15 @@ __all__ = (
     "WorkflowGraphError",
     "WorkflowState",
     "decode_frame",
+    "default_build_packet_envelope",
+    "default_build_round_envelope",
+    "default_build_text_envelope",
     "default_evaluators",
+    "default_extract_turn_input",
     "default_handler",
     "default_handlers",
+    "default_render_envelope",
+    "default_tools_for",
     "encode_frame",
     "make_id",
     "parse_duration",

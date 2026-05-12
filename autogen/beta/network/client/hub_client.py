@@ -357,6 +357,15 @@ class HubClient:
             exc=exc,
         )
 
+    async def fire_task_event(self, task_id: str, kind: str, payload: dict) -> None:
+        """Fan out an ``on_task_event`` through the hub's listener chain.
+
+        Public surface so :class:`TaskMirror` and other tenant
+        observers can emit task-lifecycle events without touching the
+        hub's private fan-out method.
+        """
+        await self._hub.fire_task_event(task_id, kind, payload)
+
     async def read_wal(self, channel_id: str, *, since: int = 0, until: int | None = None) -> list[Envelope]:
         return await self._hub.read_wal(channel_id, since=since, until=until)
 

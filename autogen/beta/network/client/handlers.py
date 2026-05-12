@@ -129,6 +129,13 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
     ``adapter.build_round_envelope`` so this handler stays free of
     adapter-specific knowledge.
 
+    Per-turn LLM tools come from ``adapter.tools_for(client, metadata,
+    state, participant_id)``. Identity-level tools (``peers`` /
+    ``channels`` / ``tasks`` / ``context`` / ``delegate``) live on
+    ``agent.tools`` via ``NetworkPlugin``; adapter-scoped tools (e.g.
+    ``say`` for consulting / conversation / discussion) merge in
+    per-call via ``agent.ask(tools=...)``.
+
     The full turn-processing path — channel resolution, view projection,
     adapter input extraction, ``agent.ask``, round-envelope construction,
     outbound send — is wrapped in one try/except. On exception the
@@ -175,6 +182,21 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
 
         dependencies = stamp_dependencies(client, channel)
 
+        # Adapter-scoped LLM tools for this turn (e.g. ``say`` for
+        # consulting / discussion). Resolution is cached on the adapter
+        # so the schema build cost is paid once per (adapter, client)
+        # — see ``ChannelAdapter.tools_for`` default implementation.
+        state = client._hub_client.adapter_state(metadata.channel_id)
+        adapter_tools: list = []
+        try:
+            adapter_tools = list(adapter.tools_for(client, metadata, state, client.agent_id))
+        except Exception:
+            logger.exception(
+                "adapter.tools_for raised: channel=%s adapter=%s",
+                envelope.channel_id,
+                type(adapter).__name__,
+            )
+
         # Attach the TaskMirror for the duration of the LLM turn so any
         # ``agent.task(...)`` (typically via the ``tasks(action="start")``
         # tool) surfaces ``ag2.task.*`` envelopes to the hub and triggers
@@ -190,11 +212,14 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
                 current_input,
                 stream=stream,
                 dependencies=dependencies,
+                tools=adapter_tools,
             )
 
             # Adapter encodes the round-end envelope.
             # For example, Workflow returns EV_PACKET.
             # Default implementations returns EV_TEXT(body) or None.
+            # State may have advanced inside the LLM turn (e.g. an
+            # ``EV_CONTEXT_SET`` fold) — re-read here.
             state = client._hub_client.adapter_state(metadata.channel_id)
             events = list(await stream.history.get_events())
             out_envelope = adapter.build_round_envelope(
