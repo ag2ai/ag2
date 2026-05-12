@@ -158,6 +158,21 @@ async def test_args_kwargs_1():
 
 
 @pytest.mark.anyio
+async def test_positional_args_passed_by_name_with_var_keyword():
+    """Regression for ag2 #1790 — async path."""
+
+    @inject
+    async def simple_func(
+        arg1: str,
+        arg2: str,
+        **kwargs: dict[str, str],
+    ):
+        return arg1, arg2, kwargs
+
+    assert await simple_func(arg1="x", arg2="y", extra="z") == ("x", "y", {"extra": "z"})
+
+
+@pytest.mark.anyio
 async def test_args_kwargs_2():
     @inject
     async def simple_func(

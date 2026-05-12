@@ -157,6 +157,25 @@ def test_args_kwargs_1():
     assert simple_func(1.0, 2.0, 3, b=3.0, key=1.0) == (1, (2.0, 3.0), 3, {"key": 1})
 
 
+def test_positional_args_passed_by_name_with_var_keyword():
+    """Regression for ag2 #1790.
+
+    When a function has positional-or-keyword params and a ``**kwargs``, all
+    arguments may arrive as keyword args (e.g. from an LLM tool call). The
+    positional names must not be swept into ``**kwargs``.
+    """
+
+    @inject
+    def simple_func(
+        arg1: str,
+        arg2: str,
+        **kwargs: dict[str, str],
+    ):
+        return arg1, arg2, kwargs
+
+    assert simple_func(arg1="x", arg2="y", extra="z") == ("x", "y", {"extra": "z"})
+
+
 def test_args_kwargs_2():
     @inject
     def simple_func(

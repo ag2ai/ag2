@@ -219,6 +219,15 @@ class CallModel(Generic[P, T]):
             if (v := kwargs.pop(arg, Parameter.empty)) is not Parameter.empty:
                 kw[arg] = v
 
+        # Positional parameters can also be supplied by name (e.g. when an LLM
+        # tool call delivers all arguments as keyword args). Pull them out
+        # before assigning the remainder to ``var_keyword_arg`` so they don't
+        # get swallowed into ``**kwargs``.
+        if self.var_keyword_arg is not None:
+            for arg in self.positional_args:
+                if (v := kwargs.pop(arg, Parameter.empty)) is not Parameter.empty:
+                    kw[arg] = v
+
         if self.var_keyword_arg is not None:
             kw[self.var_keyword_arg] = kwargs
         else:
