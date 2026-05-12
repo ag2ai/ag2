@@ -350,7 +350,7 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
             continue
 
         if input_buffer:
-            messages.append(events.ModelRequest(list(input_buffer)))
+            messages.append(events.ModelRequest(input_buffer))
             input_buffer.clear()
 
         if m.role in ["system", "developer"]:
@@ -378,7 +378,7 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
                 events.ToolResultsEvent([
                     events.ToolResultEvent(
                         parent_id=m.tool_call_id,
-                        result=ToolResult.ensure_result(m.error or m.content),
+                        result=ToolResult([m.error or m.content]),
                     )
                 ])
             )
