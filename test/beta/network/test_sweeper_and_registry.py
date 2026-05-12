@@ -18,6 +18,7 @@
 import asyncio
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
@@ -296,13 +297,11 @@ async def test_cross_tool_flow_exercises_all_six_tools() -> None:
 def test_handlers_module_does_not_touch_hub_privates() -> None:
     """``handlers.py`` must not reach into ``_hub._<private>``.
 
-    After the W4 refactor, all hub access goes through
-    :class:`HubClient`. This test fails if a future change accidentally
-    re-introduces the ``client._hub._adapter_for`` /
-    ``client._hub._adapter_states`` shortcut.
+    All hub access goes through :class:`HubClient`. This test fails if a
+    future change re-introduces a hub-private shortcut — adapter / channel
+    / task lookups, audit-log appends, listener fan-out, or any other
+    underscore-prefixed attribute reach-through.
     """
-    from pathlib import Path
-
     handlers_path = (
         Path(__file__).parent.parent.parent.parent / "autogen" / "beta" / "network" / "client" / "handlers.py"
     )
@@ -312,6 +311,13 @@ def test_handlers_module_does_not_touch_hub_privates() -> None:
         "_hub._adapter_states",
         "_hub._channels",
         "_hub._tasks",
+        "_hub._fan_out",
+        "_hub._audit_log",
+        "_hub._listeners",
+        "_hub._arbiter",
+        "hub._fan_out",
+        "hub._audit_log",
+        "hub._listeners",
     )
     found = [pat for pat in forbidden if pat in text]
     assert not found, f"handlers.py must go through HubClient, not Hub privates: {found}"

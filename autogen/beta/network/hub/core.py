@@ -30,7 +30,8 @@ import asyncio
 import contextlib
 import fnmatch
 import json
-from collections.abc import Callable
+import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 
 from autogen.beta.knowledge import KnowledgeStore
@@ -61,7 +62,6 @@ from ..envelope import (
 )
 from ..errors import (
     AccessDeniedError,
-    InboxFull,
     NetworkError,
     NotFoundError,
     ProtocolError,
@@ -82,20 +82,8 @@ from ..transport.frames import (
 )
 from ..transport.link import LinkEndpoint
 from ..views.base import ViewPolicy
-from .audit import (
-    AUDIT_KIND_AGENT_REGISTERED,
-    AUDIT_KIND_AGENT_UNREGISTERED,
-    AUDIT_KIND_CHANNEL_CLOSED,
-    AUDIT_KIND_CHANNEL_CREATED,
-    AUDIT_KIND_CHANNEL_EXPIRED,
-    AUDIT_KIND_RESUME_SET,
-    AUDIT_KIND_RULE_SET,
-    AUDIT_KIND_SKILL_SET,
-    AUDIT_KIND_TASK_TERMINATED,
-    RESUME_SOURCE_OBSERVED,
-    RESUME_SOURCE_TENANT,
-    AuditLog,
-)
+from .arbiter import Deny, HubArbiter, RuleBasedArbiter
+from .audit import AuditLog
 from .expectations import (
     ExpectationContext,
     ExpectationEvaluator,
@@ -116,9 +104,13 @@ from .layout import (
     tasks_root,
     wal_path,
 )
+from .listener import HubListener
 from .sweepers import _IntervalSweeper
 
 __all__ = ("Hub",)
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_now_iso() -> str:
@@ -190,8 +182,11 @@ class Hub:
         self._expectation_sweep_interval = expectation_sweep_interval
         self._invite_ack_timeout = invite_ack_timeout
 
-        # Audit log + expectation registries.
-        self._audit_log = AuditLog(store)
+        # Audit log + expectation registries. AuditLog is a HubListener;
+        # see _install_default_listeners() — it installs as the first
+        # listener so audit records are written before any tenant
+        # listener observes the same event.
+        self._audit_log = AuditLog(store, clock=self._clock)
         self._expectation_evaluators: dict[str, ExpectationEvaluator] = {}
         self._violation_handlers: dict[str, ViolationHandler] = {}
         # channel_id → set of (expectation_index, expectation_name, violator_id) fired.
@@ -250,7 +245,20 @@ class Hub:
 
         self._ttl_sweeper: _IntervalSweeper | None = None
         self._expectation_sweeper: _IntervalSweeper | None = None
+        # Subclass-registered periodic workers. Keyed by name so a
+        # subclass can replace a sweeper at the same name (e.g. via a
+        # config reload) by unregister + re-register.
+        self._custom_sweepers: dict[str, _IntervalSweeper] = {}
+        # Set True by ``start()`` so ``register_sweeper`` knows whether
+        # to spawn the new sweeper immediately or queue it for ``start()``.
+        self._started = False
         self._closed = False
+
+        # Observability + decision-making seams. Audit log is registered
+        # as the first listener so it sees every event a tenant
+        # listener does, in the same order.
+        self._listeners: list[HubListener] = [self._audit_log]
+        self._arbiter: HubArbiter = RuleBasedArbiter()
 
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -353,10 +361,13 @@ class Hub:
             await self._load_task(task_id)
 
     async def start(self) -> None:
-        """Spawn the TTL + expectation sweepers. Idempotent.
+        """Spawn the TTL + expectation + custom sweepers. Idempotent.
 
         ``ttl_sweep_interval=0`` disables the TTL sweeper;
-        ``expectation_sweep_interval=0`` disables the expectation sweeper.
+        ``expectation_sweep_interval=0`` disables the expectation
+        sweeper. Custom sweepers attached via
+        :meth:`register_sweeper` start here too (registered before
+        ``start()``) or immediately at registration (after ``start()``).
         """
         if self._ttl_sweep_interval > 0 and self._ttl_sweeper is None:
             self._ttl_sweeper = _IntervalSweeper(
@@ -372,6 +383,9 @@ class Hub:
                 fn=self._expectation_tick,
             )
             self._expectation_sweeper.start()
+        for sweeper in self._custom_sweepers.values():
+            sweeper.start()
+        self._started = True
 
     async def close(self) -> None:
         """Cancel sweepers + endpoint tasks; drain queues. Idempotent."""
@@ -384,11 +398,63 @@ class Hub:
         if self._expectation_sweeper is not None:
             await self._expectation_sweeper.stop()
             self._expectation_sweeper = None
+        for sweeper in list(self._custom_sweepers.values()):
+            await sweeper.stop()
+        self._custom_sweepers.clear()
         for task in list(self._endpoint_tasks):
             task.cancel()
         if self._endpoint_tasks:
             await asyncio.gather(*self._endpoint_tasks, return_exceptions=True)
         self._endpoint_tasks.clear()
+
+    # ── Sweeper extension ───────────────────────────────────────────────────
+
+    def register_sweeper(
+        self,
+        name: str,
+        interval_seconds: float,
+        fn: Callable[[], "Awaitable[None]"],
+    ) -> None:
+        """Attach a custom periodic worker.
+
+        ``fn`` is called every ``interval_seconds``. Subclasses use this
+        for protocol-specific background work (e.g. polling a chat
+        platform's presence list, refreshing an auth token).
+
+        If ``Hub.start()`` has already run, the sweeper starts immediately.
+        Otherwise it's queued and starts when ``start()`` runs.
+
+        Re-registering at the same ``name`` raises ``ValueError`` — use
+        :meth:`unregister_sweeper` first if you mean to replace.
+
+        Sync vs. async: ``register_sweeper`` is synchronous because it
+        only updates internal bookkeeping (and may call the underlying
+        ``_IntervalSweeper.start`` which schedules a fire-and-forget
+        task). :meth:`unregister_sweeper` is async because it awaits the
+        sweeper's task cancellation to ensure clean shutdown.
+        """
+        if name in self._custom_sweepers:
+            raise ValueError(f"sweeper already registered: {name!r}")
+        if interval_seconds <= 0:
+            raise ValueError(f"interval_seconds must be positive: {interval_seconds}")
+        sweeper = _IntervalSweeper(name=name, interval=interval_seconds, fn=fn)
+        self._custom_sweepers[name] = sweeper
+        if self._started:
+            # ``start()`` has already run — start this sweeper immediately.
+            sweeper.start()
+
+    async def unregister_sweeper(self, name: str) -> None:
+        """Stop and remove a custom sweeper. No-op if absent.
+
+        Async to mirror :meth:`_IntervalSweeper.stop`, which awaits
+        cancellation of the running task. Custom sweepers registered
+        before :meth:`start` still go through this path on
+        :meth:`close`, so subclasses don't need to track them
+        themselves.
+        """
+        sweeper = self._custom_sweepers.pop(name, None)
+        if sweeper is not None:
+            await sweeper.stop()
 
     async def __aenter__(self) -> "Hub":
         return self
@@ -413,6 +479,227 @@ class Hub:
         if adapter is None:
             raise NotFoundError(f"no adapter registered for {manifest_type!r}@v{manifest_version}")
         return adapter
+
+    # ── Observability + decision-making ─────────────────────────────────────
+
+    def register_listener(self, listener: HubListener) -> None:
+        """Attach a :class:`HubListener` to receive state-transition events.
+
+        Listeners receive events in registration order. Each is wrapped
+        in try/except so one buggy listener cannot stall dispatch — its
+        exception is logged at ``ERROR`` and the next listener still
+        runs.
+        """
+        self._listeners.append(listener)
+
+    def unregister_listener(self, listener: HubListener) -> None:
+        """Detach a previously-registered listener. No-op if absent."""
+        with contextlib.suppress(ValueError):
+            self._listeners.remove(listener)
+
+    async def report_turn_failure(
+        self,
+        *,
+        channel_id: str,
+        agent_id: str,
+        envelope_id: str,
+        exc: BaseException,
+    ) -> None:
+        """Fan out an ``on_turn_failed`` event to every listener.
+
+        Public entry point so client-side notify handlers can route
+        substantive-turn crashes through the observability surface
+        without touching hub privates. ``AuditLog`` (the built-in
+        listener) records the failure; tenant listeners react however
+        they choose.
+        """
+        await self._fan_out(
+            "on_turn_failed",
+            channel_id,
+            agent_id,
+            envelope_id,
+            exc,
+        )
+
+    async def fire_task_event(
+        self,
+        task_id: str,
+        kind: str,
+        payload: dict,
+    ) -> None:
+        """Fan out an ``on_task_event`` to every listener.
+
+        Public entry point so :class:`TaskMirror` (and other tenant
+        observers) can route task-side notifications through the hub's
+        listener surface without touching ``_fan_out``. ``kind`` is
+        free-form — the built-in listener Protocol documents
+        ``"started"`` / ``"progress"`` / ``"completed"`` / ``"failed"`` /
+        ``"expired"`` / ``"cancelled"`` / ``"mirror_failed"`` as the
+        recognised values, but tenants may emit additional kinds.
+        """
+        await self._fan_out("on_task_event", task_id, kind, payload)
+
+    @property
+    def audit_log(self) -> AuditLog:
+        """Public access to the built-in audit log (a :class:`HubListener`).
+
+        Use this to call :meth:`AuditLog.read_all` from tooling or to
+        attach a live subscriber via :meth:`AuditLog.subscribe`. Custom
+        hub subclasses that want a different audit format can replace
+        the instance via :meth:`replace_audit_log`.
+        """
+        return self._audit_log
+
+    def replace_audit_log(self, audit_log: AuditLog) -> None:
+        """Swap the built-in :class:`AuditLog` for a tenant-provided one.
+
+        Unregisters the prior audit log from the listener chain,
+        registers the replacement as the first listener (preserving
+        the convention that audit writes complete before tenant
+        listeners observe the same event), and updates
+        :attr:`audit_log` to point at it.
+        """
+        with contextlib.suppress(ValueError):
+            self._listeners.remove(self._audit_log)
+        self._audit_log = audit_log
+        self._listeners.insert(0, audit_log)
+
+    def register_arbiter(self, arbiter: HubArbiter) -> None:
+        """Replace the active :class:`HubArbiter` instance.
+
+        The default :class:`RuleBasedArbiter` is installed automatically
+        and enforces per-agent :class:`Rule` (access + limits) — the
+        same behavior the hub had inline before this seam existed.
+        Tenants replace it to layer custom permission protocols
+        (JWT scope, federation routing, etc.) on top of (or in place
+        of) the rule-based defaults.
+
+        Only one arbiter is active at a time; calling this with a new
+        instance replaces the prior arbiter outright.
+        """
+        self._arbiter = arbiter
+
+    @property
+    def arbiter(self) -> HubArbiter:
+        """The currently active arbiter (read-only access for testing)."""
+        return self._arbiter
+
+    def health(self) -> dict:
+        """Return an operational snapshot of hub state.
+
+        Cheap to compute (in-memory only). Wire to a ``/health``
+        endpoint or operational dashboard. The shape is intentionally
+        small — operators want a handful of indicative numbers, not
+        the full state.
+
+        Fields:
+
+        * ``active_channels``: number of channels in OPENED/PENDING state.
+        * ``registered_agents``: total registered identities (agents +
+          humans).
+        * ``pending_inbox_total``: sum of per-recipient outstanding
+          envelope counters (best-effort approximation).
+        * ``max_pending_inbox_depth``: maximum per-recipient queue depth,
+          or ``None`` when nothing is queued. Indicative of the
+          "stuck agent" case.
+        * ``registered_listeners``: number of attached
+          :class:`HubListener` instances (the built-in
+          :class:`AuditLog` counts).
+        * ``adapters_loaded``: number of registered
+          :class:`ChannelAdapter` instances.
+        """
+        max_depth: int | None = None
+        if self._inbox_pending:
+            max_depth = max(self._inbox_pending.values())
+        return {
+            "active_channels": len(self._active_channels),
+            "registered_agents": len(self._passports),
+            "pending_inbox_total": sum(self._inbox_pending.values()),
+            "max_pending_inbox_depth": max_depth,
+            "registered_listeners": len(self._listeners),
+            "adapters_loaded": len(self._adapters),
+            "audit_log_bytes": self._audit_log.bytes_written,
+        }
+
+    async def _fan_out(self, method_name: str, *args: object) -> None:
+        """Call ``method_name(*args)`` on every registered listener
+        AND on the hub itself (so subclasses can override hooks
+        directly without registering themselves).
+
+        Per-listener try/except — a single bad listener cannot stall
+        the hub. Exceptions log at ``ERROR`` with the listener's
+        class name so the offending hook is identifiable.
+        """
+        # Subclass override path. Bound methods on this instance.
+        own_method = getattr(self, method_name, None)
+        # Avoid recursing — only treat it as an override if the bound
+        # method is NOT the same _fan_out method itself.
+        if own_method is not None and not method_name.startswith("_") and own_method != self._fan_out:
+            try:
+                await own_method(*args)
+            except Exception:
+                logger.exception(
+                    "%s.%s raised",
+                    type(self).__name__,
+                    method_name,
+                )
+        for listener in self._listeners:
+            method = getattr(listener, method_name, None)
+            if method is None:
+                continue
+            try:
+                await method(*args)
+            except Exception:
+                logger.exception(
+                    "listener %s.%s raised",
+                    type(listener).__name__,
+                    method_name,
+                )
+
+    # ── Subclass hooks ──────────────────────────────────────────────────────
+    #
+    # Default no-op implementations of the listener method set so
+    # subclasses can override directly without registering themselves
+    # as listeners. The base ``Hub`` provides empty bodies; subclass
+    # overrides run alongside any externally-registered listeners.
+
+    async def on_envelope_posted(self, envelope: Envelope, metadata: ChannelMetadata) -> None:  # noqa: ARG002
+        return None
+
+    async def on_envelope_rejected(self, envelope: Envelope, reason: NetworkError) -> None:  # noqa: ARG002
+        return None
+
+    async def on_dispatch_failed(
+        self,
+        envelope: Envelope,
+        recipient_id: str,
+        reason: BaseException,
+    ) -> None:  # noqa: ARG002
+        return None
+
+    async def on_channel_event(self, channel_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+        return None
+
+    async def on_agent_event(self, agent_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+        return None
+
+    async def on_expectation_fired(self, channel_id: str, expectation: object, violation: object) -> None:  # noqa: ARG002
+        return None
+
+    async def on_turn_failed(
+        self,
+        channel_id: str,
+        agent_id: str,
+        envelope_id: str,
+        exc: BaseException,
+    ) -> None:  # noqa: ARG002
+        return None
+
+    async def on_task_event(self, task_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+        return None
+
+    async def on_inbox_pressure(self, agent_id: str, pending: int, cap: int) -> None:  # noqa: ARG002
+        return None
 
     # ── Expectation registry ────────────────────────────────────────────────
 
@@ -470,6 +757,15 @@ class Hub:
                     if key in fired:
                         continue
                     fired.add(key)
+                    # Fan out before handler so listeners (including
+                    # AuditLog) see every violation regardless of which
+                    # handler is configured.
+                    await self._fan_out(
+                        "on_expectation_fired",
+                        channel_id,
+                        expectation,
+                        violation,
+                    )
                     # Sweeper must survive handler exceptions — they
                     # leave the violation marked as fired so we don't
                     # spin on a bad handler.
@@ -533,12 +829,13 @@ class Hub:
                 self._capability_index.setdefault(cap, set()).add(agent_id)
 
         await self._persist_capability_index()
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_AGENT_REGISTERED,
-            "agent_id": agent_id,
-            "name": passport.name,
-        })
+        logger.info("agent registered: name=%s agent_id=%s", passport.name, agent_id)
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "registered",
+            {"passport": passport, "at": self._clock()},
+        )
         return passport
 
     async def unregister(self, agent_id: str) -> None:
@@ -586,12 +883,13 @@ class Hub:
             self._inbox_pending.pop(agent_id, None)
 
         await self._persist_capability_index()
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_AGENT_UNREGISTERED,
-            "agent_id": agent_id,
-            "name": passport.name if passport is not None else None,
-        })
+        logger.info("agent unregistered: agent_id=%s", agent_id)
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "unregistered",
+            {"name": passport.name if passport is not None else None, "at": self._clock()},
+        )
 
     # ── Discovery (read-side) ────────────────────────────────────────────────
 
@@ -623,12 +921,24 @@ class Hub:
         *,
         capability: str | None = None,
         query: str | None = None,
+        kind: str | None = None,
         sort_by: str | None = None,
         limit: int = 50,
     ) -> list[Passport]:
+        """Enumerate registered participants, optionally filtered.
+
+        ``kind`` filters by ``Passport.kind`` (``"agent"`` / ``"human"`` /
+        ``"remote_agent"``). ``None`` returns all kinds (current default
+        behavior); passing ``"agent"`` also matches passports with
+        ``kind=None`` since ``None`` is the back-compat alias.
+        """
         results: list[Passport] = []
         query_lower = query.lower() if query else None
         for agent_id, passport in self._passports.items():
+            if kind is not None:
+                resolved = passport.kind or "agent"
+                if resolved != kind:
+                    continue
             if capability is not None:
                 resume = self._resumes.get(agent_id)
                 if resume is None:
@@ -685,13 +995,12 @@ class Hub:
         if added or removed:
             await self._persist_capability_index()
 
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_RESUME_SET,
-            "source": RESUME_SOURCE_TENANT,
-            "agent_id": agent_id,
-            "version": resume.version,
-        })
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "resume_set",
+            {"resume": resume, "version": resume.version, "at": self._clock()},
+        )
 
     async def set_skill(self, agent_id: str, skill_md: str | None) -> None:
         if agent_id not in self._passports:
@@ -702,12 +1011,12 @@ class Hub:
         else:
             await self._persist_skill(agent_id, skill_md)
             self._skills[agent_id] = skill_md
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_SKILL_SET,
-            "agent_id": agent_id,
-            "removed": skill_md is None,
-        })
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "skill_set",
+            {"removed": skill_md is None, "at": self._clock()},
+        )
 
     async def set_rule(self, agent_id: str, rule: Rule) -> None:
         if agent_id not in self._passports:
@@ -715,12 +1024,12 @@ class Hub:
         rule.version = (self._rules[agent_id].version + 1) if agent_id in self._rules else rule.version
         await self._persist_rule(agent_id, rule)
         self._rules[agent_id] = rule
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_RULE_SET,
-            "agent_id": agent_id,
-            "version": rule.version,
-        })
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "rule_set",
+            {"rule": rule, "version": rule.version, "at": self._clock()},
+        )
 
     async def record_observation(
         self,
@@ -778,15 +1087,18 @@ class Hub:
         if task_id is not None:
             self._observed_task_ids.add(task_id)
 
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_RESUME_SET,
-            "source": RESUME_SOURCE_OBSERVED,
-            "agent_id": owner_id,
-            "version": resume.version,
-            "capability": capability,
-            "outcome": outcome.value,
-        })
+        await self._fan_out(
+            "on_agent_event",
+            owner_id,
+            "observation_recorded",
+            {
+                "resume": resume,
+                "version": resume.version,
+                "capability": capability,
+                "outcome": outcome.value,
+                "at": self._clock(),
+            },
+        )
 
     def agents_with_capability(self, capability: str) -> list[str]:
         """Return agent_ids matching ``capability`` (claimed or observed)."""
@@ -831,37 +1143,33 @@ class Hub:
 
         adapter = self._adapter_for(manifest_type, manifest_version)
 
+        creator_passport = self._passports[creator_id]
         creator_rule = self._rules.get(creator_id, Rule())
-        creator_name = self._passports[creator_id].name
 
-        # Pre-flight invitee inbound-access check. The dispatch path
-        # silently filters envelopes whose sender is not in the
-        # recipient's ``inbound_from`` whitelist; without this
-        # pre-check, an invite to a recipient who blocks the creator
-        # would be dropped on the floor and the creator would hang on
-        # the ack waiter until ``invite_ack_timeout``. Surface the
-        # access denial synchronously instead.
+        # ── Authorize channel open (arbiter) ────────────────────────────
+        # Pre-flight invitee inbound-access check + creator concurrency
+        # cap. The dispatch path silently filters envelopes whose
+        # sender is not in the recipient's whitelist; without a
+        # pre-check, an invite to a blocking recipient would be
+        # dropped and the creator would hang on the ack waiter.
+        invitee_passports: list[Passport] = []
+        invitee_rules: list[Rule] = []
         for p_id in participants:
             if p_id == creator_id:
                 continue
-            invitee_rule = self._rules.get(p_id)
-            if invitee_rule is None:
-                continue
-            if not _match_any(creator_name, invitee_rule.access.inbound_from):
-                invitee_name = self._passports[p_id].name
-                raise AccessDeniedError(f"invitee {invitee_name!r} does not accept inbound from {creator_name!r}")
-
-        # Concurrency cap: count active channels where this agent is
-        # the creator. ``0`` disables the cap. Hub rejects before any
-        # WAL or persistence work so the caller sees the limit
-        # synchronously and on-disk state stays clean.
-        max_channels = creator_rule.limits.max_concurrent_channels
-        if max_channels > 0:
-            active = sum(1 for m in self._active_channels.values() if m.creator_id == creator_id)
-            if active >= max_channels:
-                raise AccessDeniedError(
-                    f"creator {creator_id!r} exceeded max_concurrent_channels ({active} >= {max_channels})"
-                )
+            invitee_passports.append(self._passports[p_id])
+            invitee_rules.append(self._rules.get(p_id, Rule()))
+        active_creator_channels = sum(1 for m in self._active_channels.values() if m.creator_id == creator_id)
+        decision = await self._arbiter.authorize_channel_open(
+            adapter.manifest,
+            creator_passport,
+            creator_rule,
+            invitee_passports,
+            invitee_rules,
+            active_creator_channels,
+        )
+        if isinstance(decision, Deny):
+            raise decision.error(decision.reason)
 
         channel_id = make_id()
         now = self._clock()
@@ -909,15 +1217,23 @@ class Hub:
         self._adapter_states[channel_id] = adapter.initial_state(metadata)
 
         await self._persist_channel_metadata(metadata)
-        await self._audit_log.append({
-            "at": now,
-            "kind": AUDIT_KIND_CHANNEL_CREATED,
-            "channel_id": channel_id,
-            "manifest_type": manifest_type,
-            "manifest_version": manifest_version,
-            "creator_id": creator_id,
-            "participants": [p.agent_id for p in metadata_participants],
-        })
+        logger.info(
+            "channel created: id=%s type=%s creator=%s participants=%d",
+            channel_id,
+            manifest_type,
+            creator_id,
+            len(metadata_participants),
+        )
+        await self._fan_out(
+            "on_channel_event",
+            channel_id,
+            "created",
+            {
+                "metadata": metadata,
+                "participants": [p.agent_id for p in metadata_participants],
+                "at": now,
+            },
+        )
 
         if not invitees:
             # Self-only channel — already complete; transition to ACTIVE.
@@ -1207,37 +1523,50 @@ class Hub:
         ``on_accepted`` see a consistent state. Dispatch and post-accept
         transitions happen outside the lock so the broadcast of
         ``EV_CHANNEL_CLOSED`` does not deadlock on the same lock.
+
+        Access / limits decisions go through :attr:`arbiter` so
+        federation / custom permission protocols can replace the default
+        rule-based behavior without forking the hub. Hub fires
+        :meth:`HubListener.on_envelope_posted` (success) or
+        :meth:`on_envelope_rejected` (any pre-WAL failure) for every
+        attempt.
         """
+        try:
+            envelope_id = await self._post_envelope_impl(envelope)
+        except NetworkError as exc:
+            await self._fan_out("on_envelope_rejected", envelope, exc)
+            logger.warning(
+                "post_envelope rejected: channel=%s sender=%s event=%s reason=%s",
+                envelope.channel_id,
+                envelope.sender_id,
+                envelope.event_type,
+                exc,
+            )
+            raise
+        return envelope_id
+
+    async def _post_envelope_impl(self, envelope: Envelope) -> str:
         sender = self._passports.get(envelope.sender_id)
         if sender is None:
             raise NotFoundError(f"sender not registered: {envelope.sender_id}")
 
         sender_rule = self._rules.get(envelope.sender_id, Rule())
 
-        # Outbound access check. Self-routing is always allowed —
-        # protocol broadcasts (``EV_CHANNEL_OPENED`` / ``EV_CHANNEL_CLOSED``)
-        # include the creator in their own audience so the creator's
-        # ``Channel`` handle receives the lifecycle notification, and the
-        # sender's ``outbound_to`` should never block their own
-        # state-sync envelopes.
+        # ── Outbound access + delegation depth (arbiter) ────────────────
+        # Only explicit-audience sends go through the outbound gate.
+        # Broadcasts (audience=None) skip — protocol broadcasts like
+        # ``EV_CHANNEL_OPENED`` include the creator in their own audience.
+        explicit_recipients: list[Passport] = []
         if envelope.audience is not None:
             for recipient_id in envelope.audience:
                 if recipient_id == envelope.sender_id:
                     continue
                 recipient = self._passports.get(recipient_id)
-                if recipient is None:
-                    continue
-                if not _match_any(recipient.name, sender_rule.access.outbound_to):
-                    raise AccessDeniedError(f"sender {sender.name!r} not permitted to send to {recipient.name!r}")
-
-        # Delegation-depth check. ``0`` disables the cap. Hub rejects
-        # before the WAL append so the outer caller sees the limit
-        # synchronously and the WAL stays clean.
-        depth_cap = sender_rule.limits.delegation_depth
-        if depth_cap > 0 and envelope.depth > depth_cap:
-            raise AccessDeniedError(
-                f"sender {sender.name!r} exceeded delegation_depth ({envelope.depth} > {depth_cap})"
-            )
+                if recipient is not None:
+                    explicit_recipients.append(recipient)
+        decision = await self._arbiter.authorize_send(envelope, sender, sender_rule, explicit_recipients)
+        if isinstance(decision, Deny):
+            raise decision.error(decision.reason)
 
         metadata = self._channels.get(envelope.channel_id)
         if metadata is None:
@@ -1261,9 +1590,9 @@ class Hub:
                 f"(manifest {metadata.manifest.type!r}@v{metadata.manifest.version})"
             )
 
-        # Inbox capacity check (substantive events only — protocol
-        # invites / acks / opens / closes must always reach
-        # participants for the channel machine to advance).
+        # ── Inbox capacity (arbiter, substantive events only) ───────────
+        # Protocol invites / acks / opens / closes must always reach
+        # participants for the channel machine to advance.
         if not _is_protocol_event(envelope.event_type):
             if envelope.audience is not None:
                 inbox_audience: list[str] = list(envelope.audience)
@@ -1272,14 +1601,14 @@ class Hub:
             for recipient_id in inbox_audience:
                 if recipient_id == envelope.sender_id:
                     continue
+                recipient = self._passports.get(recipient_id)
                 recipient_rule = self._rules.get(recipient_id)
-                if recipient_rule is None:
+                if recipient is None or recipient_rule is None:
                     continue
-                max_pending = recipient_rule.limits.inbox.max_pending
-                if max_pending > 0:
-                    current = self._inbox_pending.get(recipient_id, 0)
-                    if current >= max_pending:
-                        raise InboxFull(f"recipient {recipient_id!r} inbox at capacity ({current} >= {max_pending})")
+                current = self._inbox_pending.get(recipient_id, 0)
+                inbox_decision = await self._arbiter.authorize_inbox(envelope, recipient, recipient_rule, current)
+                if isinstance(inbox_decision, Deny):
+                    raise inbox_decision.error(inbox_decision.reason)
 
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
 
@@ -1325,6 +1654,18 @@ class Hub:
 
         await self._dispatch(envelope, metadata)
 
+        # Listener fan-out — read-only state-transition notification.
+        # Fires for every successfully posted envelope (including
+        # protocol events like invites / acks / opens / closes) so
+        # observers see the full event stream.
+        await self._fan_out("on_envelope_posted", envelope, metadata)
+        logger.debug(
+            "post_envelope ok: channel=%s sender=%s event=%s",
+            envelope.channel_id,
+            envelope.sender_id,
+            envelope.event_type,
+        )
+
         if result.next_state is not None:
             await self._transition_channel(
                 envelope.channel_id,
@@ -1366,26 +1707,90 @@ class Hub:
         await self._store.append(wal_path(envelope.channel_id), envelope.to_json() + "\n")
 
     async def _dispatch(self, envelope: Envelope, metadata: ChannelMetadata) -> None:
-        """Send NotifyFrames to the audience (or all participants if broadcast)."""
+        """Send NotifyFrames to the audience (or all participants if broadcast).
+
+        Inbound access is consulted via :meth:`HubArbiter.authorize_dispatch`
+        per recipient. ``Deny`` causes the hub to silently skip that
+        recipient — the rest of the audience still receives. Unknown
+        audience ids are routed through
+        :meth:`HubArbiter.resolve_unknown_audience` so federation hooks
+        can replace them with locally-deliverable proxies.
+        """
         if envelope.audience is None:
             recipients = [p.agent_id for p in metadata.participants if p.agent_id != envelope.sender_id]
         else:
             recipients = list(envelope.audience)
 
         sender_passport = self._passports.get(envelope.sender_id)
-        sender_name = sender_passport.name if sender_passport is not None else envelope.sender_id
         substantive = not _is_protocol_event(envelope.event_type)
 
+        # Federation hook for unknown audience ids. Default arbiter
+        # returns None (drop silently). A federated arbiter can redirect
+        # to a local proxy id that forwards to the remote hub.
+        unknown = [rid for rid in recipients if rid not in self._passports and rid != envelope.sender_id]
+        if unknown:
+            replacement = await self._arbiter.resolve_unknown_audience(envelope, unknown)
+            if replacement is not None:
+                recipients = [rid for rid in recipients if rid not in unknown] + list(replacement)
+
         for recipient_id in recipients:
-            recipient_rule = self._rules.get(recipient_id)
-            if recipient_rule is not None and not _match_any(sender_name, recipient_rule.access.inbound_from):
-                continue
+            if recipient_id == envelope.sender_id:
+                # Self-routing always delivers (protocol broadcasts
+                # include the sender so the sender's Channel handle
+                # sees the lifecycle event).
+                pass
+            elif sender_passport is not None:
+                recipient_passport = self._passports.get(recipient_id)
+                recipient_rule = self._rules.get(recipient_id)
+                if recipient_passport is not None and recipient_rule is not None:
+                    decision = await self._arbiter.authorize_dispatch(
+                        envelope, sender_passport, recipient_passport, recipient_rule
+                    )
+                    if isinstance(decision, Deny):
+                        continue
             endpoint = self._endpoint_for(recipient_id)
             if endpoint is None:
                 continue
             if substantive:
-                self._inbox_pending[recipient_id] = self._inbox_pending.get(recipient_id, 0) + 1
-            await endpoint.send_frame(NotifyFrame(envelope=envelope, recipient_id=recipient_id))
+                prev_count = self._inbox_pending.get(recipient_id, 0)
+                new_count = prev_count + 1
+                self._inbox_pending[recipient_id] = new_count
+                await self._maybe_fire_inbox_pressure(recipient_id, prev_count, new_count)
+            try:
+                await endpoint.send_frame(NotifyFrame(envelope=envelope, recipient_id=recipient_id))
+            except Exception as exc:
+                await self._fan_out("on_dispatch_failed", envelope, recipient_id, exc)
+                logger.warning(
+                    "dispatch failed: channel=%s recipient=%s event=%s reason=%s",
+                    envelope.channel_id,
+                    recipient_id,
+                    envelope.event_type,
+                    exc,
+                )
+
+    async def _maybe_fire_inbox_pressure(self, recipient_id: str, prev: int, new: int) -> None:
+        """Fire ``on_inbox_pressure`` when crossing the high-water mark.
+
+        Fires exactly once per crossing — does not re-fire on every
+        subsequent envelope while above the mark. Resolves ``high_water``:
+        explicit value → that; ``None`` → 80% of ``max_pending``;
+        ``max_pending == 0`` → no signal.
+        """
+        rule = self._rules.get(recipient_id)
+        if rule is None:
+            return
+        cap = rule.limits.inbox.max_pending
+        if cap <= 0:
+            return
+        hw_config = rule.limits.inbox.high_water
+        if hw_config is None:
+            high_water = max(1, int(cap * 0.8))
+        elif hw_config <= 0:
+            return
+        else:
+            high_water = hw_config
+        if prev < high_water <= new:
+            await self._fan_out("on_inbox_pressure", recipient_id, new, cap)
 
     def _endpoint_for(self, agent_id: str) -> LinkEndpoint | None:
         endpoint_id = self._agent_to_endpoint.get(agent_id)
@@ -1454,6 +1859,13 @@ class Hub:
             return
         metadata.state = ChannelState.ACTIVE
         await self._persist_channel_metadata(metadata)
+        logger.info("channel opened: id=%s", channel_id)
+        await self._fan_out(
+            "on_channel_event",
+            channel_id,
+            "opened",
+            {"metadata": metadata},
+        )
         opened_envelope = Envelope(
             channel_id=channel_id,
             sender_id=metadata.creator_id,
@@ -1495,9 +1907,11 @@ class Hub:
             # don't hang until invite_ack_timeout when the sweeper /
             # auto_close handler closes a PENDING channel out-of-band.
             if was_pending:
-                waiter = self._channel_open_waiters.get(channel_id)
+                waiter = self._channel_open_waiters.pop(channel_id, None)
                 if waiter is not None and not waiter.done():
                     waiter.set_exception(ProtocolError(f"channel {channel_id!r} closed during handshake: {reason}"))
+            else:
+                self._channel_open_waiters.pop(channel_id, None)
 
         await self._persist_channel_metadata(metadata)
 
@@ -1515,14 +1929,27 @@ class Hub:
             async with self._wal_lock(channel_id):
                 await self._wal_append(close_envelope)
             await self._dispatch(close_envelope, metadata)
-            await self._audit_log.append({
-                "at": metadata.closed_at,
-                "kind": (
-                    AUDIT_KIND_CHANNEL_EXPIRED if new_state == ChannelState.EXPIRED else AUDIT_KIND_CHANNEL_CLOSED
-                ),
-                "channel_id": channel_id,
-                "reason": reason,
-            })
+            kind_label = "expired" if new_state == ChannelState.EXPIRED else "closed"
+            logger.info("channel %s: id=%s reason=%s", kind_label, channel_id, reason)
+            await self._fan_out(
+                "on_channel_event",
+                channel_id,
+                kind_label,
+                {"reason": reason, "metadata": metadata, "at": metadata.closed_at},
+            )
+
+            # Bound long-lived hub memory: drop per-channel synchronization
+            # primitives that are meaningless once the channel is terminal.
+            # ``_adapter_states`` is intentionally retained — fold state has
+            # analytical value (tests, debug tools, future re-fold checks)
+            # and is a single dataclass per channel; only the heavier
+            # ``asyncio.Lock`` is released. Done AFTER the close-envelope
+            # WAL append + dispatch so we don't accidentally re-create
+            # the lock we are trying to clean up.
+            self._channel_locks.pop(channel_id, None)
+        # ACTIVE state transitions originate from ``_activate_channel``
+        # which fires the ``opened`` event directly — no need to fan
+        # out again here.
 
     async def _transition_task(
         self,
@@ -1540,16 +1967,19 @@ class Hub:
                 metadata.error = reason or metadata.error or "expired"
         await self._persist_task_metadata(metadata)
         if new_state in TERMINAL_TASK_STATES:
-            await self._audit_log.append({
-                "at": metadata.completed_at,
-                "kind": AUDIT_KIND_TASK_TERMINATED,
-                "task_id": task_id,
-                "owner_id": metadata.owner_id,
-                "channel_id": metadata.channel_id,
-                "outcome": new_state.value,
-                "capability": metadata.spec.capability,
-                "reason": reason,
-            })
+            await self._fan_out(
+                "on_task_event",
+                task_id,
+                new_state.value,
+                {
+                    "owner_id": metadata.owner_id,
+                    "channel_id": metadata.channel_id,
+                    "reason": reason,
+                    "capability": metadata.spec.capability,
+                    "outcome": new_state.value,
+                    "at": metadata.completed_at,
+                },
+            )
 
     # ── Persistence helpers ──────────────────────────────────────────────────
 

@@ -138,7 +138,15 @@ agent = Agent(
 )
 ```
 
-Each completed turn emits a [`CompactionCompleted`](/docs/beta/advanced/observers) lifecycle event when compaction runs, with `events_before` / `events_after` / `usage` fields — subscribe to it to surface compaction activity in logs or metrics.
+Every compaction attempt emits a triple on the agent's stream:
+
+| Event | When | Use it to |
+|---|---|---|
+| `CompactionStarted` | Just before `compact()` runs | Mark the start of work; carries `strategy` / `event_count` |
+| `CompactionCompleted` | `compact()` returned and history was replaced | Read `events_before` / `events_after` / `usage` |
+| `CompactionFailed` | `compact()` raised | Inspect `error_type` + `error`; the history is left untouched and the agent turn is **not** interrupted |
+
+The failure path is the one that matters: the strategy exception is also logged via the module logger, but the stream event is the durable signal — subscribe to `CompactionFailed` if you want failed compactions to surface in your application's UI or alerting. (Aggregation emits the symmetric `AggregationStarted` / `AggregationCompleted` / `AggregationFailed` triple — see [Aggregation › Wiring onto an Agent](/docs/beta/advanced/aggregation#wiring-onto-an-agent).)
 
 ## Driving a strategy directly
 

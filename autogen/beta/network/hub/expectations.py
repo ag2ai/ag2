@@ -39,7 +39,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from ..channel import ChannelMetadata, ChannelState, Expectation
 from ..envelope import EV_EXPECTATION_VIOLATED, EV_TEXT, Envelope
-from .audit import AUDIT_KIND_EXPECTATION_VIOLATED
 
 if TYPE_CHECKING:
     from .core import Hub
@@ -270,25 +269,15 @@ class MaxSilenceEvaluator:
 # ── Handlers ────────────────────────────────────────────────────────────────
 
 
-async def _audit_violation(
-    hub: "Hub",
-    channel_id: str,
-    violation: Violation,
-) -> None:
-    await hub._audit_log.append({
-        "at": hub._clock(),
-        "kind": AUDIT_KIND_EXPECTATION_VIOLATED,
-        "channel_id": channel_id,
-        "expectation": violation.expectation.name,
-        "on_violation": violation.expectation.on_violation,
-        "params": dict(violation.expectation.params),
-        "violators": list(violation.violator_ids),
-        "detail": dict(violation.detail),
-    })
-
-
 class AuditHandler:
-    """Record the violation; no envelope, no state change."""
+    """No-op handler — audit emission is owned by the ``AuditLog`` listener.
+
+    Kept so manifests authored against the V1 vocabulary
+    (``on_violation: "audit"``) still resolve. The hub fans out
+    ``on_expectation_fired`` to every listener (including the built-in
+    ``AuditLog``) before invoking the per-violation handler, so this
+    handler has nothing to do.
+    """
 
     name = "audit"
 
@@ -298,11 +287,14 @@ class AuditHandler:
         channel_id: str,
         violation: Violation,
     ) -> None:
-        await _audit_violation(hub, channel_id, violation)
+        return None
 
 
 class NotifyChannelHandler:
-    """Audit + broadcast ``EV_EXPECTATION_VIOLATED`` to every participant."""
+    """Broadcast ``EV_EXPECTATION_VIOLATED`` to every channel participant.
+
+    Audit emission is owned by the ``AuditLog`` listener.
+    """
 
     name = "notify_channel"
 
@@ -312,7 +304,6 @@ class NotifyChannelHandler:
         channel_id: str,
         violation: Violation,
     ) -> None:
-        await _audit_violation(hub, channel_id, violation)
         metadata = hub._channels.get(channel_id)
         if metadata is None or metadata.is_terminal():
             return
@@ -334,7 +325,10 @@ class NotifyChannelHandler:
 
 
 class AutoCloseHandler:
-    """Audit + transition the channel to ``CLOSED``."""
+    """Transition the channel to ``CLOSED``.
+
+    Audit emission is owned by the ``AuditLog`` listener.
+    """
 
     name = "auto_close"
 
@@ -344,7 +338,6 @@ class AutoCloseHandler:
         channel_id: str,
         violation: Violation,
     ) -> None:
-        await _audit_violation(hub, channel_id, violation)
         metadata = hub._channels.get(channel_id)
         if metadata is None or metadata.is_terminal():
             return
