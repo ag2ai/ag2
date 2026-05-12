@@ -141,6 +141,8 @@ Cross-process or cross-host transports plug in here. `#!python LocalLink` is the
 
 Every `#!python AgentClient` has an inbox bounded by its `#!python Rule.inbox.max_pending` (default unbounded). When the inbox fills, sends to that agent fail with `#!python InboxFull`. The `#!python wait_for_channel_event` and the default handler drain the inbox in order; custom handlers should do the same — never block forever in a callback.
 
+`#!python Rule.inbox.high_water` is a soft threshold below the hard cap: when a dispatch first pushes a recipient over it, the hub fires `#!python on_inbox_pressure(agent_id, pending, cap)` on every listener (and on a `#!python Hub` subclass override) — once per crossing, not on every subsequent envelope. It defaults to `#!python None`, which resolves to 80% of `#!python max_pending`; set `#!python 0` to disable the signal. See [HubListener](/docs/beta/network/expectations_and_audit#hublistener-observing-state-transitions).
+
 ## Closing Down
 
 ```python linenums="1"

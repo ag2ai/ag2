@@ -187,6 +187,24 @@ Two background tasks run as long as the hub is open:
 
 Both are tunable via `#!python ttl_sweep_interval` and `#!python expectation_sweep_interval`. Set to `0` to disable for tests; in those cases call `#!python await hub._ttl_tick()` or `#!python await hub._expectation_tick()` manually for deterministic timing.
 
+### Custom sweepers
+
+Attach your own periodic worker — protocol-specific background work like polling a chat platform's presence list or refreshing an auth token:
+
+```python linenums="1"
+async def heartbeat() -> None:
+    ...  # runs every 30s
+
+hub.register_sweeper("heartbeat", 30.0, heartbeat)
+# later, e.g. on a config reload:
+await hub.unregister_sweeper("heartbeat")
+```
+
+- `#!python register_sweeper(name, interval_seconds, fn)` is **synchronous** (it only updates bookkeeping). If the hub has already started (`#!python Hub.open(...)` calls `#!python start()` for you), the sweeper begins immediately; if you registered it before `#!python start()`, it begins then.
+- `#!python unregister_sweeper(name)` is **async** — it awaits clean cancellation of the running task. Unknown names are a no-op.
+- A duplicate `name` raises `#!python ValueError` (call `#!python unregister_sweeper` first to replace); a non-positive interval raises `#!python ValueError`.
+- `#!python hub.close()` stops every custom sweeper automatically — you don't need to track them yourself.
+
 ## Closing Down
 
 ```python
