@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 import typing
 from collections.abc import Sequence
 from enum import Enum
@@ -157,7 +156,7 @@ class _MetricsMiddleware(BaseMiddleware):
 
         try:
             response = await call_next(event, context)
-        except Exception as e:
+        except BaseException as e:
             error_type = self._get_error_type(e)
             self._metrics.agent_turns_total.labels(
                 agent=self._agent_name, outcome=Outcome.ERROR.value, error_type=error_type
@@ -186,7 +185,7 @@ class _MetricsMiddleware(BaseMiddleware):
 
         try:
             response = await call_next(events, context)
-        except Exception as exc:
+        except BaseException as exc:
             error_type = self._get_error_type(exc)
 
             self._metrics.llm_call_duration_seconds.labels(
@@ -266,7 +265,7 @@ class _MetricsMiddleware(BaseMiddleware):
 
         try:
             result = await call_next(event, context)
-        except Exception as exc:
+        except BaseException as exc:
             error_type = self._get_error_type(exc)
             self._metrics.tool_duration_seconds.labels(
                 agent=self._agent_name, tool=tool_name, outcome=Outcome.ERROR.value, error_type=error_type
@@ -298,11 +297,14 @@ class _MetricsMiddleware(BaseMiddleware):
 
         try:
             response = await call_next(event, context)
-        except asyncio.CancelledError as exc:
-            self._record_human_input_error(start_time, exc)
-            raise
-        except Exception as exc:
-            self._record_human_input_error(start_time, exc)
+        except BaseException as exc:
+            error_type = self._get_error_type(exc)
+            self._metrics.human_input_duration_seconds.labels(
+                agent=self._agent_name, outcome=Outcome.ERROR.value, error_type=error_type
+            ).observe(perf_counter() - start_time)
+            self._metrics.human_input_requests_total.labels(
+                agent=self._agent_name, outcome=Outcome.ERROR.value, error_type=error_type
+            ).inc()
             raise
 
         self._metrics.human_input_duration_seconds.labels(
@@ -313,15 +315,6 @@ class _MetricsMiddleware(BaseMiddleware):
         ).inc()
 
         return response
-
-    def _record_human_input_error(self, start_time: float, exception: BaseException) -> None:
-        error_type = self._get_error_type(exception)
-        self._metrics.human_input_duration_seconds.labels(
-            agent=self._agent_name, outcome=Outcome.ERROR.value, error_type=error_type
-        ).observe(perf_counter() - start_time)
-        self._metrics.human_input_requests_total.labels(
-            agent=self._agent_name, outcome=Outcome.ERROR.value, error_type=error_type
-        ).inc()
 
     def _get_agent_name(self, context: "Context") -> str | None:
         agent: Agent | None = context.dependencies.get(AGENT_CONTEXT_DEPENDENCY_KEY)
