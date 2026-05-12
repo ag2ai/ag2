@@ -107,18 +107,66 @@ class ConversationSummaryAggregate:
         return response.content or ""
 
 
+DEFAULT_WORKING_MEMORY_PROMPT = (
+    "You maintain an agent's working memory. Update it based on "
+    "the new conversation below. Preserve important existing context. "
+    "Remove outdated information. Keep it concise and actionable.\n\n"
+    "## Current Working Memory\n{existing}\n\n"
+    "## New Conversation\n{events}"
+)
+"""Default prompt template for ``WorkingMemoryAggregate``.
+
+Placeholders ``{existing}`` and ``{events}`` are substituted with the
+current ``/memory/working.md`` contents (or ``(empty)``) and a textual
+rendering of the new events. Pass a custom template via the ``prompt``
+keyword argument; either placeholder may be omitted if not needed.
+"""
+
+
 class WorkingMemoryAggregate:
     """Update /memory/working.md with latest context.
 
     Reads existing working memory, merges with new events, writes
     updated working memory. The agent starts each new conversation
-    with this as context (via WorkingMemoryPolicy).
+    with this as context (via ``WorkingMemoryPolicy``).
+
+    The built-in prompt is journal-style: preserve facts that are still
+    relevant, drop outdated content. For other memory shapes — procedural
+    memory (what tactics worked), reflection (what to do differently
+    next time), or task-state memory — override ``prompt`` with a
+    template that uses the ``{existing}`` and ``{events}`` placeholders.
+
+    When ``prompt`` is not enough — for example, you need a different
+    storage path, multi-call extraction, or schema-validated output —
+    write a small class that satisfies :class:`AggregateStrategy`:
+
+    .. code-block:: python
+
+        class ResearchLessonsAggregate:
+            def __init__(self, config: ModelConfig) -> None:
+                self._config = config
+                self.last_usage: dict = {}
+
+            async def aggregate(self, events, context, store) -> None:
+                # ...your own logic, your own paths, your own prompts.
 
     Costs one LLM call per aggregation.
+
+    Args:
+        config: Model config used for the merge LLM call.
+        prompt: Optional override template. Use ``{existing}`` and
+            ``{events}`` placeholders. Defaults to
+            :data:`DEFAULT_WORKING_MEMORY_PROMPT`.
     """
 
-    def __init__(self, config: ModelConfig) -> None:
+    def __init__(
+        self,
+        config: ModelConfig,
+        *,
+        prompt: str = DEFAULT_WORKING_MEMORY_PROMPT,
+    ) -> None:
         self._config = config
+        self._prompt_template = prompt
         self._serializer = PydanticSerializer(
             pydantic_config={"arbitrary_types_allowed": True},
             use_fastdepends_errors=False,
@@ -139,12 +187,9 @@ class WorkingMemoryAggregate:
 
     async def _merge(self, existing: str, events: list[BaseEvent]) -> str:
         client = self._config.create()
-        prompt = (
-            "You maintain an agent's working memory. Update it based on "
-            "the new conversation below. Preserve important existing context. "
-            "Remove outdated information. Keep it concise and actionable.\n\n"
-            f"## Current Working Memory\n{existing or '(empty)'}\n\n"
-            "## New Conversation\n" + "\n".join(str(e) for e in events)
+        prompt = self._prompt_template.format(
+            existing=existing or "(empty)",
+            events="\n".join(str(e) for e in events),
         )
         response = await client(
             [ModelRequest.ensure_request([prompt])],

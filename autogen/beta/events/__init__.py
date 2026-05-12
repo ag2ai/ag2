@@ -21,7 +21,12 @@ from .input_events import (
 )
 from .lifecycle import (
     AggregationCompleted,
+    AggregationFailed,
+    AggregationStarted,
     CompactionCompleted,
+    CompactionFailed,
+    CompactionStarted,
+    EventLogFailed,
     ObserverCompleted,
     ObserverStarted,
     UnknownEvent,
@@ -58,6 +63,8 @@ from .voice import (
 
 __all__ = (
     "AggregationCompleted",
+    "AggregationFailed",
+    "AggregationStarted",
     "AudioInput",
     "BaseEvent",
     "BinaryInput",
@@ -67,9 +74,12 @@ __all__ = (
     "BuiltinToolResultEvent",
     "ClientToolCallEvent",
     "CompactionCompleted",
+    "CompactionFailed",
+    "CompactionStarted",
     "Condition",
     "DataInput",
     "DocumentInput",
+    "EventLogFailed",
     "Field",
     "FileIdInput",
     "HaltEvent",

@@ -9,7 +9,15 @@ import pytest
 from autogen.beta import Agent, Context
 from autogen.beta.agent import KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, CompactionSummary, TailWindowCompact
-from autogen.beta.events import CompactionCompleted, ModelMessage, ModelRequest, ModelResponse, TextInput
+from autogen.beta.events import (
+    CompactionCompleted,
+    CompactionFailed,
+    CompactionStarted,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+)
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
@@ -135,4 +143,77 @@ class TestCompactionWiredOnAgent:
         )
         await agent.ask("once", stream=stream)
 
+        assert completions == []
+
+
+class _RaisingCompact:
+    """CompactStrategy that always raises — for failure-path tests."""
+
+    last_usage: dict = {}
+
+    async def compact(self, events, context, store) -> list:
+        raise RuntimeError("compact boom")
+
+
+@pytest.mark.asyncio
+class TestCompactionLifecycleEvents:
+    """Started + Failed events must reach the stream so failures are
+    observable without configuring Python logging."""
+
+    async def test_started_event_fires_before_strategy_runs(self) -> None:
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        started: list[CompactionStarted] = []
+        stream.where(CompactionStarted).subscribe(lambda e: started.append(e))
+
+        agent = Agent(
+            "compactor",
+            config=TestConfig(
+                ModelResponse(ModelMessage("a")),
+                ModelResponse(ModelMessage("b")),
+                ModelResponse(ModelMessage("c")),
+                ModelResponse(ModelMessage("d")),
+            ),
+            knowledge=KnowledgeConfig(
+                store=store,
+                compact=TailWindowCompact(target=2),
+                compact_trigger=CompactTrigger(max_events=3),
+            ),
+        )
+        reply = await agent.ask("turn-1", stream=stream)
+        for q in ("turn-2", "turn-3", "turn-4"):
+            reply = await reply.ask(q)
+
+        assert started
+        assert started[0].agent == "compactor"
+        assert started[0].strategy == "TailWindowCompact"
+
+    async def test_failed_event_fires_when_strategy_raises(self) -> None:
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        failures: list[CompactionFailed] = []
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionFailed).subscribe(lambda e: failures.append(e))
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "broken-compactor",
+            config=TestConfig(
+                ModelResponse(ModelMessage("a")),
+                ModelResponse(ModelMessage("b")),
+            ),
+            knowledge=KnowledgeConfig(
+                store=store,
+                compact=_RaisingCompact(),
+                compact_trigger=CompactTrigger(max_events=1),
+            ),
+        )
+        # The turn itself succeeds — only compaction failed.
+        await agent.ask("turn-1", stream=stream)
+
+        assert len(failures) == 1
+        assert failures[0].agent == "broken-compactor"
+        assert failures[0].strategy == "_RaisingCompact"
+        assert failures[0].error_type == "RuntimeError"
+        assert "compact boom" in failures[0].error
         assert completions == []
