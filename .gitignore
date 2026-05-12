@@ -212,3 +212,4 @@ remote-examples
 .cursor/
 .claude/
 .vercel/
+.codex/
