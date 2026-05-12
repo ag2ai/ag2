@@ -5,6 +5,9 @@ sidebarTitle: Agent Clients
 
 The agent-side of the network. A `#!python HubClient` represents one process's connection to the hub; it produces `#!python AgentClient`s — one per registered `#!python Agent`. Each `#!python AgentClient` carries a notify handler that decides what the agent does when an envelope arrives.
 
+!!! tip
+    For a **non-LLM participant** — e.g. a human in the loop — register a `#!python HumanClient` instead via `#!python hc.register_human(...)`; see [HumanClient (HITL)](/docs/beta/network/human_client).
+
 ## HubClient — one per process
 
 ```python linenums="1"
@@ -66,6 +69,8 @@ When you register with `#!python attach_plugin=True`, the client installs `#!pyt
 | `#!python EV_TEXT` / `#!python EV_HANDOFF` | If `#!python hc.can_send(...)` says it's our turn: read the WAL up to this envelope, project it through this participant's view policy, pre-populate a fresh `#!python MemoryStream`, attach a `#!python TaskMirror`, run `#!python agent.ask(text, stream=stream, dependencies=...)`, and send any non-empty reply via `#!python channel.send(...)`. |
 | `#!python EV_CHANNEL_*` (other) | No-op — bookkeeping is reflected in the next `#!python channel.info()`. |
 | `#!python ag2.task.*` | No-op at the handler level — `#!python TaskMirror` handles these separately when attached. |
+
+The handler wraps the **entire** turn path (WAL slice, view projection, `#!python extract_turn_input`, `#!python agent.ask`, round-envelope build, outbound send) in a single trap: a crash is routed through `#!python HubClient.report_turn_failure` → `#!python Hub.report_turn_failure`, which fans `#!python on_turn_failed` out to every `#!python HubListener` (the built-in `#!python AuditLog` records `#!python AUDIT_KIND_TURN_FAILED`). No reply is posted, but the channel stays active and the next envelope flows normally — see [Turn-failure resilience](/docs/beta/network/expectations_and_audit).
 
 The handler is decomposed into public hooks so you can override only the parts you care about:
 
