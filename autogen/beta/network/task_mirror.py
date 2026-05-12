@@ -12,6 +12,7 @@ and driven by the agent itself, and the mirror simply subscribes to
 """
 
 import contextlib
+import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -33,6 +34,9 @@ if TYPE_CHECKING:
     from .hub import Hub
 
 __all__ = ("TaskMirror",)
+
+
+logger = logging.getLogger(__name__)
 
 
 def _now_iso() -> str:
@@ -145,6 +149,35 @@ class TaskMirror:
             with contextlib.suppress(Exception):
                 stream.unsubscribe(sid)  # type: ignore[arg-type]
 
+    async def _escalate(self, task_id: str, op: str, exc: BaseException) -> None:
+        """Report a mirror-side failure without crashing the agent turn.
+
+        Logs at ``ERROR`` and fires ``on_task_event(task_id,
+        "mirror_failed", payload)`` through the hub's listeners so the
+        failure surfaces to operators / dashboards. Routing goes
+        through :meth:`HubClient.fire_task_event` (preferred) or
+        :meth:`Hub.fire_task_event` (direct construction in tests) —
+        both are public surfaces.
+        """
+        logger.error(
+            "task mirror failed: op=%s task_id=%s exc=%r",
+            op,
+            task_id,
+            exc,
+        )
+        payload = {
+            "op": op,
+            "owner_id": self._owner_id,
+            "channel_id": self._channel_id,
+            "exc_type": type(exc).__name__,
+            "exc_message": str(exc),
+        }
+        with contextlib.suppress(Exception):
+            if self._hub_client is not None:
+                await self._hub_client.fire_task_event(task_id, "mirror_failed", payload)
+            elif self._hub is not None:
+                await self._hub.fire_task_event(task_id, "mirror_failed", payload)
+
     async def _on_started(self, event: TaskStarted) -> None:
         spec = event.spec if event.spec is not None else TaskSpec(title=event.objective or "")
         now = _now_iso()
@@ -157,8 +190,10 @@ class TaskMirror:
             started_at=now,
             channel_id=self._channel_id,
         )
-        with contextlib.suppress(Exception):
+        try:
             await self._observe(metadata)
+        except Exception as exc:
+            await self._escalate(event.task_id, "started", exc)
 
     async def _on_progress(self, event: TaskProgress) -> None:
         try:
@@ -168,8 +203,8 @@ class TaskMirror:
             )
         except NotFoundError:
             pass
-        except Exception:
-            pass
+        except Exception as exc:
+            await self._escalate(event.task_id, "progress", exc)
 
     async def _on_completed(self, event: TaskCompleted) -> None:
         try:
@@ -180,8 +215,8 @@ class TaskMirror:
             )
         except NotFoundError:
             pass
-        except Exception:
-            pass
+        except Exception as exc:
+            await self._escalate(event.task_id, "completed", exc)
         await self._record_observation_if_tagged(event.task_id, TaskState.COMPLETED)
 
     async def _on_failed(self, event: TaskFailed) -> None:
@@ -193,8 +228,8 @@ class TaskMirror:
             )
         except NotFoundError:
             pass
-        except Exception:
-            pass
+        except Exception as exc:
+            await self._escalate(event.task_id, "failed", exc)
         await self._record_observation_if_tagged(event.task_id, TaskState.FAILED)
 
     async def _on_expired(self, event: TaskExpired) -> None:
@@ -202,8 +237,8 @@ class TaskMirror:
             await self._update(event.task_id, state=TaskState.EXPIRED)
         except NotFoundError:
             pass
-        except Exception:
-            pass
+        except Exception as exc:
+            await self._escalate(event.task_id, "expired", exc)
         await self._record_observation_if_tagged(event.task_id, TaskState.EXPIRED)
 
     async def _record_observation_if_tagged(self, task_id: str, outcome: TaskState) -> None:

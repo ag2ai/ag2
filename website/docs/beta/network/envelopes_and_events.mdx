@@ -110,6 +110,9 @@ await alice.send_envelope(envelope)
 
 The hub doesn't validate `event_type` against any allowlist; custom types pass through unmodified. Adapters fold only event types they recognise — substantive ones (`#!python EV_TEXT`, plus `#!python EV_PACKET` under the workflow adapter) and lifecycle ones (`#!python EV_CHANNEL_*`). Custom event types are written to the WAL and delivered to participants but don't advance turn-taking state.
 
+!!! tip "Adapter-shaped envelopes"
+    When the envelope *should* advance the channel's protocol (a normal text turn, a workflow round packet) but you're constructing it outside the agent loop — a bridge, a gateway, a test harness — use the adapter's Layer-2 helpers instead of building the `#!python Envelope` by hand: `#!python adapter.build_text_envelope(...)` / `#!python adapter.build_packet_envelope(..., handoff=, context_set=)`, fetched via `#!python hub.adapter_for(channel_id)`. They produce exactly the shape the adapter folds. See [Adapters Overview → Driving a channel without an Agent](/docs/beta/network/adapters_overview#driving-a-channel-without-an-agent).
+
 ## Causation
 
 `#!python causation_id` lets you mark an envelope as "in reply to" another:

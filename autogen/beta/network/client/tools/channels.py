@@ -15,6 +15,7 @@ The grouped surface keeps the LLM's tool list short — discovery,
 state, and lifecycle live behind one tool.
 """
 
+import contextlib
 from typing import TYPE_CHECKING, Any, Literal
 
 from autogen.beta.tools import tool
@@ -66,6 +67,7 @@ def make_channels_tool(agent_client: "AgentClient") -> object:
         knobs: dict | None = None,
         intent: str | None = None,
         ttl: str | int | None = None,
+        message: str | None = None,
         channel_id: str | None = None,
         state: Literal["active", "all"] = "active",
         client: AgentClientInject = None,
@@ -74,7 +76,11 @@ def make_channels_tool(agent_client: "AgentClient") -> object:
         """Channel lifecycle.
 
         ``list``:  args state="active"|"all"
-        ``open``:  args type, target, knobs?, intent?, ttl?
+        ``open``:  args type, target, knobs?, intent?, ttl?, message?
+                   ``message`` seeds the first envelope on the
+                   initiator's behalf after the channel transitions
+                   to ``OPENED`` — useful for short-lived channels
+                   where the initiator wants to atomically open + send.
         ``info``:  args channel_id
         ``close``: args channel_id? (defaults to current)
         """
@@ -107,11 +113,25 @@ def make_channels_tool(agent_client: "AgentClient") -> object:
                 )
             except Exception as exc:
                 return f"Error: open failed: {exc}"
-            return {
+            seeded_envelope_id: str | None = None
+            if message:
+                try:
+                    seeded_envelope_id = await channel.send(message)
+                except Exception as exc:
+                    # Rollback so we deliver atomic-ish semantics: a
+                    # failed seed should not leave a dangling-open
+                    # channel that no one ever sends into.
+                    with contextlib.suppress(Exception):
+                        await hub.close_channel(channel.channel_id, reason="seed_failed")
+                    return f"Error: seed send failed: {exc}"
+            result: dict = {
                 "channel_id": channel.channel_id,
                 "type": type,
                 "participants": [p.agent_id for p in channel.metadata.participants],
             }
+            if seeded_envelope_id:
+                result["seed_envelope_id"] = seeded_envelope_id
+            return result
 
         if action == "info":
             if not channel_id:

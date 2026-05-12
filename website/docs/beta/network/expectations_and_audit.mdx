@@ -180,6 +180,27 @@ hub.register_listener(MetricsListener())
 | `#!python on_task_event(task_id, kind, payload)` | `kind` ∈ `started` / `progress` / `completed` / `failed` / `expired` / `cancelled` / `mirror_failed`. |
 | `#!python on_inbox_pressure(agent_id, pending, cap)` | A recipient's pending count first crossed its inbox high-water mark (fires once per crossing). |
 
+### Subclassing the Hub instead of registering a listener
+
+The same `#!python on_*` methods are available on `#!python Hub` itself (with no-op defaults) — so if you're building a custom hub you can override them directly rather than registering the hub as a listener of itself:
+
+```python linenums="1"
+from autogen.beta.network import Hub
+
+class ObservingHub(Hub):
+    async def on_envelope_posted(self, envelope, metadata) -> None:
+        metrics.incr("network.envelopes", tags={"type": envelope.event_type})
+
+    async def on_inbox_pressure(self, agent_id, pending, cap) -> None:
+        logger.warning("inbox pressure: %s at %d/%d", agent_id, pending, cap)
+
+hub = await ObservingHub.open(store)
+```
+
+Subclass overrides fire **alongside** any externally-registered listeners, with the same per-callee `#!python try/except` isolation. Use a subclass when the observation logic belongs to your hub implementation; use `#!python register_listener(...)` when it's a separate concern (metrics shipper, audit tap) you want to attach and detach independently.
+
+`#!python on_task_event` is the one listener hook that isn't purely hub-driven — `#!python TaskMirror` (and other tenant code) emit `#!python "mirror_failed"` and other kinds through it. The public way to fan one out is `#!python await hub_client.fire_task_event(task_id, kind, payload)` (from a registered tenant) or `#!python await hub.fire_task_event(...)` (direct); neither touches the hub's private fan-out.
+
 ### Health snapshot
 
 `#!python hub.health()` is a cheap, in-memory operational snapshot — wire it to a `/health` endpoint or dashboard:
