@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 from typing_extensions import Self
@@ -44,11 +44,11 @@ class TestClient(LLMClient):
             await context.send(message)
             next_msg = ModelResponse(message)
 
+        elif isinstance(next_msg, Iterable):
+            next_msg = ModelResponse(tool_calls=ToolCallsEvent(list(next_msg)))
+
         elif isinstance(next_msg, ToolCallEvent):
             next_msg = ModelResponse(tool_calls=ToolCallsEvent([next_msg]))
-
-        elif isinstance(next_msg, Iterable):
-            next_msg = ModelResponse(tool_calls=ToolCallsEvent(list(cast(Iterable[ToolCallEvent], next_msg))))
 
         return next_msg
 
