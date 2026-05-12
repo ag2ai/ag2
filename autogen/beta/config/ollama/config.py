@@ -7,7 +7,7 @@ from typing import TypedDict
 
 from typing_extensions import Unpack
 
-from autogen.beta.config.config import ModelConfig
+from autogen.beta.config.config import ModelConfig, ModelProvider
 
 from .ollama_client import OLLAMA_DEFAULT_HOST, CreateOptions, OllamaClient
 
@@ -61,3 +61,7 @@ class OllamaConfig(ModelConfig):
 
     def create_files_client(self) -> None:
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.OLLAMA

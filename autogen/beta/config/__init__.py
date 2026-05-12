@@ -5,7 +5,7 @@
 from autogen.beta.exceptions import missing_optional_dependency
 
 from .client import LLMClient
-from .config import ModelConfig
+from .config import ModelConfig, ModelProvider
 
 try:
     from .openai import ContainerInfo, ContainerManager, ExpiresAfter, OpenAIConfig, OpenAIResponsesConfig
@@ -46,6 +46,7 @@ __all__ = (
     "GeminiConfig",
     "LLMClient",
     "ModelConfig",
+    "ModelProvider",
     "OllamaConfig",
     "OpenAIConfig",
     "OpenAIResponsesConfig",

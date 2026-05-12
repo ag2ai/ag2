@@ -39,11 +39,11 @@ The system SHALL emit a counter metric `ag2_llm_tokens_total` for token usage wi
 
 #### Scenario: Prompt tokens emitted
 - **WHEN** an LLM response contains `prompt_tokens` in usage
-- **THEN** the counter is incremented with `token_type="prompt"` by the token count
+- **THEN** the counter is incremented with `token_type="input"` by the token count
 
 #### Scenario: Completion tokens emitted
 - **WHEN** an LLM response contains `completion_tokens` in usage
-- **THEN** the counter is incremented with `token_type="completion"` by the token count
+- **THEN** the counter is incremented with `token_type="output"` by the token count
 
 #### Scenario: Cache read input tokens emitted
 - **WHEN** an LLM response contains `cache_read_input_tokens` in usage

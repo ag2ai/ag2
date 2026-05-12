@@ -8,7 +8,7 @@ from typing import TypedDict
 import google.auth
 from typing_extensions import Unpack
 
-from autogen.beta.config.config import ModelConfig
+from autogen.beta.config.config import ModelConfig, ModelProvider
 
 from .files import GeminiFilesClient
 from .gemini_client import CreateConfig, GeminiClient
@@ -95,6 +95,10 @@ class GeminiConfig(GeminiBaseConfig, ModelConfig):
     def create_files_client(self) -> GeminiFilesClient:
         return GeminiFilesClient(self)
 
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.GEMINI
+
 
 @dataclass(slots=True)
 class VertexAIConfig(GeminiBaseConfig, ModelConfig):
@@ -104,6 +108,10 @@ class VertexAIConfig(GeminiBaseConfig, ModelConfig):
 
     def copy(self, /, **overrides: Unpack[VertexAIConfigOverrides]) -> "VertexAIConfig":
         return replace(self, **overrides)
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.VERTEXAI
 
     def create(self) -> GeminiClient:
         return GeminiClient(

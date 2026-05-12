@@ -3,14 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock
 
 from typing_extensions import Self
 
 from autogen.beta import Context
-from autogen.beta.config import LLMClient, ModelConfig
+from autogen.beta.config import LLMClient, ModelConfig, ModelProvider
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, ToolErrorEvent
+
+if TYPE_CHECKING:
+    from autogen.beta.files.protocol import FilesClient
 
 __all__ = (
     "TestConfig",
@@ -41,11 +44,11 @@ class TestClient(LLMClient):
             await context.send(message)
             next_msg = ModelResponse(message)
 
-        elif isinstance(next_msg, Iterable):
-            next_msg = ModelResponse(tool_calls=ToolCallsEvent(list(next_msg)))
-
         elif isinstance(next_msg, ToolCallEvent):
             next_msg = ModelResponse(tool_calls=ToolCallsEvent([next_msg]))
+
+        elif isinstance(next_msg, Iterable):
+            next_msg = ModelResponse(tool_calls=ToolCallsEvent(list(cast(Iterable[ToolCallEvent], next_msg))))
 
         return next_msg
 
@@ -70,21 +73,48 @@ class TrackingConfig(ModelConfig):
         self.config = config
         self.mock = MagicMock()
 
+    @property
+    def provider(self) -> ModelProvider:
+        return self.config.provider
+
+    @property
+    def model(self) -> str:
+        return self.config.model
+
     def copy(self) -> Self:
         return self
 
     def create(self) -> TrackingClient:
         return TrackingClient(self.config.create(), self.mock)
 
-    def create_files_client(self) -> None:
+    def create_files_client(self) -> "FilesClient":
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
 
 
 class TestConfig(ModelConfig):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str) -> None:
+    def __init__(
+        self,
+        *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
+        provider: ModelProvider | None = None,
+        model: str | None = None,
+    ) -> None:
         self.events = events
+        self._provider = provider
+        self._model = model
+
+    @property
+    def provider(self) -> ModelProvider:
+        if not self._provider:
+            raise NotImplementedError
+        return self._provider
+
+    @property
+    def model(self) -> str:
+        if not self._model:
+            raise NotImplementedError
+        return self._model
 
     def copy(self) -> Self:
         return self
@@ -92,5 +122,5 @@ class TestConfig(ModelConfig):
     def create(self) -> TestClient:
         return TestClient(*self.events)
 
-    def create_files_client(self) -> None:
+    def create_files_client(self) -> "FilesClient":
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

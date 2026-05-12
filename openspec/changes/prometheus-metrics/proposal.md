@@ -20,14 +20,17 @@ Operators need Prometheus-compatible metrics to monitor AG2 Beta workloads in pr
 - `ag2_human_input_duration_seconds` — human input duration with custom buckets: `[1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1200.0, 1800.0, 3600.0, +Inf]`
 
 ### Token Types
-Supported `token_type` values: `prompt`, `completion`, `cache_read_input`, `cache_creation_input`
+Supported `token_type` values: `input`, `output`, `cache_read_input`, `cache_creation_input`
 
 ### Label Strategy
 - **Outcome labeling**: Single `outcome` label with values `"success"` or `"error"`, plus optional `error_type` label with exception name when `outcome="error"`
-- **Agent name extraction**: Retrieved from `context.dependencies` using key `"agent"`
+- **Agent name extraction**: Retrieved from `context.dependencies` using internal key `"__ag2_agent__"`
+- **Provider/model extraction**: Retrieved from `ModelConfig` via `context.dependencies` using internal key `"__ag2_model_config__"`. `ModelConfig` protocol exposes `provider` and `model` properties.
 - **Missing value normalization**: Missing values normalized to `"unknown"` label value
 - **Zero value handling**: Zero token values omitted from emission to reduce cardinality
 - **Missing values**: MUST NOT be synthesized as zero
+- **CollectorRegistry ownership**: A `CollectorRegistry` can be used by only one `MetricsMiddleware` instance. To share
+  a registry across agents, share the middleware instance as well.
 
 ### Streaming Support
 - Duration tracking supports streaming LLM responses by measuring from first chunk to final response
@@ -53,7 +56,8 @@ None — this is a new observability capability.
 - **Documentation**: `website/docs/beta/metrics.mdx` — comprehensive user guide
 - **Dependencies**: `prometheus_client` (optional dependency, installable via `pip install "ag2[metrics]"`)
 - **Public API**: `MetricsMiddleware` class exposed via `autogen.beta.middleware`
-- **Agent modification**: `Agent.ask()` modified to inject agent into context dependencies
+- **Agent modification**: `Agent.ask()` modified to inject agent and ModelConfig into context dependencies
+- **ModelConfig modification**: Add `provider` and `model` properties to `ModelConfig` protocol
 
 ## Documentation
 
@@ -63,6 +67,9 @@ A comprehensive documentation page at `website/docs/beta/metrics.mdx` following 
 - **Installation**: Required dependencies (`pip install "ag2[metrics]"`)
 - **Metrics Reference**: Table of all emitted metrics with names, types, labels, and descriptions
 - **Configuration**: All `MetricsMiddleware` parameters with defaults and explanations
+- **CollectorRegistry lifecycle**: Explain that `prometheus_client` has no public collector lookup API, so users must
+  create one `MetricsMiddleware` per `CollectorRegistry` and reuse it across agents instead of constructing multiple
+  middleware instances for the same registry
 - **Label Reference**: All label values and their meanings (outcome values, token_type values, error_type values)
 - **Prometheus Integration**: How to expose the `/metrics` endpoint
 - **Grafana Dashboard**: Example queries and dashboard setup

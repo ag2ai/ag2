@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from google.oauth2 import service_account
 
-from autogen.beta.config import GeminiConfig, VertexAIConfig
+from autogen.beta.config import GeminiConfig, ModelProvider, VertexAIConfig
 from autogen.beta.config.gemini import GeminiClient
 
 
@@ -63,6 +63,11 @@ def test_vertex_config_defaults() -> None:
     assert config.project is None
     assert config.location is None
     assert config.credentials is None
+
+
+def test_provider_labels() -> None:
+    assert GeminiConfig(model="gemini-2.0-flash").provider is ModelProvider.GEMINI
+    assert VertexAIConfig(model="gemini-2.5-pro").provider is ModelProvider.VERTEXAI
 
 
 def test_max_output_tokens_can_be_set() -> None:

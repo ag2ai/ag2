@@ -5,6 +5,7 @@
 from typing import Annotated
 from unittest.mock import MagicMock
 
+import dirty_equals
 import pytest
 from pydantic import ValidationError
 
@@ -84,7 +85,7 @@ async def test_call_tool_with_mixed_dependencies(
 
     await agent.ask("Hi!", dependencies={"dep2": "2"})
 
-    mock.assert_called_once_with({"dep": "1", "dep2": "2"})
+    mock.assert_called_once_with(dirty_equals.IsPartialDict({"dep": "1", "dep2": "2"}))
 
 
 @pytest.mark.asyncio()

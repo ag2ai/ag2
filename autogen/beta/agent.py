@@ -78,7 +78,7 @@ from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
 from .types import ClassInfo, Omittable, omit
-from .utils import CONTEXT_OPTION_NAME, build_model
+from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, CONTEXT_OPTION_NAME, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
@@ -758,6 +758,8 @@ class Agent(Generic[TResult]):
             variables=self._agent_variables | (variables or {}),
             dependency_provider=self.dependency_provider,
         )
+        context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY] = self
+        context.dependencies[MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY] = config
 
         if not context.prompt:
             context.prompt.extend(self._system_prompt)
