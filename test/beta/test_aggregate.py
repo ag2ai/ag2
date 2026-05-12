@@ -209,10 +209,7 @@ class TestWorkingMemoryAggregate:
 
         strategy = WorkingMemoryAggregate(
             config=mock_config,
-            prompt=(
-                "Track tactics, not facts. Existing notes:\n"
-                "{existing}\n---\nRound:\n{events}"
-            ),
+            prompt=("Track tactics, not facts. Existing notes:\n{existing}\n---\nRound:\n{events}"),
         )
         store = MemoryKnowledgeStore()
         await store.write("/memory/working.md", "prior tactics")

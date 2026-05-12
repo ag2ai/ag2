@@ -36,10 +36,7 @@ class DefaultBootstrap:
 
     async def bootstrap(self, store: KnowledgeStore, actor_name: str) -> None:
         if self._mention_tool:
-            root_intro = (
-                "This is your persistent knowledge store. "
-                "Use the `knowledge` tool to manage it."
-            )
+            root_intro = "This is your persistent knowledge store. Use the `knowledge` tool to manage it."
         else:
             root_intro = (
                 "This is the agent's persistent knowledge store. "

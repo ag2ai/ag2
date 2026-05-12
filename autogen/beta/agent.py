@@ -1016,9 +1016,7 @@ class Agent(Generic[TResult]):
                 if not self._bootstrap_done:
                     if not await self._knowledge_store.exists("/.initialized"):
                         await self._knowledge_store.write("/.initialized", self.name)
-                        bootstrap = self._bootstrap or DefaultBootstrap(
-                            mention_tool=self._knowledge_expose_tool
-                        )
+                        bootstrap = self._bootstrap or DefaultBootstrap(mention_tool=self._knowledge_expose_tool)
                         await bootstrap.bootstrap(self._knowledge_store, self.name)
                     self._bootstrap_done = True
 
