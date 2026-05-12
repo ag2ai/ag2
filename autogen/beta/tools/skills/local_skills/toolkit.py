@@ -18,35 +18,35 @@ from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
 
 
 class SkillsToolkit(Toolkit):
-    """Client-side skills toolkit using the agentskills.io convention.
+    """Client-side toolkit for ``agentskills.io``-style local skills.
 
-    Implements a three-step progressive-disclosure pattern:
+    Packs a three-step progressive-disclosure pattern as a single
+    toolkit so any provider can ship local skills without extra wiring:
 
-    1. **list_skills()** — returns a lightweight catalog (name + description).
-    2. **load_skill(name)** — returns the full ``SKILL.md`` instructions on demand.
-    3. **run_skill_script(name, script, args)** — executes a script from the
-       skill's ``scripts/`` directory.
+    1. ``list_skills()`` — lightweight catalog (name + description).
+    2. ``load_skill(name)`` — full ``SKILL.md`` instructions on demand.
+    3. ``run_skill_script(name, script, args)`` — execute a script from
+       the skill's ``scripts/`` directory.
 
-    Works with *any* provider (no provider-specific API required).
+    Default runtime scans ``./.agents/skills`` and ``~/.agents/skills``::
 
-    Example::
-        # Default runtime (.agents/skills + ~/.agents/skills)
         SkillsToolkit()
 
-        # Custom install directory
+    Custom install directory::
+
         SkillsToolkit(runtime=LocalRuntime("./skills"))
 
-        # Additional read-only search paths
+    Extra read-only search paths::
+
         SkillsToolkit(runtime=LocalRuntime("./skills", extra_paths=["./shared-skills"]))
 
-        # Pick individual tools
+    Pick individual tools instead of the full toolkit::
+
+        skills = SkillsToolkit()
         agent = Agent(
             "a",
             config=config,
-            tools=[
-                skills.list_skills(),
-                skills.load_skill(),
-            ],
+            tools=[skills.list_skills(), skills.load_skill()],
         )
     """
 
@@ -70,6 +70,11 @@ class SkillsToolkit(Toolkit):
             name="local_skills_toolkit",
             middleware=middleware,
         )
+
+    @property
+    def runtime(self) -> SkillRuntime:
+        """The underlying ``SkillRuntime`` used to discover and load skills."""
+        return self._runtime
 
     def list_skills(
         self,

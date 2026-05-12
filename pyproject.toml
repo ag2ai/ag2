@@ -83,7 +83,9 @@ dependencies = [
 [project.optional-dependencies]
 a2ui = ["jsonschema>=4.0.0,<5"]
 
-a2a = ["a2a-sdk[http-server]>=1.0.2,<2"]
+a2a = [
+    "a2a-sdk>=1.0.0,<2",
+]
 
 ag-ui = ["ag-ui-protocol>=0.1.10,<0.2"]
 
