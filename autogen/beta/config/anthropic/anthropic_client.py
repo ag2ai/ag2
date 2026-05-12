@@ -69,6 +69,7 @@ class AnthropicClient(LLMClient):
         http_client: httpx.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
         prompt_caching: bool = True,
+        extra_body: dict[str, Any] | None = None,
     ) -> None:
         self._client = AsyncAnthropic(
             api_key=api_key,
@@ -82,6 +83,7 @@ class AnthropicClient(LLMClient):
         self._create_options = {k: v for k, v in (create_options or {}).items() if k != "stream"}
         self._streaming = (create_options or {}).get("stream", False)
         self._prompt_caching = prompt_caching
+        self._extra_body = extra_body
 
     async def __call__(
         self,
@@ -151,6 +153,11 @@ class AnthropicClient(LLMClient):
             existing_betas.add("files-api-2025-04-14")
             create_kwargs.setdefault("extra_headers", {})
             create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
+
+        # User keys win over framework-set keys (e.g. mcp_servers) on collision.
+        if self._extra_body:
+            existing = create_kwargs.get("extra_body") or {}
+            create_kwargs["extra_body"] = {**existing, **self._extra_body}
 
         max_continuations = 5
 

@@ -19,11 +19,12 @@ from .builtin import (
     WebFetchTool,
     WebSearchTool,
 )
+from .code import SandboxCodeTool
 from .final import Toolkit, tool
-from .search import DuckDuckSearchTool, ExaToolkit, TavilySearchTool
+from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchToolkit, TavilySearchTool
 from .shell import LocalShellTool
 from .skills import SkillSearchToolkit, SkillsToolkit
-from .toolkits import FilesystemToolkit
+from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
 
 __all__ = (
     "CodeExecutionTool",
@@ -34,9 +35,14 @@ __all__ = (
     "FilesystemToolkit",
     "ImageGenerationTool",
     "LocalShellTool",
+    "MCPServer",
+    "MCPServerConfig",
     "MCPServerTool",
+    "MCPStdioServerConfig",
     "MemoryTool",
     "NetworkPolicy",
+    "PerplexitySearchToolkit",
+    "SandboxCodeTool",
     "ShellTool",
     "Skill",
     "SkillSearchToolkit",

@@ -542,16 +542,23 @@ class TestVariablesPropagation:
 
 @pytest.mark.asyncio
 class TestSubtaskOptOut:
-    async def test_disabled_actor_has_no_subtask_tools(self) -> None:
-        """``tasks=False`` suppresses ``run_subtask`` / ``run_subtasks``."""
+    async def test_default_actor_has_no_subtask_tools(self) -> None:
+        """A bare Agent has no subtask tools by default (``tasks=False``)."""
+        agent = Agent("default")
+
+        names = {t.schema.function.name for t in agent._build_subtask_tools()}
+        assert names == set()
+
+    async def test_explicit_disabled_actor_has_no_subtask_tools(self) -> None:
+        """Explicit ``tasks=False`` also suppresses subtask tools."""
         agent = Agent("disabled", tasks=False)
 
         names = {t.schema.function.name for t in agent._build_subtask_tools()}
         assert names == set()
 
-    async def test_default_actor_has_subtask_tools(self) -> None:
-        """A bare Agent still gets the auto-injected subtask tools by default."""
-        agent = Agent("default")
+    async def test_taskconfig_actor_has_subtask_tools(self) -> None:
+        """Passing ``tasks=TaskConfig(...)`` opts in to the auto-injected subtask tools."""
+        agent = Agent("enabled", tasks=TaskConfig())
 
         names = {t.schema.function.name for t in agent._build_subtask_tools()}
         assert names == {"run_subtask", "run_subtasks"}
@@ -838,7 +845,7 @@ def test_run_subtask_description_advertises_parallel_invocation() -> None:
     This is what teaches Claude/GPT/Gemini to emit multiple ``tool_use``
     blocks in one assistant message rather than serializing them.
     """
-    agent = Agent("any")
+    agent = Agent("any", tasks=TaskConfig())
     [run_subtask, run_subtasks] = agent._build_subtask_tools()
 
     desc = run_subtask.schema.function.description

@@ -49,7 +49,8 @@ The directory is created automatically if it does not exist. It is **not** delet
 For advanced configuration, pass a `LocalShellEnvironment` explicitly:
 
 ```python linenums="1"
-from autogen.beta.tools import LocalShellTool, LocalShellEnvironment
+from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools.shell import LocalShellEnvironment
 
 sh = LocalShellTool(
     LocalShellEnvironment(
@@ -94,7 +95,8 @@ Filtering is applied in this order on every `shell(command)` call:
 Use `readonly=True` to let the agent inspect files without modifying anything:
 
 ```python linenums="1"
-from autogen.beta.tools import LocalShellTool, LocalShellEnvironment
+from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools.shell import LocalShellEnvironment
 
 sh = LocalShellTool(
     LocalShellEnvironment(
@@ -122,7 +124,8 @@ Because files persist in `workdir` across `ask()` calls, the agent can build on 
 ```python linenums="1"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import LocalShellTool, LocalShellEnvironment
+from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools.shell import LocalShellEnvironment
 
 sh = LocalShellTool(LocalShellEnvironment(path="/tmp/counter_demo"))
 agent = Agent("coder", "You manage files.", config=AnthropicConfig(model="claude-sonnet-4-6"), tools=[sh])

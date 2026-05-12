@@ -40,10 +40,9 @@ Run::
 import asyncio
 
 from autogen.beta import Agent
-from autogen.beta.annotations import Context
+from autogen.beta import Context
 from autogen.beta.config import GeminiConfig
-from autogen.beta.events import BaseEvent
-from autogen.beta.events.alert import ObserverAlert
+from autogen.beta.events import BaseEvent, ObserverAlert
 from autogen.beta.observer import BaseObserver, LoopDetector, TokenMonitor
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch

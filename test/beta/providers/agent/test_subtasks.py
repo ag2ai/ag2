@@ -21,7 +21,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_run_subtask_auto_injected(provider_config) -> None:
-    """run_subtask is auto-injected on every Agent; LLM can dispatch it."""
+    """``tasks=TaskConfig()`` injects ``run_subtask``; LLM can dispatch it."""
     task_starts: list[TaskStarted] = []
     task_completions: list[TaskCompleted] = []
 
@@ -37,6 +37,7 @@ async def test_run_subtask_auto_injected(provider_config) -> None:
             "self-contained research questions. Be concise."
         ),
         config=provider_config,
+        tasks=TaskConfig(),
     )
     reply = await agent.ask(
         "Use run_subtask to find out what colour ripe bananas are. Then tell me the answer in one sentence.",
@@ -65,6 +66,7 @@ async def test_run_subtasks_parallel(provider_config) -> None:
             "user asks several unrelated things at once."
         ),
         config=provider_config,
+        tasks=TaskConfig(),
     )
     reply = await agent.ask(
         "Use run_subtasks with parallel=True to answer ALL of these in one tool call: "
@@ -163,6 +165,7 @@ async def test_subtask_cannot_recurse(provider_config) -> None:
             "delegator",
             prompt="Always use run_subtask for any factual lookup. Be concise.",
             config=provider_config,
+            tasks=TaskConfig(),
         )
         await agent.ask("Use run_subtask to look up: what colour is the sky?")
     finally:

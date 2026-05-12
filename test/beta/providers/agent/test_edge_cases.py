@@ -12,9 +12,9 @@ import asyncio
 import pytest
 
 from autogen.beta import Agent
-from autogen.beta.agent import KnowledgeConfig
+from autogen.beta.agent import KnowledgeConfig, TaskConfig
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
-from autogen.beta.events.lifecycle import CompactionCompleted
+from autogen.beta.events import CompactionCompleted
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.middleware.builtin import HistoryLimiter, RetryMiddleware
@@ -102,6 +102,7 @@ async def test_concurrent_tool_calls_via_run_subtasks(provider_config) -> None:
         "parallel",
         prompt=("Use run_subtasks with parallel=True to dispatch independent jobs. Be concise."),
         config=provider_config,
+        tasks=TaskConfig(),
     )
 
     reply = await agent.ask(

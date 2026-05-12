@@ -142,9 +142,9 @@ def events_to_responses_input(
                 blocks: list[dict[str, Any]] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
-                        blocks.append({"type": "output_text", "text": part.content})
+                        blocks.append({"type": "input_text", "text": part.content})
                     elif isinstance(part, DataInput):
-                        blocks.append({"type": "output_text", "text": serializer.encode(part.data).decode()})
+                        blocks.append({"type": "input_text", "text": serializer.encode(part.data).decode()})
                     elif isinstance(part, BinaryInput):
                         b64 = base64.b64encode(part.data).decode()
                         if part.kind is BinaryType.IMAGE:
@@ -180,7 +180,7 @@ def events_to_responses_input(
                     else:
                         raise UnsupportedInputError(type(part).__name__, "openai-responses")
 
-                if len(blocks) == 1 and (block := blocks[0])["type"] == "output_text":
+                if len(blocks) == 1 and (block := blocks[0])["type"] == "input_text":
                     result.append({
                         "type": "function_call_output",
                         "call_id": r.parent_id,
@@ -199,7 +199,10 @@ def events_to_responses_input(
                 result.append(message.item.model_dump(exclude_none=True, mode="json"))
 
         elif isinstance(message, OpenAIServerToolCallEvent):
-            result.append(message.item.model_dump(exclude_none=True, mode="json"))
+            # warnings=False: openai SDK pins ActionSearchSource.type to
+            # Literal["url"] but the API returns other values (e.g. "api"),
+            # which makes pydantic warn on every round-trip serialization.
+            result.append(message.item.model_dump(exclude_none=True, mode="json", warnings=False))
 
         elif isinstance(message, ModelRequest):
             for inp in message.parts:
@@ -227,12 +230,34 @@ def events_to_responses_input(
 
                 elif isinstance(inp, BinaryInput):
                     b64 = base64.b64encode(inp.data).decode()
-                    item: dict[str, Any] = {
-                        "type": "input_file",
-                        "file_data": f"data:{inp.media_type};base64,{b64}",
-                        **inp.vendor_metadata,
-                    }
-                    result.append({"role": "user", "content": [item]})
+                    if inp.kind is BinaryType.IMAGE:
+                        image_block: dict[str, Any] = {
+                            "type": "input_image",
+                            "image_url": f"data:{inp.media_type};base64,{b64}",
+                        }
+                        if "detail" in inp.vendor_metadata:
+                            image_block["detail"] = inp.vendor_metadata["detail"]
+                        result.append({"role": "user", "content": [image_block]})
+
+                    elif inp.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
+                        # input_file with file_data *requires* filename.
+                        filename = inp.vendor_metadata.get("filename")
+                        if not filename:
+                            suffix = inp.media_type.rsplit("/", 1)[-1].split("+", 1)[0]
+                            filename = f"file.{suffix}"
+                        result.append({
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "input_file",
+                                    "file_data": f"data:{inp.media_type};base64,{b64}",
+                                    "filename": filename,
+                                }
+                            ],
+                        })
+
+                    else:
+                        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "openai-responses")
 
                 elif isinstance(inp, UrlInput):
                     if inp.kind is BinaryType.IMAGE:
@@ -307,7 +332,10 @@ def convert_messages(
                     elif inp.kind is BinaryType.IMAGE:
                         b64 = base64.b64encode(inp.data).decode()
                         data_url = f"data:{inp.media_type};base64,{b64}"
-                        parts.append({"type": "image_url", "image_url": {"url": data_url}, **inp.vendor_metadata})
+                        image_url: dict[str, Any] = {"url": data_url}
+                        if "detail" in inp.vendor_metadata:
+                            image_url["detail"] = inp.vendor_metadata["detail"]
+                        parts.append({"type": "image_url", "image_url": image_url})
 
                     elif inp.kind is BinaryType.DOCUMENT:
                         b64 = base64.b64encode(inp.data).decode()
@@ -460,6 +488,14 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         raise UnsupportedToolError(t.type, "openai-responses")
 
     raise UnsupportedToolError(t.type, "openai-responses")
+
+
+def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
+    includes: list[str] = []
+    for t in tools:
+        if isinstance(t, WebSearchToolSchema):
+            includes.append("web_search_call.action.sources")
+    return includes
 
 
 def normalize_usage(usage: CompletionUsage) -> Usage:

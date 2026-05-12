@@ -5,7 +5,8 @@
 import pytest
 
 from autogen.beta import Context
-from autogen.beta.config.openai.mappers import tool_to_responses_api
+from autogen.beta.config.openai.mappers import responses_api_includes, tool_to_responses_api
+from autogen.beta.tools.builtin.code_execution import CodeExecutionTool
 from autogen.beta.tools.builtin.web_search import UserLocation, WebSearchTool
 
 
@@ -96,3 +97,22 @@ async def test_responses_api_with_allowed_domains(context: Context) -> None:
         "type": "web_search",
         "filters": {"allowed_domains": ["example.com", "docs.example.com"]},
     }
+
+
+@pytest.mark.asyncio
+class TestResponsesApiIncludes:
+    """`responses_api_includes` declares which Responses API include[] entries
+    are required to surface observable payload for the given tools."""
+
+    async def test_web_search_requests_action_sources(self, context: Context) -> None:
+        [schema] = await WebSearchTool().schemas(context)
+
+        assert responses_api_includes([schema]) == ["web_search_call.action.sources"]
+
+    async def test_no_tools_returns_empty(self) -> None:
+        assert responses_api_includes([]) == []
+
+    async def test_unrelated_builtin_returns_empty(self, context: Context) -> None:
+        [schema] = await CodeExecutionTool().schemas(context)
+
+        assert responses_api_includes([schema]) == []

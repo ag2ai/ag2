@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from autogen.beta.context import ConversationContext
+from autogen.beta import Context
 from autogen.beta.exceptions import InvalidSkillError, SkillInstallError
 from autogen.beta.tools.skills import LocalRuntime, SkillSearchToolkit
 from autogen.beta.tools.skills.skill_search.client import SkillsClient
@@ -364,7 +364,7 @@ def test_lock_read_nonexistent(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_toolkit_exposes_six_tools(tmp_path: Path, context: ConversationContext) -> None:
+async def test_toolkit_exposes_six_tools(tmp_path: Path, context: Context) -> None:
     toolkit = SkillSearchToolkit(runtime=tmp_path / "skills")
 
     schemas = list(await toolkit.schemas(context))
@@ -375,7 +375,7 @@ async def test_toolkit_exposes_six_tools(tmp_path: Path, context: ConversationCo
 
 
 @pytest.mark.asyncio
-async def test_toolkit_individual_tools_accessible(tmp_path: Path, context: ConversationContext) -> None:
+async def test_toolkit_individual_tools_accessible(tmp_path: Path, context: Context) -> None:
     toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
 
     for attr in ("search_skills", "install_skill", "remove_skill", "list_skills", "load_skill", "run_skill_script"):

@@ -405,7 +405,7 @@ If you are unsure where a behavior belongs, use this rule of thumb:
 - Use `on_turn()` when the behavior is about the entire request/response lifecycle.
 - Use `on_llm_call()` when the behavior is about what goes into or comes out of the model.
 - Use `on_tool_execution()` when the behavior is about tool safety, auditing, or result shaping across tools (or when branching on `event.name` is acceptable).
-  - Use **tool-scoped** `middleware=[...]` on `@tool` / `Agent.tool` / `Toolkit.tool` when the behavior applies only to that tool’s definition; see [Tool middleware](/docs/beta/tools/tool_middleware){.internal-link}.
+    - Use **tool-scoped** `middleware=[...]` on `@tool` / `Agent.tool` / `Toolkit.tool` when the behavior applies only to that tool’s definition; see [Tool middleware](/docs/beta/tools/tool_middleware){.internal-link}.
 - Use `on_human_input()` when the behavior is about intercepting, logging, or transforming human-in-the-loop requests and responses.
 
 For related runtime customization patterns, see [Tools](/docs/beta/tools/tools), [Tool middleware](/docs/beta/tools/tool_middleware), [Prompt Management](../system_prompts), and [Events Streaming](../advanced/stream).

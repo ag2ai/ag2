@@ -87,7 +87,7 @@ Before opening a PR, read and follow `.github/AI_POLICY.md`.
 | `events/` | Event types for the agent loop | `BaseEvent`, `ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `Usage`, … |
 | `config/` | LLM provider clients (see [below](#llm-provider-clients)) | `ModelConfig`, `LLMClient`, `AnthropicConfig`, `OpenAIConfig`, `GeminiConfig`, … |
 | `tools/` | Tool system — builtin + user-defined | `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
-| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `depth_limiter`, `persistent_stream`, `StreamFactory` |
+| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `persistent_stream`, `StreamFactory` |
 | `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, … |
 | `response/` | Structured output validation | `ResponseSchema`, `PromptedSchema`, `ResponseProto`, `response_schema` |
 | `history.py` | Conversation history storage | `History`, `Storage`, `MemoryStorage` |
@@ -162,10 +162,10 @@ Subagent tools live in `autogen/beta/tools/subagents/` and are imported from `au
 
 ### Auto-injected `run_subtask` / `run_subtasks`
 
-Every `Agent` (unless constructed with `tasks=False`) automatically carries a `run_subtask(task)` and a `run_subtasks(tasks=[...], parallel=True)` tool. Each call spawns a **subtask Agent** that:
+Sub-task delegation is **off by default** (`tasks=False`). Pass `tasks=TaskConfig(...)` to opt in, and the `Agent` gains a `run_subtask(task)` and a `run_subtasks(tasks=[...], parallel=True)` tool. Each call spawns a **subtask Agent** that:
 
 - Inherits the parent's user-supplied tools by default (filterable via `TaskConfig.include_tools` / `exclude_tools`, extendable via `extra_tools`).
-- Is constructed with `tasks=False`, so the subtask itself has **no** `run_subtask` tools — recursive delegation is structurally impossible. No depth limiting required.
+- Is itself constructed with `tasks=False` (the default), so the subtask has **no** `run_subtask` tools — recursive delegation is structurally impossible. No depth limiting required.
 - Runs on its own `MemoryStream`; child events do not leak into the parent's stream beyond `TaskStarted` / `TaskCompleted` / `TaskFailed` lifecycle events.
 
 The LLM is told (via the tool description) that `run_subtask` may be invoked multiple times in parallel within a single response, encouraging the parallel-tool-use pattern Anthropic recommends.

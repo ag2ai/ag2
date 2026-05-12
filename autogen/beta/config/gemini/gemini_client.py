@@ -5,7 +5,7 @@
 import json
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 from uuid import uuid4
 
 import google.auth
@@ -39,6 +39,8 @@ from .mappers import (
     response_proto_to_config,
 )
 
+ThinkingLevel = Literal["low", "medium", "high"]
+
 
 class CreateConfig(TypedDict, total=False):
     temperature: float | None
@@ -49,6 +51,7 @@ class CreateConfig(TypedDict, total=False):
     presence_penalty: float | None
     frequency_penalty: float | None
     seed: int | None
+    thinking_config: types.ThinkingConfig | None
 
 
 class GeminiClient(LLMClient):
@@ -139,7 +142,7 @@ class GeminiClient(LLMClient):
                 for part in candidate.content.parts or ():
                     if part.thought and part.text:
                         await context.send(ModelReasoning(part.text))
-                    elif part.text is not None:
+                    elif part.text:
                         model_msg = ModelMessage(part.text)
                         await context.send(model_msg)
                     elif part.function_call:
@@ -215,7 +218,7 @@ class GeminiClient(LLMClient):
                     for part in candidate.content.parts or ():
                         if part.thought and part.text:
                             await context.send(ModelReasoning(part.text))
-                        elif part.text is not None:
+                        elif part.text:
                             full_content += part.text
                             await context.send(ModelMessageChunk(part.text))
                         elif part.function_call:

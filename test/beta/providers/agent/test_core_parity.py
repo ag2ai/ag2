@@ -21,8 +21,7 @@ from typing import Annotated, Any
 import pytest
 from pydantic import BaseModel
 
-from autogen.beta import Agent, Context
-from autogen.beta.annotations import Inject, Variable
+from autogen.beta import Agent, Context, Inject, Variable
 from autogen.beta.events import ModelMessageChunk
 from autogen.beta.stream import MemoryStream
 

@@ -39,7 +39,7 @@ from autogen.beta.config import ModelConfig
 from autogen.beta.events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
-from autogen.beta.observer import Observer
+from autogen.beta.observers import Observer
 from autogen.beta.tools.final import ClientTool
 from autogen.beta.tools.tool import Tool
 
@@ -147,6 +147,9 @@ async def run_stream(
         nonlocal streaming_msg_id
 
         if isinstance(event, events.ModelMessageChunk):
+            if not event.content:
+                return
+
             if streaming_msg_id is None:
                 streaming_msg_id = str(uuid4())
                 await write_events_stream.send(
@@ -174,7 +177,7 @@ async def run_stream(
                 )
                 streaming_msg_id = None
 
-            else:
+            elif event.content:
                 await write_events_stream.send(
                     TextMessageChunkEvent(
                         message_id=str(uuid4()),
@@ -365,7 +368,7 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
 
             messages.append(
                 events.ModelResponse(
-                    events.ModelMessage(m.content),
+                    events.ModelMessage(m.content) if m.content else None,
                     tool_calls=events.ToolCallsEvent(tool_calls),
                 )
             )
