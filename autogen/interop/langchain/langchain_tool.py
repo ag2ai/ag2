@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable
 from typing import Any
 
 from ...doc_utils import export_module
@@ -16,7 +17,7 @@ with optional_import_block():
     from langchain_core.tools import StructuredTool as LangchainStructuredTool
 
 
-def _has_async_run(langchain_tool: "LangchainTool") -> bool:
+def _has_async_run(langchain_tool: Any) -> bool:
     """Return True if the langchain tool defines a native async implementation.
 
     Detects both ``StructuredTool(coroutine=...)`` and class-based ``BaseTool``
@@ -70,15 +71,13 @@ class LangChainInteroperability:
 
         model_type = langchain_tool.get_input_schema()
 
-        if _has_async_run(langchain_tool):
+        async def async_func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
+            return await langchain_tool.arun(tool_input.model_dump())  # type: ignore[attr-defined]
 
-            async def func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
-                return await langchain_tool.arun(tool_input.model_dump())  # type: ignore[attr-defined]
+        def sync_func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
+            return langchain_tool.run(tool_input.model_dump())  # type: ignore[attr-defined]
 
-        else:
-
-            def func(tool_input: model_type) -> Any:  # type: ignore[valid-type,no-redef]
-                return langchain_tool.run(tool_input.model_dump())  # type: ignore[attr-defined]
+        func: Callable[..., Any] = async_func if _has_async_run(langchain_tool) else sync_func
 
         return Tool(
             name=langchain_tool.name,
