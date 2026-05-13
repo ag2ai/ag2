@@ -17,7 +17,7 @@ from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
 logger = logging.getLogger(__name__)
 
-_WEB_SEARCH_ACTION_TYPES = frozenset({"search", "open_page", "find"})
+_WEB_SEARCH_ACTION_TYPES = frozenset({"search", "open_page", "find", "find_in_page"})
 
 
 def openai_call_from_agui(

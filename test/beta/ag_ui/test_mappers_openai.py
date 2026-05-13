@@ -62,7 +62,7 @@ class TestWebSearch:
     def test_find_action_round_trips(self) -> None:
         item = ResponseFunctionWebSearch(
             id="ws_3",
-            action=ActionFind(type="find", url="https://example.com", pattern="needle"),
+            action=ActionFind(type="find_in_page", url="https://example.com", pattern="needle"),
             status="completed",
             type="web_search_call",
         )
