@@ -299,7 +299,7 @@ class MCPProxy:
         # Removing "from __future__ import annotations" to avoid ForwardRef issues, should be fixed in fastapi_code_generator
         main_py_code = main_py_code.replace("from __future__ import annotations", "")
 
-        with main_path.open("w") as f:
+        with main_path.open("w", encoding="utf-8") as f:
             f.write(main_py_code)
 
         return main_path.stem
@@ -435,7 +435,7 @@ class MCPProxy:
         rendered_config = template.render(context)
 
         # Save the output to a file
-        with open(output_file, "w") as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             f.write(rendered_config)
 
     def load_configuration(self, config_file: str) -> None:
