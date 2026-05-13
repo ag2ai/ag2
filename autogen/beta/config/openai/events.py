@@ -51,10 +51,15 @@ class OpenAIServerToolCallEvent(BuiltinToolCallEvent):
                 item=item,
             )
         if isinstance(item, ResponseCodeInterpreterToolCall):
+            # container_id is a required SDK field — must be in arguments so the
+            # AG-UI inbound mapper can reconstruct the item via model_validate.
+            arguments: dict[str, Any] = {"container_id": item.container_id}
+            if item.code is not None:
+                arguments["code"] = item.code
             return cls(
                 id=item.id,
                 name=CODE_EXECUTION_TOOL_NAME,
-                arguments=json.dumps({"code": item.code}) if item.code is not None else "{}",
+                arguments=json.dumps(arguments),
                 item=item,
             )
         if isinstance(item, ImageGenerationCall) and item.result:

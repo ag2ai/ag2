@@ -112,7 +112,10 @@ async def test_process_response_routes_all_block_types() -> None:
             block=web_result,
         ),
         AnthropicServerToolCallEvent(
-            id="b1", name=CODE_EXECUTION_TOOL_NAME, arguments='{"cmd": "ls"}', block=bash_call
+            id="b1",
+            name=CODE_EXECUTION_TOOL_NAME,
+            arguments='{"_kind": "bash_code_execution", "cmd": "ls"}',
+            block=bash_call,
         ),
         AnthropicServerToolResultEvent(
             parent_id="b1",
@@ -265,7 +268,12 @@ class TestResultParts:
         _, events = await _process([call, result])
 
         assert events == [
-            AnthropicServerToolCallEvent(id="c1", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", block=call),
+            AnthropicServerToolCallEvent(
+                id="c1",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"_kind": "code_execution"}',
+                block=call,
+            ),
             AnthropicServerToolResultEvent(
                 parent_id="c1",
                 name=CODE_EXECUTION_TOOL_NAME,
@@ -293,7 +301,12 @@ class TestResultParts:
         _, events = await _process([call, result])
 
         assert events == [
-            AnthropicServerToolCallEvent(id="c2", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", block=call),
+            AnthropicServerToolCallEvent(
+                id="c2",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"_kind": "code_execution"}',
+                block=call,
+            ),
             AnthropicServerToolResultEvent(
                 parent_id="c2",
                 name=CODE_EXECUTION_TOOL_NAME,
@@ -313,7 +326,12 @@ class TestResultParts:
         _, events = await _process([call, result])
 
         assert events == [
-            AnthropicServerToolCallEvent(id="c3", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", block=call),
+            AnthropicServerToolCallEvent(
+                id="c3",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"_kind": "code_execution"}',
+                block=call,
+            ),
             AnthropicServerToolResultEvent(
                 parent_id="c3",
                 name=CODE_EXECUTION_TOOL_NAME,
@@ -342,7 +360,12 @@ class TestResultParts:
         _, events = await _process([call, result])
 
         assert events == [
-            AnthropicServerToolCallEvent(id="b1", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", block=call),
+            AnthropicServerToolCallEvent(
+                id="b1",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"_kind": "bash_code_execution"}',
+                block=call,
+            ),
             AnthropicServerToolResultEvent(
                 parent_id="b1",
                 name=CODE_EXECUTION_TOOL_NAME,
@@ -364,7 +387,12 @@ class TestResultParts:
         _, events = await _process([call, result])
 
         assert events == [
-            AnthropicServerToolCallEvent(id="b2", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", block=call),
+            AnthropicServerToolCallEvent(
+                id="b2",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"_kind": "bash_code_execution"}',
+                block=call,
+            ),
             AnthropicServerToolResultEvent(
                 parent_id="b2",
                 name=CODE_EXECUTION_TOOL_NAME,
@@ -397,7 +425,12 @@ class TestResultParts:
         _, events = await _process([call, result])
 
         assert events == [
-            AnthropicServerToolCallEvent(id="t1", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", block=call),
+            AnthropicServerToolCallEvent(
+                id="t1",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"_kind": "text_editor_code_execution"}',
+                block=call,
+            ),
             AnthropicServerToolResultEvent(
                 parent_id="t1",
                 name=CODE_EXECUTION_TOOL_NAME,
@@ -421,7 +454,12 @@ class TestResultParts:
         _, events = await _process([call, result])
 
         assert events == [
-            AnthropicServerToolCallEvent(id="t2", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", block=call),
+            AnthropicServerToolCallEvent(
+                id="t2",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"_kind": "text_editor_code_execution"}',
+                block=call,
+            ),
             AnthropicServerToolResultEvent(
                 parent_id="t2",
                 name=CODE_EXECUTION_TOOL_NAME,
@@ -447,7 +485,12 @@ class TestResultParts:
         _, events = await _process([call, result])
 
         assert events == [
-            AnthropicServerToolCallEvent(id="t3", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", block=call),
+            AnthropicServerToolCallEvent(
+                id="t3",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"_kind": "text_editor_code_execution"}',
+                block=call,
+            ),
             AnthropicServerToolResultEvent(
                 parent_id="t3",
                 name=CODE_EXECUTION_TOOL_NAME,
@@ -473,7 +516,12 @@ class TestResultParts:
         _, events = await _process([call, result])
 
         assert events == [
-            AnthropicServerToolCallEvent(id="t4", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", block=call),
+            AnthropicServerToolCallEvent(
+                id="t4",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"_kind": "text_editor_code_execution"}',
+                block=call,
+            ),
             AnthropicServerToolResultEvent(
                 parent_id="t4",
                 name=CODE_EXECUTION_TOOL_NAME,

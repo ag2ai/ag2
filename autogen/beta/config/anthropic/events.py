@@ -54,25 +54,41 @@ AnthropicServerToolResultBlockType: TypeAlias = (
     | TextEditorCodeExecutionToolResultBlock
 )
 
+# SDK-level tool names that all map onto AG2's CODE_EXECUTION_TOOL_NAME.
+# Re-exported so AG-UI mappers can match by `_kind` discriminator without
+# duplicating the list.
+CODE_EXECUTION_SDK_NAMES: frozenset[str] = frozenset({
+    "code_execution",
+    "bash_code_execution",
+    "text_editor_code_execution",
+})
+
 
 class AnthropicServerToolCallEvent(BuiltinToolCallEvent):
     block: ServerToolUseBlock = Field(repr=False)
 
     @classmethod
     def from_block(cls, block: ServerToolUseBlock) -> "AnthropicServerToolCallEvent | None":
-        match block.name:
-            case "web_search":
-                name = WEB_SEARCH_TOOL_NAME
-            case "web_fetch":
-                name = WEB_FETCH_TOOL_NAME
-            case "code_execution" | "bash_code_execution" | "text_editor_code_execution":
-                name = CODE_EXECUTION_TOOL_NAME
-            case _:
-                return None
+        if block.name == "web_search":
+            name = WEB_SEARCH_TOOL_NAME
+            arguments_payload: dict[str, Any] = dict(block.input) if isinstance(block.input, dict) else {}
+        elif block.name == "web_fetch":
+            name = WEB_FETCH_TOOL_NAME
+            arguments_payload = dict(block.input) if isinstance(block.input, dict) else {}
+        elif block.name in CODE_EXECUTION_SDK_NAMES:
+            # The three code-execution SDK names collapse into one AG-UI tool
+            # name; _kind preserves the SDK discriminator for AG-UI inbound
+            # reconstruction.
+            name = CODE_EXECUTION_TOOL_NAME
+            arguments_payload = {"_kind": block.name}
+            if isinstance(block.input, dict):
+                arguments_payload.update(block.input)
+        else:
+            return None
         return cls(
             id=block.id,
             name=name,
-            arguments=json.dumps(block.input),
+            arguments=json.dumps(arguments_payload),
             block=block,
         )
 

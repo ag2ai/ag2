@@ -122,7 +122,10 @@ async def test_process_response_routes_all_item_types() -> None:
             result=ToolResult(metadata={"action_type": "search", "status": "completed"}),
         ),
         OpenAIServerToolCallEvent(
-            id="ci_1", name=CODE_EXECUTION_TOOL_NAME, arguments=json.dumps({"code": "print(1)"}), item=code
+            id="ci_1",
+            name=CODE_EXECUTION_TOOL_NAME,
+            arguments=json.dumps({"container_id": "c_1", "code": "print(1)"}),
+            item=code,
         ),
         OpenAIServerToolResultEvent(
             parent_id="ci_1",
@@ -391,7 +394,10 @@ class TestResultParts:
 
         assert events == [
             OpenAIServerToolCallEvent(
-                id="ci_1", name=CODE_EXECUTION_TOOL_NAME, arguments=json.dumps({"code": "print('hi')"}), item=code
+                id="ci_1",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments=json.dumps({"container_id": "c_1", "code": "print('hi')"}),
+                item=code,
             ),
             OpenAIServerToolResultEvent(
                 parent_id="ci_1",
@@ -414,7 +420,10 @@ class TestResultParts:
 
         assert events == [
             OpenAIServerToolCallEvent(
-                id="ci_2", name=CODE_EXECUTION_TOOL_NAME, arguments=json.dumps({"code": "plot()"}), item=code
+                id="ci_2",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments=json.dumps({"container_id": "c_2", "code": "plot()"}),
+                item=code,
             ),
             OpenAIServerToolResultEvent(
                 parent_id="ci_2",
@@ -439,7 +448,12 @@ class TestResultParts:
         _, events = await _process([code])
 
         assert events == [
-            OpenAIServerToolCallEvent(id="ci_3", name=CODE_EXECUTION_TOOL_NAME, arguments="{}", item=code),
+            OpenAIServerToolCallEvent(
+                id="ci_3",
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments=json.dumps({"container_id": "c_3"}),
+                item=code,
+            ),
             OpenAIServerToolResultEvent(
                 parent_id="ci_3",
                 name=CODE_EXECUTION_TOOL_NAME,
