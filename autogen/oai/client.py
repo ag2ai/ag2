@@ -241,6 +241,8 @@ AOPENAI_FALLBACK_KWARGS = {
     "project",
     "webhook_secret",
     "workload_identity",
+    "_enforce_credentials",
+    "admin_api_key",
 }
 
 
