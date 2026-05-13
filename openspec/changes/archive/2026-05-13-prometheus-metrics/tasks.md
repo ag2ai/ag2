@@ -61,14 +61,14 @@
 
 ## 9. Documentation
 
-- [ ] 9.1 Create `website/docs/beta/metrics.mdx` with frontmatter and overview
-- [ ] 9.2 Add Installation section with dependency instructions (`pip install "ag2[metrics]"`)
-- [ ] 9.3 Add Quick Start section with complete working example (Prometheus registry, agent setup)
-- [ ] 9.4 Add Metrics Reference table (all counters and histograms with labels, custom buckets)
-- [ ] 9.5 Add Label Reference section (outcome values, error_type values, token_type values, normalization rules)
-- [ ] 9.6 Add Configuration section (all MetricsMiddleware parameters)
-- [ ] 9.7 Add Prometheus Integration section (exposing /metrics endpoint)
-- [ ] 9.8 Add Grafana Dashboard section (example queries, dashboard setup, success rate calculations)
-- [ ] 9.9 Add Best Practices section (cardinality considerations, naming conventions, streaming considerations)
-- [ ] 9.10 Document `CollectorRegistry` lifecycle: create one `MetricsMiddleware` per registry and share it across agents
-- [ ] 9.11 Add page to navigation in `website/mint-json-template.json.jinja`
+- [x] 9.1 Create `website/docs/beta/metrics.mdx` with frontmatter and overview
+- [x] 9.2 Add Installation section with dependency instructions (`pip install "ag2[metrics]"`)
+- [x] 9.3 Add Quick Start section with complete working example (Prometheus registry, agent setup)
+- [x] 9.4 Add Metrics Reference table (all counters and histograms with labels, custom buckets)
+- [x] 9.5 Add Label Reference section (outcome values, error_type values, token_type values, normalization rules)
+- [x] 9.6 Add Configuration section (all MetricsMiddleware parameters)
+- [x] 9.7 Add Prometheus Integration section (exposing /metrics endpoint)
+- [x] 9.8 Add Grafana Dashboard section (example queries, dashboard setup, success rate calculations)
+- [x] 9.9 Add Best Practices section (cardinality considerations, naming conventions, streaming considerations)
+- [x] 9.10 Document `CollectorRegistry` lifecycle: create one `MetricsMiddleware` per registry and share it across agents
+- [x] 9.11 Add page to navigation in `website/mint-json-template.json.jinja`

@@ -1,0 +1,219 @@
+---
+title: Metrics
+sidebarTitle: Metrics
+---
+
+# Beta Metrics
+
+AG2 Beta includes a `MetricsMiddleware` that emits Prometheus-compatible counters and histograms for agent turns, LLM calls, tool executions, human input requests, and LLM token usage.
+
+Use metrics when you need operational dashboards and alerts for latency, success rates, error types, and token consumption. Use [Telemetry](/docs/beta/telemetry) when you need request-level traces and span details.
+
+## Installation
+
+Install the Prometheus metrics extra:
+
+```bash
+pip install "ag2[metrics]"
+```
+
+If your agent uses OpenAI in the examples below, install both extras:
+
+```bash
+pip install "ag2[openai,metrics]"
+```
+
+## Quick Start
+
+Create one Prometheus `CollectorRegistry`, create one `MetricsMiddleware` for that registry, then reuse the middleware on the agents that should emit into it.
+
+```python linenums="1"
+import asyncio
+
+from prometheus_client import CollectorRegistry, start_http_server
+
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.middleware import MetricsMiddleware
+
+
+async def main() -> None:
+    registry = CollectorRegistry()
+    metrics = MetricsMiddleware(registry=registry)
+
+    start_http_server(8000, registry=registry)
+
+    agent = Agent(
+        "assistant",
+        prompt="You are a helpful assistant.",
+        config=OpenAIConfig(model="gpt-4o-mini"),
+        middleware=[metrics],
+    )
+
+    reply = await agent.ask("Give me a one sentence project status template.")
+    print(reply.body)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Run the process, then open `http://localhost:8000/metrics` or configure Prometheus to scrape that endpoint.
+
+## Metrics Reference
+
+### Counters
+
+| Metric | Labels | Description |
+|---|---|---|
+| `ag2_agent_turns_total` | `agent`, `outcome`, `error_type` | Total agent turns. One turn is one `ask()` call or follow-up reply turn. |
+| `ag2_llm_calls_total` | `agent`, `provider`, `model`, `outcome`, `finish_reason`, `error_type` | Total LLM calls made by the agent runtime. |
+| `ag2_llm_tokens_total` | `agent`, `provider`, `model`, `token_type` | Total LLM tokens reported by model responses. |
+| `ag2_tool_calls_total` | `agent`, `tool`, `outcome`, `error_type` | Total tool executions. Tool error results and raised exceptions are counted as errors. |
+| `ag2_human_input_requests_total` | `agent`, `outcome`, `error_type` | Total human-in-the-loop input requests. Timeouts and cancellations are counted as errors. |
+
+### Histograms
+
+| Metric | Labels | Buckets | Description |
+|---|---|---|---|
+| `ag2_agent_turn_duration_seconds` | `agent`, `outcome`, `error_type` | `0.1`, `0.25`, `0.5`, `1.0`, `2.5`, `5.0`, `10.0`, `20.0`, `30.0`, `60.0`, `120.0`, `300.0`, `600.0`, `+Inf` | Full agent turn duration in seconds. |
+| `ag2_llm_call_duration_seconds` | `agent`, `provider`, `model`, `outcome`, `error_type` | `0.05`, `0.1`, `0.25`, `0.5`, `1.0`, `2.5`, `5.0`, `10.0`, `15.0`, `20.0`, `30.0`, `+Inf` | LLM call duration in seconds. Streaming calls are measured through the final response. |
+| `ag2_tool_duration_seconds` | `agent`, `tool`, `outcome`, `error_type` | `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1.0`, `2.5`, `5.0`, `10.0`, `+Inf` | Tool execution duration in seconds. |
+| `ag2_human_input_duration_seconds` | `agent`, `outcome`, `error_type` | `1.0`, `5.0`, `10.0`, `30.0`, `60.0`, `120.0`, `300.0`, `600.0`, `1200.0`, `1800.0`, `3600.0`, `+Inf` | Human input wait duration in seconds. |
+
+Prometheus histograms also expose `_bucket`, `_count`, and `_sum` series for each metric.
+
+## Label Reference
+
+| Label | Values | Notes |
+|---|---|---|
+| `agent` | Agent name or `unknown` | Derived from the running `Agent`. |
+| `provider` | LLM Provider name (for ex.`openai`, `anthropic`, `gemini`, etc.) | |
+| `model` | Model name or `unknown` | |
+| `outcome` | `success`, `error` | `error` is used for raised exceptions, tool error results, timeouts, and cancellations. |
+| `finish_reason` | Provider finish reason or `unknown` | |
+| `error_type` | Exception class name or empty string | Empty string means the operation succeeded. |
+| `token_type` | `input`, `output`, `cache_read_input`, `cache_creation_input` | |
+| `tool` | Tool name | Derived from the `ToolCallEvent` name. |
+
+Missing or empty label values are normalized to `unknown`, except `error_type`, which is an empty string for successful operations. Token values of zero are not emitted, and missing token fields are not synthesized as zero.
+
+## Configuration
+
+`MetricsMiddleware` accepts:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `registry` | `prometheus_client.CollectorRegistry` | Required | Prometheus registry where AG2 metrics are registered and later exposed. |
+
+<div class="warning">
+<Warning>
+The middleware registers all counters and histograms during construction. The same `CollectorRegistry` cannot be used to construct multiple `MetricsMiddleware` instances because Prometheus collectors must be registered once per registry.
+</Warning>
+</div>
+
+## CollectorRegistry Lifecycle
+
+Create one `MetricsMiddleware` per `CollectorRegistry`, then share that middleware instance across agents that should emit to the same registry.
+
+```python linenums="1"
+from prometheus_client import CollectorRegistry
+
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.middleware import MetricsMiddleware
+
+
+registry = CollectorRegistry()
+metrics = MetricsMiddleware(registry=registry)
+
+assistant = Agent(
+    "assistant",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    middleware=[metrics],
+)
+
+reviewer = Agent(
+    "reviewer",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    middleware=[metrics],
+)
+```
+
+## Prometheus Integration
+
+For a standalone worker or service process, the simplest integration is `start_http_server()` from `prometheus_client`:
+
+```python linenums="1"
+from prometheus_client import CollectorRegistry, start_http_server
+
+from autogen.beta.middleware import MetricsMiddleware
+
+
+registry = CollectorRegistry()
+metrics = MetricsMiddleware(registry=registry)
+
+start_http_server(8000, registry=registry)
+```
+
+Prometheus can scrape the endpoint with a job like:
+
+```yaml
+scrape_configs:
+  - job_name: ag2-beta
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - localhost:8000
+```
+
+If your application already owns an HTTP server, expose the same registry through that server and return `generate_latest(registry)` with the `CONTENT_TYPE_LATEST` content type.
+
+## Grafana Dashboard
+
+Useful starting panels:
+
+LLM call rate by provider, model, and outcome:
+
+```promql
+sum by (provider, model, outcome) (rate(ag2_llm_calls_total[5m]))
+```
+
+LLM token rate by token type:
+
+```promql
+sum by (provider, model, token_type) (rate(ag2_llm_tokens_total[5m]))
+```
+
+95th percentile LLM latency:
+
+```promql
+histogram_quantile(
+  0.95,
+  sum by (le, provider, model) (rate(ag2_llm_call_duration_seconds_bucket[5m]))
+)
+```
+
+Agent turn success rate:
+
+```promql
+sum(rate(ag2_agent_turns_total{outcome="success"}[5m]))
+/
+sum(rate(ag2_agent_turns_total[5m]))
+```
+
+Tool error rate by tool and error type:
+
+```promql
+sum by (tool, error_type) (rate(ag2_tool_calls_total{outcome="error"}[5m]))
+```
+
+Create separate rows for agent turns, LLM calls, tools, human input, and token usage. Use `outcome` and `error_type` as dashboard filters when investigating failures.
+
+## Best Practices
+
+- Keep `agent`, `tool`, `provider`, and `model` labels low-cardinality. Do not include user IDs, request IDs, session IDs, or other unbounded values in agent or tool names.
+- Use stable, descriptive agent names such as `support_triage` or `invoice_reviewer`.
+- Reuse a single `MetricsMiddleware` instance per registry across all agents in one process.
+- If you combine metrics with `RetryMiddleware` and want each retry attempt counted as a separate LLM call, register `RetryMiddleware` before `MetricsMiddleware`.
+- Streaming LLM durations are recorded after the final response arrives, so dashboards update when the streamed call completes.
