@@ -19,7 +19,7 @@ from dirty_equals import IsInt, IsPartialDict, IsStr
 
 from autogen.beta import Agent, Context, Variable
 from autogen.beta.ag_ui import AGUIEvent, AGUIStream
-from autogen.beta.events import ToolCallEvent
+from autogen.beta.events import ModelReasoning, ToolCallEvent
 from autogen.beta.testing import TestConfig
 
 from .utils import (
@@ -388,6 +388,118 @@ class TestEventTypes:
         })
 
 
+class TestToolCallLifecycle:
+    async def test_lifecycle_order_on_success(self) -> None:
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(ToolCallEvent(name="my_tool"), "Done"),
+        )
+
+        @agent.tool
+        def my_tool() -> str:
+            return "result"
+
+        stream = AGUIStream(agent)
+        run_input = create_run_input(UserMessage(id="msg_1", content="Call my_tool"))
+
+        events = await collect_events(stream, run_input)
+
+        types_order = [e["type"] for e in events if e["type"].startswith("TOOL_CALL_")]
+        assert types_order == [
+            "TOOL_CALL_START",
+            "TOOL_CALL_ARGS",
+            "TOOL_CALL_END",
+            "TOOL_CALL_RESULT",
+        ]
+
+    async def test_end_emitted_when_tool_raises(self) -> None:
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(ToolCallEvent(name="boom"), "Done"),
+        )
+
+        @agent.tool
+        def boom() -> str:
+            raise RuntimeError("tool exploded")
+
+        stream = AGUIStream(agent)
+        run_input = create_run_input(UserMessage(id="msg_1", content="Call boom"))
+
+        # TestConfig re-raises ToolErrorEvent to surface failures in tests, so
+        # collect_events propagates the RuntimeError out of the inner agent run.
+        # We still want to verify the AG-UI stream produced a complete tool
+        # lifecycle (END before the run terminates).
+        events: list[dict[str, object]] = []
+        with pytest.raises(Exception):  # noqa: BLE001
+            async for raw in stream.dispatch(run_input):
+                event_str = raw.removeprefix("data: ").strip()
+                if event_str:
+                    events.append(json.loads(event_str))
+
+        types_order = [str(e["type"]) for e in events if str(e["type"]).startswith("TOOL_CALL_")]
+        assert types_order == [
+            "TOOL_CALL_START",
+            "TOOL_CALL_ARGS",
+            "TOOL_CALL_END",
+            "TOOL_CALL_RESULT",
+        ]
+        assert_event_type(events, "RUN_ERROR")
+
+
+class TestReasoning:
+    async def test_reasoning_chunks_open_close_around_text(self) -> None:
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(ToolCallEvent(name="think"), "Final answer"),
+        )
+
+        @agent.tool
+        async def think(ctx: Context) -> str:
+            await ctx.send(ModelReasoning("step 1 "))
+            await ctx.send(ModelReasoning("step 2"))
+            return "done"
+
+        stream = AGUIStream(agent)
+        run_input = create_run_input(UserMessage(id="msg_1", content="Think"))
+
+        events = await collect_events(stream, run_input)
+
+        reasoning_types = [e["type"] for e in events if "REASONING" in e["type"]]
+        assert reasoning_types == [
+            "REASONING_START",
+            "REASONING_MESSAGE_START",
+            "REASONING_MESSAGE_CONTENT",
+            "REASONING_MESSAGE_CONTENT",
+            "REASONING_MESSAGE_END",
+            "REASONING_END",
+        ]
+
+        contents = get_events_of_type(events, "REASONING_MESSAGE_CONTENT")
+        assert [c["delta"] for c in contents] == ["step 1 ", "step 2"]
+
+        msg_ids = {e["messageId"] for e in events if "REASONING" in e["type"]}
+        assert len(msg_ids) == 1
+
+    async def test_empty_reasoning_content_is_skipped(self) -> None:
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(ToolCallEvent(name="think"), "Final"),
+        )
+
+        @agent.tool
+        async def think(ctx: Context) -> str:
+            await ctx.send(ModelReasoning(""))
+            return "done"
+
+        stream = AGUIStream(agent)
+        run_input = create_run_input(UserMessage(id="msg_1", content="Think"))
+
+        events = await collect_events(stream, run_input)
+
+        reasoning_types = [e["type"] for e in events if "REASONING" in e["type"]]
+        assert reasoning_types == []
+
+
 class TestStateSnapshotEvent:
     async def test_initial_agent_variables_send_state_event(self, mock: MagicMock) -> None:
         agent = Agent("test_agent", config=TestConfig(ToolCallEvent(name="my_tool"), "Done"), variables={"var": "123"})
@@ -484,6 +596,86 @@ class TestStateSnapshotEvent:
             IsPartialDict({"snapshot": {"var": "123", "var2": "1234"}}),
             IsPartialDict({"snapshot": {"var": "123", "var2": "1", "var3": "1234"}}),
         ]
+
+    async def test_no_final_snapshot_when_only_unserializable_changed(self) -> None:
+        # The closure dropped here is unserializable: _encode_context strips it
+        # from both the initial and final snapshots. Comparing encoded-vs-encoded
+        # must yield equality, so no spurious final STATE_SNAPSHOT is emitted.
+        sentinel = lambda: None  # noqa: E731
+
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(ToolCallEvent(name="my_tool"), "Done"),
+            variables={"keep": "value", "drop": sentinel},
+        )
+
+        @agent.tool
+        def my_tool(ctx: Context) -> str:
+            del ctx.variables["drop"]
+            return "ok"
+
+        stream = AGUIStream(agent)
+        run_input = create_run_input(UserMessage(id="msg_1", content="Hello!"))
+
+        events = await collect_events(stream, run_input)
+
+        snapshots = get_events_of_type(events, "STATE_SNAPSHOT")
+        assert snapshots == [IsPartialDict({"snapshot": {"keep": "value"}})]
+
+
+class TestMessagesSnapshot:
+    async def test_emitted_before_run_finished(self) -> None:
+        agent = Agent("test_agent", config=TestConfig("Hello back!"))
+        stream = AGUIStream(agent)
+        run_input = create_run_input(UserMessage(id="msg_1", content="Hello"))
+
+        events = await collect_events(stream, run_input)
+
+        types = [e["type"] for e in events]
+        snapshot_idx = types.index("MESSAGES_SNAPSHOT")
+        finished_idx = types.index("RUN_FINISHED")
+        assert snapshot_idx < finished_idx
+
+        snapshot = events[snapshot_idx]
+        assert snapshot["messages"] == [
+            IsPartialDict({"role": "user", "content": "Hello"}),
+            IsPartialDict({"role": "assistant", "content": "Hello back!"}),
+        ]
+
+    async def test_roundtrip_through_forward_mapper(self) -> None:
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(ToolCallEvent(name="ping"), "Pong!"),
+        )
+
+        @agent.tool
+        def ping() -> str:
+            return "pong"
+
+        stream = AGUIStream(agent)
+        run_input = create_run_input(UserMessage(id="msg_1", content="Ping"))
+
+        events = await collect_events(stream, run_input)
+
+        snapshot = assert_event_type(events, "MESSAGES_SNAPSHOT")
+        roles = [m["role"] for m in snapshot["messages"]]
+        assert roles == ["user", "assistant", "tool", "assistant"]
+
+        tool_msg = snapshot["messages"][2]
+        assert tool_msg == IsPartialDict({
+            "role": "tool",
+            "content": IsStr(regex=r".*pong.*"),
+        })
+
+        assistant_with_call = snapshot["messages"][1]
+        assert assistant_with_call == IsPartialDict({
+            "role": "assistant",
+            "toolCalls": [
+                IsPartialDict({
+                    "function": IsPartialDict({"name": "ping"}),
+                }),
+            ],
+        })
 
 
 async def test_custom_event() -> None:

@@ -12,6 +12,12 @@ from uuid import uuid4
 
 from ag_ui.core import (
     BaseEvent,
+    MessagesSnapshotEvent,
+    ReasoningEndEvent,
+    ReasoningMessageContentEvent,
+    ReasoningMessageEndEvent,
+    ReasoningMessageStartEvent,
+    ReasoningStartEvent,
     RunAgentInput,
     RunErrorEvent,
     RunFinishedEvent,
@@ -45,7 +51,7 @@ from autogen.beta.tools.final import ClientTool
 from autogen.beta.tools.tool import Tool
 
 from .events import AGUIEvent
-from .mappers import KNOWN_BUILTIN_NAMES, call_from_agui, result_from_agui
+from .mappers import KNOWN_BUILTIN_NAMES, call_from_agui, events_to_agui_messages, result_from_agui
 
 try:
     from starlette.endpoints import HTTPEndpoint
@@ -146,12 +152,57 @@ async def run_stream(
     await stream.history.replace(history_messages)
 
     streaming_msg_id: str | None = None
+    reasoning_msg_id: str | None = None
 
     @stream.subscribe
     async def map_events_to_ag_ui(event: events.BaseEvent) -> None:
-        nonlocal streaming_msg_id
+        nonlocal streaming_msg_id, reasoning_msg_id
 
-        if isinstance(event, events.ModelMessageChunk):
+        # Eagerly close an open reasoning session as soon as any non-reasoning
+        # event arrives. The explicit START/END pair gives UIs a clean signal
+        # to render/hide the "thinking" indicator.
+        if reasoning_msg_id is not None and not isinstance(event, events.ModelReasoning):
+            await write_events_stream.send(
+                ReasoningMessageEndEvent(
+                    message_id=reasoning_msg_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            await write_events_stream.send(
+                ReasoningEndEvent(
+                    message_id=reasoning_msg_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            reasoning_msg_id = None
+
+        if isinstance(event, events.ModelReasoning):
+            if not event.content:
+                return
+            if reasoning_msg_id is None:
+                reasoning_msg_id = str(uuid4())
+                await write_events_stream.send(
+                    ReasoningStartEvent(
+                        message_id=reasoning_msg_id,
+                        timestamp=_get_timestamp(),
+                    )
+                )
+                await write_events_stream.send(
+                    ReasoningMessageStartEvent(
+                        message_id=reasoning_msg_id,
+                        role="reasoning",
+                        timestamp=_get_timestamp(),
+                    )
+                )
+            await write_events_stream.send(
+                ReasoningMessageContentEvent(
+                    message_id=reasoning_msg_id,
+                    delta=event.content,
+                    timestamp=_get_timestamp(),
+                )
+            )
+
+        elif isinstance(event, events.ModelMessageChunk):
             if not event.content:
                 return
 
@@ -212,22 +263,25 @@ async def run_stream(
                     timestamp=_get_timestamp(),
                 )
             )
+            if event.arguments:
+                await write_events_stream.send(
+                    ToolCallArgsEvent(
+                        tool_call_id=event.id,
+                        delta=event.arguments,
+                        timestamp=_get_timestamp(),
+                    )
+                )
+            # END closes the call-lifecycle once args are streamed. Decoupling
+            # END from ToolResultEvent guarantees a well-formed START→ARGS→END
+            # sequence even when the tool fails before producing a result.
             await write_events_stream.send(
-                ToolCallArgsEvent(
+                ToolCallEndEvent(
                     tool_call_id=event.id,
-                    delta=event.arguments,
                     timestamp=_get_timestamp(),
                 )
             )
 
         elif isinstance(event, events.ToolResultEvent):
-            text_parts = []
-            for p in event.result.parts:
-                if isinstance(p, events.TextInput):
-                    text_parts.append(p.content)
-                elif isinstance(p, events.DataInput):
-                    text_parts.append(agent._serializer.encode(p.data).decode())
-
             await write_events_stream.send(
                 ToolCallResultEvent(
                     tool_call_id=event.parent_id,
@@ -235,12 +289,6 @@ async def run_stream(
                     message_id=str(uuid4()),
                     timestamp=_get_timestamp(),
                     role="tool",
-                )
-            )
-            await write_events_stream.send(
-                ToolCallEndEvent(
-                    tool_call_id=event.parent_id,
-                    timestamp=_get_timestamp(),
                 )
             )
 
@@ -273,6 +321,9 @@ async def run_stream(
                 )
 
             initial_state = (command.incoming.state or {}) | initial_vars
+            # Compare encoded-vs-encoded so unserializable values do not
+            # cause spurious snapshot emissions (or silent omissions).
+            initial_encoded = _encode_context(initial_state)
 
             result = await agent.ask(
                 prompt=command.prompt,
@@ -286,10 +337,20 @@ async def run_stream(
                 stream=stream,
             )
 
-            if (vars := _encode_context(result.context.variables)) != initial_state:
+            if (vars := _encode_context(result.context.variables)) != initial_encoded:
                 await write_events_stream.send(
                     StateSnapshotEvent(
                         snapshot=vars,
+                        timestamp=_get_timestamp(),
+                    )
+                )
+
+            history_events = list(await result.context.stream.history.get_events())
+            snapshot_messages = events_to_agui_messages(history_events, agent._serializer)
+            if snapshot_messages:
+                await write_events_stream.send(
+                    MessagesSnapshotEvent(
+                        messages=snapshot_messages,
                         timestamp=_get_timestamp(),
                     )
                 )
@@ -298,6 +359,7 @@ async def run_stream(
             await write_events_stream.send(
                 RunErrorEvent(
                     message=repr(e),
+                    code=type(e).__name__,
                     timestamp=_get_timestamp(),
                 )
             )

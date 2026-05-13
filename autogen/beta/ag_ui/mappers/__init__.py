@@ -14,6 +14,8 @@ from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NA
 from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
+from ._to_agui import events_to_agui_messages
+
 logger = logging.getLogger(__name__)
 
 KNOWN_BUILTIN_NAMES: frozenset[str] = frozenset({
@@ -111,6 +113,7 @@ __all__ = (
     "anthropic_call_from_agui",
     "anthropic_result_from_agui",
     "call_from_agui",
+    "events_to_agui_messages",
     "gemini_call_from_agui",
     "gemini_result_from_agui",
     "openai_call_from_agui",
