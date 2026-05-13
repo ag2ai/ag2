@@ -24,6 +24,11 @@ from pathlib import Path
 
 import pytest
 
+# These tests host Anthropic, OpenAI, and Gemini agents in the same hub
+pytest.importorskip("anthropic")
+pytest.importorskip("openai")
+pytest.importorskip("google.genai")
+
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig, GeminiConfig, OpenAIConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
