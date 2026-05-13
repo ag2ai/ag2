@@ -14,7 +14,7 @@ from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NA
 from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
-from ._to_agui import events_to_agui_messages
+from .to_agui import events_to_agui_messages
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +24,6 @@ KNOWN_BUILTIN_NAMES: frozenset[str] = frozenset({
     CODE_EXECUTION_TOOL_NAME,
     IMAGE_GENERATION_TOOL_NAME,
 })
-
-# Each provider mapper imports the corresponding SDK at module load. If the
-# optional extra is not installed we fall back to `missing_optional_dependency`
-# stubs for the public exports (matching the pattern used in
-# `autogen.beta.config.__init__`) and skip the mapper in the dispatcher.
 
 try:
     from .openai import openai_call_from_agui, openai_result_from_agui

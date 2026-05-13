@@ -46,12 +46,6 @@ def events_to_agui_messages(
     history: Iterable[BaseEvent],
     serializer: SerializerProto,
 ) -> list[Message]:
-    """Convert internal history events into AG-UI Message instances.
-
-    Inverse of ``stream.map_agui_messages_to_events``: produces a snapshot
-    that clients can use to restore a thread and round-trip back through
-    the forward mapper.
-    """
     messages: list[Message] = []
     seen_tool_result_ids: set[str] = set()
     for event in history:
