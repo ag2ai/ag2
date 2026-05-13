@@ -218,6 +218,8 @@ OPENAI_FALLBACK_KWARGS = {
     "_strict_response_validation",
     "webhook_secret",
     "workload_identity",
+    "_enforce_credentials",
+    "admin_api_key",
 }
 
 AOPENAI_FALLBACK_KWARGS = {
