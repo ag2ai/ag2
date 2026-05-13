@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+from collections.abc import Callable
 from typing import Any
 
 from ...doc_utils import export_module
@@ -31,7 +32,7 @@ def _is_async_langchain_tool(tool: Any) -> bool:
     if hasattr(tool, "coroutine"):
         # StructuredTool / Tool path: the only reliable signal is the coroutine
         # field. The class always overrides `_arun`, so the class-level check
-        # below would mis-classify sync tools as async.
+        # below would misclassify sync tools as async.
         return getattr(tool, "coroutine") is not None
 
     base_arun = getattr(LangchainTool, "_arun", None)
@@ -80,17 +81,18 @@ class LangChainInteroperability:
 
         model_type = langchain_tool.get_input_schema()
 
-        if _is_async_langchain_tool(langchain_tool):
-            # Use Langchain's async entry point so that async-native tools
-            # don't block the event loop when invoked from `a_initiate_chat`
-            # or any other async caller. AG2's Tool already accepts coroutine
-            # functions as `func_or_tool`. See issue #1402.
-            async def func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
-                return await langchain_tool.arun(tool_input.model_dump())  # type: ignore[attr-defined]
-        else:
+        # Use Langchain's async entry point for async-native tools so they
+        # don't block the event loop when invoked from `a_initiate_chat` or any
+        # other async caller. AG2's Tool already accepts coroutine functions
+        # as `func_or_tool`. See issue #1402. Sync tools keep the existing
+        # `langchain_tool.run` path unchanged.
+        async def _async_func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
+            return await langchain_tool.arun(tool_input.model_dump())  # type: ignore[attr-defined]
 
-            def func(tool_input: model_type) -> Any:  # type: ignore[valid-type, no-redef]
-                return langchain_tool.run(tool_input.model_dump())  # type: ignore[attr-defined]
+        def _sync_func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
+            return langchain_tool.run(tool_input.model_dump())  # type: ignore[attr-defined]
+
+        func: Callable[..., Any] = _async_func if _is_async_langchain_tool(langchain_tool) else _sync_func
 
         return Tool(
             name=langchain_tool.name,
