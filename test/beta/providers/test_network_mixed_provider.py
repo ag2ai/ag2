@@ -47,12 +47,6 @@ from autogen.beta.network.adapters.discussion import (
     ORDERING_ROUND_ROBIN,
 )
 from autogen.beta.network.adapters.workflow import WORKFLOW_TYPE
-from autogen.beta.network.client.channel import Channel
-from autogen.beta.network.policies import (
-    AGENT_CLIENT_DEP,
-    CHANNEL_DEP,
-    HUB_DEP,
-)
 from autogen.beta.network.transitions import (
     AgentTarget,
     FromSpeaker,
@@ -220,16 +214,41 @@ async def test_3way_discussion_one_per_provider() -> None:
     await hub.close()
 
 
+async def _wait_for_handoff(hub: Hub, channel_id: str, *, timeout: float = 60.0) -> list:
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        wal = await hub.read_wal(channel_id)
+        handoffs = [
+            e
+            for e in wal
+            if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
+        ]
+        if handoffs:
+            return handoffs
+        await asyncio.sleep(0.5)
+    return []
+
+
+async def _wait_for_adapter_state(hub: Hub, channel_id: str, pred, *, timeout: float = 60.0) -> bool:
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if pred(hub.adapter_state(channel_id)):
+            return True
+        await asyncio.sleep(0.2)
+    return False
+
+
 @pytest.mark.anthropic
 @pytest.mark.openai
 @pytest.mark.asyncio()
 async def test_workflow_handoff_anthropic_to_openai() -> None:
     """Workflow handoff across providers.
 
-    triage (Anthropic) calls ``transfer_to_eng`` → eng (OpenAI) replies →
-    ``RevertToInitiatorTarget`` rotates back to triage. Verifies the
-    routing ``EV_PACKET`` is provider-neutral and that the receiving
-    agent's notify handler engages regardless of provider.
+    A human seeds the workflow; the graph routes the human's turn to
+    triage (Anthropic), which calls ``transfer_to_eng`` → eng (OpenAI)
+    replies (via its notify handler) → ``RevertToInitiatorTarget``
+    rotates back to triage. Verifies the routing ``EV_PACKET`` and the
+    receiving agent's notify handler are provider-neutral.
     """
     anth_key, oai_key, _ = _require_all_keys()
     hub = await Hub.open(
@@ -256,17 +275,20 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
 
     triage_hc = HubClient(link, hub=hub)
     eng_hc = HubClient(link, hub=hub)
+    user_hc = HubClient(link, hub=hub)
     triage = await triage_hc.register(triage_agent, Passport(name="triage"), Resume(claimed_capabilities=["triage"]))
     eng = await eng_hc.register(eng_agent, Passport(name="eng"), Resume(claimed_capabilities=["engineering"]))
+    user = await user_hc.register_human(Passport(name="user"))
 
     graph = TransitionGraph(
-        initial_speaker=triage.agent_id,
+        initial_speaker=user.agent_id,
         transitions=[
+            Transition(when=FromSpeaker(user.agent_id), then=AgentTarget(triage.agent_id)),
             Transition(when=ToolCalled("transfer_to_eng"), then=AgentTarget(eng.agent_id)),
             Transition(when=FromSpeaker(eng.agent_id), then=RevertToInitiatorTarget()),
         ],
         default_target=TerminateTarget(reason="triage_done"),
-        max_turns=6,
+        max_turns=8,
     )
 
     # Attach a hand-written handoff tool on triage. Returns a typed
@@ -274,50 +296,47 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
     # the next speaker to eng.
     eng_agent_id = eng.agent_id
 
-    @triage_agent.tool
+    @triage.agent.tool
     async def transfer_to_eng(reason: str = "") -> Handoff:
         """Transfer the conversation to the engineering specialist."""
         return Handoff(target=eng_agent_id, reason=reason)
 
+    # Triage opens the workflow (so it's the channel creator —
+    # RevertToInitiatorTarget routes back to triage). The user is a
+    # participant + initial_speaker; eng is the handoff target.
     channel = await triage.open(
         type=WORKFLOW_TYPE,
-        target=[eng.agent_id],
+        target=[user.agent_id, eng.agent_id],
         knobs={"graph": graph.to_dict()},
         intent="triage routes deep questions to engineering",
     )
 
-    triage_deps = {
-        CHANNEL_DEP: Channel(metadata=channel.metadata, client=triage),
-        AGENT_CLIENT_DEP: triage,
-        HUB_DEP: hub,
-    }
-    await triage.agent.ask(
+    # User seeds the workflow. FromSpeaker(user)→AgentTarget(triage)
+    # advances expected_next_speaker to triage, whose notify handler
+    # then engages triage's LLM with the user's text — no direct
+    # ``agent.ask`` call.
+    await user.send(
+        channel.channel_id,
         "What's the practical difference between processes and threads in Python?",
-        dependencies=triage_deps,
     )
 
-    # Confirm the handoff happened.
-    wal = await hub.read_wal(channel.channel_id)
-    handoff_envelopes = [
-        e for e in wal if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
-    ]
-    assert handoff_envelopes, "triage did not call transfer_to_eng"
+    handoff_envelopes = await _wait_for_handoff(hub, channel.channel_id, timeout=60.0)
+    assert handoff_envelopes, "triage did not call transfer_to_eng within 60s"
 
-    # Wait up to 60s for eng (OpenAI) to engage and reply.
-    deadline = asyncio.get_event_loop().time() + 60.0
-    eng_replied = False
-    while asyncio.get_event_loop().time() < deadline:
-        state = hub._adapter_states.get(channel.channel_id)
-        if state is not None and state.last_speaker_id == eng.agent_id:
-            eng_replied = True
-            break
-        await asyncio.sleep(0.2)
+    # Wait for eng (OpenAI) to engage and reply via its notify handler.
+    eng_replied = await _wait_for_adapter_state(
+        hub,
+        channel.channel_id,
+        lambda s: s is not None and s.last_speaker_id == eng.agent_id,
+        timeout=60.0,
+    )
     assert eng_replied, "eng (OpenAI) did not reply to triage's (Anthropic) handoff within 60s"
 
     # After RevertToInitiator, expected_next_speaker should be triage again.
-    state = hub._adapter_states[channel.channel_id]
+    state = hub.adapter_state(channel.channel_id)
     assert state.expected_next_speaker == triage.agent_id
 
     await triage_hc.close()
     await eng_hc.close()
+    await user_hc.close()
     await hub.close()
