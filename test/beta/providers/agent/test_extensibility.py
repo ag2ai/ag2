@@ -140,12 +140,18 @@ async def test_hitl_hook_provides_input(provider_config) -> None:
 
     agent = Agent(
         "hitl",
-        prompt="Use confirm_then_act for any user-requested action. Report the result.",
+        prompt=(
+            "You MUST call the confirm_then_act tool before performing any user-requested action. "
+            "Never act directly and never answer without calling it first. "
+            "After the tool returns, report its result verbatim."
+        ),
         config=provider_config,
         tools=[confirm_then_act],
         hitl_hook=auto_approve,
     )
-    reply = await agent.ask("Use confirm_then_act with action='delete_file' and report what happened.")
+    reply = await agent.ask(
+        "Call the confirm_then_act tool with action='delete_file', then report exactly what it returned."
+    )
     assert reply.body is not None
     assert len(inputs_requested) >= 1
     assert "approve" in inputs_requested[0].lower()
