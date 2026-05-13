@@ -9,6 +9,7 @@ import pytest
 
 from autogen.beta import Agent
 from autogen.beta.config import GeminiConfig
+from autogen.beta.config.gemini.events import GeminiToolCallEvent
 from autogen.beta.streams.redis.serializer import Serializer, deserialize, serialize
 
 
@@ -178,9 +179,6 @@ async def test_thinking_budget_reports_thinking_tokens(gemini_config: GeminiConf
 @pytest.mark.gemini
 @pytest.mark.asyncio()
 async def test_history_round_trip_preserves_thought_signature(gemini_config: GeminiConfig) -> None:
-    """Gemini thinking models stash bytes in ``ToolCallEvent.provider_data``;
-    history persisted through the Redis JSON serializer must replay intact."""
-
     def get_weather(city: str) -> str:
         """Get the current weather for a city."""
         return f"The weather in {city} is sunny and 22°C."
@@ -195,17 +193,16 @@ async def test_history_round_trip_preserves_thought_signature(gemini_config: Gem
     reply1 = await agent.ask("What's the weather in Paris?")
     assert reply1.body is not None
 
-    # Round-trip history through the persistent-stream serializer.
     events = list(await reply1.history.get_events())
     round_tripped = [deserialize(serialize(e, Serializer.JSON), Serializer.JSON) for e in events]
 
     for ev in round_tripped:
-        sig = getattr(ev, "provider_data", {}).get("thought_signature") if hasattr(ev, "provider_data") else None
-        if sig is not None:
-            assert isinstance(sig, bytes), f"thought_signature corrupted to {type(sig).__name__}: {sig!r}"
+        if isinstance(ev, GeminiToolCallEvent) and ev.thought_signature is not None:
+            assert isinstance(ev.thought_signature, bytes), (
+                f"thought_signature corrupted to {type(ev.thought_signature).__name__}: {ev.thought_signature!r}"
+            )
 
     await reply1.history.replace(round_tripped)
 
-    # Replay must not 400 with INVALID_ARGUMENT on the corrupted signature.
     reply2 = await reply1.ask("What about London?")
     assert reply2.body is not None

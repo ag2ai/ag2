@@ -393,24 +393,6 @@ class TestRedisStream:
 class TestBinaryRoundTrip:
     """Events carrying binary or provider-SDK fields must round-trip intact."""
 
-    async def test_tool_call_event_with_bytes_provider_data(self, redis_storage, stream_id):
-        """The Gemini thought_signature scenario: bytes nested in provider_data."""
-        storage = redis_storage()
-        sig = b"\x12\x34\n\x32\x01\x0c\x39\xd6\xc7\xa3\x83,t\x95\xa2j\x9c\xb3\xd3"
-
-        original = ToolCallEvent(
-            id="call-1",
-            name="get_weather",
-            arguments='{"city": "Paris"}',
-            provider_data={"thought_signature": sig},
-        )
-        await storage.set_history(stream_id, [original])
-
-        [restored] = list(await storage.get_history(stream_id))
-        assert isinstance(restored, ToolCallEvent)
-        assert restored.provider_data["thought_signature"] == sig
-        assert isinstance(restored.provider_data["thought_signature"], bytes)
-
     async def test_image_input_round_trip(self, redis_storage, stream_id):
         """BinaryInput.data (used by ImageInput/AudioInput/...) carries raw bytes."""
         storage = redis_storage()

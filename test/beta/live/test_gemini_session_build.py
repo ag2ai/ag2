@@ -5,11 +5,16 @@
 import os
 
 import pytest
+
+pytest.importorskip("google.genai")
+
 from google.genai import Client
 from google.genai.types import Modality
 
 from autogen.beta.live import gemini
 from autogen.beta.tools.final import FunctionDefinition, FunctionToolSchema
+
+pytestmark = pytest.mark.gemini
 
 
 @pytest.fixture
