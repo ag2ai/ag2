@@ -20,19 +20,13 @@ except ImportError as e:
     ExaToolkit = missing_optional_dependency("ExaToolkit", "exa", e)  # type: ignore[misc]
 
 try:
-    from .perplexity import PerplexitySearchTool
+    from .perplexity import PerplexitySearchToolkit
 except ImportError as e:
-    PerplexitySearchTool = missing_optional_dependency("PerplexitySearchTool", "perplexity", e)  # type: ignore[misc]
-
-try:
-    from .perplexity_search_api import PerplexitySearchAPITool
-except ImportError as e:
-    PerplexitySearchAPITool = missing_optional_dependency("PerplexitySearchAPITool", "perplexity", e)  # type: ignore[misc]
+    PerplexitySearchToolkit = missing_optional_dependency("PerplexitySearchToolkit", "perplexity", e)  # type: ignore[misc]
 
 __all__ = (
     "DuckDuckSearchTool",
     "ExaToolkit",
-    "PerplexitySearchAPITool",
-    "PerplexitySearchTool",
+    "PerplexitySearchToolkit",
     "TavilySearchTool",
 )

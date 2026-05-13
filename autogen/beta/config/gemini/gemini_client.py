@@ -5,7 +5,7 @@
 import json
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 from uuid import uuid4
 
 import google.auth
@@ -29,7 +29,7 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent
+from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
 from .mappers import (
     build_system_instruction,
     build_tools,
@@ -38,6 +38,8 @@ from .mappers import (
     normalize_usage,
     response_proto_to_config,
 )
+
+ThinkingLevel = Literal["low", "medium", "high"]
 
 
 class CreateConfig(TypedDict, total=False):
@@ -49,6 +51,7 @@ class CreateConfig(TypedDict, total=False):
     presence_penalty: float | None
     frequency_penalty: float | None
     seed: int | None
+    thinking_config: types.ThinkingConfig | None
 
 
 class GeminiClient(LLMClient):
@@ -144,15 +147,12 @@ class GeminiClient(LLMClient):
                         await context.send(model_msg)
                     elif part.function_call:
                         fc = part.function_call
-                        pdata: dict[str, Any] = {}
-                        if part.thought_signature is not None:
-                            pdata["thought_signature"] = part.thought_signature
                         calls.append(
-                            ToolCallEvent(
+                            GeminiToolCallEvent(
                                 id=fc.id or str(uuid4()),
                                 name=fc.name or "",
                                 arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
-                                provider_data=pdata,
+                                thought_signature=part.thought_signature,
                             )
                         )
                     elif part.executable_code and (call_event := GeminiServerToolCallEvent.from_executable_code(part)):
@@ -220,15 +220,12 @@ class GeminiClient(LLMClient):
                             await context.send(ModelMessageChunk(part.text))
                         elif part.function_call:
                             fc = part.function_call
-                            pdata: dict[str, Any] = {}
-                            if part.thought_signature is not None:
-                                pdata["thought_signature"] = part.thought_signature
                             calls.append(
-                                ToolCallEvent(
+                                GeminiToolCallEvent(
                                     id=fc.id or str(uuid4()),
                                     name=fc.name or "",
                                     arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
-                                    provider_data=pdata,
+                                    thought_signature=part.thought_signature,
                                 )
                             )
                         elif part.executable_code and (

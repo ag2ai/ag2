@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import httpx
 from anthropic.types import ModelParam
@@ -32,6 +32,7 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     metadata: dict[str, str] | None
     service_tier: str | None
     prompt_caching: bool
+    extra_body: dict[str, Any] | None
 
 
 @dataclass(slots=True)
@@ -52,6 +53,7 @@ class AnthropicConfig(ModelConfig):
     metadata: dict[str, str] | None = None
     service_tier: str | None = None
     prompt_caching: bool = True
+    extra_body: dict[str, Any] | None = None
 
     @property
     def provider(self) -> ModelProvider:
@@ -89,6 +91,7 @@ class AnthropicConfig(ModelConfig):
             http_client=self.http_client,
             create_options=options,
             prompt_caching=self.prompt_caching,
+            extra_body=self.extra_body,
         )
 
     def create_files_client(self) -> AnthropicFilesClient:

@@ -1,11 +1,13 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 """SlidingWindowPolicy — keep the last N events."""
 
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import BaseEvent, ToolResultsEvent
+from autogen.beta.events import BaseEvent
+
+from ._pairing import ensure_tool_pairing
 
 
 class SlidingWindowPolicy:
@@ -29,10 +31,7 @@ class SlidingWindowPolicy:
         total = len(events)
         if total <= self._max:
             return prompts, events
-        trimmed = events[-self._max :]
-        # Skip leading ToolResultsEvents whose matching tool_use was trimmed away.
-        while trimmed and isinstance(trimmed[0], ToolResultsEvent):
-            trimmed = trimmed[1:]
+        trimmed = ensure_tool_pairing(events[-self._max :])
         if self._transparent:
             prompts = prompts + [f"[{self.name}] Showing last {len(trimmed)} of {total} events."]
         return prompts, trimmed

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -9,15 +9,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autogen.beta import Agent
+from autogen.beta import Context as Context
 from autogen.beta.agent import KnowledgeConfig
 from autogen.beta.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
     WorkingMemoryAggregate,
 )
-from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TextInput
-from autogen.beta.events.lifecycle import AggregationCompleted
+from autogen.beta.events import (
+    AggregationCompleted,
+    AggregationFailed,
+    AggregationStarted,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+)
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
@@ -191,6 +198,33 @@ class TestWorkingMemoryAggregate:
         assert await store.read("/memory/working.md") is None
 
     @pytest.mark.asyncio
+    async def test_custom_prompt_template_is_used(self) -> None:
+        """A user-supplied prompt= template replaces the default verbatim."""
+        mock_response = MagicMock()
+        mock_response.content = "lessons"
+        mock_response.usage = {}
+        mock_client = AsyncMock(return_value=mock_response)
+        mock_config = MagicMock()
+        mock_config.create.return_value = mock_client
+
+        strategy = WorkingMemoryAggregate(
+            config=mock_config,
+            prompt=("Track tactics, not facts. Existing notes:\n{existing}\n---\nRound:\n{events}"),
+        )
+        store = MemoryKnowledgeStore()
+        await store.write("/memory/working.md", "prior tactics")
+        ctx = Context(stream=MemoryStream())
+
+        await strategy.aggregate([ModelRequest([TextInput("hi")])], ctx, store)
+
+        prompt_event = mock_client.call_args[0][0][0]
+        rendered = next(inp.content for inp in prompt_event.parts if isinstance(inp, TextInput))
+        assert "Track tactics, not facts." in rendered
+        assert "prior tactics" in rendered
+        # The default journal-style phrasing must not leak in.
+        assert "Preserve important existing context" not in rendered
+
+    @pytest.mark.asyncio
     async def test_falls_back_to_existing_on_empty_response(self) -> None:
         mock_response = MagicMock()
         mock_response.content = ""  # LLM returns empty
@@ -315,3 +349,67 @@ class TestAggregationWiredOnAgent:
             await agent.ask("go")
 
         assert strategy.calls == 1
+
+
+class _RaisingAggregate:
+    """AggregateStrategy that always raises — for failure-path tests."""
+
+    last_usage: dict = {}
+
+    async def aggregate(self, events, context, store) -> None:
+        raise RuntimeError("aggregate boom")
+
+
+@pytest.mark.asyncio
+class TestAggregationLifecycleEvents:
+    """Started + Failed events must reach the stream so failures are observable
+    without configuring Python logging."""
+
+    async def test_started_event_fires_before_strategy_runs(self) -> None:
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        started: list[AggregationStarted] = []
+        stream.where(AggregationStarted).subscribe(lambda e: started.append(e))
+
+        agent = Agent(
+            "lifecycle",
+            config=TestConfig(ModelResponse(ModelMessage("ok"))),
+            knowledge=KnowledgeConfig(
+                store=store,
+                aggregate=_RecordingAggregate(),
+                aggregate_trigger=AggregateTrigger(on_end=True),
+            ),
+        )
+        await agent.ask("go", stream=stream)
+
+        assert len(started) == 1
+        assert started[0].agent == "lifecycle"
+        assert started[0].strategy == "_RecordingAggregate"
+
+    async def test_failed_event_fires_when_strategy_raises(self) -> None:
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        failures: list[AggregationFailed] = []
+        completions: list[AggregationCompleted] = []
+        stream.where(AggregationFailed).subscribe(lambda e: failures.append(e))
+        stream.where(AggregationCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "broken-aggregator",
+            config=TestConfig(ModelResponse(ModelMessage("ok"))),
+            knowledge=KnowledgeConfig(
+                store=store,
+                aggregate=_RaisingAggregate(),
+                aggregate_trigger=AggregateTrigger(on_end=True),
+            ),
+        )
+
+        # The turn itself must succeed — only the aggregation failed.
+        await agent.ask("go", stream=stream)
+
+        assert len(failures) == 1
+        assert failures[0].agent == "broken-aggregator"
+        assert failures[0].strategy == "_RaisingAggregate"
+        assert failures[0].error_type == "RuntimeError"
+        assert "aggregate boom" in failures[0].error
+        assert completions == []

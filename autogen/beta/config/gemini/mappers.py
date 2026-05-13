@@ -33,7 +33,7 @@ from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearc
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
-from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent
+from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
 
 
 def response_proto_to_config(response: ResponseProto | None) -> dict[str, Any]:
@@ -55,17 +55,36 @@ def build_system_instruction(
     return joined or None
 
 
+def _strip_additional_properties(node: Any) -> Any:
+    """Recursively remove ``additionalProperties`` from a JSON Schema.
+
+    Gemini's API rejects ``additionalProperties`` when it appears
+    inside ``anyOf`` / ``oneOf`` branches (the proto field is named
+    ``additional_properties`` and only allowed in specific positions).
+    Gemini doesn't enforce additional-properties anyway, so dropping
+    everywhere is safe.
+    """
+    if isinstance(node, dict):
+        return {k: _strip_additional_properties(v) for k, v in node.items() if k != "additionalProperties"}
+    if isinstance(node, list):
+        return [_strip_additional_properties(v) for v in node]
+    return node
+
+
 def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     """Gemini requires every function's parameters schema to be type=object.
 
     Parameterless functions produce ``{"type": "null"}`` (from pydantic/fast_depends)
     or ``{}`` — both rejected by Gemini with ``INVALID_ARGUMENT``.
     Normalise to ``{"type": "object", "properties": {}}``.
+
+    Strips ``additionalProperties`` recursively because Gemini
+    rejects it inside ``anyOf`` branches.
     """
     raw_type = str(params.get("type", "")).lower()
     if not params or raw_type in ("null", "none", ""):
         return {"type": "object", "properties": {}}
-    return params
+    return _strip_additional_properties(params)
 
 
 def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
@@ -79,7 +98,7 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
                 types.FunctionDeclaration(
                     name=t.function.name,
                     description=t.function.description,
-                    parameters=_ensure_object_schema(t.function.parameters),
+                    parameters_json_schema=_ensure_object_schema(t.function.parameters),
                 )
             )
 
@@ -191,8 +210,8 @@ def convert_messages(
                     name=call.name,
                     args=json.loads(call.arguments or "{}"),
                 )
-                if "thought_signature" in call.provider_data:
-                    fc_part.thought_signature = call.provider_data["thought_signature"]
+                if isinstance(call, GeminiToolCallEvent) and call.thought_signature is not None:
+                    fc_part.thought_signature = call.thought_signature
                 parts.append(fc_part)
             if parts:
                 result.append(types.Content(role="model", parts=parts))
@@ -285,11 +304,13 @@ def normalize_usage(metadata: Any) -> Usage:
     """Build usage from Gemini UsageMetadata, normalizing to standard keys."""
 
     cache_read = _to_float(metadata.cached_content_token_count) or None
+    thinking = _to_float(getattr(metadata, "thoughts_token_count", None)) or None
     return Usage(
         prompt_tokens=_to_float(metadata.prompt_token_count),
         completion_tokens=_to_float(metadata.candidates_token_count),
         total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,
+        thinking_tokens=thinking,
     )
 
 

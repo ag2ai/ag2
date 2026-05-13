@@ -21,12 +21,17 @@ from .input_events import (
 )
 from .lifecycle import (
     AggregationCompleted,
+    AggregationFailed,
+    AggregationStarted,
     CompactionCompleted,
+    CompactionFailed,
+    CompactionStarted,
+    EventLogFailed,
     ObserverCompleted,
     ObserverStarted,
     UnknownEvent,
 )
-from .task_events import TaskCompleted, TaskFailed, TaskProgress, TaskStarted
+from .task_events import TaskCompleted, TaskExpired, TaskFailed, TaskProgress, TaskStarted
 from .tool_events import (
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
@@ -49,9 +54,17 @@ from .types import (
     ModelResponse,
     Usage,
 )
+from .voice import (
+    RecordedAudioEvent,
+    SynthesizedAudioEvent,
+    TranscriptionChunkEvent,
+    TranscriptionCompletedEvent,
+)
 
 __all__ = (
     "AggregationCompleted",
+    "AggregationFailed",
+    "AggregationStarted",
     "AudioInput",
     "BaseEvent",
     "BinaryInput",
@@ -61,9 +74,12 @@ __all__ = (
     "BuiltinToolResultEvent",
     "ClientToolCallEvent",
     "CompactionCompleted",
+    "CompactionFailed",
+    "CompactionStarted",
     "Condition",
     "DataInput",
     "DocumentInput",
+    "EventLogFailed",
     "Field",
     "FileIdInput",
     "HaltEvent",
@@ -79,8 +95,11 @@ __all__ = (
     "ObserverAlert",
     "ObserverCompleted",
     "ObserverStarted",
+    "RecordedAudioEvent",
     "Severity",
+    "SynthesizedAudioEvent",
     "TaskCompleted",
+    "TaskExpired",
     "TaskFailed",
     "TaskProgress",
     "TaskStarted",
@@ -92,6 +111,8 @@ __all__ = (
     "ToolResult",
     "ToolResultEvent",
     "ToolResultsEvent",
+    "TranscriptionChunkEvent",
+    "TranscriptionCompletedEvent",
     "UnknownEvent",
     "UrlInput",
     "Usage",

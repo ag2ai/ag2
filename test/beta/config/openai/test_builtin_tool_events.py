@@ -26,7 +26,7 @@ from openai.types.responses.response_output_item import ImageGenerationCall
 from openai.types.responses.response_output_text import ResponseOutputText
 from openai.types.responses.response_reasoning_item import Summary
 
-from autogen.beta import MemoryStream
+from autogen.beta import Context, MemoryStream
 from autogen.beta.config.openai import OpenAIResponsesClient
 from autogen.beta.config.openai.events import (
     OpenAIReasoningEvent,
@@ -34,7 +34,6 @@ from autogen.beta.config.openai.events import (
     OpenAIServerToolResultEvent,
 )
 from autogen.beta.config.openai.mappers import events_to_responses_input
-from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -44,9 +43,9 @@ from autogen.beta.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolResult,
     UrlInput,
 )
-from autogen.beta.events.tool_events import ToolResult
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
@@ -62,7 +61,7 @@ async def _process(output: Iterable[Any]) -> tuple[ModelResponse, list[BaseEvent
         usage=None,
     )
     stream = MemoryStream()
-    context = ConversationContext(stream=stream)
+    context = Context(stream=stream)
     result = await client._process_response(response, context)
     return result, list(await stream.history.get_events())
 
@@ -156,7 +155,7 @@ class TestReasoning:
         reasoning = OpenAIReasoningEvent("thinking", item=reasoning_item)
 
         stream = MemoryStream()
-        context = ConversationContext(stream=stream)
+        context = Context(stream=stream)
 
         await stream.send(reasoning, context)
 

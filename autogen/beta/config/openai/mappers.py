@@ -230,12 +230,34 @@ def events_to_responses_input(
 
                 elif isinstance(inp, BinaryInput):
                     b64 = base64.b64encode(inp.data).decode()
-                    item: dict[str, Any] = {
-                        "type": "input_file",
-                        "file_data": f"data:{inp.media_type};base64,{b64}",
-                        **inp.vendor_metadata,
-                    }
-                    result.append({"role": "user", "content": [item]})
+                    if inp.kind is BinaryType.IMAGE:
+                        image_block: dict[str, Any] = {
+                            "type": "input_image",
+                            "image_url": f"data:{inp.media_type};base64,{b64}",
+                        }
+                        if "detail" in inp.vendor_metadata:
+                            image_block["detail"] = inp.vendor_metadata["detail"]
+                        result.append({"role": "user", "content": [image_block]})
+
+                    elif inp.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
+                        # input_file with file_data *requires* filename.
+                        filename = inp.vendor_metadata.get("filename")
+                        if not filename:
+                            suffix = inp.media_type.rsplit("/", 1)[-1].split("+", 1)[0]
+                            filename = f"file.{suffix}"
+                        result.append({
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "input_file",
+                                    "file_data": f"data:{inp.media_type};base64,{b64}",
+                                    "filename": filename,
+                                }
+                            ],
+                        })
+
+                    else:
+                        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "openai-responses")
 
                 elif isinstance(inp, UrlInput):
                     if inp.kind is BinaryType.IMAGE:
@@ -310,7 +332,10 @@ def convert_messages(
                     elif inp.kind is BinaryType.IMAGE:
                         b64 = base64.b64encode(inp.data).decode()
                         data_url = f"data:{inp.media_type};base64,{b64}"
-                        parts.append({"type": "image_url", "image_url": {"url": data_url}, **inp.vendor_metadata})
+                        image_url: dict[str, Any] = {"url": data_url}
+                        if "detail" in inp.vendor_metadata:
+                            image_url["detail"] = inp.vendor_metadata["detail"]
+                        parts.append({"type": "image_url", "image_url": image_url})
 
                     elif inp.kind is BinaryType.DOCUMENT:
                         b64 = base64.b64encode(inp.data).decode()

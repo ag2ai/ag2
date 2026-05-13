@@ -16,8 +16,8 @@ from ....a2a.constants import A2UI_MIME_TYPE
 from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
+    from a2a.compat.v0_3.types import AgentExtension, DataPart, Part
     from a2a.server.agent_execution import RequestContext
-    from a2a.types import AgentExtension, DataPart, Part
 
 A2UI_EXTENSION_URI = "https://a2ui.org/a2a-extension/a2ui/v0.9"
 
@@ -131,6 +131,12 @@ def try_activate_a2ui_extension(context: RequestContext) -> bool:
         True if the A2UI extension was activated, False otherwise.
     """
     if A2UI_EXTENSION_URI in context.requested_extensions:
-        context.add_activated_extension(A2UI_EXTENSION_URI)
+        # SDK 1.0 dropped `add_activated_extension`; we now signal activation
+        # implicitly by acknowledging the requested extension via metadata.
+        if context.metadata is None:
+            context.metadata = {}
+        activated = context.metadata.setdefault("activated_extensions", [])
+        if A2UI_EXTENSION_URI not in activated:
+            activated.append(A2UI_EXTENSION_URI)
         return True
     return False

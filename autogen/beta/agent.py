@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -52,7 +52,12 @@ from .events import (
 from .events.conditions import Condition
 from .events.lifecycle import (
     AggregationCompleted,
+    AggregationFailed,
+    AggregationStarted,
     CompactionCompleted,
+    CompactionFailed,
+    CompactionStarted,
+    EventLogFailed,
     ObserverCompleted,
     ObserverStarted,
 )
@@ -67,10 +72,11 @@ from .middleware.base import (
     MiddlewareFactory,
     ToolMiddleware,
 )
-from .observer import Observer
-from .observer import observer as observer_factory
+from .observers import Observer
+from .observers import observer as observer_factory
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
+from .task import Task, TaskSpec
 from .tools.executor import ToolExecutor
 from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
@@ -98,9 +104,38 @@ PromptType: TypeAlias = str | PromptHook
 
 @dataclass
 class KnowledgeConfig:
-    """Groups knowledge-related Agent parameters."""
+    """Groups knowledge-related Agent parameters.
+
+    The ``store`` is registered into ``context.dependencies[KnowledgeStore]``
+    so policies (e.g. ``WorkingMemoryPolicy``, ``EpisodicMemoryPolicy``) can
+    read from it without an extra parameter. Everything else is a side
+    effect of attaching a store; each is opt-out via its flag below.
+
+    Attributes:
+        store: The backing knowledge store.
+        expose_tool: If True (default), the agent gets an auto-injected
+            ``knowledge`` action-group tool that lets the LLM call
+            ``read`` / ``write`` / ``list`` / ``delete`` on the store. Set
+            to False when policies are the only consumer of the store and
+            the LLM should not see it.
+        write_event_log: If True (default), the agent persists its stream
+            history to ``/log/{stream_id}.jsonl`` at the end of each
+            ``ask`` call. Set to False to keep the store free of stream
+            logs (useful when the store is purely user-facing memory).
+        compact, compact_trigger: Optional compaction strategy and its
+            firing rules.
+        aggregate, aggregate_trigger: Optional aggregation strategy and
+            its firing rules. Strategy failures emit ``AggregationFailed``
+            on the stream — subscribe to that event for observability.
+        bootstrap: Optional custom bootstrap. None falls back to
+            ``DefaultBootstrap(mention_tool=expose_tool)``, so the
+            generated SKILL.md text tells the LLM about the ``knowledge``
+            tool only when the tool is actually exposed.
+    """
 
     store: KnowledgeStore
+    expose_tool: bool = True
+    write_event_log: bool = True
     compact: CompactStrategy | None = None
     compact_trigger: CompactTrigger | None = None
     aggregate: AggregateStrategy | None = None
@@ -506,6 +541,8 @@ class Agent(Generic[TResult]):
         # Knowledge store + compaction/aggregation strategies
         kc = knowledge
         self._knowledge_store = kc.store if kc else None
+        self._knowledge_expose_tool = kc.expose_tool if kc else True
+        self._knowledge_write_event_log = kc.write_event_log if kc else True
         self._bootstrap = kc.bootstrap if kc else None
         self._bootstrap_done: bool = False
         self._bootstrap_lock: asyncio.Lock | None = None
@@ -514,7 +551,9 @@ class Agent(Generic[TResult]):
         self._aggregate_strategy = kc.aggregate if kc else None
         self._aggregate_trigger = kc.aggregate_trigger if kc and kc.aggregate_trigger else AggregateTrigger()
         self._knowledge_tools: list[Tool] = (
-            [_make_knowledge_tool(self._knowledge_store)] if self._knowledge_store else []
+            [_make_knowledge_tool(self._knowledge_store)]
+            if self._knowledge_store and self._knowledge_expose_tool
+            else []
         )
 
         # Assembly policies (empty by default; bare Agent has no harness).
@@ -607,6 +646,58 @@ class Agent(Generic[TResult]):
     def add_observer(self, observer: Observer) -> None:
         """Register an observer (before calling ask())."""
         self._observers.append(observer)
+
+    def add_policy(self, policy: AssemblyPolicy) -> "Agent[TResult]":
+        """Append an assembly policy to this agent's chain.
+
+        Policies run in order; a newly added policy runs after existing
+        ones. Construction-time ordering validation (warning on suspicious
+        sequences) only runs over policies passed via ``assembly=`` — late
+        additions skip the check, so callers should be confident in the
+        ordering they introduce.
+        """
+        self._policies.append(policy)
+        return self
+
+    def task(
+        self,
+        title: str,
+        *,
+        description: str = "",
+        payload: dict[str, Any] | None = None,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
+        context: Context | None = None,
+    ) -> Task:
+        """Create a ``Task`` whose lifecycle this Agent owns.
+
+        Returns an unentered ``Task``; use as ``async with agent.task(...)``.
+        Events flow on ``context.stream`` if a ``ConversationContext`` is
+        supplied; else the Task creates a private ``MemoryStream`` on entry
+        and events fire on it (only observers attached to that private
+        stream see them).
+
+        Inside the ``async with`` block, ``ag2.task`` is stamped into
+        ``context.dependencies`` so any tool annotated with ``TaskInject``
+        resolves to this Task.
+
+        ``capability`` tags the task with a capability name. When the
+        agent is registered with the network, the ``TaskMirror`` calls
+        ``Hub.record_observation`` on the terminal event so the matching
+        ``Resume.observed[capability]`` track record updates.
+        """
+        spec = TaskSpec(
+            title=title,
+            description=description,
+            payload=dict(payload) if payload else {},
+            capability=capability,
+        )
+        return Task(
+            owner_id=self.name,
+            spec=spec,
+            context=context,
+            ttl_seconds=ttl_seconds,
+        )
 
     def tool(
         self,
@@ -779,6 +870,43 @@ class Agent(Generic[TResult]):
             response_schema=response_schema,
         )
 
+    async def _ask(
+        self,
+        *msg: str | Input,
+        context: Context,
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "AgentReply[Any, Any]":
+        """`Agent.ask()` alternative method to call agent with prebuild `context`."""
+        config = config or self.config
+        if not config:
+            raise ConfigNotProvidedError()
+        client = config.create()
+
+        initial_event = ModelRequest.ensure_request(msg)
+
+        if not context.prompt:
+            context.prompt.extend(self._system_prompt)
+
+            for dp in self._dynamic_prompt:
+                p = await dp(initial_event, context)
+                context.prompt.append(p)
+
+        return await self._execute(
+            initial_event,
+            context=context,
+            client=client,
+            hitl_hook=hitl_hook,
+            additional_tools=tools,
+            additional_middleware=middleware,
+            additional_observers=observers,
+            response_schema=response_schema,
+        )
+
     def _build_knowledge_tool(self) -> list[Tool]:
         """Return the cached knowledge tool list (built at __init__ time)."""
         return self._knowledge_tools
@@ -890,7 +1018,7 @@ class Agent(Generic[TResult]):
                 if not self._bootstrap_done:
                     if not await self._knowledge_store.exists("/.initialized"):
                         await self._knowledge_store.write("/.initialized", self.name)
-                        bootstrap = self._bootstrap or DefaultBootstrap()
+                        bootstrap = self._bootstrap or DefaultBootstrap(mention_tool=self._knowledge_expose_tool)
                         await bootstrap.bootstrap(self._knowledge_store, self.name)
                     self._bootstrap_done = True
 
@@ -1044,13 +1172,22 @@ class Agent(Generic[TResult]):
                             await context.send(ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)))
 
                 return reply
+
         finally:
-            if self._knowledge_store:
+            if self._knowledge_store and self._knowledge_write_event_log:
                 try:
                     events = list(await context.stream.history.get_events())
                     await EventLogWriter(self._knowledge_store).persist(context.stream.id, events)
-                except Exception:
+                except Exception as exc:
                     logger.exception("Event log persistence failed for %s", self.name)
+                    with suppress(Exception):
+                        await context.send(
+                            EventLogFailed(
+                                agent=self.name,
+                                error_type=type(exc).__name__,
+                                error=str(exc),
+                            )
+                        )
 
     def as_tool(
         self,
@@ -1511,7 +1648,29 @@ class _CompactionMiddleware(BaseMiddleware):
                 should_compact = True
 
         if should_compact:
-            compacted = await self._strategy.compact(events, context, self._store)
+            strategy_name = type(self._strategy).__name__
+            await context.send(
+                CompactionStarted(
+                    agent=self._actor_name,
+                    strategy=strategy_name,
+                    event_count=len(events),
+                )
+            )
+            try:
+                compacted = await self._strategy.compact(events, context, self._store)
+            except Exception as exc:
+                logger.exception("Compaction failed for %s", self._actor_name)
+                with suppress(Exception):
+                    await context.send(
+                        CompactionFailed(
+                            agent=self._actor_name,
+                            strategy=strategy_name,
+                            error_type=type(exc).__name__,
+                            error=str(exc),
+                        )
+                    )
+                return result
+
             await context.stream.history.replace(compacted)
             self._last_compact_event_count = len([e for e in compacted if not getattr(type(e), "__transient__", False)])
 
@@ -1519,7 +1678,7 @@ class _CompactionMiddleware(BaseMiddleware):
             await context.send(
                 CompactionCompleted(
                     agent=self._actor_name,
-                    strategy=type(self._strategy).__name__,
+                    strategy=strategy_name,
                     events_before=len(events),
                     events_after=len(compacted),
                     llm_calls=1 if usage else 0,
@@ -1618,20 +1777,38 @@ class _AggregationMiddleware(BaseMiddleware):
                     should_aggregate = True
 
             if should_aggregate:
+                strategy_name = type(self._strategy).__name__
+                with suppress(Exception):
+                    await context.send(
+                        AggregationStarted(
+                            agent=self._actor_name,
+                            strategy=strategy_name,
+                            event_count=count_after,
+                        )
+                    )
                 try:
                     await self._strategy.aggregate(events_after, context, self._store)
                     usage = getattr(self._strategy, "last_usage", {})
                     await context.send(
                         AggregationCompleted(
                             agent=self._actor_name,
-                            strategy=type(self._strategy).__name__,
+                            strategy=strategy_name,
                             event_count=count_after,
                             llm_calls=1 if usage else 0,
                             usage=usage,
                         )
                     )
-                except Exception:
+                except Exception as exc:
                     logger.exception("Aggregation failed for %s", self._actor_name)
+                    with suppress(Exception):
+                        await context.send(
+                            AggregationFailed(
+                                agent=self._actor_name,
+                                strategy=strategy_name,
+                                error_type=type(exc).__name__,
+                                error=str(exc),
+                            )
+                        )
 
         return result
 

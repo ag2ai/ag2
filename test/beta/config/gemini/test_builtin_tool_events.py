@@ -15,7 +15,6 @@ from autogen.beta.config.gemini.events import (
 )
 from autogen.beta.config.gemini.gemini_client import GeminiClient
 from autogen.beta.config.gemini.mappers import grounding_tool_name
-from autogen.beta.context import ConversationContext
 from autogen.beta.events import BinaryType, TextInput, UrlInput
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
@@ -43,7 +42,7 @@ def client() -> GeminiClient:
 @pytest.fixture
 def memory_context() -> tuple[Context, MemoryStream]:
     stream = MemoryStream()
-    return ConversationContext(stream=stream), stream
+    return Context(stream=stream), stream
 
 
 class TestFactoryFromExecutableCode:

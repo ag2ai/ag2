@@ -20,6 +20,7 @@ class Usage:
     total_tokens: float | None = None
     cache_read_input_tokens: float | None = None
     cache_creation_input_tokens: float | None = None
+    thinking_tokens: float | None = None
 
     def __bool__(self) -> bool:
         return any((
@@ -28,6 +29,7 @@ class Usage:
             self.total_tokens,
             self.cache_read_input_tokens,
             self.cache_creation_input_tokens,
+            self.thinking_tokens,
         ))
 
 

@@ -19,7 +19,7 @@ def test_tool_to_api() -> None:
                 types.FunctionDeclaration(
                     name=schema.function.name,
                     description=schema.function.description,
-                    parameters=schema.function.parameters,
+                    parameters_json_schema=schema.function.parameters,
                 )
             ]
         )
@@ -43,7 +43,7 @@ def test_parameterless_tool_empty_dict_gets_object_schema() -> None:
                 types.FunctionDeclaration(
                     name="list_skills",
                     description="List installed skills.",
-                    parameters={"type": "object", "properties": {}},
+                    parameters_json_schema={"type": "object", "properties": {}},
                 )
             ]
         )
@@ -67,7 +67,58 @@ def test_parameterless_tool_null_type_gets_object_schema() -> None:
                 types.FunctionDeclaration(
                     name="list_skills",
                     description="List installed skills.",
-                    parameters={"type": "object", "properties": {}},
+                    parameters_json_schema={"type": "object", "properties": {}},
+                )
+            ]
+        )
+    ]
+
+
+def test_additional_properties_stripped_from_anyof_branches() -> None:
+    """Gemini rejects ``additionalProperties`` inside ``anyOf`` items.
+
+    pydantic emits ``Optional[dict]`` as
+    ``{"anyOf": [{"type": "object", "additionalProperties": false}, {"type": "null"}]}``.
+    Gemini rejects this with ``Unknown name 'additional_properties'``.
+    The mapper must strip ``additionalProperties`` recursively.
+    """
+    schema = FunctionToolSchema(
+        function=FunctionDefinition(
+            name="emit",
+            description="Emit some payload.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "payload": {
+                        "anyOf": [
+                            {"type": "object", "additionalProperties": False},
+                            {"type": "null"},
+                        ],
+                    },
+                },
+                "additionalProperties": False,
+            },
+        )
+    )
+    api_tool = build_tools([schema])
+
+    assert api_tool == [
+        types.Tool(
+            function_declarations=[
+                types.FunctionDeclaration(
+                    name="emit",
+                    description="Emit some payload.",
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "payload": {
+                                "anyOf": [
+                                    {"type": "object"},
+                                    {"type": "null"},
+                                ],
+                            },
+                        },
+                    },
                 )
             ]
         )

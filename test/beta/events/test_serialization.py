@@ -74,20 +74,6 @@ class TestBytes:
         payload = [b"\x01", b"\x02"]
         assert _round_trip(payload) == payload
 
-    def test_bytes_inside_event_provider_data(self) -> None:
-        """The original Gemini thought_signature bug — bytes in provider_data."""
-        sig = b"\x12\x34\n\x32\x01\x0c\x39\xd6\xc7\xa3"
-        event = ToolCallEvent(
-            id="call-1",
-            name="get_weather",
-            arguments='{"city": "Paris"}',
-            provider_data={"thought_signature": sig},
-        )
-        round_tripped = _round_trip(event)
-        assert isinstance(round_tripped, ToolCallEvent)
-        assert round_tripped.provider_data["thought_signature"] == sig
-        assert isinstance(round_tripped.provider_data["thought_signature"], bytes)
-
 
 class TestUUID:
     def test_uuid_round_trip(self) -> None:
