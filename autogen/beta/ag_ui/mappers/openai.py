@@ -4,9 +4,10 @@
 
 import json
 import logging
-from typing import Any
+from typing import Any, get_args
 
 from openai.types.responses import ResponseCodeInterpreterToolCall, ResponseFunctionWebSearch
+from openai.types.responses.response_function_web_search import ActionFind, ActionOpenPage, ActionSearch
 from openai.types.responses.response_output_item import ImageGenerationCall
 
 from autogen.beta.config.openai.events import OpenAIServerToolCallEvent, OpenAIServerToolResultEvent
@@ -17,7 +18,11 @@ from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
 logger = logging.getLogger(__name__)
 
-_WEB_SEARCH_ACTION_TYPES = frozenset({"search", "open_page", "find", "find_in_page"})
+_WEB_SEARCH_ACTION_TYPES: frozenset[str] = frozenset(
+    literal
+    for cls in (ActionSearch, ActionOpenPage, ActionFind)
+    for literal in get_args(cls.model_fields["type"].annotation)
+)
 
 
 def openai_call_from_agui(
