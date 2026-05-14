@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -15,6 +16,7 @@ pytest.importorskip("tinyfish")
 from autogen.beta import Agent, Context, DataInput, Variable
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
+from autogen.beta.tools.search import tinyfish as tinyfish_module
 from autogen.beta.tools.search.tinyfish import (
     TinyFishFetchError,
     TinyFishFetchResponse,
@@ -66,6 +68,37 @@ SAMPLE_FETCH_RAW: dict[str, Any] = {
     ],
     "errors": [{"url": "https://bad.example", "error": "target_unreachable"}],
 }
+
+
+class FakeAsyncFetchResource:
+    async def get_contents(self, *, urls: list[str], **kwargs: Any) -> Any:
+        return SimpleNamespace(
+            results=[
+                SimpleNamespace(
+                    url=urls[0],
+                    final_url=None,
+                    title="AG2",
+                    description=None,
+                    language=None,
+                    author=None,
+                    published_date=None,
+                    text="# AG2",
+                    format="markdown",
+                    links=None,
+                    image_links=None,
+                    latency_ms=None,
+                )
+            ],
+            errors=[],
+        )
+
+
+class FakeAsyncTinyFish:
+    def __init__(self, **kwargs: Any) -> None:
+        self.fetch = FakeAsyncFetchResource()
+
+    async def close(self) -> None:
+        pass
 
 
 def _tool_call_config(
@@ -120,6 +153,21 @@ class TestSchema:
 
         assert schema.function.name == "web_search"
         assert schema.function.description == "Custom TinyFish search."
+
+    async def test_client_options_forwarded_to_sdk(self) -> None:
+        toolkit = TinyFishSearchToolkit(
+            api_key="test",
+            base_url="https://example.test",
+            timeout=12.0,
+            max_retries=3,
+        )
+
+        assert toolkit._client_kwargs() == {
+            "api_key": "test",
+            "base_url": "https://example.test",
+            "timeout": 12.0,
+            "max_retries": 3,
+        }
 
 
 @pytest.mark.asyncio
@@ -232,6 +280,20 @@ class TestFetchExecution:
                 errors=[TinyFishFetchError(url="https://bad.example", error="target_unreachable")],
             )
         )
+
+    async def test_null_links_return_empty_lists(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(tinyfish_module, "AsyncTinyFish", FakeAsyncTinyFish)
+        toolkit = TinyFishSearchToolkit(api_key="test")
+
+        config = TrackingConfig(_tool_call_config({"urls": ["https://ag2.ai"]}, tool_name="tinyfish_fetch"))
+        agent = Agent("a", config=config, tools=[toolkit])
+        await agent.ask("fetch")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        result = tool_results_event.results[0].result.parts[0].data.results[0]
+
+        assert result.links == []
+        assert result.image_links == []
 
     @respx.mock
     async def test_fetch_params_forwarded(self) -> None:
