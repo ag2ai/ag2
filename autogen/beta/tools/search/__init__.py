@@ -24,9 +24,15 @@ try:
 except ImportError as e:
     PerplexitySearchToolkit = missing_optional_dependency("PerplexitySearchToolkit", "perplexity", e)  # type: ignore[misc]
 
+try:
+    from .tinyfish import TinyFishSearchToolkit
+except ImportError as e:
+    TinyFishSearchToolkit = missing_optional_dependency("TinyFishSearchToolkit", "tinyfish", e)  # type: ignore[misc]
+
 __all__ = (
     "DuckDuckSearchTool",
     "ExaToolkit",
     "PerplexitySearchToolkit",
     "TavilySearchTool",
+    "TinyFishSearchToolkit",
 )

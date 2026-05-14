@@ -21,7 +21,7 @@ from .builtin import (
 )
 from .code import SandboxCodeTool
 from .final import Toolkit, tool
-from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchToolkit, TavilySearchTool
+from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchToolkit, TavilySearchTool, TinyFishSearchToolkit
 from .shell import LocalShellTool
 from .skills import SkillSearchToolkit, SkillsToolkit
 from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
@@ -49,6 +49,7 @@ __all__ = (
     "SkillsTool",
     "SkillsToolkit",
     "TavilySearchTool",
+    "TinyFishSearchToolkit",
     "ToolResult",
     "Toolkit",
     "UserLocation",
