@@ -193,7 +193,7 @@ async def test_update_file_preserves_utf8(tmp_path: Path) -> None:
     must use UTF-8 so a round-trip preserves non-ASCII byte content.
     """
     target = tmp_path / "data.txt"
-    target.write_bytes("Café old Beberenice".encode("utf-8"))
+    target.write_bytes("Café old Beberenice".encode())
 
     toolkit = FilesystemToolkit(base_path=tmp_path)
     config = TestConfig(
@@ -206,7 +206,7 @@ async def test_update_file_preserves_utf8(tmp_path: Path) -> None:
     agent = Agent("", config=config, tools=[toolkit])
     await agent.ask("update it")
 
-    assert target.read_bytes() == "Café 新 Beberenice".encode("utf-8")
+    assert target.read_bytes() == "Café 新 Beberenice".encode()
 
 
 @pytest.mark.asyncio
