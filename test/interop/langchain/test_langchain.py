@@ -194,3 +194,59 @@ class TestLangChainInteroperabilityBaseToolAsync:
 
         assert result == "echo: hello"
         self.mock.assert_called_once_with("hello")
+
+
+# Cover the sync-native BaseTool subclass path of `_is_async_langchain_tool`
+# (no `coroutine` attr, `_arun` either missing or equal to the BaseTool
+# default). The wrapper must be a plain function and call `run`, not `arun`.
+@run_for_optional_imports("langchain", "interop-langchain")
+class TestLangChainInteroperabilityBaseToolSync:
+    @pytest.fixture(autouse=True)
+    def setup(self) -> None:
+        self.mock = MagicMock()
+        outer_mock = self.mock
+
+        class SyncEcho(LangchainBaseTool):  # type: ignore[no-any-unimported,misc]
+            name: str = "sync_echo"
+            description: str = "Echo the input synchronously."
+
+            def _run(self, query: str) -> str:  # type: ignore[override]
+                outer_mock(query)
+                return f"sync echo: {query}"
+
+        self.langchain_tool = SyncEcho()
+        self.tool = LangChainInteroperability.convert_tool(self.langchain_tool)
+
+    def test_sync_wrapper(self) -> None:
+        # Without an `_arun` override, _is_async_langchain_tool returns False
+        # and convert_tool falls back to the synchronous wrapper that calls
+        # `run` directly. The Tool's callable must therefore be a plain
+        # function, not a coroutine function.
+        assert not inspect.iscoroutinefunction(self.tool.func)
+
+        result = self.tool.func(tool_input={"query": "hi"})
+
+        assert result == "sync echo: hi"
+        self.mock.assert_called_once_with("hi")
+
+
+# Cover the input-validation guard rails in convert_tool — the two ValueError
+# branches were previously executed only by users hitting bugs in their own
+# code, so they had no coverage.
+@run_for_optional_imports("langchain", "interop-langchain")
+class TestLangChainInteroperabilityConvertToolErrors:
+    def test_rejects_non_langchain_tool(self) -> None:
+        class NotALangchainTool:
+            pass
+
+        with pytest.raises(ValueError, match="Expected an instance of `langchain_core.tools.BaseTool`"):
+            LangChainInteroperability.convert_tool(NotALangchainTool())
+
+    def test_rejects_extra_kwargs(self) -> None:
+        @langchain_tool  # type: ignore[misc]
+        def trivial(query: str) -> str:
+            """Trivial tool."""
+            return query
+
+        with pytest.raises(ValueError, match="does not support any additional arguments"):
+            LangChainInteroperability.convert_tool(trivial, unsupported_kwarg="boom")
