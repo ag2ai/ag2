@@ -167,8 +167,6 @@ scrape_configs:
           - localhost:8000
 ```
 
-If your application already owns an HTTP server, expose the same registry through that server and return `generate_latest(registry)` with the `CONTENT_TYPE_LATEST` content type.
-
 For ASGI applications, Prometheus Python client can expose the same `CollectorRegistry` as an ASGI app via `make_asgi_app(registry=registry)`. For example, you can serve it directly with `uvicorn`:
 
 ```python linenums="1"
