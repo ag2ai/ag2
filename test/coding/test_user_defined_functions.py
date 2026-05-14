@@ -4,6 +4,7 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import contextlib
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -173,10 +174,8 @@ def greet(name: str) -> str:
         # module; the file is written first, so we tolerate that
         # downstream subprocess failure (e.g. when `python` resolves to
         # python3 only on the host) and assert the on-disk bytes.
-        try:
+        with contextlib.suppress(FileNotFoundError, ValueError, OSError):
             executor._setup_functions()
-        except (FileNotFoundError, ValueError, OSError):
-            pass
 
         func_file = executor._work_dir / f"{executor.functions_module}.py"
         assert func_file.exists(), "functions module should be on disk after _setup_functions"
@@ -214,13 +213,13 @@ def greet(name: str) -> str:
             captured_kwargs.append(dict(kwargs))
             return original_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
 
-        with patch.object(Path, "write_text", recording_write_text):
-            try:
-                executor._setup_functions()
-            except (FileNotFoundError, ValueError, OSError):
-                # downstream subprocess check (python on PATH) can fail —
-                # the write call we care about has already happened.
-                pass
+        with (
+            patch.object(Path, "write_text", recording_write_text),
+            # downstream subprocess check (python on PATH) can fail —
+            # the write call we care about has already happened.
+            contextlib.suppress(FileNotFoundError, ValueError, OSError),
+        ):
+            executor._setup_functions()
 
         # First write_text call inside _setup_functions writes the
         # generated module. Subsequent calls (e.g. via the syntax-check
