@@ -394,11 +394,9 @@ Reach for `workflow` when "who speaks next" is structured — pipelines, escalat
 
 You've now run all four conversation shapes. There are three more layers the network adds on top, each covered in an upcoming post:
 
-- **A choreography dial** — same primitive, more knobs. *Expectations* like `reply_within(30s, auto_close)` give the channel a deterministic response when a participant misses a deadline. *Audience* on each envelope (`audience=[a, b]`) lets a single channel carry private side-channels for free. Deeper `TransitionGraph` patterns — conditional handoffs, dynamic `Handoff` returns, context-aware routing — sit alongside. **Post 2: [Choreography You Can Dial In](#).**
-- **A trustworthy substrate** — what's written down and who you are. The hub's WAL is the source of truth: kill the hub, restart it, every channel comes back byte-for-byte. Identity is three records (`Passport` + `Resume` + `SKILL.md`), not a name string. The audit log records every envelope. **Post 3: [What Survives, Survives Exactly](#).**
-- **Cross-boundary deployment** — what lets you actually ship this. A single channel can span two organizations through Passport + Visa. Participants register and unregister dynamically. Text, audio, image, and video ride the same fan-out. And a real production-incident demo ties it all together. **Post 4: [Networks You Can Deploy](#).**
-
-For the inside of a single agent — the harness that turns a model call into something coherent for hours of work — see the companion post **[The Agent Harness: An Agent Is More Than a Loop](#)**.
+- **A choreography dial** — same primitive, more knobs. *Expectations* like `reply_within(30s, auto_close)` give the channel a deterministic response when a participant misses a deadline. *Audience* on each envelope (`audience=[a, b]`) lets a single channel carry private side-channels for free. Deeper `TransitionGraph` patterns — conditional handoffs, dynamic `Handoff` returns, context-aware routing — sit alongside. **Post 2: Choreography You Can Dial In (coming soon).**
+- **A trustworthy substrate** — what's written down and who you are. The hub's WAL is the source of truth: kill the hub, restart it, every channel comes back byte-for-byte. Identity is three records (`Passport` + `Resume` + `SKILL.md`), not a name string. The audit log records every envelope. **Post 3: What Survives, Survives Exactly (coming soon).**
+- **Cross-boundary deployment** — what lets you actually ship this. A single channel can span two organizations through Passport + Visa. Participants register and unregister dynamically. Text, audio, image, and video ride the same fan-out. And a real production-incident demo ties it all together. **Post 4: Networks You Can Deploy (coming soon)**
 
 ## Interactive Playground
 
