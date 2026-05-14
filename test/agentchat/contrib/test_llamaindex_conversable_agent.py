@@ -40,7 +40,9 @@ class TestLLamaIndexConversableAgentLegacy:
         runner.chat.return_value = AgentChatResponse(response="The Ghibli Museum in Tokyo is a great fit.")
 
         agent = self._agent(runner)
-        success, reply = agent._generate_oai_reply(messages=[{"role": "user", "content": "Where can I see Ghibli art?"}])
+        success, reply = agent._generate_oai_reply(
+            messages=[{"role": "user", "content": "Where can I see Ghibli art?"}]
+        )
 
         assert success is True
         assert reply == "The Ghibli Museum in Tokyo is a great fit."
@@ -131,9 +133,7 @@ class TestLLamaIndexConversableAgentWorkflow:
         mock_agent.run.side_effect = _fake_run
 
         agent = self._agent(mock_agent)
-        success, reply = agent._generate_oai_reply(
-            messages=[{"role": "user", "content": "Anything?"}]
-        )
+        success, reply = agent._generate_oai_reply(messages=[{"role": "user", "content": "Anything?"}])
 
         assert success is True
         assert reply == "bare string reply"

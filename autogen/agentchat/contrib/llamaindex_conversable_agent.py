@@ -32,8 +32,12 @@ with optional_import_block():
 # of those modules disappeared on 0.14, so we keep the imports optional and
 # fall back to the new surface at runtime via `hasattr`.
 with optional_import_block():
-    from llama_index.core.agent.runner.base import AgentRunner  # noqa: F401 - legacy alias for the type hint  # type: ignore[no-redef,import-not-found]
-    from llama_index.core.chat_engine.types import AgentChatResponse  # noqa: F401 - legacy response type  # type: ignore[no-redef,import-not-found]
+    from llama_index.core.agent.runner.base import (
+        AgentRunner,  # noqa: F401 - legacy alias for the type hint  # type: ignore[no-redef,import-not-found]
+    )
+    from llama_index.core.chat_engine.types import (
+        AgentChatResponse,  # noqa: F401 - legacy response type  # type: ignore[no-redef,import-not-found]
+    )
 
 
 @require_optional_import("llama_index", "neo4j")
