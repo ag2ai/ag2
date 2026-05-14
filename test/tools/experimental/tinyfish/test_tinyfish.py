@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from autogen.tools.experimental.tinyfish import TinyFishFetchTool, TinyFishSearchTool, TinyFishTool
+from autogen.tools.experimental.tinyfish import TinyFishFetchTool, TinyFishSearchTool, TinyFishTool, tinyfish_tool
 
 
 class TestTinyFishTool:
@@ -122,6 +122,166 @@ class TestTinyFishTool:
 
         assert isinstance(result, dict)
         assert result["data"]["status"] == "no_result"
+
+
+class TestTinyFishExecutionHelpers:
+    """Test TinyFish SDK response mapping helpers."""
+
+    @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
+    def test_execute_scrape_returns_dict_result_and_closes_client(self, mock_tinyfish: Mock) -> None:
+        response = Mock(status="COMPLETED", result={"company_name": "Acme"}, error=None)
+        client = Mock()
+        client.agent.run.return_value = response
+        mock_tinyfish.return_value = client
+
+        result = tinyfish_tool._execute_tinyfish_scrape(
+            url="https://example.com",
+            goal="Extract company info",
+            tinyfish_api_key="test_key",
+        )
+
+        assert result == {"company_name": "Acme"}
+        client.agent.run.assert_called_once_with(url="https://example.com", goal="Extract company info")
+        client.close.assert_called_once_with()
+
+    @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
+    def test_execute_scrape_wraps_non_dict_result(self, mock_tinyfish: Mock) -> None:
+        client = Mock()
+        client.agent.run.return_value = Mock(status="COMPLETED", result="plain text", error=None)
+        mock_tinyfish.return_value = client
+
+        result = tinyfish_tool._execute_tinyfish_scrape(
+            url="https://example.com",
+            goal="Extract text",
+            tinyfish_api_key="test_key",
+        )
+
+        assert result == {"result": "plain text"}
+        client.close.assert_called_once_with()
+
+    @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
+    def test_execute_scrape_returns_error_result(self, mock_tinyfish: Mock) -> None:
+        client = Mock()
+        client.agent.run.return_value = Mock(status="FAILED", result=None, error="Task failed")
+        mock_tinyfish.return_value = client
+
+        result = tinyfish_tool._execute_tinyfish_scrape(
+            url="https://example.com",
+            goal="Extract data",
+            tinyfish_api_key="test_key",
+        )
+
+        assert result == {"status": "error", "error": "Task failed"}
+        client.close.assert_called_once_with()
+
+    @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
+    def test_execute_scrape_returns_no_result(self, mock_tinyfish: Mock) -> None:
+        client = Mock()
+        client.agent.run.return_value = Mock(status="COMPLETED", result=None, error=None)
+        mock_tinyfish.return_value = client
+
+        result = tinyfish_tool._execute_tinyfish_scrape(
+            url="https://example.com",
+            goal="Extract data",
+            tinyfish_api_key="test_key",
+        )
+
+        assert result == {"status": "no_result", "error": "No result returned."}
+        client.close.assert_called_once_with()
+
+    @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
+    def test_execute_search_maps_results_and_closes_client(self, mock_tinyfish: Mock) -> None:
+        search_result = Mock(
+            position=1,
+            site_name="ag2.ai",
+            title="AG2",
+            snippet="Agent framework",
+            url="https://ag2.ai",
+        )
+        response = Mock(query="AG2", total_results=1, results=[search_result])
+        client = Mock()
+        client.search.query.return_value = response
+        mock_tinyfish.return_value = client
+
+        result = tinyfish_tool._execute_tinyfish_search(
+            query="AG2",
+            tinyfish_api_key="test_key",
+            location="US",
+            language="en",
+        )
+
+        assert result == {
+            "query": "AG2",
+            "total_results": 1,
+            "results": [
+                {
+                    "position": 1,
+                    "site_name": "ag2.ai",
+                    "title": "AG2",
+                    "snippet": "Agent framework",
+                    "url": "https://ag2.ai",
+                }
+            ],
+        }
+        client.search.query.assert_called_once_with(query="AG2", location="US", language="en")
+        client.close.assert_called_once_with()
+
+    @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
+    def test_execute_fetch_maps_results_errors_and_closes_client(self, mock_tinyfish: Mock) -> None:
+        fetch_result = Mock(
+            url="https://ag2.ai",
+            final_url="https://ag2.ai/",
+            title="AG2",
+            description="Agent framework",
+            language="en",
+            author="ag2ai",
+            published_date="2026-01-01",
+            text="# AG2",
+            format="markdown",
+            links=["https://github.com/ag2ai/ag2"],
+            image_links=["https://ag2.ai/logo.png"],
+            latency_ms=123.4,
+        )
+        fetch_error = Mock(url="https://bad.example", error="target_unreachable")
+        response = Mock(results=[fetch_result], errors=[fetch_error])
+        client = Mock()
+        client.fetch.get_contents.return_value = response
+        mock_tinyfish.return_value = client
+
+        result = tinyfish_tool._execute_tinyfish_fetch(
+            urls=["https://ag2.ai", "https://bad.example"],
+            tinyfish_api_key="test_key",
+            format="markdown",
+            links=True,
+            image_links=False,
+        )
+
+        assert result == {
+            "results": [
+                {
+                    "url": "https://ag2.ai",
+                    "final_url": "https://ag2.ai/",
+                    "title": "AG2",
+                    "description": "Agent framework",
+                    "language": "en",
+                    "author": "ag2ai",
+                    "published_date": "2026-01-01",
+                    "text": "# AG2",
+                    "format": "markdown",
+                    "links": ["https://github.com/ag2ai/ag2"],
+                    "image_links": ["https://ag2.ai/logo.png"],
+                    "latency_ms": 123.4,
+                }
+            ],
+            "errors": [{"url": "https://bad.example", "error": "target_unreachable"}],
+        }
+        client.fetch.get_contents.assert_called_once_with(
+            urls=["https://ag2.ai", "https://bad.example"],
+            format="markdown",
+            links=True,
+            image_links=False,
+        )
+        client.close.assert_called_once_with()
 
 
 class TestTinyFishSearchTool:
