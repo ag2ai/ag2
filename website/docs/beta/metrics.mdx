@@ -169,6 +169,26 @@ scrape_configs:
 
 If your application already owns an HTTP server, expose the same registry through that server and return `generate_latest(registry)` with the `CONTENT_TYPE_LATEST` content type.
 
+For ASGI applications, Prometheus Python client can expose the same `CollectorRegistry` as an ASGI app via `make_asgi_app(registry=registry)`. For example, you can serve it directly with `uvicorn`:
+
+```python linenums="1"
+import uvicorn
+from prometheus_client import CollectorRegistry, make_asgi_app
+
+from autogen.beta.middleware import MetricsMiddleware
+
+
+registry = CollectorRegistry()
+metrics = MetricsMiddleware(registry=registry)
+
+app = make_asgi_app(registry=registry)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+Then scrape `http://localhost:8000/`. If you prefer the CLI form, expose the same `app` object from a module and run `uvicorn your_module:app`.
+
 ## Grafana Dashboard
 
 Useful starting panels:
