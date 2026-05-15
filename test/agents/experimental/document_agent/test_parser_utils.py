@@ -265,9 +265,7 @@ class TestDoclingParseDocs:
         assert json_path.read_bytes() == _json.dumps(non_ascii_dict).encode("utf-8")
         assert html_path.read_bytes() == non_ascii_html.encode("utf-8")
 
-    def test_exports_pass_utf8_encoding_to_path_open(
-        self, tmp_path: Path, mock_conversion_result: MagicMock
-    ) -> None:
+    def test_exports_pass_utf8_encoding_to_path_open(self, tmp_path: Path, mock_conversion_result: MagicMock) -> None:
         """Every ``Path.open("w", ...)`` writer in ``docling_parse_docs`` must
         pass ``encoding="utf-8"`` so the charmap default cannot leak in on
         Windows. The byte-content test above proves the user-visible outcome
@@ -295,14 +293,12 @@ class TestDoclingParseDocs:
                 table_output_format="html",
             )
 
-        write_calls = [
-            call for call in mock_path_open.call_args_list if call.args and call.args[0] == "w"
-        ]
+        write_calls = [call for call in mock_path_open.call_args_list if call.args and call.args[0] == "w"]
         # markdown + json + 1 html table = 3 writers in the mock.
         assert len(write_calls) == 3, f"expected 3 write opens, got {write_calls!r}"
         for call in write_calls:
             assert call.kwargs.get("encoding") == "utf-8", (
-                f"Path.open(\"w\", ...) must specify encoding=\"utf-8\", got kwargs={call.kwargs!r}"
+                f'Path.open("w", ...) must specify encoding="utf-8", got kwargs={call.kwargs!r}'
             )
 
     def test_default_output_dir_path(self, tmp_path: Path, mock_conversion_result: MagicMock) -> None:
