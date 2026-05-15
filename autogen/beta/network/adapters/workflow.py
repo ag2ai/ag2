@@ -61,7 +61,7 @@ from ..transitions import (
     WorkflowGraphError,
 )
 from ..views.base import ViewPolicy
-from ..views.builtin import WindowedSummary
+from ..views.builtin import NamedWindowedSummary
 from .base import (
     AdapterResult,
     default_build_packet_envelope,
@@ -134,8 +134,12 @@ class WorkflowAdapter:
     """Generic orchestrated multi-party channel.
 
     Knobs: ``{"graph": <TransitionGraph.to_dict()>}``. Participants:
-    2+. Default view: :class:`WindowedSummary(recent_n=N*2)` with
-    ``N`` = participant count.
+    2+. Default view: :class:`NamedWindowedSummary(recent_n=N*2)`
+    with ``N`` = participant count — bounded prompt size plus sender
+    labels on non-self projection lines so the orchestrator / next
+    speaker can tell its peers apart in a 3+ party chat (the
+    assistant/user role bit alone collapses every "other" into one
+    indistinguishable stream).
     """
 
     def __init__(self) -> None:
@@ -144,7 +148,7 @@ class WorkflowAdapter:
             version=1,
             participants=ParticipantSchema(min=2),
             knobs_schema={"graph": "TransitionGraph"},
-            default_view_policy=WindowedSummary.name,
+            default_view_policy=NamedWindowedSummary.name,
             expectations=[
                 Expectation(
                     name="turn_within",
@@ -332,7 +336,7 @@ class WorkflowAdapter:
         participant_id: str,
     ) -> ViewPolicy:
         recent_n = max(len(metadata.participants) * 2, 4)
-        return WindowedSummary(recent_n=recent_n)
+        return NamedWindowedSummary(recent_n=recent_n)
 
     def extract_turn_input(self, envelope: Envelope) -> str | None:
         """Decode an inbound substantive envelope into the next

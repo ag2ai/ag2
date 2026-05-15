@@ -166,6 +166,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
             participant_id=client.agent_id,
             channel=metadata,
             render_envelope=adapter.render_envelope,
+            name_for=client._hub.name_for,
         )
 
         current_input = adapter.extract_turn_input(envelope)
