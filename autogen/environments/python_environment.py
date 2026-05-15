@@ -87,7 +87,13 @@ class PythonEnvironment(ABC):
             script_path: Path to the file to write.
             content: Content to write to the file.
         """
-        with open(script_path, "w") as f:
+        # Pin UTF-8 so any non-ASCII glyph in agent-supplied script content
+        # (string literals, comments, docstrings, identifiers) round-trips on
+        # platforms whose locale.getpreferredencoding() is not UTF-8 (cp1252
+        # on default Windows installs). Without it `open(path, "w")` raises
+        # UnicodeEncodeError mid-write on the first non-cp1252 character,
+        # turning a successful agent code-gen into a runtime failure.
+        with open(script_path, "w", encoding="utf-8") as f:
             f.write(content)
 
     # Utility method for subclasses to wrap (for async support)
