@@ -89,7 +89,7 @@ from .errors import (
     NotFoundError,
     ProtocolError,
 )
-from .handoff import Handoff
+from .handoff import Finish, Handoff
 from .hub import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_AGENT_UNREGISTERED,
@@ -277,6 +277,7 @@ __all__ = (
     "Expectation",
     "ExpectationContext",
     "ExpectationEvaluator",
+    "Finish",
     "Frame",
     "FromSpeaker",
     "FullTranscript",
