@@ -337,7 +337,7 @@ agent = Agent(
 
 ## Built-In Middleware
 
-AG2 Beta currently includes four built-in middleware in `autogen.beta.middleware`:
+AG2 Beta currently includes the following built-in middleware in `autogen.beta.middleware`:
 
 ### `LoggingMiddleware`
 
@@ -397,6 +397,35 @@ Trims the event history to fit within an approximate token budget before the mod
 It uses a character-based estimate controlled by `chars_per_token`.
 
 Use it when you need lightweight context budgeting without depending on a model-specific tokenizer.
+
+### `SamplingMiddleware`
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.middleware import SamplingMiddleware, TelemetryMiddleware
+
+agent = Agent(
+    "assistant",
+    ...,
+    middleware=[
+        SamplingMiddleware(
+            rate=0.1,
+            middleware=TelemetryMiddleware(tracer_provider),
+        )
+    ],
+)
+```
+
+Wraps another middleware and activates it on a random fraction of agent turns.
+One sampling decision is made per turn — all hooks within a sampled turn share the same on/off state, keeping traces coherent.
+A tool execution that happens in a sampled turn is always observed; no partial traces.
+
+`rate` is a float in `[0.0, 1.0]`:
+- `1.0` — inner middleware always active (equivalent to using the middleware directly).
+- `0.0` — inner middleware never active (useful for temporarily disabling tracing without removing it from the stack).
+- Values in between — the inner middleware runs on approximately that fraction of turns.
+
+Use `SamplingMiddleware` when observability overhead is a concern and representative sampling is acceptable — for example, tracing 10 % of turns in a high-traffic deployment while keeping the other 90 % at full speed.
 
 ## Choosing the Right Hook
 
