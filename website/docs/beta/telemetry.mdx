@@ -73,10 +73,14 @@ Every span includes an `ag2.span.type` attribute:
 | `llm` | `chat` | `on_llm_call` -- each LLM API call |
 | `tool` | `execute_tool` | `on_tool_execution` -- each tool invocation |
 | `human_input` | `await_human_input` | `on_human_input` -- human-in-the-loop |
+| `channel` | `channel.opened` / `channel.closed` / `channel.expired` | `TelemetryHubListener` -- channel lifecycle |
+| `turn_failure` | `agent.turn_failed` | `TelemetryHubListener` -- failed agent turn in a network |
 
 ## Semantic Attributes
 
 Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/docs/specs/semconv/gen-ai/):
+
+### Core attributes
 
 | Attribute | Span types | Description |
 |---|---|---|
@@ -94,6 +98,49 @@ Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/d
 | `gen_ai.tool.call.id` | tool | Tool call ID |
 | `gen_ai.tool.type` | tool | Tool type (always `function`) |
 
+### Request parameters
+
+When `temperature`, `top_p`, or `max_tokens` are set on `TelemetryMiddleware`, they are emitted on each `chat` span:
+
+| Attribute | Span type | Description |
+|---|---|---|
+| `gen_ai.request.temperature` | llm | Sampling temperature |
+| `gen_ai.request.top_p` | llm | Top-p sampling value |
+| `gen_ai.request.max_tokens` | llm | Max tokens per completion |
+
+### Agent and tool inventory
+
+| Attribute | Span type | Description |
+|---|---|---|
+| `ag2.agent.available_tools` | agent | Sorted list of tool names available at turn start |
+
+`ag2.agent.available_tools` is only emitted when the agent has at least one tool registered.
+
+### Network attributes
+
+These attributes appear on `invoke_agent` spans when the agent runs inside a multi-agent network:
+
+| Attribute | Span type | Description |
+|---|---|---|
+| `ag2.network.agent_id` | agent | Stable agent identifier within the hub |
+| `ag2.workflow.next_speaker` | agent | Name of the speaker selected for the next turn |
+| `ag2.workflow.turn_number` | agent | Turn counter in the current workflow |
+| `ag2.workflow.context_vars` | agent | JSON-serialized workflow context variables |
+
+All four network attributes are emitted only when the agent is running inside a hub channel. They are no-ops for standalone single-agent use.
+
+### Channel lifecycle attributes (TelemetryHubListener)
+
+| Attribute | Span types | Description |
+|---|---|---|
+| `ag2.channel.id` | channel, turn_failure | Channel identifier |
+| `ag2.channel.type` | channel | Channel type from manifest |
+| `ag2.channel.creator_id` | channel | ID of the agent that opened the channel |
+| `ag2.channel.participant_count` | channel.opened | Number of participants at open time |
+| `ag2.channel.close_reason` | channel.closed / channel.expired | Reason string when provided |
+| `ag2.agent.id` | turn_failure | Agent ID that failed |
+| `ag2.envelope_id` | turn_failure | Envelope ID of the failing turn |
+
 ## Content Capture
 
 By default, message content, tool arguments, and results **are** included in spans. To disable content capture for privacy-sensitive environments:
@@ -110,8 +157,8 @@ When content capture is enabled (the default), spans include these additional at
 
 | Attribute | Span type | Content |
 |---|---|---|
-| `gen_ai.input.messages` | llm | JSON request messages |
-| `gen_ai.output.messages` | llm | JSON response messages |
+| `gen_ai.input.messages` | llm | Full conversation history as JSON — user messages, assistant turns, and tool results |
+| `gen_ai.output.messages` | llm | JSON response messages, including tool call records when the model requests tool use |
 | `gen_ai.tool.call.arguments` | tool | Tool call arguments (JSON) |
 | `gen_ai.tool.call.result` | tool | Tool execution result |
 | `ag2.human_input.prompt` | human_input | Prompt shown to human |
@@ -131,6 +178,50 @@ When content capture is enabled (the default), spans include these additional at
 | `agent_name` | `str \| None` | `"unknown"` | Agent name for span attributes |
 | `provider_name` | `str \| None` | `None` | LLM provider name (auto-detected from response if not set) |
 | `model_name` | `str \| None` | `None` | Model name (auto-detected from response if not set) |
+| `temperature` | `float \| None` | `None` | Emitted as `gen_ai.request.temperature` on `chat` spans |
+| `top_p` | `float \| None` | `None` | Emitted as `gen_ai.request.top_p` on `chat` spans |
+| `max_tokens` | `int \| None` | `None` | Emitted as `gen_ai.request.max_tokens` on `chat` spans |
+
+## Distributed Tracing Across Agents
+
+When agents communicate through a hub, `TelemetryMiddleware` propagates the W3C `traceparent` header through network envelopes so that each agent's `invoke_agent` span is stitched into a single distributed trace.
+
+The sending agent stamps the current span as `traceparent` on the outbound envelope. The receiving agent reads it, parses it into a remote `SpanContext`, and starts `invoke_agent` as a child span. The result is a single trace that spans multiple processes or machines:
+
+```
+invoke_agent orchestrator         # root span
+  |-- chat gpt-4o-mini
+  +-- invoke_agent worker-a       # child span, auto-linked via traceparent
+        |-- chat gpt-4o-mini
+        +-- execute_tool fetch_data
+```
+
+No configuration is required — propagation activates automatically when `TelemetryMiddleware` is present on both agents.
+
+## Hub Channel Lifecycle — `TelemetryHubListener`
+
+For multi-agent networks, `TelemetryHubListener` emits instant (point-in-time) spans for channel lifecycle events:
+
+| Span name | Fired when |
+|---|---|
+| `channel.opened` | Invite handshake completes |
+| `channel.closed` | Channel closed explicitly or invite failed |
+| `channel.expired` | TTL sweeper expires an idle channel |
+| `agent.turn_failed` | Agent raises during its turn in the channel |
+
+Register it alongside your tenant listeners when constructing the hub:
+
+```python
+from autogen.beta.network.hub import Hub
+from autogen.beta.network.hub.telemetry import TelemetryHubListener
+
+hub = Hub(
+    ...,
+    listeners=[TelemetryHubListener(tracer_provider=tracer_provider)],
+)
+```
+
+`TelemetryHubListener` and `TelemetryMiddleware` share the same OTel instrumentation scope (`opentelemetry.instrumentation.ag2.beta`), so channel and agent spans appear under the same service in Jaeger, Grafana, Datadog, and other backends.
 
 ## Tool Execution Example
 
