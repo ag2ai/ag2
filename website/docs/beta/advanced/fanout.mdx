@@ -1,0 +1,88 @@
+---
+title: fanout() — Parallel Agents
+sidebarTitle: fanout()
+---
+
+`fanout()` runs multiple `agent.ask()` calls concurrently and returns the results
+in input order.  Use it any time you want to query several agents or send the same
+agent several prompts without waiting for each one to finish before starting the next.
+
+## Basic usage
+
+```python
+from autogen.beta import Agent, fanout
+from autogen.beta.config import OpenAIConfig
+
+agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
+
+# Same agent, multiple prompts — returns list in input order
+replies = await fanout(agent, ["Summarize Paris.", "Summarize Rome."])
+for r in replies:
+    print(r.body)
+```
+
+## Three calling conventions
+
+### 1 · One agent, many prompts
+
+```python
+replies = await fanout(agent, ["Summarize Paris.", "Summarize Rome.", "Summarize Berlin."])
+```
+
+### 2 · Many agents, one prompt (ensemble)
+
+Send the same prompt to several agents and collect all their replies:
+
+```python
+formal   = Agent("formal",   config=OpenAIConfig("gpt-4o-mini"))
+casual   = Agent("casual",   config=OpenAIConfig("gpt-4o-mini"))
+technical = Agent("technical", config=OpenAIConfig("gpt-4o-mini"))
+
+replies = await fanout([formal, casual, technical], "Explain recursion.")
+for reply in replies:
+    print(reply.body)
+```
+
+### 3 · Explicit (agent, prompt) pairs
+
+When each agent needs a different prompt:
+
+```python
+replies = await fanout([
+    (agent_a, "Summarize document A."),
+    (agent_b, "Summarize document B."),
+    (agent_c, "Summarize document C."),
+])
+```
+
+## Concurrency cap
+
+By default all calls run at once.  Set `max_concurrent` to limit parallelism — useful
+when you're sending a large batch and don't want to overwhelm an API rate limit:
+
+```python
+replies = await fanout(agent, prompts, max_concurrent=5)
+```
+
+## Order guarantee
+
+Results are always in the same order as the input, regardless of which calls finish first:
+
+```python
+prompts = ["slow prompt", "fast prompt"]
+replies = await fanout(agent, prompts)
+# replies[0] corresponds to "slow prompt"
+# replies[1] corresponds to "fast prompt"
+```
+
+## Error handling
+
+If any call raises an exception, `fanout()` re-raises it immediately.  Wrap it in
+`try/except` if you want to handle individual failures:
+
+```python
+try:
+    replies = await fanout(agent, prompts)
+except Exception as e:
+    print(f"One of the calls failed: {e}")
+```
