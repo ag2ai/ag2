@@ -15,6 +15,7 @@ from autogen.beta.events import (
     TextInput,
     ToolCallEvent,
     ToolResultEvent,
+    ToolResultsEvent,
 )
 from autogen.beta.middleware.base import (
     AgentTurn,
@@ -39,6 +40,34 @@ from autogen.beta.events import ToolErrorEvent
 
 _SCHEMA_URL = "https://opentelemetry.io/schemas/1.11.0"
 _INSTRUMENTING_MODULE = "opentelemetry.instrumentation.ag2.beta"
+
+
+def _build_input_messages(events: Sequence[BaseEvent]) -> list[dict[str, object]]:
+    """Serialize the full conversation history into OpenAI-compatible message dicts.
+
+    Includes user messages (ModelRequest), prior assistant turns (ModelResponse with
+    optional tool_calls), and tool results (ToolResultsEvent) so the span carries the
+    complete prompt that was sent to the model, not just the current user message.
+    Binary inputs (images, audio, documents) are omitted — they cannot be stored as
+    string span attributes.
+    """
+    result: list[dict[str, object]] = []
+    for event in events:
+        if isinstance(event, ModelRequest):
+            for inp in event.parts:
+                if isinstance(inp, TextInput):
+                    result.append(inp.to_api())
+        elif isinstance(event, ModelResponse):
+            result.append(event.to_api())
+        elif isinstance(event, ToolResultsEvent):
+            for r in event.results:
+                text_parts = [p.content for p in r.result.parts if isinstance(p, TextInput)]
+                result.append({
+                    "role": "tool",
+                    "tool_call_id": r.parent_id,
+                    "content": "\n".join(text_parts),
+                })
+    return result
 
 
 def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
@@ -152,14 +181,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
             if self._capture_content:
-                input_messages = json.dumps([
-                    inp.to_api()
-                    for event in events
-                    if isinstance(event, ModelRequest)
-                    for inp in event.parts
-                    if isinstance(inp, TextInput)
-                ])
-                span.set_attribute("gen_ai.input.messages", input_messages)
+                span.set_attribute("gen_ai.input.messages", json.dumps(_build_input_messages(events)))
 
             try:
                 response = await call_next(events, context)
