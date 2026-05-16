@@ -7,6 +7,7 @@ from autogen.beta.exceptions import missing_optional_dependency
 from .history_limiter import HistoryLimiter
 from .llm_retry import RetryMiddleware
 from .logging import LoggingMiddleware
+from .sampling import SamplingMiddleware
 from .token_limiter import TokenLimiter
 from .tools import approval_required
 
@@ -19,6 +20,7 @@ __all__ = (
     "HistoryLimiter",
     "LoggingMiddleware",
     "RetryMiddleware",
+    "SamplingMiddleware",
     "TelemetryMiddleware",
     "TokenLimiter",
     "approval_required",
