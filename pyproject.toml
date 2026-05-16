@@ -135,6 +135,9 @@ tracing = [
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
 ]
+metrics = [
+    "prometheus-client>=0.20",
+]
 
 flaml = [
     "flaml",

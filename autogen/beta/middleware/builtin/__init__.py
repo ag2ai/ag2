@@ -15,9 +15,15 @@ try:
 except ImportError as e:
     TelemetryMiddleware = missing_optional_dependency("TelemetryMiddleware", "tracing", e)
 
+try:
+    from .prometheus import PrometheusMiddleware
+except ImportError as e:
+    PrometheusMiddleware = missing_optional_dependency("PrometheusMiddleware", "metrics", e)
+
 __all__ = (
     "HistoryLimiter",
     "LoggingMiddleware",
+    "PrometheusMiddleware",
     "RetryMiddleware",
     "TelemetryMiddleware",
     "TokenLimiter",

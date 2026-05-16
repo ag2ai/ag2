@@ -45,6 +45,7 @@ setuptools.setup(
         "dashscope": ["ag2[dashscope]==" + __version__],
         "redis": ["ag2[redis]==" + __version__],
         "tracing": ["ag2[tracing]==" + __version__],
+        "metrics": ["ag2[metrics]==" + __version__],
         "flaml": ["ag2[flaml]==" + __version__],
         "docker": ["ag2[docker]==" + __version__],
         "jupyter-executor": ["ag2[jupyter-executor]==" + __version__],
