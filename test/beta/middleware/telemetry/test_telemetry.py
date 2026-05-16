@@ -498,3 +498,51 @@ async def test_thinking_tokens_omitted_when_zero(otel_setup):
     spans = exporter.get_finished_spans()
     llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
     assert "gen_ai.usage.thinking_tokens" not in llm_span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_request_params_on_llm_span(otel_setup):
+    """temperature, top_p, and max_tokens appear as gen_ai.request.* on the chat span."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hi!"))),
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider,
+                agent_name="assistant",
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=512,
+            )
+        ],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert llm_span.attributes["gen_ai.request.temperature"] == pytest.approx(0.7)
+    assert llm_span.attributes["gen_ai.request.top_p"] == pytest.approx(0.9)
+    assert llm_span.attributes["gen_ai.request.max_tokens"] == 512
+
+
+@pytest.mark.asyncio()
+async def test_request_params_absent_when_not_set(otel_setup):
+    """When temperature/top_p/max_tokens are not passed, no span attributes are emitted."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hi!"))),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert "gen_ai.request.temperature" not in llm_span.attributes
+    assert "gen_ai.request.top_p" not in llm_span.attributes
+    assert "gen_ai.request.max_tokens" not in llm_span.attributes
