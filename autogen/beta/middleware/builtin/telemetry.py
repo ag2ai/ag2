@@ -36,6 +36,7 @@ except ImportError as _err:
     ) from _err
 
 from autogen.beta.events import ToolErrorEvent
+from autogen.beta.network.policies import AGENT_CLIENT_DEP, CHANNEL_STATE_DEP
 
 _SCHEMA_URL = "https://opentelemetry.io/schemas/1.11.0"
 _INSTRUMENTING_MODULE = "opentelemetry.instrumentation.ag2.beta"
@@ -122,6 +123,30 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.provider.name", self._provider_name)
             if self._model_name:
                 span.set_attribute("gen_ai.request.model", self._model_name)
+
+            # Network identity: stamp the agent's ID when running inside a
+            # hub channel (AGENT_CLIENT_DEP is set by stamp_dependencies).
+            agent_client = context.dependencies.get(AGENT_CLIENT_DEP)
+            if agent_client is not None:
+                agent_id = getattr(agent_client, "agent_id", None)
+                if agent_id:
+                    span.set_attribute("ag2.network.agent_id", agent_id)
+
+            # Workflow state: stamp per-turn routing info when the channel
+            # adapter exposes it (WorkflowState / DiscussionState). Uses
+            # getattr so this stays adapter-agnostic without importing
+            # concrete state types into the middleware layer.
+            channel_state = context.dependencies.get(CHANNEL_STATE_DEP)
+            if channel_state is not None:
+                next_speaker = getattr(channel_state, "expected_next_speaker", None)
+                if next_speaker:
+                    span.set_attribute("ag2.workflow.next_speaker", next_speaker)
+                turn_count = getattr(channel_state, "turn_count", None)
+                if turn_count is not None:
+                    span.set_attribute("ag2.workflow.turn_number", turn_count)
+                context_vars = getattr(channel_state, "context_vars", None)
+                if context_vars and self._capture_content:
+                    span.set_attribute("ag2.workflow.context_vars", json.dumps(context_vars))
 
             try:
                 response = await call_next(event, context)
