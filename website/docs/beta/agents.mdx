@@ -96,6 +96,60 @@ reply = await agent.ask("Request confirmation through the tool.")
 print(reply.body)
 ```
 
+## Tracking Token Usage
+
+Every `AgentReply` exposes the token usage reported by the model for that turn.
+
+### Per-turn usage
+
+`reply.usage` is a synchronous property that returns the `Usage` from the final model call in the turn:
+
+```python linenums="1" hl_lines="8-11"
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+
+agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
+
+reply = await agent.ask("Summarize the Eiffel Tower in one sentence.")
+
+print(reply.usage.prompt_tokens)      # tokens sent to the model
+print(reply.usage.completion_tokens)  # tokens in the model's reply
+print(reply.usage.total_tokens)       # sum of both
+```
+
+### Accumulated usage across tool calls
+
+When a turn involves one or more tool calls, the agent makes multiple LLM calls internally.
+`reply.usage` only reflects the **last** call; `reply.total_usage()` sums all of them:
+
+```python linenums="1" hl_lines="19-22"
+from autogen.beta import Agent, tool
+from autogen.beta.config import OpenAIConfig
+
+@tool
+async def search(query: str) -> str:
+    """Look up information."""
+    return f"Result for: {query}"
+
+agent = Agent(
+    "assistant",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[search],
+)
+
+reply = await agent.ask("Search for the Eiffel Tower and summarize.")
+
+# Tokens from the final (post-tool) call only
+print(reply.usage.prompt_tokens)
+
+# Tokens across all LLM calls in this turn (tool-planning + final answer)
+total = await reply.total_usage()
+print(total.prompt_tokens)
+print(total.total_tokens)
+```
+
+For long-running agents that need to budget across many `ask()` calls, see [`TokenMonitor`](/docs/beta/advanced/observers#tokenmonitor){.internal-link}.
+
 ## Observing Agent Actions
 
 Need to know exactly what the agent is doing? Pass a `MemoryStream` when calling `ask()`. You can attach event subscribers to log actions, save history to a database, or update a user interface in real time.
