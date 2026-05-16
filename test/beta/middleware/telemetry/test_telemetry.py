@@ -498,3 +498,53 @@ async def test_thinking_tokens_omitted_when_zero(otel_setup):
     spans = exporter.get_finished_spans()
     llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
     assert "gen_ai.usage.thinking_tokens" not in llm_span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_available_tools_on_turn_span(otel_setup):
+    """ag2.agent.available_tools lists registered tool names on the invoke_agent span."""
+    exporter, provider = otel_setup
+
+    @tool
+    def search(query: str) -> str:
+        """Search for something."""
+        return f"Results for {query}"
+
+    @tool
+    def calculate(expr: str) -> str:
+        """Evaluate a math expression."""
+        return "42"
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Done!"))),
+        tools=[search, calculate],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Help")
+
+    spans = exporter.get_finished_spans()
+    turn_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "agent")
+    available = turn_span.attributes.get("ag2.agent.available_tools")
+    assert available is not None
+    assert "search" in available
+    assert "calculate" in available
+
+
+@pytest.mark.asyncio()
+async def test_available_tools_absent_when_no_tools(otel_setup):
+    """ag2.agent.available_tools is absent when the agent has no tools."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hi!"))),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    turn_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "agent")
+    assert "ag2.agent.available_tools" not in turn_span.attributes
