@@ -194,7 +194,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if usage.thinking_tokens:
                 span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
 
-            if self._capture_content and response.message:
+            if self._capture_content and (response.message or response.tool_calls):
                 span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
 
             return response
