@@ -74,6 +74,7 @@ from .middleware.base import (
 )
 from .observers import Observer
 from .observers import observer as observer_factory
+from .policies import AVAILABLE_TOOLS_DEP
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .task import Task, TaskSpec
@@ -1084,6 +1085,8 @@ class Agent(Generic[TResult]):
                         known_tools.add(schema.function.name)
                     else:
                         known_tools.add(schema.type)
+
+            context.dependencies[AVAILABLE_TOOLS_DEP] = sorted(known_tools)
 
             middleware_instances: list[BaseMiddleware] = []
             agent_turn: AgentTurn = _execute_turn

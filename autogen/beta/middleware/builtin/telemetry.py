@@ -36,6 +36,7 @@ except ImportError as _err:
     ) from _err
 
 from autogen.beta.events import ToolErrorEvent
+from autogen.beta.policies import AVAILABLE_TOOLS_DEP
 
 _SCHEMA_URL = "https://opentelemetry.io/schemas/1.11.0"
 _INSTRUMENTING_MODULE = "opentelemetry.instrumentation.ag2.beta"
@@ -122,6 +123,9 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.provider.name", self._provider_name)
             if self._model_name:
                 span.set_attribute("gen_ai.request.model", self._model_name)
+            available_tools = context.dependencies.get(AVAILABLE_TOOLS_DEP)
+            if available_tools:
+                span.set_attribute("ag2.agent.available_tools", available_tools)
 
             try:
                 response = await call_next(event, context)
