@@ -193,7 +193,16 @@ from .transport import (
     decode_frame,
     encode_frame,
 )
-from .views import FullTranscript, ViewPolicy, WindowedSummary
+from .views import (
+    EnvelopeRenderer,
+    FullTranscript,
+    NameResolver,
+    NamedTranscript,
+    NamedWindowedSummary,
+    ViewPolicy,
+    WindowedSummary,
+    default_name_resolver,
+)
 
 __all__ = (
     "AGENT_CLIENT_DEP",
@@ -272,6 +281,7 @@ __all__ = (
     "DiscussionAdapter",
     "DiscussionState",
     "Envelope",
+    "EnvelopeRenderer",
     "ErrorFrame",
     "EventFrame",
     "Expectation",
@@ -298,6 +308,9 @@ __all__ = (
     "LocalLinkClient",
     "LocalLinkEndpoint",
     "MaxSilenceEvaluator",
+    "NameResolver",
+    "NamedTranscript",
+    "NamedWindowedSummary",
     "NetworkClient",
     "NetworkContextPolicy",
     "NetworkError",
@@ -356,6 +369,7 @@ __all__ = (
     "default_extract_turn_input",
     "default_handler",
     "default_handlers",
+    "default_name_resolver",
     "default_render_envelope",
     "default_tools_for",
     "encode_frame",
