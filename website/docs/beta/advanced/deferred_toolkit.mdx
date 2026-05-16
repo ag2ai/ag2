@@ -1,0 +1,93 @@
+---
+title: DeferredToolkit
+sidebarTitle: DeferredToolkit
+---
+
+When an agent has dozens of tools, every tool schema goes into every LLM call —
+consuming thousands of tokens even for tools the agent never uses.
+
+`DeferredToolkit` hides a large tool catalog behind exactly **two** meta-tools:
+
+| Tool | What the agent does |
+|---|---|
+| `search_tools(query)` | Keyword-search the catalog. Returns matching tool names, descriptions, and parameter schemas. |
+| `use_tool(name, arguments)` | Invoke any catalog tool by name. `arguments` is a JSON object string. |
+
+The agent discovers what it needs and pays no token cost for the rest.
+
+## Basic usage
+
+```python
+from autogen.beta import Agent
+from autogen.beta.tools import DeferredToolkit, FilesystemToolkit, MemoryToolkit
+from autogen.beta.config import OpenAIConfig
+
+# Wrap many tools in a DeferredToolkit
+deferred = DeferredToolkit(
+    *FilesystemToolkit().tools,   # 5 tools
+    *MemoryToolkit().tools,       # 4 tools
+    # ...more tools
+)
+
+# Agent only sees 2 tools: search_tools + use_tool
+agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"), tools=[deferred])
+
+reply = await agent.ask("Find Python files under /tmp and remember the count.")
+```
+
+The agent's flow:
+1. `search_tools("filesystem")` → gets `find_files` schema
+2. `use_tool("find_files", '{"pattern": "**/*.py", "path": "/tmp"}')` → gets list
+3. `search_tools("memory")` → gets `remember` schema
+4. `use_tool("remember", '{"content": "42 files", "key": "py-count"}')` → stored
+
+## Selective wrapping
+
+You can combine deferred and direct tools.  Give the agent its most-common tools
+directly and defer the long tail:
+
+```python
+from autogen.beta.tools import DeferredToolkit, FilesystemToolkit, MemoryToolkit, tool
+
+@tool
+def fetch_weather(city: str) -> str:
+    """Get current weather for a city."""
+    ...
+
+# fetch_weather is used often — register it directly for zero overhead
+# The 9 filesystem+memory tools are deferred
+agent = Agent(
+    "assistant",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[
+        fetch_weather,
+        DeferredToolkit(*FilesystemToolkit().tools, *MemoryToolkit().tools),
+    ],
+)
+```
+
+## Adding tools after construction
+
+```python
+deferred = DeferredToolkit(*core_tools)
+deferred.add_to_catalog(*extra_tools)  # add more later
+```
+
+## Inspecting the catalog
+
+```python
+deferred = DeferredToolkit(*my_tools)
+print(deferred.catalog_names)  # ('find_files', 'forget', 'list_memories', ...)
+```
+
+## Trade-offs
+
+| | Direct tools | DeferredToolkit |
+|---|---|---|
+| **Token cost** | All schemas, every call | Only 2 schemas |
+| **Agent flexibility** | Immediate access | Must discover first |
+| **Best for** | ≤10 tools | Large catalogs |
+
+For small tool sets, direct registration is simpler and has zero overhead.
+Use `DeferredToolkit` when your catalog grows large enough that the schema tokens
+become a meaningful cost.
