@@ -15,6 +15,7 @@ from .events import (
     TextInput,
     VideoInput,
 )
+from .fanout import fanout
 from .files import FilesAPI
 from .middleware import Middleware
 from .observers import observer
@@ -51,6 +52,7 @@ __all__ = (
     "Toolkit",
     "Variable",
     "VideoInput",
+    "fanout",
     "observer",
     "response_schema",
     "tool",
