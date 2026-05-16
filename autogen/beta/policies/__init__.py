@@ -11,7 +11,15 @@ from .sliding_window import SlidingWindowPolicy
 from .token_budget import TokenBudgetPolicy
 from .working_memory import WorkingMemoryPolicy
 
+AVAILABLE_TOOLS_DEP = "ag2.agent.available_tools"
+"""Names of all tools registered for the current turn.
+
+Stamped into ``context.dependencies`` by :class:`autogen.beta.agent.Agent`
+immediately after building ``all_schemas``. Value is a ``list[str]``.
+"""
+
 __all__ = (
+    "AVAILABLE_TOOLS_DEP",
     "AlertPolicy",
     "ConversationPolicy",
     "EpisodicMemoryPolicy",
