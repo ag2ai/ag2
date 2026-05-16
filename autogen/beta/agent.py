@@ -48,6 +48,7 @@ from .events import (
     ModelRequest,
     ModelResponse,
     ToolResultsEvent,
+    Usage,
 )
 from .events.conditions import Condition
 from .events.lifecycle import (
@@ -236,6 +237,23 @@ class AgentReply(Generic[TResult, TAgent]):
     @property
     def history(self) -> History:
         return self.context.stream.history
+
+    @property
+    def usage(self) -> Usage:
+        """Token usage from the final model call in this turn."""
+        return self.response.usage
+
+    async def total_usage(self) -> Usage:
+        """Accumulated token usage across all model calls in this turn.
+
+        Useful when a turn involves multiple LLM calls (e.g. tool-use loops),
+        where :attr:`usage` only reflects the last call.
+        """
+        total = Usage()
+        for event in await self.history.get_events():
+            if isinstance(event, ModelResponse):
+                total = total + event.usage
+        return total
 
     @overload
     async def ask(

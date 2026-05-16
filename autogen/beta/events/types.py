@@ -32,6 +32,23 @@ class Usage:
             self.thinking_tokens,
         ))
 
+    def __add__(self, other: "Usage") -> "Usage":
+        """Return a new Usage with all fields summed. None + None stays None; None + N = N."""
+
+        def _sum(a: float | None, b: float | None) -> float | None:
+            if a is None and b is None:
+                return None
+            return (a or 0.0) + (b or 0.0)
+
+        return Usage(
+            prompt_tokens=_sum(self.prompt_tokens, other.prompt_tokens),
+            completion_tokens=_sum(self.completion_tokens, other.completion_tokens),
+            total_tokens=_sum(self.total_tokens, other.total_tokens),
+            cache_read_input_tokens=_sum(self.cache_read_input_tokens, other.cache_read_input_tokens),
+            cache_creation_input_tokens=_sum(self.cache_creation_input_tokens, other.cache_creation_input_tokens),
+            thinking_tokens=_sum(self.thinking_tokens, other.thinking_tokens),
+        )
+
 
 class ModelEvent(BaseEvent):
     """Base class for all model-related events."""
