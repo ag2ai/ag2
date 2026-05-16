@@ -69,6 +69,13 @@ from .layout import (
 )
 from .listener import BaseHubListener, HubListener
 
+try:
+    from .telemetry import TelemetryHubListener
+except ImportError as _e:
+    from autogen.beta.exceptions import missing_optional_dependency
+
+    TelemetryHubListener = missing_optional_dependency("TelemetryHubListener", "tracing", _e)
+
 __all__ = (
     "AUDIT_KIND_AGENT_REGISTERED",
     "AUDIT_KIND_AGENT_UNREGISTERED",
@@ -102,6 +109,7 @@ __all__ = (
     "NotifyChannelHandler",
     "ReplyWithinEvaluator",
     "RuleBasedArbiter",
+    "TelemetryHubListener",
     "Violation",
     "ViolationHandler",
     "agents_root",
