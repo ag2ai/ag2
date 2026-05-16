@@ -2,11 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .deferred import DeferredToolkit
 from .filesystem import FilesystemToolkit
 from .mcp_server import MCPServer, MCPServerConfig, MCPStdioServerConfig
 from .memory import MemoryToolkit
 
 __all__ = (
+    "DeferredToolkit",
     "FilesystemToolkit",
     "MCPServer",
     "MCPServerConfig",
