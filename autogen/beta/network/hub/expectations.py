@@ -52,6 +52,7 @@ __all__ = (
     "MaxSilenceEvaluator",
     "NotifyChannelHandler",
     "ReplyWithinEvaluator",
+    "TurnWithinEvaluator",
     "Violation",
     "ViolationHandler",
     "default_evaluators",
@@ -266,6 +267,49 @@ class MaxSilenceEvaluator:
         )
 
 
+class TurnWithinEvaluator:
+    """Fire when the expected next speaker hasn't posted within ``params.seconds``.
+
+    Semantically ``max_silence`` scoped to the speaker whose turn it is:
+    the timer anchors on the last substantive envelope (regardless of
+    sender), and the violator list names the agent whose turn is due.
+    For channels whose adapter state doesn't expose
+    ``expected_next_speaker`` (e.g. consulting, conversation) the
+    evaluator falls back to a channel-wide violation (empty
+    ``violator_ids``), matching ``max_silence`` behaviour.
+    """
+
+    name = "turn_within"
+
+    def evaluate(
+        self,
+        expectation: Expectation,
+        context: ExpectationContext,
+    ) -> Violation | None:
+        if context.metadata.state != ChannelState.ACTIVE:
+            return None
+        seconds = float(expectation.params.get("seconds", 120))
+        anchor_iso = context.metadata.created_at
+        for env in reversed(context.wal):
+            if _is_content_event(env.event_type):
+                anchor_iso = env.created_at
+                break
+        elapsed = context.now_seconds - _parse_iso_seconds(anchor_iso)
+        if elapsed < seconds:
+            return None
+        expected_speaker = getattr(context.state, "expected_next_speaker", None)
+        violator_ids = [expected_speaker] if expected_speaker else []
+        return Violation(
+            expectation=expectation,
+            violator_ids=violator_ids,
+            detail={
+                "elapsed_seconds": elapsed,
+                "threshold_seconds": seconds,
+                "expected_speaker": expected_speaker,
+            },
+        )
+
+
 # ── Handlers ────────────────────────────────────────────────────────────────
 
 
@@ -293,10 +337,12 @@ class AuditHandler:
 class NotifyChannelHandler:
     """Broadcast ``EV_EXPECTATION_VIOLATED`` to every channel participant.
 
+    Registered under both ``"warn"`` (the canonical name used by all
+    built-in adapter manifests) and ``"notify_channel"`` (legacy alias).
     Audit emission is owned by the ``AuditLog`` listener.
     """
 
-    name = "notify_channel"
+    name = "warn"
 
     async def handle(
         self,
@@ -310,7 +356,10 @@ class NotifyChannelHandler:
         envelope = Envelope(
             channel_id=channel_id,
             sender_id=metadata.creator_id,
-            audience=None,
+            # Use explicit audience (all participants) so the creator is not
+            # excluded from the broadcast — hub's default broadcast skips
+            # the sender, but system notifications must reach everyone.
+            audience=[p.agent_id for p in metadata.participants],
             event_type=EV_EXPECTATION_VIOLATED,
             event_data={
                 "expectation": violation.expectation.name,
@@ -352,8 +401,14 @@ class AutoCloseHandler:
 
 
 def default_evaluators() -> list[ExpectationEvaluator]:
-    return [AcksWithinEvaluator(), ReplyWithinEvaluator(), MaxSilenceEvaluator()]
+    return [AcksWithinEvaluator(), ReplyWithinEvaluator(), MaxSilenceEvaluator(), TurnWithinEvaluator()]
+
+
+class _NotifyChannelAliasHandler(NotifyChannelHandler):
+    """``"notify_channel"`` alias for ``NotifyChannelHandler`` (backward compat)."""
+
+    name = "notify_channel"
 
 
 def default_handlers() -> list[ViolationHandler]:
-    return [AuditHandler(), NotifyChannelHandler(), AutoCloseHandler()]
+    return [AuditHandler(), NotifyChannelHandler(), _NotifyChannelAliasHandler(), AutoCloseHandler()]

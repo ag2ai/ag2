@@ -28,6 +28,7 @@ imports tenant modules — the trust boundary runs through ``HubClient``
 
 import asyncio
 import contextlib
+import dataclasses
 import fnmatch
 import json
 import logging
@@ -44,8 +45,10 @@ from ..adapters.discussion import DiscussionAdapter
 from ..adapters.workflow import WorkflowAdapter
 from ..auth import AuthRegistry
 from ..channel import (
+    ChannelManifest,
     ChannelMetadata,
     ChannelState,
+    Expectation,
     Participant,
     ParticipantRole,
     is_terminal_channel_state,
@@ -1143,6 +1146,18 @@ class Hub:
 
         adapter = self._adapter_for(manifest_type, manifest_version)
 
+        # Apply ``expectations`` knob: replace the adapter's default manifest
+        # expectations with the caller-supplied list.  Any other knob keys
+        # are passed through to the adapter as-is.
+        raw_expectations = knobs.get("expectations") if knobs else None
+        if raw_expectations is not None:
+            overridden_expectations = [Expectation(**e) if isinstance(e, dict) else e for e in raw_expectations]
+            effective_manifest: ChannelManifest = dataclasses.replace(
+                adapter.manifest, expectations=overridden_expectations
+            )
+        else:
+            effective_manifest = adapter.manifest
+
         creator_passport = self._passports[creator_id]
         creator_rule = self._rules.get(creator_id, Rule())
 
@@ -1161,7 +1176,7 @@ class Hub:
             invitee_rules.append(self._rules.get(p_id, Rule()))
         active_creator_channels = sum(1 for m in self._active_channels.values() if m.creator_id == creator_id)
         decision = await self._arbiter.authorize_channel_open(
-            adapter.manifest,
+            effective_manifest,
             creator_passport,
             creator_rule,
             invitee_passports,
@@ -1196,7 +1211,7 @@ class Hub:
 
         metadata = ChannelMetadata(
             channel_id=channel_id,
-            manifest=adapter.manifest,
+            manifest=effective_manifest,
             creator_id=creator_id,
             participants=metadata_participants,
             state=ChannelState.PENDING,
