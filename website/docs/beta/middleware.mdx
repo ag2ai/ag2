@@ -337,7 +337,7 @@ agent = Agent(
 
 ## Built-In Middleware
 
-AG2 Beta currently includes four built-in middleware in `autogen.beta.middleware`:
+AG2 Beta includes the following built-in middleware in `autogen.beta.middleware`:
 
 ### `LoggingMiddleware`
 
@@ -397,6 +397,57 @@ Trims the event history to fit within an approximate token budget before the mod
 It uses a character-based estimate controlled by `chars_per_token`.
 
 Use it when you need lightweight context budgeting without depending on a model-specific tokenizer.
+
+### `PrometheusMiddleware`
+
+Requires: `pip install ag2[metrics]`
+
+```python linenums="1"
+from prometheus_client import start_http_server
+from autogen.beta import Agent
+from autogen.beta.middleware import PrometheusMiddleware
+
+start_http_server(8000)  # exposes /metrics on :8000
+
+agent = Agent(
+    "assistant",
+    ...,
+    middleware=[PrometheusMiddleware(agent_name="assistant")],
+)
+```
+
+Emits the following Prometheus metrics on every agent turn:
+
+| Metric | Type | Labels |
+|---|---|---|
+| `ag2_turn_duration_seconds` | Histogram | `agent_name` |
+| `ag2_turn_errors_total` | Counter | `agent_name` |
+| `ag2_llm_call_duration_seconds` | Histogram | `agent_name`, `provider`, `model` |
+| `ag2_llm_tokens_total` | Counter | `agent_name`, `provider`, `model`, `token_type` |
+| `ag2_tool_calls_total` | Counter | `agent_name`, `tool_name`, `status` |
+| `ag2_tool_execution_duration_seconds` | Histogram | `agent_name`, `tool_name` |
+| `ag2_human_input_requests_total` | Counter | `agent_name` |
+
+`token_type` is one of `input`, `output`, `cache_creation`, or `cache_read`.
+`status` is `success` or `error`.
+
+By default metrics are registered against the global Prometheus registry.
+Pass a custom `CollectorRegistry` when you need isolation (for example, in tests):
+
+```python linenums="1"
+from prometheus_client import CollectorRegistry
+from autogen.beta.middleware import PrometheusMiddleware
+
+registry = CollectorRegistry()
+mw = PrometheusMiddleware(agent_name="assistant", registry=registry)
+```
+
+Multiple `PrometheusMiddleware` instances sharing the same registry share a single set of metric objects, preventing duplicate-registration errors.
+
+### `TelemetryMiddleware`
+
+Emits OpenTelemetry traces for each turn, LLM call, and tool execution.
+See [Telemetry](/docs/beta/telemetry){.internal-link} for the full reference.
 
 ## Choosing the Right Hook
 
