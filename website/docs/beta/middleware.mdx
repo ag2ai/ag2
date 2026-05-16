@@ -337,7 +337,7 @@ agent = Agent(
 
 ## Built-In Middleware
 
-AG2 Beta currently includes four built-in middleware in `autogen.beta.middleware`:
+AG2 Beta currently includes the following built-in middleware in `autogen.beta.middleware`:
 
 ### `LoggingMiddleware`
 
@@ -398,6 +398,55 @@ It uses a character-based estimate controlled by `chars_per_token`.
 
 Use it when you need lightweight context budgeting without depending on a model-specific tokenizer.
 
+### `ConditionalMiddleware`
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.events import ToolCallEvent
+from autogen.beta.middleware import ConditionalMiddleware, Middleware
+from autogen.beta.middleware.builtin import approval_required
+
+agent = Agent(
+    "assistant",
+    ...,
+    middleware=[
+        ConditionalMiddleware(
+            condition=ToolCallEvent.name == "execute_code",
+            middleware=Middleware(approval_required),
+        )
+    ],
+)
+```
+
+Wraps another middleware and activates it only when a `Condition` matches the relevant event.
+Each hook is gated independently:
+
+- `on_turn` — condition evaluated against the turn-triggering event.
+- `on_tool_execution` — condition evaluated against the `ToolCallEvent`.
+- `on_llm_call` — condition evaluated against the initial turn event.
+- `on_human_input` — condition evaluated against the `HumanInputRequest`.
+
+When the condition is not satisfied the hook short-circuits — `call_next` is invoked directly and the inner middleware layer is transparent for that hook.
+
+**Building conditions** — use the field DSL on event classes:
+
+```python linenums="1"
+from autogen.beta.events import ToolCallEvent
+from autogen.beta.events.conditions import TypeCondition
+
+# Match a specific tool by name
+ToolCallEvent.name == "execute_code"
+
+# Match any tool whose name starts with "search_" (using a custom Condition)
+# Compose with & (and), | (or), ~ (not)
+cond_a & cond_b   # both must match
+cond_a | cond_b   # either must match
+~cond_a           # must NOT match
+TypeCondition(SomeEventClass)  # event must be an instance of the given type
+```
+
+Use `ConditionalMiddleware` when you want a middleware to apply selectively — for example, requiring human approval only for a specific tool, or adding tracing only when a particular event type arrives.
+
 ## Choosing the Right Hook
 
 If you are unsure where a behavior belongs, use this rule of thumb:
@@ -407,5 +456,7 @@ If you are unsure where a behavior belongs, use this rule of thumb:
 - Use `on_tool_execution()` when the behavior is about tool safety, auditing, or result shaping across tools (or when branching on `event.name` is acceptable).
     - Use **tool-scoped** `middleware=[...]` on `@tool` / `Agent.tool` / `Toolkit.tool` when the behavior applies only to that tool’s definition; see [Tool middleware](/docs/beta/tools/tool_middleware){.internal-link}.
 - Use `on_human_input()` when the behavior is about intercepting, logging, or transforming human-in-the-loop requests and responses.
+
+Use `ConditionalMiddleware` to wrap any of the above when the behavior should apply selectively based on which event arrives.
 
 For related runtime customization patterns, see [Tools](/docs/beta/tools/tools), [Tool middleware](/docs/beta/tools/tool_middleware), [Prompt Management](../system_prompts), and [Events Streaming](../advanced/stream).
