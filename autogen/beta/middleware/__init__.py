@@ -13,6 +13,8 @@ from .base import (
     ToolResultType,
 )
 from .builtin import (
+    BudgetConfig,
+    BudgetMiddleware,
     HistoryLimiter,
     LoggingMiddleware,
     RetryMiddleware,
@@ -20,10 +22,14 @@ from .builtin import (
     TokenLimiter,
     approval_required,
 )
+from .builtin.budget import BudgetExceededError
 
 __all__ = (
     "AgentTurn",
     "BaseMiddleware",
+    "BudgetConfig",
+    "BudgetExceededError",
+    "BudgetMiddleware",
     "HistoryLimiter",
     "HumanInputHook",
     "LLMCall",
