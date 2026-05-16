@@ -25,6 +25,7 @@ from autogen.beta.middleware.base import (
     ToolExecution,
     ToolResultType,
 )
+from autogen.version import __version__
 
 try:
     from opentelemetry import trace
@@ -43,7 +44,7 @@ _INSTRUMENTING_MODULE = "opentelemetry.instrumentation.ag2.beta"
 
 def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
     provider = tracer_provider or trace.get_tracer_provider()
-    return provider.get_tracer(_INSTRUMENTING_MODULE, schema_url=_SCHEMA_URL)
+    return provider.get_tracer(_INSTRUMENTING_MODULE, instrumenting_library_version=__version__, schema_url=_SCHEMA_URL)
 
 
 class TelemetryMiddleware(MiddlewareFactory):
