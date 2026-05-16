@@ -1,0 +1,333 @@
+---
+title: "What Survives, Survives Exactly"
+authors: [marklysze]
+tags: [AG2 Beta, Network, Multi-Agent, WAL, Identity, Durability]
+date: 2026-05-16
+slug: ag2-network-what-survives
+---
+
+![AG2 Network — What Survives, Survives Exactly](img/n3-banner-animated.webp)
+
+Everything in the network is an envelope. Envelopes outlive the code that sent them. This post is about the substrate that makes that true.
+
+<!-- more -->
+
+This is the third post in a four-part series introducing the AG2 Network:
+
+1. [**One Coherent Agent Isn't Enough**](/docs/blog/2026/05/14/AG2-Action-Driven-Network) — the action-driven multi-agent network, the key primitives, and the four conversation shapes.
+2. [**Choreography You Can Dial In**](/docs/blog/2026/05/15/AG2-Network-Choreography-Dial) — setting expectations, audience addressing, deeper choreography patterns, and the orchestration cookbook.
+3. **What Survives, Survives Exactly** *(this post)* — the substrate: write-ahead log + fold + hub restart, plus identity (Passport / Resume / SKILL.md) and the audit log.
+4. **Networks You Can Deploy** — federation across organizations (Visa), dynamic register / unregister, omni-modal streaming, and a full production-incident walk-through.
+
+In parallel, to build strong and capable agents, a companion post, **The Agent Harness: An Agent Is More Than a Loop**, zooms *inside* a single agent to make them long-running and knowledge-centric. Keep an eye out for that one (we'll update this when it's ready).
+
+## The Write-Ahead Log
+
+![A channel's write-ahead log filling with envelopes from top to bottom. Each row names the sender, event type, and a brief payload snippet. An arrow labelled "fold" sweeps down the log and materializes a channel-state box on the right — showing current adapter, expected_next_speaker, participants, and context_vars. A hub-restart arc loops from the bottom of the log back to the top, with the label "replay → identical state".](img/n3-wal.webp)
+
+In a conventional multi-agent system, state lives in the orchestrator. The orchestrator holds who spoke last, what the current turn is, which agents are still waiting. Kill the orchestrator and that context is gone — your conversation is over.
+
+The AG2 Network flips that. The **write-ahead log (WAL)** is the primary record. Before the hub does anything with an envelope — routes it, dispatches it, evaluates expectations — it appends the envelope to the channel's WAL. The adapter is a **pure fold** over that log: every piece of adapter state (current turn, participant list, `context_vars`, expectation timers) is derived by walking the log from the beginning and applying each envelope as a state transition.
+
+The consequence is total: the hub holds no application state that isn't already in the WAL. Its in-memory data structures are a cache of the log, not the source of truth.
+
+You can inspect any channel's WAL at any time with `hub.read_wal`:
+
+```python linenums="1"
+from autogen.beta.network import EV_TEXT, Hub
+
+# hub is any running Hub instance; channel_id is the UUID assigned at open().
+envelopes = await hub.read_wal(channel_id)
+
+for env in envelopes:
+    if env.event_type == EV_TEXT:
+        print(f"[{env.sender_id[:8]}] {env.event_data.get('text', '')}")
+```
+
+`read_wal` returns a list of `Envelope` objects in write order. Every event that ever touched the channel is there: lifecycle events (`EV_CHANNEL_INVITE`, `EV_CHANNEL_OPENED`, `EV_CHANNEL_CLOSED`), content events (`EV_TEXT`, `EV_PACKET`, `EV_CONTEXT_SET`), and governance events (`EV_EXPECTATION_VIOLATED`, `EV_RULE_SET`). Nothing is elided.
+
+By default `Hub.open(MemoryKnowledgeStore())` stores everything in memory. To make the WAL durable across process restarts, swap in a `DiskKnowledgeStore`:
+
+```python linenums="1"
+from autogen.beta.knowledge import DiskKnowledgeStore
+from autogen.beta.network import Hub
+
+hub = await Hub.open(DiskKnowledgeStore(path="/var/lib/ag2/hub"))
+```
+
+The rest of your code is identical. The WAL is an implementation detail of the knowledge store; the hub doesn't care which backing you use.
+
+## Hub Restart: Same Log, Same State
+
+Because the adapter is a pure fold, hub restart is a non-event. On startup the hub replays each channel's WAL from the first byte to the last. The fold produces the same state it held the moment before shutdown. No snapshots, no checkpoints, no reconciliation protocol.
+
+"Same state" means byte-identical:
+
+- The participant list is the same.
+- `expected_next_speaker` is the same.
+- `context_vars` are the same.
+- Expectation timers re-arm from the last relevant envelope's timestamp, not wall-clock-now.
+- The audit log is intact.
+
+This property is not a feature that had to be engineered on top of the log — it falls out of the fold model. The fold is a pure function; a pure function applied to the same input always produces the same output.
+
+The practical implication is that you can treat a hub crash the same way you'd treat any infrastructure blip: restart the process (or let the orchestrator restart it), and conversations resume exactly where they left off. Agents that were mid-turn re-receive their envelope and reply; agents that were waiting continue to wait. The channel lifecycle (`INVITED → ACTIVE → CLOSING → CLOSED`) is restored without any coordination from the participants.
+
+## Three Identity Records
+
+![Three cards side by side: Passport (hub-stamped, lock icon, fields agent_id / name / owner / model / created_at), Resume (mutable, pencil icon, fields claimed_capabilities / n / completed / failed / p50_latency_ms), SKILL.md (free-text, search icon, a short markdown snippet indexed for peer lookup).](img/n3-identity.webp)
+
+Every agent in the network carries three identity records. They answer different questions.
+
+### Passport — Who Are You?
+
+A `Passport` is the immutable identity stamp issued at registration. The tenant provides the human-facing fields; the hub stamps the rest:
+
+```python linenums="1"
+from autogen.beta.network import Hub, HubClient, LocalLink, Passport
+
+hub = await Hub.open(MemoryKnowledgeStore())
+link = LocalLink(hub)
+hc = HubClient(link, hub=hub)
+
+alice = await hc.register(
+    agent,
+    Passport(name="alice", owner="acme", model="claude-sonnet-4-6"),
+    resume,
+)
+
+# alice.agent_id is hub-stamped — use this for routing, not alice.passport.name.
+print(alice.agent_id)    # e.g. "agt_01jv..."
+print(alice.passport)
+# Passport(
+#   name="alice",
+#   owner="acme",
+#   model="claude-sonnet-4-6",
+#   agent_id="agt_01jv...",
+#   created_at=datetime(...),
+# )
+```
+
+The `agent_id` is a stable, hub-assigned UUID. Use it everywhere you need to address an agent — in `target=`, in `audience=`, in transition graphs. The `name` field is for humans; two agents on the same hub can share a name, but `agent_id` is always unique.
+
+Because the Passport is immutable, you can cache it safely. If an agent needs to change its model or owner, it re-registers (a new `agent_id` is issued), and the old Passport remains on the WAL as a historical record.
+
+### Resume — What Can You Do?
+
+A `Resume` carries two categories of information: what the agent *claims* it can do, and what the hub *observed* it actually do.
+
+```python linenums="1"
+from autogen.beta.network import Resume
+
+resume = Resume(claimed_capabilities=["summarize", "translate", "classify"])
+```
+
+As the agent handles tasks — via `agent.task(..., capability="summarize")` — the hub accumulates an `observed` record:
+
+```python linenums="1"
+# After the agent has handled some tasks:
+resume = await hub.get_resume(alice.agent_id)
+print(resume.observed)
+# {
+#   "summarize": {"n": 47, "completed": 44, "failed": 3, "p50_latency_ms": 820},
+#   "translate":  {"n": 12, "completed": 12, "failed": 0,  "p50_latency_ms": 310},
+# }
+```
+
+The `observed` block is hub-authoritative. Nobody can write to it directly — it is updated only when a task completes or fails. That makes it trustworthy for routing decisions: if you need a fast summarizer and you have three to choose from, you can rank on `p50_latency_ms` without taking anyone's word for it.
+
+The Resume is mutable — `claimed_capabilities` can be updated between registrations — but the `observed` record only grows. Historical task outcomes are never deleted.
+
+### SKILL.md — How Do Others Find You?
+
+The third record is free-text Markdown indexed for peer search. You write whatever a potential collaborator needs to know: what domains the agent covers, what tool sets it has access to, what languages it speaks, what its preferred task shape is.
+
+```python linenums="1"
+skill_md = """
+# Alice — Research Analyst
+
+Specialises in competitive intelligence and technical due diligence.
+
+## Capabilities
+- Summarise SEC filings and earnings calls
+- Cross-reference patent databases against product launches
+- Draft structured memos (executive / technical / legal register)
+
+## Tools
+- Web search (Tavily)
+- PDF parsing
+
+## Languages
+English, German
+"""
+
+await hub.set_skill(alice.agent_id, skill_md)
+```
+
+When another agent wants a collaborator — say, a PM agent that needs a legal-register writer — it can search the skill index and get back a ranked list of matching agents without any pre-configured routing table. The hub handles indexing; the agent handles prose.
+
+## The Audit Log
+
+![A horizontal timeline with coloured events: AGENT_REGISTERED (green, alice), CHANNEL_CREATED (blue), EXPECTATION_VIOLATED (amber, turn_within), CHANNEL_CLOSED (grey). A second row shows RULE_SET (purple) and TASK_TERMINATED (red). Each event has a timestamp and a collapsible detail block.](img/n3-audit.webp)
+
+The WAL is per-channel. The **audit log** is hub-wide — a single append-only record of every significant governance event across all channels and all agents. It is separate from the WAL and captures a different concern: not *what agents said*, but *what the hub decided*.
+
+```python linenums="1"
+entries = await hub._audit_log.read_all()
+for entry in entries:
+    print(f"{entry.kind:30s}  {entry.detail}")
+```
+
+Six kinds of audit entry ship today:
+
+| Kind | Fires when… |
+|---|---|
+| `AGENT_REGISTERED` | an agent successfully registers with the hub |
+| `CHANNEL_CREATED` | a channel transitions to `ACTIVE` |
+| `CHANNEL_CLOSED` | a channel reaches `CLOSED` for any reason |
+| `EXPECTATION_VIOLATED` | an expectation evaluator fires (regardless of handler) |
+| `RULE_SET` | a governance rule is installed or updated on the hub |
+| `TASK_TERMINATED` | the hub forcibly terminates a task (e.g., rule-triggered kill) |
+
+Like the WAL, the audit log is backed by the knowledge store. `DiskKnowledgeStore` makes it durable. In production you'd tail the audit log into your SIEM or observability stack — every expectation violation, every forced termination, every governance rule change lands there with a timestamp and a detail block, in the order it happened.
+
+The audit log is the governance primitive. The WAL is the conversation primitive. They are separate records with separate purposes, but they are both first-class objects on the hub and both survive a restart through the same fold model.
+
+## Putting It Together
+
+The example below is a self-contained script that exercises every concept in this post: WAL replay, identity records, and the audit log.
+
+```python linenums="1"
+import asyncio
+
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.knowledge import MemoryKnowledgeStore
+from autogen.beta.network import (
+    EV_CHANNEL_CLOSED,
+    EV_TEXT,
+    Hub,
+    HubClient,
+    LocalLink,
+    Passport,
+    Resume,
+)
+
+
+async def main() -> None:
+    config = AnthropicConfig(model="claude-haiku-4-5-20251001")
+
+    # ── Hub ──────────────────────────────────────────────────────────────────
+    # MemoryKnowledgeStore keeps everything in-process.
+    # Swap for DiskKnowledgeStore(path="...") to persist across restarts.
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+
+    # ── Register alice ───────────────────────────────────────────────────────
+    alice_agent = Agent(
+        "alice",
+        prompt="You are a concise research analyst. Reply in two sentences.",
+        config=config,
+    )
+    alice = await alice_hc.register(
+        alice_agent,
+        Passport(name="alice", owner="acme", model="claude-haiku-4-5-20251001"),
+        Resume(claimed_capabilities=["summarize", "research"]),
+    )
+
+    # Give alice a SKILL.md so peers can discover her.
+    await hub.set_skill(
+        alice.agent_id,
+        "# Alice\nSpecialises in competitive intelligence.\n## Capabilities\n- summarize\n- research",
+    )
+
+    # ── Register bob (human placeholder) ────────────────────────────────────
+    bob = await bob_hc.register_human(Passport(name="bob", kind="human"))
+
+    # ── Open a consulting channel, send one question ─────────────────────────
+    channel = await bob.open(type="consulting", target=alice.agent_id)
+    await channel.send("Summarise the key risks of concentrating LLM inference with one provider.")
+
+    # Wait for the channel to close (consulting auto-closes after the reply).
+    await bob.next_envelope(
+        predicate=lambda e: (
+            e.event_type == EV_CHANNEL_CLOSED
+            and e.channel_id == channel.channel_id
+        ),
+        timeout=60.0,
+    )
+
+    # ── Replay the WAL ───────────────────────────────────────────────────────
+    print("=== WAL ===")
+    for env in await hub.read_wal(channel.channel_id):
+        if env.event_type == EV_TEXT:
+            sender_name = "alice" if env.sender_id == alice.agent_id else "bob"
+            print(f"  [{sender_name}] {env.event_data.get('text', '')}")
+
+    # ── Read the audit log ───────────────────────────────────────────────────
+    print("\n=== AUDIT LOG ===")
+    for entry in await hub._audit_log.read_all():
+        print(f"  {entry.kind:30s}  {entry.detail}")
+
+    # ── Read alice's resume ──────────────────────────────────────────────────
+    alice_resume = await hub.get_resume(alice.agent_id)
+    print(f"\n=== ALICE RESUME ===")
+    print(f"  claimed:  {alice_resume.claimed_capabilities}")
+    print(f"  observed: {alice_resume.observed}")
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+asyncio.run(main())
+```
+
+A real run produces output in this shape:
+
+```
+=== WAL ===
+  [bob] Summarise the key risks of concentrating LLM inference with one provider.
+  [alice] Concentrating inference with one provider creates vendor lock-in and a
+          single point of failure for latency and availability. Cost leverage and
+          model monoculture further limit adaptability as the field moves fast.
+
+=== AUDIT LOG ===
+  AGENT_REGISTERED               {'agent_id': 'agt_01jv...', 'name': 'alice'}
+  AGENT_REGISTERED               {'agent_id': 'agt_01jw...', 'name': 'bob'}
+  CHANNEL_CREATED                {'channel_id': 'ch_01jx...', 'type': 'consulting'}
+  CHANNEL_CLOSED                 {'channel_id': 'ch_01jx...', 'reason': 'reply_received'}
+
+=== ALICE RESUME ===
+  claimed:  ['summarize', 'research']
+  observed: {}
+```
+
+The `observed` block is empty because the example uses a `consulting` channel rather than `agent.task(...)` calls — task-based tracking requires the explicit capability parameter. In a production deployment where alice handles named tasks, `observed` fills in automatically as tasks complete.
+
+## What This Means Operationally
+
+Four things that this substrate gives you for free, without any extra code:
+
+- **Hub crash means no data loss.** On restart, the hub replays every channel's WAL in write order. Channel state — participants, turn position, context variables, expectation timers — is re-derived exactly. Agents that were mid-conversation re-receive their pending envelopes; the conversation continues as if nothing happened.
+
+- **Agent restart is safe.** The agent's Passport and Resume live in the knowledge store, not in the agent process. When the process comes back up, it re-registers with the same credentials and the hub reconnects it to any active channels it was part of. From the channel's point of view, the agent was momentarily slow to respond.
+
+- **Audit trail for governance and compliance.** Every significant hub decision — registration, channel creation, expectation violation, forced termination — lands in the audit log with a timestamp and a detail block. The log is append-only and backed by the same knowledge store as the WAL. Pipe it to your SIEM, your compliance tool, or a simple file and you have a complete record of what the network did and when.
+
+- **Peer discovery without a config file.** SKILL.md is indexed for search. Any agent can query the hub for peers by capability, domain, or tool set and get back a ranked list of matching agents. There is no routing table to maintain, no registry to sync, no configuration to deploy. Skills change at runtime; the index updates immediately.
+
+## Where to Next
+
+The next post in this series — **Networks You Can Deploy** — moves from a single-process demo to a production-grade deployment: federation across organizations, dynamic agent registration and deregistration, omni-modal streaming, and a full production-incident walk-through showing the entire network in action.
+
+- **This series, Part 4 — Networks You Can Deploy**: federation, dynamic membership, omni-modal streaming, production walk-through.
+- **The Agent Harness: An Agent Is More Than a Loop**: what's inside each node.
+- Docs: [Hub & Identity](/docs/beta/network/hub_and_identity) · [Write-Ahead Log](/docs/beta/network/wal)
+
+The WAL is primary, the hub is derived — and that small inversion is what makes every conversation in the network worth keeping.
+
+---
