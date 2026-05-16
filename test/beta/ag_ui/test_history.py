@@ -21,7 +21,8 @@ from google.genai import types
 from openai.types.responses import ResponseFunctionWebSearch
 from openai.types.responses.response_function_web_search import ActionSearch
 
-from autogen.beta.ag_ui.stream import AGStreamInput, map_agui_messages_to_events
+from autogen.beta.ag_ui.mappers import map_agui_messages_to_events
+from autogen.beta.config import AnthropicConfig, GeminiConfig, ModelConfig, OpenAIConfig
 from autogen.beta.config.anthropic.events import (
     AnthropicServerToolCallEvent,
     AnthropicServerToolResultEvent,
@@ -45,12 +46,13 @@ from autogen.beta.events import (
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
-from .utils import create_run_input
+_OPENAI = OpenAIConfig(model="gpt-4")
+_ANTHROPIC = AnthropicConfig(model="claude-sonnet-4-6")
+_GEMINI = GeminiConfig(model="gemini-2.0-flash")
 
 
-def _map(messages: list) -> list:
-    command = AGStreamInput(incoming=create_run_input(*messages), variables={})
-    _, history = map_agui_messages_to_events(command)
+def _map(messages: list, config: ModelConfig | None = None) -> list:
+    _, history = map_agui_messages_to_events(messages, config)
     return history
 
 
@@ -64,20 +66,23 @@ class TestBuiltinRestoredFromHistory:
         )
         wire_args = item.action.model_dump_json(warnings=False)
 
-        history = _map([
-            UserMessage(id="u1", content="search for bitcoin"),
-            AssistantMessage(
-                id="a1",
-                content="searched",
-                tool_calls=[
-                    ToolCall(
-                        id="ws_1",
-                        type="function",
-                        function=FunctionCall(name=WEB_SEARCH_TOOL_NAME, arguments=wire_args),
-                    ),
-                ],
-            ),
-        ])
+        history = _map(
+            [
+                UserMessage(id="u1", content="search for bitcoin"),
+                AssistantMessage(
+                    id="a1",
+                    content="searched",
+                    tool_calls=[
+                        ToolCall(
+                            id="ws_1",
+                            type="function",
+                            function=FunctionCall(name=WEB_SEARCH_TOOL_NAME, arguments=wire_args),
+                        ),
+                    ],
+                ),
+            ],
+            _OPENAI,
+        )
 
         assert history == [
             ModelRequest([TextInput("search for bitcoin")]),
@@ -97,20 +102,23 @@ class TestBuiltinRestoredFromHistory:
     def test_anthropic_code_execution_restored_with_kind(self) -> None:
         wire_args = json.dumps({"_kind": "bash_code_execution", "cmd": "ls"})
 
-        history = _map([
-            UserMessage(id="u1", content="run ls"),
-            AssistantMessage(
-                id="a1",
-                content=None,
-                tool_calls=[
-                    ToolCall(
-                        id="b1",
-                        type="function",
-                        function=FunctionCall(name=CODE_EXECUTION_TOOL_NAME, arguments=wire_args),
-                    ),
-                ],
-            ),
-        ])
+        history = _map(
+            [
+                UserMessage(id="u1", content="run ls"),
+                AssistantMessage(
+                    id="a1",
+                    content=None,
+                    tool_calls=[
+                        ToolCall(
+                            id="b1",
+                            type="function",
+                            function=FunctionCall(name=CODE_EXECUTION_TOOL_NAME, arguments=wire_args),
+                        ),
+                    ],
+                ),
+            ],
+            _ANTHROPIC,
+        )
 
         expected_block = ServerToolUseBlock(
             id="b1",
@@ -136,20 +144,23 @@ class TestBuiltinRestoredFromHistory:
     def test_gemini_executable_code_restored(self) -> None:
         wire_args = json.dumps({"code": "print(1)", "language": "PYTHON"})
 
-        history = _map([
-            UserMessage(id="u1", content="run code"),
-            AssistantMessage(
-                id="a1",
-                content=None,
-                tool_calls=[
-                    ToolCall(
-                        id="g1",
-                        type="function",
-                        function=FunctionCall(name=CODE_EXECUTION_TOOL_NAME, arguments=wire_args),
-                    ),
-                ],
-            ),
-        ])
+        history = _map(
+            [
+                UserMessage(id="u1", content="run code"),
+                AssistantMessage(
+                    id="a1",
+                    content=None,
+                    tool_calls=[
+                        ToolCall(
+                            id="g1",
+                            type="function",
+                            function=FunctionCall(name=CODE_EXECUTION_TOOL_NAME, arguments=wire_args),
+                        ),
+                    ],
+                ),
+            ],
+            _GEMINI,
+        )
 
         expected_part = types.Part(
             executable_code=types.ExecutableCode(code="print(1)", language=types.Language.PYTHON)
@@ -202,21 +213,24 @@ class TestFallback:
         # (no `type`, no `query`, no `queries`) → mapper returns None → fallback.
         wire_args = json.dumps({"random": "stuff"})
 
-        with caplog.at_level(logging.WARNING, logger="autogen.beta.ag_ui.stream"):
-            history = _map([
-                UserMessage(id="u1", content="search"),
-                AssistantMessage(
-                    id="a1",
-                    content=None,
-                    tool_calls=[
-                        ToolCall(
-                            id="ws_x",
-                            type="function",
-                            function=FunctionCall(name=WEB_SEARCH_TOOL_NAME, arguments=wire_args),
-                        ),
-                    ],
-                ),
-            ])
+        with caplog.at_level(logging.WARNING, logger="autogen.beta.ag_ui.mappers.from_agui"):
+            history = _map(
+                [
+                    UserMessage(id="u1", content="search"),
+                    AssistantMessage(
+                        id="a1",
+                        content=None,
+                        tool_calls=[
+                            ToolCall(
+                                id="ws_x",
+                                type="function",
+                                function=FunctionCall(name=WEB_SEARCH_TOOL_NAME, arguments=wire_args),
+                            ),
+                        ],
+                    ),
+                ],
+                _OPENAI,
+            )
 
         assert history == [
             ModelRequest([TextInput("search")]),
@@ -240,21 +254,24 @@ class TestBuiltinResultsRestoredFromHistory:
         )
         wire_args = item.action.model_dump_json(warnings=False)
 
-        history = _map([
-            UserMessage(id="u1", content="search"),
-            AssistantMessage(
-                id="a1",
-                content="searched",
-                tool_calls=[
-                    ToolCall(
-                        id="ws_1",
-                        type="function",
-                        function=FunctionCall(name=WEB_SEARCH_TOOL_NAME, arguments=wire_args),
-                    ),
-                ],
-            ),
-            ToolMessage(id="t1", tool_call_id="ws_1", content="https://example.com"),
-        ])
+        history = _map(
+            [
+                UserMessage(id="u1", content="search"),
+                AssistantMessage(
+                    id="a1",
+                    content="searched",
+                    tool_calls=[
+                        ToolCall(
+                            id="ws_1",
+                            type="function",
+                            function=FunctionCall(name=WEB_SEARCH_TOOL_NAME, arguments=wire_args),
+                        ),
+                    ],
+                ),
+                ToolMessage(id="t1", tool_call_id="ws_1", content="https://example.com"),
+            ],
+            _OPENAI,
+        )
 
         assert history == [
             ModelRequest([TextInput("search")]),
@@ -281,21 +298,24 @@ class TestBuiltinResultsRestoredFromHistory:
     def test_anthropic_web_search_result_synthesizes_block(self) -> None:
         wire_args = json.dumps({"query": "bitcoin"})
 
-        history = _map([
-            UserMessage(id="u1", content="search"),
-            AssistantMessage(
-                id="a1",
-                content="searched",
-                tool_calls=[
-                    ToolCall(
-                        id="ws_1",
-                        type="function",
-                        function=FunctionCall(name=WEB_SEARCH_TOOL_NAME, arguments=wire_args),
-                    ),
-                ],
-            ),
-            ToolMessage(id="t1", tool_call_id="ws_1", content="https://a\nhttps://b"),
-        ])
+        history = _map(
+            [
+                UserMessage(id="u1", content="search"),
+                AssistantMessage(
+                    id="a1",
+                    content="searched",
+                    tool_calls=[
+                        ToolCall(
+                            id="ws_1",
+                            type="function",
+                            function=FunctionCall(name=WEB_SEARCH_TOOL_NAME, arguments=wire_args),
+                        ),
+                    ],
+                ),
+                ToolMessage(id="t1", tool_call_id="ws_1", content="https://a\nhttps://b"),
+            ],
+            _ANTHROPIC,
+        )
 
         expected_call_block = ServerToolUseBlock(
             id="ws_1",

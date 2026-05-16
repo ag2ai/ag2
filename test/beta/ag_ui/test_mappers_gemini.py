@@ -10,10 +10,13 @@ from google.genai import types
 
 from autogen.beta.ag_ui.mappers import call_from_agui
 from autogen.beta.ag_ui.mappers.gemini import gemini_call_from_agui
+from autogen.beta.config import GeminiConfig
 from autogen.beta.config.gemini.events import GeminiServerToolCallEvent
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
+
+_CONFIG = GeminiConfig(model="gemini-2.0-flash")
 
 
 class TestExecutableCode:
@@ -21,7 +24,7 @@ class TestExecutableCode:
         part = types.Part(executable_code=types.ExecutableCode(code="print(1)", language=types.Language.PYTHON))
 
         forward = GeminiServerToolCallEvent.from_executable_code(part)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -31,7 +34,7 @@ class TestGroundingWebSearch:
         gm = types.GroundingMetadata(web_search_queries=["bitcoin price", "btc usd"])
 
         forward = GeminiServerToolCallEvent.from_grounding(gm, name=WEB_SEARCH_TOOL_NAME)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         # grounding_metadata is shaped by the mapper from `queries` only, so
         # it's logically equal but not identical to forward.grounding_metadata
@@ -50,7 +53,7 @@ class TestGroundingWebFetch:
         gm = types.GroundingMetadata(web_search_queries=["example.com"])
 
         forward = GeminiServerToolCallEvent.from_grounding(gm, name=WEB_FETCH_TOOL_NAME)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == GeminiServerToolCallEvent(
             id=forward.id,

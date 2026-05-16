@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from base64 import b64decode
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -43,7 +42,7 @@ from pydantic_core import to_jsonable_python
 
 from autogen.beta import Agent, MemoryStream, ToolResult, events
 from autogen.beta.config import ModelConfig
-from autogen.beta.events import BinaryInput, BuiltinToolCallEvent, DataInput, FileIdInput, TextInput, UrlInput
+from autogen.beta.events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.observers import Observer
@@ -51,7 +50,7 @@ from autogen.beta.tools.final import ClientTool
 from autogen.beta.tools.tool import Tool
 
 from .events import AGUIEvent
-from .mappers import KNOWN_BUILTIN_NAMES, call_from_agui, events_to_agui_messages, result_from_agui
+from .mappers import events_to_agui_messages, map_agui_messages_to_events
 
 try:
     from starlette.endpoints import HTTPEndpoint
@@ -142,7 +141,10 @@ async def run_stream(
         client_tools.append(tool)
         client_tools_names.add(tool.name)
 
-    extracted_prompt, history_messages = map_agui_messages_to_events(command)
+    extracted_prompt, history_messages = map_agui_messages_to_events(
+        command.incoming.messages,
+        command.config or agent.config,
+    )
     if extracted_prompt:
         command.prompt.extend(extracted_prompt)
     if client_tools:
@@ -373,116 +375,6 @@ async def run_stream(
                     timestamp=_get_timestamp(),
                 )
             )
-
-
-def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list[events.BaseEvent]]:
-    prompt, messages = [], []
-    # Pre-scan tool_calls: remember which AG-UI tool_call_id resolved to which
-    # provider-specific builtin call. The matching `m.role == "tool"` message
-    # uses this to synthesize the proper *ServerToolResultEvent.
-    builtin_call_by_id: dict[str, BuiltinToolCallEvent] = {}
-
-    input_buffer = []
-    for m in command.incoming.messages:
-        if m.role == "user":
-            content = m.content
-            if isinstance(content, str):
-                input_buffer.append(events.TextInput(content))
-                continue
-
-            for c in content:
-                if c.type == "text":
-                    input_buffer.append(events.TextInput(c.text))
-
-                elif c.url:
-                    input_buffer.append(
-                        events.UrlInput(
-                            c.url,
-                            kind=events.BinaryType.BINARY,
-                        )
-                    )
-
-                elif c.id:
-                    input_buffer.append(
-                        events.FileIdInput(
-                            c.id,
-                            filename=c.filename,
-                        )
-                    )
-
-                elif c.data:
-                    input_buffer.append(
-                        events.BinaryInput(
-                            b64decode(c.data),
-                            media_type=c.mime_type,
-                        )
-                    )
-
-            continue
-
-        if input_buffer:
-            messages.append(events.ModelRequest(list(input_buffer)))
-            input_buffer.clear()
-
-        if m.role in ["system", "developer"]:
-            prompt.append(m.content)
-
-        elif m.role == "assistant":
-            tool_calls: list[events.ToolCallEvent] = []
-            for t in m.tool_calls or ():
-                builtin = call_from_agui(t.function.name, t.id, t.function.arguments)
-                if builtin is not None:
-                    tool_calls.append(builtin)
-                    builtin_call_by_id[t.id] = builtin
-                    continue
-                if t.function.name in KNOWN_BUILTIN_NAMES:
-                    logger.warning(
-                        "ag_ui: builtin mapper failed to restore call '%s' (id=%s); "
-                        "falling back to plain ToolCallEvent. Arguments shape may not "
-                        "match any known SDK type — model will re-execute.",
-                        t.function.name,
-                        t.id,
-                    )
-                tool_calls.append(
-                    events.ToolCallEvent(
-                        id=t.id,
-                        name=t.function.name,
-                        arguments=t.function.arguments,
-                    )
-                )
-
-            messages.append(
-                events.ModelResponse(
-                    events.ModelMessage(m.content) if m.content else None,
-                    tool_calls=events.ToolCallsEvent(tool_calls),
-                )
-            )
-
-        elif m.role == "tool":
-            raw = m.error or m.content
-            if (builtin_call := builtin_call_by_id.get(m.tool_call_id)) is not None:
-                builtin_result = result_from_agui(builtin_call, raw)
-                if builtin_result is not None:
-                    messages.append(events.ToolResultsEvent([builtin_result]))
-                    continue
-                logger.warning(
-                    "ag_ui: builtin result mapper returned None for tool_call_id=%s; "
-                    "falling back to plain ToolResultEvent.",
-                    m.tool_call_id,
-                )
-            messages.append(
-                events.ToolResultsEvent([
-                    events.ToolResultEvent(
-                        parent_id=m.tool_call_id,
-                        result=ToolResult.ensure_result(raw),
-                    )
-                ])
-            )
-
-    if input_buffer:
-        messages.append(events.ModelRequest(input_buffer))
-
-    return prompt, messages
 
 
 def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> str:

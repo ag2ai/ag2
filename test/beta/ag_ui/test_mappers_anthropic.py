@@ -10,10 +10,13 @@ from anthropic.types import ServerToolUseBlock
 
 from autogen.beta.ag_ui.mappers import call_from_agui
 from autogen.beta.ag_ui.mappers.anthropic import anthropic_call_from_agui
+from autogen.beta.config import AnthropicConfig
 from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
+
+_CONFIG = AnthropicConfig(model="claude-sonnet-4-6")
 
 
 class TestWebSearch:
@@ -26,7 +29,7 @@ class TestWebSearch:
         )
 
         forward = AnthropicServerToolCallEvent.from_block(block)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -41,7 +44,7 @@ class TestWebFetch:
         )
 
         forward = AnthropicServerToolCallEvent.from_block(block)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -56,7 +59,7 @@ class TestCodeExecution:
         )
 
         forward = AnthropicServerToolCallEvent.from_block(block)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -69,7 +72,7 @@ class TestCodeExecution:
         )
 
         forward = AnthropicServerToolCallEvent.from_block(block)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -82,7 +85,7 @@ class TestCodeExecution:
         )
 
         forward = AnthropicServerToolCallEvent.from_block(block)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 

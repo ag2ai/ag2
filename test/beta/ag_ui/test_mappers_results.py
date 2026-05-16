@@ -28,6 +28,7 @@ from openai.types.responses import ResponseCodeInterpreterToolCall, ResponseFunc
 from openai.types.responses.response_function_web_search import ActionSearch
 
 from autogen.beta.ag_ui.mappers import result_from_agui
+from autogen.beta.config import AnthropicConfig, GeminiConfig, OpenAIConfig
 from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
 from autogen.beta.config.gemini.events import GeminiServerToolCallEvent, GeminiServerToolResultEvent
 from autogen.beta.config.openai.events import OpenAIServerToolCallEvent, OpenAIServerToolResultEvent
@@ -35,6 +36,10 @@ from autogen.beta.events import TextInput, ToolResult
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
+
+_OPENAI = OpenAIConfig(model="gpt-4")
+_ANTHROPIC = AnthropicConfig(model="claude-sonnet-4-6")
+_GEMINI = GeminiConfig(model="gemini-2.0-flash")
 
 
 class TestOpenAIResults:
@@ -48,7 +53,7 @@ class TestOpenAIResults:
             )
         )
 
-        result = result_from_agui(call, "https://example.com\nhttps://other.example")
+        result = result_from_agui(_OPENAI, call, "https://example.com\nhttps://other.example")
 
         assert result == OpenAIServerToolResultEvent(
             parent_id="ws_1",
@@ -68,7 +73,7 @@ class TestOpenAIResults:
             )
         )
 
-        result = result_from_agui(call, "1\n")
+        result = result_from_agui(_OPENAI, call, "1\n")
 
         assert result == OpenAIServerToolResultEvent(
             parent_id="ci_1",
@@ -83,7 +88,7 @@ class TestAnthropicResults:
             ServerToolUseBlock(id="w1", name="web_search", input={"query": "x"}, type="server_tool_use")
         )
 
-        result = result_from_agui(call, "https://a.example\nhttps://b.example\nnot-a-url")
+        result = result_from_agui(_ANTHROPIC, call, "https://a.example\nhttps://b.example\nnot-a-url")
 
         assert result == AnthropicServerToolResultEvent(
             parent_id="w1",
@@ -116,7 +121,7 @@ class TestAnthropicResults:
             ServerToolUseBlock(id="w2", name="web_search", input={"query": "x"}, type="server_tool_use")
         )
 
-        result = result_from_agui(call, "")
+        result = result_from_agui(_ANTHROPIC, call, "")
 
         assert result == AnthropicServerToolResultEvent(
             parent_id="w2",
@@ -139,7 +144,7 @@ class TestAnthropicResults:
             )
         )
 
-        result = result_from_agui(call, "page body")
+        result = result_from_agui(_ANTHROPIC, call, "page body")
 
         assert result == AnthropicServerToolResultEvent(
             parent_id="f1",
@@ -172,7 +177,7 @@ class TestAnthropicResults:
             )
         )
 
-        result = result_from_agui(call, "1\n")
+        result = result_from_agui(_ANTHROPIC, call, "1\n")
 
         assert result == AnthropicServerToolResultEvent(
             parent_id="c1",
@@ -201,7 +206,7 @@ class TestAnthropicResults:
             )
         )
 
-        result = result_from_agui(call, "file.txt\n")
+        result = result_from_agui(_ANTHROPIC, call, "file.txt\n")
 
         assert result == AnthropicServerToolResultEvent(
             parent_id="b1",
@@ -230,7 +235,7 @@ class TestAnthropicResults:
             )
         )
 
-        result = result_from_agui(call, "line1\nline2")
+        result = result_from_agui(_ANTHROPIC, call, "line1\nline2")
 
         assert result == AnthropicServerToolResultEvent(
             parent_id="t1",
@@ -256,7 +261,7 @@ class TestGeminiResults:
         part = types.Part(executable_code=types.ExecutableCode(code="print(1)", language=types.Language.PYTHON))
         call = GeminiServerToolCallEvent.from_executable_code(part)
 
-        result = result_from_agui(call, "1\n")
+        result = result_from_agui(_GEMINI, call, "1\n")
 
         assert result == GeminiServerToolResultEvent(
             parent_id=call.id,
@@ -274,7 +279,7 @@ class TestGeminiResults:
         gm = types.GroundingMetadata(web_search_queries=["bitcoin"])
         call = GeminiServerToolCallEvent.from_grounding(gm, name=WEB_SEARCH_TOOL_NAME)
 
-        result = result_from_agui(call, "https://example.com")
+        result = result_from_agui(_GEMINI, call, "https://example.com")
 
         assert result == GeminiServerToolResultEvent(
             parent_id=call.id,

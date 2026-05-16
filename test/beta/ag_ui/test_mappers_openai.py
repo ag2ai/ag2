@@ -19,10 +19,13 @@ from openai.types.responses.response_output_item import ImageGenerationCall
 
 from autogen.beta.ag_ui.mappers import call_from_agui
 from autogen.beta.ag_ui.mappers.openai import openai_call_from_agui
+from autogen.beta.config import OpenAIConfig
 from autogen.beta.config.openai.events import OpenAIServerToolCallEvent
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
+
+_CONFIG = OpenAIConfig(model="gpt-4")
 
 
 class TestWebSearch:
@@ -42,7 +45,7 @@ class TestWebSearch:
         )
 
         forward = OpenAIServerToolCallEvent.from_item(item)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -55,7 +58,7 @@ class TestWebSearch:
         )
 
         forward = OpenAIServerToolCallEvent.from_item(item)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -68,7 +71,7 @@ class TestWebSearch:
         )
 
         forward = OpenAIServerToolCallEvent.from_item(item)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -85,7 +88,7 @@ class TestCodeInterpreter:
         )
 
         forward = OpenAIServerToolCallEvent.from_item(item)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -101,7 +104,7 @@ class TestCodeInterpreter:
         )
 
         forward = OpenAIServerToolCallEvent.from_item(item)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == forward
 
@@ -121,7 +124,7 @@ class TestImageGeneration:
         )
 
         forward = OpenAIServerToolCallEvent.from_item(item)
-        restored = call_from_agui(forward.name, forward.id, forward.arguments)
+        restored = call_from_agui(_CONFIG, forward.name, forward.id, forward.arguments)
 
         assert restored == OpenAIServerToolCallEvent(
             id="ig_1",
@@ -149,5 +152,5 @@ class TestNonMatching:
         assert openai_call_from_agui(CODE_EXECUTION_TOOL_NAME, "ci_x", {"code": "x = 1"}) is None
 
     def test_call_from_agui_garbage_arguments_returns_none(self) -> None:
-        assert call_from_agui(WEB_SEARCH_TOOL_NAME, "ws_x", "not-json") is None
-        assert call_from_agui(WEB_SEARCH_TOOL_NAME, "ws_x", json.dumps([1, 2])) is None
+        assert call_from_agui(_CONFIG, WEB_SEARCH_TOOL_NAME, "ws_x", "not-json") is None
+        assert call_from_agui(_CONFIG, WEB_SEARCH_TOOL_NAME, "ws_x", json.dumps([1, 2])) is None
