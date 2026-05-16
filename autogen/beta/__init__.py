@@ -19,6 +19,7 @@ from .files import FilesAPI
 from .middleware import Middleware
 from .observers import observer
 from .response import PromptedSchema, ResponseSchema, response_schema
+from .scheduler import AgentScheduler, ScheduledJob
 from .spec import AgentSpec
 from .stream import MemoryStream
 from .task import Task, TaskInject, TaskSpec
@@ -27,6 +28,7 @@ from .tools import ToolResult, Toolkit, tool
 __all__ = (
     "Agent",
     "AgentReply",
+    "AgentScheduler",
     "AgentSpec",
     "AudioInput",
     "BinaryInput",
@@ -42,6 +44,7 @@ __all__ = (
     "Middleware",
     "PromptedSchema",
     "ResponseSchema",
+    "ScheduledJob",
     "Task",
     "TaskConfig",
     "TaskInject",
