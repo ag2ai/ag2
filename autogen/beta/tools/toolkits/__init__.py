@@ -4,10 +4,12 @@
 
 from .filesystem import FilesystemToolkit
 from .mcp_server import MCPServer, MCPServerConfig, MCPStdioServerConfig
+from .memory import MemoryToolkit
 
 __all__ = (
     "FilesystemToolkit",
     "MCPServer",
     "MCPServerConfig",
     "MCPStdioServerConfig",
+    "MemoryToolkit",
 )
