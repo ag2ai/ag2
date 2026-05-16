@@ -1,0 +1,145 @@
+---
+title: Agent Scheduler
+sidebarTitle: Scheduler
+---
+
+**`AgentScheduler`** runs `agent.ask()` calls on a time-based schedule. Register jobs with cron expressions, fixed intervals, or one-shot delays — then start the scheduler and let it drive your agents automatically.
+
+## Basic usage
+
+```python linenums="1" hl_lines="9 10 13"
+import asyncio
+from autogen.beta import Agent, AgentScheduler
+from autogen.beta.config import OpenAIConfig
+
+agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
+
+scheduler = AgentScheduler()
+
+# Every Monday at 9am
+scheduler.cron("0 9 * * MON", agent=agent, prompt="Give me a Monday briefing.")
+
+# Every 5 minutes
+scheduler.interval(300, agent=agent, prompt="Health check — report status.")
+
+async with scheduler:
+    await asyncio.sleep(86400)  # run for 24 hours
+```
+
+`AgentScheduler` is an async context manager: entering it starts all registered jobs, and exiting stops them. You can also call `.start()` and `.stop()` directly.
+
+## Registering jobs
+
+### `.cron(expression, *, agent, prompt)`
+
+Fires on a standard 5-field cron expression: `minute hour day-of-month month day-of-week`.
+
+```python linenums="1"
+scheduler.cron("0 9 * * *",       agent=agent, prompt="Daily summary.")
+scheduler.cron("0 9 * * MON-FRI", agent=agent, prompt="Weekday brief.")
+scheduler.cron("*/30 * * * *",    agent=agent, prompt="Check every 30 min.")
+```
+
+### `.interval(seconds, *, agent, prompt)`
+
+Fires every *seconds* seconds after the scheduler starts.
+
+```python linenums="1"
+scheduler.interval(60,  agent=agent, prompt="Ping.")      # every minute
+scheduler.interval(300, agent=agent, prompt="Health check.")  # every 5 min
+```
+
+### `.delay(seconds, *, agent, prompt)`
+
+Fires exactly once after *seconds* seconds, then auto-cancels.
+
+```python linenums="1"
+scheduler.delay(30, agent=agent, prompt="Follow up in 30 seconds.")
+```
+
+## Inspecting replies with `on_reply`
+
+Every job accepts an optional `on_reply` callback. It is called with the `AgentReply` produced by each invocation:
+
+```python linenums="1" hl_lines="4-6 10"
+from autogen.beta import Agent, AgentScheduler, AgentReply
+
+async def log_reply(reply: AgentReply) -> None:
+    print(f"Agent said: {reply.body}")
+    print(f"Tokens used: {reply.usage.total_tokens}")
+
+scheduler = AgentScheduler()
+scheduler.interval(
+    300,
+    agent=agent,
+    prompt="Status check.",
+    on_reply=log_reply,
+)
+```
+
+Exceptions raised inside `on_reply` are logged and do not stop the scheduler.
+
+## Dynamic prompts
+
+`prompt` can be a plain string, a zero-argument sync callable, or an async callable. The factory is called fresh on each firing:
+
+```python linenums="1" hl_lines="7 10"
+from datetime import datetime
+
+# Sync factory
+scheduler.interval(60, agent=agent, prompt=lambda: f"Current time: {datetime.now()}")
+
+# Async factory
+async def get_prompt() -> str:
+    return f"Current time: {datetime.now()}"
+
+scheduler.interval(60, agent=agent, prompt=get_prompt)
+```
+
+## Managing individual jobs
+
+Every registration method returns a `ScheduledJob`. Call `.cancel()` to stop a single job without affecting the others:
+
+```python linenums="1" hl_lines="6"
+heartbeat = scheduler.interval(60, agent=agent, prompt="Ping.")
+report    = scheduler.cron("0 9 * * *", agent=agent, prompt="Daily report.")
+
+async with scheduler:
+    await asyncio.sleep(120)
+    heartbeat.cancel()           # stop heartbeat; report keeps running
+    await asyncio.sleep(3600)    # report fires at 9am as scheduled
+```
+
+Jobs can be added after `.start()` — they are armed immediately:
+
+```python linenums="1"
+async with scheduler:
+    await asyncio.sleep(60)
+    # add a new job at runtime
+    scheduler.interval(30, agent=agent, prompt="Late addition.")
+    await asyncio.sleep(300)
+```
+
+## Custom Watch triggers
+
+For triggers beyond cron/interval/delay, use `.add(watch, ...)` with any `Watch` instance from `autogen.beta.watch`:
+
+```python linenums="1" hl_lines="1 3"
+from autogen.beta.watch import CadenceWatch
+
+# Fire once per batch of 10 ModelResponse events
+watch = CadenceWatch(n=10)
+scheduler.add(watch, agent=agent, prompt="Summarize the last 10 responses.")
+```
+
+See [Watches](/docs/beta/advanced/watches){.internal-link} for the full list of available Watch primitives.
+
+## Resilience
+
+If `agent.ask()` raises an exception, the error is logged and the scheduler continues running. The next interval or cron firing proceeds normally — a transient failure never stops the loop.
+
+## Next steps
+
+- [`AgentReply.usage` and `total_usage()`](/docs/beta/agents#tracking-token-usage){.internal-link} — inspect token costs from scheduled runs.
+- [Watches](/docs/beta/advanced/watches){.internal-link} — build custom triggers with the Watch primitives.
+- [Observers](/docs/beta/advanced/observers){.internal-link} — monitor agent activity with token budgets and alerts.
