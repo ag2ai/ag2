@@ -275,6 +275,15 @@ class AgentClient:
             raise RuntimeError("AgentClient is disconnected")
         if envelope.sender_id == "":
             envelope.sender_id = self.agent_id
+        if envelope.trace_id is None:
+            try:
+                from opentelemetry import trace as _otel_trace
+
+                sc = _otel_trace.get_current_span().get_span_context()
+                if sc.is_valid:
+                    envelope.trace_id = f"00-{sc.trace_id:032x}-{sc.span_id:016x}-{sc.trace_flags:02x}"
+            except ImportError:
+                pass
         return await self._hub_client.post_envelope(envelope)
 
     # ── Tenant-driven mutation ───────────────────────────────────────────────

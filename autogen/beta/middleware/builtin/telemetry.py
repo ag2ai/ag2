@@ -36,6 +36,8 @@ except ImportError as _err:
     ) from _err
 
 from autogen.beta.events import ToolErrorEvent
+from autogen.beta.network.envelope import Envelope
+from autogen.beta.network.policies import CHANNEL_DEP, ENVELOPE_DEP
 
 _SCHEMA_URL = "https://opentelemetry.io/schemas/1.11.0"
 _INSTRUMENTING_MODULE = "opentelemetry.instrumentation.ag2.beta"
@@ -44,6 +46,22 @@ _INSTRUMENTING_MODULE = "opentelemetry.instrumentation.ag2.beta"
 def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
     provider = tracer_provider or trace.get_tracer_provider()
     return provider.get_tracer(_INSTRUMENTING_MODULE, schema_url=_SCHEMA_URL)
+
+
+def _parse_traceparent(tp: str) -> "trace.SpanContext | None":
+    """Parse a W3C traceparent header into an OTel SpanContext, or return None."""
+    parts = tp.split("-")
+    if len(parts) != 4 or parts[0] != "00":
+        return None
+    try:
+        return trace.SpanContext(
+            trace_id=int(parts[1], 16),
+            span_id=int(parts[2], 16),
+            is_remote=True,
+            trace_flags=trace.TraceFlags(int(parts[3], 16)),
+        )
+    except (ValueError, IndexError):
+        return None
 
 
 class TelemetryMiddleware(MiddlewareFactory):
@@ -111,8 +129,21 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         event: BaseEvent,
         context: Context,
     ) -> ModelResponse:
+        inbound_envelope: Envelope | None = context.dependencies.get(ENVELOPE_DEP)
+        inbound_channel = context.dependencies.get(CHANNEL_DEP)
+
+        # If a remote agent sent us this turn via an Envelope carrying a
+        # W3C traceparent, start our span as a child of that remote span so
+        # the distributed trace is stitched across agent boundaries.
+        otel_ctx = None
+        if inbound_envelope and inbound_envelope.trace_id:
+            remote_sc = _parse_traceparent(inbound_envelope.trace_id)
+            if remote_sc:
+                otel_ctx = trace.set_span_in_context(trace.NonRecordingSpan(remote_sc))
+
         with self._tracer.start_as_current_span(
             f"invoke_agent {self._agent_name}",
+            context=otel_ctx,
             kind=SpanKind.INTERNAL,
         ) as span:
             span.set_attribute("ag2.span.type", "agent")
@@ -122,6 +153,22 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.provider.name", self._provider_name)
             if self._model_name:
                 span.set_attribute("gen_ai.request.model", self._model_name)
+
+            if inbound_envelope:
+                if inbound_envelope.envelope_id:
+                    span.set_attribute("ag2.network.envelope_id", inbound_envelope.envelope_id)
+                span.set_attribute("ag2.network.sender", inbound_envelope.sender_id)
+                span.set_attribute("ag2.network.channel_id", inbound_envelope.channel_id)
+                span.set_attribute("ag2.network.depth", inbound_envelope.depth)
+                span.set_attribute("ag2.network.priority", inbound_envelope.priority)
+                if inbound_envelope.causation_id:
+                    span.set_attribute("ag2.network.causation_id", inbound_envelope.causation_id)
+                if inbound_envelope.task_id:
+                    span.set_attribute("ag2.network.task_id", inbound_envelope.task_id)
+                if inbound_envelope.audience is not None:
+                    span.set_attribute("ag2.network.audience", json.dumps(inbound_envelope.audience))
+            if inbound_channel:
+                span.set_attribute("ag2.network.channel_type", inbound_channel.metadata.manifest.type)
 
             try:
                 response = await call_next(event, context)

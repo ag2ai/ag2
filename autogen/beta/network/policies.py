@@ -17,6 +17,7 @@ __all__ = (
     "AGENT_CLIENT_DEP",
     "CHANNEL_DEP",
     "CHANNEL_STATE_DEP",
+    "ENVELOPE_DEP",
     "HUB_DEP",
     "TASK_DEP",
 )
@@ -25,5 +26,6 @@ __all__ = (
 CHANNEL_DEP = "ag2.network.channel"
 CHANNEL_STATE_DEP = "ag2.network.channel_state"
 AGENT_CLIENT_DEP = "ag2.network.agent_client"
+ENVELOPE_DEP = "ag2.network.inbound_envelope"  # the Envelope that triggered this agent turn
 HUB_DEP = "ag2.network.hub"
 TASK_DEP = "ag2.task"  # framework-core key; re-exported for symmetry

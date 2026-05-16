@@ -32,7 +32,7 @@ from ..envelope import (
     EV_CHANNEL_INVITE_ACK,
     Envelope,
 )
-from ..policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, HUB_DEP
+from ..policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, ENVELOPE_DEP, HUB_DEP
 from ..task_mirror import TaskMirror
 from ..views.base import ViewPolicy
 from .channel import Channel
@@ -82,6 +82,7 @@ def resolve_view_policy(
 def stamp_dependencies(
     client: "AgentClient",
     channel: Channel,
+    inbound_envelope: Envelope | None = None,
 ) -> dict[object, object]:
     """Build the ``context.dependencies`` dict for the LLM turn.
 
@@ -89,13 +90,20 @@ def stamp_dependencies(
     object (``WorkflowState`` / ``DiscussionState`` / ...). Tools that
     need to read channel-scoped state (e.g. ``context_vars`` on a
     workflow channel) inject it via ``ChannelStateInject``.
+
+    ``ENVELOPE_DEP`` is the inbound ``Envelope`` that triggered this turn;
+    set by ``_process_substantive`` so middleware (e.g. ``TelemetryMiddleware``)
+    can read network-level metadata without coupling to network internals.
     """
-    return {
+    deps: dict[object, object] = {
         CHANNEL_DEP: channel,
         AGENT_CLIENT_DEP: client,
         HUB_DEP: client._hub,
         CHANNEL_STATE_DEP: client._hub_client.adapter_state(channel.channel_id),
     }
+    if inbound_envelope is not None:
+        deps[ENVELOPE_DEP] = inbound_envelope
+    return deps
 
 
 async def _auto_ack_invite(envelope: Envelope, client: "AgentClient") -> None:
@@ -181,7 +189,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         if projection:
             await stream.history.storage.set_history(stream.id, projection)
 
-        dependencies = stamp_dependencies(client, channel)
+        dependencies = stamp_dependencies(client, channel, inbound_envelope=envelope)
 
         # Adapter-scoped LLM tools for this turn (e.g. ``say`` for
         # consulting / discussion). Resolution is cached on the adapter

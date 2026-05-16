@@ -140,7 +140,7 @@ from .identity import (
     ResumeExample,
 )
 from .ids import make_id
-from .policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, HUB_DEP, TASK_DEP
+from .policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, ENVELOPE_DEP, HUB_DEP, TASK_DEP
 from .rule import (
     AccessBlock,
     ChannelTypeAccess,
@@ -222,6 +222,7 @@ __all__ = (
     "CONSULTING_TYPE",
     "CONVERSATION_TYPE",
     "DISCUSSION_TYPE",
+    "ENVELOPE_DEP",
     "EV_CHANNEL_CLOSED",
     "EV_CHANNEL_EXPIRED",
     "EV_CHANNEL_INVITE",
