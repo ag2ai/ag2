@@ -1,0 +1,92 @@
+---
+title: MemoryToolkit
+sidebarTitle: MemoryToolkit
+---
+
+`MemoryToolkit` gives an agent four tools — `remember`, `recall`, `forget`, and
+`list_memories` — so it can autonomously store and retrieve information across a
+conversation or across sessions.
+
+## Basic usage
+
+```python
+from autogen.beta import Agent
+from autogen.beta.tools import MemoryToolkit
+from autogen.beta.config import OpenAIConfig
+
+memory = MemoryToolkit()
+agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"), tools=[memory])
+
+reply = await agent.ask("Remember that our primary database host is db.prod.example.com")
+```
+
+The agent will call `remember` autonomously.  On a later turn:
+
+```python
+reply = await agent.ask("What is the database host?")
+# The agent calls recall("database host") and uses the stored memory in its answer.
+```
+
+## Tools the agent gets
+
+| Tool | What it does |
+|---|---|
+| `remember(content, key?)` | Store a piece of information. An optional key names the memory; if omitted, a unique key is generated. |
+| `recall(query, max_results?)` | Keyword search across stored memories. Returns the best matches. |
+| `forget(key)` | Delete a memory by its key. |
+| `list_memories()` | List all stored memories, most recent first. |
+
+## Backends
+
+### Session-scoped (in-memory, default)
+
+```python
+memory = MemoryToolkit()
+```
+
+Memories live in-process.  They are fast but are discarded when the session ends.
+
+### Persistent (SQLite)
+
+```python
+memory = MemoryToolkit(storage_path="~/.my-agent/memories.db")
+```
+
+Memories survive process restarts.  The SQLite file is created automatically.
+Use `~` to expand to the user's home directory.
+
+## Picking individual tools
+
+Pass tools from the toolkit selectively if you only want some of them:
+
+```python
+fs = MemoryToolkit()
+agent = Agent(
+    "assistant",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[
+        fs._remember_tool(),
+        fs._recall_tool(),
+    ],
+)
+```
+
+## Example: persistent research assistant
+
+```python
+from autogen.beta import Agent
+from autogen.beta.tools import MemoryToolkit
+from autogen.beta.config import OpenAIConfig
+
+memory = MemoryToolkit(storage_path="~/.research-agent/memories.db")
+agent = Agent(
+    "researcher",
+    config=OpenAIConfig("gpt-4o"),
+    tools=[memory],
+    system_prompt=(
+        "You are a research assistant. When you learn something important, "
+        "use remember() to store it. Use recall() to find relevant facts "
+        "before answering questions."
+    ),
+)
+```
