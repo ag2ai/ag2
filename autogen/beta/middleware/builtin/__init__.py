@@ -4,6 +4,12 @@
 
 from autogen.beta.exceptions import missing_optional_dependency
 
+from .circuit_breaker import (
+    CircuitBreakerConfig,
+    CircuitBreakerMiddleware,
+    CircuitBreakerOpenError,
+    CircuitState,
+)
 from .history_limiter import HistoryLimiter
 from .llm_retry import RetryMiddleware
 from .logging import LoggingMiddleware
@@ -16,6 +22,10 @@ except ImportError as e:
     TelemetryMiddleware = missing_optional_dependency("TelemetryMiddleware", "tracing", e)
 
 __all__ = (
+    "CircuitBreakerConfig",
+    "CircuitBreakerMiddleware",
+    "CircuitBreakerOpenError",
+    "CircuitState",
     "HistoryLimiter",
     "LoggingMiddleware",
     "RetryMiddleware",

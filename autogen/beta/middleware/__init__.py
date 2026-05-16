@@ -13,6 +13,10 @@ from .base import (
     ToolResultType,
 )
 from .builtin import (
+    CircuitBreakerConfig,
+    CircuitBreakerMiddleware,
+    CircuitBreakerOpenError,
+    CircuitState,
     HistoryLimiter,
     LoggingMiddleware,
     RetryMiddleware,
@@ -24,6 +28,10 @@ from .builtin import (
 __all__ = (
     "AgentTurn",
     "BaseMiddleware",
+    "CircuitBreakerConfig",
+    "CircuitBreakerMiddleware",
+    "CircuitBreakerOpenError",
+    "CircuitState",
     "HistoryLimiter",
     "HumanInputHook",
     "LLMCall",
