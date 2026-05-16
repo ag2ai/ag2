@@ -57,6 +57,9 @@ class TelemetryMiddleware(MiddlewareFactory):
         agent_name: Agent name for span attributes. If not set, defaults to "unknown".
         provider_name: LLM provider name (e.g. "openai", "anthropic").
         model_name: Model name (e.g. "gpt-4o-mini").
+        temperature: Sampling temperature emitted as ``gen_ai.request.temperature``.
+        top_p: Top-p sampling value emitted as ``gen_ai.request.top_p``.
+        max_tokens: Max tokens value emitted as ``gen_ai.request.max_tokens``.
     """
 
     def __init__(
@@ -67,12 +70,18 @@ class TelemetryMiddleware(MiddlewareFactory):
         agent_name: str | None = None,
         provider_name: str | None = None,
         model_name: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_tokens: int | None = None,
     ) -> None:
         self._tracer = _get_tracer(tracer_provider)
         self._capture_content = capture_content
         self._agent_name = agent_name or "unknown"
         self._provider_name = provider_name
         self._model_name = model_name
+        self._temperature = temperature
+        self._top_p = top_p
+        self._max_tokens = max_tokens
 
     def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
         return _TelemetryMiddlewareInstance(
@@ -83,6 +92,9 @@ class TelemetryMiddleware(MiddlewareFactory):
             agent_name=self._agent_name,
             provider_name=self._provider_name,
             model_name=self._model_name,
+            temperature=self._temperature,
+            top_p=self._top_p,
+            max_tokens=self._max_tokens,
         )
 
 
@@ -97,6 +109,9 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         agent_name: str,
         provider_name: str | None,
         model_name: str | None,
+        temperature: float | None,
+        top_p: float | None,
+        max_tokens: int | None,
     ) -> None:
         super().__init__(event, context)
         self._tracer = tracer
@@ -104,6 +119,9 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         self._agent_name = agent_name
         self._provider_name = provider_name
         self._model_name = model_name
+        self._temperature = temperature
+        self._top_p = top_p
+        self._max_tokens = max_tokens
 
     async def on_turn(
         self,
@@ -150,6 +168,13 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.provider.name", self._provider_name)
             if self._model_name:
                 span.set_attribute("gen_ai.request.model", self._model_name)
+
+            if self._temperature is not None:
+                span.set_attribute("gen_ai.request.temperature", self._temperature)
+            if self._top_p is not None:
+                span.set_attribute("gen_ai.request.top_p", self._top_p)
+            if self._max_tokens is not None:
+                span.set_attribute("gen_ai.request.max_tokens", self._max_tokens)
 
             if self._capture_content:
                 input_messages = json.dumps([
