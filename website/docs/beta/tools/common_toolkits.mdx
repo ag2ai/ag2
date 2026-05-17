@@ -169,6 +169,35 @@ Available tools:
 | `load_skill` | Fetch the full `SKILL.md` content for a specific skill |
 | `run_skill_script` | Execute a `.py` or `.sh` script from a skill's `scripts/` directory |
 
+### Bundled repository-development skills
+
+AG2 ships four skills that help agents work on Python repositories. They live in `skills/` at the repo root.
+
+| Skill | Description |
+| :--- | :--- |
+| `python-code` | AG2 Python coding conventions — type annotations, async patterns, `@tool` authoring |
+| `repo-structure` | Repository layout, where to add new code/tests/docs, PR workflow |
+| `docs-writer` | MDX format, admonitions, code blocks, docstring style, roadmap updates |
+| `test-scaffold` | pytest fixtures, async tests, `TrackingConfig` end-to-end verification |
+
+The `test-scaffold` skill also includes a `scripts/scaffold.py` utility that generates an empty test file from a module's public API:
+
+```bash
+python skills/test-scaffold/scripts/scaffold.py autogen.beta.tools.toolkits.memory
+```
+
+Load the bundled skills by pointing `LocalRuntime` at the `skills/` directory:
+
+```python linenums="1"
+from autogen.beta.tools import SkillsToolkit
+from autogen.beta.tools.skills import LocalRuntime
+
+# Load bundled AG2 development skills alongside user-installed skills
+skills = SkillsToolkit(
+    runtime=LocalRuntime("~/.agents/skills", extra_paths=["./skills"])
+)
+```
+
 ---
 
 ## SkillSearchToolkit
