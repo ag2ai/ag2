@@ -9,9 +9,11 @@ except ImportError as e:
 
 
 from .events import AGUIEvent
+from .plugin import A2UIPlugin
 from .stream import AGUIStream
 
 __all__ = (
+    "A2UIPlugin",
     "AGUIEvent",
     "AGUIStream",
     "RunAgentInput",
