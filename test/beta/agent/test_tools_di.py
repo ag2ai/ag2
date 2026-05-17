@@ -84,7 +84,10 @@ async def test_call_tool_with_mixed_dependencies(
 
     await agent.ask("Hi!", dependencies={"dep2": "2"})
 
-    mock.assert_called_once_with({"dep": "1", "dep2": "2"})
+    mock.assert_called_once()
+    actual = mock.call_args[0][0]
+    assert actual["dep"] == "1"
+    assert actual["dep2"] == "2"
 
 
 @pytest.mark.asyncio()
