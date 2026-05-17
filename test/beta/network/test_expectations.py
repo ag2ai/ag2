@@ -64,6 +64,7 @@ from autogen.beta.network.hub import (
     ExpectationContext,
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
+    TurnWithinEvaluator,
 )
 from autogen.beta.testing import TestConfig
 
@@ -260,6 +261,62 @@ class TestMaxSilenceEvaluator:
         evaluator = MaxSilenceEvaluator()
         expectation = Expectation(name="max_silence", on_violation="audit", params={"seconds": 60})
         violation = evaluator.evaluate(expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:02:00+00:00"))
+        assert violation is None
+
+
+class TestTurnWithinEvaluator:
+    def test_fires_when_expected_speaker_overdue(self) -> None:
+        import types
+
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        wal = [_envelope("alice", "hello", "2026-01-01T00:00:30+00:00")]
+        evaluator = TurnWithinEvaluator()
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        state = types.SimpleNamespace(expected_next_speaker="bob")
+        ctx = ExpectationContext(
+            metadata=metadata,
+            state=state,
+            wal=wal,
+            now_iso="2026-01-01T00:02:00+00:00",
+            now_seconds=1767225720.0,
+        )
+        violation = evaluator.evaluate(expectation, ctx)
+        assert violation is not None
+        assert violation.violator_ids == ["bob"]
+
+    def test_silent_within_threshold(self) -> None:
+        import types
+
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        wal = [_envelope("alice", "hello", "2026-01-01T00:01:30+00:00")]
+        evaluator = TurnWithinEvaluator()
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        state = types.SimpleNamespace(expected_next_speaker="bob")
+        ctx = ExpectationContext(
+            metadata=metadata,
+            state=state,
+            wal=wal,
+            now_iso="2026-01-01T00:02:00+00:00",
+            now_seconds=1767225720.0,
+        )
+        violation = evaluator.evaluate(expectation, ctx)
+        assert violation is None
+
+    def test_channel_wide_violation_when_no_expected_speaker(self) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        wal = [_envelope("alice", "hello", "2026-01-01T00:00:30+00:00")]
+        evaluator = TurnWithinEvaluator()
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        ctx = _ctx(metadata, wal=wal, now="2026-01-01T00:02:00+00:00")
+        violation = evaluator.evaluate(expectation, ctx)
+        assert violation is not None
+        assert violation.violator_ids == []  # fallback: channel-wide
+
+    def test_silent_when_channel_not_active(self) -> None:
+        metadata = _conv_metadata(state=ChannelState.CLOSED, created_at="2026-01-01T00:00:00+00:00")
+        evaluator = TurnWithinEvaluator()
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        violation = evaluator.evaluate(expectation, _ctx(metadata))
         assert violation is None
 
 
