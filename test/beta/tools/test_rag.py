@@ -141,7 +141,7 @@ class TestRAGToolkitConstruction:
         rag = RAGToolkit()
         schemas = list(await rag.schemas(Context(async_mock)))
         names = {s.function.name for s in schemas}
-        assert names == {"index_document", "search", "remove_document", "list_documents"}
+        assert names == {"index_document", "search", "remove_document", "list_documents", "configure_search"}
 
     def test_importable_from_tools_package(self) -> None:
         from autogen.beta.tools import RAGToolkit as RAGToolkitAlias  # noqa: F401
@@ -152,6 +152,11 @@ class TestRAGToolkitConstruction:
         rag = RAGToolkit(chunk_size=200, overlap=20)
         assert rag._chunk_size == 200
         assert rag._overlap == 20
+
+    def test_custom_search_defaults_accepted(self) -> None:
+        rag = RAGToolkit(default_top_k=3, default_min_score=0.1)
+        assert rag._default_top_k == 3
+        assert rag._default_min_score == pytest.approx(0.1)
 
 
 # ---------------------------------------------------------------------------
@@ -344,3 +349,78 @@ class TestGlobalTFIDFRecomputation:
         rag.index("second document terms", title="B", doc_id="b")
         for chunk in rag._store.all_chunks():
             assert chunk.tfidf, f"Chunk {chunk.chunk_id} from doc {chunk.doc_id} has empty tfidf"
+
+
+# ---------------------------------------------------------------------------
+# RAGToolkit — configure_search (model-configurable search params)
+# ---------------------------------------------------------------------------
+
+
+class TestConfigureSearch:
+    @pytest.mark.asyncio
+    async def test_configure_search_updates_top_k(self) -> None:
+        rag = RAGToolkit()
+        assert rag._default_top_k == 5
+        cfg_tool = rag.configure_search()
+        result = await cfg_tool.model.call(top_k=2)
+        assert rag._default_top_k == 2
+        assert "top_k: 2" in result
+
+    @pytest.mark.asyncio
+    async def test_configure_search_updates_min_score(self) -> None:
+        rag = RAGToolkit()
+        assert rag._default_min_score == pytest.approx(0.0)
+        cfg_tool = rag.configure_search()
+        result = await cfg_tool.model.call(min_score=0.5)
+        assert rag._default_min_score == pytest.approx(0.5)
+        assert "min_score: 0.500" in result
+
+    @pytest.mark.asyncio
+    async def test_configure_search_partial_update(self) -> None:
+        rag = RAGToolkit(default_top_k=3, default_min_score=0.1)
+        cfg_tool = rag.configure_search()
+        await cfg_tool.model.call(top_k=10)
+        assert rag._default_top_k == 10
+        assert rag._default_min_score == pytest.approx(0.1)  # unchanged
+
+    @pytest.mark.asyncio
+    async def test_configure_search_no_args_is_noop(self) -> None:
+        rag = RAGToolkit(default_top_k=7, default_min_score=0.2)
+        cfg_tool = rag.configure_search()
+        await cfg_tool.model.call()
+        assert rag._default_top_k == 7
+        assert rag._default_min_score == pytest.approx(0.2)
+
+    @pytest.mark.asyncio
+    async def test_search_respects_configured_top_k(self) -> None:
+        rag = RAGToolkit()
+        for i in range(5):
+            rag.index(f"Document {i} about topic {i}.", title=f"Doc{i}", doc_id=f"d{i}")
+        cfg_tool = rag.configure_search()
+        await cfg_tool.model.call(top_k=2)
+        search_tool = rag.search()
+        result = await search_tool.model.call(query="document topic")
+        assert result.count("doc_id=") == 2
+
+    @pytest.mark.asyncio
+    async def test_search_respects_configured_min_score(self) -> None:
+        rag = RAGToolkit()
+        rag.index("Python is a programming language.", title="Python", doc_id="py")
+        # Set a very high min_score threshold so results should be filtered out
+        cfg_tool = rag.configure_search()
+        await cfg_tool.model.call(min_score=999.0)
+        search_tool = rag.search()
+        result = await search_tool.model.call(query="python")
+        assert "No relevant results" in result
+
+    @pytest.mark.asyncio
+    async def test_search_top_k_arg_overrides_default(self) -> None:
+        rag = RAGToolkit()
+        for i in range(5):
+            rag.index(f"Entry {i} with unique words like zeta{i}.", title=f"E{i}", doc_id=f"e{i}")
+        cfg_tool = rag.configure_search()
+        await cfg_tool.model.call(top_k=1)
+        search_tool = rag.search()
+        # Explicit top_k=3 overrides the configured default of 1
+        result = await search_tool.model.call(query="entry words unique", top_k=3)
+        assert result.count("doc_id=") == 3

@@ -4,8 +4,8 @@
 
 """RAGToolkit — retrieval-augmented generation tools for AG2 Beta agents.
 
-Gives an agent four tools: ``index_document``, ``search``, ``remove_document``,
-and ``list_documents``.
+Gives an agent five tools: ``index_document``, ``search``, ``remove_document``,
+``list_documents``, and ``configure_search``.
 
 Documents are automatically split into overlapping chunks.  By default the
 toolkit uses TF-IDF keyword scoring (pure stdlib — no extra dependencies).
@@ -130,6 +130,8 @@ class _Store:
 
 _DEFAULT_CHUNK_SIZE = 500
 _DEFAULT_OVERLAP = 50
+_DEFAULT_TOP_K = 5
+_DEFAULT_MIN_SCORE = 0.0
 _PARA_RE = re.compile(r"\n\s*\n")
 
 
@@ -226,8 +228,8 @@ def _cosine(a: list[float], b: list[float]) -> float:
 class RAGToolkit(Toolkit):
     """Retrieval-Augmented Generation toolkit.
 
-    Gives an agent four tools: ``index_document``, ``search``,
-    ``remove_document``, and ``list_documents``.
+    Gives an agent five tools: ``index_document``, ``search``,
+    ``remove_document``, ``list_documents``, and ``configure_search``.
 
     Documents are automatically split into overlapping chunks.  By default
     TF-IDF keyword search is used (no external dependencies).  Pass *embed_fn*
@@ -240,11 +242,17 @@ class RAGToolkit(Toolkit):
         chunk_size: Maximum number of characters per chunk (default 500).
         overlap: Character overlap between consecutive hard-split chunks
             (default 50).
+        default_top_k: Default maximum results returned by ``search`` when the
+            caller omits *top_k* (default 5).  The model can update this at
+            runtime via the ``configure_search`` tool.
+        default_min_score: Minimum relevance score for results (default 0.0,
+            meaning no filtering).  The model can update this via
+            ``configure_search``.
         middleware: Optional sequence of ``ToolMiddleware`` applied to every
             tool in the toolkit.
     """
 
-    __slots__ = ("_store", "_embed_fn", "_chunk_size", "_overlap")
+    __slots__ = ("_store", "_embed_fn", "_chunk_size", "_overlap", "_default_top_k", "_default_min_score")
 
     def __init__(
         self,
@@ -252,18 +260,23 @@ class RAGToolkit(Toolkit):
         embed_fn: EmbedFn | None = None,
         chunk_size: int = _DEFAULT_CHUNK_SIZE,
         overlap: int = _DEFAULT_OVERLAP,
+        default_top_k: int = _DEFAULT_TOP_K,
+        default_min_score: float = _DEFAULT_MIN_SCORE,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self._store = _Store()
         self._embed_fn = embed_fn
         self._chunk_size = chunk_size
         self._overlap = overlap
+        self._default_top_k = default_top_k
+        self._default_min_score = default_min_score
 
         super().__init__(
             self.index_document(),
             self.search(),
             self.remove_document(),
             self.list_documents(),
+            self.configure_search(),
             name="rag_toolkit",
             middleware=middleware,
         )
@@ -339,18 +352,28 @@ class RAGToolkit(Toolkit):
         name: str = "search",
         description: str = (
             "Search the indexed documents for chunks relevant to the query. "
-            "Returns the top matching passages with their source document IDs and titles."
+            "Returns the top matching passages with their source document IDs and titles. "
+            "Uses the configured defaults for top_k and min_score when those parameters are omitted."
         ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         @tool(name=name, description=description, middleware=middleware)
         def _search(
             query: Annotated[str, Field(description="Natural-language query to search for.")],
-            top_k: Annotated[int, Field(description="Maximum number of results (1–20).", ge=1, le=20)] = 5,
+            top_k: Annotated[
+                int | None,
+                Field(
+                    description="Maximum number of results (1–20). Uses the configured default when omitted.",
+                    ge=1,
+                    le=20,
+                ),
+            ] = None,
         ) -> str:
             chunks = self._store.all_chunks()
             if not chunks:
                 return "No documents indexed yet."
+
+            effective_top_k = top_k if top_k is not None else self._default_top_k
 
             if self._embed_fn is not None:
                 q_emb = self._embed_fn([query])[0]
@@ -360,9 +383,9 @@ class RAGToolkit(Toolkit):
                 scored = [(c, _tfidf_score(tokens, c)) for c in chunks]
 
             scored.sort(key=lambda x: x[1], reverse=True)
-            top = scored[:top_k]
+            top = [(c, s) for c, s in scored[:effective_top_k] if s >= self._default_min_score]
 
-            if not top or top[0][1] == 0.0:
+            if not top:
                 return "No relevant results found."
 
             parts: list[str] = []
@@ -392,6 +415,47 @@ class RAGToolkit(Toolkit):
             return f"Removed document {doc_id!r}."
 
         return _remove_document
+
+    def configure_search(
+        self,
+        *,
+        name: str = "configure_search",
+        description: str = (
+            "Persist search defaults for this RAG session. "
+            "top_k sets how many results search() returns by default; "
+            "min_score filters out results whose relevance score is below the threshold "
+            "(0.0 means no filtering). "
+            "Omit a parameter to leave its current value unchanged. "
+            "Returns a summary of the active configuration."
+        ),
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool:
+        @tool(name=name, description=description, middleware=middleware)
+        def _configure_search(
+            top_k: Annotated[
+                int | None,
+                Field(
+                    description="Default number of results returned by search() (1–20). Omit to keep current value.",
+                    ge=1,
+                    le=20,
+                ),
+            ] = None,
+            min_score: Annotated[
+                float | None,
+                Field(
+                    description="Minimum relevance score threshold (0.0–1.0). Results below this are excluded. Omit to keep current value.",
+                    ge=0.0,
+                    le=1.0,
+                ),
+            ] = None,
+        ) -> str:
+            if top_k is not None:
+                self._default_top_k = top_k
+            if min_score is not None:
+                self._default_min_score = min_score
+            return f"Search configured — top_k: {self._default_top_k}, min_score: {self._default_min_score:.3f}"
+
+        return _configure_search
 
     def list_documents(
         self,

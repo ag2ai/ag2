@@ -693,4 +693,27 @@ rag = RAGToolkit(chunk_size=1000, overlap=100)
 ```
 
 The default is `chunk_size=500` characters with `overlap=50`. Documents split on paragraph boundaries first; hard character-limit splits only apply when a single paragraph exceeds `chunk_size`.
+
+### Configurable search parameters
+
+The agent can call `configure_search` at any point to persist search defaults for subsequent `search` calls:
+
+```python linenums="1"
+from autogen.beta.tools import RAGToolkit
+
+# Set construction-time defaults
+rag = RAGToolkit(default_top_k=10, default_min_score=0.05)
 ```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `default_top_k` | `5` | Maximum results returned by `search` when `top_k` is not supplied |
+| `default_min_score` | `0.0` | Minimum relevance score; results below this threshold are excluded |
+
+The model can also update these at runtime by calling the `configure_search` tool:
+
+```
+configure_search(top_k=3, min_score=0.1)
+```
+
+An explicit `top_k` passed directly to a `search` call overrides the configured default for that call only.
