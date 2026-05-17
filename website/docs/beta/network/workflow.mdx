@@ -166,6 +166,27 @@ async def transfer_to_eng(reason: str = "") -> Handoff:
 
 The workflow adapter consumes the `#!python Handoff` from the agent's local-stream `#!python ToolResultEvent` at round-end and routes the next speaker — no separate `#!python ToolCalled` evaluation is needed because the typed return supersedes the graph match. The matching `#!python ToolCalled` rule in the graph remains useful as documentation and as a fallback if you ever want to re-route the same tool name to a different target.
 
+### Ending a workflow with `Finish`
+
+A tool can also end the channel cleanly by returning a typed `#!python Finish(summary="...", reason="...")`. The framework reads it from the agent's `#!python ToolResultEvent` and closes the channel — same effect as a `#!python TerminateTarget` rule firing, but the decision is made by the tool at runtime rather than by a static graph transition:
+
+```python linenums="1" hl_lines="1 2 3"
+@coord.tool
+async def finish(summary: str) -> Finish:
+    """Wrap up — no further handoffs needed."""
+    return Finish(summary=summary)
+```
+
+`#!python reason` (default `#!python "finished"`) lands on `#!python ChannelMetadata.close_reason`; `#!python summary` rides on the packet's `#!python routing.summary` field for callers and observability. With `#!python Finish`, you no longer need a `#!python Rule(when=ToolCalled("finish"), then=TerminateTarget())` glue rule — the typed return is enough.
+
+!!! tip "Handoff vs Finish — which to use?"
+    Both are typed returns the framework reads from `#!python ToolResultEvent`. They're mutually exclusive intents:
+
+    - `#!python Handoff(target="alice", reason="...")` — redirect: the channel continues; `alice` speaks next.
+    - `#!python Finish(summary="...", reason="...")` — terminate: the channel closes; no further turns.
+
+    First emission wins. If a tool emits both in the same round (unusual), the first event in stream order takes precedence.
+
 ## Context-Driven Transitions
 
 Most non-trivial group-chat orchestrations in classic AG2 routed on context variables — `#!python OnContextCondition`, `#!python StringContextCondition`, `#!python ExpressionContextCondition`. The beta equivalent is a tool that emits `#!python EV_CONTEXT_SET` and a transition whose `#!python when` is `#!python ContextEquals(key, value)`. The mutation primitive lives on the [Context Variables](/docs/beta/network/context_variables) page; this section is about *using* context to decide who speaks next.
