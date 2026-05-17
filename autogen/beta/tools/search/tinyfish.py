@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+import os
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 from urllib.parse import urlparse
@@ -18,11 +20,26 @@ from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 
 FetchFormat: TypeAlias = Literal["markdown", "html", "json"]
+_API_INTEGRATION = "ag2"
+_API_INTEGRATION_ENV_VAR = "TF_API_INTEGRATION"
 _SAFE_URL_SCHEMES = {"http", "https"}
 
 
 def _safe_url(url: str) -> bool:
     return urlparse(url).scheme.lower() in _SAFE_URL_SCHEMES
+
+
+@contextmanager
+def _tinyfish_api_integration() -> Iterator[None]:
+    previous = os.environ.get(_API_INTEGRATION_ENV_VAR)
+    os.environ[_API_INTEGRATION_ENV_VAR] = _API_INTEGRATION
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(_API_INTEGRATION_ENV_VAR, None)
+        else:
+            os.environ[_API_INTEGRATION_ENV_VAR] = previous
 
 
 @dataclass(slots=True)
@@ -203,7 +220,8 @@ class TinyFishSearchToolkit(Toolkit):
 
             client = AsyncTinyFish(**client_kwargs)
             try:
-                raw = await client.fetch.get_contents(urls=urls, **kwargs)
+                with _tinyfish_api_integration():
+                    raw = await client.fetch.get_contents(urls=urls, **kwargs)
             finally:
                 await client.close()
 

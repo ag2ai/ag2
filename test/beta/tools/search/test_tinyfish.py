@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import os
 from types import SimpleNamespace
 from typing import Any
 
@@ -18,6 +19,7 @@ from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, To
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools.search import tinyfish as tinyfish_module
 from autogen.beta.tools.search.tinyfish import (
+    _API_INTEGRATION_ENV_VAR,
     TinyFishFetchError,
     TinyFishFetchResponse,
     TinyFishFetchResult,
@@ -71,7 +73,10 @@ SAMPLE_FETCH_RAW: dict[str, Any] = {
 
 
 class FakeAsyncFetchResource:
+    integration_value: str | None = None
+
     async def get_contents(self, *, urls: list[str], **kwargs: Any) -> Any:
+        self.integration_value = os.environ.get(_API_INTEGRATION_ENV_VAR)
         return SimpleNamespace(
             results=[
                 SimpleNamespace(
@@ -93,8 +98,11 @@ class FakeAsyncFetchResource:
 
 
 class FakeAsyncTinyFish:
+    last_instance: "FakeAsyncTinyFish | None" = None
+
     def __init__(self, **kwargs: Any) -> None:
         self.fetch = FakeAsyncFetchResource()
+        FakeAsyncTinyFish.last_instance = self
 
     async def close(self) -> None:
         pass
@@ -262,7 +270,7 @@ class TestFetchExecution:
         await agent.ask("fetch")
 
         body = json.loads(route.calls.last.request.content)
-        assert body == {"urls": ["https://ag2.ai", "https://bad.example"]}
+        assert body == {"urls": ["https://ag2.ai", "https://bad.example"], "api_integration": "ag2"}
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         assert tool_results_event.results[0].result.parts[0] == DataInput(
@@ -287,6 +295,7 @@ class TestFetchExecution:
         )
 
     async def test_null_links_return_empty_lists(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv(_API_INTEGRATION_ENV_VAR, raising=False)
         monkeypatch.setattr(tinyfish_module, "AsyncTinyFish", FakeAsyncTinyFish)
         toolkit = TinyFishSearchToolkit(api_key="test")
 
@@ -299,6 +308,25 @@ class TestFetchExecution:
 
         assert result.links == []
         assert result.image_links == []
+        assert FakeAsyncTinyFish.last_instance is not None
+        assert FakeAsyncTinyFish.last_instance.fetch.integration_value == "ag2"
+        assert os.environ.get(_API_INTEGRATION_ENV_VAR) is None
+
+    async def test_fetch_restores_existing_api_integration_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(_API_INTEGRATION_ENV_VAR, "existing")
+        monkeypatch.setattr(tinyfish_module, "AsyncTinyFish", FakeAsyncTinyFish)
+        toolkit = TinyFishSearchToolkit(api_key="test")
+
+        agent = Agent(
+            "a",
+            config=_tool_call_config({"urls": ["https://ag2.ai"]}, tool_name="tinyfish_fetch"),
+            tools=[toolkit],
+        )
+        await agent.ask("fetch")
+
+        assert FakeAsyncTinyFish.last_instance is not None
+        assert FakeAsyncTinyFish.last_instance.fetch.integration_value == "ag2"
+        assert os.environ[_API_INTEGRATION_ENV_VAR] == "existing"
 
     @respx.mock
     async def test_fetch_rejects_unsafe_url_scheme_before_client_call(self) -> None:
@@ -337,6 +365,7 @@ class TestFetchExecution:
             "format": "html",
             "links": True,
             "image_links": True,
+            "api_integration": "ag2",
         }
 
     @respx.mock
@@ -356,6 +385,7 @@ class TestFetchExecution:
             "urls": ["https://ag2.ai"],
             "format": "markdown",
             "links": True,
+            "api_integration": "ag2",
         }
 
 
@@ -397,7 +427,12 @@ class TestTinyFishToolkitVariable:
         await agent.ask("fetch")
 
         body = json.loads(route.calls.last.request.content)
-        assert body == {"urls": ["https://ag2.ai"], "format": "markdown", "links": True}
+        assert body == {
+            "urls": ["https://ag2.ai"],
+            "format": "markdown",
+            "links": True,
+            "api_integration": "ag2",
+        }
 
     @respx.mock
     async def test_missing_raises(self) -> None:

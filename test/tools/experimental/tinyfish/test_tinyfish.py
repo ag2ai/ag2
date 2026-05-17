@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -128,7 +129,10 @@ class TestTinyFishExecutionHelpers:
     """Test TinyFish SDK response mapping helpers."""
 
     @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
-    def test_execute_scrape_returns_dict_result_and_closes_client(self, mock_tinyfish: Mock) -> None:
+    def test_execute_scrape_returns_dict_result_and_closes_client(
+        self, mock_tinyfish: Mock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv(tinyfish_tool._API_INTEGRATION_ENV_VAR, raising=False)
         response = Mock(status="COMPLETED", result={"company_name": "Acme"}, error=None)
         client = Mock()
         client.agent.run.return_value = response
@@ -141,8 +145,32 @@ class TestTinyFishExecutionHelpers:
         )
 
         assert result == {"company_name": "Acme"}
+        assert os.environ.get(tinyfish_tool._API_INTEGRATION_ENV_VAR) is None
         client.agent.run.assert_called_once_with(url="https://example.com", goal="Extract company info")
         client.close.assert_called_once_with()
+
+    @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
+    def test_execute_scrape_sets_api_integration_and_restores_existing_env_var(
+        self, mock_tinyfish: Mock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(tinyfish_tool._API_INTEGRATION_ENV_VAR, "existing")
+        client = Mock()
+
+        def run(**kwargs: Any) -> Mock:
+            assert os.environ[tinyfish_tool._API_INTEGRATION_ENV_VAR] == "ag2"
+            return Mock(status="COMPLETED", result={"ok": True}, error=None)
+
+        client.agent.run.side_effect = run
+        mock_tinyfish.return_value = client
+
+        result = tinyfish_tool._execute_tinyfish_scrape(
+            url="https://example.com",
+            goal="Extract data",
+            tinyfish_api_key="test_key",
+        )
+
+        assert result == {"ok": True}
+        assert os.environ[tinyfish_tool._API_INTEGRATION_ENV_VAR] == "existing"
 
     @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
     def test_execute_scrape_wraps_non_dict_result(self, mock_tinyfish: Mock) -> None:
@@ -227,7 +255,10 @@ class TestTinyFishExecutionHelpers:
         client.close.assert_called_once_with()
 
     @patch("autogen.tools.experimental.tinyfish.tinyfish_tool.TinyFish")
-    def test_execute_fetch_maps_results_errors_and_closes_client(self, mock_tinyfish: Mock) -> None:
+    def test_execute_fetch_maps_results_errors_and_closes_client(
+        self, mock_tinyfish: Mock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv(tinyfish_tool._API_INTEGRATION_ENV_VAR, raising=False)
         fetch_result = Mock(
             url="https://ag2.ai",
             final_url="https://ag2.ai/",
@@ -244,7 +275,12 @@ class TestTinyFishExecutionHelpers:
         fetch_error = Mock(url="https://bad.example", error="target_unreachable")
         response = Mock(results=[fetch_result], errors=[fetch_error])
         client = Mock()
-        client.fetch.get_contents.return_value = response
+
+        def get_contents(**kwargs: Any) -> Mock:
+            assert os.environ[tinyfish_tool._API_INTEGRATION_ENV_VAR] == "ag2"
+            return response
+
+        client.fetch.get_contents.side_effect = get_contents
         mock_tinyfish.return_value = client
 
         result = tinyfish_tool._execute_tinyfish_fetch(
@@ -279,6 +315,7 @@ class TestTinyFishExecutionHelpers:
             links=True,
             image_links=False,
         )
+        assert os.environ.get(tinyfish_tool._API_INTEGRATION_ENV_VAR) is None
         client.close.assert_called_once_with()
 
 

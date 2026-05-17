@@ -4,6 +4,8 @@
 
 import logging
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Annotated, Any
 from urllib.parse import urlparse
 
@@ -14,6 +16,8 @@ from ... import Depends, Tool
 from ...dependency_injection import on
 
 logger = logging.getLogger(__name__)
+_API_INTEGRATION = "ag2"
+_API_INTEGRATION_ENV_VAR = "TF_API_INTEGRATION"
 _SAFE_URL_SCHEMES = {"http", "https"}
 
 with optional_import_block():
@@ -22,6 +26,19 @@ with optional_import_block():
 
 def _safe_url(url: str) -> bool:
     return urlparse(url).scheme.lower() in _SAFE_URL_SCHEMES
+
+
+@contextmanager
+def _tinyfish_api_integration() -> Iterator[None]:
+    previous = os.environ.get(_API_INTEGRATION_ENV_VAR)
+    os.environ[_API_INTEGRATION_ENV_VAR] = _API_INTEGRATION
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(_API_INTEGRATION_ENV_VAR, None)
+        else:
+            os.environ[_API_INTEGRATION_ENV_VAR] = previous
 
 
 @require_optional_import(
@@ -47,7 +64,8 @@ def _execute_tinyfish_scrape(
     """
     client = TinyFish(api_key=tinyfish_api_key)
     try:
-        response = client.agent.run(url=url, goal=goal)
+        with _tinyfish_api_integration():
+            response = client.agent.run(url=url, goal=goal)
     finally:
         client.close()
 
@@ -133,7 +151,8 @@ def _execute_tinyfish_fetch(
     """
     client = TinyFish(api_key=tinyfish_api_key)
     try:
-        response = client.fetch.get_contents(urls=urls, format=format, links=links, image_links=image_links)
+        with _tinyfish_api_integration():
+            response = client.fetch.get_contents(urls=urls, format=format, links=links, image_links=image_links)
     finally:
         client.close()
 
