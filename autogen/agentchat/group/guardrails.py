@@ -45,6 +45,13 @@ class Guardrail(ABC):
         pass
 
 
+class _LLMGuardrailResponse(BaseModel):
+    """Internal response schema sent to the LLM — excludes the non-serialisable `guardrail` ref."""
+
+    activated: bool
+    justification: str = Field(default="No justification provided")
+
+
 class LLMGuardrail(Guardrail):
     """Guardrail that uses an LLM to check the context."""
 
@@ -62,7 +69,7 @@ class LLMGuardrail(Guardrail):
             raise ValueError("LLMConfig is required.")
 
         self.llm_config = llm_config.deepcopy()
-        setattr(self.llm_config, "response_format", GuardrailResult)
+        setattr(self.llm_config, "response_format", _LLMGuardrailResponse)
         self.client = OpenAIWrapper(**self.llm_config.model_dump())
 
         self.check_prompt = f"""You are a guardrail that checks if a condition is met in the conversation you are given.
@@ -94,7 +101,8 @@ You will activate the guardrail only if the condition is met.
             raise ValueError("Context must be a string or a list of messages.")
         # Call the LLM with the check messages
         response = self.client.create(messages=check_messages)
-        return GuardrailResult.parse(response.choices[0].message.content, guardrail=self)  # type: ignore
+        llm_result = _LLMGuardrailResponse.model_validate_json(response.choices[0].message.content)  # type: ignore[arg-type]
+        return GuardrailResult(activated=llm_result.activated, justification=llm_result.justification, guardrail=self)
 
 
 class RegexGuardrail(Guardrail):

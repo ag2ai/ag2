@@ -219,8 +219,37 @@ class TestLLMGuardrail:
                 name="test_llm_guardrail", condition="test condition", target=mock_target, llm_config=mock_llm_config
             )
 
-            # Verify that response_format was set to GuardrailResult
             mock_llm_config.deepcopy.assert_called_once()
+
+    def test_check_tolerates_guardrail_key_in_llm_response(
+        self, mock_target: TransitionTarget, mock_llm_config: MagicMock
+    ) -> None:
+        """LLM response that includes a 'guardrail' key must not raise TypeError.
+
+        Some LLMs echo back every field in the response_format schema (including
+        non-serialisable ones like 'guardrail') as null.  Previously this caused
+        `TypeError: got multiple values for argument 'guardrail'` in parse().
+        """
+        with patch("autogen.agentchat.group.guardrails.OpenAIWrapper") as mock_openai:
+            mock_wrapper = MagicMock()
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            # LLM includes 'guardrail' key — must be silently ignored
+            mock_response.choices[
+                0
+            ].message.content = '{"activated": true, "justification": "Triggered", "guardrail": null}'
+            mock_wrapper.create.return_value = mock_response
+            mock_openai.return_value = mock_wrapper
+
+            guardrail = LLMGuardrail(
+                name="test_llm_guardrail", condition="test condition", target=mock_target, llm_config=mock_llm_config
+            )
+
+            result = guardrail.check("Some context")
+
+            assert result.activated is True
+            assert result.justification == "Triggered"
+            assert result.guardrail is guardrail
 
 
 class TestRegexGuardrail:
