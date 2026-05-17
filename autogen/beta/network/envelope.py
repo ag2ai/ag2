@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 __all__ = (
+    "EV_AUDIO",
     "EV_CHANNEL_CLOSED",
     "EV_CHANNEL_EXPIRED",
     "EV_CHANNEL_INVITE",
@@ -24,8 +25,10 @@ __all__ = (
     "EV_CHANNEL_OPENED",
     "EV_CONTEXT_SET",
     "EV_EXPECTATION_VIOLATED",
+    "EV_IMAGE",
     "EV_PACKET",
     "EV_TEXT",
+    "EV_VIDEO",
     "Envelope",
     "Priority",
     "visible_to",
@@ -41,6 +44,9 @@ Priority = Literal["background", "normal", "urgent"]
 # special-cases the names below.
 
 EV_TEXT = "ag2.msg.text"
+EV_IMAGE = "ag2.msg.image"
+EV_AUDIO = "ag2.msg.audio"
+EV_VIDEO = "ag2.msg.video"
 
 # For the WorkflowAdapter, this is one agent's full ``Agent.ask`` round,
 # captured atomically. The ``event_data`` shape:

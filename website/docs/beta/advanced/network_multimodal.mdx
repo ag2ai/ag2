@@ -1,0 +1,141 @@
+---
+title: Network Multimodal Messages
+sidebarTitle: Network Multimodal
+---
+
+The AG2 Beta network layer supports sending **images, audio, and video** through any channel, alongside ordinary text messages. A dedicated envelope type carries each media kind, and the built-in adapter helpers handle encoding, decoding, and LLM-visible rendering automatically.
+
+## Overview
+
+Every message exchanged between networked agents travels inside an [`Envelope`](/docs/beta/network/concepts). Three new event types extend the existing `EV_TEXT` type:
+
+| Constant | Value | Media kind |
+|----------|-------|-----------|
+| `EV_IMAGE` | `"ag2.msg.image"` | Still images |
+| `EV_AUDIO` | `"ag2.msg.audio"` | Audio clips |
+| `EV_VIDEO` | `"ag2.msg.video"` | Video clips |
+
+Each event type supports three **source variants**:
+
+| Variant | When to use |
+|---------|------------|
+| URL | Publicly accessible media (CDN, object storage) |
+| File ID | Pre-uploaded files (e.g., OpenAI file store) |
+| Binary | Raw bytes embedded in the envelope (base64-encoded) |
+
+## Sending multimodal messages
+
+Use the builder helpers to construct correctly-shaped envelopes:
+
+```python
+from autogen.beta.network import (
+    default_build_image_envelope,
+    default_build_audio_envelope,
+    default_build_video_envelope,
+)
+
+# Image from a URL
+image_env = default_build_image_envelope(
+    channel_id=channel.channel_id,
+    sender_id=client.agent_id,
+    url="https://example.com/diagram.png",
+)
+
+# Audio from raw bytes
+audio_env = default_build_audio_envelope(
+    channel_id=channel.channel_id,
+    sender_id=client.agent_id,
+    data=wav_bytes,
+    media_type="audio/wav",
+)
+
+# Video via a pre-uploaded file ID
+video_env = default_build_video_envelope(
+    channel_id=channel.channel_id,
+    sender_id=client.agent_id,
+    file_id="file-abc123",
+    filename="presentation.mp4",
+)
+
+await client.send_envelope(image_env)
+```
+
+Each helper accepts:
+- **`url`** — a string URL (mutually exclusive with `file_id` / `data`)
+- **`file_id`** + optional **`filename`** — a pre-uploaded file reference
+- **`data`** (bytes) + **`media_type`** (MIME string) — raw binary content
+
+`audience` and `causation_id` are also accepted for targeted or threaded sends.
+
+## Receiving multimodal messages
+
+The existing `default_extract_turn_input` adapter hook now handles all four message types. When an agent's turn is triggered by a multimodal envelope, the decoded value passed to `agent.ask` is one of the `Input` types from `autogen.beta.events`:
+
+| Envelope variant | Returned type |
+|-----------------|--------------|
+| URL | `UrlInput(url, kind=BinaryType.IMAGE \| AUDIO \| VIDEO)` |
+| File ID | `FileIdInput(file_id, filename=...)` |
+| Binary | `BinaryInput(data, media_type=..., kind=...)` |
+| Text (`EV_TEXT`) | `str` (unchanged) |
+
+Adapters that call `default_extract_turn_input` — Consulting, Conversation, Discussion, and Workflow — all inherit multimodal support automatically with no changes.
+
+## LLM-visible rendering
+
+When a view policy projects WAL history into an agent's context, `default_render_envelope` converts multimodal envelopes into human-readable placeholders:
+
+| Variant | Example rendering |
+|---------|------------------|
+| URL | `[image: https://example.com/diagram.png]` |
+| File ID | `[image: file=diagram.png]` |
+| Binary | `[image: image/png]` |
+| Audio URL | `[audio: https://example.com/clip.mp3]` |
+| Video binary | `[video: video/mp4]` |
+
+This keeps conversation history readable for models that don't support the raw binary modality, while preserving the semantic signal that a media artifact was exchanged.
+
+## Custom adapters
+
+If you implement a custom `ChannelAdapter`, delegate to the defaults from your `extract_turn_input` and `render_envelope` methods:
+
+```python
+from autogen.beta.network.adapters.base import (
+    default_extract_turn_input,
+    default_render_envelope,
+)
+
+class MyAdapter:
+    def extract_turn_input(self, envelope):
+        # Handle custom event types first, then fall through
+        if envelope.event_type == "my.custom.event":
+            return envelope.event_data.get("body", "")
+        return default_extract_turn_input(envelope)
+
+    def render_envelope(self, envelope):
+        if envelope.event_type == "my.custom.event":
+            return f"[custom: {envelope.event_data.get('body', '')}]"
+        return default_render_envelope(envelope)
+```
+
+## Import paths
+
+```python
+# Event type constants
+from autogen.beta.network import EV_IMAGE, EV_AUDIO, EV_VIDEO
+
+# Builder helpers
+from autogen.beta.network import (
+    default_build_image_envelope,
+    default_build_audio_envelope,
+    default_build_video_envelope,
+)
+
+# Or directly from the adapter base module
+from autogen.beta.network.adapters.base import (
+    default_build_image_envelope,
+    default_build_audio_envelope,
+    default_build_video_envelope,
+    default_extract_turn_input,
+    default_render_envelope,
+)
+```

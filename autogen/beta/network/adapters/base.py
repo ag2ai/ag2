@@ -29,13 +29,14 @@ Three layers of surface per adapter:
   workflow, where handoff tools are user-authored) return ``[]``.
 """
 
+import base64
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from autogen.beta.events import Input
 
 from ..channel import ChannelManifest, ChannelMetadata, ChannelState
-from ..envelope import EV_PACKET, EV_TEXT, Envelope
+from ..envelope import EV_AUDIO, EV_IMAGE, EV_PACKET, EV_TEXT, EV_VIDEO, Envelope
 from ..handoff import Handoff
 from ..views.base import ViewPolicy
 
@@ -51,9 +52,12 @@ __all__ = (
     "AdapterResult",
     "AdapterState",
     "ChannelAdapter",
+    "default_build_audio_envelope",
+    "default_build_image_envelope",
     "default_build_packet_envelope",
     "default_build_round_envelope",
     "default_build_text_envelope",
+    "default_build_video_envelope",
     "default_extract_turn_input",
     "default_render_envelope",
     "default_tools_for",
@@ -253,15 +257,37 @@ class ChannelAdapter(Protocol):
         ...
 
 
-def default_extract_turn_input(envelope: Envelope) -> str | None:
-    """Default ``extract_turn_input``: decode ``EV_TEXT`` only.
+def default_extract_turn_input(envelope: Envelope) -> "str | Input | None":
+    """Default ``extract_turn_input``: decode text and multimodal envelopes.
 
+    Handles ``EV_TEXT``, ``EV_IMAGE``, ``EV_AUDIO``, and ``EV_VIDEO``.
     Adapters that don't handle additional substantive event types
     delegate to this helper from their ``extract_turn_input``.
     """
+    from autogen.beta.events.input_events import BinaryInput, BinaryType, FileIdInput, UrlInput
+
     if envelope.event_type == EV_TEXT:
         text = envelope.event_data.get("text", "")
         return text if isinstance(text, str) else None
+
+    if envelope.event_type in (EV_IMAGE, EV_AUDIO, EV_VIDEO):
+        kind_map = {EV_IMAGE: BinaryType.IMAGE, EV_AUDIO: BinaryType.AUDIO, EV_VIDEO: BinaryType.VIDEO}
+        btype = kind_map[envelope.event_type]
+        data = envelope.event_data
+        variant = data.get("kind", "url")
+        if variant == "url":
+            url = data.get("url", "")
+            return UrlInput(url, kind=btype) if isinstance(url, str) and url else None
+        if variant == "file_id":
+            fid = data.get("file_id", "")
+            return FileIdInput(fid, filename=data.get("filename")) if isinstance(fid, str) and fid else None
+        if variant == "binary":
+            raw = data.get("data", "")
+            media_type = data.get("media_type", "")
+            if isinstance(raw, str) and raw and isinstance(media_type, str) and media_type:
+                return BinaryInput(base64.b64decode(raw), media_type=media_type, kind=btype)
+        return None
+
     return None
 
 
@@ -292,16 +318,34 @@ def default_build_round_envelope(
 
 
 def default_render_envelope(envelope: Envelope) -> str | None:
-    """Default ``render_envelope``: project ``EV_TEXT`` only.
+    """Default ``render_envelope``: project text and multimodal envelopes.
 
-    Returns the envelope's text payload, or ``None`` for any other
-    event type (so the view skips it). Adapters that emit additional
-    substantive event types override ``render_envelope`` and fall
-    through to this helper for ``EV_TEXT``.
+    Returns the envelope's text payload for ``EV_TEXT``, a descriptive
+    placeholder for ``EV_IMAGE`` / ``EV_AUDIO`` / ``EV_VIDEO``, or
+    ``None`` for other event types (which the view skips). Adapters that
+    emit additional substantive event types override ``render_envelope``
+    and fall through to this helper for the universal cases.
     """
     if envelope.event_type == EV_TEXT:
         text = envelope.event_data.get("text", "")
         return text if isinstance(text, str) else None
+
+    if envelope.event_type in (EV_IMAGE, EV_AUDIO, EV_VIDEO):
+        label = {EV_IMAGE: "image", EV_AUDIO: "audio", EV_VIDEO: "video"}[envelope.event_type]
+        data = envelope.event_data
+        variant = data.get("kind", "url")
+        if variant == "url":
+            url = data.get("url", "")
+            return f"[{label}: {url}]" if url else f"[{label}]"
+        if variant == "file_id":
+            fid = data.get("file_id", "")
+            name = data.get("filename") or fid
+            return f"[{label}: file={name}]"
+        if variant == "binary":
+            media_type = data.get("media_type", label)
+            return f"[{label}: {media_type}]"
+        return f"[{label}]"
+
     return None
 
 
@@ -337,6 +381,112 @@ def default_build_text_envelope(
         event_data={"text": text},
         causation_id=causation_id,
     )
+
+
+def default_build_image_envelope(
+    channel_id: str,
+    sender_id: str,
+    *,
+    url: str | None = None,
+    file_id: str | None = None,
+    filename: str | None = None,
+    data: bytes | None = None,
+    media_type: str | None = None,
+    audience: list[str] | None = None,
+    causation_id: str | None = None,
+) -> Envelope:
+    """Construct an ``EV_IMAGE`` envelope.
+
+    Accepts the same source variants as :func:`~autogen.beta.events.ImageInput`:
+    a URL, a pre-uploaded file ID, or raw bytes with a media type.
+
+    Binary ``data`` is base64-encoded for JSON transport.
+    """
+    event_data = _build_media_event_data(url=url, file_id=file_id, filename=filename, data=data, media_type=media_type)
+    return Envelope(
+        channel_id=channel_id,
+        sender_id=sender_id,
+        audience=audience,
+        event_type=EV_IMAGE,
+        event_data=event_data,
+        causation_id=causation_id,
+    )
+
+
+def default_build_audio_envelope(
+    channel_id: str,
+    sender_id: str,
+    *,
+    url: str | None = None,
+    file_id: str | None = None,
+    filename: str | None = None,
+    data: bytes | None = None,
+    media_type: str | None = None,
+    audience: list[str] | None = None,
+    causation_id: str | None = None,
+) -> Envelope:
+    """Construct an ``EV_AUDIO`` envelope.
+
+    Binary ``data`` is base64-encoded for JSON transport.
+    """
+    event_data = _build_media_event_data(url=url, file_id=file_id, filename=filename, data=data, media_type=media_type)
+    return Envelope(
+        channel_id=channel_id,
+        sender_id=sender_id,
+        audience=audience,
+        event_type=EV_AUDIO,
+        event_data=event_data,
+        causation_id=causation_id,
+    )
+
+
+def default_build_video_envelope(
+    channel_id: str,
+    sender_id: str,
+    *,
+    url: str | None = None,
+    file_id: str | None = None,
+    filename: str | None = None,
+    data: bytes | None = None,
+    media_type: str | None = None,
+    audience: list[str] | None = None,
+    causation_id: str | None = None,
+) -> Envelope:
+    """Construct an ``EV_VIDEO`` envelope.
+
+    Binary ``data`` is base64-encoded for JSON transport.
+    """
+    event_data = _build_media_event_data(url=url, file_id=file_id, filename=filename, data=data, media_type=media_type)
+    return Envelope(
+        channel_id=channel_id,
+        sender_id=sender_id,
+        audience=audience,
+        event_type=EV_VIDEO,
+        event_data=event_data,
+        causation_id=causation_id,
+    )
+
+
+def _build_media_event_data(
+    *,
+    url: str | None,
+    file_id: str | None,
+    filename: str | None,
+    data: bytes | None,
+    media_type: str | None,
+) -> dict:
+    if url is not None:
+        return {"kind": "url", "url": url}
+    if file_id is not None:
+        d: dict = {"kind": "file_id", "file_id": file_id}
+        if filename is not None:
+            d["filename"] = filename
+        return d
+    if data is not None:
+        if media_type is None:
+            raise ValueError("'media_type' is required when 'data' is provided")
+        return {"kind": "binary", "data": base64.b64encode(data).decode(), "media_type": media_type}
+    raise ValueError("One of 'url', 'file_id', or 'data' + 'media_type' must be provided")
 
 
 def default_build_packet_envelope(
