@@ -12,6 +12,9 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 import pytest
+
+pytest.importorskip("prometheus_client")
+
 from prometheus_client import CollectorRegistry
 
 from autogen.beta import Agent
