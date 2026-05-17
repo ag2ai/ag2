@@ -36,7 +36,7 @@ from ..envelope import (
 )
 from ..errors import ProtocolError
 from ..views.base import ViewPolicy
-from ..views.builtin import WindowedSummary
+from ..views.builtin import NamedWindowedSummary
 from .base import (
     AdapterResult,
     default_build_packet_envelope,
@@ -107,8 +107,12 @@ class DiscussionAdapter:
     Knobs: ``{"ordering": "round_robin"}`` (default). Unsupported
     orderings are rejected at create time.
 
-    Default view: :class:`WindowedSummary(recent_n=N*2)` where N =
-    participant count — keeps prompt size bounded at any turn count.
+    Default view: :class:`NamedWindowedSummary(recent_n=N*2)` where
+    N = participant count — keeps prompt size bounded at any turn
+    count AND prefixes each non-self projection line with the
+    sender's name so the LLM can tell its peers apart in a 3+ party
+    chat (the assistant/user role bit alone collapses every "other"
+    into one indistinguishable stream).
     """
 
     def __init__(self) -> None:
@@ -118,7 +122,7 @@ class DiscussionAdapter:
             version=1,
             participants=ParticipantSchema(min=2),
             knobs_schema={"ordering": "str"},
-            default_view_policy=WindowedSummary.name,
+            default_view_policy=NamedWindowedSummary.name,
             expectations=[
                 Expectation(
                     name="turn_within",
@@ -203,7 +207,7 @@ class DiscussionAdapter:
         participant_id: str,
     ) -> ViewPolicy:
         recent_n = max(len(metadata.participants) * 2, 4)
-        return WindowedSummary(recent_n=recent_n)
+        return NamedWindowedSummary(recent_n=recent_n)
 
     def extract_turn_input(self, envelope):
         return default_extract_turn_input(envelope)
