@@ -8,8 +8,7 @@ from typing import Any, Literal, TypedDict
 
 import httpx
 from fast_depends.library.serializer import SerializerProto
-from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given
-from openai._types import Omit
+from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given
 from openai.types import ChatModel
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from typing_extensions import Required

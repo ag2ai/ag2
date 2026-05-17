@@ -202,6 +202,7 @@ class A2aRemoteAgent(ConversableAgent):
                 io_stream = IOStream.get_default()
 
                 reply: ResponseMessage | None = None
+                task: Task | None = None
                 # do not break stream to let HTTPX client close correctly
                 async for a2a_event in a2a_stream:
                     if isinstance(a2a_event, Message):

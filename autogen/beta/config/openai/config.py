@@ -6,8 +6,7 @@ from dataclasses import dataclass, replace
 from typing import Any, TypedDict
 
 import httpx
-from openai import DEFAULT_MAX_RETRIES, not_given, omit
-from openai._types import Omit
+from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
 from openai.types import ChatModel
 from typing_extensions import Unpack
 

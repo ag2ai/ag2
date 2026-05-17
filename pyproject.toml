@@ -93,7 +93,7 @@ ag-ui = ["ag-ui-protocol>=0.1.10,<0.2"]
 diskcache = ["diskcache"]
 
 # providers
-openai = ["openai>=1.99.3,<3.0"]
+openai = ["openai>=2.30.0,<3.0"]
 openai-realtime = ["ag2[openai]", "openai[realtime]"]
 
 deepseek = ["ag2[openai]"]

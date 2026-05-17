@@ -468,6 +468,120 @@ async def test_workflow_swarm_with_tool_handoff_and_revert() -> None:
 
 
 @pytest.mark.asyncio
+async def test_workflow_finish_routing_closes_channel() -> None:
+    """A ``Finish`` typed return surfaces on the packet as
+    ``routing.kind == "finish"``; ``fold`` then sets the next speaker
+    to ``None`` and ``on_accepted`` closes the channel using the
+    finish's ``reason`` as the close reason."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    a_hc = HubClient(link, hub=hub)
+    b_hc = HubClient(link, hub=hub)
+    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+
+    graph = TransitionGraph(
+        initial_speaker=alice.agent_id,
+        transitions=[
+            Transition(when=FromSpeaker(alice.agent_id), then=AgentTarget(bob.agent_id)),
+            Transition(when=FromSpeaker(bob.agent_id), then=AgentTarget(alice.agent_id)),
+        ],
+        default_target=TerminateTarget(reason="default"),
+        max_turns=10,
+    )
+    channel = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+
+    # Alice emits a finish-routed packet — the typed-return payload as
+    # the framework would construct it from a ``Finish`` instance.
+    finish_env = Envelope(
+        channel_id=channel.channel_id,
+        sender_id=alice.agent_id,
+        audience=None,
+        event_type=EV_PACKET,
+        event_data={
+            "routing": {
+                "kind": "finish",
+                "tool": "finish",
+                "reason": "all_done",
+                "summary": "covered the agenda",
+            },
+            "context_updates": {"set": {}, "delete": []},
+            "body": "",
+        },
+    )
+    await hub.post_envelope(finish_env)
+
+    # State should reflect termination intent: no next speaker, reason
+    # propagated from Finish.
+    state = hub._adapter_states[channel.channel_id]
+    assert state.expected_next_speaker is None
+    assert state.pending_close_reason == "all_done"
+
+    # Channel itself should be closed with the finish reason.
+    refreshed = await hub.get_channel(channel.channel_id)
+    assert refreshed.state == ChannelState.CLOSED
+    assert refreshed.close_reason == "all_done"
+
+    await a_hc.close()
+    await b_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_workflow_finish_default_reason_uses_finished() -> None:
+    """``Finish()`` with no args (or empty reason) folds to the
+    ``"finished"`` default close reason."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    a_hc = HubClient(link, hub=hub)
+    b_hc = HubClient(link, hub=hub)
+    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+
+    graph = TransitionGraph(
+        initial_speaker=alice.agent_id,
+        transitions=[Transition(when=Always(), then=AgentTarget(bob.agent_id))],
+        default_target=TerminateTarget(reason="default"),
+        max_turns=5,
+    )
+    channel = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+
+    # routing.reason missing entirely — fold should fall back to "finished".
+    finish_env = Envelope(
+        channel_id=channel.channel_id,
+        sender_id=alice.agent_id,
+        audience=None,
+        event_type=EV_PACKET,
+        event_data={
+            "routing": {"kind": "finish", "tool": "finish"},
+            "context_updates": {"set": {}, "delete": []},
+            "body": "",
+        },
+    )
+    await hub.post_envelope(finish_env)
+
+    refreshed = await hub.get_channel(channel.channel_id)
+    assert refreshed.state == ChannelState.CLOSED
+    assert refreshed.close_reason == "finished"
+
+    await a_hc.close()
+    await b_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
 async def test_workflow_manager_as_initiator_auto_pattern() -> None:
     """AutoPattern equivalent: manager is initiator + RevertToInitiator default.
 
