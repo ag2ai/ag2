@@ -90,7 +90,7 @@ class TestFetchHelper:
             result = await _fetch("https://example.com", include_links=False, include_images=False)
         assert "My Page" in result
         assert "Some content here." in result
-        assert "https://example.com" in result
+        assert "URL: https://example.com" in result
 
     @pytest.mark.asyncio
     async def test_fetch_no_title(self) -> None:
@@ -148,7 +148,7 @@ class TestFetchHelper:
         with patch.dict(sys.modules, {"crawl4ai": fake_mod}):
             result = await _fetch("https://example.com", include_links=True, include_images=False)
         assert "/about" in result
-        assert "https://other.com" in result
+        assert "- (external) https://other.com" in result
         assert "## Links" in result
 
     @pytest.mark.asyncio
@@ -188,7 +188,7 @@ class TestFetchHelper:
         with patch.dict(sys.modules, {"crawl4ai": fake_mod}):
             result = await _fetch("https://example.com", include_links=True, include_images=False)
         assert "/safe" in result
-        assert "https://other.com" in result
+        assert "- (external) https://other.com" in result
         assert "javascript:" not in result
         assert "data:" not in result
 
