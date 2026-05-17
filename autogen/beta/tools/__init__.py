@@ -24,12 +24,13 @@ from .final import Toolkit, tool
 from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchToolkit, TavilySearchTool
 from .shell import LocalShellTool
 from .skills import SkillSearchToolkit, SkillsToolkit
-from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
+from .toolkits import Crawl4AIToolkit, FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
 
 __all__ = (
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
+    "Crawl4AIToolkit",
     "DuckDuckSearchTool",
     "ExaToolkit",
     "FilesystemToolkit",

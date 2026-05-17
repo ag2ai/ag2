@@ -615,3 +615,66 @@ sh = LocalShellTool(LocalShellEnvironment(
     ignore=["**/.env", "*.key", "secrets/**"],
 ))
 ```
+
+---
+
+## Crawl4AIToolkit
+
+`Crawl4AIToolkit` gives an agent two tools for fetching and reading web pages.
+It is powered by the [`crawl4ai`](https://github.com/unclecode/crawl4ai){.external-link target="_blank"} package, which must be installed separately:
+
+```bash
+pip install crawl4ai
+```
+
+If `crawl4ai` is not installed, both tools return a clear error message rather than raising at import time.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.tools import Crawl4AIToolkit
+
+crawler = Crawl4AIToolkit()
+agent = Agent("researcher", config=OpenAIConfig("gpt-4o-mini"), tools=[crawler])
+```
+
+### Available tools
+
+| Tool | Description |
+| :--- | :--- |
+| `crawl` | Fetch a single URL and return its main content as Markdown |
+| `crawl_many` | Fetch multiple URLs concurrently and return combined results |
+
+### `crawl` — single URL
+
+```python linenums="1"
+from autogen.beta.tools import Crawl4AIToolkit
+
+crawler = Crawl4AIToolkit()
+
+# Fetch with optional extras
+crawl_tool = crawler.crawl()
+# Agent calls: crawl(url="https://example.com", include_links=True)
+```
+
+The `include_links` flag appends a list of internal and external hyperlinks.
+The `include_images` flag appends a list of image URLs found on the page.
+
+### `crawl_many` — concurrent fetches
+
+```python linenums="1"
+from autogen.beta.tools import Crawl4AIToolkit
+
+crawler = Crawl4AIToolkit(max_concurrent=2)
+
+# Agent calls: crawl_many(urls=["https://a.com", "https://b.com"])
+```
+
+`max_concurrent` caps the number of simultaneous requests (default 3).
+The agent can also override it per-call:
+
+```
+crawl_many(urls=["https://a.com", "https://b.com"], max_concurrent=1)
+```
+
+Results for each URL are separated by `---` dividers.
