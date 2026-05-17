@@ -5,6 +5,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
+from urllib.parse import urlparse
 
 from pydantic import Field
 from tinyfish import AsyncTinyFish
@@ -17,6 +18,11 @@ from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 
 FetchFormat: TypeAlias = Literal["markdown", "html", "json"]
+_SAFE_URL_SCHEMES = {"http", "https"}
+
+
+def _safe_url(url: str) -> bool:
+    return urlparse(url).scheme.lower() in _SAFE_URL_SCHEMES
 
 
 @dataclass(slots=True)
@@ -185,6 +191,10 @@ class TinyFishSearchToolkit(Toolkit):
             ctx: Context,
         ) -> ToolResult:
             """Fetch web pages using TinyFish and return extracted content."""
+            invalid_urls = [url for url in urls if not _safe_url(url)]
+            if invalid_urls:
+                return ToolResult({"error": f"Only http/https URLs are supported; rejected: {invalid_urls}"})
+
             params: dict[str, Any] = {
                 "format": resolve_variable(format, ctx, param_name="format"),
                 "links": resolve_variable(links, ctx, param_name="links"),

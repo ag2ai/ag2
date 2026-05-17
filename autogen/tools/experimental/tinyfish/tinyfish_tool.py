@@ -5,6 +5,7 @@
 import logging
 import os
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -13,9 +14,14 @@ from ... import Depends, Tool
 from ...dependency_injection import on
 
 logger = logging.getLogger(__name__)
+_SAFE_URL_SCHEMES = {"http", "https"}
 
 with optional_import_block():
     from tinyfish import TinyFish
+
+
+def _safe_url(url: str) -> bool:
+    return urlparse(url).scheme.lower() in _SAFE_URL_SCHEMES
 
 
 @require_optional_import(
@@ -242,6 +248,13 @@ def _tinyfish_fetch(
     Returns:
         dict[str, Any]: The fetch result, or an error dict.
     """
+    invalid_urls = [url for url in urls if not _safe_url(url)]
+    if invalid_urls:
+        return {
+            "results": [],
+            "errors": [{"url": url, "error": "Only http/https URLs are supported."} for url in invalid_urls],
+        }
+
     try:
         return _execute_tinyfish_fetch(
             urls=urls,

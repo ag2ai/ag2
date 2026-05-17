@@ -24,6 +24,7 @@ from autogen.beta.tools.search.tinyfish import (
     TinyFishSearchResponse,
     TinyFishSearchResult,
     TinyFishSearchToolkit,
+    _safe_url,
 )
 
 TINYFISH_BASE_URL = "https://agent.tinyfish.ai"
@@ -239,6 +240,13 @@ class TestSearchExecution:
 
 @pytest.mark.asyncio
 class TestFetchExecution:
+    async def test_safe_url_rejects_non_http_schemes(self) -> None:
+        assert _safe_url("https://ag2.ai")
+        assert _safe_url("http://ag2.ai")
+        assert not _safe_url("file:///etc/passwd")
+        assert not _safe_url("javascript:alert(1)")
+        assert not _safe_url("data:text/plain,hello")
+
     @respx.mock
     async def test_returns_structured_results_and_errors(self) -> None:
         route = respx.post(f"{TINYFISH_BASE_URL}/v1/fetch").mock(
@@ -294,6 +302,23 @@ class TestFetchExecution:
 
         assert result.links == []
         assert result.image_links == []
+
+    @respx.mock
+    async def test_fetch_rejects_unsafe_url_scheme_before_client_call(self) -> None:
+        route = respx.post(f"{TINYFISH_BASE_URL}/v1/fetch").mock(
+            return_value=httpx.Response(200, json=SAMPLE_FETCH_RAW)
+        )
+        toolkit = TinyFishSearchToolkit(api_key="test")
+
+        config = TrackingConfig(_tool_call_config({"urls": ["file:///etc/passwd"]}, tool_name="tinyfish_fetch"))
+        agent = Agent("a", config=config, tools=[toolkit])
+        await agent.ask("fetch")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        result = tool_results_event.results[0].result.parts[0].data
+
+        assert result == {"error": "Only http/https URLs are supported; rejected: ['file:///etc/passwd']"}
+        assert not route.called
 
     @respx.mock
     async def test_fetch_params_forwarded(self) -> None:

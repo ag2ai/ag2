@@ -475,3 +475,13 @@ class TestTinyFishFetchTool:
 
         assert result["results"] == []
         assert result["errors"] == [{"url": "https://ag2.ai", "error": "Fetch failed"}]
+
+    @patch("autogen.tools.experimental.tinyfish.tinyfish_tool._execute_tinyfish_fetch")
+    def test_rejects_unsafe_url_scheme_before_client_call(self, mock_execute: Mock) -> None:
+        """Test that fetch rejects non-http URLs before calling TinyFish."""
+        tool = TinyFishFetchTool(tinyfish_api_key="test_key")
+        result = tool(urls=["file:///etc/passwd"], tinyfish_api_key="test_key")
+
+        assert result["results"] == []
+        assert result["errors"] == [{"url": "file:///etc/passwd", "error": "Only http/https URLs are supported."}]
+        mock_execute.assert_not_called()
