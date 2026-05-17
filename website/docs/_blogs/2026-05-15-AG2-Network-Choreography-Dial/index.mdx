@@ -8,7 +8,7 @@ slug: ag2-network-choreography-dial
 
 ![AG2 Network — Choreography You Can Dial In](img/n2-banner-animated.webp)
 
-We've touched on the four built-in conversation shapes, now you need to make them survive contact with the real world.
+We've touched on the four built-in conversation shapes; now you need to make them survive contact with the real world.
 
 In the first post — [*One Coherent Agent Isn't Enough*](/docs/blog/2026/05/14/AG2-Action-Driven-Network) — you opened a channel, watched agents take turns, and saw the hub fold envelopes into a durable thread. That's the *shape*. This post is about the *dials* on top of that shape — the knobs that turn a loose multi-agent free-for-all into something you'd actually run when an agent goes quiet at 2am, a step needs to time out, or a sub-conversation has to stay off the main thread.
 
@@ -23,7 +23,7 @@ This is the second post in a four-part series introducing the AG2 Network:
 3. **What Survives, Survives Exactly** — the substrate: write-ahead log + fold + hub restart, plus identity (Passport / Resume / SKILL.md) and the audit log.
 4. **Networks You Can Deploy** — federation across organizations (Visa), dynamic register / unregister, omni-modal streaming, and a full production-incident walk-through.
 
-In parallel, to build strong and capable agents, we're preparing a companion post, **The Agent Harness: An Agent Is More Than a Loop**, zooms *inside* a single agent to make them long-running and knowledge-centric. Keep an eye out for that one (we'll update this when it's ready).
+In parallel, to build strong and capable agents, we're preparing a companion post, **The Agent Harness: An Agent Is More Than a Loop**, that zooms *inside* a single agent to make them long-running and knowledge-centric. Keep an eye out for that one (we'll update this when it's ready).
 
 ## Choreography you can dial in
 
@@ -35,11 +35,11 @@ The four adapters from the first post each sit at a different position on that d
 
 But the starting notch isn't the only knob. Three more sit on top of every adapter, and you reach for them when "what conversation shape do I want?" turns into "what should happen when the room goes quiet, when two participants need a side bar, or when the next speaker depends on what the previous one returned?":
 
-- **Expectations** — per-channel SLAs (`reply_within`, `max_silence`, `turn_within`) with explicit violation handlers (`auto_close`, `warn`, `audit`). A timer that does something is choreography with teeth.
+- **Expectations** — per-channel SLAs (`reply_within`, `max_silence`, `turn_within`) with explicit violation handlers (`auto_close`, `warn`, `audit`).
 - **Audience addressing** — every envelope carries an `audience` list, so two participants can open a private side-channel without polluting the main thread. The WAL keeps both cleanly separated.
-- **Deeper TransitionGraph rules** — `FromSpeaker`, `ContextEquals`, `ToolCalled`, and dynamic `Handoff` returns let a workflow react to *what* was said, not just *who* said it.
+- **Deeper TransitionGraph rules** — `FromSpeaker`, `ContextEquals`, `ToolCalled`, and dynamic `Handoff` and 'Finish' returns let a workflow react to *what* was said, not just *who* said it.
 
-The next four sections walk through each knob and end with a single centerpiece that combines all three. Every knob is a first-class envelope on the channel's write-ahead log — so the choreography you dial in survives a fold replay byte-for-byte, the same way the conversation does.
+The next four sections walk through each knob and end with a single centerpiece that combines all three. Every knob is a first-class envelope on the channel's write-ahead log — so the choreography you dial in survives a fold replay, the same way the conversation does.
 
 ## Expectations and violation handlers
 
@@ -65,7 +65,7 @@ Three handlers decide what happens when an evaluator fires:
 
 The hub evaluates expectations on a periodic sweep (10 s by default). All three knobs are pure data on the WAL — the sweep is stateless, so a hub restart re-derives the same state and the same timers pick up exactly where they left off.
 
-**Example: `reply_within` auto-close on a consulting channel.** Alice asks bob a question. Bob never replies. The hub closes the channel after the threshold.
+**Example 1: `reply_within` auto-close on a consulting channel.** Alice asks Bob a question. Bob never replies. The hub closes the channel after the threshold.
 
 ```python linenums="1"
 import asyncio
@@ -121,7 +121,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-**Example: `max_silence` warn on a conversation channel.** Alice posts once, then both sides go quiet. The `warn` handler fires and broadcasts `ag2.expectation.violated` — the channel stays open so the participants can choose what to do with the signal.
+**Example 2: `max_silence` warn on a conversation channel.** Alice posts once, then both sides go quiet. The `warn` handler fires and broadcasts `ag2.expectation.violated` — the channel stays open so the participants can choose what to do with the signal.
 
 ```python linenums="1"
 import asyncio
@@ -187,9 +187,9 @@ The two examples cover opposite ends of the spectrum: `auto_close` is the "tear 
 
 Every envelope carries an optional `audience` field — a list of participant IDs that should receive the message. Omit it and the hub broadcasts to everyone. Set it and only those participants see the envelope. The WAL records both variants identically; the audience filter is applied at dispatch time, not write time, so the full log stays durable even if a participant was excluded.
 
-Private side-channels use the same primitive: open a second channel with a restricted participant list. The two channels run on separate WALs that never intersect. An agent on the main channel cannot even discover that the side-channel exists, let alone read its messages.
+Private side-channels use the same primitive: open a second channel with a restricted participant list. The two channels run on separate WALs that never intersect. An agent on the main channel cannot discover that the side-channel exists, let alone read its messages.
 
-The example below has three participants on a discussion channel. After a public exchange, alice opens a private `consulting` channel with carol — bob is not invited and never sees a single byte of that conversation.
+The example below has three participants on a discussion channel. After a public exchange, alice opens a private `consulting` channel with carol — bob is not invited and never sees that conversation.
 
 ```python linenums="1"
 import asyncio
@@ -301,9 +301,9 @@ graph = TransitionGraph(
 )
 ```
 
-When `classify()` returns `Handoff(target=specialist_id)`, the fold reads `routing.target` directly and sets `expected_next_speaker = specialist_id`, bypassing `select_next` entirely. The graph edge is never consulted. The `FromSpeaker(drafter)` fallback only fires if the drafter writes a plain reply without calling `classify`.
+When the `classify()` tool returns `Handoff(target=specialist_id)`, the fold sets the next speaker as the `specialist_id`. The graph edge is never consulted.
 
-**ContextEquals — routing on state, not sender.** `ContextEquals(key, value)` fires when `channel.context_vars[key] == value`. You write context vars from a `@tool` via `set_context(channel, key, value)`, which emits an `EV_CONTEXT_SET` envelope. The fold applies the mutation before evaluating transitions, so the same turn that sets a var can immediately route on it:
+**ContextEquals — routing on state, not sender.** `ContextEquals(key, value)` fires when `channel.context_vars[key] == value`. You write context vars from a `@tool` via `set_context(channel, key, value)`. Similar to a tool returning a Handoff, this is evaluated before evaluating transitions, so the same turn that sets a var can immediately route on it:
 
 ```python linenums="1"
 from autogen.beta.network import (
@@ -478,5 +478,3 @@ Every knob lands exactly once, in the right place, in the right order. The `EV_C
 Three dials, one primitive. Expectations govern *time* — how long any step can stall before the hub acts. Audience addressing governs *visibility* — who sees which envelope on which thread. `TransitionGraph` conditions govern *routing* — who speaks next based on what was said or what state was written. Each is a first-class envelope on the WAL, which means each one survives a hub restart exactly as written.
 
 The next post in this series — **What Survives, Survives Exactly** — zooms into that WAL. You'll see how the hub re-derives every channel from scratch on restart, how identity (Passport / Resume / SKILL.md) and the audit log compose with the same fold model, and what "durable" really means for a multi-agent conversation.
-
----
