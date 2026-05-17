@@ -10,5 +10,14 @@ __all__ = (
     "LocalRuntime",
     "SkillSearchToolkit",
     "SkillsClientConfig",
+    "SkillsPlugin",  # noqa: F822 — lazy-loaded via __getattr__ below
     "SkillsToolkit",
 )
+
+
+def __getattr__(name: str) -> object:
+    if name == "SkillsPlugin":
+        from .skills_plugin import SkillsPlugin
+
+        return SkillsPlugin
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

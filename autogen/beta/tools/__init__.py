@@ -46,6 +46,7 @@ __all__ = (
     "ShellTool",
     "Skill",
     "SkillSearchToolkit",
+    "SkillsPlugin",  # noqa: F822 — lazy-loaded via __getattr__ below
     "SkillsTool",
     "SkillsToolkit",
     "TavilySearchTool",
@@ -56,3 +57,11 @@ __all__ = (
     "WebSearchTool",
     "tool",
 )
+
+
+def __getattr__(name: str) -> object:
+    if name == "SkillsPlugin":
+        from .skills import SkillsPlugin
+
+        return SkillsPlugin
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
