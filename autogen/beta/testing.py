@@ -10,7 +10,15 @@ from typing_extensions import Self
 
 from autogen.beta import Context
 from autogen.beta.config import LLMClient, ModelConfig
-from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, ToolErrorEvent
+from autogen.beta.events import (
+    BaseEvent,
+    ModelMessage,
+    ModelReasoning,
+    ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolErrorEvent,
+)
 
 __all__ = (
     "TestConfig",
@@ -21,7 +29,7 @@ __all__ = (
 class TestClient(LLMClient):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str) -> None:
+    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | ModelReasoning | str) -> None:
         self.events = iter(events)
 
     async def __call__(
@@ -35,6 +43,11 @@ class TestClient(LLMClient):
                 raise m.error
 
         next_msg = next(self.events)
+
+        # Emit any pre-response reasoning events before the actual model response.
+        if isinstance(next_msg, ModelReasoning):
+            await context.send(next_msg)
+            next_msg = next(self.events)
 
         if isinstance(next_msg, str):
             message = ModelMessage(next_msg)
@@ -83,7 +96,7 @@ class TrackingConfig(ModelConfig):
 class TestConfig(ModelConfig):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str) -> None:
+    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | ModelReasoning | str) -> None:
         self.events = events
 
     def copy(self) -> Self:

@@ -22,6 +22,11 @@ from ag_ui.core import (
     TextMessageContentEvent,
     TextMessageEndEvent,
     TextMessageStartEvent,
+    ThinkingEndEvent,
+    ThinkingStartEvent,
+    ThinkingTextMessageContentEvent,
+    ThinkingTextMessageEndEvent,
+    ThinkingTextMessageStartEvent,
     ToolCallArgsEvent,
     ToolCallChunkEvent,
     ToolCallEndEvent,
@@ -146,7 +151,31 @@ async def run_stream(
     async def map_events_to_ag_ui(event: events.BaseEvent) -> None:
         nonlocal streaming_msg_id
 
-        if isinstance(event, events.ModelMessageChunk):
+        if isinstance(event, events.ModelReasoning):
+            thinking_id = str(uuid4())
+            await write_events_stream.send(ThinkingStartEvent(timestamp=_get_timestamp()))
+            await write_events_stream.send(
+                ThinkingTextMessageStartEvent(
+                    message_id=thinking_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            await write_events_stream.send(
+                ThinkingTextMessageContentEvent(
+                    message_id=thinking_id,
+                    delta=event.content,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            await write_events_stream.send(
+                ThinkingTextMessageEndEvent(
+                    message_id=thinking_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            await write_events_stream.send(ThinkingEndEvent(timestamp=_get_timestamp()))
+
+        elif isinstance(event, events.ModelMessageChunk):
             if not event.content:
                 return
 
