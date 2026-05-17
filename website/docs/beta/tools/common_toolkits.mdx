@@ -169,6 +169,43 @@ Available tools:
 | `load_skill` | Fetch the full `SKILL.md` content for a specific skill |
 | `run_skill_script` | Execute a `.py` or `.sh` script from a skill's `scripts/` directory |
 
+### SkillsPlugin — pre-load skills at construction time
+
+`SkillsPlugin` is a `Plugin` subclass that loads one or more skills' `SKILL.md` content
+directly into the agent's **system prompt** at construction time, and adds `SkillsToolkit`
+tools so the agent can run skill scripts.
+
+The difference from `SkillsToolkit` alone:
+
+| | `SkillsToolkit` | `SkillsPlugin` |
+|---|---|---|
+| Skills available | After agent calls `load_skill()` | Immediately, before the first turn |
+| System-prompt injection | No | Yes — `SKILL.md` content prepended |
+| Can run skill scripts | Yes | Yes (via bundled `SkillsToolkit`) |
+
+Use `SkillsPlugin` when you know at construction time which skills the agent will need and
+want the instructions present from the very first message.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools.skills import SkillsPlugin
+
+agent = Agent(
+    "assistant",
+    plugins=[SkillsPlugin("web-search", "code-review")],
+)
+```
+
+Skills are looked up by name in the runtime's skill directory (default: `.agents/skills`).
+Pass `runtime=` to override:
+
+```python linenums="1"
+from autogen.beta.tools.skills import LocalRuntime, SkillsPlugin
+
+plugin = SkillsPlugin("web-search", runtime=LocalRuntime("./my-skills"))
+agent = Agent("assistant", plugins=[plugin])
+```
+
 ---
 
 ## SkillSearchToolkit
