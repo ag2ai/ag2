@@ -250,7 +250,6 @@ class TestCheckpointResume:
     @pytest.mark.asyncio()
     async def test_resume_sees_previous_history(self, mock: MagicMock) -> None:
         """After resuming from checkpoint, the model is called with prior context."""
-        call_args: list = []
 
         def capture_tool() -> str:
             return "captured"
