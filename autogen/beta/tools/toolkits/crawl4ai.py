@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable
 from typing import Annotated
+from urllib.parse import urlparse
 
 from pydantic import Field
 
@@ -42,10 +43,20 @@ from autogen.beta.tools.final.function_tool import FunctionTool
 __all__ = ("Crawl4AIToolkit",)
 
 _DEFAULT_MAX_CONCURRENT = 3
+_SAFE_SCHEMES = {"http", "https"}
+
+
+def _safe_url(url: str) -> str:
+    """Return url unchanged if scheme is http/https; otherwise return empty string."""
+    scheme = urlparse(url).scheme.lower()
+    return url if scheme in _SAFE_SCHEMES else ""
 
 
 async def _fetch(url: str, *, include_links: bool, include_images: bool) -> str:
     """Fetch one URL and return a formatted result string."""
+    if not _safe_url(url):
+        return f"[invalid URL] Only http/https URLs are supported; got {url!r}"
+
     try:
         from crawl4ai import AsyncWebCrawler  # type: ignore[import]
     except ImportError:
@@ -80,9 +91,14 @@ async def _fetch(url: str, *, include_links: bool, include_images: bool) -> str:
             parts.append("\n## Links")
             for lnk in internal[:20]:
                 href = lnk.get("href", "") if isinstance(lnk, dict) else str(lnk)
+                # Keep relative paths; reject non-http(s) absolute URLs
+                if href and not (href.startswith(("/", "#")) or _safe_url(href)):
+                    continue
                 parts.append(f"- (internal) {href}")
             for lnk in external[:20]:
                 href = lnk.get("href", "") if isinstance(lnk, dict) else str(lnk)
+                if href and not _safe_url(href):
+                    continue
                 parts.append(f"- (external) {href}")
 
     if include_images:

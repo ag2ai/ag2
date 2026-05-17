@@ -168,6 +168,30 @@ class TestFetchHelper:
             result = await _fetch("https://example.com", include_links=False, include_images=False)
         assert "no content extracted" in result
 
+    @pytest.mark.asyncio
+    async def test_fetch_rejects_non_http_scheme(self) -> None:
+        result = await _fetch("javascript:alert(1)", include_links=False, include_images=False)
+        assert "invalid URL" in result
+
+    @pytest.mark.asyncio
+    async def test_fetch_rejects_file_scheme(self) -> None:
+        result = await _fetch("file:///etc/passwd", include_links=False, include_images=False)
+        assert "invalid URL" in result
+
+    @pytest.mark.asyncio
+    async def test_fetch_links_filters_unsafe_hrefs(self) -> None:
+        links = {
+            "internal": [{"href": "javascript:void(0)"}, {"href": "/safe"}],
+            "external": [{"href": "https://other.com"}, {"href": "data:text/html,<h1>xss</h1>"}],
+        }
+        fake_mod = _make_crawl4ai_mock(markdown="Content.", links=links)
+        with patch.dict(sys.modules, {"crawl4ai": fake_mod}):
+            result = await _fetch("https://example.com", include_links=True, include_images=False)
+        assert "/safe" in result
+        assert "https://other.com" in result
+        assert "javascript:" not in result
+        assert "data:" not in result
+
 
 # ---------------------------------------------------------------------------
 # crawl tool
