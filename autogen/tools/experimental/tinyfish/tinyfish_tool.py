@@ -151,7 +151,6 @@ def _execute_tinyfish_fetch(
                 "format": result.format,
                 "links": list(result.links or []),
                 "image_links": list(result.image_links or []),
-                "latency_ms": result.latency_ms,
             }
             for result in response.results
         ],

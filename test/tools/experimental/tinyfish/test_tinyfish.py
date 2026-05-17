@@ -240,7 +240,6 @@ class TestTinyFishExecutionHelpers:
             format="markdown",
             links=["https://github.com/ag2ai/ag2"],
             image_links=["https://ag2.ai/logo.png"],
-            latency_ms=123.4,
         )
         fetch_error = Mock(url="https://bad.example", error="target_unreachable")
         response = Mock(results=[fetch_result], errors=[fetch_error])
@@ -270,7 +269,6 @@ class TestTinyFishExecutionHelpers:
                     "format": "markdown",
                     "links": ["https://github.com/ag2ai/ag2"],
                     "image_links": ["https://ag2.ai/logo.png"],
-                    "latency_ms": 123.4,
                 }
             ],
             "errors": [{"url": "https://bad.example", "error": "target_unreachable"}],

@@ -64,7 +64,6 @@ SAMPLE_FETCH_RAW: dict[str, Any] = {
             "format": "markdown",
             "links": ["https://github.com/ag2ai/ag2"],
             "image_links": ["https://ag2.ai/logo.png"],
-            "latency_ms": 123.4,
         }
     ],
     "errors": [{"url": "https://bad.example", "error": "target_unreachable"}],
@@ -87,7 +86,6 @@ class FakeAsyncFetchResource:
                     format="markdown",
                     links=None,
                     image_links=None,
-                    latency_ms=None,
                 )
             ],
             errors=[],
@@ -282,7 +280,6 @@ class TestFetchExecution:
                         format="markdown",
                         links=["https://github.com/ag2ai/ag2"],
                         image_links=["https://ag2.ai/logo.png"],
-                        latency_ms=123.4,
                     )
                 ],
                 errors=[TinyFishFetchError(url="https://bad.example", error="target_unreachable")],

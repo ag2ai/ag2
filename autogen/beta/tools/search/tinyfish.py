@@ -54,7 +54,6 @@ class TinyFishFetchResult:
     text: Any | None = None
     links: list[str] = field(default_factory=list)
     image_links: list[str] = field(default_factory=list)
-    latency_ms: float | None = None
 
 
 @dataclass(slots=True)
@@ -223,7 +222,6 @@ class TinyFishSearchToolkit(Toolkit):
                             format=r.format,
                             links=list(r.links or []),
                             image_links=list(r.image_links or []),
-                            latency_ms=r.latency_ms,
                         )
                         for r in raw.results
                     ],
