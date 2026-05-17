@@ -1,0 +1,95 @@
+---
+title: Dynamic Agents
+sidebarTitle: Dynamic Agents
+---
+
+`DynamicAgentToolkit` gives an orchestrating agent the ability to spawn specialist
+sub-agents on demand — at runtime, inside a single tool call.
+
+The orchestrator calls `ask_specialist`, describes the role it needs, hands off a
+task, and receives the specialist's reply as a string.  No specialist agents need to
+be pre-configured; they are created, used, and discarded by the toolkit.
+
+## Basic usage
+
+```python linenums="1"
+import asyncio
+from autogen.beta import Agent
+from autogen.beta.tools import DynamicAgentToolkit
+from autogen.beta.config import OpenAIConfig
+
+async def main():
+    config = OpenAIConfig("gpt-4o-mini")
+
+    coordinator = Agent(
+        "coordinator",
+        config=config,
+        prompt=(
+            "You are a coordinator. Break complex requests into focused subtasks "
+            "and delegate each one to a specialist using ask_specialist."
+        ),
+        tools=[DynamicAgentToolkit(config=config)],
+    )
+
+    reply = await coordinator.ask(
+        "Research and summarise the history of the internet, then write a short essay."
+    )
+    print(await reply.content())
+
+asyncio.run(main())
+```
+
+The coordinator will autonomously call `ask_specialist` to create a researcher agent,
+collect the research, then call it again to create a writer agent to draft the essay.
+
+## The ask_specialist tool
+
+| Parameter | Type | Description |
+|---|---|---|
+| `role` | `str` | System prompt that defines the specialist's persona and expertise |
+| `task` | `str` | The task or question to delegate |
+| `name` | `str` | Optional agent name for logging (default `"specialist"`) |
+
+Each call creates a fresh, independent agent.  The specialist's conversation is
+isolated — it does not share history with the orchestrator or other specialists.
+
+## Sharing tools with specialists
+
+Pass tools to `DynamicAgentToolkit` to equip every spawned specialist:
+
+```python linenums="1"
+from autogen.beta.tools import DynamicAgentToolkit, FilesystemToolkit
+
+fs = FilesystemToolkit()
+
+coordinator = Agent(
+    "coordinator",
+    config=config,
+    prompt="You coordinate file-aware specialists.",
+    tools=[DynamicAgentToolkit(config=config, tools=[fs])],
+)
+```
+
+Any specialist the coordinator spawns will have access to `FilesystemToolkit`'s tools.
+
+## Combining with DeferredToolkit
+
+Equip specialists with a deferred catalog so they can discover their own tools:
+
+```python linenums="1"
+from autogen.beta.tools import DeferredToolkit, DynamicAgentToolkit, FilesystemToolkit, MemoryToolkit
+
+catalog = DeferredToolkit(*FilesystemToolkit().tools, *MemoryToolkit().tools)
+toolkit = DynamicAgentToolkit(config=config, tools=[catalog])
+
+coordinator = Agent("coordinator", config=config, tools=[toolkit])
+```
+
+## When to use it
+
+| Pattern | Use |
+|---|---|
+| Orchestrator delegates to specialists described at runtime | `DynamicAgentToolkit` |
+| Fixed set of agents running in parallel | [`fanout`](/docs/beta/advanced/fanout) |
+| Orchestrator fires an agent call without blocking | [`run_in_background`](/docs/beta/advanced/background) |
+| Agent delegates to another agent with a known spec | `AgentSpec.to_agent()` + `agent.ask()` |

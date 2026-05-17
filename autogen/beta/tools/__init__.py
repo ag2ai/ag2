@@ -26,6 +26,7 @@ from .shell import LocalShellTool
 from .skills import SkillSearchToolkit, SkillsToolkit
 from .toolkits import (
     DeferredToolkit,
+    DynamicAgentToolkit,
     FilesystemToolkit,
     MCPServer,
     MCPServerConfig,
@@ -39,6 +40,7 @@ __all__ = (
     "ContainerReferenceEnvironment",
     "DeferredToolkit",
     "DuckDuckSearchTool",
+    "DynamicAgentToolkit",
     "ExaToolkit",
     "FilesystemToolkit",
     "ImageGenerationTool",
