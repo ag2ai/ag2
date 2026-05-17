@@ -5,8 +5,11 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
-from typing import Any, overload
+from typing import TYPE_CHECKING, Any, overload
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from .checkpoint import Checkpoint
 
 from fast_depends.core import CallModel
 
@@ -184,6 +187,26 @@ class MemoryStream(ABCStream):
     def unsubscribe(self, sub_id: SubId) -> None:
         self._subscribers.pop(sub_id, None)
         self._interrupters.pop(sub_id, None)
+
+    @classmethod
+    async def from_checkpoint(cls, checkpoint: "Checkpoint") -> "MemoryStream":
+        """Create a ``MemoryStream`` pre-loaded with a checkpoint's event history.
+
+        The returned stream has the same ``id`` as the original and its
+        history is populated with the checkpoint's events.  Pass it to
+        ``agent.ask(..., stream=stream, variables=checkpoint.variables)``
+        to resume the conversation from the saved state.
+
+        Args:
+            checkpoint: A :class:`~autogen.beta.Checkpoint` previously
+                created with ``await Checkpoint.from_reply(reply)``.
+
+        Returns:
+            A new ``MemoryStream`` ready for the next turn.
+        """
+        stream = cls(id=checkpoint.stream_id)
+        await stream.history.replace(checkpoint.restore_events())
+        return stream
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
         # interrupters should follow registration order

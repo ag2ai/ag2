@@ -1,0 +1,203 @@
+---
+title: Checkpoints and Snapshots
+---
+
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+
+# Checkpoints and Snapshots
+
+A **Checkpoint** captures an agent's runtime state after a turn — the full
+event history and all context variables — so you can resume the conversation
+later, possibly in a different process or on a different machine.
+
+The agent's code (tools, middleware, prompts, LLM config) is **not** stored.
+You reconstruct the `Agent` normally; the checkpoint only restores the
+runtime state.
+
+## When to use checkpoints
+
+- **Long-running tasks** — save progress after each milestone so a crash or
+  timeout doesn't lose work.
+- **Multi-session workflows** — pause a conversation, store the checkpoint,
+  and resume it the next day.
+- **Debugging** — replay a turn from a known good state without re-running
+  the full conversation.
+- **Testing** — seed an agent with a predetermined history to isolate a
+  specific behaviour.
+
+## Quick start
+
+```python
+import asyncio
+from autogen.beta import Agent, Checkpoint, MemoryStream
+from autogen.beta.config import ModelConfig
+
+cfg = ModelConfig(model="gpt-4o-mini")
+agent = Agent("planner", config=cfg)
+
+async def main() -> None:
+    # ── Turn 1 ──────────────────────────────────────────────────────────────
+    reply = await agent.ask("Plan my week: Monday gym, Wednesday team meeting.")
+    print(reply.body)
+
+    # Save checkpoint to disk
+    cp = await Checkpoint.from_reply(reply)
+    cp.save("planner.json")
+
+    # ── (New process / new session) ──────────────────────────────────────────
+    cp = Checkpoint.load("planner.json")
+    stream = await MemoryStream.from_checkpoint(cp)
+
+    # Resume: the agent sees the full prior conversation
+    reply2 = await agent.ask(
+        "Add a Friday gym session too.",
+        stream=stream,
+        variables=cp.variables,   # restore context variables
+    )
+    print(reply2.body)
+
+asyncio.run(main())
+```
+
+## How it works
+
+### Capturing state
+
+`Checkpoint.from_reply(reply)` reads the event history from the reply's
+stream and snapshots the context variables:
+
+```python
+cp = await Checkpoint.from_reply(reply)
+
+print(cp.agent_name)   # "planner"
+print(cp.stream_id)    # UUID
+print(len(cp.events))  # number of persisted events
+print(cp.variables)    # {"user_id": "alice", ...}
+```
+
+The checkpoint stores only **persisted** events — transient streaming
+artifacts (`ModelMessageChunk`, observer bookkeeping, etc.) are excluded by
+the stream's default filter, so the checkpoint stays compact.
+
+### Serialization
+
+Every event type implements `to_dict()` / `from_dict()` round-trips, with
+built-in support for nested events, UUIDs, bytes, enums, Pydantic models,
+and dataclasses.  `Checkpoint.save()` writes a readable JSON file:
+
+```json
+{
+  "version": "1",
+  "agent_name": "planner",
+  "stream_id": "3fa85f64-...",
+  "created_at": "2026-05-17T14:30:00+00:00",
+  "variables": { "user_id": "alice" },
+  "events": [
+    { "__event__": "autogen.beta.events.ModelRequest", "content": "Plan my week...", ... },
+    { "__event__": "autogen.beta.events.ModelResponse", "content": "Here is your plan...", ... }
+  ]
+}
+```
+
+### Restoring state
+
+`MemoryStream.from_checkpoint(cp)` creates a new `MemoryStream` with the
+same `id` as the original, pre-loaded with the checkpoint's events:
+
+```python
+stream = await MemoryStream.from_checkpoint(cp)
+```
+
+Pass this stream (and `variables=cp.variables`) to `agent.ask()` to resume:
+
+```python
+reply = await agent.ask("Add Friday gym.", stream=stream, variables=cp.variables)
+```
+
+The agent sees the full prior conversation and continues naturally from there.
+New events from this turn are appended to the stream — the checkpoint itself
+is not modified.
+
+## Checkpointing with context variables
+
+Context variables are part of the checkpoint.  They are serialized as a plain
+dict, so only JSON-compatible values survive the round-trip:
+
+```python
+reply = await agent.ask(
+    "Search for flights to Tokyo.",
+    variables={"user_id": "alice", "budget": 1500},
+)
+cp = await Checkpoint.from_reply(reply)
+cp.save("flight-search.json")
+
+# Later:
+cp = Checkpoint.load("flight-search.json")
+print(cp.variables)  # {"user_id": "alice", "budget": 1500}
+
+stream = await MemoryStream.from_checkpoint(cp)
+reply = await agent.ask(
+    "Also add hotel options.",
+    stream=stream,
+    variables=cp.variables,
+)
+```
+
+:::note
+Variables that contain non-serializable objects (functions, class instances,
+etc.) are not stored.  Only JSON-primitive values (strings, numbers, bools,
+`None`, lists, dicts) survive the round-trip.
+:::
+
+## Checkpointing a multi-turn conversation
+
+You can checkpoint at any point in a multi-turn session.  Earlier checkpoints
+let you roll back to a previous state:
+
+```python
+stream = MemoryStream()
+
+reply1 = await agent.ask("Plan Monday.", stream=stream)
+cp1 = await Checkpoint.from_reply(reply1)
+cp1.save("checkpoint-1.json")
+
+reply2 = await agent.ask("Add Tuesday.", stream=stream)
+cp2 = await Checkpoint.from_reply(reply2)
+cp2.save("checkpoint-2.json")
+
+# Roll back to after Monday only:
+cp = Checkpoint.load("checkpoint-1.json")
+rolled_back = await MemoryStream.from_checkpoint(cp)
+reply = await agent.ask("Actually, skip Monday entirely.", stream=rolled_back)
+```
+
+## API reference
+
+### `Checkpoint`
+
+```python
+from autogen.beta import Checkpoint
+```
+
+| Member | Description |
+|---|---|
+| `await Checkpoint.from_reply(reply)` | Capture state from a completed `agent.ask()` call |
+| `cp.save(path)` | Write checkpoint to a JSON file |
+| `Checkpoint.load(path)` | Load checkpoint from a JSON file |
+| `cp.agent_name` | Name of the agent at checkpoint time |
+| `cp.stream_id` | UUID of the original stream |
+| `cp.events` | Serialized event list |
+| `cp.variables` | Context variable dict |
+| `cp.created_at` | Checkpoint timestamp |
+| `cp.restore_events()` | Deserialize events back to `BaseEvent` instances |
+
+### `MemoryStream.from_checkpoint`
+
+```python
+stream = await MemoryStream.from_checkpoint(checkpoint)
+```
+
+Creates a new `MemoryStream` with the checkpoint's `stream_id` and event
+history pre-loaded.  Equivalent to creating an empty stream and calling
+`history.replace(cp.restore_events())`.

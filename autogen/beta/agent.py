@@ -224,6 +224,11 @@ class AgentReply(Generic[TResult, TAgent]):
                 )
 
     @property
+    def agent_name(self) -> str:
+        """Name of the agent that produced this reply."""
+        return self.__agent.name
+
+    @property
     def body(self) -> str | None:
         """Text body of the model's response for this turn."""
         return self.response.content

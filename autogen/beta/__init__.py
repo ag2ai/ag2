@@ -6,6 +6,7 @@ from fast_depends import Depends
 
 from .agent import Agent, AgentReply, KnowledgeConfig, TaskConfig
 from .annotations import Context, Inject, Variable
+from .checkpoint import Checkpoint
 from .events import (
     AudioInput,
     BinaryInput,
@@ -30,6 +31,7 @@ __all__ = (
     "AgentSpec",
     "AudioInput",
     "BinaryInput",
+    "Checkpoint",
     "Context",
     "DataInput",
     "Depends",
