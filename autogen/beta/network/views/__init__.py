@@ -11,15 +11,21 @@ is what view policies produce.
 Built-ins: ``FullTranscript`` (verbatim) and ``WindowedSummary``
 (bounded tail + head summary, composes with framework-core
 ``compact.py``). Envelope rendering is supplied per-call by the
-channel's adapter via ``ChannelAdapter.render_envelope``.
+channel's adapter via ``ChannelAdapter.render_envelope``. Sender
+identity is supplied per-call by the handler via a ``NameResolver``
+sourced from the hub's passport directory.
 """
 
-from .base import EnvelopeRenderer, ViewPolicy
-from .builtin import FullTranscript, WindowedSummary
+from .base import EnvelopeRenderer, NameResolver, ViewPolicy, default_name_resolver
+from .builtin import FullTranscript, NamedTranscript, NamedWindowedSummary, WindowedSummary
 
 __all__ = (
     "EnvelopeRenderer",
     "FullTranscript",
+    "NameResolver",
+    "NamedTranscript",
+    "NamedWindowedSummary",
     "ViewPolicy",
     "WindowedSummary",
+    "default_name_resolver",
 )
