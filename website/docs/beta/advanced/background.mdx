@@ -1,0 +1,100 @@
+---
+title: Background Agents
+sidebarTitle: Background Agents
+---
+
+`run_in_background` starts an agent call without blocking the caller.
+It returns a `BackgroundTask` immediately — you can do other async work,
+then `await` the task to collect the `AgentReply` when the agent finishes.
+
+## Basic usage
+
+```python linenums="1"
+import asyncio
+from autogen.beta import Agent, run_in_background
+from autogen.beta.config import OpenAIConfig
+
+async def main():
+    agent = Agent("analyst", config=OpenAIConfig("gpt-4o-mini"))
+
+    # Starts without blocking — returns immediately
+    task = run_in_background(agent, "Summarise the Q1 results.")
+
+    # Do other work concurrently
+    await asyncio.sleep(0)
+
+    # Collect the result when ready
+    reply = await task
+    print(await reply.content())
+
+asyncio.run(main())
+```
+
+## Running many agents concurrently
+
+Use `asyncio.gather` to start and collect multiple background tasks at once:
+
+```python linenums="1"
+import asyncio
+from autogen.beta import Agent, run_in_background
+from autogen.beta.config import OpenAIConfig
+
+async def main():
+    config = OpenAIConfig("gpt-4o-mini")
+    agents = [Agent(f"agent-{i}", config=config) for i in range(5)]
+
+    tasks = [run_in_background(a, "Analyse your slice of the data.") for a in agents]
+    replies = await asyncio.gather(*tasks)
+
+    for reply in replies:
+        print(await reply.content())
+
+asyncio.run(main())
+```
+
+!!! tip
+    For a simpler parallel fan-out pattern where all agents receive the **same**
+    message, see [`fanout`](/docs/beta/advanced/fanout).
+
+## Task control
+
+`BackgroundTask` exposes the same control surface as `asyncio.Task`:
+
+```python linenums="1"
+task = run_in_background(agent, "Long analysis…")
+
+# Check whether it has finished (non-blocking)
+if task.done():
+    reply = task.result()
+
+# Cancel mid-flight
+task.cancel()
+
+# Inspect an exception after the task finished with an error
+exc = task.exception()
+```
+
+| Method | Returns |
+|---|---|
+| `done()` | `True` once the agent finishes (or errors/cancels) |
+| `cancelled()` | `True` if the task was cancelled via `cancel()` |
+| `cancel(msg=None)` | Requests cancellation; returns `True` if the request was sent |
+| `result()` | The `AgentReply`, or raises if not done / cancelled / errored |
+| `exception()` | The exception raised, or `None` on success |
+
+## Error handling
+
+Exceptions raised inside `agent.ask` propagate when you `await` the task:
+
+```python linenums="1"
+task = run_in_background(agent, "Problematic prompt.")
+try:
+    reply = await task
+except Exception as exc:
+    print(f"Agent failed: {exc}")
+```
+
+## Requirements
+
+`run_in_background` must be called from an async context — it uses
+`asyncio.create_task` internally, which requires a running event loop.

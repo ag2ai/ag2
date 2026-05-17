@@ -6,6 +6,7 @@ from fast_depends import Depends
 
 from .agent import Agent, AgentReply, KnowledgeConfig, TaskConfig
 from .annotations import Context, Inject, Variable
+from .background import BackgroundTask, run_in_background
 from .events import (
     AudioInput,
     BinaryInput,
@@ -29,6 +30,7 @@ __all__ = (
     "AgentReply",
     "AgentSpec",
     "AudioInput",
+    "BackgroundTask",
     "BinaryInput",
     "Context",
     "DataInput",
@@ -53,5 +55,6 @@ __all__ = (
     "VideoInput",
     "observer",
     "response_schema",
+    "run_in_background",
     "tool",
 )
