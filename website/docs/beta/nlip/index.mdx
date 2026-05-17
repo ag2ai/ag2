@@ -1,0 +1,118 @@
+---
+title: NLIP Integration
+sidebarTitle: NLIP
+description: "Expose an AG2 beta Agent over the Natural Language Interaction Protocol (NLIP / ECMA-430) using NLIPPlugin."
+---
+
+The `#!python autogen.beta.nlip` module exposes any AG2 `#!python Agent` over the
+[Natural Language Interaction Protocol (NLIP)](https://ecma-international.org/publications-and-standards/standards/ecma-430/){.external-link target="_blank"}
+(ECMA-430), making it reachable from any NLIP-compatible client.
+
+## When to use NLIP
+
+Use NLIP when you need:
+
+- **Protocol-neutral chat front-ends.** NLIP is a vendor-agnostic standard; any NLIP client can talk to your agent without knowing it is backed by AG2.
+- **ECMA-430 compliance.** You operate in an environment that mandates ECMA-430 for human-agent communication channels.
+- **Drop-in ASGI app.** You want a self-contained ASGI callable (uvicorn, Gunicorn + Uvicorn worker, Hypercorn, etc.) without building HTTP routing by hand.
+
+For AG-UI–based frontends see [AG-UI integration](/docs/beta/ag-ui/index). For cross-process agent-to-agent calls see [A2A](/docs/beta/a2a/overview).
+
+## Installation
+
+```bash
+pip install "ag2[nlip]"
+```
+
+This pulls in `nlip-sdk` (message types and factory helpers) and `nlip-server` (ASGI application scaffold).
+
+## Quick start
+
+```python title="run_nlip.py" linenums="1"
+import uvicorn
+from autogen.beta import Agent
+from autogen.beta.nlip import NLIPPlugin
+
+plugin = NLIPPlugin()
+agent = Agent(
+    name="assistant",
+    prompt="You are a helpful assistant.",
+)
+agent.register_plugin(plugin)  # or: Agent("assistant", plugins=[plugin])
+
+uvicorn.run(plugin.build_asgi(), host="0.0.0.0", port=8000)
+```
+
+The `#!python build_asgi()` call returns a `#!python BetaNlipApplication`, which is both an
+`#!python nlip_server.NLIP_Application` and a standard ASGI callable.
+
+### Shorthand via the Agent constructor
+
+```python linenums="1"
+plugin = NLIPPlugin()
+agent = Agent("assistant", plugins=[plugin])
+app   = plugin.build_asgi()
+```
+
+Each `#!python build_asgi()` call creates a fresh `#!python BetaNlipApplication`; the plugin
+holds the agent reference and can be called any number of times.
+
+## Limiting history
+
+By default the agent sees its full conversation history on every turn. For long-running
+sessions this can grow without bound. Pass `#!python history_limit=` to cap it:
+
+```python linenums="1"
+plugin = NLIPPlugin(history_limit=40)
+agent  = Agent("assistant", plugins=[plugin])
+```
+
+Under the hood this wires a `#!python HistoryLimiter(40)` into the agent's middleware
+stack — the 40 most recent events are forwarded to the LLM and older events are dropped.
+
+## How it works
+
+```
+NLIP client
+    │  POST /  (NLIP_Message)
+    ▼
+BetaNlipApplication (NLIP_Application + ASGI callable)
+    │  create_session()
+    ▼
+BetaNlipSession (NLIP_Session)
+    │  execute(msg)  →  agent.ask(text)
+    ▼
+Agent  →  LLM  →  AgentReply.body
+    │
+    ▼
+NLIP_Factory.create_text(response_text)  →  NLIP_Message
+```
+
+`#!python BetaNlipSession.execute()` extracts the top-level text from the inbound
+`#!python NLIP_Message`, calls `#!python agent.ask()`, and wraps the reply body in a new
+`#!python NLIP_Message` with `#!python language="english"`.
+
+## Deploying with Gunicorn
+
+```bash
+pip install gunicorn uvicorn
+gunicorn run_nlip:app -k uvicorn.workers.UvicornWorker --workers 4 --bind 0.0.0.0:8000
+```
+
+Where `#!python app` is the value returned by `#!python plugin.build_asgi()` (store it at module level in `run_nlip.py`).
+
+## Public API
+
+```python linenums="1"
+from autogen.beta.nlip import NLIPPlugin
+```
+
+| Symbol | Purpose |
+|---|---|
+| `#!python NLIPPlugin` | `#!python Plugin` subclass — register with an agent, then call `#!python build_asgi()` |
+| `#!python BetaNlipApplication` | ASGI app + `#!python NLIP_Application`; returned by `#!python build_asgi()` |
+| `#!python BetaNlipSession` | Per-request session; calls `#!python agent.ask()` per NLIP turn |
+
+`#!python NLIPPlugin` can be instantiated and registered with an agent without the optional
+`#!python ag2[nlip]` extras installed. The import-time guard is only triggered when
+`#!python build_asgi()` is called.
