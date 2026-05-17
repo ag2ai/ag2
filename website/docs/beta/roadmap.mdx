@@ -38,37 +38,25 @@ sidebarTitle: Beta Roadmap
 - Local Code execution tool
 - A2A
 - Prometheus metrics
-
-## In Progress
-
 - Messages aggregation
 - Dynamic agents
 - Background agents
 - Multi-Agent Network supports multimodality
 - Multi-Agent Network supports streaming
+- First-class Usage tracking (`AgentReply.usage` / `AgentReply.total_usage()`)
+- Scheduler support (`AgentScheduler` — cron / interval / delay-driven invocations)
+- Repository development skills (bundled `skills/` for code, structure, docs, and tests)
+- A2UI Plugin (expose an `Agent` via the AG-UI protocol)
+- NLIP (expose an `Agent` via the Natural Language Interaction Protocol)
+- Deferred tools / Tool Search Tool (`DeferredToolkit`)
+- Builtin Memory toolkit (`MemoryToolkit` — in-memory + SQLite backends)
+- Builtin RAG toolkit (`RAGToolkit` with model-configurable search params)
+- Crawl4AI tool (`Crawl4AIToolkit` — single URL and concurrent multi-URL crawl)
+- Skills Plugin (`SkillsPlugin` — pre-load skill instructions into agent system prompt)
+- Update AG-UI integration (forward `ModelReasoning` to AG-UI Thinking events)
+- Allow models to configure tool search params (via `configure_search` tool on `RAGToolkit`)
 
 ## Future Priorities
-
-### P1
-
-- First-class Usage tracking (in progress: `AgentReply.usage` / `AgentReply.total_usage()`)
-- Scheduler support
-- Repository development skills (code, structure, documentation, tests)
-
-### P2
-
-- A2UI Plugin
-- NLIP
-- Deferred tools (Tool Search Tool)
-- Builtin Memory toolkit
-
-### P3
-
-- Builtin RAG toolkit
-- Crawl4AI tool
-- Skills Plugin
-- Update AG-UI integration
-- Allow models to configure tool search params
 
 ### P4
 
