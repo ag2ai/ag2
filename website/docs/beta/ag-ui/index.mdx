@@ -120,6 +120,29 @@ data: {"type":"TEXT_MESSAGE_CHUNK","delta":"Hello! How can I help?",...}
 data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",...}
 ```
 
+## Plugin pattern (A2UIPlugin)
+
+`#!python A2UIPlugin` is a `#!python Plugin` subclass that wires `#!python AGUIStream` to an
+agent through the Plugin API. Use it when:
+
+- You want to **bundle AG-UI configuration with the agent definition** (history limiting, etc.) rather than set it up at server construction time.
+- You prefer a **single object** you can pass to `#!python Agent(..., plugins=[plugin])` and later call `#!python plugin.build_asgi()` on.
+
+```python linenums="1"
+import uvicorn
+from autogen.beta import Agent
+from autogen.beta.ag_ui import A2UIPlugin
+
+plugin = A2UIPlugin(history_limit=40)   # cap LLM context to 40 events per turn
+agent  = Agent("assistant", plugins=[plugin])
+
+uvicorn.run(plugin.build_asgi(), host="0.0.0.0", port=8000)
+```
+
+`#!python A2UIPlugin.build_asgi()` is a shortcut for `#!python plugin.stream.build_asgi()`.
+You can also access `#!python plugin.stream` directly to call `#!python dispatch()` inside
+your own FastAPI / Starlette route if you need custom auth or middleware.
+
 ## UI clients
 
 Any AG-UI client works with this endpoint.
