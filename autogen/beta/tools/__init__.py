@@ -24,7 +24,7 @@ from .final import Toolkit, tool
 from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchToolkit, TavilySearchTool
 from .shell import LocalShellTool
 from .skills import SkillSearchToolkit, SkillsToolkit
-from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
+from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig, RAGToolkit
 
 __all__ = (
     "CodeExecutionTool",
@@ -42,6 +42,7 @@ __all__ = (
     "MemoryTool",
     "NetworkPolicy",
     "PerplexitySearchToolkit",
+    "RAGToolkit",
     "SandboxCodeTool",
     "ShellTool",
     "Skill",

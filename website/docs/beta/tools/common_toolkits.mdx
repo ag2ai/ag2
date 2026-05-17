@@ -614,4 +614,83 @@ sh = LocalShellTool(LocalShellEnvironment(
     path="/tmp/my_project",
     ignore=["**/.env", "*.key", "secrets/**"],
 ))
+
+---
+
+## RAGToolkit
+
+`RAGToolkit` gives an agent the ability to index documents and retrieve relevant passages at query time — the classic Retrieval-Augmented Generation pattern.
+
+Documents are automatically split into overlapping chunks. By default the toolkit uses **TF-IDF keyword search** — pure Python stdlib, no extra dependencies. Pass an `embed_fn` to switch to **cosine-similarity semantic search** with any embedding provider.
+
+### Available tools
+
+| Tool | Description |
+| :--- | :--- |
+| `index_document` | Index a document (auto-chunked). Returns the assigned document ID. |
+| `search` | Search indexed documents. Returns top-*k* passages with scores. |
+| `remove_document` | Remove a document and all its chunks by document ID. |
+| `list_documents` | List all indexed documents with IDs, titles, and character counts. |
+
+### Basic usage (keyword search)
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.tools import RAGToolkit
+
+rag = RAGToolkit()
+agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"), tools=[rag])
+```
+
+The agent can call `index_document` to add material at runtime and `search` to find relevant passages before composing a reply.
+
+### Pre-indexing documents
+
+Index documents before the agent starts so they are immediately available:
+
+```python linenums="1"
+from autogen.beta.tools import RAGToolkit
+
+rag = RAGToolkit()
+rag.index("Python was created by Guido van Rossum in 1991.", title="Python history")
+rag.index("Rust was designed by Graydon Hoare at Mozilla.", title="Rust history")
+rag.index("Go was introduced by Google in 2009 with a focus on concurrency.", title="Go history")
+
+# rag is ready — hand it to an agent
+```
+
+The `index()` helper accepts an optional `doc_id`; if omitted a UUID is generated. The same `doc_id` can be passed to `remove_document` later.
+
+### Semantic search
+
+Pass any callable that maps a list of text strings to a list of float vectors:
+
+```python linenums="1"
+from openai import OpenAI
+from autogen.beta.tools import RAGToolkit
+
+client = OpenAI()
+
+def embed(texts: list[str]) -> list[list[float]]:
+    resp = client.embeddings.create(input=texts, model="text-embedding-3-small")
+    return [d.embedding for d in resp.data]
+
+rag = RAGToolkit(embed_fn=embed)
+```
+
+The `embed_fn` is called once per `index_document` call (for all chunks of that document) and once per `search` call (for the query). Any embedding provider works — OpenAI, Cohere, a local `sentence-transformers` model, etc.
+
+### Chunking configuration
+
+Control chunk size and overlap to tune retrieval precision:
+
+```python linenums="1"
+from autogen.beta.tools import RAGToolkit
+
+# Larger chunks for prose; smaller for dense technical content
+rag = RAGToolkit(chunk_size=1000, overlap=100)
+```
+
+The default is `chunk_size=500` characters with `overlap=50`. Documents split on paragraph boundaries first; hard character-limit splits only apply when a single paragraph exceeds `chunk_size`.
 ```
