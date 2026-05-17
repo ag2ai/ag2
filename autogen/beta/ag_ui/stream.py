@@ -322,36 +322,39 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
             for c in content:
                 if c.type == "text":
                     input_buffer.append(events.TextInput(c.text))
+                    continue
 
-                elif c.url:
-                    input_buffer.append(
-                        events.UrlInput(
-                            c.url,
-                            kind=events.BinaryType.BINARY,
+                match c.type:
+                    case "image":
+                        factory = events.ImageInput
+                    case "audio":
+                        factory = events.AudioInput
+                    case "video":
+                        factory = events.VideoInput
+                    case "document":
+                        factory = events.DocumentInput
+                    case "binary":
+                        raise ValueError(
+                            "AG-UI 'binary' content type is deprecated; "
+                            "use ImageInputContent / AudioInputContent / "
+                            "VideoInputContent / DocumentInputContent instead."
                         )
-                    )
 
-                elif c.id:
-                    input_buffer.append(
-                        events.FileIdInput(
-                            c.id,
-                            filename=c.filename,
-                        )
-                    )
+                src = c.source
+                if src.type == "url":
+                    inp = factory(src.value)
+                else:
+                    inp = factory(data=b64decode(src.value), media_type=src.mime_type)
 
-                elif c.data:
-                    input_buffer.append(
-                        events.BinaryInput(
-                            b64decode(c.data),
-                            media_type=c.mime_type,
-                        )
-                    )
+                if c.metadata:
+                    inp.metadata = c.metadata
+                input_buffer.append(inp)
 
             continue
 
         if input_buffer:
             messages.append(events.ModelRequest(input_buffer))
-            input_buffer.clear()
+            input_buffer = []
 
         if m.role in ["system", "developer"]:
             prompt.append(m.content)
