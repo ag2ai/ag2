@@ -46,6 +46,7 @@ __all__ = ("AgentClient",)
 
 EnvelopeHandler = Callable[[Envelope], Awaitable[None]]
 EnvelopePredicate = Callable[[Envelope], bool]
+ChunkHandler = Callable[..., Awaitable[None]]  # (content: str, *, channel_id: str, parent_envelope_id: str)
 
 
 class AgentClient:
@@ -70,6 +71,7 @@ class AgentClient:
         self._hub = hub
         self._hub_client = hub_client
         self._on_envelope: EnvelopeHandler | None = self._run_default_handler if attach_default_handler else None
+        self._on_chunk: ChunkHandler | None = None
         self._disconnected = False
 
         # Per-channel inbox queues for ``wait_for_channel_event``
@@ -120,6 +122,31 @@ class AgentClient:
             return
         if self._on_envelope is not None:
             await self._on_envelope(envelope)
+
+    async def receive_chunk(
+        self,
+        content: str,
+        *,
+        channel_id: str,
+        parent_envelope_id: str,
+    ) -> None:
+        """Streaming chunk delivery. No-op by default.
+
+        Override in a subclass or attach a callback via
+        :meth:`on_chunk` to consume token-level streaming output while
+        the sending agent's ``agent.ask`` is still in progress.
+        """
+        if self._on_chunk is not None:
+            await self._on_chunk(content, channel_id=channel_id, parent_envelope_id=parent_envelope_id)
+
+    def on_chunk(self, callback: "ChunkHandler | None") -> None:
+        """Register a callback fired per streaming chunk.
+
+        ``callback(content, *, channel_id, parent_envelope_id)`` is
+        called for every ``ModelMessageChunk`` emitted by an agent in
+        any channel this client participates in. Pass ``None`` to remove.
+        """
+        self._on_chunk = callback
 
     def on_envelope(self, callback: EnvelopeHandler) -> None:
         """Override the default notify handler with a custom callback.

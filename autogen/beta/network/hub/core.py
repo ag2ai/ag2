@@ -71,6 +71,7 @@ from ..ids import make_id
 from ..rule import Rule, parse_duration
 from ..transport.frames import (
     AcceptFrame,
+    ChunkFrame,
     ErrorFrame,
     Frame,
     HelloFrame,
@@ -520,6 +521,42 @@ class Hub:
             envelope_id,
             exc,
         )
+
+    async def notify_chunk(
+        self,
+        channel_id: str,
+        sender_id: str,
+        content: str,
+        parent_envelope_id: str,
+    ) -> None:
+        """Fan a streaming chunk out to every channel participant.
+
+        Transient — not WAL-persisted and not access-checked (chunks are
+        a presentation aid for the current turn, not authoritative
+        content). Recipients that don't override ``receive_chunk`` ignore
+        it silently.
+
+        Called by :func:`~autogen.beta.network.client.handlers.default_handler`
+        for each ``ModelMessageChunk`` emitted during ``agent.ask``.
+        """
+        metadata = self._channels.get(channel_id)
+        if metadata is None:
+            return
+        participants = [p.agent_id for p in metadata.participants]
+        for recipient_id in participants:
+            endpoint = self._endpoint_for(recipient_id)
+            if endpoint is None:
+                continue
+            with contextlib.suppress(Exception):
+                await endpoint.send_frame(
+                    ChunkFrame(
+                        channel_id=channel_id,
+                        sender_id=sender_id,
+                        content=content,
+                        parent_envelope_id=parent_envelope_id,
+                        recipient_id=recipient_id,
+                    )
+                )
 
     async def fire_task_event(
         self,

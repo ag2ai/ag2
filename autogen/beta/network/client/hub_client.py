@@ -27,7 +27,7 @@ from ..channel import ChannelMetadata, ChannelState
 from ..envelope import Envelope
 from ..identity import Passport, Resume
 from ..rule import Rule
-from ..transport.frames import NotifyFrame
+from ..transport.frames import ChunkFrame, NotifyFrame
 from ..transport.local import LocalLink, LocalLinkClient
 from ..views.base import ViewPolicy
 from .agent_client import AgentClient
@@ -93,6 +93,9 @@ class HubClient:
                             frame.envelope.event_type,
                             frame.recipient_id,
                         )
+                elif isinstance(frame, ChunkFrame):
+                    with contextlib.suppress(Exception):
+                        await self._dispatch_chunk(frame)
                 # Other frame kinds (Accept/Error/Pong/Event) bypass the
                 # demuxer — the in-process send path goes direct via
                 # ``Hub.post_envelope`` so ``AcceptFrame`` is unused here.
@@ -117,6 +120,22 @@ class HubClient:
             if client is not None:
                 await client.receive(frame.envelope)
             return
+
+    async def _dispatch_chunk(self, frame: ChunkFrame) -> None:
+        """Route a streaming chunk to the recipient's ``receive_chunk`` hook.
+
+        Chunk delivery is best-effort and silently dropped when the
+        recipient has no registered client (e.g. the agent is on a
+        different connection).
+        """
+        client = self._clients.get(frame.recipient_id)
+        if client is None:
+            return
+        await client.receive_chunk(
+            frame.content,
+            channel_id=frame.channel_id,
+            parent_envelope_id=frame.parent_envelope_id,
+        )
         if frame.envelope.audience is None:
             return
         for recipient_id in frame.envelope.audience:

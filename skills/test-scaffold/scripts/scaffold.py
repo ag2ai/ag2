@@ -69,10 +69,7 @@ def _is_async(obj: object) -> bool:
 
 def collect_symbols(module_name: str) -> list[tuple[str, object]]:
     mod = importlib.import_module(module_name)
-    if hasattr(mod, "__all__"):
-        names = list(mod.__all__)
-    else:
-        names = [n for n in dir(mod) if not n.startswith("_")]
+    names = list(mod.__all__) if hasattr(mod, "__all__") else [n for n in dir(mod) if not n.startswith("_")]
 
     symbols = []
     for name in names:

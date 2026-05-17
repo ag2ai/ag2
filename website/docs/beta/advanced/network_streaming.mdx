@@ -1,0 +1,123 @@
+---
+title: Network Streaming
+sidebarTitle: Network Streaming
+---
+
+The AG2 Beta network layer propagates LLM **streaming tokens** across channels in real-time. While an agent is generating a response, every participant in the channel receives individual token chunks via a lightweight callback — long before the final reply envelope is posted to the WAL.
+
+## Overview
+
+Streaming works through three cooperating layers:
+
+1. **`handlers.py`** — subscribes to the agent's `MemoryStream` during `agent.ask` and forwards each `ModelMessageChunk` to the hub.
+2. **`Hub.notify_chunk`** — fans the chunk out to every participant in the channel via a transient `ChunkFrame` (never WAL-persisted).
+3. **`AgentClient.on_chunk`** — a per-client callback that fires for each chunk, letting observers display tokens in real-time.
+
+## Receiving streaming tokens
+
+Register a callback on any `AgentClient` or `HumanClient`:
+
+```python
+async def on_token(content: str, *, channel_id: str, parent_envelope_id: str) -> None:
+    print(f"[{channel_id}] token: {content!r}")
+
+client.on_chunk(on_token)
+```
+
+The callback signature is:
+
+```python
+async def callback(
+    content: str,
+    *,
+    channel_id: str,          # channel where the turn is happening
+    parent_envelope_id: str,  # WAL envelope that triggered the turn
+) -> None: ...
+```
+
+Pass `None` to deregister:
+
+```python
+client.on_chunk(None)
+```
+
+## What fires the callback
+
+Chunks are emitted by any LLM client that supports streaming — every first-party provider in `autogen.beta.config` (OpenAI, Anthropic, Gemini, Ollama, …) streams tokens automatically. No agent-level configuration is required; streaming flows through the network layer whenever a participant runs `agent.ask` in response to an inbound envelope.
+
+The `parent_envelope_id` identifies the turn-triggering envelope in the WAL, so the UI can anchor a streaming bubble to the correct message thread.
+
+## End-to-end example
+
+```python
+import asyncio
+from autogen.beta import Agent
+from autogen.beta.knowledge import MemoryKnowledgeStore
+from autogen.beta.network import Hub, HubClient, LocalLink, Passport, Resume
+
+async def main() -> None:
+    hub = await Hub.open(MemoryKnowledgeStore())
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+
+    alice = await alice_hc.register(Agent(name="alice", config=...), Passport(name="alice"), Resume())
+    bob   = await bob_hc.register(Agent(name="bob",   config=...), Passport(name="bob"),   Resume())
+
+    chunks: list[str] = []
+
+    async def stream_display(content: str, *, channel_id: str, parent_envelope_id: str) -> None:
+        chunks.append(content)
+        print(content, end="", flush=True)
+
+    alice.on_chunk(stream_display)
+
+    channel = await alice.open(type="consulting", target="bob")
+    await channel.send("Summarise quantum entanglement in one sentence.")
+
+    await asyncio.sleep(1.0)   # wait for bob's turn to complete
+    print()
+    print("Full reply:", "".join(chunks))
+
+asyncio.run(main())
+```
+
+## ChunkFrame wire format
+
+`ChunkFrame` is the transport primitive. It is lightweight and **never persisted to the WAL**:
+
+```python
+@dataclass(slots=True)
+class ChunkFrame:
+    kind: ClassVar[str] = "chunk"   # wire discriminator
+    channel_id: str
+    sender_id: str
+    content: str
+    parent_envelope_id: str
+    recipient_id: str = ""
+```
+
+The hub stamps `recipient_id` on each frame before dispatch so the receiving `HubClient` can route directly to the right `AgentClient` without re-walking channel participants — the same pattern as `NotifyFrame`.
+
+## Ordering guarantees
+
+- Chunks for a given turn arrive in emission order within one participant's receive loop.
+- The final WAL envelope (e.g. `EV_TEXT`) is always posted **after** the last chunk of that turn.
+- Chunks are best-effort: delivery failures are silently swallowed rather than propagating errors into the sending agent's turn.
+
+## HumanClient streaming
+
+`HumanClient.receive_chunk` is a documented no-op in V1. Subclass and override to forward tokens to a UI:
+
+```python
+class StreamingHumanClient(HumanClient):
+    async def receive_chunk(
+        self,
+        delta: object,
+        *,
+        channel_id: str,
+        parent_envelope_id: str,
+    ) -> None:
+        await self.ui.push_token(str(delta))
+```

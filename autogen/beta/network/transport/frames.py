@@ -21,6 +21,7 @@ from ..envelope import Envelope
 
 __all__ = (
     "AcceptFrame",
+    "ChunkFrame",
     "ErrorFrame",
     "EventFrame",
     "Frame",
@@ -129,6 +130,29 @@ class NotifyFrame:
 
 
 @dataclass(slots=True)
+class ChunkFrame:
+    """hub → client: a streaming token chunk during an agent's turn.
+
+    Transient — never WAL-persisted. Delivered while the sending
+    agent's ``agent.ask`` is in progress so observers can display tokens
+    in real-time before the final ``NotifyFrame`` carrying the complete
+    envelope arrives.
+
+    ``parent_envelope_id`` is the WAL envelope that triggered the turn
+    (the question the agent is answering). ``recipient_id`` mirrors
+    ``NotifyFrame``'s per-recipient stamp so ``HubClient`` can demux
+    without re-walking channel participants.
+    """
+
+    kind: ClassVar[str] = "chunk"
+    channel_id: str
+    sender_id: str
+    content: str
+    parent_envelope_id: str
+    recipient_id: str = ""
+
+
+@dataclass(slots=True)
 class ReceiptFrame:
     """client → hub: ack or nack a ``notify``.
 
@@ -188,6 +212,7 @@ Frame: TypeAlias = (
     | AcceptFrame
     | ErrorFrame
     | NotifyFrame
+    | ChunkFrame
     | ReceiptFrame
     | SubscribeFrame
     | UnsubscribeFrame
@@ -204,6 +229,7 @@ _FRAME_CLASSES: dict[str, type] = {
     "accept": AcceptFrame,
     "error": ErrorFrame,
     "notify": NotifyFrame,
+    "chunk": ChunkFrame,
     "receipt": ReceiptFrame,
     "subscribe": SubscribeFrame,
     "unsubscribe": UnsubscribeFrame,

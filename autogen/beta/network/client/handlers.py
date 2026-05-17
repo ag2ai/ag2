@@ -23,7 +23,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING
 
-from autogen.beta.events import BaseEvent
+from autogen.beta.events import BaseEvent, ModelMessageChunk
 from autogen.beta.stream import MemoryStream
 
 from ..channel import ChannelMetadata, ChannelState
@@ -208,6 +208,22 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
             channel_id=metadata.channel_id,
         )
         sub_ids = mirror.attach(stream)
+
+        # Forward ModelMessageChunk events to channel participants so
+        # observers (HumanClient, AgentClient.on_chunk) see tokens in
+        # real-time before the final reply envelope is posted.
+        _channel_id = metadata.channel_id
+        _sender_id = client.agent_id
+        _parent_id = envelope.envelope_id
+        _hub = client._hub
+
+        async def _forward_chunk(event: ModelMessageChunk) -> None:
+            await _hub.notify_chunk(_channel_id, _sender_id, event.content, _parent_id)
+
+        chunk_sub_id = stream.subscribe(
+            _forward_chunk,
+            condition=lambda e: isinstance(e, ModelMessageChunk),
+        )
         try:
             reply = await client.agent.ask(
                 current_input,
@@ -232,6 +248,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
                 hub=client._hub,
             )
         finally:
+            stream.unsubscribe(chunk_sub_id)
             mirror.detach(stream, sub_ids)
 
         if out_envelope is None:
