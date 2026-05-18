@@ -136,6 +136,80 @@ async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_write_file_encodes_as_utf8(tmp_path: Path) -> None:
+    """The toolkit must write non-ASCII content as UTF-8 regardless of the
+    host's `locale.getpreferredencoding()` (which is `cp1252` on most
+    Windows installs and would silently raise `UnicodeEncodeError` mid-write
+    for any non-cp1252 glyph). Read the bytes back and compare against the
+    UTF-8 encoding directly so the test pins the contract on every platform.
+    """
+    payload = "Café — Beberenice ☕ — 例 — émoji 🚀"
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+
+    config = TestConfig(
+        ToolCallEvent(
+            name="write_file",
+            arguments=json.dumps({"path": "non_ascii.txt", "content": payload}),
+        ),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("write it")
+
+    assert (tmp_path / "non_ascii.txt").read_bytes() == payload.encode("utf-8")
+
+
+@pytest.mark.asyncio
+async def test_read_file_decodes_as_utf8(tmp_path: Path) -> None:
+    """The toolkit must read files written as UTF-8 regardless of the
+    host's default encoding. On Windows, `Path.read_text()` without an
+    explicit encoding decodes as `cp1252` and raises `UnicodeDecodeError`
+    for any non-cp1252 byte sequence.
+    """
+    payload = "Café — Beberenice ☕ — 例 — émoji 🚀"
+    (tmp_path / "non_ascii.txt").write_bytes(payload.encode("utf-8"))
+
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+
+    tracking = TrackingConfig(
+        TestConfig(
+            ToolCallEvent(
+                name="read_file",
+                arguments=json.dumps({"path": "./non_ascii.txt"}),
+            ),
+            "done",
+        )
+    )
+    agent = Agent("", config=tracking, tools=[toolkit])
+    await agent.ask("read it")
+
+    tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
+    assert tool_result_msg.results[0].result.parts[0].content == payload
+
+
+@pytest.mark.asyncio
+async def test_update_file_preserves_utf8(tmp_path: Path) -> None:
+    """`update_file` reads, edits, and rewrites the file. Both endpoints
+    must use UTF-8 so a round-trip preserves non-ASCII byte content.
+    """
+    target = tmp_path / "data.txt"
+    target.write_bytes("Café old Beberenice".encode())
+
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+    config = TestConfig(
+        ToolCallEvent(
+            name="update_file",
+            arguments=json.dumps({"path": "data.txt", "old_content": "old", "new_content": "新"}),
+        ),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("update it")
+
+    assert target.read_bytes() == "Café 新 Beberenice".encode()
+
+
+@pytest.mark.asyncio
 async def test_update_file(tmp_path: Path) -> None:
     (tmp_path / "data.txt").write_text("foo bar baz")
 
