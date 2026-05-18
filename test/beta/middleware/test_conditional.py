@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from unittest.mock import MagicMock
 
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
+from autogen.beta.events import BaseEvent, ModelResponse, ToolCallEvent, ToolResultEvent
 from autogen.beta.events.conditions import TypeCondition
-from autogen.beta.middleware import BaseMiddleware, ConditionalMiddleware, Middleware, ToolExecution
-from autogen.beta.testing import TestConfig
+from autogen.beta.middleware import AgentTurn, BaseMiddleware, ConditionalMiddleware, LLMCall, Middleware, ToolExecution
 
 
 class TrackingMiddleware(BaseMiddleware):
@@ -23,6 +23,15 @@ class TrackingMiddleware(BaseMiddleware):
         super().__init__(event, ctx)
         self.mock = mock
 
+    async def on_turn(
+        self,
+        call_next: AgentTurn,
+        event: BaseEvent,
+        ctx: Context,
+    ) -> ModelResponse:
+        self.mock.on_turn(event.__class__.__name__)
+        return await call_next(event, ctx)
+
     async def on_tool_execution(
         self,
         call_next: ToolExecution,
@@ -32,18 +41,28 @@ class TrackingMiddleware(BaseMiddleware):
         self.mock.on_tool(event.name)
         return await call_next(event, ctx)
 
+    async def on_llm_call(
+        self,
+        call_next: LLMCall,
+        events: Sequence[BaseEvent],
+        ctx: Context,
+    ) -> ModelResponse:
+        self.mock.on_llm(len(events))
+        return await call_next(events, ctx)
+
 
 @pytest.mark.asyncio()
 class TestConditionalMiddleware:
-    async def test_activates_when_condition_matches(self, mock: MagicMock) -> None:
-        condition = TypeCondition(BaseEvent)
+    async def test_tool_condition_activates_on_matching_tool(self, mock: MagicMock) -> None:
+        """The motivating example from #2781: condition on ToolCallEvent.name."""
+        condition = ToolCallEvent.name == "my_tool"
 
         def my_tool() -> str:
             return "done"
 
         agent = Agent(
             "",
-            config=TestConfig(
+            config=__import__("autogen.beta.testing", fromlist=["TestConfig"]).TestConfig(
                 ToolCallEvent(name="my_tool"),
                 "result",
             ),
@@ -60,15 +79,16 @@ class TestConditionalMiddleware:
 
         mock.on_tool.assert_called_once_with("my_tool")
 
-    async def test_skips_when_condition_does_not_match(self, mock: MagicMock) -> None:
-        condition = TypeCondition(ToolCallEvent)
+    async def test_tool_condition_skips_non_matching_tool(self, mock: MagicMock) -> None:
+        """Condition targets a different tool name — middleware should not fire."""
+        condition = ToolCallEvent.name == "other_tool"
 
         def my_tool() -> str:
             return "done"
 
         agent = Agent(
             "",
-            config=TestConfig(
+            config=__import__("autogen.beta.testing", fromlist=["TestConfig"]).TestConfig(
                 ToolCallEvent(name="my_tool"),
                 "result",
             ),
@@ -85,15 +105,16 @@ class TestConditionalMiddleware:
 
         mock.on_tool.assert_not_called()
 
-    async def test_inverted_condition(self, mock: MagicMock) -> None:
-        condition = ~TypeCondition(ToolCallEvent)
+    async def test_type_condition_on_tool_event(self, mock: MagicMock) -> None:
+        """TypeCondition(ToolCallEvent) should activate on_tool_execution but not on_turn."""
+        condition = TypeCondition(ToolCallEvent)
 
         def my_tool() -> str:
             return "done"
 
         agent = Agent(
             "",
-            config=TestConfig(
+            config=__import__("autogen.beta.testing", fromlist=["TestConfig"]).TestConfig(
                 ToolCallEvent(name="my_tool"),
                 "result",
             ),
@@ -109,37 +130,89 @@ class TestConditionalMiddleware:
         await agent.ask("Hi!")
 
         mock.on_tool.assert_called_once_with("my_tool")
+        mock.on_turn.assert_not_called()
 
-    async def test_multiple_conditional_middleware(self, mock: MagicMock) -> None:
-        always_match = TypeCondition(BaseEvent)
-        never_match = TypeCondition(ToolCallEvent)
-
-        def my_tool() -> str:
-            return "done"
-
-        mock_active = MagicMock()
-        mock_skipped = MagicMock()
+    async def test_llm_call_always_delegates(self, mock: MagicMock) -> None:
+        """on_llm_call always delegates regardless of condition."""
+        condition = TypeCondition(ToolCallEvent)
 
         agent = Agent(
             "",
-            config=TestConfig(
-                ToolCallEvent(name="my_tool"),
-                "result",
-            ),
-            tools=[my_tool],
+            config=__import__("autogen.beta.testing", fromlist=["TestConfig"]).TestConfig("result"),
             middleware=[
                 ConditionalMiddleware(
-                    Middleware(TrackingMiddleware, mock=mock_active),
-                    condition=always_match,
-                ),
-                ConditionalMiddleware(
-                    Middleware(TrackingMiddleware, mock=mock_skipped),
-                    condition=never_match,
+                    Middleware(TrackingMiddleware, mock=mock),
+                    condition=condition,
                 ),
             ],
         )
 
         await agent.ask("Hi!")
 
-        mock_active.on_tool.assert_called_once_with("my_tool")
-        mock_skipped.on_tool.assert_not_called()
+        mock.on_turn.assert_not_called()
+        mock.on_llm.assert_called()
+
+    async def test_inverted_condition(self, mock: MagicMock) -> None:
+        """~TypeCondition(ToolCallEvent) activates on_turn but not on_tool_execution."""
+        condition = ~TypeCondition(ToolCallEvent)
+
+        def my_tool() -> str:
+            return "done"
+
+        agent = Agent(
+            "",
+            config=__import__("autogen.beta.testing", fromlist=["TestConfig"]).TestConfig(
+                ToolCallEvent(name="my_tool"),
+                "result",
+            ),
+            tools=[my_tool],
+            middleware=[
+                ConditionalMiddleware(
+                    Middleware(TrackingMiddleware, mock=mock),
+                    condition=condition,
+                ),
+            ],
+        )
+
+        await agent.ask("Hi!")
+
+        mock.on_turn.assert_called()
+        mock.on_tool.assert_not_called()
+
+    async def test_composed_or_condition(self, mock: MagicMock) -> None:
+        """Composed condition from issue: (name == 'a') | (name == 'b')."""
+        condition = (ToolCallEvent.name == "tool_a") | (ToolCallEvent.name == "tool_b")
+
+        def tool_a() -> str:
+            return "a"
+
+        def tool_b() -> str:
+            return "b"
+
+        def tool_c() -> str:
+            return "c"
+
+        agent = Agent(
+            "",
+            config=__import__("autogen.beta.testing", fromlist=["TestConfig"]).TestConfig(
+                [
+                    ToolCallEvent(name="tool_a"),
+                    ToolCallEvent(name="tool_b"),
+                    ToolCallEvent(name="tool_c"),
+                ],
+                "result",
+            ),
+            tools=[tool_a, tool_b, tool_c],
+            middleware=[
+                ConditionalMiddleware(
+                    Middleware(TrackingMiddleware, mock=mock),
+                    condition=condition,
+                ),
+            ],
+        )
+
+        await agent.ask("Hi!")
+
+        assert mock.on_tool.call_count == 2
+        mock.on_tool.assert_any_call("tool_a")
+        mock.on_tool.assert_any_call("tool_b")

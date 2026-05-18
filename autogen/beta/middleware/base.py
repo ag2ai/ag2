@@ -52,31 +52,6 @@ ToolExecution: TypeAlias = Callable[["ToolCallEvent", "Context"], Awaitable[Tool
 ToolMiddleware: TypeAlias = Callable[[ToolExecution, "ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 
 
-class ConditionalMiddleware:
-    """Middleware wrapper that only activates when a condition matches the initial event.
-
-    When the condition evaluates to True, delegates to the wrapped middleware.
-    When False, returns a passthrough BaseMiddleware (all hooks call call_next).
-    """
-
-    def __init__(
-        self,
-        middleware: "MiddlewareFactory",
-        condition: Condition,
-    ) -> None:
-        self._middleware = middleware
-        self._condition = condition
-
-    def __call__(
-        self,
-        event: "BaseEvent",
-        context: "Context",
-    ) -> "BaseMiddleware":
-        if self._condition(event):
-            return self._middleware(event, context)
-        return BaseMiddleware(event, context)
-
-
 class BaseMiddleware:
     def __init__(
         self,
@@ -117,3 +92,84 @@ class BaseMiddleware:
         context: "Context",
     ) -> "HumanMessage":
         return await call_next(event, context)
+
+
+class _ConditionalWrapper(BaseMiddleware):
+    """Evaluates a condition per-hook against each hook's own event."""
+
+    def __init__(
+        self,
+        event: "BaseEvent",
+        context: "Context",
+        inner: BaseMiddleware,
+        condition: Condition,
+    ) -> None:
+        super().__init__(event, context)
+        self._inner = inner
+        self._condition = condition
+
+    async def on_turn(
+        self,
+        call_next: AgentTurn,
+        event: "BaseEvent",
+        context: "Context",
+    ) -> "ModelResponse":
+        if self._condition(event):
+            return await self._inner.on_turn(call_next, event, context)
+        return await call_next(event, context)
+
+    async def on_tool_execution(
+        self,
+        call_next: ToolExecution,
+        event: "ToolCallEvent",
+        context: "Context",
+    ) -> ToolResultType:
+        if self._condition(event):
+            return await self._inner.on_tool_execution(call_next, event, context)
+        return await call_next(event, context)
+
+    async def on_llm_call(
+        self,
+        call_next: LLMCall,
+        events: "Sequence[BaseEvent]",
+        context: "Context",
+    ) -> "ModelResponse":
+        return await self._inner.on_llm_call(call_next, events, context)
+
+    async def on_human_input(
+        self,
+        call_next: HumanInputHook,
+        event: "HumanInputRequest",
+        context: "Context",
+    ) -> "HumanMessage":
+        if self._condition(event):
+            return await self._inner.on_human_input(call_next, event, context)
+        return await call_next(event, context)
+
+
+class ConditionalMiddleware:
+    """Middleware wrapper that evaluates a condition per-hook.
+
+    Each hook checks the condition against its own event parameter.
+    When the condition matches, the hook delegates to the wrapped middleware.
+    When it does not match, the hook passes through to call_next.
+
+    on_llm_call always delegates to the wrapped middleware because it receives
+    a sequence of events rather than a single event to match against.
+    """
+
+    def __init__(
+        self,
+        middleware: "MiddlewareFactory",
+        condition: Condition,
+    ) -> None:
+        self._middleware = middleware
+        self._condition = condition
+
+    def __call__(
+        self,
+        event: "BaseEvent",
+        context: "Context",
+    ) -> "BaseMiddleware":
+        inner = self._middleware(event, context)
+        return _ConditionalWrapper(event, context, inner=inner, condition=self._condition)
