@@ -2,6 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+"""TinyFish search and fetch extension for AG2 Beta.
+
+Provides a toolkit that lets agents query TinyFish Search for ranked web
+results and use TinyFish Fetch to extract browser-rendered page content.
+
+Maintainer: pranavjana
+Docs: https://docs.ag2.ai/docs/beta/extensions/tools/search/tinyfish
+"""
+
 import os
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager

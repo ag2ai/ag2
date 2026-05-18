@@ -16,9 +16,8 @@ pytest.importorskip("tinyfish")
 
 from autogen.beta import Agent, Context, DataInput, Variable
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.beta.testing import TestConfig, TrackingConfig
-from autogen.beta.tools.search import tinyfish as tinyfish_module
-from autogen.beta.tools.search.tinyfish import (
+from autogen.beta.extensions.tools.search import tinyfish as tinyfish_module
+from autogen.beta.extensions.tools.search.tinyfish import (
     _API_INTEGRATION_ENV_VAR,
     TinyFishFetchError,
     TinyFishFetchResponse,
@@ -28,6 +27,7 @@ from autogen.beta.tools.search.tinyfish import (
     TinyFishSearchToolkit,
     _safe_url,
 )
+from autogen.beta.testing import TestConfig, TrackingConfig
 
 TINYFISH_BASE_URL = "https://agent.tinyfish.ai"
 
