@@ -101,6 +101,15 @@ def test_captain_agent_with_library(credentials_all: Credentials):
     print(result)
 
 
+def test_default_nested_config_does_not_set_temperature_and_top_p_together() -> None:
+    """Guard against regressions where the built-in ``default_llm_config`` sets
+    both ``temperature`` and ``top_p`` — providers (e.g. Anthropic) reject
+    configurations that set both at once, which used to break out-of-the-box
+    ``CaptainAgent`` runs (see issue #2102)."""
+    default_llm_config = CaptainAgent.DEFAULT_NESTED_CONFIG["autobuild_build_config"]["default_llm_config"]
+    assert not ("temperature" in default_llm_config and "top_p" in default_llm_config)
+
+
 if __name__ == "__main__":
     test_captain_agent_from_scratch()
     test_captain_agent_with_library()
