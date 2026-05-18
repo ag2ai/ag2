@@ -1,13 +1,18 @@
 name: Claude Code Review
 
+# NOTE: this workflow uses `pull_request_target` so secrets (including
+# ``CLAUDE_CODE_OAUTH_TOKEN`` and the optional ``CLAUDE_REVIEW_PAT``) are
+# available for PRs opened from forks. To prevent code from a fork from
+# running with those secrets, fork PRs are only reviewed when a
+# maintainer has applied the ``safe-to-review`` label.
+
 on:
-  # For PRs from the same repository
-  pull_request:
+  pull_request_target:
     types:
       - opened
       - synchronize
       - ready_for_review
-  # Manual trigger
+      - labeled
   workflow_dispatch:
     inputs:
       pr_number:
@@ -19,24 +24,18 @@ jobs:
   claude-review:
     if: |
       github.actor != 'dependabot[bot]' &&
-      ((github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
+      ((github.event_name == 'pull_request_target' && github.event.pull_request.draft == false) ||
       github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Check PR and checkout branch
-        id: check-pr
+      - name: Resolve PR number and fork status
+        id: pr-info
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
@@ -50,36 +49,48 @@ jobs:
             PR_NUMBER="$PR_NUMBER_EVENT"
           fi
 
-          echo "Checking PR #$PR_NUMBER"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
 
-          # Check if it's a forked PR
-          PR_INFO=$(gh pr view "$PR_NUMBER" --json isCrossRepository,headRepositoryOwner,headRepository 2>/dev/null || echo '{}')
+          PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPO" \
+            --json isCrossRepository,headRepositoryOwner,headRefOid,labels \
+            2>/dev/null || echo '{}')
           IS_FORK=$(echo "$PR_INFO" | jq -r '.isCrossRepository // false')
-          HEAD_REPO=$(echo "$PR_INFO" | jq -r '.headRepository.nameWithOwner // ""')
+          HEAD_SHA=$(echo "$PR_INFO" | jq -r '.headRefOid // ""')
+          HAS_SAFE_LABEL=$(echo "$PR_INFO" | jq -r '[.labels[].name] | index("safe-to-review") != null')
 
-          # Skip (don't fail) forked PRs on automatic triggers, but allow manual triggers
-          if [ "$EVENT_NAME" == "pull_request" ] && ([ "$IS_FORK" = "true" ] || [ "$HEAD_REPO" != "$GITHUB_REPO" ]); then
-            echo "⏭️  Skipping review: PR #$PR_NUMBER is from a forked repository"
-            echo "Forked PRs are skipped for automatic reviews. Use workflow_dispatch to manually trigger a review."
+          echo "is_fork=$IS_FORK" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "has_safe_label=$HAS_SAFE_LABEL" >> "$GITHUB_OUTPUT"
+
+          if [ "$IS_FORK" = "true" ] && [ "$HAS_SAFE_LABEL" != "true" ] && [ "$EVENT_NAME" != "workflow_dispatch" ]; then
+            echo "::notice::Skipping automatic review for forked PR #$PR_NUMBER — apply the 'safe-to-review' label to enable."
             echo "skip_review=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          else
+            echo "skip_review=false" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "Checking out PR #$PR_NUMBER"
-          gh pr checkout "$PR_NUMBER"
-          echo "✅ PR branch checked out successfully"
-          echo "skip_review=false" >> "$GITHUB_OUTPUT"
+      - name: Checkout PR head
+        if: steps.pr-info.outputs.skip_review != 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ steps.pr-info.outputs.head_sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Run Claude Code Review
-        if: steps.check-pr.outputs.skip_review != 'true'
+        if: steps.pr-info.outputs.skip_review != 'true'
         id: claude-review
         uses: anthropics/claude-code-action@1eddb334cfa79fdb21ecbe2180ca1a016e8e7d47 # v1.0.88
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # When ``CLAUDE_REVIEW_PAT`` is set, use it so the Claude action's
+          # actor-permission check sees a collaborator (with write access)
+          # instead of the fork owner (read-only). Falls back to the default
+          # ``GITHUB_TOKEN`` for same-repo PRs.
+          github_token: ${{ secrets.CLAUDE_REVIEW_PAT || secrets.GITHUB_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number || github.event.pull_request.number }}
+            PR NUMBER: ${{ steps.pr-info.outputs.pr_number }}
 
             Please review this pull request and provide feedback on:
             - Code quality and best practices
