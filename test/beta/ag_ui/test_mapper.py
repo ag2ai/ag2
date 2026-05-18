@@ -55,17 +55,19 @@ class TestUserMessageString:
     def test_plain_string_becomes_text_input(self) -> None:
         command = _command(UserMessage(id="m1", content="hello"))
 
-        prompt, messages = map_agui_messages_to_events(command)
+        prompt, messages, current_turn = map_agui_messages_to_events(command)
 
         assert prompt == []
-        assert messages == [ModelRequest([TextInput("hello")])]
+        assert messages == []
+        assert current_turn == [TextInput("hello")]
 
     def test_text_content_becomes_text_input(self) -> None:
         command = _command(UserMessage(id="m1", content=[TextInputContent(text="hi")]))
 
-        prompt, messages = map_agui_messages_to_events(command)
+        _, messages, current_turn = map_agui_messages_to_events(command)
 
-        assert messages == [ModelRequest([TextInput("hi")])]
+        assert messages == []
+        assert current_turn == [TextInput("hi")]
 
 
 @pytest.mark.parametrize(
@@ -83,17 +85,19 @@ class TestMediaContentMapping:
         content = content_cls(source=InputContentUrlSource(value=url))
         command = _command(UserMessage(id="m1", content=[content]))
 
-        _, messages = map_agui_messages_to_events(command)
+        _, messages, current_turn = map_agui_messages_to_events(command)
 
-        assert messages == [ModelRequest([factory(url)])]
+        assert messages == []
+        assert current_turn == [factory(url)]
 
     def test_data_source_maps_to_binary_input(self, content_cls: type, factory: Any, mime: str) -> None:
         content = content_cls(source=InputContentDataSource(value=B64_VALUE, mime_type=mime))
         command = _command(UserMessage(id="m1", content=[content]))
 
-        _, messages = map_agui_messages_to_events(command)
+        _, messages, current_turn = map_agui_messages_to_events(command)
 
-        assert messages == [ModelRequest([factory(data=RAW_BYTES, media_type=mime)])]
+        assert messages == []
+        assert current_turn == [factory(data=RAW_BYTES, media_type=mime)]
 
 
 class TestBinaryContentRejected:
@@ -122,9 +126,10 @@ class TestMetadata:
             )
         )
 
-        _, messages = map_agui_messages_to_events(command)
+        _, messages, current_turn = map_agui_messages_to_events(command)
 
-        text_part, image_part = messages[0].parts
+        assert messages == []
+        text_part, image_part = current_turn
         assert text_part.metadata == {}
         assert image_part.metadata == {"alt": "cat"}
 
@@ -136,10 +141,11 @@ class TestNonUserRoles:
             UserMessage(id="u1", content="hi"),
         )
 
-        prompt, messages = map_agui_messages_to_events(command)
+        prompt, messages, current_turn = map_agui_messages_to_events(command)
 
         assert prompt == ["be brief"]
-        assert messages == [ModelRequest([TextInput("hi")])]
+        assert messages == []
+        assert current_turn == [TextInput("hi")]
 
     def test_assistant_message_becomes_model_response(self) -> None:
         command = _command(
@@ -147,8 +153,9 @@ class TestNonUserRoles:
             AssistantMessage(id="a1", content="hello!"),
         )
 
-        _, messages = map_agui_messages_to_events(command)
+        _, messages, current_turn = map_agui_messages_to_events(command)
 
+        assert current_turn == []
         assert messages == [
             ModelRequest([TextInput("hi")]),
             ModelResponse(ModelMessage("hello!"), tool_calls=ToolCallsEvent([])),
@@ -167,8 +174,9 @@ class TestNonUserRoles:
             ToolMessage(id="tm1", tool_call_id="t1", content="42"),
         )
 
-        _, messages = map_agui_messages_to_events(command)
+        _, messages, current_turn = map_agui_messages_to_events(command)
 
+        assert current_turn == []
         assert messages == [
             ModelRequest([TextInput("run tool")]),
             ModelResponse(
@@ -177,3 +185,32 @@ class TestNonUserRoles:
             ),
             ToolResultsEvent([ToolResultEvent(parent_id="t1", result=ToolResult(["42"]))]),
         ]
+
+
+class TestCurrentTurnSplit:
+    def test_trailing_user_messages_split_from_history(self) -> None:
+        command = _command(
+            UserMessage(id="u1", content="first turn"),
+            AssistantMessage(id="a1", content="reply"),
+            UserMessage(id="u2", content="follow-up"),
+        )
+
+        prompt, messages, current_turn = map_agui_messages_to_events(command)
+
+        assert prompt == []
+        assert messages == [
+            ModelRequest([TextInput("first turn")]),
+            ModelResponse(ModelMessage("reply"), tool_calls=ToolCallsEvent([])),
+        ]
+        assert current_turn == [TextInput("follow-up")]
+
+    def test_consecutive_trailing_user_messages_accumulate_in_current_turn(self) -> None:
+        command = _command(
+            UserMessage(id="u1", content="hello"),
+            UserMessage(id="u2", content="and more"),
+        )
+
+        _, messages, current_turn = map_agui_messages_to_events(command)
+
+        assert messages == []
+        assert current_turn == [TextInput("hello"), TextInput("and more")]
