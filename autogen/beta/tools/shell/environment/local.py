@@ -5,9 +5,10 @@
 import atexit
 import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
+
+from autogen.beta.tools.sandbox.local import _run_subprocess
 
 from .base import READONLY_COMMANDS, ShellEnvironment, check_ignore, matches
 
@@ -117,7 +118,8 @@ class LocalShellEnvironment(ShellEnvironment):
         """Execute *command* and return its output as a string.
 
         Applies allowed/blocked filtering, ignore-pattern checks, then runs
-        the command via :func:`subprocess.run`.
+        the command via the shared :func:`_run_subprocess` helper used by
+        :class:`~autogen.beta.tools.sandbox.LocalSandbox`.
         """
         if self._allowed is not None and not any(matches(p, command) for p in self._allowed):
             return f"Command not allowed: {command!r}"
@@ -130,27 +132,16 @@ class LocalShellEnvironment(ShellEnvironment):
             if denied is not None:
                 return denied
 
-        merged_env = {**os.environ, **self._env} if self._env is not None else None
+        result = _run_subprocess(
+            [command],
+            cwd=self._workdir,
+            env=self._env,
+            timeout=self._timeout,
+            max_output=self._max_output,
+            shell=True,
+        )
 
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                cwd=self._workdir,
-                capture_output=True,
-                text=True,
-                timeout=self._timeout,
-                env=merged_env,
-            )
-            output = (result.stdout + result.stderr).strip()
-
-            if (total := len(output)) > self._max_output:
-                output = output[: self._max_output]
-                output += f"\n[truncated: showing first {self._max_output} of {total} chars]"
-
-            if result.returncode != 0:
-                suffix = f"[exit code: {result.returncode}]"
-                return f"{output}\n{suffix}" if output else suffix
-            return output
-        except subprocess.TimeoutExpired:
-            return f"Command timed out after {self._timeout}s\n[exit code: 124]"
+        if result.exit_code != 0:
+            suffix = f"[exit code: {result.exit_code}]"
+            return f"{result.output}\n{suffix}" if result.output else suffix
+        return result.output
