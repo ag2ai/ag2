@@ -398,6 +398,58 @@ It uses a character-based estimate controlled by `chars_per_token`.
 
 Use it when you need lightweight context budgeting without depending on a model-specific tokenizer.
 
+## Conditional Middleware
+
+`ConditionalMiddleware` lets you gate any middleware so it only activates when a condition matches the initial event for the turn. When the condition is not met, the middleware is skipped entirely — all hooks pass through to the next middleware in the chain.
+
+This is useful when you have middleware that should only run for certain types of requests, without writing condition checks inside every hook method.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.events import ModelRequest
+from autogen.beta.events.conditions import TypeCondition
+from autogen.beta.middleware import ConditionalMiddleware, LoggingMiddleware, Middleware
+
+agent = Agent(
+    "assistant",
+    prompt="Be helpful.",
+    config=OpenAIConfig("gpt-4o-mini"),
+    middleware=[
+        ConditionalMiddleware(
+            LoggingMiddleware(),
+            condition=TypeCondition(ModelRequest),
+        ),
+    ],
+)
+```
+
+In this example, `LoggingMiddleware` only activates when the turn is triggered by a `ModelRequest` event. For any other event type, all four hooks (`on_turn`, `on_llm_call`, `on_tool_execution`, `on_human_input`) pass through without running the logging logic.
+
+### Composing Conditions
+
+Conditions support `&` (and), `|` (or), and `~` (not) operators, so you can build expressive gates:
+
+```python linenums="1"
+from autogen.beta.events import ModelRequest, ToolCallEvent
+from autogen.beta.events.conditions import TypeCondition
+from autogen.beta.middleware import ConditionalMiddleware, Middleware
+
+# Activate only when the event is NOT a ToolCallEvent
+conditional = ConditionalMiddleware(
+    Middleware(MyAuditMiddleware, logger=logger),
+    condition=~TypeCondition(ToolCallEvent),
+)
+
+# Activate for ModelRequest OR ToolCallEvent
+conditional = ConditionalMiddleware(
+    Middleware(MyAuditMiddleware, logger=logger),
+    condition=TypeCondition(ModelRequest) | TypeCondition(ToolCallEvent),
+)
+```
+
+`ConditionalMiddleware` wraps any `MiddlewareFactory` — including `Middleware(...)` instances, bare `BaseMiddleware` subclasses, and other `ConditionalMiddleware` wrappers.
+
 ## Choosing the Right Hook
 
 If you are unsure where a behavior belongs, use this rule of thumb:

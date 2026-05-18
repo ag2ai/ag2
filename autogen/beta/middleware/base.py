@@ -9,6 +9,7 @@ from autogen.beta.annotations import Context
 from autogen.beta.events import (
     BaseEvent,
     ClientToolCallEvent,
+    Condition,
     HumanInputRequest,
     HumanMessage,
     ModelResponse,
@@ -49,6 +50,31 @@ HumanInputHook: TypeAlias = Callable[["HumanInputRequest", "Context"], Awaitable
 ToolExecution: TypeAlias = Callable[["ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 # call_next + ToolExecution type. BaseMiddleware.on_tool_execution() hook signature.
 ToolMiddleware: TypeAlias = Callable[[ToolExecution, "ToolCallEvent", "Context"], Awaitable[ToolResultType]]
+
+
+class ConditionalMiddleware:
+    """Middleware wrapper that only activates when a condition matches the initial event.
+
+    When the condition evaluates to True, delegates to the wrapped middleware.
+    When False, returns a passthrough BaseMiddleware (all hooks call call_next).
+    """
+
+    def __init__(
+        self,
+        middleware: "MiddlewareFactory",
+        condition: Condition,
+    ) -> None:
+        self._middleware = middleware
+        self._condition = condition
+
+    def __call__(
+        self,
+        event: "BaseEvent",
+        context: "Context",
+    ) -> "BaseMiddleware":
+        if self._condition(event):
+            return self._middleware(event, context)
+        return BaseMiddleware(event, context)
 
 
 class BaseMiddleware:
