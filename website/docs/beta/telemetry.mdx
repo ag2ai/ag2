@@ -120,6 +120,27 @@ When content capture is enabled (the default), spans include these additional at
 !!! warning
     With `capture_content=True`, message content, tool arguments, and human input will appear in your tracing backend. Ensure your backend has appropriate access controls.
 
+## Custom Span Attributes
+
+Use `span_attributes` to stamp custom key-value pairs onto spans the middleware emits. This is useful for routing or filtering traces by tenant, environment, deployment, or any other label your backend supports. Every span will carry these attributes.
+
+```python
+TelemetryMiddleware(
+    tracer_provider=tracer_provider,
+    agent_name="assistant",
+    span_attributes={
+        "deployment": "production",
+        "ag2.org.id": "org-abc123",
+    },
+)
+```
+
+!!! tip
+    This is the right place to add tenant or organization identifiers when your tracing backend filters traces by span-level labels (for example, Google Cloud Trace label filters or Datadog tags).
+
+!!! note
+    If a key in `span_attributes` collides with an intrinsic attribute set by the middleware (such as `ag2.span.type` or `gen_ai.usage.input_tokens`), the middleware's value always wins.
+
 ## Configuration
 
 `TelemetryMiddleware` accepts:
@@ -131,6 +152,7 @@ When content capture is enabled (the default), spans include these additional at
 | `agent_name` | `str \| None` | `"unknown"` | Agent name for span attributes |
 | `provider_name` | `str \| None` | `None` | LLM provider name (auto-detected from response if not set) |
 | `model_name` | `str \| None` | `None` | Model name (auto-detected from response if not set) |
+| `span_attributes` | `dict[str, str] \| None` | `None` | Extra key-value pairs stamped onto every span (tenant IDs, environment tags, etc.) |
 
 ## Tool Execution Example
 

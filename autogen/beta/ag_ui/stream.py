@@ -11,6 +11,11 @@ from uuid import uuid4
 
 from ag_ui.core import (
     BaseEvent,
+    ReasoningEndEvent,
+    ReasoningMessageContentEvent,
+    ReasoningMessageEndEvent,
+    ReasoningMessageStartEvent,
+    ReasoningStartEvent,
     RunAgentInput,
     RunErrorEvent,
     RunFinishedEvent,
@@ -131,7 +136,7 @@ async def run_stream(
         client_tools.append(tool)
         client_tools_names.add(tool.name)
 
-    extracted_prompt, history_messages = map_agui_messages_to_events(command)
+    extracted_prompt, history_messages, current_turn = map_agui_messages_to_events(command)
     if extracted_prompt:
         command.prompt.extend(extracted_prompt)
     if client_tools:
@@ -141,10 +146,55 @@ async def run_stream(
     await stream.history.replace(history_messages)
 
     streaming_msg_id: str | None = None
+    reasoning_msg_id: str | None = None
 
     @stream.subscribe
     async def map_events_to_ag_ui(event: events.BaseEvent) -> None:
-        nonlocal streaming_msg_id
+        nonlocal streaming_msg_id, reasoning_msg_id
+
+        if reasoning_msg_id is not None and not isinstance(event, events.ModelReasoning):
+            await write_events_stream.send(
+                ReasoningMessageEndEvent(
+                    message_id=reasoning_msg_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            await write_events_stream.send(
+                ReasoningEndEvent(
+                    message_id=reasoning_msg_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            reasoning_msg_id = None
+
+        if isinstance(event, events.ModelReasoning):
+            if not event.content:
+                return
+
+            if reasoning_msg_id is None:
+                reasoning_msg_id = str(uuid4())
+                await write_events_stream.send(
+                    ReasoningStartEvent(
+                        message_id=reasoning_msg_id,
+                        timestamp=_get_timestamp(),
+                    )
+                )
+                await write_events_stream.send(
+                    ReasoningMessageStartEvent(
+                        message_id=reasoning_msg_id,
+                        role="reasoning",
+                        timestamp=_get_timestamp(),
+                    )
+                )
+
+            await write_events_stream.send(
+                ReasoningMessageContentEvent(
+                    message_id=reasoning_msg_id,
+                    delta=event.content,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            return
 
         if isinstance(event, events.ModelMessageChunk):
             if not event.content:
@@ -270,6 +320,7 @@ async def run_stream(
             initial_state = (command.incoming.state or {}) | initial_vars
 
             result = await agent.ask(
+                *current_turn,
                 prompt=command.prompt,
                 tools=command.tools,
                 variables=initial_state,
@@ -308,10 +359,21 @@ async def run_stream(
             )
 
 
-def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list[events.BaseEvent]]:
+def map_agui_messages_to_events(
+    command: AGStreamInput,
+) -> tuple[list[str], list[events.BaseEvent], list[events.Input]]:
+    """Translate AG-UI history into the parts ``run_stream`` hands to the agent.
+
+    Returns the system/developer ``prompt`` strings, the prior-turn ``history``
+    events, and the parts of the current user turn (trailing run of
+    ``UserMessage`` entries). The current turn is kept separate because
+    ``Agent.ask`` always constructs a ``ModelRequest`` from ``*msg`` and sends
+    it as the loop's initial event — putting the current turn there gives the
+    LLM a meaningful ``messages[-1]`` instead of an empty placeholder.
+    """
     prompt, messages = [], []
 
-    input_buffer = []
+    input_buffer: list[events.Input] = []
     for m in command.incoming.messages:
         if m.role == "user":
             content = m.content
@@ -322,36 +384,39 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
             for c in content:
                 if c.type == "text":
                     input_buffer.append(events.TextInput(c.text))
+                    continue
 
-                elif c.url:
-                    input_buffer.append(
-                        events.UrlInput(
-                            c.url,
-                            kind=events.BinaryType.BINARY,
+                match c.type:
+                    case "image":
+                        factory = events.ImageInput
+                    case "audio":
+                        factory = events.AudioInput
+                    case "video":
+                        factory = events.VideoInput
+                    case "document":
+                        factory = events.DocumentInput
+                    case "binary":
+                        raise ValueError(
+                            "AG-UI 'binary' content type is deprecated; "
+                            "use ImageInputContent / AudioInputContent / "
+                            "VideoInputContent / DocumentInputContent instead."
                         )
-                    )
 
-                elif c.id:
-                    input_buffer.append(
-                        events.FileIdInput(
-                            c.id,
-                            filename=c.filename,
-                        )
-                    )
+                src = c.source
+                if src.type == "url":
+                    inp = factory(src.value)
+                else:
+                    inp = factory(data=b64decode(src.value), media_type=src.mime_type)
 
-                elif c.data:
-                    input_buffer.append(
-                        events.BinaryInput(
-                            b64decode(c.data),
-                            media_type=c.mime_type,
-                        )
-                    )
+                if c.metadata:
+                    inp.metadata = c.metadata
+                input_buffer.append(inp)
 
             continue
 
         if input_buffer:
             messages.append(events.ModelRequest(input_buffer))
-            input_buffer.clear()
+            input_buffer = []
 
         if m.role in ["system", "developer"]:
             prompt.append(m.content)
@@ -373,6 +438,10 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
                 )
             )
 
+        elif m.role == "reasoning":
+            if m.content:
+                messages.append(events.ModelReasoning(m.content))
+
         elif m.role == "tool":
             messages.append(
                 events.ToolResultsEvent([
@@ -383,10 +452,7 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
                 ])
             )
 
-    if input_buffer:
-        messages.append(events.ModelRequest(input_buffer))
-
-    return prompt, messages
+    return prompt, messages, input_buffer
 
 
 def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> str:
