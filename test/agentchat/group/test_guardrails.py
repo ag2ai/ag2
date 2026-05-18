@@ -48,6 +48,15 @@ class TestGuardrailResult:
         assert result.activated is False
         assert result.justification == "No justification provided"
 
+    def test_parse_json_with_guardrail_field(self) -> None:
+        """Test parsing JSON that contains a stray ``guardrail`` field does not raise."""
+        json_str = '{"activated": true, "justification": "Test", "guardrail": "ignored"}'
+        guardrail = MagicMock(spec=Guardrail)
+        result = GuardrailResult.parse(json_str, guardrail=guardrail)
+        assert result.activated is True
+        assert result.justification == "Test"
+        assert result.guardrail is guardrail
+
     def test_parse_invalid_json(self) -> None:
         """Test parsing invalid JSON string raises ValueError."""
         invalid_json = '{"activated": true, "justification": "Test"'  # Missing closing brace

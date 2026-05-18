@@ -174,6 +174,7 @@ class GuardrailResult(BaseModel):
         """
         try:
             data = json.loads(text)
+            data.pop("guardrail", None)
             return GuardrailResult(**data, guardrail=guardrail)
         except (json.JSONDecodeError, ValueError) as e:
             raise ValueError(f"Failed to parse GuardrailResult from text: {text}") from e
