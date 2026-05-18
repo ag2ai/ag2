@@ -95,7 +95,13 @@ class FilesystemToolkit(Toolkit):
             target = _resolve_path(base_dir, path)
             if raw:
                 return base64.b64encode(target.read_bytes()).decode("ascii")
-            return target.read_text()
+            # Pin the encoding so the toolkit produces the same bytes on Linux,
+            # macOS, and Windows. Without it `Path.read_text()` inherits
+            # `locale.getpreferredencoding()`, which is `cp1252` on most
+            # Windows installs and raises `UnicodeDecodeError` on any file
+            # written with non-cp1252 content (most modern source files,
+            # config files, JSON with non-ASCII strings, etc.).
+            return target.read_text(encoding="utf-8")
 
         return _read_file
 
@@ -148,7 +154,12 @@ class FilesystemToolkit(Toolkit):
         ) -> str:
             target = _resolve_path(base_dir, path)
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content)
+            # Encode the payload as UTF-8 so the toolkit round-trips any
+            # text the model writes (smart quotes, emoji, non-Latin scripts,
+            # code with non-ASCII docstrings). The platform-default
+            # encoding is `cp1252` on most Windows machines and silently
+            # raises `UnicodeEncodeError` mid-write.
+            target.write_text(content, encoding="utf-8")
             return f"Successfully wrote {len(content)} characters to {path}"
 
         return _write_file
@@ -179,10 +190,15 @@ class FilesystemToolkit(Toolkit):
             ],
         ) -> str:
             target = _resolve_path(base_dir, path)
-            text = target.read_text()
+            # See _read_file / _write_file: pin UTF-8 so update_file reads
+            # back the exact bytes it (or any other UTF-8 writer) produced,
+            # and writes the modified payload back in the same encoding.
+            # Without this, the read/write pair on Windows would silently
+            # transcode the file into cp1252 every time the model edits it.
+            text = target.read_text(encoding="utf-8")
             if old_content not in text:
                 raise ValueError(f"old_content not found in {path}")
-            target.write_text(text.replace(old_content, new_content, 1))
+            target.write_text(text.replace(old_content, new_content, 1), encoding="utf-8")
             return f"Successfully updated {path}"
 
         return _update_file
