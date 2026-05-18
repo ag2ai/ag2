@@ -390,3 +390,77 @@ def test_conversation_default_view_unchanged() -> None:
     assert isinstance(view, WindowedSummary)
     # And NOT the named variant (subclass guard).
     assert not isinstance(view, NamedWindowedSummary)
+
+
+# ── Single-envelope projection: current-turn attribution ─────────────────────
+#
+# The handler calls view.project([current_envelope], ...) for the triggering
+# envelope so named views apply the same [name]: label they use for history.
+
+
+@pytest.mark.asyncio
+async def test_named_transcript_single_envelope_prefixes_non_self() -> None:
+    """project() on a single non-self envelope gives [name]: prefix."""
+    metadata = _two_party_metadata("alice", "bob")
+    wal = [_text_envelope("alice", "bob", "hi bob")]
+
+    projection = await NamedTranscript().project(
+        wal,
+        participant_id="bob",
+        channel=metadata,
+        render_envelope=default_render_envelope,
+        name_for=_named_resolver({"alice": "Alice"}),
+    )
+
+    assert projection == [ModelRequest([TextInput("[Alice]: hi bob")])]
+
+
+@pytest.mark.asyncio
+async def test_named_windowed_summary_single_envelope_prefixes_non_self() -> None:
+    """NamedWindowedSummary.project() on a single envelope gives [name]: prefix."""
+    metadata = _two_party_metadata("alice", "bob")
+    wal = [_text_envelope("alice", "bob", "hi bob")]
+
+    projection = await NamedWindowedSummary(recent_n=10).project(
+        wal,
+        participant_id="bob",
+        channel=metadata,
+        render_envelope=default_render_envelope,
+        name_for=_named_resolver({"alice": "Alice"}),
+    )
+
+    assert projection == [ModelRequest([TextInput("[Alice]: hi bob")])]
+
+
+@pytest.mark.asyncio
+async def test_full_transcript_single_envelope_no_prefix() -> None:
+    """Unnamed FullTranscript.project() on a single envelope gives no prefix."""
+    metadata = _two_party_metadata("alice", "bob")
+    wal = [_text_envelope("alice", "bob", "hi bob")]
+
+    projection = await FullTranscript().project(
+        wal,
+        participant_id="bob",
+        channel=metadata,
+        render_envelope=default_render_envelope,
+        name_for=_named_resolver({"alice": "Alice"}),
+    )
+
+    assert projection == [ModelRequest([TextInput("hi bob")])]
+
+
+@pytest.mark.asyncio
+async def test_windowed_summary_single_envelope_no_prefix() -> None:
+    """Unnamed WindowedSummary.project() on a single envelope gives no prefix."""
+    metadata = _two_party_metadata("alice", "bob")
+    wal = [_text_envelope("alice", "bob", "hi bob")]
+
+    projection = await WindowedSummary(recent_n=10).project(
+        wal,
+        participant_id="bob",
+        channel=metadata,
+        render_envelope=default_render_envelope,
+        name_for=_named_resolver({"alice": "Alice"}),
+    )
+
+    assert projection == [ModelRequest([TextInput("hi bob")])]
