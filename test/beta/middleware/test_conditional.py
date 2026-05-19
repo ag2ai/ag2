@@ -129,8 +129,8 @@ class TestConditionalMiddleware:
         mock.on_tool.assert_called_once_with("my_tool")
         mock.on_turn.assert_not_called()
 
-    async def test_llm_call_always_delegates(self, mock: MagicMock) -> None:
-        """on_llm_call always delegates regardless of condition."""
+    async def test_llm_call_skipped_when_condition_does_not_match(self, mock: MagicMock) -> None:
+        """on_llm_call checks condition against initial event — skipped when it doesn't match."""
         agent = Agent(
             "",
             config=TestConfig("result"),
@@ -145,6 +145,24 @@ class TestConditionalMiddleware:
         await agent.ask("Hi!")
 
         mock.on_turn.assert_not_called()
+        mock.on_llm.assert_not_called()
+
+    async def test_llm_call_delegates_when_condition_matches(self, mock: MagicMock) -> None:
+        """on_llm_call delegates when condition matches the initial event."""
+        agent = Agent(
+            "",
+            config=TestConfig("result"),
+            middleware=[
+                ConditionalMiddleware(
+                    Middleware(TrackingMiddleware, mock=mock),
+                    condition=BaseEvent,
+                ),
+            ],
+        )
+
+        await agent.ask("Hi!")
+
+        mock.on_turn.assert_called()
         mock.on_llm.assert_called()
 
     async def test_inverted_condition(self, mock: MagicMock) -> None:

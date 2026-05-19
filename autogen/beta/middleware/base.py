@@ -96,8 +96,6 @@ class BaseMiddleware:
 
 
 class _ConditionalWrapper(BaseMiddleware):
-    """Evaluates a condition per-hook against each hook's own event."""
-
     def __init__(
         self,
         event: "BaseEvent",
@@ -135,7 +133,9 @@ class _ConditionalWrapper(BaseMiddleware):
         events: "Sequence[BaseEvent]",
         context: "Context",
     ) -> "ModelResponse":
-        return await self._inner.on_llm_call(call_next, events, context)
+        if self._condition(self.initial_event):
+            return await self._inner.on_llm_call(call_next, events, context)
+        return await call_next(events, context)
 
     async def on_human_input(
         self,
@@ -149,15 +149,7 @@ class _ConditionalWrapper(BaseMiddleware):
 
 
 class ConditionalMiddleware:
-    """Middleware wrapper that evaluates a condition per-hook.
-
-    Each hook checks the condition against its own event parameter.
-    When the condition matches, the hook delegates to the wrapped middleware.
-    When it does not match, the hook passes through to call_next.
-
-    on_llm_call always delegates to the wrapped middleware because it receives
-    a sequence of events rather than a single event to match against.
-    """
+    """Middleware wrapper that evaluates a condition per-hook."""
 
     def __init__(
         self,

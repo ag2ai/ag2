@@ -424,7 +424,9 @@ agent = Agent(
 )
 ```
 
-In this example, `LoggingMiddleware` only activates when the turn is triggered by a `ModelRequest` event. For any other event type, all four hooks (`on_turn`, `on_llm_call`, `on_tool_execution`, `on_human_input`) pass through without running the logging logic.
+In this example, `LoggingMiddleware` only activates when the turn is triggered by a `ModelRequest` event. For any other event type, all four hooks pass through without running the logging logic.
+
+Each hook checks the condition against its own event: `on_turn`, `on_tool_execution`, and `on_human_input` check against the event they receive. `on_llm_call` checks against the initial turn event, since it receives a sequence of events rather than a single one.
 
 ### Composing Conditions
 
