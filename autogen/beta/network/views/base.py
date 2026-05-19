@@ -10,6 +10,11 @@ inbound envelopes, ``ModelMessage`` for the participant's own past
 turns) in chronological order. The current turn's ``ModelRequest`` is
 appended by the caller.
 
+The same ``project`` method is used for both historical WAL slices and
+for the single current-turn envelope — the handler calls
+``view.project([current_envelope], ...)`` to ensure consistent labeling
+between history and the triggering message.
+
 Built-ins: :class:`FullTranscript` and :class:`WindowedSummary`.
 """
 
