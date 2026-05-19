@@ -56,6 +56,7 @@ from autogen.beta.network.channel import (
     Participant,
     ParticipantRole,
 )
+from autogen.beta.network.client.handlers import _render_current_input
 from autogen.beta.testing import TestConfig
 
 
@@ -390,3 +391,162 @@ def test_conversation_default_view_unchanged() -> None:
     assert isinstance(view, WindowedSummary)
     # And NOT the named variant (subclass guard).
     assert not isinstance(view, NamedWindowedSummary)
+
+
+# ── Single-envelope projection: current-turn attribution ─────────────────────
+#
+# The handler calls view.project([current_envelope], ...) for the triggering
+# envelope so named views apply the same [name]: label they use for history.
+
+
+@pytest.mark.asyncio
+async def test_named_transcript_single_envelope_prefixes_non_self() -> None:
+    """project() on a single non-self envelope gives [name]: prefix."""
+    metadata = _two_party_metadata("alice", "bob")
+    wal = [_text_envelope("alice", "bob", "hi bob")]
+
+    projection = await NamedTranscript().project(
+        wal,
+        participant_id="bob",
+        channel=metadata,
+        render_envelope=default_render_envelope,
+        name_for=_named_resolver({"alice": "Alice"}),
+    )
+
+    assert projection == [ModelRequest([TextInput("[Alice]: hi bob")])]
+
+
+@pytest.mark.asyncio
+async def test_named_windowed_summary_single_envelope_prefixes_non_self() -> None:
+    """NamedWindowedSummary.project() on a single envelope gives [name]: prefix."""
+    metadata = _two_party_metadata("alice", "bob")
+    wal = [_text_envelope("alice", "bob", "hi bob")]
+
+    projection = await NamedWindowedSummary(recent_n=10).project(
+        wal,
+        participant_id="bob",
+        channel=metadata,
+        render_envelope=default_render_envelope,
+        name_for=_named_resolver({"alice": "Alice"}),
+    )
+
+    assert projection == [ModelRequest([TextInput("[Alice]: hi bob")])]
+
+
+@pytest.mark.asyncio
+async def test_full_transcript_single_envelope_no_prefix() -> None:
+    """Unnamed FullTranscript.project() on a single envelope gives no prefix."""
+    metadata = _two_party_metadata("alice", "bob")
+    wal = [_text_envelope("alice", "bob", "hi bob")]
+
+    projection = await FullTranscript().project(
+        wal,
+        participant_id="bob",
+        channel=metadata,
+        render_envelope=default_render_envelope,
+        name_for=_named_resolver({"alice": "Alice"}),
+    )
+
+    assert projection == [ModelRequest([TextInput("hi bob")])]
+
+
+@pytest.mark.asyncio
+async def test_windowed_summary_single_envelope_no_prefix() -> None:
+    """Unnamed WindowedSummary.project() on a single envelope gives no prefix."""
+    metadata = _two_party_metadata("alice", "bob")
+    wal = [_text_envelope("alice", "bob", "hi bob")]
+
+    projection = await WindowedSummary(recent_n=10).project(
+        wal,
+        participant_id="bob",
+        channel=metadata,
+        render_envelope=default_render_envelope,
+        name_for=_named_resolver({"alice": "Alice"}),
+    )
+
+    assert projection == [ModelRequest([TextInput("hi bob")])]
+
+
+# ── _render_current_input: branch coverage ────────────────────────────────────
+
+
+class _FixedView:
+    """Stub ViewPolicy that always returns a pre-configured projection."""
+
+    name = "fixed"
+
+    def __init__(self, projected: list) -> None:
+        self._projected = projected
+
+    async def project(
+        self,
+        wal,  # noqa: ARG002
+        *,
+        participant_id,  # noqa: ARG002
+        channel,  # noqa: ARG002
+        render_envelope,  # noqa: ARG002
+        name_for: NameResolver = default_name_resolver,  # noqa: ARG002
+    ) -> list:
+        return self._projected
+
+
+class _FixedAdapter:
+    """Stub adapter with a fixed extract_turn_input return value."""
+
+    def __init__(self, fallback: str = "fallback") -> None:
+        self._fallback = fallback
+
+    def render_envelope(self, envelope):  # noqa: ARG002
+        return None
+
+    def extract_turn_input(self, envelope):  # noqa: ARG002
+        return self._fallback
+
+
+@pytest.mark.asyncio
+class TestRenderCurrentInput:
+    """Branch coverage for ``_render_current_input``."""
+
+    async def test_model_request_with_text_input_returns_content(self) -> None:
+        """Happy path: projected ModelRequest with TextInput → text content."""
+        envelope = _text_envelope("alice", "bob", "hi bob")
+        metadata = _two_party_metadata("alice", "bob")
+        view = _FixedView([ModelRequest([TextInput("[Alice]: hi bob")])])
+        adapter = _FixedAdapter("fallback")
+
+        result = await _render_current_input(view, envelope, adapter, "bob", metadata, default_name_resolver)
+
+        assert result == "[Alice]: hi bob"
+
+    async def test_empty_projection_falls_back_to_adapter(self) -> None:
+        """view.project returns [] (e.g. image/document) → adapter.extract_turn_input."""
+        envelope = _text_envelope("alice", "bob", "hi bob")
+        metadata = _two_party_metadata("alice", "bob")
+        view = _FixedView([])
+        adapter = _FixedAdapter("adapter fallback")
+
+        result = await _render_current_input(view, envelope, adapter, "bob", metadata, default_name_resolver)
+
+        assert result == "adapter fallback"
+
+    async def test_model_request_no_text_parts_falls_back_to_adapter(self) -> None:
+        """ModelRequest with no TextInput parts (e.g. only non-text inputs) → adapter fallback."""
+        envelope = _text_envelope("alice", "bob", "hi bob")
+        metadata = _two_party_metadata("alice", "bob")
+        view = _FixedView([ModelRequest([])])
+        adapter = _FixedAdapter("adapter fallback")
+
+        result = await _render_current_input(view, envelope, adapter, "bob", metadata, default_name_resolver)
+
+        assert result == "adapter fallback"
+
+    async def test_model_message_returns_content(self) -> None:
+        """ModelMessage projection (custom view treating current turn as own-past) → content."""
+        envelope = _text_envelope("bob", "alice", "my own message")
+        metadata = _two_party_metadata("alice", "bob")
+        view = _FixedView([ModelMessage("my own message")])
+        adapter = _FixedAdapter("fallback")
+
+        result = await _render_current_input(view, envelope, adapter, "bob", metadata, default_name_resolver)
+
+        assert result == "my own message"
