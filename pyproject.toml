@@ -87,7 +87,7 @@ a2a = [
     "a2a-sdk>=1.0.0,<2",
 ]
 
-ag-ui = ["ag-ui-protocol>=0.1.10,<0.2"]
+ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # cache backends
 diskcache = ["diskcache"]
