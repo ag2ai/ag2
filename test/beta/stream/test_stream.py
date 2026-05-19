@@ -93,6 +93,36 @@ class TestStreamWhereTypeFilter:
         mock.assert_not_called()
 
 
+class TestStreamWhereNegation:
+    @pytest.mark.asyncio
+    async def test_where_inverted_type_excludes_matching(self, mock: MagicMock) -> None:
+        stream = MemoryStream()
+
+        stream.where(~ToolCallEvent).subscribe(mock)
+
+        event1 = ToolCallEvent(name="func1", arguments="test1")
+        event2 = ModelMessage("response")
+        event3 = ToolCallEvent(name="func2", arguments="test2")
+        await stream.send(event1, context=Context(stream))
+        await stream.send(event2, context=Context(stream))
+        await stream.send(event3, context=Context(stream))
+
+        assert [c[0][0] for c in mock.call_args_list] == [event2]
+
+    @pytest.mark.asyncio
+    async def test_where_inverted_type_with_union(self, mock: MagicMock) -> None:
+        stream = MemoryStream()
+
+        stream.where(~ToolCallEvent | ModelMessage).subscribe(mock)
+
+        event1 = ToolCallEvent(name="func1", arguments="test1")
+        event2 = ModelMessage("response")
+        await stream.send(event1, context=Context(stream))
+        await stream.send(event2, context=Context(stream))
+
+        assert [c[0][0] for c in mock.call_args_list] == [event2]
+
+
 class TestStreamWhereConditionFilter:
     @pytest.mark.asyncio
     async def test_where_condition_filter_by_condition(self, mock: MagicMock) -> None:
