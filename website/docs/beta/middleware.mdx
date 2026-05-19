@@ -400,16 +400,15 @@ Use it when you need lightweight context budgeting without depending on a model-
 
 ## Conditional Middleware
 
-`ConditionalMiddleware` lets you gate any middleware so it only activates when a condition matches the initial event for the turn. When the condition is not met, the middleware is skipped entirely — all hooks pass through to the next middleware in the chain.
+`ConditionalMiddleware` lets you gate any middleware so each hook only activates when a condition matches the hook's own event. When the condition is not met, that hook passes through to the next middleware in the chain.
 
-This is useful when you have middleware that should only run for certain types of requests, without writing condition checks inside every hook method.
+This is useful when you have middleware that should only run for certain event types — for example, approval middleware that only fires for a specific tool — without writing condition checks inside every hook method.
 
 ```python linenums="1"
 from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
-from autogen.beta.events import ModelRequest
-from autogen.beta.events.conditions import TypeCondition
-from autogen.beta.middleware import ConditionalMiddleware, LoggingMiddleware, Middleware
+from autogen.beta.events import ToolCallEvent
+from autogen.beta.middleware import ConditionalMiddleware, Middleware
 
 agent = Agent(
     "assistant",
@@ -417,16 +416,16 @@ agent = Agent(
     config=OpenAIConfig("gpt-4o-mini"),
     middleware=[
         ConditionalMiddleware(
-            LoggingMiddleware(),
-            condition=TypeCondition(ModelRequest),
+            Middleware(ApprovalMiddleware),
+            condition=ToolCallEvent.name == "execute_code",
         ),
     ],
 )
 ```
 
-In this example, `LoggingMiddleware` only activates when the turn is triggered by a `ModelRequest` event. For any other event type, all four hooks pass through without running the logging logic.
+In this example, `ApprovalMiddleware` only activates during `on_tool_execution` when the tool name is `"execute_code"`. The `on_turn` hook receives a different event type (`ModelRequest`), so the condition does not match there and the middleware passes through.
 
-Each hook checks the condition against its own event: `on_turn`, `on_tool_execution`, and `on_human_input` check against the event they receive. `on_llm_call` checks against the initial turn event, since it receives a sequence of events rather than a single one.
+Each hook — `on_turn`, `on_tool_execution`, `on_human_input` — checks the condition against its own event. `on_llm_call` checks against the initial turn event, since it receives a sequence of events rather than a single one. When a condition targets a specific event type like `ToolCallEvent`, hooks that receive a different type will naturally pass through.
 
 ### Composing Conditions
 
