@@ -12,6 +12,7 @@ from uuid import uuid4
 from ag_ui.core import (
     AudioInputContent,
     BaseEvent,
+    BinaryInputContent,
     DocumentInputContent,
     ImageInputContent,
     InputContent,
@@ -368,9 +369,17 @@ async def run_stream(
 
 
 def map_agui_content_to_input(content: InputContent) -> events.Input:
+    if isinstance(content, BinaryInputContent):
+        raise ValueError(
+            "AG-UI 'binary' content type is deprecated; "
+            "use ImageInputContent / AudioInputContent / "
+            "VideoInputContent / DocumentInputContent instead."
+        )
+
+    if isinstance(content, TextInputContent):
+        return events.TextInput(content.text)
+
     match content:
-        case TextInputContent():
-            return events.TextInput(content.text)
         case DocumentInputContent():
             kind = BinaryType.DOCUMENT
         case AudioInputContent():
@@ -384,15 +393,19 @@ def map_agui_content_to_input(content: InputContent) -> events.Input:
 
     source = content.source
     if isinstance(source, InputContentDataSource):
-        return events.BinaryInput(
+        inp = events.BinaryInput(
             b64decode(source.value),
             media_type=source.mime_type,
             kind=kind,
         )
     elif isinstance(source, InputContentUrlSource):
-        return events.UrlInput(source.value, kind=kind)
+        inp = events.UrlInput(source.value, kind=kind)
     else:
         raise ValueError(f"Unexpected source type: {type(source).__name__}")
+
+    if content.metadata:
+        inp.metadata = content.metadata
+    return inp
 
 
 def map_agui_messages_to_events(
