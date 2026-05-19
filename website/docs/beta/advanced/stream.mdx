@@ -73,6 +73,15 @@ def handle_event(event):
 stream.where(ToolCallEvent | ModelMessage).subscribe(handle_event)
 ```
 
+### Exclude events of a specific type
+
+You can negate an event type using the bitwise NOT operator (`~`). This creates a condition that matches everything *except* the specified type.
+
+```python
+# Subscribe to all events except ToolCallEvent
+stream.where(~ToolCallEvent).subscribe(handle_event)
+```
+
 ### Subscribe to events with a specific value
 
 You can filter events based on the value of their fields. The event classes define fields that support comparison operators.
