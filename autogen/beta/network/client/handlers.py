@@ -34,10 +34,11 @@ from ..envelope import (
 )
 from ..policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, HUB_DEP
 from ..task_mirror import TaskMirror
-from ..views.base import ViewPolicy
+from ..views.base import NameResolver, ViewPolicy
 from .channel import Channel
 
 if TYPE_CHECKING:
+    from ..adapters.base import ChannelAdapter
     from .agent_client import AgentClient
 
 __all__ = (
@@ -55,7 +56,14 @@ def _is_task_event(event_type: str) -> bool:
     return event_type.startswith("ag2.task.")
 
 
-async def _render_current_input(view, envelope, adapter, participant_id, metadata, name_for):
+async def _render_current_input(
+    view: ViewPolicy,
+    envelope: Envelope,
+    adapter: "ChannelAdapter",
+    participant_id: str,
+    metadata: ChannelMetadata,
+    name_for: NameResolver,
+) -> str | None:
     """Render the current-turn envelope through the view.
 
     Calls ``view.project([envelope])`` so named views apply consistent
