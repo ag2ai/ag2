@@ -8,7 +8,14 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ModelResponse, ToolCallEvent, ToolResultEvent
+from autogen.beta.events import (
+    BaseEvent,
+    HumanInputRequest,
+    HumanMessage,
+    ModelResponse,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from autogen.beta.middleware import (
     AgentTurn,
     BaseMiddleware,
