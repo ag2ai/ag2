@@ -17,6 +17,7 @@ from autogen.beta.events import (
     ToolErrorEvent,
     ToolResultEvent,
 )
+from autogen.beta.events.conditions import TypeCondition
 
 
 class MiddlewareFactory(Protocol):
@@ -161,10 +162,10 @@ class ConditionalMiddleware:
     def __init__(
         self,
         middleware: "MiddlewareFactory",
-        condition: Condition,
+        condition: "Condition | type",
     ) -> None:
         self._middleware = middleware
-        self._condition = condition
+        self._condition = condition if isinstance(condition, Condition) else TypeCondition(condition)
 
     def __call__(
         self,
