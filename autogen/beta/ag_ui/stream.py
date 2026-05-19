@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 from ag_ui.core import (
+    AudioInputContent,
     BaseEvent,
     DocumentInputContent,
     ImageInputContent,
@@ -28,6 +29,7 @@ from ag_ui.core import (
     StateSnapshotEvent,
     StepFinishedEvent,
     StepStartedEvent,
+    TextInputContent,
     TextMessageChunkEvent,
     TextMessageContentEvent,
     TextMessageEndEvent,
@@ -37,6 +39,7 @@ from ag_ui.core import (
     ToolCallEndEvent,
     ToolCallResultEvent,
     ToolCallStartEvent,
+    VideoInputContent,
 )
 from ag_ui.encoder import EventEncoder
 from anyio import create_memory_object_stream, create_task_group
