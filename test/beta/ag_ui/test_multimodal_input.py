@@ -25,12 +25,15 @@ from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.events import (
     AudioInput,
     BaseEvent,
+    BinaryInput,
+    BinaryType,
     DocumentInput,
     ImageInput,
     ModelMessage,
     ModelRequest,
     ModelResponse,
     TextInput,
+    UrlInput,
     VideoInput,
 )
 
@@ -124,62 +127,33 @@ class TestTextContent:
         ]
 
 
-class TestImageContent:
-    async def test_image_url(self) -> None:
-        request = await _dispatch(
-            ImageInputContent(source=InputContentUrlSource(value="https://x/img.png", mime_type="image/png"))
-        )
+@pytest.mark.parametrize(
+    "content_cls,factory,kind,url,mime",
+    [
+        (ImageInputContent, ImageInput, BinaryType.IMAGE, "https://x/img.png", "image/jpeg"),
+        (DocumentInputContent, DocumentInput, BinaryType.DOCUMENT, "https://x/doc.pdf", "application/pdf"),
+        (AudioInputContent, AudioInput, BinaryType.AUDIO, "https://x/a.wav", "audio/wav"),
+        (VideoInputContent, VideoInput, BinaryType.VIDEO, "https://x/v.mp4", "video/mp4"),
+    ],
+)
+class TestMediaContent:
+    async def test_url_source(self, content_cls: type, factory: Any, kind: BinaryType, url: str, mime: str) -> None:
+        request = await _dispatch(content_cls(source=InputContentUrlSource(value=url)))
 
-        assert request.parts == [ImageInput("https://x/img.png")]
+        assert request.parts == [factory(url)]
+        [part] = request.parts
+        assert isinstance(part, UrlInput)
+        assert part.kind == kind
 
-    async def test_image_data_base64(self) -> None:
-        request = await _dispatch(
-            ImageInputContent(source=InputContentDataSource(value=B64_VALUE, mime_type="image/jpeg"))
-        )
+    async def test_data_source_base64(
+        self, content_cls: type, factory: Any, kind: BinaryType, url: str, mime: str
+    ) -> None:
+        request = await _dispatch(content_cls(source=InputContentDataSource(value=B64_VALUE, mime_type=mime)))
 
-        assert request.parts == [ImageInput(data=RAW_BYTES, media_type="image/jpeg")]
-
-
-class TestDocumentContent:
-    async def test_document_url(self) -> None:
-        request = await _dispatch(DocumentInputContent(source=InputContentUrlSource(value="https://x/doc.pdf")))
-
-        assert request.parts == [DocumentInput("https://x/doc.pdf")]
-
-    async def test_document_data_base64(self) -> None:
-        request = await _dispatch(
-            DocumentInputContent(source=InputContentDataSource(value=B64_VALUE, mime_type="application/pdf"))
-        )
-
-        assert request.parts == [DocumentInput(data=RAW_BYTES, media_type="application/pdf")]
-
-
-class TestAudioContent:
-    async def test_audio_url(self) -> None:
-        request = await _dispatch(AudioInputContent(source=InputContentUrlSource(value="https://x/a.wav")))
-
-        assert request.parts == [AudioInput("https://x/a.wav")]
-
-    async def test_audio_data_base64(self) -> None:
-        request = await _dispatch(
-            AudioInputContent(source=InputContentDataSource(value=B64_VALUE, mime_type="audio/wav"))
-        )
-
-        assert request.parts == [AudioInput(data=RAW_BYTES, media_type="audio/wav")]
-
-
-class TestVideoContent:
-    async def test_video_url(self) -> None:
-        request = await _dispatch(VideoInputContent(source=InputContentUrlSource(value="https://x/v.mp4")))
-
-        assert request.parts == [VideoInput("https://x/v.mp4")]
-
-    async def test_video_data_base64(self) -> None:
-        request = await _dispatch(
-            VideoInputContent(source=InputContentDataSource(value=B64_VALUE, mime_type="video/mp4"))
-        )
-
-        assert request.parts == [VideoInput(data=RAW_BYTES, media_type="video/mp4")]
+        assert request.parts == [factory(data=RAW_BYTES, media_type=mime)]
+        [part] = request.parts
+        assert isinstance(part, BinaryInput)
+        assert part.kind == kind
 
 
 class TestMetadata:
