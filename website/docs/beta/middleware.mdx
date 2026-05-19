@@ -432,20 +432,29 @@ Each hook — `on_turn`, `on_tool_execution`, `on_human_input` — checks the co
 Conditions support `&` (and), `|` (or), and `~` (not) operators, so you can build expressive gates:
 
 ```python linenums="1"
-from autogen.beta.events import ModelRequest, ToolCallEvent
-from autogen.beta.events.conditions import TypeCondition
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.middleware import ConditionalMiddleware, Middleware
 
-# Activate only when the event is NOT a ToolCallEvent
+# Activate only for tool calls named "search" or "browse"
 conditional = ConditionalMiddleware(
     Middleware(MyAuditMiddleware, logger=logger),
-    condition=~TypeCondition(ToolCallEvent),
+    condition=(ToolCallEvent.name == "search") | (ToolCallEvent.name == "browse"),
 )
 
-# Activate for ModelRequest OR ToolCallEvent
+# Activate for all tool calls EXCEPT "calculate"
 conditional = ConditionalMiddleware(
     Middleware(MyAuditMiddleware, logger=logger),
-    condition=TypeCondition(ModelRequest) | TypeCondition(ToolCallEvent),
+    condition=~(ToolCallEvent.name == "calculate"),
+)
+```
+
+You can also pass a bare event type as the condition — it is automatically wrapped:
+
+```python linenums="1"
+# Activate only when the hook receives a ToolCallEvent
+conditional = ConditionalMiddleware(
+    Middleware(MyAuditMiddleware, logger=logger),
+    condition=ToolCallEvent,
 )
 ```
 
