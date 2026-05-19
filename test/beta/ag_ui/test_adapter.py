@@ -1,7 +1,6 @@
 # Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-
 import json
 from typing import Annotated
 from unittest.mock import MagicMock
@@ -9,17 +8,25 @@ from unittest.mock import MagicMock
 import pytest
 from ag_ui.core import (
     AssistantMessage,
+    AudioInputContent,
     CustomEvent,
+    DocumentInputContent,
     FunctionCall,
+    ImageInputContent,
+    InputContentDataSource,
+    InputContentUrlSource,
+    TextInputContent,
     ToolCall,
     ToolMessage,
     UserMessage,
+    VideoInputContent,
 )
 from dirty_equals import IsInt, IsPartialDict, IsStr
 
-from autogen.beta import Agent, Context, Variable
+from autogen.beta import Agent, Context, Variable, events
 from autogen.beta.ag_ui import AGUIEvent, AGUIStream
-from autogen.beta.events import ToolCallEvent
+from autogen.beta.ag_ui.stream import map_agui_content_to_input
+from autogen.beta.events import BinaryType, ToolCallEvent
 from autogen.beta.testing import TestConfig
 
 from .utils import (
@@ -504,3 +511,110 @@ async def test_custom_event() -> None:
         "name": "test",
         "value": 123,
     })
+
+
+class TestMapAguiContentToInput:
+    @pytest.mark.parametrize(
+        "content_cls,expected_event_cls,expected_kind",
+        [
+            pytest.param(
+                DocumentInputContent,
+                events.UrlInput,
+                BinaryType.DOCUMENT,
+                id="document-url",
+            ),
+            pytest.param(
+                AudioInputContent,
+                events.UrlInput,
+                BinaryType.AUDIO,
+                id="audio-url",
+            ),
+            pytest.param(
+                VideoInputContent,
+                events.UrlInput,
+                BinaryType.VIDEO,
+                id="video-url",
+            ),
+            pytest.param(
+                ImageInputContent,
+                events.UrlInput,
+                BinaryType.IMAGE,
+                id="image-url",
+            ),
+        ],
+    )
+    async def test_media_content_mapping_url(self, content_cls, expected_event_cls, expected_kind) -> None:
+        source = InputContentUrlSource(
+            type="url",
+            value="https://example.com/file.ext",
+            mime_type="application/octet-stream",
+        )
+        content = content_cls(source=source)
+
+        result = map_agui_content_to_input(content)
+
+        assert isinstance(result, expected_event_cls)
+
+    @pytest.mark.parametrize(
+        "content_cls,expected_event_cls,expected_kind",
+        [
+            pytest.param(
+                DocumentInputContent,
+                events.BinaryInput,
+                BinaryType.DOCUMENT,
+                id="document-data",
+            ),
+            pytest.param(
+                ImageInputContent,
+                events.BinaryInput,
+                BinaryType.IMAGE,
+                id="image-data",
+            ),
+            pytest.param(
+                AudioInputContent,
+                events.BinaryInput,
+                BinaryType.IMAGE,
+                id="audio-data",
+            ),
+            pytest.param(
+                VideoInputContent,
+                events.BinaryInput,
+                BinaryType.IMAGE,
+                id="video-data",
+            ),
+        ],
+    )
+    async def test_media_content_mapping_data(self, content_cls, expected_event_cls, expected_kind) -> None:
+        source = InputContentDataSource(
+            type="data",
+            value="aGVsbG8=",
+            mime_type="application/octet-stream",
+        )
+        content = content_cls(source=source)
+
+        result = map_agui_content_to_input(content)
+
+        assert isinstance(result, expected_event_cls)
+
+    async def test_text_content_mapping(self) -> None:
+        content = TextInputContent(text="Hello, world!")
+
+        result = map_agui_content_to_input(content)
+
+        assert isinstance(result, events.TextInput)
+
+    async def test_unexpected_content_type_raises_error(self) -> None:
+        class UnknownContent:
+            pass
+
+        with pytest.raises(ValueError, match="Unexpected content type: UnknownContent"):
+            map_agui_content_to_input(UnknownContent())
+
+    async def test_unexpected_source_type_raises_error(self) -> None:
+        class UnknownSource:
+            pass
+
+        content = ImageInputContent.model_construct(source=UnknownSource())
+
+        with pytest.raises(ValueError, match="Unexpected source type: UnknownSource"):
+            map_agui_content_to_input(content)
