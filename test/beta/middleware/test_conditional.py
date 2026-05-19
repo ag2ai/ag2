@@ -8,8 +8,16 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, ModelResponse, ToolCallEvent, ToolResultEvent
-from autogen.beta.middleware import AgentTurn, BaseMiddleware, ConditionalMiddleware, LLMCall, Middleware, ToolExecution
+from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ModelResponse, ToolCallEvent, ToolResultEvent
+from autogen.beta.middleware import (
+    AgentTurn,
+    BaseMiddleware,
+    ConditionalMiddleware,
+    HumanInputHook,
+    LLMCall,
+    Middleware,
+    ToolExecution,
+)
 from autogen.beta.testing import TestConfig
 
 
@@ -49,6 +57,15 @@ class TrackingMiddleware(BaseMiddleware):
     ) -> ModelResponse:
         self.mock.on_llm(len(events))
         return await call_next(events, ctx)
+
+    async def on_human_input(
+        self,
+        call_next: HumanInputHook,
+        event: HumanInputRequest,
+        ctx: Context,
+    ) -> HumanMessage:
+        self.mock.on_human(event.content)
+        return await call_next(event, ctx)
 
 
 @pytest.mark.asyncio()
@@ -228,3 +245,65 @@ class TestConditionalMiddleware:
         assert mock.on_tool.call_count == 2
         mock.on_tool.assert_any_call("tool_a")
         mock.on_tool.assert_any_call("tool_b")
+
+    async def test_human_input_activates_when_condition_matches(self, mock: MagicMock) -> None:
+        """on_human_input fires when condition matches HumanInputRequest."""
+
+        async def my_tool(ctx: Context) -> str:
+            await ctx.input("Approve?", timeout=1.0)
+            return "done"
+
+        def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+            return HumanMessage("yes")
+
+        agent = Agent(
+            "",
+            config=TestConfig(
+                ToolCallEvent(name="my_tool"),
+                "result",
+            ),
+            tools=[my_tool],
+            hitl_hook=hitl_hook,
+            middleware=[
+                ConditionalMiddleware(
+                    Middleware(TrackingMiddleware, mock=mock),
+                    condition=HumanInputRequest,
+                ),
+            ],
+        )
+
+        await agent.ask("Hi!")
+
+        mock.on_human.assert_called_once_with("Approve?")
+        mock.on_turn.assert_not_called()
+        mock.on_tool.assert_not_called()
+
+    async def test_human_input_skipped_when_condition_does_not_match(self, mock: MagicMock) -> None:
+        """on_human_input skipped when condition targets a different event type."""
+
+        async def my_tool(ctx: Context) -> str:
+            await ctx.input("Approve?", timeout=1.0)
+            return "done"
+
+        def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+            return HumanMessage("yes")
+
+        agent = Agent(
+            "",
+            config=TestConfig(
+                ToolCallEvent(name="my_tool"),
+                "result",
+            ),
+            tools=[my_tool],
+            hitl_hook=hitl_hook,
+            middleware=[
+                ConditionalMiddleware(
+                    Middleware(TrackingMiddleware, mock=mock),
+                    condition=ToolCallEvent.name == "other_tool",
+                ),
+            ],
+        )
+
+        await agent.ask("Hi!")
+
+        mock.on_human.assert_not_called()
