@@ -98,7 +98,7 @@ class Field:
 
 
 class _ConditionMeta(type):
-    """Metaclass providing class-level condition operators (|, or_, not_)."""
+    """Metaclass providing class-level condition operators (~, |, or_, not_)."""
 
     def __init__(cls, name: str, bases: tuple[type, ...], namespace: dict[str, Any], **kwargs: Any) -> None:
         super().__init__(name, bases, namespace, **kwargs)
@@ -109,6 +109,9 @@ class _ConditionMeta(type):
 
     def or_(cls, other: Any) -> OrCondition:
         return TypeCondition(cls).or_(other)
+
+    def __invert__(cls) -> NotCondition:
+        return cls.not_()
 
     def not_(cls) -> NotCondition:
         return TypeCondition(cls).not_()
