@@ -112,7 +112,7 @@ Every cookbook page below uses the same close-detection primitive in
 its demo `#!python main`:
 
 ```python linenums="1"
-close_env = await intake_hc.wait_for_channel_event(
+close_env = await intake.wait_for_channel_event(
     channel_id=channel.channel_id,
     predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
     timeout=180.0,
@@ -120,7 +120,7 @@ close_env = await intake_hc.wait_for_channel_event(
 print(f"closed: reason={close_env.event_data.get('reason')!r}")
 ```
 
-`#!python HubClient.wait_for_channel_event` blocks on the per-channel
+`#!python AgentClient.wait_for_channel_event` blocks on the per-channel
 inbox until an envelope matching the predicate arrives — here, the
 `#!python EV_CHANNEL_CLOSED` envelope every termination route emits.
 The reason string distinguishes the close (e.g. `'sequence_complete'`,
