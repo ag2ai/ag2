@@ -150,7 +150,7 @@ class TestToolPolicyAdversarial:
         assert not allowed
         assert "blocked" in reason
 
-    def test_tool_error_content_matches_reason(self) -> None:
+    def test_tool_error_reason_carried_as_permission_error(self) -> None:
         # Given a tool call that will be blocked
         event = _make_tool_call(name="delete_all")
         reason = "tool 'delete_all' is blocked"
@@ -158,9 +158,9 @@ class TestToolPolicyAdversarial:
         # When building the error event
         error_event = _make_tool_error(event, reason)
 
-        # Then the content equals the reason string, not "NoneType: None"
-        assert error_event.content == reason
-        assert "NoneType" not in error_event.content
+        # Then the error is a PermissionError whose message equals the denial reason
+        assert isinstance(error_event.error, PermissionError)
+        assert str(error_event.error) == reason
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +236,8 @@ class TestToolPolicyMiddleware:
 
         # Then enforcement still returns the policy denial
         assert isinstance(result, ToolErrorEvent)
-        assert result.content == "tool 'bad_tool' is blocked"
+        assert isinstance(result.error, PermissionError)
+        assert str(result.error) == "tool 'bad_tool' is blocked"
 
     @pytest.mark.asyncio()
     async def test_on_blocked_not_called_when_allowed(self) -> None:

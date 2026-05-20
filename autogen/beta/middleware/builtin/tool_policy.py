@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolErrorEvent
 from autogen.beta.middleware.base import BaseMiddleware, MiddlewareFactory, ToolExecution, ToolResultType
-from autogen.beta.tools import ToolResult
 
 OnBlockedCallback = Callable[[ToolCallEvent, str], None]
 
@@ -38,16 +37,8 @@ class ToolPolicyConfig:
 
 
 def _make_tool_error(event: ToolCallEvent, reason: str) -> ToolErrorEvent:
-    """Build a ToolErrorEvent with an explicit content string."""
-    err = ToolErrorEvent(
-        parent_id=event.id,
-        name=event.name,
-        result=ToolResult(content=None),
-        error=PermissionError(reason),
-    )
-    # Override content so it shows the reason, not a traceback.
-    err.content = reason
-    return err
+    """Build a ToolErrorEvent that carries the denial reason as a PermissionError."""
+    return ToolErrorEvent.from_call(event, PermissionError(reason))
 
 
 class _ToolPolicy:
