@@ -9,11 +9,9 @@ from autogen.beta.spec import AgentSpec
 from autogen.beta.tools.subagents.run_task import run_task
 from autogen.beta.tools.tool import Tool
 
-from .spec_input import DynamicAgentSpec
-
 
 async def resolve_and_run(
-    spec: DynamicAgentSpec,
+    spec: AgentSpec,
     objective: str,
     ctx: Context,
     *,
@@ -27,14 +25,8 @@ async def resolve_and_run(
     exception) returns a human-readable ``Error: ...`` string instead of
     raising — so the parent can retry with a corrected spec.
     """
-    agent_spec = AgentSpec(
-        name=spec.name,
-        prompt=list(spec.prompt),
-        tool_names=list(spec.tool_names),
-    )
-
     try:
-        agent = agent_spec.to_agent(
+        agent = spec.to_agent(
             available_tools=pool,
             config=config,
         )

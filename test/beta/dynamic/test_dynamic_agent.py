@@ -5,7 +5,6 @@
 import json
 
 import pytest
-from pydantic import ValidationError
 
 from autogen.beta import Agent, MemoryStream, tool
 from autogen.beta.events import (
@@ -13,7 +12,6 @@ from autogen.beta.events import (
     TaskFailed,
     TaskStarted,
     ToolCallEvent,
-    ToolErrorEvent,
     ToolResultEvent,
 )
 from autogen.beta.testing import TestConfig
@@ -45,7 +43,7 @@ def _spec(name: str, *, prompt: list[str] | None = None, tool_names: list[str] |
 
 
 def _text(event: ToolResultEvent) -> str:
-    """Pull the text body out of a ToolResultEvent / ToolErrorEvent."""
+    """Pull the text body out of a ToolResultEvent."""
     return event.result.parts[0].content
 
 
@@ -112,48 +110,6 @@ class TestErrorPaths:
         assert not [e for e in events if isinstance(e, TaskStarted)]
         assert not [e for e in events if isinstance(e, TaskCompleted)]
 
-    async def test_response_schema_field_is_rejected(self) -> None:
-        """``extra='forbid'`` blocks any LLM attempt to pass a forbidden field.
-
-        Pydantic raises during fast-depends coercion before the handler
-        runs. The error surfaces as a ``ToolErrorEvent`` on the parent
-        stream and bubbles out of ``parent.ask`` (because ``TestClient``
-        re-raises any ``ToolErrorEvent`` it sees on its next turn — that
-        re-raise lets us assert from the test).
-        """
-        child_cfg = TestConfig("ignored")
-        parent_stream = MemoryStream()
-        parent_cfg = TestConfig(
-            ToolCallEvent(
-                name="create_and_run_agent",
-                arguments=_args({
-                    "spec": {
-                        "name": "h",
-                        "prompt": [],
-                        "tool_names": [],
-                        "response_schema": {"some": "schema"},
-                    },
-                    "objective": "x",
-                }),
-            ),
-            "Done.",
-        )
-
-        parent = Agent(
-            "orchestrator",
-            config=parent_cfg,
-            tools=[dynamic_agent(available_tools=[calc], config=child_cfg)],
-        )
-
-        with pytest.raises(ValidationError) as exc:
-            await parent.ask("Go", stream=parent_stream)
-
-        assert "response_schema" in str(exc.value)
-        events = list(await parent_stream.history.get_events())
-        errors = [e for e in events if isinstance(e, ToolErrorEvent)]
-        assert len(errors) == 1
-        assert "response_schema" in str(errors[0].error)
-
     async def test_child_failure_yields_task_failed(self) -> None:
         """Child agent raises (no responses queued) → handler returns 'Error:'."""
         child_cfg = TestConfig()  # empty → StopIteration when invoked
@@ -184,6 +140,58 @@ class TestErrorPaths:
         assert _text(results[0]).startswith("Error:")
         assert len([e for e in events if isinstance(e, TaskStarted)]) == 1
         assert len([e for e in events if isinstance(e, TaskFailed)]) == 1
+
+
+@pytest.mark.asyncio
+async def test_response_schema_in_spec_is_forwarded_to_child() -> None:
+    """``response_schema`` in spec is accepted and forwarded to the child agent.
+
+    Reusing :class:`AgentSpec` directly as the tool input means the
+    parent LLM may pass a ``response_schema``; the framework reconstructs
+    it on the child via :meth:`AgentSpec.to_agent`. The call must
+    complete without a validation error.
+    """
+    child_cfg = TestConfig('{"answer": 42}')
+    parent_stream = MemoryStream()
+    parent_cfg = TestConfig(
+        ToolCallEvent(
+            name="create_and_run_agent",
+            arguments=_args({
+                "spec": {
+                    "name": "structured_helper",
+                    "prompt": [],
+                    "tool_names": [],
+                    "response_schema": {
+                        "name": "Answer",
+                        "description": "Structured answer.",
+                        "json_schema": {
+                            "type": "object",
+                            "properties": {"answer": {"type": "integer"}},
+                            "required": ["answer"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "objective": "x",
+            }),
+        ),
+        "Done.",
+    )
+
+    parent = Agent(
+        "orchestrator",
+        config=parent_cfg,
+        tools=[dynamic_agent(available_tools=[calc], config=child_cfg)],
+    )
+
+    reply = await parent.ask("Go", stream=parent_stream)
+
+    assert reply.body == "Done."
+    events = list(await parent_stream.history.get_events())
+    completed = [e for e in events if isinstance(e, TaskCompleted)]
+    assert len(completed) == 1
+    assert completed[0].agent_name == "structured_helper"
+    assert completed[0].result == '{"answer": 42}'
 
 
 @pytest.mark.asyncio

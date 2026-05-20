@@ -8,19 +8,19 @@ from typing import Any
 from autogen.beta.annotations import Context
 from autogen.beta.config.config import ModelConfig
 from autogen.beta.middleware.base import ToolMiddleware
-from autogen.beta.tools.final import FunctionTool, Toolkit, tool
+from autogen.beta.spec import AgentSpec
+from autogen.beta.tools.final import FunctionTool, tool
 from autogen.beta.tools.tool import Tool
 
 from .handler import resolve_and_run
-from .spec_input import DynamicAgentSpec
 
 _SINGLE_DESCRIPTION = (
     "Create an ephemeral dynamic agent from a spec (name, system prompt, "
-    "subset of available tools) and immediately run it on the given objective. "
-    "Returns the agent's final reply as a string. The spawned agent has a "
-    "fresh conversation history and cannot recursively spawn other dynamic "
-    "agents. Call this when a focused sub-task benefits from a tailored "
-    "system prompt and a narrow tool set."
+    "subset of available tools, optional response schema) and immediately "
+    "run it on the given objective. Returns the agent's final reply as a "
+    "string. The spawned agent has a fresh conversation history and cannot "
+    "recursively spawn other dynamic agents. Call this when a focused "
+    "sub-task benefits from a tailored system prompt and a narrow tool set."
 )
 
 
@@ -47,27 +47,24 @@ def dynamic_agent(
     *,
     available_tools: Iterable[Tool | Callable[..., Any]],
     config: ModelConfig,
-    name: str = "dynamic_agent",
     middleware: Iterable[ToolMiddleware] = (),
-) -> Toolkit:
+) -> FunctionTool:
     """Tool factory that lets a parent Agent dynamically build & run sub-agents.
 
-    Drop the returned :class:`Toolkit` into ``Agent(tools=[...])`` and the
+    Drop the returned :class:`FunctionTool` into ``Agent(tools=[...])`` and the
     parent LLM gains one tool: ``create_and_run_agent(spec, objective)``.
 
     The parent LLM constructs each spec at runtime (name, system prompt,
-    a subset of tool names from ``available_tools``) and the framework
-    instantiates an ephemeral :class:`Agent`, runs the objective via
-    :func:`run_task` (fresh stream, shallow-copied deps, copied vars),
-    and returns the reply string.
+    a subset of tool names from ``available_tools``, optional response
+    schema) and the framework instantiates an ephemeral :class:`Agent`,
+    runs the objective via :func:`run_task` (fresh stream, shallow-copied
+    deps, copied vars), and returns the reply string.
 
     Parameters:
         available_tools: Pool of tools the dynamic agent may pick from
             by name. Normalized and deduped once at factory time.
         config: Model configuration used to run every dynamic agent
             spawned through this factory.
-        name: Name of the returned :class:`Toolkit` (the LLM-visible tool
-            name is fixed: ``create_and_run_agent``).
         middleware: Tool middleware applied to the tool.
     """
     pool = _normalize_pool(available_tools)
@@ -75,9 +72,10 @@ def dynamic_agent(
     @tool(
         name="create_and_run_agent",
         description=_SINGLE_DESCRIPTION,
+        middleware=middleware,
     )
     async def create_and_run_agent(
-        spec: DynamicAgentSpec,
+        spec: AgentSpec,
         objective: str,
         ctx: Context,
     ) -> str:
@@ -89,8 +87,4 @@ def dynamic_agent(
             config=config,
         )
 
-    return Toolkit(
-        create_and_run_agent,
-        name=name,
-        middleware=middleware,
-    )
+    return create_and_run_agent

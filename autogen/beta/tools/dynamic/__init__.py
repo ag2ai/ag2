@@ -3,9 +3,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .factory import dynamic_agent
-from .spec_input import DynamicAgentSpec
 
-__all__ = (
-    "DynamicAgentSpec",
-    "dynamic_agent",
-)
+__all__ = ("dynamic_agent",)
