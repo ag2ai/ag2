@@ -227,7 +227,7 @@ async def main() -> None:
     # Wait for the workflow to terminate (any of the five close routes
     # documented in /docs/beta/network/termination — this demo uses
     # ContextEquals("done", True) → TerminateTarget("approved")).
-    close_env = await intake_hc.wait_for_channel_event(
+    close_env = await intake.wait_for_channel_event(
         channel_id=channel.channel_id,
         predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=360.0,
