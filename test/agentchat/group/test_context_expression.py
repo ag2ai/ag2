@@ -453,3 +453,23 @@ class TestContextExpressionNewSyntax:
             ).evaluate(context)
             is True
         )
+
+    def test_string_injection_prevention(self) -> None:
+        """Regression test for GHSA-9fvw-gr53-m7fw: string context vars must not allow eval injection."""
+        # Single quote injection attempt
+        malicious_value = "'; __import__('os').getcwd(); '"
+        context = ContextVariables(data={"user_input": malicious_value})
+        result = ContextExpression("${user_input} == 'safe'").evaluate(context)
+        assert result is False
+
+        # Backslash in value
+        backslash_value = "path\\to\\file"
+        context2 = ContextVariables(data={"path_var": backslash_value})
+        result2 = ContextExpression("${path_var} == 'other'").evaluate(context2)
+        assert result2 is False
+
+        # Benign string comparison still works
+        context3 = ContextVariables(data={"status": "active"})
+        result3 = ContextExpression("${status} == 'active'").evaluate(context3)
+        assert result3 is True
+
