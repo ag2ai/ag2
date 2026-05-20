@@ -210,7 +210,9 @@ class ContextExpression:
             if isinstance(var_value, (bool, int, float)):
                 formatted_value = str(var_value)
             elif isinstance(var_value, str):
-                formatted_value = "'" + var_value.replace("\\", "\\\\").replace("'", "\\'")+"'"  # Quote strings, escaping backslashes and single quotes to prevent injection
+                formatted_value = (
+                    "'" + var_value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+                )  # Escape backslashes and single quotes to prevent eval injection (GHSA-9fvw-gr53-m7fw)
             elif isinstance(var_value, (list, dict, tuple)):
                 # For collections, convert to their boolean evaluation
                 formatted_value = str(bool(var_value))
