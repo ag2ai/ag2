@@ -472,4 +472,3 @@ class TestContextExpressionNewSyntax:
         context3 = ContextVariables(data={"status": "active"})
         result3 = ContextExpression("${status} == 'active'").evaluate(context3)
         assert result3 is True
-
