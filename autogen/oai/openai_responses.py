@@ -163,7 +163,7 @@ def _get_base_class():
 # -----------------------------------------------------------------------------
 # OpenAI Client that calls the /responses endpoint
 # -----------------------------------------------------------------------------
-@require_optional_import("openai", "openai")
+@require_optional_import("openai>=2.30.0", "openai")
 class OpenAIResponsesClient:
     """Minimal implementation targeting the experimental /responses endpoint.
 

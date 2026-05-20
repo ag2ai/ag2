@@ -23,6 +23,10 @@ Policies dispatch envelope rendering through the adapter via the
 ``render_envelope`` callable supplied to ``project`` and resolve
 sender identity via the ``name_for`` callable supplied by the default
 handler — both keep view policies adapter-neutral and hub-independent.
+
+The handler calls ``view.project([current_envelope], ...)`` for the
+current-turn input using the same method as for history, so named views
+label both history and the triggering message consistently.
 """
 
 from autogen.beta.compact import CompactionSummary

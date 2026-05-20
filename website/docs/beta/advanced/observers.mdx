@@ -93,7 +93,7 @@ reply = await agent.ask(
 
 Observers support the same condition system as [stream subscriptions](/docs/beta/advanced/stream). You can filter by event type, combine types, or match on field values:
 
-```python linenums="1" hl_lines="4 9 14"
+```python linenums="1" hl_lines="4 9 14 19"
 from autogen.beta.events import ModelRequest, ModelResponse, ToolCallEvent
 
 # Single event type
@@ -110,6 +110,11 @@ def on_any(event: ModelRequest | ModelResponse) -> None:
 @agent.observer(ToolCallEvent.name == "search")
 def on_search(event: ToolCallEvent) -> None:
     print(f"Search: {event.name}")
+
+# Negation — everything except a specific type
+@agent.observer(~ToolCallEvent)
+def on_non_tool(event) -> None:
+    print(f"Non-tool event: {event}")
 ```
 
 ## Dependency Injection
