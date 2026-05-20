@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable
+from typing import Any
+
 from autogen.beta.annotations import Context
 from autogen.beta.config.config import ModelConfig
 from autogen.beta.exceptions import ToolResolutionError
@@ -15,7 +18,7 @@ async def resolve_and_run(
     objective: str,
     ctx: Context,
     *,
-    pool: list[Tool],
+    pool: list[Tool | Callable[..., Any]],
     config: ModelConfig,
 ) -> str:
     """Build a dynamic agent from ``spec`` and execute ``objective`` via ``run_task``.

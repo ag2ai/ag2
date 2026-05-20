@@ -24,25 +24,6 @@ _SINGLE_DESCRIPTION = (
 )
 
 
-def _normalize_pool(
-    available_tools: Iterable[Tool | Callable[..., Any]],
-) -> list[Tool]:
-    """Normalize and dedupe the tool pool once at factory time.
-
-    Conversion via :meth:`FunctionTool.ensure_tool` is done here so the
-    runtime path doesn't redo it on every tool call.
-    """
-    pool: list[Tool] = []
-    seen: set[str] = set()
-    for t in available_tools:
-        normalized = FunctionTool.ensure_tool(t)
-        if normalized.name in seen:
-            continue
-        seen.add(normalized.name)
-        pool.append(normalized)
-    return pool
-
-
 def dynamic_agent(
     *,
     available_tools: Iterable[Tool | Callable[..., Any]],
@@ -62,12 +43,12 @@ def dynamic_agent(
 
     Parameters:
         available_tools: Pool of tools the dynamic agent may pick from
-            by name. Normalized and deduped once at factory time.
+            by name.
         config: Model configuration used to run every dynamic agent
             spawned through this factory.
         middleware: Tool middleware applied to the tool.
     """
-    pool = _normalize_pool(available_tools)
+    pool = list(available_tools)
 
     @tool(
         name="create_and_run_agent",
