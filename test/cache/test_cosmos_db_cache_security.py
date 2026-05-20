@@ -118,10 +118,16 @@ class TestCosmosDBCachePickleRejection:
 
     def test_unknown_format_prefix_raises(self):
         """Unknown format prefix MUST raise ValueError."""
-        cache = _make_cache()
-        cache.container.read_item.return_value = {"data": b"\x99{}"}
-        with pytest.raises(ValueError, match="Unknown cache payload format prefix"):
-            cache.get("k")
+        import importlib
+
+        import autogen.cache.cosmos_db_cache as mod
+
+        with patch.dict(os.environ, {"AG2_ALLOW_PICKLE_CACHE_READ": "0"}):
+            importlib.reload(mod)
+            cache = _make_cache()
+            cache.container.read_item.return_value = {"data": b"\x99{}"}
+            with pytest.raises(ValueError, match="Unknown cache payload format prefix"):
+                cache.get("k")
 
     def test_pickle_read_allowed_with_env_var(self):
         """With AG2_ALLOW_PICKLE_CACHE_READ=1, legacy pickle payloads MAY be read."""
@@ -141,3 +147,38 @@ class TestCosmosDBCachePickleRejection:
                 result = cache.get("k")
             assert result == legacy_data
             assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+
+    def test_deserialize_unversioned_pickle_with_env_var(self):
+        """Unversioned (no prefix) pickle bytes MUST be readable with AG2_ALLOW_PICKLE_CACHE_READ=1."""
+        import importlib
+        import warnings
+
+        import autogen.cache.cosmos_db_cache as mod
+
+        with patch.dict(os.environ, {"AG2_ALLOW_PICKLE_CACHE_READ": "1"}):
+            importlib.reload(mod)
+            cache = _make_cache()
+            original = {"key": "value", "num": 42}
+            raw = pickle.dumps(original)  # no prefix -- old code format
+            cache.container.read_item.return_value = {"data": raw}
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                result = cache.get("k")
+            assert result == original
+            dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+            assert len(dep_warnings) == 1
+            assert "unversioned" in str(dep_warnings[0].message).lower()
+
+    def test_deserialize_unversioned_pickle_without_env_var(self):
+        """Unversioned (no prefix) pickle bytes MUST raise ValueError without env var."""
+        import importlib
+
+        import autogen.cache.cosmos_db_cache as mod
+
+        with patch.dict(os.environ, {"AG2_ALLOW_PICKLE_CACHE_READ": "0"}):
+            importlib.reload(mod)
+            cache = _make_cache()
+            raw = pickle.dumps({"key": "value"})  # no prefix -- old code format
+            cache.container.read_item.return_value = {"data": raw}
+            with pytest.raises(ValueError, match="Unknown cache payload format prefix"):
+                cache.get("k")

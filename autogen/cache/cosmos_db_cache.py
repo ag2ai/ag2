@@ -112,6 +112,8 @@ class CosmosDBCache(AbstractCache):
         Format:
           b'\\x01' + json-bytes  -- JSON (current)
           b'\\x00' + pickle-bytes -- legacy pickle (read-only, behind env var)
+          <no prefix>             -- unversioned legacy pickle (pre-migration,
+                                     read-only, behind env var)
         """
         if not raw:
             raise ValueError("Empty cache payload")
@@ -132,7 +134,17 @@ class CosmosDBCache(AbstractCache):
                 stacklevel=4,
             )
             return pickle.loads(body)  # noqa: S301
-        raise ValueError(f"Unknown cache payload format prefix: {prefix!r}")
+        # Unversioned payload: legacy pickle written by old code (no prefix byte).
+        # Only honoured with AG2_ALLOW_PICKLE_CACHE_READ=1.
+        if not _PICKLE_CACHE_READ_ENABLED:
+            raise ValueError(f"Unknown cache payload format prefix: {prefix!r}")
+        warnings.warn(
+            "Reading an unversioned (pre-migration) pickle cache entry. "
+            "Re-write the entry (cache.set) to migrate to JSON.",
+            DeprecationWarning,
+            stacklevel=4,
+        )
+        return pickle.loads(raw)  # noqa: S301
 
     def get(self, key: str, default: Any | None = None) -> Any | None:
         """Retrieve an item from the Cosmos DB cache.

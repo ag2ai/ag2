@@ -17,7 +17,8 @@ Each payload is prefixed with a single byte:
 | Prefix byte | Format |
 |-------------|--------|
 | `\x01`      | JSON (current, default) |
-| `\x00`      | Legacy pickle (read-only, requires opt-in) |
+| `\x00`      | Legacy pickle with version prefix (read-only, requires opt-in) |
+| (none)      | Unversioned legacy pickle -- written by old AG2 code before this PR (read-only, requires opt-in) |
 
 New writes always produce `\x01` + JSON bytes, regardless of environment
 variables.
@@ -39,6 +40,15 @@ On next use, AG2 will write JSON-encoded entries automatically.
 
 ### Option B -- Read-back existing data and re-write
 
+This option works for both types of legacy data:
+
+- Entries written by the new code (after PR #2709) that carry a `\x00` prefix byte.
+- **Unversioned entries written by old AG2 code** (before PR #2709) that start
+  directly with pickle protocol bytes such as `\x80\x05` -- no prefix at all.
+
+Both are handled transparently when `AG2_ALLOW_PICKLE_CACHE_READ=1` is set.
+A `DeprecationWarning` is emitted for each legacy read.
+
 1. Set `AG2_ALLOW_PICKLE_CACHE_READ=1` in the environment.
 2. Read each key and write it back:
 
@@ -51,9 +61,9 @@ from autogen.cache.redis_cache import RedisCache
 with RedisCache(seed="your_seed", redis_url="redis://localhost:6379/0") as cache:
     # Iterate your known keys and re-write them
     for key in your_key_list:
-        value = cache.get(key)
+        value = cache.get(key)  # reads legacy pickle (versioned or unversioned)
         if value is not None:
-            cache.set(key, value)  # re-writes as JSON
+            cache.set(key, value)  # re-writes as JSON with \x01 prefix
 ```
 
 3. Remove `AG2_ALLOW_PICKLE_CACHE_READ` from the environment.
