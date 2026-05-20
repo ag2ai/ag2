@@ -213,3 +213,43 @@ class TestLangChainAsyncDetection:
         # The user explicitly defined _arun on their class, so we treat it
         # as having async support regardless of what the body does.
         assert _langchain_tool_has_async_implementation(tool) is True
+
+    def test_structured_tool_sync_wrapped_callable_is_not_async(self) -> None:
+        """Regression for the StructuredTool gap (review feedback on #2618).
+
+        ``StructuredTool`` and ``Tool`` always override ``_arun`` at the
+        class level — internally ``_arun`` delegates to the ``coroutine``
+        attribute, which is ``None`` when the wrapped callable is sync.
+        An MRO-only check therefore misclassifies every sync function wrapped
+        with ``@langchain_core.tools.tool`` as async, routing them through
+        ``arun`` unnecessarily. The helper must instead read ``coroutine``
+        directly for this path.
+        """
+        from autogen.interop.langchain.langchain_tool import _langchain_tool_has_async_implementation
+
+        @langchain_tool  # type: ignore[misc]
+        def sync_wrapped(query: str) -> str:
+            """A sync callable wrapped by the @tool decorator becomes a StructuredTool."""
+            return f"sync:{query}"
+
+        assert hasattr(sync_wrapped, "coroutine"), (
+            "test prerequisite: the @tool decorator should wrap the callable in a "
+            "StructuredTool that exposes `coroutine` — if this assert fails the "
+            "LangChain API has changed and the detection path needs to be re-checked"
+        )
+        assert getattr(sync_wrapped, "coroutine", "<missing>") is None
+        assert _langchain_tool_has_async_implementation(sync_wrapped) is False
+
+    def test_structured_tool_async_wrapped_callable_is_async(self) -> None:
+        """Pair of the above: a StructuredTool whose wrapped callable IS async
+        must be detected as async via the ``coroutine`` attribute (not via the
+        class-level ``_arun`` override)."""
+        from autogen.interop.langchain.langchain_tool import _langchain_tool_has_async_implementation
+
+        @langchain_tool  # type: ignore[misc]
+        async def async_wrapped(query: str) -> str:
+            """An async callable wrapped by @tool stores itself in `coroutine`."""
+            return f"async:{query}"
+
+        assert getattr(async_wrapped, "coroutine", None) is not None
+        assert _langchain_tool_has_async_implementation(async_wrapped) is True

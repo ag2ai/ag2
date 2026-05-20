@@ -18,21 +18,39 @@ with optional_import_block():
 def _langchain_tool_has_async_implementation(langchain_tool: "LangchainTool") -> bool:  # type: ignore[no-any-unimported]
     """Check if a LangChain tool has a real async implementation.
 
-    LangChain's ``BaseTool`` defines a default ``_arun`` that raises
-    ``NotImplementedError``.  We walk the MRO to find the first class that
-    defines ``_arun``.  If that class is the tool's own concrete class (or
-    any intermediate subclass that is *not* ``BaseTool``), we treat it as
-    having a real async implementation.
+    Two cases are handled separately because LangChain's class hierarchy
+    forces it:
+
+    1. ``StructuredTool`` / ``Tool`` always overrides ``_arun`` at the
+       class level — internally it delegates to its ``coroutine``
+       attribute, which is set when the wrapped function is async and
+       ``None`` when it is sync. The MRO walk below would therefore
+       misclassify every ``StructuredTool``-wrapped sync function as
+       async-native, so for this path we check ``tool.coroutine`` directly.
+
+    2. Direct ``BaseTool`` subclasses (no ``coroutine`` attribute) may
+       override ``_arun`` themselves; ``BaseTool`` itself only ships a
+       default that raises ``NotImplementedError``. Walk the MRO and
+       treat the tool as async iff the first class that defines
+       ``_arun`` is not ``BaseTool``.
+
+    See review feedback on #2618 — #2790 uses the same two-case split.
 
     Returns:
-        True if the tool overrides ``_arun`` with a custom implementation.
+        True if the tool exposes a real async implementation.
     """
     try:
         from langchain_core.tools import BaseTool as LangchainBaseTool
     except ImportError:
         return False
 
-    # Walk the MRO to find the first class that defines ``_arun``.
+    # Case 1 — StructuredTool / Tool path. ``coroutine`` is the only
+    # reliable signal here; the class always overrides ``_arun`` so the
+    # MRO walk below would misclassify sync wrappers as async.
+    if hasattr(langchain_tool, "coroutine"):
+        return getattr(langchain_tool, "coroutine") is not None
+
+    # Case 2 — BaseTool subclass MRO walk.
     for cls in type(langchain_tool).__mro__:
         if "_arun" in cls.__dict__:
             # If the defining class is BaseTool itself, there is no
