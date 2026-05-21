@@ -11,13 +11,14 @@ from typing_extensions import Required
 from xai_sdk import AsyncClient
 from xai_sdk.aio.chat import Chat as XAIChat
 from xai_sdk.chat import Response as XAIResponse
-from xai_sdk.proto import sample_pb2
+from xai_sdk.proto import chat_pb2, sample_pb2
 from xai_sdk.types.chat import IncludeOption, ReasoningEffort, ToolMode
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
+    BuiltinToolCallEvent,
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
@@ -138,23 +139,30 @@ class XAIClient(LLMClient):
 
         calls: list[ToolCallEvent] = []
         for tc in getattr(response, "tool_calls", None) or ():
-            calls.append(
-                ToolCallEvent(
-                    id=tc.id,
-                    name=tc.function.name,
-                    arguments=tc.function.arguments or "{}",
-                )
-            )
+            cls = ToolCallEvent if tc.type == chat_pb2.TOOL_CALL_TYPE_CLIENT_SIDE_TOOL else BuiltinToolCallEvent
+            ev = cls(id=tc.id, name=tc.function.name, arguments=tc.function.arguments or "{}")
+            if isinstance(ev, BuiltinToolCallEvent):
+                await context.send(ev)
+            else:
+                calls.append(ev)
 
         await context.send(XAIAssistantEvent.from_response(response))
+
+        # xai-sdk returns finish_reason as either a string (e.g. "FINISH_REASON_STOP")
+        # or a proto enum int — strip the prefix and lowercase to match openai's "stop".
+        fr = getattr(response, "finish_reason", None)
+        finish_reason: str | None = None
+        if fr is not None:
+            name = sample_pb2.FinishReason.Name(fr) if isinstance(fr, int) else str(fr)
+            finish_reason = name.removeprefix("FINISH_REASON_").removeprefix("REASON_").lower() or None
 
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls),
             usage=normalize_usage(getattr(response, "usage", None)),
-            model=getattr(response, "model", None),
+            model=response.proto.model or None,
             provider=PROVIDER,
-            finish_reason=_finish_reason_to_str(getattr(response, "finish_reason", None)),
+            finish_reason=finish_reason,
         )
 
     async def _call_streaming(
@@ -164,11 +172,12 @@ class XAIClient(LLMClient):
     ) -> ModelResponse:
         full_content: str = ""
         usage: Usage = Usage()
-        finish_reason: str | None = None
+        finish_reason_raw: str | int | sample_pb2.FinishReason.ValueType | None = None
         resolved_model: str | None = None
         last_response: XAIResponse | None = None
         # tool_calls accumulate by id; the SDK delivers whole calls per chunk.
         tool_calls_by_id: dict[str, ToolCallEvent] = {}
+        builtin_emitted: set[str] = set()
 
         async for response, chunk in chat.stream():
             last_response = response
@@ -181,19 +190,24 @@ class XAIClient(LLMClient):
                 await context.send(ModelMessageChunk(content))
 
             for tc in getattr(chunk, "tool_calls", None) or ():
-                if tc.id and tc.id not in tool_calls_by_id:
-                    tool_calls_by_id[tc.id] = ToolCallEvent(
-                        id=tc.id,
-                        name=tc.function.name,
-                        arguments=tc.function.arguments or "{}",
-                    )
+                if not tc.id:
+                    continue
+                if tc.id in tool_calls_by_id or tc.id in builtin_emitted:
+                    continue
+                cls = ToolCallEvent if tc.type == chat_pb2.TOOL_CALL_TYPE_CLIENT_SIDE_TOOL else BuiltinToolCallEvent
+                ev = cls(id=tc.id, name=tc.function.name, arguments=tc.function.arguments or "{}")
+                if isinstance(ev, BuiltinToolCallEvent):
+                    await context.send(ev)
+                    builtin_emitted.add(tc.id)
+                else:
+                    tool_calls_by_id[tc.id] = ev
 
             if u := getattr(chunk, "usage", None):
                 usage = normalize_usage(u)
-            if model := getattr(chunk, "model", None):
+            if model := chunk.proto.model or None:
                 resolved_model = model
             if fr := getattr(chunk, "finish_reason", None):
-                finish_reason = _finish_reason_to_str(fr)
+                finish_reason_raw = fr
 
         message: ModelMessage | None = None
         if full_content:
@@ -205,9 +219,20 @@ class XAIClient(LLMClient):
             if not usage:
                 usage = normalize_usage(getattr(last_response, "usage", None))
             if not resolved_model:
-                resolved_model = getattr(last_response, "model", None)
-            if not finish_reason:
-                finish_reason = _finish_reason_to_str(getattr(last_response, "finish_reason", None))
+                resolved_model = last_response.proto.model or None
+            if finish_reason_raw is None:
+                finish_reason_raw = getattr(last_response, "finish_reason", None)
+
+        # xai-sdk returns finish_reason as either a string (e.g. "FINISH_REASON_STOP")
+        # or a proto enum int — strip the prefix and lowercase to match openai's "stop".
+        finish_reason: str | None = None
+        if finish_reason_raw is not None:
+            name = (
+                sample_pb2.FinishReason.Name(finish_reason_raw)
+                if isinstance(finish_reason_raw, int)
+                else str(finish_reason_raw)
+            )
+            finish_reason = name.removeprefix("FINISH_REASON_").removeprefix("REASON_").lower() or None
 
         return ModelResponse(
             message=message,
@@ -217,22 +242,3 @@ class XAIClient(LLMClient):
             provider=PROVIDER,
             finish_reason=finish_reason,
         )
-
-
-def _finish_reason_to_str(reason: "str | int | sample_pb2.FinishReason.ValueType | None") -> str | None:
-    """Normalise xai-sdk finish_reason (string or proto enum) to a plain string.
-
-    xai-sdk emits ``FinishReason`` proto-enum names like
-    ``FINISH_REASON_STOP`` / ``FINISH_REASON_TOOL_CALLS``. Strip the prefix so
-    downstream consumers see ``stop`` / ``tool_calls`` (consistent with openai).
-    """
-    if reason is None:
-        return None
-    if isinstance(reason, str):
-        s = reason
-    else:
-        name = sample_pb2.FinishReason.Name(reason) if isinstance(reason, int) else str(reason)
-        s = name
-    if s.startswith("FINISH_REASON_"):
-        s = s[len("FINISH_REASON_") :]
-    return s.lower() or None

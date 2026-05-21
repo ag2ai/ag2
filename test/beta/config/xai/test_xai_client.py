@@ -35,21 +35,27 @@ def _fake_response(
     finish_reason: str = "FINISH_REASON_STOP",
     usage: object | None = None,
 ) -> SimpleNamespace:
-    proto = chat_pb2.GetChatCompletionResponse()
+    proto = chat_pb2.GetChatCompletionResponse(model=model)
     return SimpleNamespace(
         content=content,
         reasoning_content=reasoning_content,
         tool_calls=tool_calls or [],
-        model=model,
         finish_reason=finish_reason,
         usage=usage or SimpleNamespace(prompt_tokens=3, completion_tokens=5, total_tokens=8),
         proto=proto,
     )
 
 
-def _fake_tool_call(call_id: str, name: str, arguments: str) -> SimpleNamespace:
+def _fake_tool_call(
+    call_id: str,
+    name: str,
+    arguments: str,
+    *,
+    type: int = chat_pb2.TOOL_CALL_TYPE_CLIENT_SIDE_TOOL,
+) -> SimpleNamespace:
     return SimpleNamespace(
         id=call_id,
+        type=type,
         function=SimpleNamespace(name=name, arguments=arguments),
     )
 
@@ -143,41 +149,17 @@ async def test_tool_calls_surface_in_response() -> None:
 
 @pytest.mark.asyncio
 async def test_streaming_accumulates_chunks() -> None:
-    proto = chat_pb2.GetChatCompletionResponse()
     chunks = [
-        SimpleNamespace(
-            content="Hello, ",
-            reasoning_content="",
-            tool_calls=[],
-            usage=None,
-            model="grok-4-fast",
-            finish_reason=None,
-        ),
-        SimpleNamespace(
-            content="world!",
-            reasoning_content="",
-            tool_calls=[],
-            usage=None,
-            model="grok-4-fast",
-            finish_reason=None,
-        ),
-        SimpleNamespace(
+        _fake_response(content="Hello, ", usage=None, finish_reason=""),
+        _fake_response(content="world!", usage=None, finish_reason=""),
+        _fake_response(
             content="",
-            reasoning_content="",
-            tool_calls=[],
             usage=SimpleNamespace(prompt_tokens=2, completion_tokens=4, total_tokens=6),
-            model="grok-4-fast",
-            finish_reason="FINISH_REASON_STOP",
         ),
     ]
-    final_response = SimpleNamespace(
+    final_response = _fake_response(
         content="Hello, world!",
-        reasoning_content="",
-        tool_calls=[],
         usage=SimpleNamespace(prompt_tokens=2, completion_tokens=4, total_tokens=6),
-        model="grok-4-fast",
-        finish_reason="FINISH_REASON_STOP",
-        proto=proto,
     )
 
     async def fake_stream() -> object:

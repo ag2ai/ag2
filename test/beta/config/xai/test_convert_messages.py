@@ -156,6 +156,21 @@ class TestToolResult:
         assert msg.tool_call_id == "tc_1"
         assert _content_texts(msg) == ["ok"]
 
+    def test_multi_text_tool_result_serialises_to_json_array(self) -> None:
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="tc_1",
+                    name="t",
+                    result=ToolResult(TextInput("first"), TextInput("second")),
+                )
+            ]
+        )
+
+        [msg], _ = convert_messages([], [event], SerializerCls)
+
+        assert _content_texts(msg) == ['["first", "second"]']
+
     def test_binary_in_tool_result_unsupported(self) -> None:
         event = ToolResultsEvent(
             results=[

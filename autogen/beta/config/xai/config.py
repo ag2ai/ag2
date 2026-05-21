@@ -13,7 +13,6 @@ from autogen.beta.config.config import ModelConfig
 from .xai_client import CreateOptions, IncludeOption, ReasoningEffort, XAIClient
 
 XAI_DEFAULT_API_HOST = "api.x.ai"
-XAI_DEFAULT_TIMEOUT = 1620.0  # seconds; matches xai-sdk default
 
 
 class XAIConfigOverrides(TypedDict, total=False):
@@ -50,7 +49,7 @@ class XAIConfig(ModelConfig):
     model: str
     api_key: str | None = None
     api_host: str = XAI_DEFAULT_API_HOST
-    timeout: float | None = XAI_DEFAULT_TIMEOUT
+    timeout: float | None = None
     metadata: tuple[tuple[str, str], ...] | None = None
     channel_options: list[tuple[str, Any]] | None = None
     streaming: bool = False

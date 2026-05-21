@@ -229,16 +229,26 @@ def _content_from_input(part: Input, serializer: SerializerProto) -> chat_pb2.Co
 
 
 def _tool_result_to_string(parts: Sequence[Input], serializer: SerializerProto) -> str:
-    """xAI ``tool_result`` takes ``result: str``; flatten parts to a single string."""
-    chunks: list[str] = []
+    """xAI ``tool_result`` accepts only ``result: str`` (see ``xai_sdk.chat.tool_result``).
+
+    Strategy mirrors other providers (single text → bare str) and aligns with xAI
+    docs that recommend JSON for structured results. Multiple text/data fragments
+    are emitted as a JSON array so the model sees the part boundary explicitly
+    instead of a silent ``\\n`` flatten. Binary/URL inputs are not supported by
+    the API for tool results.
+    """
+    fragments: list[str] = []
     for part in parts:
         if isinstance(part, TextInput):
-            chunks.append(part.content)
+            fragments.append(part.content)
         elif isinstance(part, DataInput):
-            chunks.append(serializer.encode(part.data).decode())
+            fragments.append(serializer.encode(part.data).decode())
         else:
             raise UnsupportedInputError(f"tool_result/{type(part).__name__}", PROVIDER)
-    return "\n".join(chunks)
+
+    if len(fragments) == 1:
+        return fragments[0]
+    return json.dumps(fragments, ensure_ascii=False)
 
 
 def convert_messages(

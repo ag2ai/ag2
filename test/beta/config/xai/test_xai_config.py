@@ -98,7 +98,7 @@ def test_defaults() -> None:
     config = XAIConfig(model="grok-4-fast")
 
     assert config.api_host == "api.x.ai"
-    assert config.timeout == 1620.0
+    assert config.timeout is None
     assert config.api_key is None
     assert config.streaming is False
     assert config.temperature is None
