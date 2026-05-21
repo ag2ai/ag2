@@ -12,14 +12,13 @@ import pytest
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
 @pytest.mark.asyncio
-async def test_async_chats(credentials_gpt_4o_mini: Credentials):
-    config_list_4omini = credentials_gpt_4o_mini.config_list
+async def test_async_chats(credentials_openai_mini: Credentials):
+    config_list_4omini = credentials_openai_mini.config_list
 
     financial_tasks = [
         """What are the full names of NVDA and TESLA.""",

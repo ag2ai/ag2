@@ -12,8 +12,7 @@ from autogen import AssistantAgent, UserProxyAgent
 from autogen.agentchat.contrib.agent_optimizer import AgentOptimizer
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
-
-from ...conftest import Credentials
+from test.credentials import Credentials
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -84,18 +83,18 @@ def test_step(credentials_all: Credentials):
     user_proxy.initiate_chat(assistant, message=problem)
     optimizer.record_one_conversation(assistant.chat_messages_for_summary(user_proxy), is_satisfied=True)
 
-    register_for_llm, register_for_exector = optimizer.step()
+    register_for_llm, register_for_executor = optimizer.step()
 
     print("-------------------------------------")
     print("register_for_llm:")
     print(register_for_llm)
-    print("register_for_exector")
-    print(register_for_exector)
+    print("register_for_executor")
+    print(register_for_executor)
 
     for item in register_for_llm:
         assistant.update_function_signature(**item)
-    if len(register_for_exector.keys()) > 0:
-        user_proxy.register_function(function_map=register_for_exector)
+    if len(register_for_executor.keys()) > 0:
+        user_proxy.register_function(function_map=register_for_executor)
 
     print("-------------------------------------")
     print("Updated assistant.llm_config:")
@@ -106,33 +105,24 @@ def test_step(credentials_all: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_llm_config_current_property(credentials_all: Credentials):
-    """Test that AgentOptimizer correctly uses LLMConfig.current property when llm_config is None."""
+    """Test that AgentOptimizer works when llm_config is explicitly provided."""
     # Create a default LLMConfig
-    config_list = credentials_all.config_list
     llm_config = LLMConfig(
-        config_list=config_list,
+        *credentials_all.config_list,
         timeout=60,
         cache_seed=42,
     )
 
-    # Set it as the current LLMConfig
-    with llm_config:
-        # Create AgentOptimizer without passing llm_config
-        optimizer = AgentOptimizer(max_actions_per_step=3)
+    # Create AgentOptimizer without passing llm_config
+    optimizer = AgentOptimizer(max_actions_per_step=3, llm_config=llm_config)
 
-        # Verify that the optimizer has the correct llm_config
-        assert optimizer.llm_config is not None
-        assert "config_list" in optimizer.llm_config
-        assert len(optimizer.llm_config["config_list"]) > 0
-
-        # Test that it works with record_one_conversation
-        conversation = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi there!"}]
-        optimizer.record_one_conversation(conversation, is_satisfied=True)
-        assert len(optimizer._trial_conversations_history) == 1
+    # Test that it works with record_one_conversation
+    conversation = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi there!"}]
+    optimizer.record_one_conversation(conversation, is_satisfied=True)
+    assert len(optimizer._trial_conversations_history) == 1
 
 
 def test_llm_config_without_context():
-    """Test that AgentOptimizer raises ValueError when no LLMConfig is provided and no context is set."""
-    # This should raise a ValueError because no current LLMConfig is set
-    with pytest.raises(ValueError, match="No current LLMConfig set"):
+    """Test that AgentOptimizer raises ValueError when no llm_config is provided."""
+    with pytest.raises(ValueError, match="llm_config is required for AgentOptimizer"):
         AgentOptimizer(max_actions_per_step=3)

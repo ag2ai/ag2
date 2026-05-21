@@ -8,7 +8,7 @@
 
 import logging
 import warnings
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -24,8 +24,8 @@ def validate_parameter(
     allowed_types: tuple[Any, ...],
     allow_None: bool,  # noqa: N803
     default_value: Any,
-    numerical_bound: Optional[tuple[Optional[float], Optional[float]]],
-    allowed_values: Optional[list[Any]],
+    numerical_bound: tuple[float | None, float | None] | None,
+    allowed_values: list[Any] | None,
 ) -> Any:
     """Validates a given config parameter, checking its type, values, and setting defaults
     Parameters:
@@ -110,6 +110,33 @@ def validate_parameter(
     return param_value
 
 
+def merge_config_with_tools(config: dict[str, Any], client_config: dict[str, Any]) -> dict[str, Any]:
+    """Merge configuration dictionaries with proper tools and functions handling.
+
+    This function merges two configuration dictionaries while ensuring that:
+    1. Empty 'tools' arrays are not added unnecessarily
+    2. 'tools' and deprecated 'functions' parameters are not both present
+    3. Actual tool configurations are properly merged
+
+    Args:
+        config: The base configuration dictionary (e.g., from create() call)
+        client_config: The client-specific configuration dictionary (e.g., from config_list)
+
+    Returns:
+        dict[str, Any]: The merged configuration with proper tools/functions handling
+    """
+    # Start with a clean merge of both configs
+    full_config = {**config, **client_config}
+
+    # Add tools if tools contains something AND are not using deprecated functions
+    tools = config.get("tools", []) + client_config.get("tools", [])
+    if tools and "functions" not in full_config:
+        # Don't add tools if functions parameter is present (deprecated API)
+        full_config["tools"] = tools
+
+    return full_config
+
+
 def should_hide_tools(messages: list[dict[str, Any]], tools: list[dict[str, Any]], hide_tools_param: str) -> bool:
     """Determines if tools should be hidden. This function is used to hide tools when they have been run, minimising the chance of the LLM choosing them when they shouldn't.
     Parameters:
@@ -131,7 +158,7 @@ def should_hide_tools(messages: list[dict[str, Any]], tools: list[dict[str, Any]
         return False
     elif hide_tools_param == "if_any_run":
         # Return True if any tool_call_id exists, indicating a tool call has been executed. False otherwise.
-        return any(["tool_call_id" in dictionary for dictionary in messages])
+        return any("tool_call_id" in dictionary for dictionary in messages)
     elif hide_tools_param == "if_all_run":
         # Return True if all tools have been executed at least once. False otherwise.
 

@@ -24,8 +24,7 @@ from autogen.mcp.mcp_client import (
     StdioConfig,
     create_toolkit,
 )
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block():
     from mcp import ClientSession, StdioServerParameters
@@ -75,13 +74,11 @@ class TestMCPClient:
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "arguments": {
-                                    "type": "object",
-                                    "description": "arguments",
-                                    "additionalProperties": True,
-                                }
+                                "a": {"title": "A", "type": "integer"},
+                                "b": {"title": "B", "type": "integer"},
                             },
-                            "required": ["arguments"],
+                            "required": ["a", "b"],
+                            "title": "addArguments",
                         },
                     },
                 },
@@ -93,13 +90,11 @@ class TestMCPClient:
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "arguments": {
-                                    "type": "object",
-                                    "description": "arguments",
-                                    "additionalProperties": True,
-                                }
+                                "a": {"title": "A", "type": "integer"},
+                                "b": {"title": "B", "type": "integer"},
                             },
-                            "required": ["arguments"],
+                            "required": ["a", "b"],
+                            "title": "multiplyArguments",
                         },
                     },
                 },
@@ -146,7 +141,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     @pytest.mark.skipif("OPENAI_API_KEY" not in os.environ, reason="OPENAI_API_KEY not set, skipping integration test.")
     async def test_register_for_llm_tool(
-        self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials
+        self, server_params: "StdioServerParameters", credentials_openai_mini: Credentials
     ) -> None:  # type: ignore[no-any-unimported]
         async with (
             stdio_client(server_params) as (read, write),
@@ -157,7 +152,7 @@ class TestMCPClient:
             toolkit = await create_toolkit(session=session)
             agent = AssistantAgent(
                 name="agent",
-                llm_config=credentials_gpt_4o_mini.llm_config,
+                llm_config=credentials_openai_mini.llm_config,
             )
             toolkit.register_for_llm(agent)
             assert len(agent.tools) == len(toolkit.tools)
@@ -195,7 +190,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     @pytest.mark.skipif("OPENAI_API_KEY" not in os.environ, reason="OPENAI_API_KEY not set, skipping integration test.")
     @run_for_optional_imports("openai", "openai")
-    async def test_with_llm(self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials) -> None:  # type: ignore[no-any-unimported]
+    async def test_with_llm(self, server_params: "StdioServerParameters", credentials_openai_mini: Credentials) -> None:  # type: ignore[no-any-unimported]
         async with (
             stdio_client(server_params) as (read, write),
             ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
@@ -206,7 +201,7 @@ class TestMCPClient:
 
             agent = AssistantAgent(
                 name="agent",
-                llm_config=credentials_gpt_4o_mini.llm_config,
+                llm_config=credentials_openai_mini.llm_config,
             )
             toolkit.register_for_llm(agent)
 

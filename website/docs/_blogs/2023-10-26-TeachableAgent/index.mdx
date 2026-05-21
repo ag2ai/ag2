@@ -4,6 +4,9 @@ authors: [rickyloynd-microsoft]
 tags: [Tutorial]
 ---
 
+!!! warning "Deprecated"
+    Some features referenced in this blog post (`TextAnalyzerAgent`, `GPTAssistantAgent`) are deprecated as of v0.12 and will be removed in v0.14. This blog post and associated notebooks will also be removed in v0.14.
+
 ![Teachable Agent Architecture](img/teachable-arch.png)
 
 **TL;DR:**
@@ -68,10 +71,10 @@ llm_config = LLMConfig.from_json(
 ```python
 
 # Start by instantiating any agent that inherits from ConversableAgent, which we use directly here for simplicity.
-with llm_config:
-    teachable_agent = ConversableAgent(
-        name="teachable_agent",  # The name can be anything.
-    )
+teachable_agent = ConversableAgent(
+    name="teachable_agent",  # The name can be anything.
+    llm_config=llm_config,
+)
 
 # Instantiate a Teachability object. Its parameters are all optional.
 teachability = Teachability(

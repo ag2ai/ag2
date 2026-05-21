@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import os
 import pickle
-from typing import Any, Optional, Union
+from typing import Any
 
 from ....formatting_utils import colored
 from ....import_utils import optional_import_block, require_optional_import
@@ -38,12 +38,12 @@ class Teachability(AgentCapability):
 
     def __init__(
         self,
-        verbosity: Optional[int] = 0,
-        reset_db: Optional[bool] = False,
-        path_to_db_dir: Optional[str] = "./tmp/teachable_agent_db",
-        recall_threshold: Optional[float] = 1.5,
-        max_num_retrievals: Optional[int] = 10,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], bool]] = None,
+        verbosity: int | None = 0,
+        reset_db: bool | None = False,
+        path_to_db_dir: str | None = "./tmp/teachable_agent_db",
+        recall_threshold: float | None = 1.5,
+        max_num_retrievals: int | None = 10,
+        llm_config: LLMConfig | dict[str, Any] | bool | None = None,
     ):
         """Args:
         verbosity (Optional, int): # 0 (default) for basic info, 1 to add memory operations, 2 for analyzer messages, 3 for memo lists.
@@ -92,7 +92,7 @@ class Teachability(AgentCapability):
         """Adds a few arbitrary memos to the DB."""
         self.memo_store.prepopulate()
 
-    def process_last_received_message(self, text: Union[dict[str, Any], str]):
+    def process_last_received_message(self, text: dict[str, Any] | str):
         """Appends any relevant memos to the message text, and stores any apparent teachings in new memos.
         Uses TextAnalyzerAgent to make decisions about memo storage and retrieval.
         """
@@ -107,7 +107,7 @@ class Teachability(AgentCapability):
         # Return the (possibly) expanded message text.
         return expanded_text
 
-    def _consider_memo_storage(self, comment: Union[dict[str, Any], str]):
+    def _consider_memo_storage(self, comment: dict[str, Any] | str):
         """Decides whether to store something from one user comment in the DB."""
         memo_added = False
 
@@ -165,7 +165,7 @@ class Teachability(AgentCapability):
             # Yes. Save them to disk.
             self.memo_store._save_memos()
 
-    def _consider_memo_retrieval(self, comment: Union[dict[str, Any], str]):
+    def _consider_memo_retrieval(self, comment: dict[str, Any] | str):
         """Decides whether to retrieve memos from the DB, and add them to the chat context."""
         # First, use the comment directly as the lookup key.
         if self.verbosity >= 1:
@@ -228,7 +228,7 @@ class Teachability(AgentCapability):
             memo_texts = memo_texts + "\n" + info
         return memo_texts
 
-    def _analyze(self, text_to_analyze: Union[dict[str, Any], str], analysis_instructions: Union[dict[str, Any], str]):
+    def _analyze(self, text_to_analyze: dict[str, Any] | str, analysis_instructions: dict[str, Any] | str):
         """Asks TextAnalyzerAgent to analyze the given text according to specific instructions."""
         self.analyzer.reset()  # Clear the analyzer's list of messages.
         self.teachable_agent.send(
@@ -251,9 +251,9 @@ class MemoStore:
 
     def __init__(
         self,
-        verbosity: Optional[int] = 0,
-        reset: Optional[bool] = False,
-        path_to_db_dir: Optional[str] = "./tmp/teachable_agent_db",
+        verbosity: int | None = 0,
+        reset: bool | None = False,
+        path_to_db_dir: str | None = "./tmp/teachable_agent_db",
     ):
         """Args:
         - verbosity (Optional, int): 1 to print memory operations, 0 to omit them. 3+ to print memo lists.
@@ -342,7 +342,7 @@ class MemoStore:
             )
         return input_text, output_text, distance
 
-    def get_related_memos(self, query_text: str, n_results: int, threshold: Union[int, float]):
+    def get_related_memos(self, query_text: str, n_results: int, threshold: int | float):
         """Retrieves memos that are related to the given query text within the specified distance threshold."""
         if n_results > len(self.uid_text_dict):
             n_results = len(self.uid_text_dict)

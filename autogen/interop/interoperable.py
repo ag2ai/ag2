@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from ..doc_utils import export_module
 from ..tools import Tool
@@ -35,7 +35,7 @@ class Interoperable(Protocol):
         ...
 
     @classmethod
-    def get_unsupported_reason(cls) -> Optional[str]:
+    def get_unsupported_reason(cls) -> str | None:
         """Returns the reason for the tool being unsupported.
 
         This method should be implemented by any class adhering to the `Interoperable` protocol.

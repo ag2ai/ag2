@@ -7,7 +7,7 @@
 # Install Azure Cosmos DB SDK if not already
 
 import pickle
-from typing import Any, Optional, TypedDict, Union
+from typing import Any, Optional, TypedDict
 
 from ..import_utils import optional_import_block, require_optional_import
 from .abstract_cache_base import AbstractCache
@@ -22,7 +22,7 @@ class CosmosDBConfig(TypedDict, total=False):
     connection_string: str
     database_id: str
     container_id: str
-    cache_seed: Optional[Union[str, int]]
+    cache_seed: str | int | None
     client: Optional["CosmosClient"]
 
 
@@ -39,7 +39,7 @@ class CosmosDBCache(AbstractCache):
         container: The container instance used for caching.
     """
 
-    def __init__(self, seed: Union[str, int], cosmosdb_config: CosmosDBConfig):
+    def __init__(self, seed: str | int, cosmosdb_config: CosmosDBConfig):
         """Initialize the CosmosDBCache instance.
 
         Args:
@@ -58,7 +58,7 @@ class CosmosDBCache(AbstractCache):
         )
 
     @classmethod
-    def create_cache(cls, seed: Union[str, int], cosmosdb_config: CosmosDBConfig):
+    def create_cache(cls, seed: str | int, cosmosdb_config: CosmosDBConfig):
         """Factory method to create a CosmosDBCache instance based on the provided configuration.
         This method decides whether to use an existing CosmosClient or create a new one.
         """
@@ -68,20 +68,20 @@ class CosmosDBCache(AbstractCache):
             return cls.from_config(seed, cosmosdb_config)
 
     @classmethod
-    def from_config(cls, seed: Union[str, int], cosmosdb_config: CosmosDBConfig):
+    def from_config(cls, seed: str | int, cosmosdb_config: CosmosDBConfig):
         return cls(str(seed), cosmosdb_config)
 
     @classmethod
-    def from_connection_string(cls, seed: Union[str, int], connection_string: str, database_id: str, container_id: str):
+    def from_connection_string(cls, seed: str | int, connection_string: str, database_id: str, container_id: str):
         config = {"connection_string": connection_string, "database_id": database_id, "container_id": container_id}
         return cls(str(seed), config)
 
     @classmethod
-    def from_existing_client(cls, seed: Union[str, int], client: "CosmosClient", database_id: str, container_id: str):
+    def from_existing_client(cls, seed: str | int, client: "CosmosClient", database_id: str, container_id: str):
         config = {"client": client, "database_id": database_id, "container_id": container_id}
         return cls(str(seed), config)
 
-    def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
+    def get(self, key: str, default: Any | None = None) -> Any | None:
         """Retrieve an item from the Cosmos DB cache.
 
         Args:
@@ -136,7 +136,7 @@ class CosmosDBCache(AbstractCache):
         """
         return self
 
-    def __exit__(self, exc_type: Optional[type], exc_value: Optional[Exception], traceback: Optional[Any]) -> None:
+    def __exit__(self, exc_type: type | None, exc_value: Exception | None, traceback: Any | None) -> None:
         """Context management exit.
 
         Perform cleanup actions such as closing the Cosmos DB client.

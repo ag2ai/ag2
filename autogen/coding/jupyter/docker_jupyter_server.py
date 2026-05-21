@@ -10,27 +10,24 @@ import atexit
 import io
 import logging
 import secrets
-import sys
 import uuid
 from pathlib import Path
 from types import TracebackType
-from typing import Optional
 
-import docker
+from typing_extensions import Self
 
 from ...doc_utils import export_module
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
+from ...import_utils import optional_import_block, require_optional_import
 from ..docker_commandline_code_executor import _wait_for_ready
 from .base import JupyterConnectable, JupyterConnectionInfo
 from .import_utils import require_jupyter_kernel_gateway_installed
 from .jupyter_client import JupyterClient
 
+with optional_import_block():
+    import docker
 
+
+@require_optional_import(["docker"], "docker")
 @require_jupyter_kernel_gateway_installed()
 @export_module("autogen.coding.jupyter")
 class DockerJupyterServer(JupyterConnectable):
@@ -62,8 +59,8 @@ WORKDIR "${HOME}"
     def __init__(
         self,
         *,
-        custom_image_name: Optional[str] = None,
-        container_name: Optional[str] = None,
+        custom_image_name: str | None = None,
+        container_name: str | None = None,
         auto_remove: bool = True,
         stop_container: bool = True,
         docker_env: dict[str, str] = {},
@@ -162,6 +159,6 @@ WORKDIR "${HOME}"
         return self
 
     def __exit__(
-        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         self.stop()

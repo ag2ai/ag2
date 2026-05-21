@@ -5,7 +5,8 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any
 
 from ....code_utils import content_str
 from ....oai.client import OpenAIWrapper
@@ -33,7 +34,7 @@ class VisionCapability(AgentCapability):
         The vision capability will hook to the ConversableAgent's `process_last_received_message`.
 
         Some technical details:
-        When the agent (who has the vision capability) received an message, it will:
+        When the agent (who has the vision capability) receives a message, it will:
         1. _process_received_message:
             a. _append_oai_message
         2. generate_reply: if the agent is a MultimodalAgent, it will also use the image tag.
@@ -47,7 +48,7 @@ class VisionCapability(AgentCapability):
     def __init__(
         self,
         lmm_config: dict[str, Any],
-        description_prompt: Optional[str] = DEFAULT_DESCRIPTION_PROMPT,
+        description_prompt: str | None = DEFAULT_DESCRIPTION_PROMPT,
         custom_caption_func: Callable = None,
     ) -> None:
         """Initializes a new instance, setting up the configuration for interacting with
@@ -101,7 +102,7 @@ class VisionCapability(AgentCapability):
         # Register a hook for processing the last message.
         agent.register_hook(hookable_method="process_last_received_message", hook=self.process_last_received_message)
 
-    def process_last_received_message(self, content: Union[str, list[dict[str, Any]]]) -> str:
+    def process_last_received_message(self, content: str | list[dict[str, Any]]) -> str:
         """Processes the last received message content by normalizing and augmenting it
         with descriptions of any included images. The function supports input content
         as either a string or a list of dictionaries, where each dictionary represents
@@ -157,7 +158,7 @@ class VisionCapability(AgentCapability):
             A beautiful sunset over the mountains\n"
             (Caption added after the image)
         """
-        copy.deepcopy(content)
+        content = copy.deepcopy(content)
         # normalize the content into the gpt-4v format for multimodal
         # we want to keep the URL format to keep it concise.
         if isinstance(content, str):
@@ -182,7 +183,7 @@ class VisionCapability(AgentCapability):
 
                 aug_content += f"<img {img_url}> in case you can not see, the caption of this image is: {img_caption}\n"
             else:
-                print(f"Warning: the input type should either be `test` or `image_url`. Skip {item['type']} here.")
+                print(f"Warning: the input type should either be `text` or `image_url`. Skip {item['type']} here.")
 
         return aug_content
 

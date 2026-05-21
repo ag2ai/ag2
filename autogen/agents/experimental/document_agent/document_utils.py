@@ -5,14 +5,14 @@
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
-from .url_utils import ExtensionToFormat, InputFormat, URLAnalyzer
+from .url_utils import ExtensionToFormat, InputFormat, URLAnalyzer, validate_url
 
 with optional_import_block():
     import requests
@@ -63,7 +63,13 @@ def _download_rendered_html(url: str) -> str:
 
     Returns:
         str: The rendered HTML content of the page.
+
+    Raises:
+        UnsafeURLError: if the URL targets a non-public host.
     """
+    # SSRF guard: block file://, internal/private hosts, cloud metadata IPs, etc.
+    validate_url(url)
+
     # Set up Chrome options
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")  # Enable headless mode
@@ -102,7 +108,13 @@ def _download_binary_file(url: str, output_dir: Path) -> Path:
 
     Returns:
         Path: Path to the saved file.
+
+    Raises:
+        UnsafeURLError: if the URL targets a non-public host.
     """
+    # SSRF guard: block file://, internal/private hosts, cloud metadata IPs, etc.
+    validate_url(url)
+
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -112,6 +124,8 @@ def _download_binary_file(url: str, output_dir: Path) -> Path:
 
     # Get file info
     final_url = analysis.get("final_url", url)
+    # SSRF guard: re-validate the post-redirect URL before downloading
+    validate_url(final_url)
     file_type = analysis.get("file_type")
     content_type = analysis.get("mime_type", "")
 
@@ -244,7 +258,7 @@ def _is_valid_extension_for_file_type(extension: str, file_type: InputFormat) ->
 
 
 @require_optional_import(["selenium", "webdriver_manager", "requests"], "rag")
-def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Path:
+def download_url(url: Any, output_dir: str | Path | None = None) -> Path:
     """Download the content of a URL and save it as a file.
 
     For direct file URLs (.md, .pdf, .docx, etc.), downloads the raw file.
@@ -296,7 +310,7 @@ def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Pat
     return _download_binary_file(url=final_url, output_dir=output_dir)
 
 
-def list_files(directory: Union[Path, str]) -> list[Path]:
+def list_files(directory: Path | str) -> list[Path]:
     """Recursively list all files in a directory.
 
     This function will raise an exception if the directory does not exist.
@@ -310,9 +324,8 @@ def list_files(directory: Union[Path, str]) -> list[Path]:
 
 
 @export_module("autogen.agents.experimental.document_agent")
-def handle_input(input_path: Union[Path, str], output_dir: Union[Path, str] = "./output") -> list[Path]:
+def handle_input(input_path: Path | str, output_dir: Path | str = "./output") -> list[Path]:
     """Process the input string and return the appropriate file paths"""
-
     output_dir = preprocess_path(str_or_path=output_dir, is_dir=True, mk_path=True)
     if isinstance(input_path, str) and is_url(input_path):
         _logger.info("Detected URL. Downloading content...")
@@ -336,9 +349,7 @@ def handle_input(input_path: Union[Path, str], output_dir: Union[Path, str] = ".
 
 
 @export_module("autogen.agents.experimental.document_agent")
-def preprocess_path(
-    str_or_path: Union[Path, str], mk_path: bool = False, is_file: bool = False, is_dir: bool = True
-) -> Path:
+def preprocess_path(str_or_path: Path | str, mk_path: bool = False, is_file: bool = False, is_dir: bool = True) -> Path:
     """Preprocess the path for file operations.
 
     Args:
@@ -350,7 +361,6 @@ def preprocess_path(
     Returns:
         Path: The preprocessed path.
     """
-
     # Convert the input to a Path object if it's a string
     temp_path = Path(str_or_path)
 

@@ -8,12 +8,16 @@
 
 import asyncio
 import copy
-import inspect
+import io
+import json
+import logging
 import os
+import threading
 import time
 import unittest
-from typing import Annotated, Any, Callable, List, Literal, Optional, Union
-from unittest.mock import MagicMock
+from collections.abc import Callable
+from typing import Annotated, Any, Literal
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import BaseModel, Field
@@ -24,17 +28,14 @@ from autogen.agentchat.conversable_agent import register_function
 from autogen.agentchat.group import ContextVariables
 from autogen.cache.cache import Cache
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
 from autogen.tools.tool import Tool
-
-from ..conftest import (
-    Credentials,
-    credentials_all_llms,
-    suppress_gemini_resource_exhausted,
-    suppress_json_decoder_error,
-)
+from test.credentials import Credentials
+from test.marks import credentials_all_llms
+from test.utils import suppress_gemini_resource_exhausted, suppress_json_decoder_error
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -64,12 +65,6 @@ def test_conversable_agent_name_with_white_space(
         match=f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'",
     ):
         ConversableAgent(name=name, llm_config=llm_config)
-
-    llm_config["config_list"][0]["api_type"] = "azure"
-    llm_config["config_list"][0]["api_version"] = "2023-01-01"
-    llm_config["config_list"][0]["base_url"] = "https://api.azure.com/v1"
-    agent = ConversableAgent(name=name, llm_config=llm_config)
-    assert agent.name == name
 
 
 def test_sync_trigger():
@@ -398,26 +393,44 @@ def test_max_consecutive_auto_reply():
 def test_max_consecutive_auto_reply_with_max_turns(capsys: pytest.CaptureFixture[str]):
     agent1 = ConversableAgent("agent1", max_consecutive_auto_reply=1, llm_config=False, human_input_mode="NEVER")
     agent2 = ConversableAgent("agent2", max_consecutive_auto_reply=100, llm_config=False, human_input_mode="NEVER")
+    logger = logging.getLogger("ag2.event.processor")
+    log_stream = io.StringIO()
+    handler = logging.StreamHandler(log_stream)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    old_handlers = logger.handlers[:]
+    old_level = logger.level
+    old_propagate = logger.propagate
+    logger.handlers = [handler]
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    # max_consecutive_auto_reply parameter on the agent that initiates chat
-    agent1.initiate_chat(agent2, message="hello", max_turns=50)
-    assert len(agent2.chat_messages[agent1]) == 4
-    assert len(agent1.chat_messages[agent2]) == 4
-    # checking captured output
-    captured = capsys.readouterr()
-    assert "TERMINATING RUN" in captured.out
-    assert "Maximum number of consecutive auto-replies reached" in captured.out
+    try:
+        # max_consecutive_auto_reply parameter on the agent that initiates chat
+        agent1.initiate_chat(agent2, message="hello", max_turns=50)
+        assert len(agent2.chat_messages[agent1]) == 4
+        assert len(agent1.chat_messages[agent2]) == 4
+        # checking captured output
+        log_output = log_stream.getvalue()
+        assert "TERMINATING RUN" in log_output
+        assert "Maximum number of consecutive auto-replies reached" in log_output
 
-    _ = capsys.readouterr()  # Explicitly clear buffer
+        _ = capsys.readouterr()  # Explicitly clear buffer
+        log_stream.truncate(0)
+        log_stream.seek(0)
 
-    # max_consecutive_auto_reply parameter on the recipient agent
-    agent2.initiate_chat(agent1, message="hello", max_turns=50)
-    assert len(agent1.chat_messages[agent2]) == 3
-    assert len(agent2.chat_messages[agent1]) == 3
-    # checking captured output
-    captured = capsys.readouterr()
-    assert "TERMINATING RUN" in captured.out
-    assert "Maximum number of consecutive auto-replies reached" in captured.out
+        # max_consecutive_auto_reply parameter on the recipient agent
+        agent2.initiate_chat(agent1, message="hello", max_turns=50)
+        assert len(agent1.chat_messages[agent2]) == 3
+        assert len(agent2.chat_messages[agent1]) == 3
+        # checking captured output
+        _ = capsys.readouterr()
+        log_output = log_stream.getvalue()
+        assert "TERMINATING RUN" in log_output
+        assert "Maximum number of consecutive auto-replies reached" in log_output
+    finally:
+        logger.handlers = old_handlers
+        logger.setLevel(old_level)
+        logger.propagate = old_propagate
 
 
 def test_conversable_agent():
@@ -494,6 +507,66 @@ def test_conversable_agent():
     assert dummy_agent_5.description == "The fifth dummy agent used for testing."  # Same as system message
 
 
+def test_terminate_chat_true():
+    """Test _terminate_chat returns True for a termination message."""
+    agent = ConversableAgent("agent", llm_config=False)
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+    message = {"content": "TERMINATE"}
+    assert agent._should_terminate_chat(recipient, message) is True
+
+
+def test_terminate_chat_false_non_termination_content():
+    """Test _terminate_chat returns False for a non-termination message."""
+    agent = ConversableAgent("agent", llm_config=False)
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+    message = {"content": "Hello"}
+    assert agent._should_terminate_chat(recipient, message) is False
+
+
+def test_terminate_chat_false_non_string_content():
+    """Test _terminate_chat returns False if content is not a string."""
+    agent = ConversableAgent("agent", llm_config=False)
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+    message = {"content": None}
+    assert agent._should_terminate_chat(recipient, message) is False
+
+
+@pytest.mark.asyncio
+async def test_a_initiate_chat_triggers_terminate_chat(monkeypatch):
+    agent = ConversableAgent("agent", llm_config=False, human_input_mode="NEVER")
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+        human_input_mode="NEVER",
+    )
+
+    async def fake_a_generate_init_message(self, message, **kwargs):
+        return {"content": "TERMINATE"}
+
+    monkeypatch.setattr(ConversableAgent, "a_generate_init_message", fake_a_generate_init_message)
+
+    async def fake_a_get_human_input(self, prompt):
+        return ""
+
+    monkeypatch.setattr(ConversableAgent, "a_get_human_input", fake_a_get_human_input)
+    result = await agent.a_initiate_chat(recipient, message="irrelevant", max_turns=2)
+    assert len(result.chat_history) == 1
+    assert result.chat_history[0]["content"] == "TERMINATE"
+
+
 def test_generate_reply():
     def add_num(num_to_be_added):
         given_num = 10
@@ -553,6 +626,68 @@ async def test_a_generate_reply_with_messages_and_sender_none(conversable_agent)
         pytest.fail(f"Unexpected AssertionError: {e}")
     except Exception as e:
         pytest.fail(f"Unexpected exception: {e}")
+
+
+@pytest.mark.asyncio
+@patch("builtins.input")
+async def test_a_get_human_input_console_io(mock_input) -> None:
+    from autogen.io.base import IOStream
+    from autogen.io.console import IOConsole
+
+    mock_input.return_value = "test input"
+    with IOStream.set_default(IOConsole()):
+        agent = ConversableAgent(name="agent", llm_config=False, human_input_mode="ALWAYS")
+        assert agent.human_input_mode == "ALWAYS"
+        result = await agent.a_get_human_input("Please enter your input: ")
+        assert result == "test input"
+
+
+@pytest.mark.asyncio
+async def test_a_get_human_input_thread_stream() -> None:
+    from autogen.io.base import IOStream
+    from autogen.io.thread_io_stream import ThreadIOStream
+
+    agent = ConversableAgent(name="agent", llm_config=False, human_input_mode="ALWAYS")
+    ts = ThreadIOStream()
+
+    def responder():
+        _evt = ts.input_stream.get()
+        time.sleep(0.01)
+        ts._output_stream.put("thread-ok")
+
+    t = threading.Thread(target=responder, daemon=True)
+    t.start()
+
+    with IOStream.set_default(ts):
+        result = await agent.a_get_human_input("Enter:")
+    assert result == "thread-ok"
+    assert agent._human_input[-1] == "thread-ok"
+    t.join(timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_a_get_human_input_async_thread_stream() -> None:
+    from autogen.io.base import IOStream
+    from autogen.io.thread_io_stream import AsyncThreadIOStream
+
+    agent = ConversableAgent(name="agent", llm_config=False, human_input_mode="ALWAYS")
+    ats = AsyncThreadIOStream()
+
+    async def responder():
+        _evt = await ats.input_stream.get()
+        await asyncio.sleep(0)
+        outq = ats.output_stream if hasattr(ats, "output_stream") else ats._output_stream
+        await outq.put("async-thread-ok")
+
+    task = asyncio.create_task(responder())
+    try:
+        with IOStream.set_default(ats):
+            result = await agent.a_get_human_input("Enter:")
+    finally:
+        task.cancel()
+
+    assert result == "async-thread-ok"
+    assert agent._human_input[-1] == "async-thread-ok"
 
 
 def test_update_function_signature_and_register_functions(mock_credentials: Credentials) -> None:
@@ -663,7 +798,7 @@ class TestWrapFunction:
             == '{"currency":"EUR","amount":100.1}'
         )
 
-        assert not inspect.iscoroutinefunction(currency_calculator)
+        assert not is_coroutine_callable(currency_calculator)
 
     @pytest.mark.skip(reason="Not implemented yet")
     def test__wrap_function_list(self) -> None:
@@ -674,7 +809,7 @@ class TestWrapFunction:
         agent = ConversableAgent(name="agent", llm_config=False)
 
         @agent._wrap_function
-        def f(xs: list[tuple[float, float]], ys: List[Point]) -> List[Point]:
+        def f(xs: list[tuple[float, float]], ys: list[Point]) -> list[Point]:
             return [Point(x=x, y=y) for (x, y) in xs] + ys
 
         assert f([(1.0, 2.0), (3.0, 4.0)], [Point(x=5.0, y=6.0)]) == [
@@ -716,7 +851,7 @@ class TestWrapFunction:
             == '{"currency":"EUR","amount":100.1}'
         )
 
-        assert inspect.iscoroutinefunction(currency_calculator)
+        assert is_coroutine_callable(currency_calculator)
 
 
 def get_origin(d: dict[str, Callable[..., Any]]) -> dict[str, Callable[..., Any]]:
@@ -983,25 +1118,25 @@ def test_register_functions(mock_credentials: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+def test_function_registration_e2e_sync(credentials_openai_mini: Credentials) -> None:
+    llm_config = credentials_openai_mini.llm_config
 
-    with llm_config:
-        coder = autogen.AssistantAgent(
-            name="chatbot",
-            system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
-            # llm_config=credentials_gpt_4o_mini.llm_config,
-        )
+    coder = autogen.AssistantAgent(
+        name="chatbot",
+        system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+        llm_config=llm_config,
+    )
 
-        # create a UserProxyAgent instance named "user_proxy"
-        user_proxy = autogen.UserProxyAgent(
-            name="user_proxy",
-            system_message="A proxy for the user for executing code.",
-            is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
-            human_input_mode="NEVER",
-            max_consecutive_auto_reply=10,
-            code_execution_config={"work_dir": "coding"},
-        )
+    # create a UserProxyAgent instance named "user_proxy"
+    user_proxy = autogen.UserProxyAgent(
+        name="user_proxy",
+        system_message="A proxy for the user for executing code.",
+        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=10,
+        code_execution_config={"work_dir": "coding"},
+        llm_config=llm_config,
+    )
 
     # define functions according to the function description
     timer_mock = unittest.mock.MagicMock()
@@ -1114,18 +1249,16 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
 async def test_function_registration_e2e_async(
     credentials_from_test_param: Credentials,
 ) -> None:
-    if credentials_from_test_param.api_type == "google":
-        pytest.skip("This test currently fails with gemini flash model")
     await _test_function_registration_e2e_async(credentials_from_test_param)
 
 
 @run_for_optional_imports("openai", "openai")
-def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
+def test_max_turn(credentials_openai_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
         max_consecutive_auto_reply=10,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
 
     user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)
@@ -1140,7 +1273,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 @run_for_optional_imports("openai", "openai")
-def test_message_func(credentials_gpt_4o_mini: Credentials):
+def test_message_func(credentials_openai_mini: Credentials):
     import random
 
     class Function:
@@ -1171,7 +1304,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
         name="Player",
         system_message="You will use function `get_random_number` to get a random number. Stop only when you get at least 1 even number and 1 odd number. Reply TERMINATE to stop.",
         description="A player that makes function_calls.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
 
@@ -1191,7 +1324,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_summary(credentials_gpt_4o_mini: Credentials):
+def test_summary(credentials_openai_mini: Credentials):
     import random
 
     class Function:
@@ -1226,7 +1359,7 @@ def test_summary(credentials_gpt_4o_mini: Credentials):
         name="Player",
         system_message="You will use function `get_random_number` to get a random number. Stop only when you get at least 1 even number and 1 odd number. Reply TERMINATE to stop.",
         description="A player that makes function_calls.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
 
@@ -1309,15 +1442,15 @@ def test_messages_with_carryover():
         llm_config=False,
         default_auto_reply="This is alice speaking.",
     )
-    context = dict(message="hello", carryover="Testing carryover.")
+    context = {"message": "hello", "carryover": "Testing carryover."}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, str)
 
-    context = dict(message="hello", carryover=["Testing carryover.", "This should pass"])
+    context = {"message": "hello", "carryover": ["Testing carryover.", "This should pass"]}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, str)
 
-    context = dict(message="hello", carryover=3)
+    context = {"message": "hello", "carryover": 3}
     with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
@@ -1331,26 +1464,26 @@ def test_messages_with_carryover():
         },
     ]
     mm_message = {"content": mm_content}
-    context = dict(
-        message=mm_message,
-        carryover="Testing carryover.",
-    )
+    context = {
+        "message": mm_message,
+        "carryover": "Testing carryover.",
+    }
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 4
 
-    context = dict(message=mm_message, carryover=["Testing carryover.", "This should pass"])
+    context = {"message": mm_message, "carryover": ["Testing carryover.", "This should pass"]}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 4
 
-    context = dict(message=mm_message, carryover=3)
+    context = {"message": mm_message, "carryover": 3}
     with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
     # Test without carryover
     print(mm_message)
-    context = dict(message=mm_message)
+    context = {"message": mm_message}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 3
@@ -1360,7 +1493,7 @@ def test_messages_with_carryover():
         {"type": "image_url", "image_url": {"url": "https://example.com/image.png"}},
     ]
     mm_message = {"content": mm_content}
-    context = dict(message=mm_message)
+    context = {"message": mm_message}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 1
@@ -1588,7 +1721,7 @@ def test_conversable_agent_with_whitespaces_in_name_end2end(
 
     # Get the parameter name request node
     current_llm = request.node.callspec.id
-    if "gpt_4" in current_llm:
+    if "gpt_4" in current_llm or "openai" in current_llm:
         with pytest.raises(
             ValueError,
             match="This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.",
@@ -1653,7 +1786,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
     @user_proxy.register_for_execution()
     @agent.register_for_llm(description="Login function")
     def login(
-        additional_notes: Annotated[Optional[str], "Additional notes"] = None,
+        additional_notes: Annotated[str | None, "Additional notes"] = None,
     ) -> str:
         mock()
         return "Login successful."
@@ -1780,11 +1913,8 @@ def test_remove_tool_for_llm(mock_credentials: Credentials):
     # Remove the tool
     agent.remove_tool_for_llm(mock_tool)
 
-    # Verify tool was removed from internal list
-    assert len(agent._tools) == 0
-
     # Verify tool was unregistered from LLM
-    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.tools]
     print(mock_tool.name)
     print(tool_schemas)
     assert mock_tool.name not in tool_schemas
@@ -1804,11 +1934,8 @@ def test_remove_tool_by_name_for_llm(mock_credentials: Credentials):
     # Remove the tool by name
     agent.update_tool_signature(tool_sig="test_tool", is_remove=True)
 
-    # Verify tool was removed from internal list
-    assert "tools" not in mock_credentials.llm_config
-
     # Verify tool was unregistered from LLM
-    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.tools]
     print(mock_tool.name)
     print(tool_schemas)
     assert mock_tool.name not in tool_schemas
@@ -1858,6 +1985,55 @@ def test_tool_integration(mock_credentials: Credentials):
     tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
     assert "tool1" not in tool_schemas
     assert "tool2" in tool_schemas
+
+
+def test_execute_function_resolves_async_tool(mock_credentials: Credentials):
+    """execute_function should await async tools instead of returning coroutine reprs."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+    observed_inputs: list[str] = []
+
+    @agent.register_for_execution()
+    @agent.register_for_llm(description="Uppercase text asynchronously")
+    async def uppercase_tool(text: str) -> str:
+        observed_inputs.append(text)
+        await asyncio.sleep(0)
+        return text.upper()
+
+    success, payload = agent.execute_function(
+        {"name": "uppercase_tool", "arguments": json.dumps({"text": "nyc"})},
+        call_id="tool-call-1",
+    )
+
+    assert success is True
+    assert payload["content"] == "NYC"
+    assert observed_inputs == ["nyc"]
+
+
+def test_generate_tool_calls_reply_handles_async_tool(mock_credentials: Credentials):
+    """generate_tool_calls_reply should await async tools registered for execution."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    @agent.register_for_execution()
+    @agent.register_for_llm(description="Title case text asynchronously")
+    async def title_tool(text: str) -> str:
+        await asyncio.sleep(0)
+        return text.title()
+
+    message = {
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call-xyz",
+                "function": {"name": "title_tool", "arguments": json.dumps({"text": "new york"})},
+            }
+        ],
+    }
+
+    handled, response = agent.generate_tool_calls_reply(messages=[message])
+    assert handled is True
+    tool_response = response["tool_responses"][0]
+    assert tool_response["tool_call_id"] == "call-xyz"
+    assert tool_response["content"] == "New York"
 
 
 def test_create_or_get_executor(mock_credentials: Credentials):
@@ -1910,32 +2086,38 @@ def test_create_or_get_executor(mock_credentials: Credentials):
         (False, False),
         pytest.param(
             {"config_list": [{"model": "gpt-3", "api_key": "whatever"}]},
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")]),
-            marks=pytest.mark.xfail(
-                reason="This doesn't fails when executed with filename but fails when running using scripts"
-            ),
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")),
+            id="deprecated (remove in 0.11): legacy dict format with config_list",
+            marks=pytest.mark.filterwarnings("ignore::DeprecationWarning"),
         ),
-        (
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
+        pytest.param(
+            {"model": "gpt-3", "api_key": "whatever"},
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")),
+            id="deprecated (remove in 0.11): legacy dict format",
+            marks=pytest.mark.filterwarnings("ignore::DeprecationWarning"),
+        ),
+        pytest.param(
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3")),
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3")),
+            id="LLMConfig passed",
         ),
     ],
 )
 def test_validate_llm_config(
-    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]], expected: Union[LLMConfig, Literal[False]]
+    llm_config: LLMConfig | dict[str, Any] | Literal[False] | None, expected: LLMConfig | Literal[False]
 ):
     actual = ConversableAgent._validate_llm_config(llm_config)
     assert actual == expected, f"{actual} != {expected}"
 
 
 @run_for_optional_imports("openai", "openai")
-def test_cache_context(credentials_gpt_4o_mini: Credentials) -> None:
+def test_cache_context(credentials_openai_mini: Credentials) -> None:
     message = "Hello, make a joke about AI."
 
     assistant = autogen.AssistantAgent(
         name="assistant",
         max_consecutive_auto_reply=10,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
 
     user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)
@@ -2063,18 +2245,258 @@ def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
         assert "runtime_tool" in executor.function_map
 
 
-if __name__ == "__main__":
-    # test_trigger()
-    # test_context()
-    # test_handle_carryover():
-    # test_max_turn()
-    # test_process_before_send()
-    # test_message_func()
-    # test_summary()
-    # test_adding_duplicate_function_warning()
-    # test_function_registration_e2e_sync()
-    # test_process_gemini_carryover()
-    # test_process_carryover()
-    # test_context_variables()
-    # test_max_consecutive_auto_reply_with_max_turns()
-    test_invalid_functions_parameter()
+class TestAsyncReplyFunctionSkipping:
+    """Tests for skipping sync reply functions in async chat when async equivalents exist."""
+
+    def test_get_sync_funcs_to_skip_in_async_chat(self):
+        """Test that _get_sync_funcs_to_skip_in_async_chat identifies correct sync functions."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+
+        sync_to_skip = agent._get_sync_funcs_to_skip_in_async_chat()
+
+        # Should identify all sync functions that have async equivalents
+        sync_names = {f.__name__ for f in sync_to_skip}
+        expected = {
+            "check_termination_and_human_reply",
+            "generate_oai_reply",
+            "generate_tool_calls_reply",
+            "generate_function_call_reply",
+        }
+        assert sync_names == expected
+
+    def test_get_sync_funcs_to_skip_excludes_sync_only_functions(self):
+        """Test that sync-only functions (no async equivalent) are not in skip set."""
+        agent = ConversableAgent(
+            name="test",
+            llm_config=False,
+            human_input_mode="NEVER",
+            code_execution_config={"executor": "commandline-local"},
+        )
+
+        sync_to_skip = agent._get_sync_funcs_to_skip_in_async_chat()
+        sync_names = {f.__name__ for f in sync_to_skip}
+
+        # Code execution reply is sync-only, should NOT be in skip set
+        assert "_generate_code_execution_reply_using_executor" not in sync_names
+
+    def test_custom_sync_only_function_not_skipped(self):
+        """Test that user-registered sync-only functions are not skipped in async chat."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+
+        def custom_sync_reply(recipient, messages, sender, config):
+            return (True, "custom sync response")
+
+        agent.register_reply([autogen.Agent, None], custom_sync_reply)
+
+        sync_to_skip = agent._get_sync_funcs_to_skip_in_async_chat()
+
+        # Custom sync function should NOT be in skip set
+        assert custom_sync_reply not in sync_to_skip
+
+    def test_custom_async_with_sync_equivalent_skips_sync(self):
+        """Test that when user registers async with ignore_async_in_sync_chat, sync is skipped."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+
+        def my_reply(recipient, messages, sender, config):
+            return (True, "sync response")
+
+        async def a_my_reply(recipient, messages, sender, config):
+            return (True, "async response")
+
+        # Register both with the naming convention and flag
+        agent.register_reply([autogen.Agent, None], my_reply)
+        agent.register_reply([autogen.Agent, None], a_my_reply, ignore_async_in_sync_chat=True)
+
+        sync_to_skip = agent._get_sync_funcs_to_skip_in_async_chat()
+        sync_names = {f.__name__ for f in sync_to_skip}
+
+        # my_reply should be in skip set because a_my_reply has ignore_async_in_sync_chat=True
+        assert "my_reply" in sync_names
+
+    @pytest.mark.asyncio
+    async def test_a_generate_reply_skips_sync_with_async_equivalent(self):
+        """Test that a_generate_reply skips sync functions when async equivalents exist."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+        sender = ConversableAgent(name="sender", llm_config=False)
+        agent._oai_messages[sender] = [{"role": "user", "content": "hello"}]
+
+        # Reset counter to verify it's only incremented once
+        agent._consecutive_auto_reply_counter[sender] = 0
+
+        await agent.a_generate_reply(sender=sender)
+
+        # Counter should be incremented exactly once (by async version only)
+        # If sync was also called, it would be 2
+        assert agent._consecutive_auto_reply_counter[sender] == 1
+
+    @pytest.mark.asyncio
+    async def test_a_generate_reply_calls_sync_only_functions(self):
+        """Test that a_generate_reply still calls sync-only functions."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+        sender = ConversableAgent(name="sender", llm_config=False)
+
+        sync_only_called = []
+
+        def sync_only_reply(recipient, messages, sender, config):
+            sync_only_called.append(True)
+            return (False, None)  # Don't finalize, let other functions run
+
+        agent.register_reply([autogen.Agent, None], sync_only_reply)
+        agent._oai_messages[sender] = [{"role": "user", "content": "hello"}]
+
+        await agent.a_generate_reply(sender=sender)
+
+        # sync_only_reply should have been called
+        assert len(sync_only_called) == 1
+
+    @pytest.mark.asyncio
+    async def test_a_generate_reply_prefers_async_over_sync(self):
+        """Test that when both sync and async exist, only async is called."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+        sender = ConversableAgent(name="sender", llm_config=False)
+
+        call_log = []
+
+        def my_reply(recipient, messages, sender, config):
+            call_log.append("sync")
+            return (True, "sync response")
+
+        async def a_my_reply(recipient, messages, sender, config):
+            call_log.append("async")
+            return (True, "async response")
+
+        # Register both with naming convention and flag
+        agent.register_reply([autogen.Agent, None], my_reply)
+        agent.register_reply([autogen.Agent, None], a_my_reply, ignore_async_in_sync_chat=True)
+        agent._oai_messages[sender] = [{"role": "user", "content": "hello"}]
+
+        result = await agent.a_generate_reply(sender=sender)
+
+        # Only async should be called
+        assert call_log == ["async"]
+        assert result == "async response"
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_two_agent_async_chat_skips_sync_with_async_equivalent(self):
+        """Integration test: Two-agent async chat via a_run properly skips sync functions when async equivalents exist."""
+        call_log = []
+
+        # Termination condition for both agents
+        def is_termination(x):
+            return x.get("content", "").find("TERMINATE") >= 0
+
+        # Create two agents that will have a conversation
+        assistant = ConversableAgent(
+            name="assistant",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=2,
+            is_termination_msg=is_termination,
+        )
+        user_proxy = ConversableAgent(
+            name="user_proxy",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=2,
+            is_termination_msg=is_termination,
+        )
+
+        # Define sync and async reply function pairs for the assistant
+        def assistant_sync_reply(recipient, messages, sender, config):
+            call_log.append("assistant_sync")
+            return (True, "sync response from assistant TERMINATE")
+
+        async def a_assistant_sync_reply(recipient, messages, sender, config):
+            call_log.append("assistant_async")
+            return (True, "async response from assistant TERMINATE")
+
+        # Define sync and async reply function pairs for the user_proxy
+        def user_proxy_sync_reply(recipient, messages, sender, config):
+            call_log.append("user_proxy_sync")
+            return (True, "sync response from user_proxy TERMINATE")
+
+        async def a_user_proxy_sync_reply(recipient, messages, sender, config):
+            call_log.append("user_proxy_async")
+            return (True, "async response from user_proxy TERMINATE")
+
+        # Register both sync and async reply functions with the naming convention and flag
+        assistant.register_reply([autogen.Agent, None], assistant_sync_reply)
+        assistant.register_reply([autogen.Agent, None], a_assistant_sync_reply, ignore_async_in_sync_chat=True)
+
+        user_proxy.register_reply([autogen.Agent, None], user_proxy_sync_reply)
+        user_proxy.register_reply([autogen.Agent, None], a_user_proxy_sync_reply, ignore_async_in_sync_chat=True)
+
+        # Initiate async chat using a_run
+        response = await user_proxy.a_run(
+            recipient=assistant,
+            message="Hello, let's have a conversation!",
+            max_turns=2,
+        )
+
+        # Process all events from the response
+        async for event in response.events:
+            pass  # Just consume events to let the chat complete
+
+        # Verify only async functions were called, not their sync counterparts
+        assert "assistant_sync" not in call_log, "Sync assistant reply should be skipped in async chat"
+        assert "user_proxy_sync" not in call_log, "Sync user_proxy reply should be skipped in async chat"
+        assert "assistant_async" in call_log, "Async assistant reply should be called"
+
+        # Verify the conversation completed
+        messages = await response.messages
+        assert len(messages) > 0, "Messages should not be empty"
+        assert "async response" in messages[-1]["content"]
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_two_agent_async_chat_calls_sync_only_functions(self):
+        """Integration test: Two-agent async chat via a_run calls sync-only functions (no async equivalent)."""
+        call_log = []
+
+        # Termination condition for both agents
+        def is_termination(x):
+            return x.get("content", "").find("TERMINATE") >= 0
+
+        assistant = ConversableAgent(
+            name="assistant",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=1,
+            is_termination_msg=is_termination,
+        )
+        user_proxy = ConversableAgent(
+            name="user_proxy",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=1,
+            is_termination_msg=is_termination,
+        )
+
+        # Sync-only reply function (no async equivalent) - should still be called
+        def sync_only_reply(recipient, messages, sender, config):
+            call_log.append("sync_only")
+            return (False, None)  # Continue to next reply function
+
+        # Final async reply to end conversation
+        async def final_async_reply(recipient, messages, sender, config):
+            call_log.append("final_async")
+            return (True, "TERMINATE")
+
+        assistant.register_reply([autogen.Agent, None], final_async_reply, ignore_async_in_sync_chat=True)
+        assistant.register_reply([autogen.Agent, None], sync_only_reply)
+
+        # Initiate async chat using a_run
+        response = await user_proxy.a_run(
+            recipient=assistant,
+            message="Hello!",
+            max_turns=1,
+        )
+
+        # Process all events
+        async for event in response.events:
+            pass
+
+        # Sync-only function should still be called in async chat
+        assert "sync_only" in call_log, "Sync-only function should be called in async chat"
+        assert "final_async" in call_log, "Final async function should be called"

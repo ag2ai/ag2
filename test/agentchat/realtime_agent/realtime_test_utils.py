@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Literal, Optional, TypeVar, Union
+from typing import Any, Literal, TypeVar, Union
 from unittest.mock import MagicMock
 
 from anyio import Event
@@ -12,9 +13,12 @@ from anyio import Event
 from autogen.import_utils import optional_import_block
 
 with optional_import_block() as result:
-    from openai import NotGiven, OpenAI
+    from openai import Omit, OpenAI
 
-__all__ = ["text_to_speech", "trace"]
+__all__ = (
+    "text_to_speech",
+    "trace",
+)
 
 
 def text_to_speech(
@@ -23,7 +27,7 @@ def text_to_speech(
     openai_api_key: str,
     model: str = "tts-1",
     voice: Literal["alloy", "echo", "fable", "onyx", "nova", "shimmer"] = "alloy",
-    response_format: Union[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"], "NotGiven"] = "pcm",
+    response_format: Union[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"], "Omit"] = "pcm",
 ) -> str:
     """Convert text to voice using OpenAI API.
 
@@ -32,13 +36,13 @@ def text_to_speech(
         openai_api_key (str): OpenAI API key.
         model (str, optional): Model to use for the conversion. Defaults to "tts-1".
         voice (Literal["alloy", "echo", "fable", "onyx", "nova", "shimmer"], optional): Voice to use for the conversion. Defaults to "alloy".
-        response_format (Union[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"], NotGiven], optional): Response format. Defaults to "pcm".
+        response_format (Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] | Omit, optional): Response format. Defaults to "pcm".
 
     Returns:
         str: Base64 encoded audio.
     """
     tts_client = OpenAI(api_key=openai_api_key)
-    response = tts_client.audio.speech.create(model=model, voice=voice, input=text, response_format=response_format)
+    response = tts_client.audio.speech.create(model=model, voice=voice, input=text, response_format=response_format)  # type: ignore[arg-type]
     return base64.b64encode(response.content).decode("utf-8")
 
 
@@ -46,7 +50,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 def trace(
-    mock: MagicMock, *, precall_event: Optional[Event] = None, postcall_event: Optional[Event] = None
+    mock: MagicMock, *, precall_event: Event | None = None, postcall_event: Event | None = None
 ) -> Callable[[F], F]:
     """Decorator to trace a function
 

@@ -4,11 +4,10 @@
 import base64
 import json
 import logging
-from typing import Any, ClassVar, Literal, Optional
+from typing import Any, ClassVar, Literal, TypeAlias
 
 import requests
 from pydantic import BaseModel, model_validator
-from typing_extensions import TypeAlias
 
 # Get the logger
 logger = logging.getLogger(__name__)
@@ -57,7 +56,7 @@ class BaseSecurity(BaseModel):
                 return sub_class
 
         logger.error(f"Unsupported type '{type}' and schema_parameters '{schema_parameters}' combination")
-        return UnsuportedSecurityStub
+        return UnsupportedSecurityStub
 
     @classmethod
     def get_security_parameters(cls, schema_parameters: dict[str, Any]) -> str:
@@ -102,7 +101,7 @@ class BaseSecurityParameters(BaseModel):
         }
 
 
-class UnsuportedSecurityStub(BaseSecurity):
+class UnsupportedSecurityStub(BaseSecurity):
     """Unsupported security stub class."""
 
     type: ClassVar[Literal["unsupported"]] = "unsupported"
@@ -114,7 +113,7 @@ class UnsuportedSecurityStub(BaseSecurity):
 
     def accept(self, security_params: "BaseSecurityParameters") -> bool:
         if isinstance(self, security_params.get_security_class()):
-            raise RuntimeError("Trying to set UnsuportedSecurityStub params")
+            raise RuntimeError("Trying to set UnsupportedSecurityStub params")
         return False
 
     class Parameters(BaseSecurityParameters):  # BaseSecurityParameters
@@ -129,7 +128,7 @@ class UnsuportedSecurityStub(BaseSecurity):
             pass
 
         def get_security_class(self) -> type[BaseSecurity]:
-            return UnsuportedSecurityStub
+            return UnsupportedSecurityStub
 
         def dump(self) -> dict[str, Any]:
             return {
@@ -343,7 +342,7 @@ class OAuth2PasswordBearer(BaseSecurity):
 
         username: str = "USERNAME"
         password: str = "PASSWORD"
-        bearer_token: Optional[str] = None
+        bearer_token: str | None = None
         token_url: str = "TOKEN_URL"
 
         # @model_validator(mode="before")

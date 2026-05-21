@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -15,14 +15,21 @@ with optional_import_block():
 
 
 @run_for_optional_imports(
-    ["langchain_anthropic", "langchain_google_genai", "langchain_ollama", "langchain_openai", "langchain_core"],
+    [
+        "langchain_anthropic",
+        "langchain_google_genai",
+        "langchain_google_vertexai",
+        "langchain_ollama",
+        "langchain_openai",
+        "langchain_core",
+    ],
     "browser-use",
 )
 class TestLangchainFactory:
     test_api_key = "test"  # pragma: allowlist secret
 
     def test_number_of_factories(self) -> None:
-        assert len(LangChainChatModelFactory._factories) == 6
+        assert len(LangChainChatModelFactory._factories) == 7
 
     @pytest.mark.parametrize(
         ("config_list", "llm_class_name", "base_url"),
@@ -68,6 +75,18 @@ class TestLangchainFactory:
             ),
             (
                 [
+                    {
+                        "api_type": "google_vertex",
+                        "model": "gemini-2.5-flash",
+                        "project": "test-project",
+                        "location": "us-central1",
+                    },
+                ],
+                "ChatVertexAI",
+                None,
+            ),
+            (
+                [
                     {"api_type": "anthropic", "model": "sonnet", "api_key": test_api_key},
                 ],
                 "ChatAnthropic",
@@ -89,7 +108,7 @@ class TestLangchainFactory:
         self,
         config_list: list[dict[str, str]],
         llm_class_name: str,
-        base_url: Optional[str],
+        base_url: str | None,
     ) -> None:
         llm = LangChainChatModelFactory.create_base_chat_model(llm_config={"config_list": config_list})
         assert llm.__class__.__name__ == llm_class_name
@@ -128,7 +147,77 @@ class TestLangchainFactory:
 
 
 @run_for_optional_imports(
-    ["langchain_anthropic", "langchain_google_genai", "langchain_ollama", "langchain_openai", "langchain_core"],
+    [
+        "langchain_anthropic",
+        "langchain_google_genai",
+        "langchain_google_vertexai",
+        "langchain_ollama",
+        "langchain_openai",
+        "langchain_core",
+    ],
+    "browser-use",
+)
+class TestChatVertexAIFactory:
+    """The ChatVertexAIFactory (api_type='google_vertex') is the Vertex AI
+    counterpart of the AI-Studio-oriented ChatGoogleGenerativeAIFactory.
+    It routes to aiplatform.googleapis.com and uses Google Cloud auth."""
+
+    def test_accepts_google_vertex(self) -> None:
+        from autogen.interop.langchain.langchain_chat_model_factory import ChatVertexAIFactory
+
+        assert ChatVertexAIFactory.accepts({"api_type": "google_vertex"}) is True
+        assert ChatVertexAIFactory.accepts({"api_type": "google"}) is False
+        assert ChatVertexAIFactory.accepts({"api_type": "openai"}) is False
+
+    def test_creates_chat_vertex_ai(self) -> None:
+        from langchain_google_vertexai import ChatVertexAI
+
+        llm = LangChainChatModelFactory.create_base_chat_model(
+            llm_config={
+                "config_list": [
+                    {
+                        "api_type": "google_vertex",
+                        "model": "gemini-2.5-flash",
+                        "project": "test-project",
+                        "location": "us-central1",
+                    }
+                ]
+            }
+        )
+        assert isinstance(llm, ChatVertexAI)
+        assert llm.project == "test-project"
+        assert llm.location == "us-central1"
+
+    def test_project_id_is_normalized_to_project(self) -> None:
+        """Callers using the AG2-style ``project_id`` should not need to
+        learn the langchain-internal name ``project``."""
+        from langchain_google_vertexai import ChatVertexAI
+
+        llm = LangChainChatModelFactory.create_base_chat_model(
+            llm_config={
+                "config_list": [
+                    {
+                        "api_type": "google_vertex",
+                        "model": "gemini-2.5-flash",
+                        "project_id": "my-project",
+                        "location": "us-central1",
+                    }
+                ]
+            }
+        )
+        assert isinstance(llm, ChatVertexAI)
+        assert llm.project == "my-project"
+
+
+@run_for_optional_imports(
+    [
+        "langchain_anthropic",
+        "langchain_google_genai",
+        "langchain_google_vertexai",
+        "langchain_ollama",
+        "langchain_openai",
+        "langchain_core",
+    ],
     "browser-use",
 )
 class TestChatOpenAIFactory:

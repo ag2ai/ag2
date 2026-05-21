@@ -11,8 +11,7 @@ from pydantic import ValidationError
 from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental.tavily import TavilySearchTool
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 class TestTavilySearchTool:
@@ -182,7 +181,7 @@ class TestTavilySearchTool:
         assert "Input should be a valid string" in str(exc_info.value)
 
     @run_for_optional_imports("openai", "openai")
-    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_agent_integration(self, credentials_openai_mini: Credentials) -> None:
         """
         Test integration with AssistantAgent.
         """
@@ -190,7 +189,7 @@ class TestTavilySearchTool:
         assistant = AssistantAgent(
             name="assistant",
             system_message="You are a helpful assistant. Use the tavily_search tool when needed.",
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
         )
         search_tool.register_for_llm(assistant)
         with patch("autogen.tools.experimental.tavily.tavily_search._execute_tavily_query") as mock_execute_query:

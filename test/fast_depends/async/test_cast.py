@@ -5,12 +5,12 @@
 # Portions derived from  https://github.com/https://github.com/Lancetnik/FastDepends are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-from typing import Iterator
+from collections.abc import Iterator
+from typing import Annotated
 
 import pytest
 from annotated_types import Ge
 from pydantic import BaseModel, Field, ValidationError
-from typing_extensions import Annotated
 
 from autogen.fast_depends import inject
 from test.fast_depends.marks import pydanticV2

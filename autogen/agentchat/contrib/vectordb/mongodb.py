@@ -4,9 +4,10 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from time import monotonic, sleep
-from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union
+from typing import Any, Literal
 
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
@@ -40,12 +41,12 @@ class MongoDBAtlasVectorDB(VectorDB):
         self,
         connection_string: str = "",
         database_name: str = "vector_db",
-        embedding_function: Optional[Callable[..., Any]] = None,
+        embedding_function: Callable[..., Any] | None = None,
         collection_name: str = None,
         index_name: str = "vector_index",
         overwrite: bool = False,
-        wait_until_index_ready: Optional[float] = None,
-        wait_until_document_ready: Optional[float] = None,
+        wait_until_index_ready: float | None = None,
+        wait_until_document_ready: float | None = None,
     ):
         """Initialize the vector database.
 
@@ -221,7 +222,7 @@ class MongoDBAtlasVectorDB(VectorDB):
     def create_vector_search_index(
         self,
         collection: "Collection",
-        index_name: Union[str, None] = "vector_index",
+        index_name: str | None = "vector_index",
         similarity: Literal["euclidean", "cosine", "dotProduct"] = "cosine",
     ) -> None:
         """Create a vector search index in the collection.
@@ -436,7 +437,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         if include is None:
             include_fields = {"_id": 1, "content": 1, "metadata": 1}
         else:
-            include_fields = {k: 1 for k in set(include).union({"_id"})}
+            include_fields = dict.fromkeys(set(include).union({"_id"}), 1)
         collection = self.get_collection(collection_name)
         if ids is not None:
             docs = collection.find({"_id": {"$in": ids}}, include_fields)

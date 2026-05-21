@@ -7,20 +7,33 @@
 import copy
 import logging
 import re
+import warnings
+from collections.abc import Callable
 from datetime import datetime
-from typing import Annotated, Any, Callable, Literal, Optional, Union
+from typing import Annotated, Any, Literal
+
+from typing_extensions import deprecated
 
 from ... import Agent, AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ...browser_utils import SimpleTextBrowser
 from ...llm_config import LLMConfig
-from ...oai.openai_utils import filter_config
+from ...llm_config.utils import filter_config
 from ...token_count_utils import count_token, get_max_token_limit
 
 logger = logging.getLogger(__name__)
 
 
+@deprecated(
+    "WebSurferAgent (contrib) is deprecated and will be removed in v0.14. "
+    "Use autogen.agents.experimental.WebSurferAgent instead."
+)
 class WebSurferAgent(ConversableAgent):
-    """(In preview) An agent that acts as a basic web surfer that can search the web and visit web pages."""
+    """(Deprecated) An agent that acts as a basic web surfer that can search the web and visit web pages.
+
+    .. deprecated::
+        WebSurferAgent (contrib) is deprecated and will be removed in v0.14.
+        Use autogen.agents.experimental.WebSurferAgent instead.
+    """
 
     DEFAULT_PROMPT = (
         "You are a helpful AI assistant with access to a web browser (via the provided functions). In fact, YOU ARE THE ONLY MEMBER OF YOUR PARTY WITH ACCESS TO A WEB BROWSER, so please help out where you can by performing web searches, navigating pages, and reporting what you find. Today's date is "
@@ -32,19 +45,25 @@ class WebSurferAgent(ConversableAgent):
     def __init__(
         self,
         name: str,
-        system_message: Optional[Union[str, list[str]]] = DEFAULT_PROMPT,
-        description: Optional[str] = DEFAULT_DESCRIPTION,
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
+        system_message: str | list[str] | None = DEFAULT_PROMPT,
+        description: str | None = DEFAULT_DESCRIPTION,
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        max_consecutive_auto_reply: int | None = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
-        function_map: Optional[dict[str, Callable[..., Any]]] = None,
-        code_execution_config: Union[dict[str, Any], Literal[False]] = False,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
-        summarizer_llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
-        default_auto_reply: Optional[Union[str, dict[str, Any]]] = "",
-        browser_config: Optional[dict[str, Any]] = None,
+        function_map: dict[str, Callable[..., Any]] | None = None,
+        code_execution_config: dict[str, Any] | Literal[False] = False,
+        llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None,
+        summarizer_llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None,
+        default_auto_reply: str | dict[str, Any] | None = "",
+        browser_config: dict[str, Any] | None = None,
         **kwargs: Any,
     ):
+        warnings.warn(
+            "WebSurferAgent (contrib) is deprecated and will be removed in v0.14. "
+            "Use autogen.agents.experimental.WebSurferAgent instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             system_message=system_message,
@@ -91,7 +110,7 @@ class WebSurferAgent(ConversableAgent):
         self.register_reply([Agent, None], ConversableAgent.check_termination_and_human_reply)
 
     def _create_summarizer_client(
-        self, summarizer_llm_config: Union[LLMConfig, dict[str, Any]], llm_config: Union[LLMConfig, dict[str, Any]]
+        self, summarizer_llm_config: LLMConfig | dict[str, Any], llm_config: LLMConfig | dict[str, Any]
     ) -> None:
         # If the summarizer_llm_config is None, we copy it from the llm_config
         if summarizer_llm_config is None:
@@ -200,8 +219,8 @@ class WebSurferAgent(ConversableAgent):
                 description="Uses AI to read the page and directly answer a given question based on the content.",
             )
             def _answer_from_page(
-                question: Annotated[Optional[str], "The question to directly answer."],
-                url: Annotated[Optional[str], "[Optional] The url of the page. (Defaults to the current page)"] = None,
+                question: Annotated[str | None, "The question to directly answer."],
+                url: Annotated[str | None, "[Optional] The url of the page. (Defaults to the current page)"] = None,
             ) -> str:
                 if url is not None and url != self.browser.address:
                     self.browser.visit_page(url)
@@ -257,17 +276,17 @@ class WebSurferAgent(ConversableAgent):
             )
             def _summarize_page(
                 url: Annotated[
-                    Optional[str], "[Optional] The url of the page to summarize. (Defaults to current page)"
+                    str | None, "[Optional] The url of the page to summarize. (Defaults to current page)"
                 ] = None,
             ) -> str:
                 return _answer_from_page(url=url, question=None)
 
     def generate_surfer_reply(
         self,
-        messages: Optional[list[dict[str, str]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, str]]]]:
+        messages: list[dict[str, str]] | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, str | dict[str, str] | None]:
         """Generate a reply using autogen.oai."""
         if messages is None:
             messages = self._oai_messages[sender]
@@ -276,7 +295,7 @@ class WebSurferAgent(ConversableAgent):
         self._assistant.reset()  # type: ignore[no-untyped-call]
 
         # Clone the messages to give context
-        self._assistant.chat_messages[self._user_proxy] = list()
+        self._assistant.chat_messages[self._user_proxy] = []
         history = messages[0 : len(messages) - 1]
         for message in history:
             self._assistant.chat_messages[self._user_proxy].append(message)

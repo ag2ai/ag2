@@ -9,7 +9,8 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from openai import AzureOpenAI, OpenAI
@@ -18,8 +19,8 @@ if TYPE_CHECKING:
     from .. import Agent, ConversableAgent, OpenAIWrapper
 
 F = TypeVar("F", bound=Callable[..., Any])
-ConfigItem = dict[str, Union[str, list[str]]]
-LLMConfig = dict[str, Union[None, float, int, ConfigItem, list[ConfigItem]]]
+ConfigItem = dict[str, str | list[str]]
+LLMConfig = dict[str, None | float | int | ConfigItem | list[ConfigItem]]
 
 
 class BaseLogger(ABC):

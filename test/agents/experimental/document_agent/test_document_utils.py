@@ -56,6 +56,12 @@ class TestIsUrl:
 
 
 class TestDownloadUrl:
+    @pytest.fixture(autouse=True)
+    def _disable_ssrf_guard(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        noop = lambda url: None  # noqa: E731
+        monkeypatch.setattr("autogen.agents.experimental.document_agent.document_utils.validate_url", noop)
+        monkeypatch.setattr("autogen.agents.experimental.document_agent.url_utils.validate_url", noop)
+
     @pytest.fixture
     def mock_chrome(self) -> Iterable[MagicMock]:
         with patch("selenium.webdriver.Chrome") as mock:
@@ -122,7 +128,7 @@ class TestDownloadUrl:
         url = "https://www.example.com/index.html"
         filepath = download_url(url, tmp_path.resolve())
         assert filepath.suffix == ".html"
-        with open(file=filepath, mode="r") as html_file:
+        with open(file=filepath) as html_file:
             content = html_file.read()
             assert content == mock_html_value
 
@@ -138,7 +144,7 @@ class TestDownloadUrl:
         url = "https://www.example.com/path"
         filepath = download_url(url, str(tmp_path))
         assert filepath.suffix == ".html"
-        with open(file=filepath, mode="r") as html_file:
+        with open(file=filepath) as html_file:
             content = html_file.read()
             assert content == mock_html_value
 
@@ -174,11 +180,11 @@ class TestDownloadUrl:
 
     def test_list_files(self, path_with_two_files: Path) -> None:
         file_list = list_files(str(path_with_two_files))
-        assert set(str(f) for f in file_list) == {str(path_with_two_files / f) for f in ["file1.txt", "file2.txt"]}
+        assert {str(f) for f in file_list} == {str(path_with_two_files / f) for f in ["file1.txt", "file2.txt"]}
 
     def test_handle_input_directory(self, path_with_two_files: Path) -> None:
         file_list = handle_input(str(path_with_two_files))
-        assert set(str(f) for f in file_list) == {str(path_with_two_files / f) for f in ["file1.txt", "file2.txt"]}
+        assert {str(f) for f in file_list} == {str(path_with_two_files / f) for f in ["file1.txt", "file2.txt"]}
 
     def test_handle_input_file(self, tmp_path: Path) -> None:
         file = tmp_path / "file.txt"

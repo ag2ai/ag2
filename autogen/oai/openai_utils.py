@@ -5,30 +5,30 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-import importlib
 import importlib.metadata
-import inspect
 import json
 import logging
 import os
 import re
 import tempfile
 import time
-import warnings
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from dotenv import find_dotenv, load_dotenv
 from packaging.version import parse
 from pydantic_core import to_jsonable_python
 
+from ..llm_config.utils import config_list_from_json as latest_config_list_from_json
+
 if TYPE_CHECKING:
     from openai import OpenAI
     from openai.types.beta.assistant import Assistant
 
+    from ..llm_config import LLMConfig
+
 from ..doc_utils import export_module
-from ..llm_config import LLMConfig
 
 NON_CACHE_KEY = [
     "api_key",
@@ -58,15 +58,35 @@ OAI_PRICE1K = {
     # o3
     "o3": (0.0011, 0.0044),
     "o3-mini-2025-01-31": (0.0011, 0.0044),
+    # gpt-5.2
+    "gpt-5.2": (0.00175, 0.014),
+    "gpt-5.2-chat-latest": (0.00175, 0.014),
+    "gpt-5.2-pro": (0.021, 0.168),
+    "gpt-5.2-codex": (0.00175, 0.014),
+    "gpt-5.2-codex-max": (0.00125, 0.01),
+    # gpt-5.1
+    "gpt-5.1": (0.00125, 0.01),
+    "gpt-5.1-2025-11-13": (0.00125, 0.01),
+    "gpt-5.1-chat-latest": (0.00125, 0.01),
+    "gpt-5.1-codex": (0.00125, 0.01),
+    "gpt-5.1-codex-max": (0.00125, 0.01),
+    "gpt-5.1-codex-mini": (0.00025, 0.002),
     # gpt-5
-    "gpt-5": (0.00125, 0.00125),
-    "gpt-5-2025-08-07": (0.00125, 0.00125),
+    "gpt-5": (0.00125, 0.01),
+    "gpt-5-2025-08-07": (0.00125, 0.01),
+    "gpt-5-chat-latest": (0.00125, 0.01),
+    "gpt-5-codex": (0.00125, 0.01),
+    "gpt-5-search-api": (0.00125, 0.01),
     # gpt-5-mini
-    "gpt-5-mini": (0.00025, 0.00025),
-    "gpt-5-mini-2025-08-07": (0.00025, 0.00025),
+    "gpt-5-mini": (0.00025, 0.002),
+    "gpt-5-mini-2025-08-07": (0.00025, 0.002),
     # gpt-5-nano
-    "gpt-5-nano": (0.00005, 0.00005),
-    "gpt-5-nano-2025-08-07": (0.00005, 0.00005),
+    "gpt-5-nano": (0.00005, 0.0004),
+    "gpt-5-nano-2025-08-07": (0.00005, 0.0004),
+    # gpt-5-pro
+    "gpt-5-pro": (0.015, 0.12),
+    # codex
+    "codex-mini-latest": (0.0015, 0.006),
     # gpt-4o
     "gpt-4o": (0.005, 0.015),
     "gpt-4o-2024-05-13": (0.005, 0.015),
@@ -166,9 +186,9 @@ def is_valid_api_key(api_key: str) -> bool:
 @export_module("autogen")
 def get_config_list(
     api_keys: list[str],
-    base_urls: Optional[list[str]] = None,
-    api_type: Optional[str] = None,
-    api_version: Optional[str] = None,
+    base_urls: list[str] | None = None,
+    api_type: str | None = None,
+    api_version: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get a list of configs for OpenAI API client.
 
@@ -217,7 +237,7 @@ def get_config_list(
 
 @export_module("autogen")
 def get_first_llm_config(
-    llm_config: Union[LLMConfig, dict[str, Any]],
+    llm_config: Union["LLMConfig", dict[str, Any]],
 ) -> dict[str, Any]:
     """Get the first LLM config from the given LLM config.
 
@@ -245,12 +265,12 @@ def get_first_llm_config(
 
 @export_module("autogen")
 def config_list_openai_aoai(
-    key_file_path: Optional[str] = ".",
-    openai_api_key_file: Optional[str] = "key_openai.txt",
-    aoai_api_key_file: Optional[str] = "key_aoai.txt",
-    openai_api_base_file: Optional[str] = "base_openai.txt",
-    aoai_api_base_file: Optional[str] = "base_aoai.txt",
-    exclude: Optional[str] = None,
+    key_file_path: str | None = ".",
+    openai_api_key_file: str | None = "key_openai.txt",
+    aoai_api_key_file: str | None = "key_aoai.txt",
+    openai_api_base_file: str | None = "base_openai.txt",
+    aoai_api_base_file: str | None = "base_aoai.txt",
+    exclude: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get a list of configs for OpenAI API client (including Azure or local model deployments that support OpenAI's chat completion API).
 
@@ -375,12 +395,12 @@ def config_list_openai_aoai(
 
 @export_module("autogen")
 def config_list_from_models(
-    key_file_path: Optional[str] = ".",
-    openai_api_key_file: Optional[str] = "key_openai.txt",
-    aoai_api_key_file: Optional[str] = "key_aoai.txt",
-    aoai_api_base_file: Optional[str] = "base_aoai.txt",
-    exclude: Optional[str] = None,
-    model_list: Optional[list[str]] = None,
+    key_file_path: str | None = ".",
+    openai_api_key_file: str | None = "key_openai.txt",
+    aoai_api_key_file: str | None = "key_aoai.txt",
+    aoai_api_base_file: str | None = "base_aoai.txt",
+    exclude: str | None = None,
+    model_list: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Get a list of configs for API calls with models specified in the model list.
 
@@ -405,8 +425,8 @@ def config_list_from_models(
     key_file_path = "/path/to/key/files"
 
     # Define the file names for the OpenAI and Azure OpenAI API keys and bases
-    openai_api_key_file = "key_openai.txt"
-    aoai_api_key_file = "key_aoai.txt"
+    openai_api_key_file = "key_openai.txt"  # pragma: allowlist secret
+    aoai_api_key_file = "key_aoai.txt"  # pragma: allowlist secret
     aoai_api_base_file = "base_aoai.txt"
 
     # Define the list of models for which to create configurations
@@ -442,11 +462,11 @@ def config_list_from_models(
 
 @export_module("autogen")
 def config_list_gpt4_gpt35(
-    key_file_path: Optional[str] = ".",
-    openai_api_key_file: Optional[str] = "key_openai.txt",
-    aoai_api_key_file: Optional[str] = "key_aoai.txt",
-    aoai_api_base_file: Optional[str] = "base_aoai.txt",
-    exclude: Optional[str] = None,
+    key_file_path: str | None = ".",
+    openai_api_key_file: str | None = "key_openai.txt",
+    aoai_api_key_file: str | None = "key_aoai.txt",
+    aoai_api_base_file: str | None = "base_aoai.txt",
+    exclude: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get a list of configs for 'gpt-4' followed by 'gpt-3.5-turbo' API calls.
 
@@ -470,239 +490,11 @@ def config_list_gpt4_gpt35(
     )
 
 
-@export_module("autogen")
-def filter_config(
-    config_list: list[dict[str, Any]],
-    filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]],
-    exclude: bool = False,
-) -> list[dict[str, Any]]:
-    """Filter configuration dictionaries based on specified criteria.
-
-    This function filters a list of configuration dictionaries by applying ALL criteria specified in `filter_dict`.
-    A configuration is included in the result if it satisfies every key-value constraint in the filter dictionary.
-    For each filter key, the configuration's corresponding field value must match at least one of the acceptable
-    values (OR logic within each criteria, AND logic between different criteria).
-
-    Args:
-        config_list (list of dict): A list of configuration dictionaries to be filtered.
-
-        filter_dict (dict, optional): A dictionary specifying filter criteria where:
-            - Keys are field names to check in each configuration dictionary
-            - Values are lists/sets of acceptable values for that field
-            - A configuration matches if ALL filter keys are satisfied AND for each key,
-              the config's field value matches at least one acceptable value
-            - If a filter value includes None, configurations missing that field will match
-            - If None, no filtering is applied
-
-        exclude (bool, optional): If False (default), return configurations that match the filter.
-                                If True, return configurations that do NOT match the filter.
-
-    Returns:
-        list of dict: Filtered list of configuration dictionaries.
-
-    Matching Logic:
-        - **Between different filter keys**: AND logic (all criteria must be satisfied)
-        - **Within each filter key's values**: OR logic (any acceptable value can match)
-        - **For list-type config values**: Match if there's any intersection with acceptable values
-        - **For scalar config values**: Match if the value is in the list of acceptable values
-        - **Missing fields**: Only match if None is included in the acceptable values for that field
-
-    Examples:
-        ```python
-        configs = [
-            {"model": "gpt-3.5-turbo", "api_type": "openai"},
-            {"model": "gpt-4", "api_type": "openai"},
-            {"model": "gpt-3.5-turbo", "api_type": "azure", "api_version": "2024-02-01"},
-            {"model": "gpt-4", "tags": ["premium", "latest"]},
-        ]
-
-        # Example 1: Single criterion - matches any model in the list
-        filter_dict = {"model": ["gpt-4", "gpt-4o"]}
-        result = filter_config(configs, filter_dict)
-        # Returns: [{"model": "gpt-4", "api_type": "openai"}, {"model": "gpt-4", "tags": ["premium", "latest"]}]
-
-        # Example 2: Multiple criteria - must satisfy ALL conditions
-        filter_dict = {"model": ["gpt-3.5-turbo"], "api_type": ["azure"]}
-        result = filter_config(configs, filter_dict)
-        # Returns: [{"model": "gpt-3.5-turbo", "api_type": "azure", "api_version": "2024-02-01"}]
-
-        # Example 3: Tag filtering with list intersection
-        filter_dict = {"tags": ["premium"]}
-        result = filter_config(configs, filter_dict)
-        # Returns: [{"model": "gpt-4", "tags": ["premium", "latest"]}]
-
-        # Example 4: Exclude matching configurations
-        filter_dict = {"api_type": ["openai"]}
-        result = filter_config(configs, filter_dict, exclude=True)
-        # Returns configs that do NOT have api_type="openai"
-        ```
-    Note:
-        - If `filter_dict` is empty or None, no filtering is applied and `config_list` is returned as is.
-        - If a configuration dictionary in `config_list` does not contain a key specified in `filter_dict`,
-          it is considered a non-match and is excluded from the result.
-
-    """
-    if inspect.stack()[1].function != "where":
-        warnings.warn(
-            "filter_config is deprecated and will be removed in a future release. "
-            'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model="gpt-4o")" method instead.',
-            DeprecationWarning,
-        )
-
-    if filter_dict:
-        return [
-            item
-            for item in config_list
-            if all(_satisfies_criteria(item.get(key), values) != exclude for key, values in filter_dict.items())
-        ]
-    return config_list
-
-
-def _satisfies_criteria(config_value: Any, criteria_values: Any) -> bool:
-    """Check if a configuration field value satisfies the filter criteria.
-
-    This helper function implements the matching logic between a single configuration
-    field value and the acceptable values specified in the filter criteria. It handles
-    both scalar and list-type configuration values with appropriate matching strategies.
-
-    Args:
-        config_value (Any): The value from a configuration dictionary field.
-                           Can be None, a scalar value, or a list of values.
-        criteria_values (Any): The acceptable values from the filter dictionary.
-                              Can be a single value or a list/set of acceptable values.
-
-    Returns:
-        bool: True if the config_value satisfies the criteria, False otherwise.
-
-    Matching Logic:
-        - **None config values**: Always return False (missing fields don't match)
-        - **List config values**:
-            - If criteria is a list: Match if there's any intersection (set overlap)
-            - If criteria is scalar: Match if the scalar is contained in the config list
-        - **Scalar config values**:
-            - If criteria is a list: Match if the config value is in the criteria list
-            - If criteria is scalar: Match if the values are exactly equal
-
-    Examples:
-        ```python
-        # List config value with list criteria (intersection matching)
-        _satisfies_criteria(["gpt-4", "gpt-3.5"], ["gpt-4", "claude"])  # True (gpt-4 intersects)
-        _satisfies_criteria(["tag1", "tag2"], ["tag3", "tag4"])  # False (no intersection)
-
-        # List config value with scalar criteria (containment matching)
-        _satisfies_criteria(["premium", "latest"], "premium")  # True (premium is in list)
-        _satisfies_criteria(["tag1", "tag2"], "tag3")  # False (tag3 not in list)
-
-        # Scalar config value with list criteria (membership matching)
-        _satisfies_criteria("gpt-4", ["gpt-4", "gpt-3.5"])  # True (gpt-4 in criteria)
-        _satisfies_criteria("claude", ["gpt-4", "gpt-3.5"])  # False (claude not in criteria)
-
-        # Scalar config value with scalar criteria (equality matching)
-        _satisfies_criteria("openai", "openai")  # True (exact match)
-        _satisfies_criteria("openai", "azure")  # False (different values)
-
-        # None config values (missing fields)
-        _satisfies_criteria(None, ["gpt-4"])  # False (missing field)
-        _satisfies_criteria(None, "gpt-4")  # False (missing field)
-        ```
-
-    Note:
-        This is an internal helper function used by `filter_config()`. The function
-        assumes that both parameters can be of various types and handles type
-        checking internally to determine the appropriate matching strategy.
-    """
-    if config_value is None:
-        return False
-
-    if isinstance(config_value, list):
-        if isinstance(criteria_values, list):
-            return bool(set(config_value) & set(criteria_values))  # Non-empty intersection
-        else:
-            return criteria_values in config_value
-    else:
-        # In filter_dict, filter could be either a list of values or a single value.
-        # For example, filter_dict = {"model": ["gpt-3.5-turbo"]} or {"model": "gpt-3.5-turbo"}
-        if isinstance(criteria_values, list):
-            return config_value in criteria_values
-        return bool(config_value == criteria_values)
-
-
-@export_module("autogen")
-def config_list_from_json(
-    env_or_file: str,
-    file_location: Optional[str] = "",
-    filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]] = None,
-) -> list[dict[str, Any]]:
-    """Retrieves a list of API configurations from a JSON stored in an environment variable or a file.
-
-    This function attempts to parse JSON data from the given `env_or_file` parameter. If `env_or_file` is an
-    environment variable containing JSON data, it will be used directly. Otherwise, it is assumed to be a filename,
-    and the function will attempt to read the file from the specified `file_location`.
-
-    The `filter_dict` parameter allows for filtering the configurations based on specified criteria. Each key in the
-    `filter_dict` corresponds to a field in the configuration dictionaries, and the associated value is a list or set
-    of acceptable values for that field. If a field is missing in a configuration and `None` is included in the list
-    of acceptable values for that field, the configuration will still be considered a match.
-
-    Args:
-        env_or_file (str): The name of the environment variable, the filename, or the environment variable of the filename
-            that containing the JSON data.
-        file_location (str, optional): The directory path where the file is located, if `env_or_file` is a filename.
-        filter_dict (dict, optional): A dictionary specifying the filtering criteria for the configurations, with
-            keys representing field names and values being lists or sets of acceptable values for those fields.
-
-    Example:
-    ```python
-    # Suppose we have an environment variable 'CONFIG_JSON' with the following content:
-    # '[{"model": "gpt-3.5-turbo", "api_type": "azure"}, {"model": "gpt-4"}]'
-
-    # We can retrieve a filtered list of configurations like this:
-    filter_criteria = {"model": ["gpt-3.5-turbo"]}
-    configs = config_list_from_json("CONFIG_JSON", filter_dict=filter_criteria)
-    # The 'configs' variable will now contain only the configurations that match the filter criteria.
-    ```
-
-    Returns:
-        List[Dict]: A list of configuration dictionaries that match the filtering criteria specified in `filter_dict`.
-
-    Raises:
-        FileNotFoundError: if env_or_file is neither found as an environment variable nor a file
-    """
-    if inspect.stack()[1].function != "from_json":
-        warnings.warn(
-            "config_list_from_json is deprecated and will be removed in a future release. "
-            'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")" method instead.',
-            DeprecationWarning,
-        )
-
-    env_str = os.environ.get(env_or_file)
-
-    if env_str:
-        # The environment variable exists. We should use information from it.
-        if os.path.exists(env_str):
-            # It is a file location, and we need to load the json from the file.
-            with open(env_str) as file:
-                json_str = file.read()
-        else:
-            # Else, it should be a JSON string by itself.
-            json_str = env_str
-        config_list = json.loads(json_str)
-    else:
-        # The environment variable does not exist.
-        # So, `env_or_file` is a filename. We should use the file location.
-        config_list_path = os.path.join(file_location, env_or_file) if file_location is not None else env_or_file
-
-        with open(config_list_path) as json_file:
-            config_list = json.load(json_file)
-
-    return filter_config(config_list, filter_dict)
-
-
 def get_config(
-    api_key: Optional[str],
-    base_url: Optional[str] = None,
-    api_type: Optional[str] = None,
-    api_version: Optional[str] = None,
+    api_key: str | None,
+    base_url: str | None = None,
+    api_type: str | None = None,
+    api_version: str | None = None,
 ) -> dict[str, Any]:
     """Constructs a configuration dictionary for a single model with the provided API configurations.
 
@@ -711,7 +503,7 @@ def get_config(
     config = get_config(api_key="sk-abcdef1234567890", base_url="https://api.openai.com", api_version="v1")
     # The 'config' variable will now contain:
     # {
-    #     "api_key": "sk-abcdef1234567890",
+    #     "api_key": "sk-abcdef1234567890",  # pragma: allowlist secret
     #     "base_url": "https://api.openai.com",
     #     "api_version": "v1"
     # }
@@ -738,10 +530,10 @@ def get_config(
 
 @export_module("autogen")
 def config_list_from_dotenv(
-    dotenv_file_path: Optional[str] = None,
-    model_api_key_map: Optional[dict[str, Any]] = None,
-    filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]] = None,
-) -> list[dict[str, Union[str, set[str]]]]:
+    dotenv_file_path: str | None = None,
+    model_api_key_map: dict[str, Any] | None = None,
+    filter_dict: dict[str, list[str | None] | set[str | None]] | None = None,
+) -> list[dict[str, str | set[str]]]:
     """Load API configurations from a specified .env file or environment variables and construct a list of configurations.
 
     This function will:
@@ -806,12 +598,12 @@ def config_list_from_dotenv(
             config_without_key_var = {k: v for k, v in config.items() if k != "api_key_env_var"}
             config_dict = get_config(api_key=api_key, **config_without_key_var)
         else:
-            logging.warning(f"Unsupported type {type(config)} for model {model} configuration")
+            logging.warning(
+                "Unsupported configuration type encountered for a model. Please check your model_api_key_map."
+            )
 
         if not config_dict["api_key"] or config_dict["api_key"].strip() == "":
-            logging.warning(
-                f"API key not found or empty for model {model}. Please ensure path to .env file is correct."
-            )
+            logging.warning("API key not found or empty for a model. Please ensure path to .env file is correct.")
             continue  # Skip this configuration and continue with the next
 
         # Add model to the configuration and append to the list
@@ -826,7 +618,7 @@ def config_list_from_dotenv(
             temp.flush()
 
             # Assuming config_list_from_json is a valid function from your code
-            config_list = config_list_from_json(env_or_file=temp_name, filter_dict=filter_dict)
+            config_list = latest_config_list_from_json(env_or_file=temp_name, filter_dict=filter_dict)
     finally:
         # The file is deleted after using its name (to prevent windows build from breaking)
         os.remove(temp_name)
@@ -855,15 +647,15 @@ def detect_gpt_assistant_api_version() -> str:
     return "v1" if parse(oai_version) < parse("1.21") else "v2"
 
 
-def create_gpt_vector_store(client: "OpenAI", name: str, fild_ids: list[str]) -> Any:
-    """Create a openai vector store for gpt assistant"""
+def create_gpt_vector_store(client: "OpenAI", name: str, file_ids: list[str]) -> Any:
+    """Create an OpenAI vector store for gpt assistant"""
     try:
         vector_store = client.vector_stores.create(name=name)
     except Exception as e:
         raise AttributeError(f"Failed to create vector store, please install the latest OpenAI python package: {e}")
 
     # poll the status of the file batch for completion.
-    batch = client.vector_stores.file_batches.create_and_poll(vector_store_id=vector_store.id, file_ids=fild_ids)
+    batch = client.vector_stores.file_batches.create_and_poll(vector_store_id=vector_store.id, file_ids=file_ids)
 
     if batch.status == "in_progress":
         time.sleep(1)
@@ -879,7 +671,7 @@ def create_gpt_vector_store(client: "OpenAI", name: str, fild_ids: list[str]) ->
 def create_gpt_assistant(
     client: "OpenAI", name: str, instructions: str, model: str, assistant_config: dict[str, Any]
 ) -> "Assistant":
-    """Create a openai gpt assistant"""
+    """Create an OpenAI GPT assistant"""
     assistant_create_kwargs = {}
     gpt_assistant_api_version = detect_gpt_assistant_api_version()
     tools = assistant_config.get("tools", [])
@@ -899,7 +691,7 @@ def create_gpt_assistant(
                 tool["type"] = "file_search"
                 if file_ids is not None:
                     # create a vector store for the file search tool
-                    vs = create_gpt_vector_store(client, f"{name}-vectorestore", file_ids)
+                    vs = create_gpt_vector_store(client, f"{name}-vectorstore", file_ids)
                     tool_resources["file_search"] = {
                         "vector_store_ids": [vs.id],
                     }

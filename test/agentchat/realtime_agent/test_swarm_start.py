@@ -7,8 +7,7 @@ from typing import Annotated
 from unittest.mock import MagicMock
 
 import pytest
-from anyio import Event, move_on_after, sleep
-from asyncer import create_task_group
+from anyio import Event, create_task_group, move_on_after, sleep
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from pytest import FixtureRequest
@@ -16,22 +15,28 @@ from pytest import FixtureRequest
 from autogen import ConversableAgent
 from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 from autogen.agentchat.realtime.experimental.realtime_swarm import register_swarm
+from autogen.tools import tool
 from autogen.tools.dependency_injection import Field as AG2Field
+from test.credentials import Credentials
 
-from ...conftest import Credentials
 from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)
 
 
+@pytest.mark.skip(
+    reason="RealtimeAgent is deprecated and scheduled for removal in v0.14; "
+    "relies on deprecated realtime API endpoints and an aging model alias. "
+    "Revisit when (or if) the realtime path is re-architected."
+)
 class TestSwarmE2E:
-    async def _test_e2e(self, credentials_llm_realtime: Credentials, credentials_gpt_4o_mini: Credentials) -> None:
+    async def _test_e2e(self, credentials_llm_realtime: Credentials, credentials_openai_mini: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Create a FastAPI app with a WebSocket endpoint that handles audio stream and Realtime API.
 
         """
-        openai_api_key = credentials_gpt_4o_mini.api_key
+        openai_api_key = credentials_openai_mini.api_key
 
         # Event for synchronization and tracking state
         weather_func_called_event = Event()
@@ -54,6 +59,7 @@ class TestSwarmE2E:
 
             agent.register_observer(mock_observer)
 
+            @tool(name="get_weather", description="Get the current weather")
             @trace(weather_func_mock, postcall_event=weather_func_called_event)
             def get_weather(location: Annotated[str, AG2Field(description="city")]) -> str:
                 return "The weather is cloudy." if location == "Seattle" else "The weather is sunny."
@@ -61,7 +67,7 @@ class TestSwarmE2E:
             weatherman = ConversableAgent(
                 name="Weatherman",
                 system_message="You are a weatherman. You can answer questions about the weather.",
-                llm_config=credentials_gpt_4o_mini.llm_config,
+                llm_config=credentials_openai_mini.llm_config,
                 functions=[get_weather],
             )
 
@@ -72,7 +78,7 @@ class TestSwarmE2E:
             )
 
             async with create_task_group() as tg:
-                tg.soonify(agent.run)()
+                tg.start_soon(agent.run)
                 await sleep(25)  # Run for 10 seconds
                 tg.cancel_scope.cancel()
 
@@ -105,16 +111,22 @@ class TestSwarmE2E:
         "credentials_llm_realtime",
         [
             pytest.param("credentials_gpt_4o_realtime", marks=[pytest.mark.openai_realtime, pytest.mark.aux_neg_flag]),
-            pytest.param("credentials_gemini_realtime", marks=[pytest.mark.gemini_realtime, pytest.mark.aux_neg_flag]),
+            pytest.param(
+                "credentials_gemini_realtime",
+                marks=[
+                    pytest.mark.gemini_realtime,
+                    pytest.mark.aux_neg_flag,
+                    pytest.mark.skip(reason="Gemini realtime API WebSocket connection issue - InvalidURI error"),
+                ],
+            ),
         ],
     )
     async def test_e2e(
-        self, credentials_llm_realtime: str, credentials_gpt_4o_mini: Credentials, request: FixtureRequest
+        self, credentials_llm_realtime: str, credentials_openai_mini: Credentials, request: FixtureRequest
     ) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Retry the test up to 5 times if it fails. Sometimes the test fails due to voice not being recognized by the realtime API.
-
         """
         i = 0
         count = 5
@@ -123,7 +135,7 @@ class TestSwarmE2E:
                 credentials = request.getfixturevalue(credentials_llm_realtime)
                 await self._test_e2e(
                     credentials_llm_realtime=credentials,
-                    credentials_gpt_4o_mini=credentials_gpt_4o_mini,
+                    credentials_openai_mini=credentials_openai_mini,
                 )
                 return  # Exit the function if the test passes
             except Exception as e:

@@ -7,15 +7,23 @@
 # ruff: noqa: E722
 import copy
 import traceback
+import warnings
+from collections.abc import Callable
 from contextlib import suppress
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Any, Literal
+
+from typing_extensions import deprecated
 
 from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
 from ...llm_config import LLMConfig
 
 
+@deprecated(
+    "SocietyOfMindAgent is deprecated and will be removed in v0.14. "
+    "Use GroupChat patterns for multi-agent orchestration instead."
+)
 class SocietyOfMindAgent(ConversableAgent):
-    """(In preview) A single agent that runs a Group Chat as an inner monologue.
+    """(Deprecated) A single agent that runs a Group Chat as an inner monologue.
     At the end of the conversation (termination for any reason), the SocietyOfMindAgent
     applies the response_preparer method on the entire inner monologue message history to
     extract a final answer for the reply.
@@ -39,16 +47,22 @@ class SocietyOfMindAgent(ConversableAgent):
         self,
         name: str,
         chat_manager: GroupChatManager,
-        response_preparer: Optional[Union[str, Callable[..., Any]]] = None,
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
+        response_preparer: str | Callable[..., Any] | None = None,
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        max_consecutive_auto_reply: int | None = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
-        function_map: Optional[dict[str, Callable[..., Any]]] = None,
-        code_execution_config: Union[dict[str, Any], Literal[False]] = False,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = False,
-        default_auto_reply: Optional[Union[str, dict[str, Any]]] = "",
+        function_map: dict[str, Callable[..., Any]] | None = None,
+        code_execution_config: dict[str, Any] | Literal[False] = False,
+        llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = False,
+        default_auto_reply: str | dict[str, Any] | None = "",
         **kwargs: Any,
     ):
+        warnings.warn(
+            "SocietyOfMindAgent is deprecated and will be removed in v0.14. "
+            "Use GroupChat patterns for multi-agent orchestration instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             system_message="",
@@ -135,11 +149,11 @@ class SocietyOfMindAgent(ConversableAgent):
             return extracted_response
 
     @property
-    def chat_manager(self) -> Union[GroupChatManager, None]:
+    def chat_manager(self) -> GroupChatManager | None:
         """Return the group chat manager."""
         return self._chat_manager
 
-    def update_chat_manager(self, chat_manager: Union[GroupChatManager, None]):
+    def update_chat_manager(self, chat_manager: GroupChatManager | None):
         """Update the chat manager.
 
         Args:
@@ -158,17 +172,17 @@ class SocietyOfMindAgent(ConversableAgent):
 
     def generate_inner_monologue_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Generate a reply by running the group chat"""
         if self.chat_manager is None:
             return False, None
         if messages is None:
             messages = self._oai_messages[sender]
 
-        # We want to clear the inner monolgue, keeping only the exteranl chat for context.
+        # We want to clear the inner monolgue, keeping only the external chat for context.
         # Reset all the counters and histories, then populate agents with necessary context from the external chat
         self.chat_manager.reset()
         self.update_chat_manager(self.chat_manager)
@@ -192,7 +206,7 @@ class SocietyOfMindAgent(ConversableAgent):
 
         try:
             self.initiate_chat(self.chat_manager, message=messages[-1], clear_history=False)
-        except:
+        except Exception:
             traceback.print_exc()
 
         response_preparer = self.response_preparer

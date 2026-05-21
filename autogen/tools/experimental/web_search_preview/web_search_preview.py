@@ -6,7 +6,8 @@
 import copy
 import logging
 import os
-from typing import Annotated, Any, Literal, Optional, Type, Union
+import warnings
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel
 
@@ -21,7 +22,7 @@ with optional_import_block():
     from openai.types.responses.web_search_tool import UserLocation
 
 
-@require_optional_import("openai>=1.66.2", "openai")
+@require_optional_import("openai>=2.30.0", "openai")
 @export_module("autogen.tools.experimental")
 class WebSearchPreviewTool(Tool):
     """WebSearchPreviewTool is a tool that uses OpenAI's web_search_preview tool to perform a search."""
@@ -29,11 +30,11 @@ class WebSearchPreviewTool(Tool):
     def __init__(
         self,
         *,
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: LLMConfig | dict[str, Any],
         search_context_size: Literal["low", "medium", "high"] = "medium",
-        user_location: Optional[dict[str, str]] = None,
-        instructions: Optional[str] = None,
-        text_format: Optional[Type[BaseModel]] = None,
+        user_location: dict[str, str] | None = None,
+        instructions: str | None = None,
+        text_format: type[BaseModel] | None = None,
     ):
         """Initialize the WebSearchPreviewTool.
 
@@ -48,8 +49,14 @@ class WebSearchPreviewTool(Tool):
             text_format: The format of the text to be returned. This should be a subclass of `BaseModel`.
                 The default is `None`, which means the text will be returned as a string.
         """
+        warnings.warn(
+            "WebSearchPreviewTool is deprecated and will be removed in v0.14. "
+            "Use autogen.beta.tools.WebSearchTool instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.web_search_tool_param = WebSearchToolParam(
-            type="web_search_preview",
+            type="web_search_preview",  # type: ignore[typeddict-item]
             search_context_size=search_context_size,
             user_location=UserLocation(**user_location) if user_location else None,  # type: ignore[typeddict-item]
         )
@@ -85,7 +92,7 @@ class WebSearchPreviewTool(Tool):
 
         def web_search_preview(
             query: Annotated[str, "The search query. Add all relevant context to the query."],
-        ) -> Union[str, Optional[BaseModel]]:
+        ) -> str | BaseModel | None:
             client = OpenAI()
 
             if not self.text_format:

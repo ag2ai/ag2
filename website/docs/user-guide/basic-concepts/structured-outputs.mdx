@@ -34,7 +34,7 @@ Just as standardized medical forms ensure complete and consistent documentation 
 
 ## From Concept to Implementation
 
-Implementing structured outputs in AG2 is straightforward using Pydantic models and the [`response_format`](/docs/api-reference/autogen/llm_config/LLMConfigEntry#response_format) parameter:
+Implementing structured outputs in AG2 is straightforward using Pydantic models and the [`response_format`](/docs/api-reference/autogen/LLMConfig) parameter:
 
 <Note>
 Not all model providers support structured outputs. For a current list of supported providers, see [here](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs/?h=structured#supported-model-providers).
@@ -52,17 +52,19 @@ class ResponseModel(BaseModel):
 
 # 2. Create LLM configuration with the structured output model
 llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    response_format=ResponseModel,  # Specify the response format
+    config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "response_format": ResponseModel,  # Specify the response format
+    },
 )
 
 # 3. Create agent with structured output configuration
-with llm_config:
-    structured_agent = ConversableAgent(
-        name="structured_agent",
-        system_message="You provide information in a structured format."
-    )
+structured_agent = ConversableAgent(
+    name="structured_agent",
+    system_message="You provide information in a structured format.",
+    llm_config=llm_config,
+)
 ```
 
 With this setup:
@@ -106,11 +108,12 @@ Next, let's update our summary agent to use this structured output model:
 ```python hl_lines="7 12-16"
 # Configure the LLM for summary bot with structured output
 summary_llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    api_key=os.environ.get("OPENAI_API_KEY"),
-    temperature=0.2,
-    response_format=AuditLogSummary,  # Using our Pydantic model for structured output
+   config_list = {
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+        "response_format": AuditLogSummary,  # Using our Pydantic model for structured output
+    },
 )
 
 # Define the system message for the summary agent
@@ -122,11 +125,11 @@ Include each transaction with its vendor, amount, memo, status and reason.
 """
 
 # Create the summary agent with structured output
-with summary_llm_config:
-    summary_bot = ConversableAgent(
-        name="summary_bot",
-        system_message=summary_system_message,
-    )
+summary_bot = ConversableAgent(
+    name="summary_bot",
+    system_message=summary_system_message,
+    llm_config=summary_llm_config,
+)
 ```
 
 Notice how much simpler the system message is now - we no longer need to include detailed formatting instructions because the structure is enforced by the Pydantic model.
@@ -176,25 +179,7 @@ print(json.dumps(structured_data, indent=4))
 
 With structured outputs added to our financial compliance system, our workflow becomes much more reliable:
 
-```mermaid
-flowchart TD
-    User([User]) --> |"Submits transactions"| Finance[Finance Bot]
-    Finance --> |"Processes transactions"| Human[Human Agent]
-    Human --> |"Approves/rejects"| Finance
-    Finance --> |"Handoff"| Summary[Summary Bot with Structured Output]
-    Summary --> |"Generates structured audit log"| Output[["JSON in exact required format"]]
-    Output --> RiskSystem[Risk Management System]
-    Output --> Dashboard[Finance Dashboard]
-    Output --> Database[(Transaction Database)]
-
-    style Finance fill:#e3f2fd,stroke:#1976d2
-    style Human fill:#f3e5f5,stroke:#7b1fa2
-    style Summary fill:#e8f5e9,stroke:#4caf50
-    style Output fill:#fff8e1,stroke:#ffa000
-    style RiskSystem fill:#e8f5e9,stroke:#4caf50
-    style Dashboard fill:#e0f2f1,stroke:#009688
-    style Database fill:#f3e5f5,stroke:#7b1fa2
-```
+![Understanding the Enhanced Workflow](assets/structured-output-workflow.png)
 
 ## Complete Code Example
 
@@ -272,10 +257,11 @@ Here's the complete, ready-to-run code for our financial compliance system with 
 
     # Configure the LLM for finance bot (standard configuration)
     finance_llm_config = LLMConfig(
-        api_type="openai",
-        model="gpt-4o-mini",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        temperature=0.2
+        config_list={
+            "api_type": "openai",
+            "model": "gpt-5-nano",
+            "api_key": os.environ.get("OPENAI_API_KEY"),
+        }
     )
 
     # Define the system message for our finance bot
@@ -295,12 +281,12 @@ Here's the complete, ready-to-run code for our financial compliance system with 
     """
 
     # Create the agents with respective LLM configurations
-    with finance_llm_config:
-        finance_bot = ConversableAgent(
-            name="finance_bot",
-            system_message=finance_system_message,
-            functions=[check_duplicate_payment],
-        )
+    finance_bot = ConversableAgent(
+        name="finance_bot",
+        system_message=finance_system_message,
+        functions=[check_duplicate_payment],
+        llm_config=finance_llm_config,
+    )
 
     # Create the human agent for oversight
     human = ConversableAgent(
@@ -325,10 +311,11 @@ Here's the complete, ready-to-run code for our financial compliance system with 
 
     # Configure the LLM for summary bot with structured output
     summary_llm_config = LLMConfig(
-        api_type="openai",
-        model="gpt-4o-mini",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        temperature=0.2,
+        {
+            "api_type": "openai",
+            "model": "gpt-5-nano",
+            "api_key": os.environ.get("OPENAI_API_KEY"),
+        },
         response_format=AuditLogSummary,  # Using the Pydantic model for structured output
     )
 
@@ -340,11 +327,11 @@ Here's the complete, ready-to-run code for our financial compliance system with 
     Include each transaction with its vendor, amount, memo, status and reason.
     """
 
-    with summary_llm_config:
-        summary_bot = ConversableAgent(
-            name="summary_bot",
-            system_message=summary_system_message,
-        )
+    summary_bot = ConversableAgent(
+        name="summary_bot",
+        system_message=summary_system_message,
+        llm_config=summary_llm_config,
+    )
 
     def is_termination_msg(x: dict[str, Any]) -> bool:
         content = x.get("content", "")
@@ -366,7 +353,7 @@ Here's the complete, ready-to-run code for our financial compliance system with 
 
     # Format the initial message
     initial_prompt = (
-        "Please process the following transactions one at a time, checking for duplicates:\n\n" +
+        "Please process the following transactions one at a time, checking for duplicates:\n note: you must go to the summary_bot once all tasks are done and generate final summary\n\n" +
         "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
     )
 

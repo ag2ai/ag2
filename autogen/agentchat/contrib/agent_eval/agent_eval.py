@@ -4,7 +4,8 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Literal, Optional, Union
+import warnings
+from typing import Any, Literal
 
 from .... import GroupChat, GroupChatManager, UserProxyAgent
 from ....llm_config import LLMConfig
@@ -14,15 +15,20 @@ from .quantifier_agent import QuantifierAgent
 from .subcritic_agent import SubCriticAgent
 from .task import Task
 
+_DEPRECATION_MSG = "The agent_eval module is deprecated and will be removed in v0.14. "
+
 
 def generate_criteria(
-    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
+    llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None,
     task: Task = None,
     additional_instructions: str = "",
     max_round=2,
     use_subcritic: bool = False,
 ):
     """Creates a list of criteria for evaluating the utility of a given task.
+
+    .. deprecated::
+        The agent_eval module is deprecated and will be removed in v0.14.
 
     Args:
         llm_config (LLMConfig or dict or bool): llm inference configuration.
@@ -34,6 +40,7 @@ def generate_criteria(
     Returns:
         list: A list of Criterion objects for evaluating the utility of the given task.
     """
+    warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
     critic = CriticAgent(
         system_message=CriticAgent.DEFAULT_SYSTEM_MESSAGE + "\n" + additional_instructions,
         llm_config=llm_config,
@@ -67,13 +74,16 @@ def generate_criteria(
 
 
 def quantify_criteria(
-    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
+    llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None,
     criteria: list[Criterion] = None,
     task: Task = None,
     test_case: str = "",
     ground_truth: str = "",
 ):
     """Quantifies the performance of a system using the provided criteria.
+
+    .. deprecated::
+        The agent_eval module is deprecated and will be removed in v0.14.
 
     Args:
         llm_config (LLMConfig or dict or bool): llm inference configuration.
@@ -85,6 +95,7 @@ def quantify_criteria(
     Returns:
         dict: A dictionary where the keys are the criteria and the values are the assessed performance based on accepted values for each criteria.
     """
+    warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
     quantifier = QuantifierAgent(
         llm_config=llm_config,
     )

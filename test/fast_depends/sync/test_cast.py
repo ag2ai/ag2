@@ -5,12 +5,12 @@
 # Portions derived from  https://github.com/https://github.com/Lancetnik/FastDepends are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-from typing import Iterator
+from collections.abc import Iterator
+from typing import Annotated
 
 import pytest
 from annotated_types import Ge
 from pydantic import BaseModel, Field, ValidationError
-from typing_extensions import Annotated
 
 from autogen.fast_depends import inject
 from test.fast_depends.marks import pydanticV2
@@ -217,3 +217,44 @@ def test_multi_annotated():
         f(1)
 
     assert f(10) == 20
+
+
+def test_var_keyword_with_named_positional_or_keyword_args():
+    """Regression for ag2 issue #1790.
+
+    A function declaring both regular POSITIONAL_OR_KEYWORD parameters and
+    a ``**kwargs`` catch-all must route keyword-supplied values to their
+    own slots, not bundle every keyword argument into ``**kwargs``.
+    """
+
+    @inject
+    def f(arg1: str, arg2: str, **kwargs):
+        return arg1, arg2, kwargs
+
+    arg1, arg2, kwargs = f(arg1="A", arg2="B", extra1="X", extra2="Y")
+    assert arg1 == "A"
+    assert arg2 == "B"
+    assert kwargs == {"extra1": "X", "extra2": "Y"}
+
+
+def test_var_keyword_only_extras():
+    """If only **kwargs is declared, every supplied keyword goes to it."""
+
+    @inject
+    def f(**kwargs):
+        return kwargs
+
+    assert f(a=1, b=2) == {"a": 1, "b": 2}
+
+
+def test_var_keyword_with_positional_call():
+    """POSITIONAL_OR_KEYWORD args supplied positionally still work alongside **kwargs."""
+
+    @inject
+    def f(arg1: str, arg2: str, **kwargs):
+        return arg1, arg2, kwargs
+
+    arg1, arg2, kwargs = f("A", "B", extra="X")
+    assert arg1 == "A"
+    assert arg2 == "B"
+    assert kwargs == {"extra": "X"}

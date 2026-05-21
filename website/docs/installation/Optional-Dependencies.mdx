@@ -3,17 +3,17 @@
 AG2 installs OpenAI package by default. To use LLMs by other providers, you can install the following packages:
 
 ```bash
-pip install ag2[openai,gemini,anthropic,mistral,together,groq,cohere]
+pip install ag2[openai,gemini,anthropic,mistral,together,groq,cohere,yepcode]
 ```
 
 <Tip>
 If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen[openai,gemini,anthropic,mistral,together,groq,cohere]
+pip install -U autogen[openai,gemini,anthropic,mistral,together,groq,cohere,yepcode]
 ```
 or
 ```bash
-pip install -U ag2[openai,gemini,anthropic,mistral,together,groq,cohere]
+pip install -U ag2[openai,gemini,anthropic,mistral,together,groq,cohere,yepcode]
 ```
 as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
@@ -48,6 +48,146 @@ from autogen import UserProxyAgent
 
 proxy = UserProxyAgent(name="proxy", code_execution_config={"executor": "ipython-embedded"})
 ```
+
+## Remyx Code Executor
+
+To use [Remyx](https://docs.remyx.ai/resources/explore)'s Docker images for exploring novel codebases, install AG2 with the `remyx` option:
+```bash
+pip install "ag2[remyx]"
+```
+
+Remyx hosts Docker images that reproduce codebases from 1000+ ArXiv papers (expanding to GitHub and HuggingFace) with dependencies resolved and environments tested. See the [Remyx docs](https://docs.remyx.ai/cli) to get your API key.
+
+To use the Remyx executor:
+```python
+from autogen.coding import RemyxCodeExecutor
+from remyxai.client.search import SearchClient
+
+# Set your API key as environment variable
+# export REMYXAI_API_KEY=your_api_key
+
+# Search for papers with Docker environments
+client = SearchClient()
+papers = client.search(
+    query="llm pruning strategies",
+    has_docker=True,
+    max_results=5
+)
+
+# Create executor for a paper
+executor = RemyxCodeExecutor(
+    arxiv_id=papers[0].arxiv_id,
+    timeout=300
+)
+
+# Explore the paper's code
+executor.explore()
+```
+
+For AI-guided exploration of research code:
+```python
+# Interactive exploration with explanations
+executor.explore(goal="Understand the main finding", interactive=True)
+
+# Automated batch experiments
+executor.explore(goal="Run the quickstart example", interactive=False)
+```
+Example notebook: [Remyx Executor](/docs/use-cases/notebooks/notebooks/agentchat_remyx_executor)
+
+## YepCode Serverless Code Executor
+
+To use YepCode's serverless code execution platform, install AG2 with the `yepcode` option:
+
+```bash
+pip install "ag2[yepcode]"
+```
+
+YepCode provides secure, production-grade serverless code execution with automatic dependency management for both Python and JavaScript. Get your API token from [yepcode.io](https://yepcode.io).
+
+To use the YepCode executor:
+
+```python
+from autogen.coding import YepCodeCodeExecutor
+from autogen import ConversableAgent
+
+# Set your API token as environment variable
+# export YEPCODE_API_TOKEN=your_token
+
+executor = YepCodeCodeExecutor(
+    timeout=120,
+    sync_execution=True
+)
+
+agent = ConversableAgent(
+    "agent",
+    llm_config=False,
+    code_execution_config={"executor": executor},
+    human_input_mode="NEVER"
+)
+```
+
+Alternatively, use the factory pattern:
+
+```python
+from autogen.coding import CodeExecutorFactory
+
+executor = CodeExecutorFactory.create({
+    "executor": "yepcode",
+    "yepcode": {"timeout": 120}
+})
+```
+
+Example notebook: [YepCode Executor](/docs/use-cases/notebooks/notebooks/agentchat_yepcode_executor)
+
+## Daytona Sandbox Code Executor
+
+To use [Daytona's](https://www.daytona.io) sandboxed code execution, install AG2 with the `daytona` option:
+
+```bash
+pip install "ag2[daytona]"
+```
+
+Daytona provides secure, isolated cloud sandboxes for running LLM-generated code with support for Python, Bash, JavaScript, and TypeScript. Get your API key from [app.daytona.io](https://app.daytona.io/dashboard/keys).
+
+To use the Daytona executor:
+
+```python
+from autogen.coding import DaytonaCodeExecutor
+from autogen import ConversableAgent
+
+# Set your API key as environment variable
+# export DAYTONA_API_KEY=your_api_key
+
+with DaytonaCodeExecutor(timeout=60) as executor:
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        code_execution_config={"executor": executor},
+        human_input_mode="NEVER",
+    )
+```
+
+Named Daytona snapshots are supported and take priority over `image`:
+
+```python
+executor = DaytonaCodeExecutor(snapshot="my-data-science-snapshot", timeout=60)
+```
+
+Custom Docker images are also supported — pass a plain image string or build one declaratively via the Daytona `Image` object:
+
+```python
+from daytona import Image
+from autogen.coding import DaytonaCodeExecutor
+
+# Plain image string
+executor = DaytonaCodeExecutor(image="python:3.12-slim", timeout=60)
+
+# Declarative image build with pre-installed packages
+custom_image = Image.base("python:3.12-slim").pip_install("pandas", "numpy")
+executor = DaytonaCodeExecutor(image=custom_image, timeout=120)
+```
+
+Example notebook: [Daytona Executor](/docs/use-cases/notebooks/notebooks/agentchat_daytona_executor)
 
 ## retrievechat
 

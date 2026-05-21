@@ -6,9 +6,11 @@
 # SPDX-License-Identifier: MIT
 import json
 import logging
-from typing import Any, Optional, Union
+import warnings
+from typing import Any
 
 import requests
+from typing_extensions import deprecated
 
 from ...code_utils import content_str
 from ...formatting_utils import colored
@@ -29,11 +31,21 @@ SEP = "###"
 DEFAULT_LLAVA_SYS_MSG = "You are an AI agent and you can view images."
 
 
+@deprecated(
+    "LLaVAAgent is deprecated and will be removed in v0.14. v1.0 will contain native multimodal support on Agent."
+)
 class LLaVAAgent(MultimodalConversableAgent):
+    """(Deprecated) LLaVA-based multimodal agent.
+
+    .. deprecated::
+        LLaVAAgent is deprecated and will be removed in v0.14.
+        v1.0 will contain native multimodal support on Agent.
+    """
+
     def __init__(
         self,
         name: str,
-        system_message: Optional[tuple[str, list]] = DEFAULT_LLAVA_SYS_MSG,
+        system_message: tuple[str, list] | None = DEFAULT_LLAVA_SYS_MSG,
         *args,
         **kwargs: Any,
     ):
@@ -44,6 +56,12 @@ class LLaVAAgent(MultimodalConversableAgent):
         **kwargs (dict): Please refer to other kwargs in
             [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
+        warnings.warn(
+            "LLaVAAgent is deprecated and will be removed in v0.14. "
+            "v1.0 will contain native multimodal support on Agent.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name,
             system_message=system_message,
@@ -84,12 +102,14 @@ class LLaVAAgent(MultimodalConversableAgent):
         retry = 10
         while len(out) == 0 and retry > 0:
             # image names will be inferred automatically from llava_call
+            max_tokens = self.llm_config.get("max_tokens")
+
             out = llava_call_binary(
                 prompt=prompt,
                 images=images,
                 config_list=self.llm_config["config_list"],
                 temperature=self.llm_config.get("temperature", 0.5),
-                max_new_tokens=self.llm_config.get("max_new_tokens", 2000),
+                max_new_tokens=max_tokens or 2000,
             )
             retry -= 1
 
@@ -169,7 +189,7 @@ def llava_call_binary(
             continue
 
 
-def llava_call(prompt: str, llm_config: Union[LLMConfig, dict]) -> str:
+def llava_call(prompt: str, llm_config: LLMConfig | dict) -> str:
     """Makes a call to the LLaVA service to generate text based on a given prompt"""
     prompt, images = llava_formatter(prompt, order_image_tokens=False)
 

@@ -33,7 +33,11 @@ def groq_client():
 
 
 def test_groq_llm_config_entry():
-    groq_llm_config = GroqLLMConfigEntry(api_key="fake_api_key", model="llama3-8b-8192")
+    groq_llm_config = GroqLLMConfigEntry(
+        api_key="fake_api_key",
+        model="llama3-8b-8192",
+        temperature=1.0,
+    )
     expected = {
         "api_type": "groq",
         "model": "llama3-8b-8192",
@@ -44,12 +48,9 @@ def test_groq_llm_config_entry():
         "tags": [],
     }
     actual = groq_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[groq_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(groq_llm_config).model_dump() == {
         "config_list": [expected],
     }
 

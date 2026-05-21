@@ -10,8 +10,7 @@ from autogen.agents.experimental import DeepResearchAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
 from autogen.tools.experimental import DeepResearchTool
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports(

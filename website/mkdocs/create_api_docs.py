@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,9 +6,9 @@ import itertools
 import shutil
 from importlib import import_module
 from pathlib import Path
-from typing import List
 
-from autogen._website.generate_api_references import import_submodules
+from _website.generate_api_references import import_submodules
+
 from autogen.doc_utils import get_target_module
 
 API_META = "# 0.5 - API\n# 2 - Release\n# 3 - Contributing\n# 5 - Template Page\n# 10 - Default\nsearch:\n  boost: 0.5"
@@ -21,7 +21,7 @@ def _is_private(name: str) -> bool:
     return any(part.startswith("_") for part in parts)
 
 
-def _merge_lists(members: List[str], submodules: List[str]) -> List[str]:
+def _merge_lists(members: list[str], submodules: list[str]) -> list[str]:
     members_copy = members[:]
     for sm in submodules:
         for i, el in enumerate(members_copy):
@@ -31,8 +31,8 @@ def _merge_lists(members: List[str], submodules: List[str]) -> List[str]:
     return members_copy
 
 
-def _add_all_submodules(members: List[str]) -> List[str]:
-    def _f(x: str) -> List[str]:
+def _add_all_submodules(members: list[str]) -> list[str]:
+    def _f(x: str) -> list[str]:
         xs = x.split(".")
         return [".".join(xs[:i]) + "." for i in range(1, len(xs))]
 
@@ -47,6 +47,43 @@ def _add_all_submodules(members: List[str]) -> List[str]:
     return sorted(members, key=_get_sorting_key)
 
 
+def _resolve_case_collisions(members: list[str]) -> dict[str, str]:
+    """Build a mapping from member name to file path, resolving case collisions.
+
+    On case-insensitive filesystems (macOS), Tool.md and tool.md collide.
+    When a collision is detected, the lowercase member gets a _func suffix.
+    """
+    path_map: dict[str, str] = {}  # member -> file path (without .md)
+    seen_lower: dict[str, str] = {}  # lowercased path -> first member
+
+    for x in members:
+        if x.endswith("."):
+            continue
+        xs = x.split(".")
+        file_path = "/".join(xs)
+        lower_path = file_path.lower()
+
+        if lower_path in seen_lower:
+            # Case collision - disambiguate the lowercase one
+            existing = seen_lower[lower_path]
+            existing_last = existing.split(".")[-1]
+            current_last = xs[-1]
+            if current_last[0].islower():
+                # Current is lowercase, add suffix
+                file_path = "/".join(xs[:-1]) + f"/{xs[-1]}_func"
+            elif existing_last[0].islower():
+                # Existing was lowercase, update it
+                path_map[existing] = "/".join(existing.split(".")[:-1]) + f"/{existing_last}_func"
+        seen_lower[lower_path] = x
+        path_map[x] = file_path
+
+    return path_map
+
+
+# Module-level cache populated during summary generation
+_MEMBER_PATH_MAP: dict[str, str] = {}
+
+
 def _get_api_summary_item(x: str) -> str:
     xs = x.split(".")
     if x.endswith("."):
@@ -54,10 +91,13 @@ def _get_api_summary_item(x: str) -> str:
         return f"{indent}- {xs[-2]}"
     else:
         indent = " " * (4 * (len(xs)))
-        return f"{indent}- [{xs[-1]}](docs/api-reference/{'/'.join(xs)}.md)"
+        file_path = _MEMBER_PATH_MAP.get(x, "/".join(xs))
+        return f"{indent}- [{xs[-1]}](docs/api-reference/{file_path}.md)"
 
 
-def _get_api_summary(members: List[str]) -> str:
+def _get_api_summary(members: list[str]) -> str:
+    global _MEMBER_PATH_MAP
+    _MEMBER_PATH_MAP = _resolve_case_collisions(members)
     return "\n".join([_get_api_summary_item(x) for x in members])
 
 
@@ -65,7 +105,8 @@ def _generate_api_doc(name: str, docs_path: Path) -> Path:
     xs = name.split(".")
     module_name = ".".join(xs[:-1])
     member_name = xs[-1]
-    path = docs_path / f"{('/').join(xs)}.md"
+    file_path = _MEMBER_PATH_MAP.get(name, "/".join(xs))
+    path = docs_path / f"{file_path}.md"
     content = f"::: {module_name}.{member_name}\n"
 
     path.parent.mkdir(exist_ok=True, parents=True)
@@ -74,7 +115,7 @@ def _generate_api_doc(name: str, docs_path: Path) -> Path:
     return path
 
 
-def _generate_api_docs(members: List[str], docs_path: Path) -> List[Path]:
+def _generate_api_docs(members: list[str], docs_path: Path) -> list[Path]:
     return [_generate_api_doc(x, docs_path) for x in members if not x.endswith(".")]
 
 
@@ -85,7 +126,11 @@ def _filter_submodules_by_export_path(submodules: list[str], module_name: str) -
         if not submodule.startswith(module_name):
             continue
 
-        module = import_module(submodule)  # nosemgrep
+        try:
+            module = import_module(submodule)  # nosemgrep
+        except ImportError as e:
+            print(f"[api-docs] skipping {submodule}: {e}")
+            continue
         all = module.__all__ if hasattr(module, "__all__") else None
         for name, obj in module.__dict__.items():
             if not all:

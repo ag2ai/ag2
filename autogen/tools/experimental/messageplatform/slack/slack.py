@@ -4,7 +4,7 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Annotated, Any, Optional, Tuple, Union
+from typing import Annotated, Any
 
 from .....doc_utils import export_module
 from .....import_utils import optional_import_block, require_optional_import
@@ -26,8 +26,7 @@ class SlackSendTool(Tool):
     """Sends a message to a Slack channel."""
 
     def __init__(self, *, bot_token: str, channel_id: str) -> None:
-        """
-        Initialize the SlackSendTool.
+        """Initialize the SlackSendTool.
 
         Args:
             bot_token: Bot User OAuth Token starting with "xoxb-".
@@ -40,8 +39,7 @@ class SlackSendTool(Tool):
             bot_token: Annotated[str, Depends(on(bot_token))],
             channel_id: Annotated[str, Depends(on(channel_id))],
         ) -> Any:
-            """
-            Sends a message to a Slack channel.
+            """Sends a message to a Slack channel.
 
             Args:
                 message: The message to send to the channel.
@@ -57,6 +55,7 @@ class SlackSendTool(Tool):
                         message[i : i + (MAX_MESSAGE_LENGTH - 1)]
                         for i in range(0, len(message), (MAX_MESSAGE_LENGTH - 1))
                     ]
+                    sent_message_id = None
                     for i, chunk in enumerate(chunks):
                         response = web_client.chat_postMessage(channel=channel_id, text=chunk)
 
@@ -93,8 +92,7 @@ class SlackRetrieveTool(Tool):
     """Retrieves messages from a Slack channel."""
 
     def __init__(self, *, bot_token: str, channel_id: str) -> None:
-        """
-        Initialize the SlackRetrieveTool.
+        """Initialize the SlackRetrieveTool.
 
         Args:
             bot_token: Bot User OAuth Token starting with "xoxb-".
@@ -105,18 +103,17 @@ class SlackRetrieveTool(Tool):
             bot_token: Annotated[str, Depends(on(bot_token))],
             channel_id: Annotated[str, Depends(on(channel_id))],
             messages_since: Annotated[
-                Union[str, None],
+                str | None,
                 "Date to retrieve messages from (ISO format) OR Slack message ID. If None, retrieves latest messages.",
             ] = None,
             maximum_messages: Annotated[
-                Union[int, None], "Maximum number of messages to retrieve. If None, retrieves all messages since date."
+                int | None, "Maximum number of messages to retrieve. If None, retrieves all messages since date."
             ] = None,
         ) -> Any:
-            """
-            Retrieves messages from a Discord channel.
+            """Retrieves messages from a Slack channel.
 
             Args:
-                bot_token: The bot token to use for Discord. (uses dependency injection)
+                bot_token: The bot token to use for Slack. (uses dependency injection)
                 channel_id: The ID of the channel. (uses dependency injection)
                 messages_since: ISO format date string OR Slack message ID, to retrieve messages from. If None, retrieves latest messages.
                 maximum_messages: Maximum number of messages to retrieve. If None, retrieves all messages since date.
@@ -169,7 +166,8 @@ class SlackRetrieveTool(Tool):
                         if not response["has_more"]:
                             break
 
-                        cursor = response["response_metadata"]["next_cursor"]
+                        metadata = response.get("response_metadata") or {}
+                        cursor = metadata.get("next_cursor")  # type: ignore[union-attr]
 
                     except SlackApiError as e:
                         return f"Message retrieval failed on pagination, Slack API error: {e.response['error']}"
@@ -198,8 +196,7 @@ class SlackRetrieveRepliesTool(Tool):
     """Retrieves replies to a specific Slack message from both threads and the channel."""
 
     def __init__(self, *, bot_token: str, channel_id: str) -> None:
-        """
-        Initialize the SlackRetrieveRepliesTool.
+        """Initialize the SlackRetrieveRepliesTool.
 
         Args:
             bot_token: Bot User OAuth Token starting with "xoxb-".
@@ -211,7 +208,7 @@ class SlackRetrieveRepliesTool(Tool):
             bot_token: Annotated[str, Depends(on(bot_token))],
             channel_id: Annotated[str, Depends(on(channel_id))],
             min_replies: Annotated[
-                Optional[int],
+                int | None,
                 "Minimum number of replies to wait for before returning (thread + channel). If None, returns immediately.",
             ] = None,
             timeout_seconds: Annotated[
@@ -222,8 +219,7 @@ class SlackRetrieveRepliesTool(Tool):
                 bool, "Whether to include messages in the channel after the original message."
             ] = True,
         ) -> Any:
-            """
-            Retrieves replies to a specific Slack message, from both threads and the main channel.
+            """Retrieves replies to a specific Slack message, from both threads and the main channel.
 
             Args:
                 message_ts: The timestamp (ts) identifier of the parent message.
@@ -238,7 +234,7 @@ class SlackRetrieveRepliesTool(Tool):
                 web_client = WebClient(token=bot_token)
 
                 # Function to get current thread replies
-                async def get_thread_replies() -> tuple[Optional[list[dict[str, Any]]], Optional[str]]:
+                async def get_thread_replies() -> tuple[list[dict[str, Any]] | None, str | None]:
                     try:
                         response = web_client.conversations_replies(
                             channel=channel_id,
@@ -258,7 +254,7 @@ class SlackRetrieveRepliesTool(Tool):
                         return None, f"Thread reply retrieval failed, exception: {e}"
 
                 # Function to get messages in the channel after the original message
-                async def get_channel_messages() -> Tuple[Optional[list[dict[str, Any]]], Optional[str]]:
+                async def get_channel_messages() -> tuple[list[dict[str, Any]] | None, str | None]:
                     try:
                         response = web_client.conversations_history(
                             channel=channel_id,
@@ -286,8 +282,8 @@ class SlackRetrieveRepliesTool(Tool):
                         return None, f"Channel message retrieval failed, exception: {e}"
 
                 # Function to get all replies (both thread and channel)
-                async def get_all_replies() -> Tuple[
-                    Optional[list[dict[str, Any]]], Optional[list[dict[str, Any]]], Optional[str]
+                async def get_all_replies() -> tuple[
+                    list[dict[str, Any]] | None, list[dict[str, Any]] | None, str | None
                 ]:
                     thread_replies, thread_error = await get_thread_replies()
                     if thread_error:

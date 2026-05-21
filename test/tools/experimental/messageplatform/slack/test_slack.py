@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable
+from collections.abc import Callable
 from unittest.mock import MagicMock, Mock
 
 import pytest

@@ -3,6 +3,9 @@ title: "Agent Orchestration: Coordinating Multiple Agents"
 sidebarTitle: "Agent Orchestration: Coordinating Multiple Agents"
 ---
 
+!!! example "Try it on the AG2 Playground"
+    See handoff patterns running live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
 In our financial compliance example, we've successfully implemented a human-in-the-loop agent that processes transactions and flags suspicious ones for human approval. This works well for basic compliance checking, but what if we need to provide detailed summary reports after all transactions are processed?
 
 We could expand the system message of our `finance_bot` to include this functionality, but this approach isn't scalable as requirements grow more complex. The `finance_bot` would have multiple responsibilities, making it harder to maintain and extend.
@@ -37,15 +40,14 @@ This pattern leverages specialized skills while maintaining a cohesive workflow 
 
 ## From Concept to Implementation
 
-Implementing a swarm in AG2 is straightforward using the [`initiate_swarm_chat`](/docs/api-reference/autogen/initiate_swarm_chat) method:
+Implementing a swarm in AG2 is straightforward using the `initiate_swarm_chat` method:
 
 ```python hl_lines="12-18"
 from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
 
 # Create your specialized agents
-with llm_config:
-    agent_1 = ConversableAgent(name="agent_1", system_message="...")
-    agent_2 = ConversableAgent(name="agent_2", system_message="...")
+agent_1 = ConversableAgent(name="agent_1", llm_config=llm_config, system_message="...")
+agent_2 = ConversableAgent(name="agent_2", llm_config=llm_config, system_message="...")
 
 # Create human agent if needed
 human = ConversableAgent(name="human", human_input_mode="ALWAYS")
@@ -101,12 +103,12 @@ import random
 # Note: Make sure to set your API key in your environment first
 
 # Configure the LLM
-llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    api_key=os.environ.get("OPENAI_API_KEY"),
-    temperature=0.2,
-)
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ.get("OPENAI_API_KEY"),
+    "temperature": 0.2,
+})
 
 # Define the system message for our finance bot
 finance_system_message = """
@@ -133,15 +135,16 @@ The summary should be concise and clear.
 """
 
 # Create the finance agent with LLM intelligence
-with llm_config:
-    finance_bot = ConversableAgent(
-        name="finance_bot",
-        system_message=finance_system_message,
-    )
-    summary_bot = ConversableAgent(
-        name="summary_bot",
-        system_message=summary_system_message,
-    )
+finance_bot = ConversableAgent(
+    name="finance_bot",
+    llm_config=llm_config,
+    system_message=finance_system_message,
+)
+summary_bot = ConversableAgent(
+    name="summary_bot",
+    llm_config=llm_config,
+    system_message=summary_system_message,
+)
 
 # Create the human agent for oversight
 human = ConversableAgent(
@@ -246,13 +249,13 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig(
-        api_type="openai",
-        model="gpt-4o-mini",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        temperature=0.2,
-        cache_seed=42
-    )
+    llm_config = LLMConfig({
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+        "temperature": 0.2,
+        "cache_seed": 42
+    })
 
     # Define the system message for our finance bot
     finance_system_message = """
@@ -279,15 +282,16 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     """
 
     # Create the finance agent with LLM intelligence
-    with llm_config:
-        finance_bot = ConversableAgent(
-            name="finance_bot",
-            system_message=finance_system_message,
-        )
-        summary_bot = ConversableAgent(
-            name="summary_bot",
-            system_message=summary_system_message,
-        )
+    finance_bot = ConversableAgent(
+        name="finance_bot",
+        llm_config=llm_config,
+        system_message=finance_system_message,
+    )
+    summary_bot = ConversableAgent(
+        name="summary_bot",
+        llm_config=llm_config,
+        system_message=summary_system_message,
+    )
 
     # Create the human agent for oversight
     human = ConversableAgent(
@@ -516,12 +520,12 @@ Here's the updated code that incorporates automatic termination:
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig(
-        api_type="openai",
-        model="gpt-4o-mini",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        temperature=0.2,
-    )
+    llm_config = LLMConfig({
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+        "temperature": 0.2,
+    })
 
     # Define the system message for our finance bot
     finance_system_message = """
@@ -551,16 +555,16 @@ Here's the updated code that incorporates automatic termination:
     """
 
     # Create the finance agent with LLM intelligence
-    with llm_config:
-        finance_bot = ConversableAgent(
-            name="finance_bot",
-            system_message=finance_system_message,
-        )
-        summary_bot = ConversableAgent(
-            name="summary_bot",
-            system_message=summary_system_message,
-        )
-
+    finance_bot = ConversableAgent(
+        name="finance_bot",
+        llm_config=llm_config,
+        system_message=finance_system_message,
+    )
+    summary_bot = ConversableAgent(
+        name="summary_bot",
+        llm_config=llm_config,
+        system_message=summary_system_message,
+    )
 
     def is_termination_msg(x: dict[str, Any]) -> bool:
         content = x.get("content", "")

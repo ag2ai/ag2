@@ -12,8 +12,7 @@ from autogen import GroupChat, GroupChatManager
 from autogen.agentchat.contrib.llamaindex_conversable_agent import LLamaIndexConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ...conftest import MOCK_OPEN_AI_API_KEY
+from test.const import MOCK_OPEN_AI_API_KEY
 
 with optional_import_block() as result:
     from llama_index.core.agent import ReActAgent

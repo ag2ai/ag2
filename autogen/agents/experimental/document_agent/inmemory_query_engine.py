@@ -5,8 +5,9 @@
 import copy
 import json
 import os
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -38,15 +39,14 @@ class QueryAnswer(BaseModel):
 
 @export_module("autogen.agents.experimental")
 class InMemoryQueryEngine:
-    """
-    This engine stores ingested documents in memory and then injects them into an internal agent's system message for answering queries.
+    """This engine stores ingested documents in memory and then injects them into an internal agent's system message for answering queries.
 
     This implements the autogen.agentchat.contrib.rag.RAGQueryEngine protocol.
     """
 
     def __init__(
         self,
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: LLMConfig | dict[str, Any],
     ) -> None:
         # Deep copy the llm config to avoid changing the original
         structured_config = copy.deepcopy(llm_config)
@@ -65,7 +65,6 @@ class InMemoryQueryEngine:
 
     def query(self, question: str, *args: Any, **kwargs: Any) -> str:
         """Run a query against the ingested documents and return the answer."""
-
         # If no documents have been ingested, return an empty response
         if not self._ingested_documents:
             return QUERY_NO_INGESTIONS_REPLY
@@ -116,11 +115,10 @@ class InMemoryQueryEngine:
 
     def add_docs(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
     ) -> None:
-        """
-        Add additional documents to the in-memory store
+        """Add additional documents to the in-memory store
 
         Loads new Docling-parsed Markdown files from a specified directory or a list of file paths
         and inserts them into the in-memory store.
@@ -135,11 +133,8 @@ class InMemoryQueryEngine:
         new_doc_paths = new_doc_paths_or_urls or []
         self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths)
 
-    def _load_doc(
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
-    ) -> None:
-        """
-        Load documents from a directory and/or a list of file paths into the in-memory store.
+    def _load_doc(self, input_dir: Path | str | None, input_docs: Sequence[Path | str] | None) -> None:
+        """Load documents from a directory and/or a list of file paths into the in-memory store.
 
         This helper method reads files using native Python file operations and stores them
         in the in-memory document store. It supports reading text-based files, with the primary
@@ -179,16 +174,15 @@ class InMemoryQueryEngine:
                     raise ValueError(f"Document file not found: {doc_path}")
                 self._read_and_store_file(doc_path)
 
-    def _read_and_store_file(self, file_path: Union[Path, str]) -> None:
-        """
-        Read a file and store its content in the in-memory document store.
+    def _read_and_store_file(self, file_path: Path | str) -> None:
+        """Read a file and store its content in the in-memory document store.
 
         Args:
             file_path (Union[Path, str]): Path to the file to be read
         """
         file_path = Path(file_path)
         try:
-            with open(file_path, "r", encoding="utf-8") as file:
+            with open(file_path, encoding="utf-8") as file:
                 content = file.read()
 
             # Store the document in the in-memory store
@@ -199,8 +193,8 @@ class InMemoryQueryEngine:
 
     def init_db(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:

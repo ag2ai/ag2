@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -13,8 +13,7 @@ from ... import Depends, Tool
 from ...dependency_injection import on
 
 with optional_import_block():
-    from browser_use import Agent, Controller
-    from browser_use.browser.browser import Browser, BrowserConfig
+    from browser_use import Agent, BrowserProfile, BrowserSession, Controller
 
     from ....interop.langchain.langchain_chat_model_factory import LangChainChatModelFactory
 
@@ -32,11 +31,11 @@ class ExtractedContent(BaseModel):
     """
 
     content: str
-    url: Optional[str]
+    url: str | None
 
     @field_validator("url")
     @classmethod
-    def check_url(cls, v: str) -> Optional[str]:
+    def check_url(cls, v: str) -> str | None:
         """Check if the URL is about:blank and return None if it is.
 
         Args:
@@ -57,7 +56,7 @@ class BrowserUseResult(BaseModel):
     """
 
     extracted_content: list[ExtractedContent]
-    final_result: Optional[str]
+    final_result: str | None
 
 
 @require_optional_import(
@@ -78,21 +77,21 @@ class BrowserUseTool(Tool):
     def __init__(  # type: ignore[no-any-unimported]
         self,
         *,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        browser: Optional["Browser"] = None,
-        agent_kwargs: Optional[dict[str, Any]] = None,
-        browser_config: Optional[dict[str, Any]] = None,
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        browser: Optional["BrowserSession"] = None,
+        agent_kwargs: dict[str, Any] | None = None,
+        browser_config: dict[str, Any] | None = None,
     ):
         """Use the browser to perform a task.
 
         Args:
             llm_config: The LLM configuration. If None, the current LLMConfig from context is used.
-            browser: The browser to use. If defined, browser_config must be None
+            browser: The browser session to use. If defined, browser_config must be None
             agent_kwargs: Additional keyword arguments to pass to the Agent
             browser_config: The browser configuration to use. If defined, browser must be None
         """
         if llm_config is None:
-            llm_config = LLMConfig.current
+            raise ValueError("llm_config is required")
         if agent_kwargs is None:
             agent_kwargs = {}
         if browser_config is None:
@@ -104,8 +103,8 @@ class BrowserUseTool(Tool):
 
         async def browser_use(  # type: ignore[no-any-unimported]
             task: Annotated[str, "The task to perform."],
-            llm_config: Annotated[Union[LLMConfig, dict[str, Any]], Depends(on(llm_config))],
-            browser: Annotated[Optional[Browser], Depends(on(browser))],
+            llm_config: Annotated[LLMConfig | dict[str, Any], Depends(on(llm_config))],
+            browser: Annotated[BrowserSession | None, Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
             browser_config: Annotated[dict[str, Any], Depends(on(browser_config))],
         ) -> BrowserUseResult:
@@ -114,8 +113,8 @@ class BrowserUseTool(Tool):
             if browser is None:
                 # set default value for headless
                 headless = browser_config.pop("headless", True)
-                browser_config = BrowserConfig(headless=headless, **browser_config)
-                browser = Browser(config=browser_config)
+                browser_profile = BrowserProfile(headless=headless, **browser_config)
+                browser = BrowserSession(browser_profile=browser_profile)
             # set default value for generate_gif
             if "generate_gif" not in agent_kwargs:
                 agent_kwargs["generate_gif"] = False
@@ -145,7 +144,7 @@ class BrowserUseTool(Tool):
         )
 
     @staticmethod
-    def _get_controller(llm_config: Union[LLMConfig, dict[str, Any]]) -> Any:
+    def _get_controller(llm_config: LLMConfig | dict[str, Any]) -> Any:
         response_format = (
             llm_config["config_list"][0].get("response_format", None)
             if "config_list" in llm_config

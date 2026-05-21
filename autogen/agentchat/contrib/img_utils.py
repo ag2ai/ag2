@@ -63,7 +63,7 @@ def get_pil_image(image_file: Union[str, "Image.Image"]) -> "Image.Image":
 
     if image_file.startswith("http://") or image_file.startswith("https://"):
         # A URL file
-        response = requests.get(image_file)
+        response = requests.get(image_file, timeout=30)
         content = BytesIO(response.content)
         image = Image.open(content)
     # Match base64-encoded image URIs for supported formats: jpg, jpeg, png, gif, bmp, webp
@@ -194,7 +194,7 @@ def convert_base64_to_data_uri(base64_image):
 
 
 @require_optional_import("PIL", "unknown")
-def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dict[str, Any]]]:
+def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[str | dict[str, Any]]:
     """Formats the input prompt by replacing image tags and returns a list of text and images.
 
     Args:

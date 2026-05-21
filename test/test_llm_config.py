@@ -9,19 +9,25 @@ from copy import copy, deepcopy
 from typing import Any
 
 import pytest
-from pydantic import ValidationError  # Added import
+from pydantic import ValidationError
 
+from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2LLMConfigEntry
 from autogen.llm_config import LLMConfig
-from autogen.oai.anthropic import AnthropicLLMConfigEntry
-from autogen.oai.bedrock import BedrockLLMConfigEntry
-from autogen.oai.cerebras import CerebrasLLMConfigEntry
-from autogen.oai.client import AzureOpenAILLMConfigEntry, DeepSeekLLMConfigEntry, OpenAILLMConfigEntry
-from autogen.oai.cohere import CohereLLMConfigEntry
-from autogen.oai.gemini import GeminiLLMConfigEntry
-from autogen.oai.groq import GroqLLMConfigEntry
-from autogen.oai.mistral import MistralLLMConfigEntry
-from autogen.oai.ollama import OllamaLLMConfigEntry
-from autogen.oai.together import TogetherLLMConfigEntry
+from autogen.oai import (
+    AnthropicLLMConfigEntry,
+    AzureOpenAILLMConfigEntry,
+    BedrockLLMConfigEntry,
+    CerebrasLLMConfigEntry,
+    CohereLLMConfigEntry,
+    DeepSeekLLMConfigEntry,
+    GeminiLLMConfigEntry,
+    GroqLLMConfigEntry,
+    MistralLLMConfigEntry,
+    OllamaLLMConfigEntry,
+    OpenAILLMConfigEntry,
+    OpenAIResponsesLLMConfigEntry,
+    TogetherLLMConfigEntry,
+)
 
 JSON_SAMPLE = """
 [
@@ -62,13 +68,13 @@ def openai_llm_config_entry() -> OpenAILLMConfigEntry:
 
 class TestLLMConfigEntry:
     def test_extra_fields(self) -> None:
-        with pytest.raises(ValueError) as e:
-            # Intentionally passing extra field to raise an error
-            OpenAILLMConfigEntry(  # type: ignore [call-arg]
-                model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly", extra="extra"
-            )
-        assert "Extra inputs are not permitted [type=extra_forbidden, input_value='extra', input_type=str]" in str(
-            e.value
+        assert (
+            OpenAILLMConfigEntry(  # type: ignore[attr-defined]
+                model="gpt-4o-mini",
+                api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                extra="extra",
+            ).extra
+            == "extra"
         )
 
     def test_serialization(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
@@ -114,444 +120,369 @@ class TestLLMConfigEntry:
 class TestLLMConfig:
     @pytest.fixture
     def openai_llm_config(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> LLMConfig:
-        return LLMConfig(config_list=[openai_llm_config_entry], temperature=0.5, check_every_ms=1000, cache_seed=42)
+        return LLMConfig(
+            openai_llm_config_entry,
+            temperature=0.5,
+            check_every_ms=1000,
+            cache_seed=42,
+        )
+
+    def test_init_with_extras(self) -> None:
+        assert LLMConfig(
+            {
+                "model": "gpt-4o-mini",
+                "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                "api_type": "openai",
+                "extra": "extra",
+            },
+            temperature=0.5,
+            max_tokens=1024,
+            check_every_ms=1000,
+            cache_seed=42,
+        ) == LLMConfig(
+            OpenAILLMConfigEntry(
+                model="gpt-4o-mini",
+                api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                temperature=0.5,
+                max_tokens=1024,
+                extra="extra",
+            ),
+            temperature=0.5,
+            max_tokens=1024,
+            check_every_ms=1000,
+            cache_seed=42,
+        )
 
     @pytest.mark.parametrize(
-        "llm_config, expected",
+        (
+            "llm_config",
+            "expected",
+        ),
         [
-            (
-                # todo add more test cases
+            pytest.param(
                 {
-                    "config_list": [
-                        {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
-                    ]
-                },
-                LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                        )
-                    ]
-                ),
-            ),
-            (
-                {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"},
-                LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                        )
-                    ]
-                ),
-            ),
-            (
-                {
-                    "model": "gpt-4o-mini",
+                    "model": "o3",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                    "cache_seed": 42,
+                    "max_completion_tokens": 1024,
+                    "reasoning_effort": "low",
                 },
                 LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                        )
-                    ],
-                    cache_seed=42,
+                    OpenAILLMConfigEntry(
+                        model="o3",
+                        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        max_completion_tokens=1024,
+                        reasoning_effort="low",
+                    )
                 ),
+                id="openai o3",
             ),
-            (
+            pytest.param(
                 {
-                    "config_list": [
-                        {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
-                    ],
-                    "max_tokens": 1024,
+                    "model": "o3",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "api_type": "azure",
+                    "base_url": "https://api.openai.com",
+                    "max_completion_tokens": 1024,
+                    "reasoning_effort": "low",
                 },
                 LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            max_tokens=1024,
-                        )
-                    ]
+                    AzureOpenAILLMConfigEntry(
+                        model="o3",
+                        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        base_url="https://api.openai.com",
+                        max_completion_tokens=1024,
+                        reasoning_effort="low",
+                    )
                 ),
+                id="azure o3",
             ),
-            (
+            pytest.param(
                 {
-                    "config_list": [
-                        {
-                            "model": "o3",
-                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            "max_completion_tokens": 1024,
-                            "reasoning_effort": "low",
-                        }
-                    ],
+                    "api_type": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "api_key": "dummy_api_key",
+                    "stream": False,
+                    "temperature": 1.0,
+                    "max_tokens": 100,
                 },
                 LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="o3",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            max_completion_tokens=1024,
-                            reasoning_effort="low",
-                        )
-                    ]
+                    AnthropicLLMConfigEntry(
+                        model="claude-sonnet-4-5",
+                        api_key="dummy_api_key",
+                        stream=False,
+                        temperature=1.0,
+                        max_tokens=100,
+                    )
                 ),
+                id="anthropic claude-sonnet-4-5",
             ),
-            (
+            pytest.param(
                 {
-                    "config_list": [
-                        {
-                            "model": "gpt-4o-mini",
-                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            "api_type": "openai",
-                        }
-                    ],
+                    "api_type": "bedrock",
+                    "model": "anthropic.claude-4-5-sonnet-20250929-v1:0",
+                    "aws_region": "us-east-1",
+                    "aws_access_key": "test_access_key_id",
+                    "aws_secret_key": "test_secret_access_key",
+                    "aws_session_token": "test_session_token",
+                    "temperature": 0.8,
+                    "supports_system_prompts": True,
+                },
+                LLMConfig(
+                    BedrockLLMConfigEntry(
+                        model="anthropic.claude-4-5-sonnet-20250929-v1:0",
+                        aws_region="us-east-1",
+                        aws_access_key="test_access_key_id",
+                        aws_secret_key="test_secret_access_key",
+                        aws_session_token="test_session_token",
+                        temperature=0.8,
+                    )
+                ),
+                id="bedrock claude-4-5-sonnet",
+            ),
+            pytest.param(
+                {
+                    "api_type": "cerebras",
+                    "api_key": "fake_api_key",
+                    "model": "llama3.1-8b",
+                    "max_tokens": 1000,
+                    "seed": 42,
+                    "stream": False,
+                    "temperature": 1.0,
+                },
+                LLMConfig(
+                    CerebrasLLMConfigEntry(
+                        api_key="fake_api_key",
+                        model="llama3.1-8b",
+                        max_tokens=1000,
+                        seed=42,
+                        stream=False,
+                        temperature=1.0,
+                    )
+                ),
+                id="cerebras llama3.1-8b",
+            ),
+            pytest.param(
+                {
+                    "api_type": "cohere",
+                    "model": "command-r-plus",
+                    "api_key": "dummy_api_key",
+                    "frequency_penalty": 0,
+                    "k": 0,
+                    "top_p": 0.75,
+                    "presence_penalty": 0,
+                    "strict_tools": False,
+                    "tags": [],
+                },
+                LLMConfig(
+                    CohereLLMConfigEntry(
+                        model="command-r-plus",
+                        api_key="dummy_api_key",
+                        top_p=0.75,
+                    )
+                ),
+                id="cohere command-r-plus",
+            ),
+            pytest.param(
+                {
+                    "api_type": "deepseek",
+                    "api_key": "fake_api_key",
+                    "model": "deepseek-chat",
+                    "base_url": "https://api.deepseek.com/v1",
+                    "max_tokens": 8192,
                     "temperature": 0.5,
-                    "check_every_ms": 1000,
-                    "cache_seed": 42,
                 },
                 LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                        )
-                    ],
-                    temperature=0.5,
-                    check_every_ms=1000,
-                    cache_seed=42,
+                    DeepSeekLLMConfigEntry(
+                        api_key="fake_api_key",
+                        model="deepseek-chat",
+                        temperature=0.5,
+                    )
                 ),
+                id="deepseek deepseek-chat",
             ),
-            (
+            pytest.param(
                 {
-                    "config_list": [
-                        {
-                            "model": "gpt-4o-mini",
-                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            "api_type": "azure",
-                            "base_url": "https://api.openai.com",
-                        }
-                    ],
+                    "api_type": "google",
+                    "model": "gemini-2.5-flash",
+                    "api_key": "dummy_api_key",
+                    "project_id": "fake-project-id",
+                    "location": "us-west1",
+                    "stream": False,
                 },
                 LLMConfig(
-                    config_list=[
-                        AzureOpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            base_url="https://api.openai.com",
-                        )
-                    ],
+                    GeminiLLMConfigEntry(
+                        model="gemini-2.5-flash",
+                        api_key="dummy_api_key",
+                        project_id="fake-project-id",
+                        location="us-west1",
+                    )
                 ),
+                id="google gemini-2.5-flash",
             ),
-            (
+            pytest.param(
                 {
-                    "config_list": [
-                        {
-                            "model": "o3",
-                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            "api_type": "azure",
-                            "base_url": "https://api.openai.com",
-                            "max_completion_tokens": 1024,
-                            "reasoning_effort": "low",
-                        }
-                    ],
+                    "api_type": "groq",
+                    "model": "llama3-8b-8192",
+                    "api_key": "fake_api_key",
+                    "temperature": 1.0,
                 },
                 LLMConfig(
-                    config_list=[
-                        AzureOpenAILLMConfigEntry(
-                            model="o3",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            base_url="https://api.openai.com",
-                            max_completion_tokens=1024,
-                            reasoning_effort="low",
-                        )
-                    ],
+                    GroqLLMConfigEntry(
+                        api_key="fake_api_key",
+                        model="llama3-8b-8192",
+                        temperature=1.0,
+                    ),
                 ),
+                id="groq llama3-8b-8192",
             ),
-            (
+            pytest.param(
                 {
-                    "config_list": [
-                        {
-                            "api_type": "anthropic",
-                            "model": "claude-3-5-sonnet-latest",
-                            "api_key": "dummy_api_key",
-                            "stream": False,
-                            "temperature": 1.0,
-                            "top_p": 0.8,
-                            "max_tokens": 100,
-                            "tags": [],
-                        }
-                    ]
+                    "api_type": "mistral",
+                    "model": "mistral-small-latest",
+                    "api_key": "fake_api_key",
+                    "temperature": 0.7,
                 },
                 LLMConfig(
-                    config_list=[
-                        AnthropicLLMConfigEntry(
-                            model="claude-3-5-sonnet-latest",
-                            api_key="dummy_api_key",
-                            stream=False,
-                            temperature=1.0,
-                            top_p=0.8,
-                            max_tokens=100,
-                        )
-                    ],
+                    MistralLLMConfigEntry(
+                        model="mistral-small-latest",
+                        api_key="fake_api_key",
+                        temperature=0.7,
+                    )
                 ),
+                id="mistral mistral-small-latest",
             ),
-            (
+            pytest.param(
                 {
-                    "config_list": [
-                        {
-                            "api_type": "bedrock",
-                            "model": "anthropic.claude-3-sonnet-20240229-v1:0",
-                            "aws_region": "us-east-1",
-                            "aws_access_key": "test_access_key_id",
-                            "aws_secret_key": "test_secret_access_key",
-                            "aws_session_token": "test_session_token",
-                            "temperature": 0.8,
-                            "topP": 0.6,
-                            "stream": False,
-                            "tags": [],
-                            "supports_system_prompts": True,
-                        }
-                    ]
+                    "api_type": "ollama",
+                    "model": "llama3.1:8b",
+                    "num_ctx": 2048,
+                    "num_predict": -1,
+                    "repeat_penalty": 1.1,
+                    "seed": 0,
+                    "stream": False,
+                    "tags": [],
+                    "temperature": 0.8,
+                    "top_k": 40,
+                    "native_tool_calls": False,
                 },
                 LLMConfig(
-                    config_list=[
-                        BedrockLLMConfigEntry(
-                            model="anthropic.claude-3-sonnet-20240229-v1:0",
-                            aws_region="us-east-1",
-                            aws_access_key="test_access_key_id",
-                            aws_secret_key="test_secret_access_key",
-                            aws_session_token="test_session_token",
-                            temperature=0.8,
-                            topP=0.6,
-                            stream=False,
-                        )
-                    ]
+                    OllamaLLMConfigEntry(model="llama3.1:8b", temperature=0.8),
                 ),
+                id="ollama llama3.1:8b",
             ),
-            (
+            pytest.param(
                 {
-                    "config_list": [
-                        {
-                            "api_type": "cerebras",
-                            "api_key": "fake_api_key",
-                            "model": "llama3.1-8b",
-                            "max_tokens": 1000,
-                            "seed": 42,
-                            "stream": False,
-                            "temperature": 1.0,
-                            "tags": [],
-                        }
-                    ]
+                    "api_type": "together",
+                    "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                    "api_key": "fake_api_key",
+                    "safety_model": "Meta-Llama/Llama-Guard-7b",
+                    "tags": [],
+                    "max_tokens": 512,
+                    "stream": False,
                 },
                 LLMConfig(
-                    config_list=[
-                        CerebrasLLMConfigEntry(
-                            api_key="fake_api_key",
-                            model="llama3.1-8b",
-                            max_tokens=1000,
-                            seed=42,
-                            stream=False,
-                            temperature=1,
-                        )
-                    ]
+                    TogetherLLMConfigEntry(
+                        model="mistralai/Mixtral-8x7B-Instruct-v0.1",
+                        api_key="fake_api_key",
+                        safety_model="Meta-Llama/Llama-Guard-7b",
+                    )
                 ),
+                id="together mistralai/Mixtral-8x7B-Instruct-v0.1",
             ),
-            (
+            pytest.param(
                 {
-                    "config_list": [
-                        {
-                            "api_type": "cohere",
-                            "model": "command-r-plus",
-                            "api_key": "dummy_api_key",
-                            "frequency_penalty": 0,
-                            "k": 0,
-                            "p": 0.75,
-                            "presence_penalty": 0,
-                            "strict_tools": False,
-                            "tags": [],
-                            "temperature": 0.3,
-                        }
-                    ]
+                    "api_type": "responses_v2",
+                    "model": "o3",
+                    "api_key": "fake_api_key",
+                    "max_tokens": 512,
+                    "stream": False,
                 },
                 LLMConfig(
-                    config_list=[
-                        CohereLLMConfigEntry(
-                            model="command-r-plus",
-                            api_key="dummy_api_key",
-                            stream=False,
-                        )
-                    ]
+                    OpenAIResponsesV2LLMConfigEntry(
+                        model="o3",
+                        api_key="fake_api_key",
+                        max_tokens=512,
+                    )
                 ),
-            ),
-            (
-                {
-                    "config_list": [
-                        {
-                            "api_type": "deepseek",
-                            "api_key": "fake_api_key",
-                            "model": "deepseek-chat",
-                            "base_url": "https://api.deepseek.com/v1",
-                            "max_tokens": 8192,
-                            "temperature": 0.5,
-                            "tags": [],
-                        }
-                    ]
-                },
-                LLMConfig(
-                    config_list=[
-                        DeepSeekLLMConfigEntry(
-                            api_key="fake_api_key",
-                            model="deepseek-chat",
-                        )
-                    ]
-                ),
-            ),
-            (
-                {
-                    "config_list": [
-                        {
-                            "api_type": "google",
-                            "model": "gemini-2.0-flash-lite",
-                            "api_key": "dummy_api_key",
-                            "project_id": "fake-project-id",
-                            "location": "us-west1",
-                            "stream": False,
-                            "tags": [],
-                        }
-                    ]
-                },
-                LLMConfig(
-                    config_list=[
-                        GeminiLLMConfigEntry(
-                            model="gemini-2.0-flash-lite",
-                            api_key="dummy_api_key",
-                            project_id="fake-project-id",
-                            location="us-west1",
-                        )
-                    ]
-                ),
-            ),
-            (
-                {
-                    "config_list": [
-                        {
-                            "api_type": "groq",
-                            "model": "llama3-8b-8192",
-                            "api_key": "fake_api_key",
-                            "temperature": 1,
-                            "stream": False,
-                            "tags": [],
-                        }
-                    ]
-                },
-                LLMConfig(config_list=[GroqLLMConfigEntry(api_key="fake_api_key", model="llama3-8b-8192")]),
-            ),
-            (
-                {
-                    "config_list": [
-                        {
-                            "api_type": "mistral",
-                            "model": "mistral-small-latest",
-                            "api_key": "fake_api_key",
-                            "safe_prompt": False,
-                            "stream": False,
-                            "temperature": 0.7,
-                            "tags": [],
-                        }
-                    ]
-                },
-                LLMConfig(
-                    config_list=[
-                        MistralLLMConfigEntry(
-                            model="mistral-small-latest",
-                            api_key="fake_api_key",
-                        )
-                    ]
-                ),
-            ),
-            (
-                {
-                    "config_list": [
-                        {
-                            "api_type": "ollama",
-                            "model": "llama3.1:8b",
-                            "num_ctx": 2048,
-                            "num_predict": -1,
-                            "repeat_penalty": 1.1,
-                            "seed": 0,
-                            "stream": False,
-                            "tags": [],
-                            "temperature": 0.8,
-                            "top_k": 40,
-                            "top_p": 0.9,
-                            "native_tool_calls": False,
-                        }
-                    ]
-                },
-                LLMConfig(config_list=[OllamaLLMConfigEntry(model="llama3.1:8b")]),
-            ),
-            (
-                {
-                    "config_list": [
-                        {
-                            "api_type": "together",
-                            "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-                            "api_key": "fake_api_key",
-                            "safety_model": "Meta-Llama/Llama-Guard-7b",
-                            "tags": [],
-                            "max_tokens": 512,
-                            "stream": False,
-                        }
-                    ]
-                },
-                LLMConfig(
-                    config_list=[
-                        TogetherLLMConfigEntry(
-                            model="mistralai/Mixtral-8x7B-Instruct-v0.1",
-                            api_key="fake_api_key",
-                            safety_model="Meta-Llama/Llama-Guard-7b",
-                        )
-                    ]
-                ),
-            ),
-            (
-                {
-                    "model": "gpt-4o-realtime-preview",
-                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                    "voice": "alloy",
-                    "tags": ["gpt-4o-realtime", "realtime"],
-                },
-                LLMConfig(
-                    model="gpt-4o-realtime-preview",
-                    api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                    voice="alloy",
-                    tags=["gpt-4o-realtime", "realtime"],
-                ),
+                id="openaoi responses o3",
             ),
         ],
     )
-    def test_init(self, llm_config: dict[str, Any], expected: LLMConfig) -> None:
-        actual = LLMConfig(**llm_config)
-        assert actual == expected, actual
+    def test_init_with_entities(self, llm_config: dict[str, Any], expected: LLMConfig) -> None:
+        assert LLMConfig(llm_config) == expected
 
-    def test_extra_fields(self) -> None:
-        with pytest.raises(ValueError) as e:
-            LLMConfig(
-                config_list=[
+    @pytest.mark.parametrize(
+        (
+            "llm_config",
+            "expected",
+        ),
+        [
+            pytest.param(
+                {
+                    "model": "o3",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                },
+                LLMConfig(
                     OpenAILLMConfigEntry(
-                        model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+                        model="o3",
+                        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     )
+                ),
+                id="config from dict",
+            ),
+            pytest.param(
+                OpenAILLMConfigEntry(
+                    model="o3",
+                    api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                ),
+                LLMConfig(
+                    OpenAILLMConfigEntry(
+                        model="o3",
+                        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    )
+                ),
+                id="config from entry",
+            ),
+            pytest.param(
+                OpenAILLMConfigEntry(
+                    model="o3",
+                    api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                ),
+                LLMConfig(
+                    OpenAILLMConfigEntry(
+                        model="o3",
+                        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    )
+                ),
+                id="config from config",
+            ),
+            pytest.param(
+                [
+                    {
+                        "model": "o3",
+                        "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    },
+                    OpenAILLMConfigEntry(
+                        model="gpt-4",
+                        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    ),
                 ],
-                extra="extra",
-            )
-        assert "Extra inputs are not permitted [type=extra_forbidden, input_value='extra', input_type=str]" in str(
-            e.value
-        )
+                LLMConfig(
+                    OpenAILLMConfigEntry(
+                        model="o3",
+                        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    ),
+                    OpenAILLMConfigEntry(
+                        model="gpt-4",
+                        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    ),
+                ),
+                id="config from list",
+            ),
+        ],
+    )
+    def test_ensure_config(self, llm_config: Any, expected: LLMConfig) -> None:
+        assert LLMConfig.ensure_config(llm_config) == expected
 
     def test_serialization(self, openai_llm_config: LLMConfig) -> None:
         actual = openai_llm_config.model_dump()
@@ -562,6 +493,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "temperature": 0.5,
                     "stream": False,
                 }
             ],
@@ -570,14 +502,6 @@ class TestLLMConfig:
             "cache_seed": 42,
         }
         assert actual == expected
-
-    def test_deserialization(self, openai_llm_config: LLMConfig) -> None:
-        actual = LLMConfig(**openai_llm_config.model_dump())
-        assert actual.model_dump() == openai_llm_config.model_dump()
-        assert type(actual._model) == type(openai_llm_config._model)
-        assert actual._model == openai_llm_config._model
-        assert actual == openai_llm_config
-        assert isinstance(actual.config_list[0], OpenAILLMConfigEntry)
 
     def test_get(self, openai_llm_config: LLMConfig) -> None:
         assert openai_llm_config.get("temperature") == 0.5
@@ -627,6 +551,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "temperature": 0.5,
                     "stream": False,
                 }
             ],
@@ -649,6 +574,7 @@ class TestLLMConfig:
             0.5,
             1000,
             42,
+            # Remove ["**"] - allowed_paths is None and excluded
             [
                 {
                     "api_type": "openai",
@@ -656,6 +582,7 @@ class TestLLMConfig:
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
                     "stream": False,
+                    "temperature": 0.5,
                 }
             ],
         ]
@@ -702,31 +629,8 @@ class TestLLMConfig:
         assert "config_list" in openai_llm_config
         assert not "config_list" not in openai_llm_config
 
-    def test_with_context(self, openai_llm_config: LLMConfig) -> None:
-        # Test with dummy agent
-        class DummyAgent:
-            def __init__(self) -> None:
-                self.llm_config = LLMConfig.get_current_llm_config()
-
-        with openai_llm_config:
-            agent = DummyAgent()
-        assert agent.llm_config == openai_llm_config
-        assert agent.llm_config.temperature == 0.5
-        assert agent.llm_config.config_list[0]["model"] == "gpt-4o-mini"
-
-        # Test passing LLMConfig object as parameter
-        assert LLMConfig.get_current_llm_config(openai_llm_config) == openai_llm_config
-
-        # Test accessing current_llm_config outside the context
-        assert LLMConfig.get_current_llm_config() is None
-        with openai_llm_config:
-            actual = LLMConfig.get_current_llm_config()
-            assert actual == openai_llm_config
-
-        assert LLMConfig.get_current_llm_config() is None
-
     @pytest.mark.parametrize(
-        "filter_dict, exclude, expected",
+        ("filter_dict, exclude, expected"),
         [
             (
                 {"tags": ["gpt35", "gpt4"]},
@@ -756,15 +660,14 @@ class TestLLMConfig:
         ],
     )
     def test_where(self, filter_dict: dict[str, Any], exclude: bool, expected: list[dict[str, Any]]) -> None:
-        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT, temperature=0.1)
+        openai_llm_config = LLMConfig(*JSON_SAMPLE_DICT)
 
         actual = openai_llm_config.where(**filter_dict, exclude=exclude)
-        assert isinstance(actual, LLMConfig)
-        assert actual.config_list == LLMConfig(config_list=expected).config_list
-        assert actual.temperature == 0.1
+
+        assert actual == LLMConfig(*expected)
 
     def test_where_invalid_filter(self) -> None:
-        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        openai_llm_config = LLMConfig(*JSON_SAMPLE_DICT)
 
         with pytest.raises(ValueError) as e:
             openai_llm_config.where(api_type="invalid")
@@ -772,7 +675,7 @@ class TestLLMConfig:
 
     def test_repr(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
         # Case 1: routing_method is None (default)
-        config_default_routing = LLMConfig(config_list=[openai_llm_config_entry])
+        config_default_routing = LLMConfig(openai_llm_config_entry)
         actual_repr_default = repr(config_default_routing)
         assert config_default_routing.routing_method is None
         assert "routing_method" not in actual_repr_default
@@ -789,9 +692,7 @@ class TestLLMConfig:
             assert "'base_url'" not in actual_repr_default  # Ensure it's omitted
 
         # Case 2: routing_method is explicitly set
-        config_custom_routing = LLMConfig(
-            config_list=[openai_llm_config_entry], routing_method="round_robin", temperature=0.77
-        )
+        config_custom_routing = LLMConfig(openai_llm_config_entry, routing_method="round_robin", temperature=0.77)
         actual_repr_custom = repr(config_custom_routing)
         assert config_custom_routing.routing_method == "round_robin"
         assert "routing_method='round_robin'" in actual_repr_custom
@@ -802,7 +703,7 @@ class TestLLMConfig:
     def test_str(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
         # str calls repr, so logic is similar
         # Case 1: routing_method is None (default)
-        config_default_routing = LLMConfig(config_list=[openai_llm_config_entry])
+        config_default_routing = LLMConfig(openai_llm_config_entry)
         actual_str_default = str(config_default_routing)
         assert config_default_routing.routing_method is None
         assert "routing_method" not in actual_str_default
@@ -817,9 +718,7 @@ class TestLLMConfig:
             assert "'base_url'" not in actual_str_default
 
         # Case 2: routing_method is explicitly set
-        config_custom_routing = LLMConfig(
-            config_list=[openai_llm_config_entry], routing_method="round_robin", temperature=0.77
-        )
+        config_custom_routing = LLMConfig(openai_llm_config_entry, routing_method="round_robin", temperature=0.77)
         actual_str_custom = str(config_custom_routing)
         assert config_custom_routing.routing_method == "round_robin"
         assert "routing_method='round_robin'" in actual_str_custom
@@ -828,20 +727,20 @@ class TestLLMConfig:
         assert "temperature=0.77" in actual_str_custom
 
     def test_routing_method_default(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
-        llm_config = LLMConfig(config_list=[openai_llm_config_entry])
+        llm_config = LLMConfig(openai_llm_config_entry)
         assert llm_config.routing_method is None
 
     def test_routing_method_custom(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
-        llm_config = LLMConfig(config_list=[openai_llm_config_entry], routing_method="round_robin")
+        llm_config = LLMConfig(openai_llm_config_entry, routing_method="round_robin")
         assert llm_config.routing_method == "round_robin"
 
     def test_routing_method_invalid(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
         with pytest.raises(ValidationError):  # Changed from ValueError to ValidationError
-            LLMConfig(config_list=[openai_llm_config_entry], routing_method="invalid_method")  # type: ignore[arg-type]
+            LLMConfig(openai_llm_config_entry, routing_method="invalid_method")  # type: ignore[arg-type]
 
     def test_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)
-        expected = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        expected = LLMConfig(*JSON_SAMPLE_DICT)
         actual = LLMConfig.from_json(env="LLM_CONFIG")
         assert isinstance(actual, LLMConfig)
         assert actual == expected, actual
@@ -854,7 +753,7 @@ class TestLLMConfig:
 
     def test_from_json_env_with_kwargs(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)
-        expected = LLMConfig(config_list=JSON_SAMPLE_DICT, temperature=0.5, check_every_ms=1000, cache_seed=42)
+        expected = LLMConfig(*JSON_SAMPLE_DICT, temperature=0.5, check_every_ms=1000, cache_seed=42)
         actual = LLMConfig.from_json(env="LLM_CONFIG", temperature=0.5, check_every_ms=1000, cache_seed=42)
         assert isinstance(actual, LLMConfig)
         assert actual == expected, actual
@@ -865,7 +764,7 @@ class TestLLMConfig:
             with open(file_path, "w") as f:
                 f.write(JSON_SAMPLE)
 
-            expected = LLMConfig(config_list=JSON_SAMPLE_DICT)
+            expected = LLMConfig(*JSON_SAMPLE_DICT)
             actual = LLMConfig.from_json(path=file_path)
             assert isinstance(actual, LLMConfig)
             assert actual == expected, actual
@@ -891,29 +790,126 @@ class TestLLMConfig:
         assert actual == openai_llm_config
         assert actual is not openai_llm_config
 
-    def test_current(self) -> None:
-        llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+    def test_llm_config_doesnt_patch_entry(self) -> None:
+        entry = OpenAILLMConfigEntry(top_p=0.5, model="o3", extra="extra")
 
-        # Test without context. Should raise an error
-        expected_error = "No current LLMConfig set. Are you inside a context block?"
-        with pytest.raises(ValueError) as e:
-            LLMConfig.current
-        assert str(e.value) == expected_error
-        with pytest.raises(ValueError) as e:
-            LLMConfig.default
-        assert str(e.value) == expected_error
+        # test entry combination
+        assert LLMConfig(entry, max_tokens=1024).config_list == [
+            OpenAILLMConfigEntry(top_p=0.5, model="o3", extra="extra", max_tokens=1024)
+        ]
 
-        with llm_config:
-            assert LLMConfig.get_current_llm_config() == llm_config
-            assert LLMConfig.current == llm_config
-            assert LLMConfig.default == llm_config
+        assert entry.max_tokens is None
 
-            with LLMConfig.current.where(api_type="openai"):
-                assert LLMConfig.get_current_llm_config() == llm_config.where(api_type="openai")
-                assert LLMConfig.current == llm_config.where(api_type="openai")
-                assert LLMConfig.default == llm_config.where(api_type="openai")
+    def test_llm_config_doesnt_patch_entry_dict(self) -> None:
+        entry = {"top_p": 0.5, "model": "o3", "extra": "extra"}
 
-                with LLMConfig.default.where(model="gpt-4"):
-                    assert LLMConfig.get_current_llm_config() == llm_config.where(api_type="openai", model="gpt-4")
-                    assert LLMConfig.current == llm_config.where(api_type="openai", model="gpt-4")
-                    assert LLMConfig.default == llm_config.where(api_type="openai", model="gpt-4")
+        # test entry combination
+        assert LLMConfig(entry, max_tokens=1024).config_list == [
+            OpenAILLMConfigEntry(top_p=0.5, model="o3", extra="extra", max_tokens=1024)
+        ]
+
+        assert entry == {"top_p": 0.5, "model": "o3", "extra": "extra"}
+
+    def test_openai_llm_config_entry_with_workspace_dir(
+        self, openai_llm_config_entry: OpenAIResponsesLLMConfigEntry
+    ) -> None:
+        """Test OpenAIResponsesLLMConfigEntry with workspace_dir parameter."""
+        entry = OpenAIResponsesLLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            workspace_dir="./my_project",
+        )
+        assert entry.workspace_dir == "./my_project"
+        assert entry.model_dump()["workspace_dir"] == "./my_project"
+
+    def test_openai_llm_config_entry_with_allowed_paths(
+        self, openai_llm_config_entry: OpenAIResponsesLLMConfigEntry
+    ) -> None:
+        """Test OpenAIResponsesLLMConfigEntry with allowed_paths parameter."""
+        entry = OpenAIResponsesLLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            allowed_paths=["src/**", "tests/**"],
+        )
+        assert entry.allowed_paths == ["src/**", "tests/**"]
+        assert entry.model_dump()["allowed_paths"] == ["src/**", "tests/**"]
+
+    def test_openai_llm_config_entry_workspace_dir_and_allowed_paths(self) -> None:
+        """Test OpenAIResponsesLLMConfigEntry with both workspace_dir and allowed_paths."""
+        entry = OpenAIResponsesLLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            workspace_dir="./project",
+            allowed_paths=["src/**", "*.py"],
+        )
+        assert entry.workspace_dir == "./project"
+        assert entry.allowed_paths == ["src/**", "*.py"]
+
+        # Test that they're included in model_dump
+        dumped = entry.model_dump()
+        assert dumped["workspace_dir"] == "./project"
+        assert dumped["allowed_paths"] == ["src/**", "*.py"]
+
+    def test_openai_llm_config_entry_defaults_workspace_dir_and_allowed_paths(self) -> None:
+        """Test that workspace_dir and allowed_paths default to None."""
+        entry = OpenAIResponsesLLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        )
+        assert entry.workspace_dir is None
+        assert entry.allowed_paths is None
+
+        # Test that None values are excluded from model_dump with exclude_none=True
+        dumped = entry.model_dump(exclude_none=True)
+        assert "workspace_dir" not in dumped
+        assert "allowed_paths" not in dumped
+
+    def test_llm_config_with_entry_workspace_dir_and_allowed_paths(self) -> None:
+        """Test LLMConfig with OpenAIResponsesLLMConfigEntry containing workspace_dir and allowed_paths."""
+        entry = OpenAIResponsesLLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            workspace_dir="./project",
+            allowed_paths=["src/**"],
+        )
+        config = LLMConfig(entry)
+
+        # Verify they're in the config entry, not at LLMConfig level
+        assert config.config_list[0].workspace_dir == "./project"  # type: ignore[union-attr]
+        assert config.config_list[0].allowed_paths == ["src/**"]  # type: ignore[union-attr]
+
+        # Verify LLMConfig doesn't have these attributes
+        assert not hasattr(config, "workspace_dir")
+        assert not hasattr(config, "allowed_paths")
+
+    def test_llm_config_copy_preserves_entry_workspace_dir(self) -> None:
+        """Test that copy() preserves workspace_dir in config entry."""
+        entry = OpenAILLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            workspace_dir="./project",
+        )
+        config = LLMConfig(entry)
+        copied = config.copy()
+
+        # Verify workspace_dir is preserved in the copied config entry
+        assert copied.config_list[0].workspace_dir == "./project"  # type: ignore[union-attr]
+        assert copied.config_list[0].workspace_dir == config.config_list[0].workspace_dir  # type: ignore[union-attr]
+
+    def test_llm_config_dict_with_workspace_dir_and_allowed_paths(self) -> None:
+        """Test LLMConfig with dict config containing workspace_dir and allowed_paths."""
+        config = LLMConfig({
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            "workspace_dir": "./project",
+            "allowed_paths": ["src/**", "*.py"],
+        })
+
+        # Verify they're in the config entry
+        assert config.config_list[0].workspace_dir == "./project"  # type: ignore[union-attr]
+        assert config.config_list[0].allowed_paths == ["src/**", "*.py"]  # type: ignore[union-attr]
+
+        # Verify LLMConfig doesn't have these attributes
+        assert not hasattr(config, "workspace_dir")
+        assert not hasattr(config, "allowed_paths")

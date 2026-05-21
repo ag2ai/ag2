@@ -59,7 +59,7 @@ credentials = provider.get_credentials()
 ```python
 llm_config = LLMConfig.from_json(
     path="OAI_CONFIG_LIST",
-).where(model="gpt-4o-mini")
+).where(model="gpt-5-nano")
 
 assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 ```

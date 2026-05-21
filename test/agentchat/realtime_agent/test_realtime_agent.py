@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from autogen.agentchat.realtime.experimental import RealtimeAgent
 from autogen.tools.tool import Tool
-
-from ...conftest import Credentials
+from test.credentials import Credentials
 
 
 def f(a: int, b: int = 3) -> int:

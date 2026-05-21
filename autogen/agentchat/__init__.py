@@ -15,30 +15,46 @@ from .contrib.swarm_agent import (
     run_swarm,
 )
 from .conversable_agent import ConversableAgent, UpdateSystemMessage, register_function
-from .group.multi_agent_chat import a_initiate_group_chat, a_run_group_chat, initiate_group_chat, run_group_chat
+from .eligibility_policy import AgentDescriptionGuard, AgentEligibilityPolicy, SelectionContext
+from .group import ContextVariables, ReplyResult
+from .group.multi_agent_chat import (
+    a_initiate_group_chat,
+    a_run_group_chat,
+    a_run_group_chat_iter,
+    initiate_group_chat,
+    run_group_chat,
+    run_group_chat_iter,
+)
 from .groupchat import GroupChat, GroupChatManager
 from .user_proxy_agent import UserProxyAgent
 from .utils import gather_usage_summary
 
 __all__ = [
     "Agent",
+    "AgentDescriptionGuard",
+    "AgentEligibilityPolicy",
     "AssistantAgent",
     "ChatResult",
+    "ContextVariables",
     "ConversableAgent",
     "GroupChat",
     "GroupChatManager",
     "LLMAgent",
+    "ReplyResult",
+    "SelectionContext",
     "UpdateSystemMessage",
     "UserProxyAgent",
     "a_initiate_chats",
     "a_initiate_group_chat",
     "a_initiate_swarm_chat",
     "a_run_group_chat",
+    "a_run_group_chat_iter",
     "a_run_swarm",
     "gather_usage_summary",
     "initiate_chats",
     "initiate_group_chat",
     "register_function",
     "run_group_chat",
+    "run_group_chat_iter",
     "run_swarm",
 ]

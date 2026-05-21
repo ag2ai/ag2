@@ -16,18 +16,18 @@ class TestConsoleIO:
     def setup_method(self) -> None:
         self.console_io = IOConsole()
 
-    @patch("builtins.print")
-    def test_print(self, mock_print: MagicMock) -> None:
-        # calling the print method should call the mock of the builtin print function
+    @patch("autogen.events.base_event.event_print")
+    def test_print(self, mock_event_print: MagicMock) -> None:
+        # calling the print method should route through the event logger
         self.console_io.print("Hello, World!", flush=True)
-        mock_print.assert_called_once_with("Hello, World!", end="\n", sep=" ", flush=True)
+        mock_event_print.assert_called_once_with("Hello, World!", sep=" ", end="\n", flush=True)
 
-    @patch("builtins.print")
-    def test_send(self, mock_print: MagicMock) -> None:
+    @patch("autogen.events.base_event.event_print")
+    def test_send(self, mock_event_print: MagicMock) -> None:
         # calling the send method should call the print method
         message = PrintEvent("Hello, World!", "How are you", sep=" ", end="\n", flush=False)
         self.console_io.send(message)
-        mock_print.assert_called_once_with("Hello, World!", "How are you", sep=" ", end="\n", flush=True)
+        mock_event_print.assert_called_once_with("Hello, World!", "How are you", sep=" ", end="\n", flush=True)
 
     @patch("builtins.input")
     def test_input(self, mock_input: MagicMock) -> None:

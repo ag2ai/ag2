@@ -5,12 +5,13 @@
 # Portions derived from  https://github.com/https://github.com/Lancetnik/FastDepends are under the MIT License.
 # SPDX-License-Identifier: MIT
 
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterator
+from typing import Any
 
 
 class Provider:
-    dependency_overrides: Dict[Callable[..., Any], Callable[..., Any]]
+    dependency_overrides: dict[Callable[..., Any], Callable[..., Any]]
 
     def __init__(self) -> None:
         self.dependency_overrides = {}

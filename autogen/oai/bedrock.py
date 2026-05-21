@@ -36,13 +36,14 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import requests
-from pydantic import Field, SecretStr, field_serializer
+from pydantic import BaseModel, Field, SecretStr, field_serializer
+from typing_extensions import Required, Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -51,26 +52,46 @@ with optional_import_block():
     from botocore.config import Config
 
 
-@register_llm_config
+class BedrockEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["bedrock"]
+    aws_region: Required[str]
+    aws_access_key: SecretStr | None
+    aws_secret_key: SecretStr | None
+    aws_session_token: SecretStr | None
+    aws_profile_name: str | None
+    top_k: int | None
+    k: int | None
+    seed: int | None
+    cache_seed: int | None
+    supports_system_prompts: bool
+    price: list[float] | None
+    timeout: int | None
+    additional_model_request_fields: dict[str, Any] | None
+    total_max_attempts: int | None
+    max_attempts: int | None
+    mode: Literal["standard", "adaptive", "legacy"]
+
+
 class BedrockLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["bedrock"] = "bedrock"
+
+    # Bedrock-specific options
     aws_region: str
-    aws_access_key: Optional[SecretStr] = None
-    aws_secret_key: Optional[SecretStr] = None
-    aws_session_token: Optional[SecretStr] = None
-    aws_profile_name: Optional[str] = None
-    temperature: Optional[float] = None
-    topP: Optional[float] = None  # noqa: N815
-    maxTokens: Optional[int] = None  # noqa: N815
-    top_p: Optional[float] = None
-    top_k: Optional[int] = None
-    k: Optional[int] = None
-    seed: Optional[int] = None
-    cache_seed: Optional[int] = None
+    aws_access_key: SecretStr | None = None
+    aws_secret_key: SecretStr | None = None
+    aws_session_token: SecretStr | None = None
+    aws_profile_name: str | None = None
+    top_k: int | None = None
+    k: int | None = None
+    seed: int | None = None
+    cache_seed: int | None = None
     supports_system_prompts: bool = True
-    stream: bool = False
-    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
-    timeout: Optional[int] = None
+    price: list[float] | None = Field(default=None, min_length=2, max_length=2)
+    timeout: int | None = None
+    additional_model_request_fields: dict[str, Any] | None = None
+    total_max_attempts: int | None = 5
+    max_attempts: int | None = 5
+    mode: Literal["standard", "adaptive", "legacy"] = "standard"
 
     @field_serializer("aws_access_key", "aws_secret_key", "aws_session_token", when_used="unless-none")
     def serialize_aws_secrets(self, v: SecretStr) -> str:
@@ -84,29 +105,26 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
 class BedrockClient:
     """Client for Amazon's Bedrock Converse API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     _retries = 5
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, **kwargs: Unpack[BedrockEntryDict]):
         """Initialises BedrockClient for Amazon's Bedrock Converse API"""
-        self._aws_access_key = kwargs.get("aws_access_key")
-        self._aws_secret_key = kwargs.get("aws_secret_key")
-        self._aws_session_token = kwargs.get("aws_session_token")
-        self._aws_region = kwargs.get("aws_region")
+        self._aws_access_key = kwargs.get("aws_access_key") or os.getenv("AWS_ACCESS_KEY")
+        self._aws_secret_key = kwargs.get("aws_secret_key") or os.getenv("AWS_SECRET_KEY")
+        self._aws_session_token = kwargs.get("aws_session_token") or os.getenv("AWS_SESSION_TOKEN")
+        self._aws_region = kwargs.get("aws_region") or os.getenv("AWS_REGION")
         self._aws_profile_name = kwargs.get("aws_profile_name")
         self._timeout = kwargs.get("timeout")
-
-        if not self._aws_access_key:
-            self._aws_access_key = os.getenv("AWS_ACCESS_KEY")
-
-        if not self._aws_secret_key:
-            self._aws_secret_key = os.getenv("AWS_SECRET_KEY")
-
-        if not self._aws_session_token:
-            self._aws_session_token = os.getenv("AWS_SESSION_TOKEN")
-
-        if not self._aws_region:
-            self._aws_region = os.getenv("AWS_REGION")
-
+        self._total_max_attempts = kwargs.get("total_max_attempts", 5)
+        self._max_attempts = kwargs.get("max_attempts", 5)
+        self._mode = kwargs.get("mode", "standard")
+        self._retry_config = {
+            "total_max_attempts": self._total_max_attempts,
+            "max_attempts": self._max_attempts,
+            "mode": self._mode,
+        }
         if self._aws_region is None:
             raise ValueError("Region is required to use the Amazon Bedrock API.")
 
@@ -117,7 +135,7 @@ class BedrockClient:
         bedrock_config = Config(
             region_name=self._aws_region,
             signature_version="v4",
-            retries={"max_attempts": self._retries, "mode": "standard"},
+            retries=self._retry_config,
             read_timeout=self._timeout,
         )
 
@@ -128,9 +146,9 @@ class BedrockClient:
             profile_name=self._aws_profile_name,
         )
 
-        if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Bedrock, it will be ignored.", UserWarning)
-
+        # if "response_format" in kwargs and kwargs["response_format"] is not None:
+        #     warnings.warn("response_format is not supported for Bedrock, it will be ignored.", UserWarning)
+        self._response_format: BaseModel | dict[str, Any] | None = kwargs.get("response_format")
         # if haven't got any access_key or secret_key in environment variable or via arguments then
         if (
             self._aws_access_key is None
@@ -149,6 +167,199 @@ class BedrockClient:
             )
             self.bedrock_runtime = session.client(service_name="bedrock-runtime", config=bedrock_config)
 
+    def _get_response_format_schema(self, response_format: BaseModel | dict[str, Any]) -> dict[str, Any]:
+        """Extract and normalize JSON schema from response_format.
+
+        Args:
+            response_format: Either a Pydantic BaseModel subclass or a dict containing JSON schema.
+
+        Returns:
+            Normalized JSON schema dict.
+        """
+        schema = response_format.copy() if isinstance(response_format, dict) else response_format.model_json_schema()
+
+        # Ensure root is an object type
+        if "type" not in schema:
+            schema["type"] = "object"
+        elif schema.get("type") != "object":
+            # Wrap in object if not already
+            schema = {"type": "object", "properties": {"data": schema}, "required": ["data"]}
+
+        # Ensure properties and required exist
+        if "properties" not in schema:
+            schema["properties"] = {}
+        if "required" not in schema:
+            schema["required"] = []
+
+        return schema
+
+    def _normalize_pydantic_schema_to_dict(self, schema: dict[str, Any] | type[BaseModel]) -> dict[str, Any]:
+        """
+        Convert a Pydantic model's JSON schema to a flat dict schema by resolving $ref references.
+
+        This function takes a Pydantic model or its JSON schema and converts it to a simple
+        dict schema format without $defs or $ref references, making it compatible with
+        APIs that don't support JSON Schema references.
+
+        Args:
+            schema: Either a Pydantic model class or a dict containing the JSON schema
+
+        Returns:
+            A normalized dict schema with all $ref references resolved and $defs removed
+
+        Example:
+            >>> from pydantic import BaseModel
+            >>> class Step(BaseModel):
+            ...     explanation: str
+            ...     output: str
+            >>> class MathReasoning(BaseModel):
+            ...     steps: list[Step]
+            ...     final_answer: str
+            >>>
+            >>> normalized = _normalize_pydantic_schema_to_dict(MathReasoning)
+            >>> # Returns schema without $defs or $ref
+        """
+        from pydantic import BaseModel
+
+        # If it's a Pydantic model, get its JSON schema
+        if isinstance(schema, type) and issubclass(schema, BaseModel):
+            schema_dict = schema.model_json_schema()
+        elif isinstance(schema, dict):
+            schema_dict = schema.copy()
+        else:
+            raise ValueError(f"Schema must be a Pydantic model class or dict, got {type(schema)}")
+
+        # Extract $defs if present
+        defs = schema_dict.get("$defs", {}).copy()
+
+        def resolve_ref(ref: str, definitions: dict[str, Any]) -> dict[str, Any]:
+            """Resolve a $ref to its actual schema definition."""
+            if not ref.startswith("#/$defs/"):
+                raise ValueError(f"Unsupported $ref format: {ref}. Only '#/$defs/...' is supported.")
+            # Extract the definition name from "#/$defs/Name"
+            def_name = ref.split("/")[-1]
+            if def_name not in definitions:
+                raise ValueError(f"Definition '{def_name}' not found in $defs")
+            return definitions[def_name].copy()
+
+        def resolve_refs_recursive(obj: Any, definitions: dict[str, Any]) -> Any:
+            """Recursively resolve all $ref references in the schema."""
+            if isinstance(obj, dict):
+                # If this dict has a $ref, replace it with the actual definition
+                if "$ref" in obj:
+                    ref_def = resolve_ref(obj["$ref"], definitions)
+                    # Merge any additional properties from the current object (except $ref)
+                    merged = {**ref_def, **{k: v for k, v in obj.items() if k != "$ref"}}
+                    # Recursively resolve any refs in the merged definition
+                    return resolve_refs_recursive(merged, definitions)
+                else:
+                    # Process all values recursively
+                    return {k: resolve_refs_recursive(v, definitions) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [resolve_refs_recursive(item, definitions) for item in obj]
+            else:
+                return obj
+
+        # Resolve all references
+        normalized_schema = resolve_refs_recursive(schema_dict, defs)
+
+        # Remove $defs section as it's no longer needed
+        if "$defs" in normalized_schema:
+            del normalized_schema["$defs"]
+
+        return normalized_schema
+
+    def _create_structured_output_tool(self, response_format: BaseModel | dict[str, Any]) -> dict[str, Any]:
+        """Convert response_format into a Bedrock tool definition for structured outputs.
+
+        Args:
+            response_format: Either a Pydantic BaseModel subclass or a dict containing JSON schema.
+
+        Returns:
+            Tool definition compatible with format_tools().
+        """
+        schema = self._get_response_format_schema(response_format)
+        schema = self._normalize_pydantic_schema_to_dict(schema)
+
+        return {
+            "type": "function",
+            "function": {
+                "name": "__structured_output",
+                "description": "Generate structured output matching the specified schema",
+                "parameters": schema,
+            },
+        }
+
+    def _merge_tools_with_structured_output(
+        self, user_tools: list[dict[str, Any]], structured_output_tool: dict[str, Any]
+    ) -> dict[Literal["tools"], list[dict[str, Any]]]:
+        """Merge user tools with structured output tool.
+
+        Args:
+            user_tools: List of user-defined tool definitions (can be empty).
+            structured_output_tool: The structured output tool from _create_structured_output_tool().
+
+        Returns:
+            Dict with "tools" key containing all tools in Bedrock format.
+        """
+        all_tools = list(user_tools) if user_tools else []
+        all_tools.append(structured_output_tool)
+        return format_tools(all_tools)
+
+    def _extract_structured_output_from_tool_call(
+        self, tool_calls: list[ChatCompletionMessageToolCall]
+    ) -> dict[str, Any] | None:
+        """Extract structured output data from tool call response.
+
+        Args:
+            tool_calls: List of tool calls from Bedrock response.
+
+        Returns:
+            Parsed JSON dict from __structured_output tool call, or None if not found.
+        """
+        for tool_call in tool_calls:
+            if tool_call.function.name == "__structured_output":
+                try:
+                    return json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"Failed to parse structured output from tool call: {e!s}") from e
+        return None
+
+    def _validate_and_format_structured_output(self, structured_data: dict[str, Any]) -> str:
+        """Validate structured data against schema and format for response message.
+
+        Args:
+            structured_data: Parsed dict from tool call.
+
+        Returns:
+            Formatted string representation of structured output.
+        """
+        if self._response_format:
+            return json.dumps(structured_data)
+
+        try:
+            # Validate against schema
+            if isinstance(self._response_format, dict):
+                # For dict schemas, just return JSON
+                validated_data = structured_data
+            else:
+                # Pydantic model - validate
+                validated_data = self._response_format.model_validate(structured_data)
+
+            # Format the response
+            from .client_utils import FormatterProtocol
+
+            if isinstance(validated_data, FormatterProtocol):
+                return validated_data.format()
+            elif hasattr(validated_data, "model_dump_json"):
+                # Pydantic model
+                return validated_data.model_dump_json()
+            else:
+                return json.dumps(structured_data)
+
+        except Exception as e:
+            raise ValueError(f"Failed to validate structured output against schema: {e!s}") from e
+
     def message_retrieval(self, response):
         """Retrieve the messages from the response."""
         return [choice.message for choice in response.choices]
@@ -159,18 +370,15 @@ class BedrockClient:
         # This is required because not all models support a system prompt (e.g. Mistral Instruct).
         self._supports_system_prompts = params.get("supports_system_prompts", True)
 
-    def parse_params(self, params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    def parse_params(self, params: BedrockEntryDict | dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         """Loads the valid parameters required to invoke Bedrock Converse
         Returns a tuple of (base_params, additional_params)
         """
-        base_params = {}
-        additional_params = {}
-
         # Amazon Bedrock  base model IDs are here:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
-        self._model_id = params.get("model")
-        assert self._model_id, "Please provide the 'model` in the config_list to use Amazon Bedrock"
 
+        self._model_id = params.get("model")
+        assert self._model_id, "Please provide the 'model' in the config_list to use Amazon Bedrock"
         # Parameters vary based on the model used.
         # As we won't cater for all models and parameters, it's the developer's
         # responsibility to implement the parameters and they will only be
@@ -189,60 +397,100 @@ class BedrockClient:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-meta.html
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-mistral-chat-completion.html
 
-        # Here are the possible "base" parameters and their suitable types
-        base_parameters = [["temperature", (float, int)], ["topP", (float, int)], ["maxTokens", (int)]]
+        # Config-only fields that should not be included in inference params
+        # These are used for client initialization but not for API calls
+        config_only_fields = {
+            "api_type",
+            "model",
+            "aws_region",
+            "aws_access_key",
+            "aws_secret_key",
+            "aws_session_token",
+            "aws_profile_name",
+            "supports_system_prompts",
+            "price",
+            "timeout",
+            "api_key",  # Not used by Bedrock but may be in params
+            "messages",  # Handled separately
+            "tools",  # Handled separately
+            "response_format",  # Handled separately in create method
+        }
 
-        for param_name, suitable_types in base_parameters:
-            if param_name in params:
-                base_params[param_name] = validate_parameter(
-                    params, param_name, suitable_types, False, None, None, None
-                )
+        # Here are the possible "base" parameters and their suitable types
+        base_params = {}
+
+        if "temperature" in params:
+            base_params["temperature"] = validate_parameter(
+                params, "temperature", (float, int), False, None, None, None
+            )
+
+        if "top_p" in params:
+            base_params["topP"] = validate_parameter(params, "top_p", (float, int), False, None, None, None)
+
+        if "max_tokens" in params:
+            base_params["maxTokens"] = validate_parameter(params, "max_tokens", (int,), False, None, None, None)
 
         # Here are the possible "model-specific" parameters and their suitable types, known as additional parameters
-        additional_parameters = [
-            ["top_p", (float, int)],
-            ["top_k", (int)],
-            ["k", (int)],
-            ["seed", (int)],
-        ]
+        additional_params = {}
 
-        for param_name, suitable_types in additional_parameters:
-            if param_name in params:
+        # Extract fields from BedrockEntryDict that should go into additional_params
+        for param_name, suitable_types in (
+            ("top_k", (int,)),
+            ("k", (int,)),
+            ("seed", (int,)),
+            ("cache_seed", (int,)),
+        ):
+            if param_name in params and param_name not in config_only_fields:
                 additional_params[param_name] = validate_parameter(
                     params, param_name, suitable_types, False, None, None, None
                 )
 
-        # Streaming
-        self._streaming = params.get("stream", False)
+        if "additional_model_request_fields" in params and isinstance(params["additional_model_request_fields"], dict):
+            additional_model_fields = params["additional_model_request_fields"]
+            for key, value in additional_model_fields.items():
+                if key not in config_only_fields:
+                    additional_params[key] = value
 
         # For this release we will not support streaming as many models do not support streaming with tool use
-        if self._streaming:
+        if params.get("stream", False):
             warnings.warn(
                 "Streaming is not currently supported, streaming will be disabled.",
                 UserWarning,
             )
-            self._streaming = False
 
         return base_params, additional_params
 
     def create(self, params) -> ChatCompletion:
         """Run Amazon Bedrock inference and return AG2 response"""
         # Set custom client class settings
+
         self.parse_custom_params(params)
 
         # Parse the inference parameters
         base_params, additional_params = self.parse_params(params)
 
-        has_tools = "tools" in params
-        messages = oai_messages_to_bedrock_messages(params["messages"], has_tools, self._supports_system_prompts)
+        # Handle response_format for structured outputs
+        has_response_format = self._response_format is not None
+        if has_response_format:
+            structured_output_tool = self._create_structured_output_tool(self._response_format)
+            # Merge with user tools if any
+            user_tools = params.get("tools", [])
+            tool_config = self._merge_tools_with_structured_output(user_tools, structured_output_tool)
+
+            has_tools = len(tool_config["tools"]) > 0
+        else:
+            has_tools = "tools" in params
+            tool_config = format_tools(params["tools"] if has_tools else [])
+            has_tools = len(tool_config["tools"]) > 0
+
+        messages = oai_messages_to_bedrock_messages(
+            params["messages"], has_tools or has_response_format, self._supports_system_prompts
+        )
 
         if self._supports_system_prompts:
             system_messages = extract_system_messages(params["messages"])
 
-        tool_config = format_tools(params["tools"] if has_tools else [])
-
         request_args = {"messages": messages, "modelId": self._model_id}
-
         # Base and additional args
         if len(base_params) > 0:
             request_args["inferenceConfig"] = base_params
@@ -265,11 +513,25 @@ class BedrockClient:
 
         tool_calls = format_tool_calls(response_message["content"]) if finish_reason == "tool_calls" else None
 
+        # Extract structured output if response_format was used
         text = ""
-        for content in response_message["content"]:
-            if "text" in content:
-                text = content["text"]
-                # NOTE: other types of output may be dealt with here
+        if has_response_format and finish_reason == "tool_calls" and tool_calls:
+            structured_data = self._extract_structured_output_from_tool_call(tool_calls)
+            if structured_data:
+                text = self._validate_and_format_structured_output(structured_data)
+            else:
+                # Fallback: extract text content if tool call extraction failed
+                for content in response_message["content"]:
+                    if "text" in content:
+                        text = content["text"]
+                        break
+        else:
+            # Normal text extraction
+            for content in response_message["content"]:
+                if "text" in content:
+                    text = content["text"]
+                    # NOTE: other types of output may be dealt with here
+                    break
 
         message = ChatCompletionMessage(role="assistant", content=text, tool_calls=tool_calls)
 
@@ -534,10 +796,34 @@ def format_tools(tools: list[dict[str, Any]]) -> dict[Literal["tools"], list[dic
             }
 
             for prop_name, prop_details in function["parameters"]["properties"].items():
-                converted_tool["toolSpec"]["inputSchema"]["json"]["properties"][prop_name] = {
-                    "type": prop_details["type"],
-                    "description": prop_details.get("description", ""),
-                }
+                if not isinstance(prop_details, dict):
+                    raise TypeError(f"Property '{prop_name}' schema must be a dict, got {type(prop_details)!r}")
+
+                prop_schema: dict[str, Any] = {"description": prop_details.get("description", "")}
+
+                for key in (
+                    "type",
+                    "enum",
+                    "default",
+                    "anyOf",
+                    "oneOf",
+                    "allOf",
+                    "items",
+                    "const",
+                    "format",
+                    "minimum",
+                    "maximum",
+                    "minItems",
+                    "maxItems",
+                    "minLength",
+                    "maxLength",
+                    "pattern",
+                    "additionalProperties",
+                ):
+                    if key in prop_details:
+                        prop_schema[key] = prop_details[key]
+
+                converted_tool["toolSpec"]["inputSchema"]["json"]["properties"][prop_name] = prop_schema
                 if "enum" in prop_details:
                     converted_tool["toolSpec"]["inputSchema"]["json"]["properties"][prop_name]["enum"] = prop_details[
                         "enum"

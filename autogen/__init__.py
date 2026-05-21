@@ -8,11 +8,14 @@ import logging
 
 from .agentchat import (
     Agent,
+    AgentDescriptionGuard,
+    AgentEligibilityPolicy,
     AssistantAgent,
     ChatResult,
     ConversableAgent,
     GroupChat,
     GroupChatManager,
+    SelectionContext,
     UpdateSystemMessage,
     UserProxyAgent,
     a_initiate_swarm_chat,
@@ -31,17 +34,14 @@ from .exception_utils import (
     SenderRequiredError,
     UndefinedNextAgentError,
 )
-from .llm_config import LLMConfig
+from .llm_config import LLMConfig, ModelClient
 from .oai import (
     Cache,
-    ModelClient,
     OpenAIWrapper,
     config_list_from_dotenv,
-    config_list_from_json,
     config_list_from_models,
     config_list_gpt4_gpt35,
     config_list_openai_aoai,
-    filter_config,
     get_config_list,
 )
 from .version import __version__
@@ -55,6 +55,8 @@ __all__ = [
     "DEFAULT_MODEL",
     "FAST_MODEL",
     "Agent",
+    "AgentDescriptionGuard",
+    "AgentEligibilityPolicy",
     "AgentNameConflictError",
     "AssistantAgent",
     "Cache",
@@ -68,6 +70,7 @@ __all__ = [
     "ModelClient",
     "NoEligibleSpeakerError",
     "OpenAIWrapper",
+    "SelectionContext",
     "SenderRequiredError",
     "UndefinedNextAgentError",
     "UpdateSystemMessage",
@@ -76,11 +79,9 @@ __all__ = [
     "a_initiate_swarm_chat",
     "a_run_swarm",
     "config_list_from_dotenv",
-    "config_list_from_json",
     "config_list_from_models",
     "config_list_gpt4_gpt35",
     "config_list_openai_aoai",
-    "filter_config",
     "gather_usage_summary",
     "get_config_list",
     "initiate_chats",

@@ -4,7 +4,6 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Union
 
 import pytest
 
@@ -54,7 +53,7 @@ def _delete_unused_keys(d: dict) -> None:
 
 
 @pytest.mark.parametrize("test_case", TAG_PARSING_TESTS)
-def test_tag_parsing(test_case: dict[str, Union[str, list[dict[str, Union[str, dict[str, str]]]]]]) -> None:
+def test_tag_parsing(test_case: dict[str, str | list[dict[str, str | dict[str, str]]]]) -> None:
     """Test the tag_parsing function."""
     message = test_case["message"]
     expected = test_case["expected"]

@@ -121,11 +121,10 @@ from autogen import ConversableAgent, LLMConfig
 # Import the Tool
 from autogen.tools.experimental import Crawl4AITool
 
-llm_config = LLMConfig(model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+llm_config = LLMConfig({"model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
 
 # Agent for LLM tool recommendation
-with llm_config:
-    assistant = AssistantAgent(name="assistant")
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 
 # Agent for tool execution
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
@@ -169,7 +168,7 @@ As a way for other developers to learn about and understand how to use your tool
 - Has sample codes, simple to advanced
 - Notes on capabilities and limitations
 
-As an example, here's the [notebook](/docs/use-cases/notebooks/notebooks/tools_crawl4ai) for the Crawl4AI tool.
+As an example, here's the [notebook](/docs/use-cases/notebooks/notebooks/agentchat_tools_crawl4ai) for the Crawl4AI tool.
 
 ## 3rd party packages
 

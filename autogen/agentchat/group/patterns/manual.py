@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..context_variables import ContextVariables
 from ..group_tool_executor import GroupToolExecutor
@@ -22,10 +23,10 @@ class ManualPattern(Pattern):
         initial_agent: "ConversableAgent",
         agents: list["ConversableAgent"],
         user_agent: Optional["ConversableAgent"] = None,
-        group_manager_args: Optional[dict[str, Any]] = None,
-        context_variables: Optional[ContextVariables] = None,
+        group_manager_args: dict[str, Any] | None = None,
+        context_variables: ContextVariables | None = None,
         exclude_transit_message: bool = True,
-        summary_method: Optional[Union[str, Callable[..., Any]]] = "last_msg",
+        summary_method: str | Callable[..., Any] | None = "last_msg",
     ):
         """Initialize the ManualPattern.
 
@@ -57,8 +58,8 @@ class ManualPattern(Pattern):
     def prepare_group_chat(
         self,
         max_rounds: int,
-        messages: Union[list[dict[str, Any]], str],
-    ) -> Tuple[
+        messages: list[dict[str, Any]] | str,
+    ) -> tuple[
         list["ConversableAgent"],
         list["ConversableAgent"],
         Optional["ConversableAgent"],

@@ -8,7 +8,7 @@
 import json
 import logging
 import re
-from typing import Any, Union
+from typing import Any
 
 import tiktoken
 
@@ -66,6 +66,43 @@ def get_max_token_limit(model: str = "gpt-3.5-turbo-0613") -> int:
         "gpt-5": 128000,
         "gpt-5-mini": 128000,
         "gpt-5-nano": 128000,
+        "gpt-5-pro": 128000,
+        "gpt-5-search-api": 128000,
+        "gpt-5.1": 128000,
+        "gpt-5.1-chat-latest": 128000,
+        "gpt-5.1-codex": 128000,
+        "gpt-5.1-codex-mini": 128000,
+        "gpt-5.1-codex-max": 128000,
+        "codex-mini-latest": 128000,
+        "gpt-5.2": 128000,
+        "gpt-5.2-chat-latest": 128000,
+        "gpt-5.2-pro": 128000,
+        "gpt-5.2-codex": 128000,
+        "gpt-5.2-codex-max": 128000,
+        "gpt-5.3": 128000,
+        "gpt-5.3-chat-latest": 128000,
+        "gpt-5.4": 128000,
+        "gpt-5.4-chat-latest": 128000,
+        "gpt-5.4-pro": 128000,
+        "gpt-4.1": 1047576,
+        "gpt-4.1-2025-04-14": 1047576,
+        "gpt-4.1-mini": 1047576,
+        "gpt-4.1-mini-2025-04-14": 1047576,
+        "gpt-4.1-nano": 1047576,
+        "gpt-4.1-nano-2025-04-14": 1047576,
+        "o1": 200000,
+        "o1-2024-12-17": 200000,
+        "o1-mini": 128000,
+        "o1-mini-2024-09-12": 128000,
+        "o1-preview": 128000,
+        "o1-preview-2024-09-12": 128000,
+        "o1-pro": 200000,
+        "o1-pro-2025-03-19": 200000,
+        "o3": 200000,
+        "o3-mini": 200000,
+        "o3-mini-2025-01-31": 200000,
+        "o4-mini": 200000,
+        "o4-mini-2025-04-16": 200000,
     }
     return max_token_limit[model]
 
@@ -74,7 +111,7 @@ def percentile_used(input, model="gpt-3.5-turbo-0613"):
     return count_token(input) / get_max_token_limit(model)
 
 
-def token_left(input: Union[str, list[str], dict[str, Any]], model="gpt-3.5-turbo-0613") -> int:
+def token_left(input: str | list[str] | dict[str, Any], model="gpt-3.5-turbo-0613") -> int:
     """Count number of tokens left for an OpenAI model.
 
     Args:
@@ -87,7 +124,7 @@ def token_left(input: Union[str, list[str], dict[str, Any]], model="gpt-3.5-turb
     return get_max_token_limit(model) - count_token(input, model=model)
 
 
-def count_token(input: Union[str, list[str], dict[str, Any]], model: str = "gpt-3.5-turbo-0613") -> int:
+def count_token(input: str | list[str] | dict[str, Any], model: str = "gpt-3.5-turbo-0613") -> int:
     """Count number of tokens used by an OpenAI model.
 
     Args:
@@ -115,7 +152,7 @@ def _num_token_from_text(text: str, model: str = "gpt-3.5-turbo-0613"):
     return len(encoding.encode(text))
 
 
-def _num_token_from_messages(messages: Union[list[str], dict[str, Any]], model="gpt-3.5-turbo-0613"):
+def _num_token_from_messages(messages: list[str] | dict[str, Any], model="gpt-3.5-turbo-0613"):
     """Return the number of tokens used by a list of messages.
 
     retrieved from https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb/
@@ -143,6 +180,25 @@ def _num_token_from_messages(messages: Union[list[str], dict[str, Any]], model="
         "gpt-4o-2024-11-20",
         "gpt-4o-mini",
         "gpt-4o-mini-2024-07-18",
+        "gpt-4.1",
+        "gpt-4.1-2025-04-14",
+        "gpt-4.1-mini",
+        "gpt-4.1-mini-2025-04-14",
+        "gpt-4.1-nano",
+        "gpt-4.1-nano-2025-04-14",
+        "o1",
+        "o1-2024-12-17",
+        "o1-mini",
+        "o1-mini-2024-09-12",
+        "o1-preview",
+        "o1-preview-2024-09-12",
+        "o1-pro",
+        "o1-pro-2025-03-19",
+        "o3",
+        "o3-mini",
+        "o3-mini-2025-01-31",
+        "o4-mini",
+        "o4-mini-2025-04-16",
     }:
         tokens_per_message = 3
         tokens_per_name = 1
@@ -154,6 +210,9 @@ def _num_token_from_messages(messages: Union[list[str], dict[str, Any]], model="
         return _num_token_from_messages(messages, model="gpt-3.5-turbo-0613")
     elif "gpt-4" in model:
         logger.info("gpt-4 may update over time. Returning num tokens assuming gpt-4-0613.")
+        return _num_token_from_messages(messages, model="gpt-4-0613")
+    elif "gpt-5" in model:
+        logger.info("gpt-5 may update over time. Returning num tokens assuming gpt-4-0613.")
         return _num_token_from_messages(messages, model="gpt-4-0613")
     elif "gemini" in model:
         logger.info("Gemini is not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")

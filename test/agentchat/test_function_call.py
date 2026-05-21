@@ -15,13 +15,11 @@ import pytest
 import autogen
 from autogen.import_utils import run_for_optional_imports
 from autogen.math_utils import eval_math_responses
+from test.credentials import Credentials
 
-from ..conftest import Credentials, reason
 
-
-@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
+def test_eval_math_responses(credentials_openai_mini: Credentials):
     functions = [
         {
             "name": "eval_math_responses",
@@ -43,7 +41,7 @@ def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
             },
         },
     ]
-    client = autogen.OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = autogen.OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(
         messages=[
             {
@@ -167,9 +165,7 @@ async def test_a_execute_function():
     user = UserProxyAgent(name="test", function_map={"add_num": add_num})
     correct_args = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
 
-    # Asset coroutine doesn't match.
-    assert user.execute_function(func_call=correct_args)[1]["content"] != "15"
-    # Asset awaited coroutine does match.
+    assert user.execute_function(func_call=correct_args)[1]["content"] == "15"
     assert (await user.a_execute_function(func_call=correct_args))[1]["content"] == "15"
 
     # function name called is wrong or doesn't exist
@@ -213,15 +209,34 @@ async def test_a_execute_function():
     assert (await user.a_execute_function(func_call))[1]["content"] == "42"
 
 
+@pytest.mark.asyncio
+async def test_a_execute_function_awaits_awaitable_returned_by_sync_callable():
+    from autogen.agentchat import UserProxyAgent
+
+    async def add_num_async(num_to_be_added):
+        await asyncio.sleep(0)
+        return str(num_to_be_added + 10)
+
+    def add_num(num_to_be_added):
+        return add_num_async(num_to_be_added)
+
+    user = UserProxyAgent(name="test", function_map={"add_num": add_num})
+    func_call = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
+
+    is_success, result = await user.a_execute_function(func_call=func_call)
+
+    assert is_success is True
+    assert result["content"] == "15"
+
+
 @run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.10"),
-    reason=reason,
+    reason="Test available only on Python 3.10",
 )
-@run_for_optional_imports(["openai"], "openai")
-def test_update_function(credentials_gpt_4o_mini: Credentials):
+def test_update_function(credentials_openai_mini: Credentials):
     llm_config = {
-        "config_list": credentials_gpt_4o_mini.config_list,
+        "config_list": credentials_openai_mini.config_list,
         "seed": 42,
         "functions": [],
     }
@@ -248,7 +263,7 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     )
     res1 = user_proxy.initiate_chat(
         assistant,
-        message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+        message="Do not execute, but tell me what functions, by their names, do you know about in the context of this conversation? End your response with 'TERMINATE'.",
         summary_method="reflection_with_llm",
     )
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
@@ -257,7 +272,7 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     assistant.update_function_signature("greet_user", is_remove=True)
     res2 = user_proxy.initiate_chat(
         assistant,
-        message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+        message="What functions by their names do you know about in the context of this conversation? End your response with 'TERMINATE'.",
         summary_method="reflection_with_llm",
     )
     messages2 = assistant.chat_messages[user_proxy][-1]["content"]
@@ -285,11 +300,3 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
             message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
             summary_method="reflection_with_llm",
         )
-
-
-if __name__ == "__main__":
-    # test_json_extraction()
-    # test_execute_function()
-    test_update_function()
-    # asyncio.run(test_a_execute_function())
-    # test_eval_math_responses()

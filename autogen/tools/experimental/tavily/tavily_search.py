@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import os
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -30,8 +30,7 @@ def _execute_tavily_query(
     include_domains: list[str] = [],
     num_results: int = 5,
 ) -> Any:
-    """
-    Execute a search query using the Tavily API.
+    """Execute a search query using the Tavily API.
 
     Args:
         query (str): The search query string.
@@ -68,8 +67,7 @@ def _tavily_search(
     include_domains: list[str] = [],
     num_results: int = 5,
 ) -> list[dict[str, Any]]:
-    """
-    Perform a Tavily search and format the results.
+    """Perform a Tavily search and format the results.
 
     This function takes search parameters, executes the query using `_execute_tavily_query`,
     and formats the results into a list of dictionaries containing title, link, and snippet.
@@ -107,8 +105,7 @@ def _tavily_search(
 
 @export_module("autogen.tools.experimental")
 class TavilySearchTool(Tool):
-    """
-    TavilySearchTool is a tool that uses the Tavily Search API to perform a search.
+    """TavilySearchTool is a tool that uses the Tavily Search API to perform a search.
 
     This tool allows agents to leverage the Tavily search engine for information retrieval.
     It requires a Tavily API key, which can be provided during initialization or set as
@@ -118,11 +115,8 @@ class TavilySearchTool(Tool):
         tavily_api_key (str): The API key used for authenticating with the Tavily API.
     """
 
-    def __init__(
-        self, *, llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None, tavily_api_key: Optional[str] = None
-    ):
-        """
-        Initializes the TavilySearchTool.
+    def __init__(self, *, llm_config: LLMConfig | dict[str, Any] | None = None, tavily_api_key: str | None = None):
+        """Initializes the TavilySearchTool.
 
         Args:
             llm_config (Optional[Union[LLMConfig, dict[str, Any]]]): LLM configuration. (Currently unused but kept for potential future integration).
@@ -139,15 +133,14 @@ class TavilySearchTool(Tool):
 
         def tavily_search(
             query: Annotated[str, "The search query."],
-            tavily_api_key: Annotated[Optional[str], Depends(on(self.tavily_api_key))],
-            search_depth: Annotated[Optional[str], "Either 'advanced' or 'basic'"] = "basic",
-            include_answer: Annotated[Optional[str], "Either 'advanced' or 'basic'"] = "basic",
-            include_raw_content: Annotated[Optional[bool], "Include the raw contents"] = False,
-            include_domains: Annotated[Optional[list[str]], "Specific web domains to search"] = [],
+            tavily_api_key: Annotated[str | None, Depends(on(self.tavily_api_key))],
+            search_depth: Annotated[str | None, "Either 'advanced' or 'basic'"] = "basic",
+            include_answer: Annotated[str | None, "Either 'advanced' or 'basic'"] = "basic",
+            include_raw_content: Annotated[bool | None, "Include the raw contents"] = False,
+            include_domains: Annotated[list[str] | None, "Specific web domains to search"] = [],
             num_results: Annotated[int, "The number of results to return."] = 5,
         ) -> list[dict[str, Any]]:
-            """
-            Performs a search using the Tavily API and returns formatted results.
+            """Performs a search using the Tavily API and returns formatted results.
 
             Args:
                 query: The search query string.

@@ -17,25 +17,21 @@ import requests
 
 from autogen.browser_utils import SimpleTextBrowser
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
-
-BLOG_POST_URL = "https://docs.ag2.ai/latest/docs/blog/2023/04/21/LLM-tuning-math/"
-BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
-BLOG_POST_STRING = "Large language models (LLMs) are powerful tools that can generate natural language texts for various applications, such as chatbots, summarization, translation, and more. GPT-4 is currently the state of the art LLM in the world. Is model selection irrelevant? What about inference parameters?"
-
-WIKIPEDIA_URL = "https://en.wikipedia.org/wiki/Microsoft"
-WIKIPEDIA_TITLE = "Microsoft - Wikipedia"
-WIKIPEDIA_STRING = "Redmond"
-
-PLAIN_TEXT_URL = "https://raw.githubusercontent.com/ag2ai/ag2/main/README.md"
-IMAGE_URL = "https://github.com/afourney.png"
-
-PDF_URL = "https://arxiv.org/pdf/2308.08155.pdf"
-PDF_STRING = "Figure 1: AutoGen enables diverse LLM-based applications using multi-agent conversations."
-
-BING_QUERY = "Microsoft"
-BING_TITLE = f"{BING_QUERY} - Search"
-BING_STRING = f"A Bing search for '{BING_QUERY}' found"
-
+from test.const import (
+    BING_QUERY,
+    BING_STRING,
+    BING_TITLE,
+    BLOG_POST_STRING,
+    BLOG_POST_TITLE,
+    BLOG_POST_URL,
+    IMAGE_URL,
+    PDF_STRING,
+    PDF_URL,
+    PLAIN_TEXT_URL,
+    WIKIPEDIA_STRING,
+    WIKIPEDIA_TITLE,
+    WIKIPEDIA_URL,
+)
 
 with optional_import_block() as result:
     import requests
@@ -67,13 +63,16 @@ def downloads_folder():
 @skip_on_missing_imports(["markdownify", "pathvalidate", "requests", "bs4"], "websurfer")
 def test_simple_text_browser(downloads_folder: str):
     # Instantiate the browser
-    user_agent = "python-requests/" + requests.__version__
+    headers = {
+        "User-Agent": "AG2-AI-Agent/1.0 (+https://docs.ag2.ai/latest/)",
+        "X-Agent-Name": "ag2_test_agent",
+    }
     viewport_size = 1024
     browser = SimpleTextBrowser(
         downloads_folder=downloads_folder,
         viewport_size=viewport_size,
         request_kwargs={
-            "headers": {"User-Agent": user_agent},
+            "headers": headers,
         },
     )
 
@@ -156,12 +155,15 @@ def test_simple_text_browser(downloads_folder: str):
 @skip_on_missing_imports(["markdownify", "pathvalidate", "requests", "bs4"], "websurfer")
 def test_bing_search():
     # Instantiate the browser
-    user_agent = "python-requests/" + requests.__version__
+    headers = {
+        "User-Agent": "AG2-AI-Agent/1.0 (+https://ag2.ai/agent-policy)",
+        "X-Agent-Name": "ag2_test_agent",
+    }
     browser = SimpleTextBrowser(
         bing_api_key=BING_API_KEY,
         viewport_size=1024,
         request_kwargs={
-            "headers": {"User-Agent": user_agent},
+            "headers": headers,
         },
     )
 

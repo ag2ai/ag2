@@ -4,7 +4,8 @@
 
 __all__ = ["export_module"]
 
-from typing import Callable, Optional, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 T = TypeVar("T")
 
@@ -25,7 +26,7 @@ def export_module(module: str) -> Callable[[T], T]:
     return decorator
 
 
-def get_target_module(obj: object) -> Optional[str]:
+def get_target_module(obj: object) -> str | None:
     """Get the target module where an object should be documented."""
     if not hasattr(obj, "__module__"):
         return None

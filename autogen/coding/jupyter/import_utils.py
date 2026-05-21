@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import subprocess
+from collections.abc import Callable
 from functools import lru_cache
 from logging import getLogger
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 from ...import_utils import patch_object
 
@@ -20,8 +21,7 @@ def is_jupyter_kernel_gateway_installed() -> bool:
     try:
         subprocess.run(
             ["jupyter", "kernelgateway", "--version"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=True,
         )
         return True

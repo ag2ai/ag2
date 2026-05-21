@@ -7,13 +7,12 @@
 
 import logging
 from time import monotonic_ns
-from typing import Any
+from typing import Annotated, Any
 
 import anyio
 import pydantic
 import pytest
 from annotated_types import Ge
-from typing_extensions import Annotated
 
 from autogen.fast_depends import Depends, inject
 from autogen.fast_depends.library import CustomField

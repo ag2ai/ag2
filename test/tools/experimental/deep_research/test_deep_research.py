@@ -2,15 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Callable
+from collections.abc import Callable
+from typing import Annotated, Any
 from unittest.mock import patch
 
+from autogen import LLMConfig
 from autogen.agentchat import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.dependency_injection import Depends, on
 from autogen.tools.experimental import DeepResearchTool
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports(
@@ -112,10 +113,10 @@ class TestDeepResearchTool:
         assert "wang" in result or "wu" in result
 
     @run_for_optional_imports("openai", "openai")
-    def test_get_split_question_and_answer_subquestions(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_get_split_question_and_answer_subquestions(self, credentials_openai_mini: Credentials) -> None:
         max_web_steps = 30
         split_question_and_answer_subquestions = DeepResearchTool._get_split_question_and_answer_subquestions(
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
             max_web_steps=max_web_steps,
         )
 
@@ -126,7 +127,7 @@ class TestDeepResearchTool:
             result = split_question_and_answer_subquestions(
                 question="Who are the founders of the AG2 framework?",
                 # When we register the function to the agents, llm_config will be injected
-                llm_config=credentials_gpt_4o_mini.llm_config,
+                llm_config=credentials_openai_mini.llm_config,
                 max_web_steps=max_web_steps,
             )
         assert isinstance(result, str)
@@ -135,18 +136,18 @@ class TestDeepResearchTool:
         mock_answer_question.assert_called()
 
     @run_for_optional_imports("openai", "openai")
-    def test_delegate_research_task(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_delegate_research_task(self, credentials_openai_mini: Credentials) -> None:
         expected_max_web_steps = 30
 
         def _get_split_question_and_answer_subquestions(
-            llm_config: dict[str, Any], max_web_steps: int
+            llm_config: LLMConfig, max_web_steps: int
         ) -> Callable[..., Any]:
             def split_question_and_answer_subquestions(
                 question: Annotated[str, "The question to split and answer."],
-                llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
+                llm_config: Annotated[LLMConfig, Depends(on(llm_config))],
                 max_web_steps: Annotated[int, Depends(on(max_web_steps))],
             ) -> str:
-                assert llm_config == credentials_gpt_4o_mini.llm_config
+                assert llm_config == credentials_openai_mini.llm_config
                 assert max_web_steps == expected_max_web_steps
                 return (
                     "Subquestions answered:\n"
@@ -164,11 +165,12 @@ class TestDeepResearchTool:
         with patch(
             "autogen.agents.experimental.deep_research.deep_research.DeepResearchTool._get_split_question_and_answer_subquestions",
             return_value=_get_split_question_and_answer_subquestions(
-                credentials_gpt_4o_mini.llm_config, max_web_steps=expected_max_web_steps
+                credentials_openai_mini.llm_config,
+                max_web_steps=expected_max_web_steps,
             ),
         ):
             tool = DeepResearchTool(
-                llm_config=credentials_gpt_4o_mini.llm_config,
+                llm_config=credentials_openai_mini.llm_config,
             )
             # The second task is for testing if the chat history was preserved
             for task in ["Who are the founders of the AG2 framework?", "Can you please repeat the answer?"]:

@@ -1,7 +1,6 @@
 import logging
 import re
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -11,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 app = typer.Typer()
 
 
-def read_lines_from_file(file_path: Path, lines_spec: Optional[str]) -> str:
+def read_lines_from_file(file_path: Path, lines_spec: str | None) -> str:
     """Read lines from a file.
 
     Args:

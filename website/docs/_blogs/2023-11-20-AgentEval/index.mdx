@@ -4,6 +4,9 @@ authors: [julianakiseleva, narabzad]
 tags: [Evaluation]
 ---
 
+!!! warning "Deprecated"
+    The `agent_eval` module (`CriticAgent`, `QuantifierAgent`, `generate_criteria`, `quantify_criteria`) is deprecated as of v0.12 and will be removed in v0.14. This blog post and associated notebooks will also be removed in v0.14.
+
 ![Fig.1: A verification framework](img/agenteval-CQ.webp)
 
 <p align="center"><em>Fig.1 illustrates the general flow of AgentEval</em></p>
@@ -11,7 +14,7 @@ tags: [Evaluation]
 **TL;DR:**
 * As a developer of an LLM-powered application, how can you assess the utility it brings to end users while helping them with their tasks?
 * To shed light on the question above, we introduce `AgentEval` — the first version of the framework to assess the utility of any LLM-powered application crafted to assist users in specific tasks.  AgentEval aims to simplify the evaluation process by automatically proposing a set of criteria tailored to the unique purpose of your application. This allows for a comprehensive assessment, quantifying the utility of your application against the suggested criteria.
-* We demonstrate how `AgentEval` work using [math problems dataset](https://docs.ag2.ai/latest/docs/blog/2023/06/28/MathChat) as an example in the [following notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agenteval_cq_math.ipynb). Any feedback would be useful for future development. Please contact us on our [Discord](https://discord.gg/pAbnFJrkgZ).
+* We demonstrate how `AgentEval` work using [math problems dataset](https://docs.ag2.ai/latest/docs/blog/2023/06/28/MathChat) as an example in the [following notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_agenteval_cq_math.ipynb). Any feedback would be useful for future development. Please contact us on our [Discord](https://discord.gg/pAbnFJrkgZ).
 
 
 
@@ -42,33 +45,33 @@ Our previous research on [assistive agents in Minecraft](https://github.com/micr
 
 ```python
 llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")
-with llm_config:
-  critic = autogen.AssistantAgent(
-      name="critic",
-      system_message="""You are a helpful assistant. You suggest criteria for evaluating different tasks. They should be distinguishable, quantifiable, and not redundant.
-      Convert the evaluation criteria into a dictionary where the keys are the criteria.
-      The value of each key is a dictionary as follows {"description": criteria description, "accepted_values": possible accepted inputs for this key}
-      Make sure the keys are criteria for assessing the given task. "accepted_values" include the acceptable inputs for each key that are fine-grained and preferably multi-graded levels. "description" includes the criterion description.
-      Return only the dictionary."""
-  )
+critic = autogen.AssistantAgent(
+    name="critic",
+    system_message="""You are a helpful assistant. You suggest criteria for evaluating different tasks. They should be distinguishable, quantifiable, and not redundant.
+    Convert the evaluation criteria into a dictionary where the keys are the criteria.
+    The value of each key is a dictionary as follows {"description": criteria description, "accepted_values": possible accepted inputs for this key}
+    Make sure the keys are criteria for assessing the given task. "accepted_values" include the acceptable inputs for each key that are fine-grained and preferably multi-graded levels. "description" includes the criterion description.
+    Return only the dictionary."""
+    llm_config=llm_config,
+)
 ```
 
-Next, the critic is given successful and failed examples of the task execution; then, it is able to return a list of criteria (Fig. 1). For reference, use the [following notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agenteval_cq_math.ipynb).
+Next, the critic is given successful and failed examples of the task execution; then, it is able to return a list of criteria (Fig. 1). For reference, use the [following notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_agenteval_cq_math.ipynb).
 
 * The goal of `QuantifierAgent` is to quantify each of the suggested criteria (Fig. 1), providing us with an idea of the utility of this system for the given task. Here is an example of how it can be defined:
 
 ```python
 llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")
-with llm_config:
-  quantifier = autogen.AssistantAgent(
-      name="quantifier",
-      system_message = """You are a helpful assistant. You quantify the output of different tasks based on the given criteria.
-      The criterion is given in a dictionary format where each key is a distinct criteria.
-      The value of each key is a dictionary as follows {"description": criteria description , "accepted_values": possible accepted inputs for this key}
-      You are going to quantify each of the criteria for a given task based on the task description.
-      Return a dictionary where the keys are the criteria and the values are the assessed performance based on accepted values for each criteria.
-      Return only the dictionary."""
-  )
+quantifier = autogen.AssistantAgent(
+    name="quantifier",
+    system_message = """You are a helpful assistant. You quantify the output of different tasks based on the given criteria.
+    The criterion is given in a dictionary format where each key is a distinct criteria.
+    The value of each key is a dictionary as follows {"description": criteria description , "accepted_values": possible accepted inputs for this key}
+    You are going to quantify each of the criteria for a given task based on the task description.
+    Return a dictionary where the keys are the criteria and the values are the assessed performance based on accepted values for each criteria.
+    Return only the dictionary."""
+    llm_config=llm_config,
+)
 ```
 
 ## `AgentEval` Results based on Math Problems Dataset
@@ -117,7 +120,7 @@ We would love to hear about how AgentEval works for your application. Any feedba
 ```
 @InProceedings{pmlr-v176-kiseleva22a,
   title = "Interactive Grounded Language Understanding in a Collaborative Environment: IGLU 2021",
-  author = "Kiseleva, Julia and Li, Ziming and Aliannejadi, Mohammad and Mohanty, Shrestha and ter Hoeve, Maartje and Burtsev, Mikhail and Skrynnik, Alexey and Zholus, Artem and Panov, Aleksandr and Srinet, Kavya and Szlam, Arthur and Sun, Yuxuan and Hofmann, Katja and C{\^o}t{\'e}, Marc-Alexandre and Awadallah, Ahmed and Abdrazakov, Linar and Churin, Igor and Manggala, Putra and Naszadi, Kata and van der Meer, Michiel and Kim, Taewoon",
+  author = "Kiseleva, Julia and Li, Ziming and Aliannejadi, Mohammad and Mohanty, Shrestha and ter Hoeve, Maartje and Burtsev, Mikhail and Skrynnik, Alexey and Zholus, Artem and Panov, Aleksandr and Srinet, Kavya and Szlam, Arthur and Sun, Yuxuan and Hofmann, Katja and C{\^o}t{\'e}, Marc-Alexandre and Awadallah, Ahmed and Abdrazakov, Linear and Churin, Igor and Manggala, Putra and Naszadi, Kata and van der Meer, Michiel and Kim, Taewoon",
   booktitle = "Proceedings of the NeurIPS 2021 Competitions and Demonstrations Track",
   pages = "146--161",
   year = 2022,
@@ -135,7 +138,7 @@ We would love to hear about how AgentEval works for your application. Any feedba
 ```
 @InProceedings{pmlr-v220-kiseleva22a,
   title = "Interactive Grounded Language Understanding in a Collaborative Environment: Retrospective on Iglu 2022 Competition",
-  author = "Kiseleva, Julia and Skrynnik, Alexey and Zholus, Artem and Mohanty, Shrestha and Arabzadeh, Negar and C\^{o}t\'e, Marc-Alexandre and Aliannejadi, Mohammad and Teruel, Milagro and Li, Ziming and Burtsev, Mikhail and ter Hoeve, Maartje and Volovikova, Zoya and Panov, Aleksandr and Sun, Yuxuan and Srinet, Kavya and Szlam, Arthur and Awadallah, Ahmed and Rho, Seungeun and Kwon, Taehwan and Wontae Nam, Daniel and Bivort Haiek, Felipe and Zhang, Edwin and Abdrazakov, Linar and Qingyam, Guo and Zhang, Jason and Guo, Zhibin",
+  author = "Kiseleva, Julia and Skrynnik, Alexey and Zholus, Artem and Mohanty, Shrestha and Arabzadeh, Negar and C\^{o}t\'e, Marc-Alexandre and Aliannejadi, Mohammad and Teruel, Milagro and Li, Ziming and Burtsev, Mikhail and ter Hoeve, Maartje and Volovikova, Zoya and Panov, Aleksandr and Sun, Yuxuan and Srinet, Kavya and Szlam, Arthur and Awadallah, Ahmed and Rho, Seungeun and Kwon, Taehwan and Wontae Name, Daniel and Bivort Haiek, Felipe and Zhang, Edwin and Abdrazakov, Linear and Qingyam, Guo and Zhang, Jason and Guo, Zhibin",
   booktitle = "Proceedings of the NeurIPS 2022 Competitions Track",
   pages = "204--216",
   year = 2022,

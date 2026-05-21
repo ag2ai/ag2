@@ -5,7 +5,6 @@
 # Portions derived from  https://github.com/https://github.com/Lancetnik/FastDepends are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-from typing import Optional
 
 from dirty_equals import IsDict, IsPartialDict
 from pydantic import BaseModel, Field
@@ -39,7 +38,7 @@ class TestNoType:
             "type": "object",
         }, schema
 
-    def test_no_type_embeded(self) -> None:
+    def test_no_type_embedded(self) -> None:
         def handler(a) -> None:
             pass
 
@@ -86,7 +85,7 @@ class TestOneArg:
         assert schema == {"title": "A", "type": "integer"}, schema
 
     def test_one_arg_with_optional(self) -> None:
-        def handler(a: Optional[int]) -> None:
+        def handler(a: int | None) -> None:
             pass
 
         schema = get_schema(build_call_model(handler))
@@ -169,7 +168,7 @@ class TestOneArgWithModel:
         class Model(BaseModel):
             a: int
 
-        def handler(a: Optional[Model] = None) -> None:
+        def handler(a: Model | None = None) -> None:
             pass
 
         schema = get_schema(build_call_model(handler), resolve_refs=True)
@@ -198,11 +197,11 @@ class TestOneArgWithModel:
             "type": "object",
         }, schema
 
-    def test_optional_embeded_model(self) -> None:
+    def test_optional_embedded_model(self) -> None:
         class Model(BaseModel):
             a: int
 
-        def handler(a: Optional[Model]) -> None:
+        def handler(a: Model | None) -> None:
             pass
 
         schema = get_schema(build_call_model(handler), resolve_refs=True, embed=True)
@@ -255,7 +254,7 @@ class TestOneArgWithModel:
             "type": "object",
         }, schema
 
-    def test_embeded_model(self) -> None:
+    def test_embedded_model(self) -> None:
         class Model(BaseModel):
             a: int
 
@@ -270,7 +269,7 @@ class TestOneArgWithModel:
             "type": "object",
         }, schema
 
-    def test_embeded_resolved_model(self) -> None:
+    def test_embedded_resolved_model(self) -> None:
         class Model2(BaseModel):
             a: int
 
@@ -324,7 +323,7 @@ class TestMultiArgs:
             "type": "object",
         }, schema
 
-    def test_ignores_embed(self) -> None:
+    def test_ignores_embedded(self) -> None:
         def handler(a: str, b: int = 0) -> None:
             pass
 

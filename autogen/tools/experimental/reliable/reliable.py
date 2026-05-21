@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,7 +14,8 @@ import json
 import logging
 import time
 import warnings
-from typing import Annotated, Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from collections.abc import Callable
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -25,6 +26,7 @@ from ....agentchat.group import AgentTarget, ReplyResult, TerminateTarget
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.patterns import DefaultPattern
 from ....doc_utils import export_module
+from ....fast_depends.utils import is_coroutine_callable
 from ....llm_config import LLMConfig
 from ....tools.dependency_injection import Field as AG2Field
 from ....tools.tool import Tool
@@ -61,13 +63,13 @@ class ExecutionAttempt(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     timestamp: float = Field(default_factory=time.time)
-    attempt_args: List[Any] = Field(default_factory=list)
-    attempt_kwargs: Dict[str, Any] = Field(default_factory=dict)
-    hypothesis: Optional[str] = None
-    error: Optional[str] = None
-    result_data: Optional[Any] = None
-    result_str: Optional[str] = None
-    validation: Optional[ValidationResult] = None
+    attempt_args: list[Any] = Field(default_factory=list)
+    attempt_kwargs: dict[str, Any] = Field(default_factory=dict)
+    hypothesis: str | None = None
+    error: str | None = None
+    result_data: Any | None = None
+    result_str: str | None = None
+    validation: ValidationResult | None = None
 
     @property
     def did_execute_successfully(self) -> bool:
@@ -87,14 +89,12 @@ class ReliableToolContext(BaseModel):
     task: str
     reliable_tool_name: str
     start_time: float = Field(default_factory=time.time)
-    dynamic_validation_input: Optional[str] = None
-    attempts: List[ExecutionAttempt] = Field(default_factory=list)
-    initial_messages: Optional[List[dict[str, Any]]] = Field(
+    dynamic_validation_input: str | None = None
+    attempts: list[ExecutionAttempt] = Field(default_factory=list)
+    initial_messages: list[dict[str, Any]] | None = Field(
         default=None, description="Initial messages provided to the tool run."
     )
-    initial_ground_truth: Optional[List[str]] = Field(
-        default=None, description="Initial ground truth strings provided."
-    )
+    initial_ground_truth: list[str] | None = Field(default=None, description="Initial ground truth strings provided.")
 
     @property
     def attempt_count(self) -> int:
@@ -102,7 +102,7 @@ class ReliableToolContext(BaseModel):
         return len(self.attempts)
 
     @property
-    def latest_attempt(self) -> Optional[ExecutionAttempt]:
+    def latest_attempt(self) -> ExecutionAttempt | None:
         """Return the most recent attempt, if any."""
         return self.attempts[-1] if self.attempts else None
 
@@ -143,8 +143,8 @@ class SuccessfulExecutionParameters(BaseModel):
     """Holds the arguments of a successful tool function execution."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    attempt_args: List[Any]
-    attempt_kwargs: Dict[str, Any]
+    attempt_args: list[Any]
+    attempt_kwargs: dict[str, Any]
 
 
 class ToolExecutionDetails(BaseModel):
@@ -153,14 +153,14 @@ class ToolExecutionDetails(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     task: str
     is_overall_successful: bool
-    failure_reason: Optional[str] = None
-    successful_parameters: Optional[SuccessfulExecutionParameters] = None
+    failure_reason: str | None = None
+    successful_parameters: SuccessfulExecutionParameters | None = None
     final_tool_context: ReliableToolContext
 
 
 def _configure_llm_for_structured_output(
-    llm_config: Optional[Union[LLMConfig, dict[str, Any]]], structured_output_type: Type[BaseModel]
-) -> Union[LLMConfig, dict[str, Any]]:  # Return type changed, False is no longer a valid return
+    llm_config: LLMConfig | dict[str, Any] | None, structured_output_type: type[BaseModel]
+) -> LLMConfig | dict[str, Any]:  # Return type changed, False is no longer a valid return
     """Configure LLM config for structured output using a Pydantic model."""
     if llm_config is None or llm_config is False:
         raise ValueError("LLMConfig cannot be None or False for structured output.")
@@ -174,7 +174,7 @@ def _configure_llm_for_structured_output(
 
     response_format_set = False
 
-    def _set_format_and_remove_conflicts(config_item: Union[LLMConfig, Dict[str, Any]]) -> None:
+    def _set_format_and_remove_conflicts(config_item: LLMConfig | dict[str, Any]) -> None:
         nonlocal response_format_set
         conflicting_keys = ["tools", "tool_choice", "functions"]
         removed_keys = []
@@ -192,7 +192,7 @@ def _configure_llm_for_structured_output(
             for key in conflicting_keys:
                 if hasattr(config_item, key) and getattr(config_item, key, None):
                     # Try setting to None or empty list/dict as appropriate
-                    default_empty: Optional[List[str]] = [] if key in ["tools", "functions"] else None
+                    default_empty: list[str] | None = [] if key in ["tools", "functions"] else None
                     setattr(config_item, key, default_empty)
                     removed_keys.append(key)
         else:
@@ -243,7 +243,7 @@ def _configure_llm_for_structured_output(
     return llm_config_obj
 
 
-def _get_last_non_empty_message_content(messages: Optional[List[dict[str, Any]]]) -> Optional[str]:
+def _get_last_non_empty_message_content(messages: list[dict[str, Any]] | None) -> str | None:
     """Get content of the last message with non-empty content."""
     if not messages:
         return None
@@ -342,7 +342,7 @@ Current Task:
 
 
 def get_validator_prompt(
-    task: str, base_validator_system_message: str, dynamic_validation_addition: Optional[str] = None
+    task: str, base_validator_system_message: str, dynamic_validation_addition: str | None = None
 ) -> str:
     """Generate the system prompt for the internal validator agent."""
     dynamic_section = (
@@ -376,7 +376,7 @@ def reliable_function_wrapper(
     Adds 'hypothesis' and 'context_variables' keyword-only arguments.
     Returns a ReplyResult targeting the validator.
     """
-    is_original_func_async = inspect.iscoroutinefunction(tool_function)
+    is_original_func_async = is_coroutine_callable(tool_function)
     tool_sig = inspect.signature(tool_function)
     wrapper_func: Callable[..., Any]  # Declare type for wrapper_func
 
@@ -517,7 +517,7 @@ def reliable_function_wrapper(
 class ReliableToolError(Exception):
     """Custom exception for errors during ReliableTool execution."""
 
-    def __init__(self, message: str, final_context: Optional[ReliableToolContext] = None):
+    def __init__(self, message: str, final_context: ReliableToolContext | None = None):
         super().__init__(message)
         self.final_context = final_context
 
@@ -529,19 +529,18 @@ class ReliableTool(Tool):
     def __init__(
         self,
         name: str,
-        func_or_tool: Union[Callable[..., Any], Tool],
-        runner_llm_config: Union[LLMConfig, dict[str, Any]],
-        validator_llm_config: Union[LLMConfig, dict[str, Any]],
-        description: Optional[str] = None,
+        func_or_tool: Callable[..., Any] | Tool,
+        runner_llm_config: LLMConfig | dict[str, Any],
+        validator_llm_config: LLMConfig | dict[str, Any],
+        description: str | None = None,
         system_message_addition_for_tool_calling: str = "",
         system_message_addition_for_result_validation: str = "",
         max_tool_invocations: int = 3,
         enable_dynamic_validation: bool = False,
-        messages: Optional[List[dict[str, Any]]] = None,
-        ground_truth: Optional[List[str]] = None,
+        messages: list[dict[str, Any]] | None = None,
+        ground_truth: list[str] | None = None,
     ) -> None:
-        """
-        A ReliableTool wraps an existing function or tool.
+        """A ReliableTool wraps an existing function or tool.
         When the ReliableTool is invoked, it kicks off an internal Group Chat where a Runner
         and Validator agent will iteratively invoke the wrapped function or tool until
         *the output of a single invocation of the original function or tool satisfies the provided validation criteria.*
@@ -590,31 +589,31 @@ class ReliableTool(Tool):
                 the function's result. It can be the same as `runner_llm_config` or different.
                 Example: `LLMConfig(config_list=oai_config_list, model="gpt-4o-mini")`
 
-            description (Optional[str], default: None):
+            description (Optional[str]):
                 A human-readable description of what this `ReliableTool` achieves.
                 If `None`, the description is inferred from the docstring of the
                 provided `func_or_tool`. This description is primarily for the public-facing
                 `ReliableTool` (e.g., when registered with an outer agent for it to decide
-                when to use this tool).
+                when to use this tool). Defaults to None.
                 Example: `"Reliably fetches and validates current weather information for a specified city."`
 
-            system_message_addition_for_tool_calling (str, default: ""):
+            system_message_addition_for_tool_calling (str):
                 Additional text appended to the system message of the internal "Runner Agent".
                 This allows you to provide specific instructions, context, or constraints
                 to the LLM responsible for deciding *how* to call your underlying `func_or_tool`.
                 Use this when the Runner Agent needs more guidance than just the task
-                description and the function's signature to correctly formulate arguments.
+                description and the function's signature to correctly formulate arguments. Defaults to "".
                 Example: `"When calling 'search_products', if the task mentions 'budget', ensure the 'max_price' argument is set accordingly. Prioritize items in stock."`
 
-            system_message_addition_for_result_validation (str, default: ""):
+            system_message_addition_for_result_validation (str):
                 Additional text appended to the system message of the internal "Validator Agent".
                 This is where you define the *base* or *static* criteria for validating the
                 *result* (string representation) of your `func_or_tool`. These criteria
                 are applied on every validation attempt unless overridden or supplemented by
-                dynamic validation.
+                dynamic validation. Defaults to "".
                 Example: `"The stock price must be a positive number. The company name in the result must match the one in the task. If data is unavailable, the result should explicitly state 'Data not found'."`
 
-            max_tool_invocations (int, default: 3):
+            max_tool_invocations (int):
                 The maximum number of times the internal "Runner Agent" can attempt to
                 call the underlying `func_or_tool`. This limit includes the initial attempt
                 and any subsequent retries that occur due to:
@@ -622,40 +621,40 @@ class ReliableTool(Tool):
                 2. The Runner Agent failing to generate a valid tool call.
                 3. The Validator Agent deeming a successful execution's result as invalid.
                 Adjust this to control retries and prevent excessive LLM calls, considering
-                the potential flakiness of the `func_or_tool` or complexity of parameterization.
+                the potential flakiness of the `func_or_tool` or complexity of parameterization. Defaults to 3.
                 Example: `max_tool_invocations=2` (allows one initial attempt and one retry if needed).
 
-            enable_dynamic_validation (bool, default: False):
+            enable_dynamic_validation (bool):
                 If `True`, the public-facing `run` (or `a_run`) method of this `ReliableTool`
                 (accessible via its `func` attribute after initialization) will accept an
                 additional optional argument: `validation_prompt_addition: Optional[str]`.
                 If a string is provided for this argument during a call, it will be appended
                 to the Validator Agent's system message *for that specific run*, allowing
-                validation criteria to be tailored on-the-fly based on the task.
+                validation criteria to be tailored on-the-fly based on the task. Defaults to False.
                 Example: If `True`, `my_tool.func(task="search for AG2 examples", validation_prompt_addition="Result must include Python code snippets.")`
 
-            messages (Optional[List[dict[str, Any]]], default: None):
+            messages (Optional[list[dict[str, Any]]]):
                 A list of initial messages (e.g., from a prior conversation history) to
                 provide context to the internal Runner and Validator agents. These messages
                 are prepended to the message history seen by these agents during their
                 internal chat, helping them understand the `task` in a broader context.
                 Use when the `task` for the `ReliableTool` might refer to entities or
-                intentions established in preceding turns of a conversation.
+                intentions established in preceding turns of a conversation. Defaults to None.
                 Example: `messages=[{"role": "user", "content": "I'm interested in large-cap tech stocks."}, {"role": "assistant", "content": "Okay, any specific ones?"}]`
                          (Then a task like "Fetch the latest price for 'the one we just discussed'.")
 
-            ground_truth (Optional[List[str]], default: None):
+            ground_truth (Optional[list[str]]):
                 A list of strings representing factual information, examples, or specific
                 constraints that should be considered by the internal Runner and Validator
                 agents. These are injected into the conversation history as distinct user
                 messages (e.g., "[[Provided Ground Truth 1]]: ...").
                 Use to provide specific, factual data or strong hints that might not fit
                 naturally into system messages or prior conversation history, guiding the
-                agents towards correct interpretation or validation.
+                agents towards correct interpretation or validation. Defaults to None.
                 Example: `ground_truth=["The API rate limit is 10 requests per minute.", "User preference: only show results from the last 7 days."]`
         """
         self._original_func, original_name, original_description = self._extract_func_details(func_or_tool)
-        self._is_original_func_async = inspect.iscoroutinefunction(self._original_func)
+        self._is_original_func_async = is_coroutine_callable(self._original_func)
 
         self._runner_llm_config = ConversableAgent._validate_llm_config(runner_llm_config)
         if self._runner_llm_config is False:
@@ -703,9 +702,7 @@ class ReliableTool(Tool):
         if not is_async:
             if enable_dynamic:
 
-                def sync_entry_point_with_validation(
-                    task: str, validation_prompt_addition: Optional[str] = None
-                ) -> Any:
+                def sync_entry_point_with_validation(task: str, validation_prompt_addition: str | None = None) -> Any:
                     return self.run(task=task, validation_prompt_addition=validation_prompt_addition)
 
                 return sync_entry_point_with_validation
@@ -719,7 +716,7 @@ class ReliableTool(Tool):
             if enable_dynamic:
 
                 async def async_entry_point_with_validation(
-                    task: str, validation_prompt_addition: Optional[str] = None
+                    task: str, validation_prompt_addition: str | None = None
                 ) -> Any:
                     return await self.a_run(task=task, validation_prompt_addition=validation_prompt_addition)
 
@@ -731,9 +728,7 @@ class ReliableTool(Tool):
 
                 return async_entry_point_without_validation
 
-    def _extract_func_details(
-        self, func_or_tool: Union[Callable[..., Any], Tool]
-    ) -> Tuple[Callable[..., Any], str, str]:
+    def _extract_func_details(self, func_or_tool: Callable[..., Any] | Tool) -> tuple[Callable[..., Any], str, str]:
         default_desc_template = "Executes the '{name}' function."
         if isinstance(func_or_tool, Tool):
             func = getattr(func_or_tool, "func", None)
@@ -806,8 +801,8 @@ class ReliableTool(Tool):
         self._runner.register_hook(hookable_method="process_message_before_send", hook=self._ensure_function_call_hook)
 
     def _validator_structured_output_hook(
-        self, sender: Agent, message: Union[dict[str, Any], str], recipient: Agent, silent: bool
-    ) -> Union[dict[str, Any], str]:
+        self, sender: Agent, message: dict[str, Any] | str, recipient: Agent, silent: bool
+    ) -> dict[str, Any] | str:
         if not isinstance(message, str):
             logger.error(
                 f"Validator Hook: Expected a JSON string message from LLM, but got {type(message)}. Content: {str(message)[:200]}"
@@ -885,8 +880,8 @@ class ReliableTool(Tool):
         return final_messages
 
     def _ensure_function_call_hook(
-        self, sender: Agent, message: Union[dict[str, Any], str], recipient: Agent, silent: bool
-    ) -> Union[dict[str, Any], str]:
+        self, sender: Agent, message: dict[str, Any] | str, recipient: Agent, silent: bool
+    ) -> dict[str, Any] | str:
         if sender.name != self._runner_name:
             return message
 
@@ -941,8 +936,8 @@ class ReliableTool(Tool):
         self,
         task: str,
         initial_context_vars: ContextVariables,  # Renamed for clarity
-        dynamic_validation_str: Optional[str] = None,
-    ) -> Tuple[ChatResult, ContextVariables, Agent]:
+        dynamic_validation_str: str | None = None,
+    ) -> tuple[ChatResult, ContextVariables, Agent]:
         internal_tool_name = f"{self.INTERNAL_TOOL_NAME_PREFIX}{self._original_func_name}"
 
         # update_system_message should not fail if agent is properly initialized
@@ -1008,9 +1003,9 @@ class ReliableTool(Tool):
         self,
         task: str,
         current_context_variables: ContextVariables,
-        validation_prompt_addition: Optional[str] = None,
-        messages: Optional[list[dict[str, Any]]] = None,
-        ground_truth: Optional[List[str]] = None,
+        validation_prompt_addition: str | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        ground_truth: list[str] | None = None,
     ) -> ReliableToolContext:
         """Initializes or updates the ReliableToolContext for the current run."""
         effective_messages = copy.deepcopy(messages) if messages is not None else self._init_messages
@@ -1029,10 +1024,10 @@ class ReliableTool(Tool):
     def _process_run(
         self,
         task: str,
-        context_variables: Optional[ContextVariables] = None,
-        validation_prompt_addition: Optional[str] = None,
-        messages: Optional[list[dict[str, Any]]] = None,
-        ground_truth: Optional[List[str]] = None,
+        context_variables: ContextVariables | None = None,
+        validation_prompt_addition: str | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        ground_truth: list[str] | None = None,
     ) -> Any:
         current_context_variables = context_variables if context_variables is not None else ContextVariables()
         if not isinstance(current_context_variables, ContextVariables):
@@ -1082,10 +1077,10 @@ class ReliableTool(Tool):
     def run(
         self,
         task: str,
-        context_variables: Optional[ContextVariables] = None,
-        validation_prompt_addition: Optional[str] = None,
-        messages: Optional[list[dict[str, Any]]] = None,
-        ground_truth: Optional[List[str]] = None,
+        context_variables: ContextVariables | None = None,
+        validation_prompt_addition: str | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        ground_truth: list[str] | None = None,
     ) -> Any:
         if self._is_original_func_async:
             raise TypeError(f"Sync 'run()' called for async tool '{self.name}'. Use 'a_run()'.")
@@ -1100,10 +1095,10 @@ class ReliableTool(Tool):
     async def a_run(
         self,
         task: str,
-        context_variables: Optional[ContextVariables] = None,
-        validation_prompt_addition: Optional[str] = None,
-        messages: Optional[list[dict[str, Any]]] = None,
-        ground_truth: Optional[List[str]] = None,
+        context_variables: ContextVariables | None = None,
+        validation_prompt_addition: str | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        ground_truth: list[str] | None = None,
     ) -> Any:
         if not self._is_original_func_async:
             warnings.warn(
@@ -1127,10 +1122,10 @@ class ReliableTool(Tool):
     def _process_run_with_details(
         self,
         task: str,
-        context_variables: Optional[ContextVariables] = None,
-        validation_prompt_addition: Optional[str] = None,
-        messages: Optional[list[dict[str, Any]]] = None,
-        ground_truth: Optional[List[str]] = None,
+        context_variables: ContextVariables | None = None,
+        validation_prompt_addition: str | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        ground_truth: list[str] | None = None,
     ) -> ToolExecutionDetails:
         current_context_variables = context_variables if context_variables is not None else ContextVariables()
         if not isinstance(current_context_variables, ContextVariables):
@@ -1251,10 +1246,10 @@ class ReliableTool(Tool):
     def run_and_get_details(
         self,
         task: str,
-        context_variables: Optional[ContextVariables] = None,
-        validation_prompt_addition: Optional[str] = None,
-        messages: Optional[list[dict[str, Any]]] = None,
-        ground_truth: Optional[List[str]] = None,
+        context_variables: ContextVariables | None = None,
+        validation_prompt_addition: str | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        ground_truth: list[str] | None = None,
     ) -> ToolExecutionDetails:
         if self._is_original_func_async:
             raise TypeError(
@@ -1272,10 +1267,10 @@ class ReliableTool(Tool):
     async def a_run_and_get_details(
         self,
         task: str,
-        context_variables: Optional[ContextVariables] = None,
-        validation_prompt_addition: Optional[str] = None,
-        messages: Optional[list[dict[str, Any]]] = None,
-        ground_truth: Optional[List[str]] = None,
+        context_variables: ContextVariables | None = None,
+        validation_prompt_addition: str | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        ground_truth: list[str] | None = None,
     ) -> ToolExecutionDetails:
         if not self._is_original_func_async:
             warnings.warn(

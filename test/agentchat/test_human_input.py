@@ -10,12 +10,11 @@ from unittest.mock import MagicMock
 
 import autogen
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
-def test_get_human_input(credentials_gpt_4o_mini: Credentials):
+def test_get_human_input(credentials_openai_mini: Credentials):
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
@@ -23,7 +22,7 @@ def test_get_human_input(credentials_gpt_4o_mini: Credentials):
         llm_config={
             "timeout": 600,
             "cache_seed": 41,
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
             "temperature": 0,
         },
     )
@@ -44,7 +43,3 @@ def test_get_human_input(credentials_gpt_4o_mini: Credentials):
 
     # Assert that custom_a_get_human_input was called at least once
     user_proxy.get_human_input.assert_called()
-
-
-if __name__ == "__main__":
-    test_get_human_input()

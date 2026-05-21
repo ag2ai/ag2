@@ -1,11 +1,18 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
+from collections.abc import Callable
 from functools import partial
 from types import MethodType
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
+
+from autogen.agentchat.group.events.transition_events import (
+    AfterWorksTransitionEvent,
+    OnContextConditionTransitionEvent,
+)
+from autogen.io.base import IOStream
 
 from ..agent import Agent
 from ..groupchat import GroupChat, GroupChatManager
@@ -15,6 +22,7 @@ from .targets.group_manager_target import GroupManagerTarget
 from .targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
+    RandomAgentTarget,
     TransitionTarget,
 )
 
@@ -86,7 +94,7 @@ def _evaluate_after_works_conditions(
     agent: "ConversableAgent",
     groupchat: GroupChat,
     user_agent: Optional["ConversableAgent"],
-) -> Optional[Union[Agent, str]]:
+) -> Agent | str | None:
     """Evaluate after_works context conditions for an agent.
 
     Args:
@@ -113,21 +121,26 @@ def _evaluate_after_works_conditions(
             after_work_condition.condition is None or after_work_condition.condition.evaluate(agent.context_variables)
         ):
             # Condition matched, resolve and return
-            return after_work_condition.target.resolve(
+            after_works_speaker = after_work_condition.target.resolve(
                 groupchat,
                 agent,
                 user_agent,
             ).get_speaker_selection_result(groupchat)
+
+            iostream = IOStream.get_default()
+            iostream.send(AfterWorksTransitionEvent(source_agent=agent, transition_target=after_work_condition.target))
+
+            return after_works_speaker
 
     return None
 
 
 def _run_oncontextconditions(
     agent: "ConversableAgent",
-    messages: Optional[list[dict[str, Any]]] = None,
-    sender: Optional[Agent] = None,
-    config: Optional[Any] = None,
-) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+    messages: list[dict[str, Any]] | None = None,
+    sender: Agent | None = None,
+    config: Any | None = None,
+) -> tuple[bool, str | dict[str, Any] | None]:
     """Run OnContextConditions for an agent before any other reply function."""
     for on_condition in agent.handoffs.context_conditions:  # type: ignore[attr-defined]
         is_available = (
@@ -140,6 +153,9 @@ def _run_oncontextconditions(
             on_condition.target.activate_target(agent._group_manager.groupchat)  # type: ignore[attr-defined]
 
             transfer_name = on_condition.target.display_name()
+
+            iostream = IOStream.get_default()
+            iostream.send(OnContextConditionTransitionEvent(source_agent=agent, transition_target=on_condition.target))
 
             return True, "[Handing off to " + transfer_name + "]"
 
@@ -181,29 +197,33 @@ def create_on_condition_handoff_functions(agent: "ConversableAgent") -> None:
         )
 
 
+def _validate_handoff_target(target: TransitionTarget, agent_names: list[str], context: str) -> None:
+    """Validate that a handoff target references agents within the group.
+
+    Args:
+        target: The transition target to validate.
+        agent_names: Names of agents in the group.
+        context: Description of where this target appears, used in error messages.
+    """
+    if isinstance(target, (AgentTarget, AgentNameTarget)):
+        if target.agent_name not in agent_names:
+            raise ValueError(f"Agent in {context} Hand-offs must be in the agents list")
+    elif isinstance(target, RandomAgentTarget):
+        for name in target.agent_names:
+            if name not in agent_names:
+                raise ValueError(f"Agent '{name}' in RandomAgentTarget Hand-offs must be in the agents list")
+
+
 def ensure_handoff_agents_in_group(agents: list["ConversableAgent"]) -> None:
     """Ensure the agents in handoffs are in the group chat."""
     agent_names = [agent.name for agent in agents]
     for agent in agents:
         for llm_conditions in agent.handoffs.llm_conditions:
-            if (
-                isinstance(llm_conditions.target, (AgentTarget, AgentNameTarget))
-                and llm_conditions.target.agent_name not in agent_names
-            ):
-                raise ValueError("Agent in OnCondition Hand-offs must be in the agents list")
+            _validate_handoff_target(llm_conditions.target, agent_names, "OnCondition")
         for context_conditions in agent.handoffs.context_conditions:
-            if (
-                isinstance(context_conditions.target, (AgentTarget, AgentNameTarget))
-                and context_conditions.target.agent_name not in agent_names
-            ):
-                raise ValueError("Agent in OnContextCondition Hand-offs must be in the agents list")
-        # Check after_works targets
+            _validate_handoff_target(context_conditions.target, agent_names, "OnContextCondition")
         for after_work_condition in agent.handoffs.after_works:
-            if (
-                isinstance(after_work_condition.target, (AgentTarget, AgentNameTarget))
-                and after_work_condition.target.agent_name not in agent_names
-            ):
-                raise ValueError("Agent in after work target Hand-offs must be in the agents list")
+            _validate_handoff_target(after_work_condition.target, agent_names, "after work target")
 
 
 def ensure_guardrail_agents_in_group(agents: list["ConversableAgent"]) -> None:
@@ -267,7 +287,7 @@ def prepare_group_agents(
     tool_execution = GroupToolExecutor()
 
     # Wrap handoff targets in agents that need to be wrapped
-    wrapped_chat_agents: list["ConversableAgent"] = []
+    wrapped_chat_agents: list[ConversableAgent] = []
     for agent in agents:
         wrap_agent_handoff_targets(agent, wrapped_chat_agents)
 
@@ -318,7 +338,7 @@ def wrap_agent_handoff_targets(agent: "ConversableAgent", wrapped_agent_list: li
 
 
 def process_initial_messages(
-    messages: Union[list[dict[str, Any]], str],
+    messages: list[dict[str, Any]] | str,
     user_agent: Optional["ConversableAgent"],
     agents: list["ConversableAgent"],
     wrapped_agents: list["ConversableAgent"],
@@ -346,8 +366,8 @@ def process_initial_messages(
 
     # If there's only one message and there's no identified group agent
     # Start with a user proxy agent, creating one if they haven't passed one in
-    last_agent: Optional[ConversableAgent]
-    temp_user_proxy: Optional[ConversableAgent] = None
+    last_agent: ConversableAgent | None
+    temp_user_proxy: ConversableAgent | None = None
     temp_user_list: list[Agent] = []
     if len(messages) == 1 and "name" not in messages[0] and not user_agent:
         temp_user_proxy = ConversableAgent(name="_User", code_execution_config=False, human_input_mode="ALWAYS")
@@ -425,7 +445,7 @@ def determine_next_agent(
     group_agent_names: list[str],
     user_agent: Optional["ConversableAgent"],
     group_after_work: TransitionTarget,
-) -> Optional[Union[Agent, str]]:
+) -> Agent | str | None:
     """Determine the next agent in the conversation.
 
     Args:
@@ -441,7 +461,6 @@ def determine_next_agent(
     Returns:
         Optional[Union[Agent, str]]: The next agent or speaker selection method.
     """
-
     # Logic for determining the next target (anything based on Transition Target: an agent, wrapped agent, TerminateTarget, StayTarget, RevertToUserTarget, GroupManagerTarget, etc.
     # 1. If it's the first response -> initial agent
     # 2. If the last message is a tool call -> tool execution agent
@@ -452,8 +471,16 @@ def determine_next_agent(
     # 6. Resolve and return the After Work condition -> agent / wrapped agent / TerminateTarget / StayTarget / RevertToUserTarget / GroupManagerTarget / etc.
 
     # 1. If it's the first response, return the initial agent
+    manager = getattr(last_speaker, "_group_manager", None)
+
     if use_initial_agent:
         return initial_agent
+
+    next_target: TransitionTarget | None = None
+    if manager := getattr(last_speaker, "_group_manager", None):
+        next_target = getattr(manager, "_next_target_force", None)
+        if next_target is not None:
+            delattr(manager, "_next_target_force")
 
     # 2. If the last message is a tool call, return the tool execution agent
     if "tool_calls" in groupchat.messages[-1]:
@@ -461,11 +488,12 @@ def determine_next_agent(
 
     # 3. If the Tool Executor has determined a next target, return that
     if tool_executor.has_next_target():
-        next_agent = tool_executor.get_next_target()
+        next_target = tool_executor.get_next_target()
         tool_executor.clear_next_target()
 
-        if next_agent.can_resolve_for_speaker_selection():
-            return next_agent.resolve(groupchat, last_speaker, user_agent).get_speaker_selection_result(groupchat)
+    if next_target:
+        if next_target.can_resolve_for_speaker_selection():
+            return next_target.resolve(groupchat, last_speaker, user_agent).get_speaker_selection_result(groupchat)
         else:
             raise ValueError(
                 "Tool Executor next target must be a valid TransitionTarget that can resolve for speaker selection."
@@ -513,7 +541,7 @@ def create_group_transition(
     group_agent_names: list[str],
     user_agent: Optional["ConversableAgent"],
     group_after_work: TransitionTarget,
-) -> Callable[["ConversableAgent", GroupChat], Optional[Union[Agent, str]]]:
+) -> Callable[["ConversableAgent", GroupChat], Agent | str | None]:
     """Creates a transition function for group chat with enclosed state for the use_initial_agent.
 
     Args:
@@ -530,7 +558,7 @@ def create_group_transition(
     # of group_transition
     state = {"use_initial_agent": True}
 
-    def group_transition(last_speaker: "ConversableAgent", groupchat: GroupChat) -> Optional[Union[Agent, str]]:
+    def group_transition(last_speaker: "ConversableAgent", groupchat: GroupChat) -> Agent | str | None:
         result = determine_next_agent(
             last_speaker=last_speaker,
             groupchat=groupchat,
@@ -549,7 +577,7 @@ def create_group_transition(
 
 def create_group_manager(
     groupchat: GroupChat,
-    group_manager_args: Optional[dict[str, Any]],
+    group_manager_args: dict[str, Any] | None,
     agents: list["ConversableAgent"],
     group_after_work: TransitionTarget,
 ) -> GroupChatManager:

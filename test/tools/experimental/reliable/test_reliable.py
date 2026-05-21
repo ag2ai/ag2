@@ -4,7 +4,8 @@
 
 import os
 import tempfile
-from typing import Annotated, Generator, List, Tuple
+from collections.abc import Generator
+from typing import Annotated
 
 import pytest
 
@@ -17,7 +18,7 @@ from autogen.tools.experimental.reliable.reliable import ToolExecutionDetails
 
 # AG2 framework specific imports for testing
 # Adjust the path to conftest.py if necessary based on your test file's location
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     import openai  # noqa: F401
@@ -47,7 +48,7 @@ def setup_test_environment() -> Generator[None, None, None]:
 
 class TestReliableTool:
     @run_for_optional_imports("openai", "openai")
-    def test_bad_response(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_bad_response(self, credentials_openai_mini: Credentials) -> None:
         # Skip this test in GitHub Actions due to SQLite database permission issues
         if os.getenv("GITHUB_ACTIONS") == "true":
             pytest.skip("Skipping ReliableTool test in GitHub Actions due to SQLite database permission issues")
@@ -55,8 +56,8 @@ class TestReliableTool:
         should_bad_response = True
 
         def generate_sub_questions_list(
-            sub_questions: Annotated[List[str], "A list of sub-questions related to the main question."],
-        ) -> List[str]:
+            sub_questions: Annotated[list[str], "A list of sub-questions related to the main question."],
+        ) -> list[str]:
             """
             Receives and returns a list of generated sub-questions.
             """
@@ -70,8 +71,8 @@ class TestReliableTool:
             name="SubQuestionGenerator",
             func_or_tool=generate_sub_questions_list,
             description="Reliably generates exactly 3 relevant sub-questions for a given main question.",
-            runner_llm_config=credentials_gpt_4o_mini.llm_config,
-            validator_llm_config=credentials_gpt_4o_mini.llm_config,
+            runner_llm_config=credentials_openai_mini.llm_config,
+            validator_llm_config=credentials_openai_mini.llm_config,
             system_message_addition_for_tool_calling=sub_question_runner_system_message_addition,
             system_message_addition_for_result_validation=sub_question_validator_system_message_addition,
             max_tool_invocations=5,
@@ -86,7 +87,7 @@ class TestReliableTool:
         assert not should_bad_response
 
     @run_for_optional_imports("openai", "openai")
-    def test_error(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_error(self, credentials_openai_mini: Credentials) -> None:
         # Skip this test in GitHub Actions due to SQLite database permission issues
         if os.getenv("GITHUB_ACTIONS") == "true":
             pytest.skip("Skipping ReliableTool test in GitHub Actions due to SQLite database permission issues")
@@ -94,8 +95,8 @@ class TestReliableTool:
         should_error = True
 
         def generate_sub_questions_list(
-            sub_questions: Annotated[List[str], "A list of sub-questions related to the main question."],
-        ) -> List[str]:
+            sub_questions: Annotated[list[str], "A list of sub-questions related to the main question."],
+        ) -> list[str]:
             """
             Receives and returns a list of generated sub-questions.
             """
@@ -109,8 +110,8 @@ class TestReliableTool:
             name="SubQuestionGenerator",
             func_or_tool=generate_sub_questions_list,
             description="Reliably generates exactly 3 relevant sub-questions for a given main question.",
-            runner_llm_config=credentials_gpt_4o_mini.llm_config,
-            validator_llm_config=credentials_gpt_4o_mini.llm_config,
+            runner_llm_config=credentials_openai_mini.llm_config,
+            validator_llm_config=credentials_openai_mini.llm_config,
             system_message_addition_for_tool_calling=sub_question_runner_system_message_addition,
             system_message_addition_for_result_validation=sub_question_validator_system_message_addition,
             max_tool_invocations=5,
@@ -125,7 +126,7 @@ class TestReliableTool:
         assert not should_error
 
     @run_for_optional_imports("openai", "openai")
-    def test_return_tuple(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_return_tuple(self, credentials_openai_mini: Credentials) -> None:
         # Skip this test in GitHub Actions due to SQLite database permission issues
         if os.getenv("GITHUB_ACTIONS") == "true":
             pytest.skip("Skipping ReliableTool test in GitHub Actions due to SQLite database permission issues")
@@ -133,8 +134,8 @@ class TestReliableTool:
         should_error = True
 
         def generate_sub_questions_list(
-            sub_questions: Annotated[List[str], "A list of sub-questions related to the main question."],
-        ) -> Tuple[List[str], str]:
+            sub_questions: Annotated[list[str], "A list of sub-questions related to the main question."],
+        ) -> tuple[list[str], str]:
             """
             Receives and returns a list of generated sub-questions.
             """
@@ -148,8 +149,8 @@ class TestReliableTool:
             name="SubQuestionGenerator",
             func_or_tool=generate_sub_questions_list,
             description="Reliably generates exactly 3 relevant sub-questions for a given main question.",
-            runner_llm_config=credentials_gpt_4o_mini.llm_config,
-            validator_llm_config=credentials_gpt_4o_mini.llm_config,
+            runner_llm_config=credentials_openai_mini.llm_config,
+            validator_llm_config=credentials_openai_mini.llm_config,
             system_message_addition_for_tool_calling=sub_question_runner_system_message_addition,
             system_message_addition_for_result_validation=sub_question_validator_system_message_addition,
             max_tool_invocations=5,

@@ -22,48 +22,52 @@ Install Mistral.AI python library using: pip install --upgrade mistralai
 Resources:
 - https://docs.mistral.ai/getting-started/quickstart/
 
-NOTE: Requires mistralai package version >= 1.0.1
+NOTE: Requires mistralai package version >= 2.0.0
 """
 
 import json
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
-from pydantic import Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     # Mistral libraries
-    # pip install mistralai
-    from mistralai import (
-        AssistantMessage,
-        Function,
-        FunctionCall,
-        Mistral,
-        SystemMessage,
-        ToolCall,
-        ToolMessage,
-        UserMessage,
-    )
+    # pip install mistralai>=2.0.0
+    from mistralai.client.models.assistantmessage import AssistantMessage
+    from mistralai.client.models.function import Function
+    from mistralai.client.models.functioncall import FunctionCall
+    from mistralai.client.models.systemmessage import SystemMessage
+    from mistralai.client.models.toolcall import ToolCall
+    from mistralai.client.models.toolmessage import ToolMessage
+    from mistralai.client.models.usermessage import UserMessage
+    from mistralai.client.sdk import Mistral
 
 
-@register_llm_config
+class MistralEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["mistral"]
+
+    safe_prompt: bool
+    random_seed: int | None
+    stream: bool
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    tool_choice: Literal["none", "auto", "any"] | None
+
+
 class MistralLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["mistral"] = "mistral"
-    temperature: float = Field(default=0.7)
-    top_p: Optional[float] = None
-    max_tokens: Optional[int] = Field(default=None, ge=0)
     safe_prompt: bool = False
-    random_seed: Optional[int] = None
+    random_seed: int | None = None
     stream: bool = False
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
-    tool_choice: Optional[Literal["none", "auto", "any"]] = None
+    tool_choice: Literal["none", "auto", "any"] | None = None
 
     def create_client(self):
         raise NotImplementedError("MistralLLMConfigEntry.create_client is not implemented.")
@@ -73,7 +77,9 @@ class MistralLLMConfigEntry(LLMConfigEntry):
 class MistralAIClient:
     """Client for Mistral.AI's API."""
 
-    def __init__(self, **kwargs):
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
+    def __init__(self, **kwargs: Unpack[MistralEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:
@@ -93,7 +99,7 @@ class MistralAIClient:
 
         self._client = Mistral(api_key=self.api_key)
 
-    def message_retrieval(self, response: ChatCompletion) -> Union[list[str], list[ChatCompletionMessage]]:
+    def message_retrieval(self, response: ChatCompletion) -> list[str] | list[ChatCompletionMessage]:
         """Retrieve the messages from the response."""
         return [choice.message for choice in response.choices]
 
@@ -120,7 +126,7 @@ class MistralAIClient:
         )
         mistral_params["random_seed"] = validate_parameter(params, "random_seed", int, True, None, False, None)
         mistral_params["tool_choice"] = validate_parameter(
-            params, "tool_choice", str, False, None, None, ["none", "auto", "any"]
+            params, "tool_choice", str, True, None, None, ["none", "auto", "any"]
         )
 
         # TODO

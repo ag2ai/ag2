@@ -12,6 +12,6 @@ cd "$(dirname "$0")"/..
 
 pip uninstall ag2 --yes --quiet
 
-pip install -q -e .[types]
+uv pip install -q -e .[types]
 
 mypy

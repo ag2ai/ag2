@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, List, Optional, Union
+from typing import Any
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -11,8 +11,7 @@ from ....tools.experimental import WikipediaPageLoadTool, WikipediaQueryRunTool
 
 @export_module("autogen.agents.experimental")
 class WikipediaAgent(ConversableAgent):
-    """
-    An AI agent that leverages Wikipedia tools to provide accurate, concise answers
+    """An AI agent that leverages Wikipedia tools to provide accurate, concise answers
     to user queries.
 
     Tools:
@@ -44,14 +43,13 @@ class WikipediaAgent(ConversableAgent):
 
     def __init__(
         self,
-        system_message: Optional[Union[str, List[str]]] = None,
-        format_instructions: Optional[str] = None,
+        system_message: str | list[str] | None = None,
+        format_instructions: str | None = None,
         language: str = "en",
         top_k: int = 2,
         **kwargs: Any,
     ) -> None:
-        """
-        Initialize the WikipediaAgent with optional custom prompts and tools.
+        """Initialize the WikipediaAgent with optional custom prompts and tools.
 
         Args:
             system_message (Optional[Union[str, List[str]]]):

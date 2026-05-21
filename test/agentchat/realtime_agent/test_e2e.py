@@ -7,15 +7,14 @@ from typing import Annotated
 from unittest.mock import MagicMock
 
 import pytest
-from anyio import Event, move_on_after, sleep
-from asyncer import create_task_group
+from anyio import Event, create_task_group, move_on_after, sleep
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from pytest import FixtureRequest
 
 from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
+from test.credentials import Credentials
 
-from ...conftest import Credentials
 from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)
@@ -60,7 +59,7 @@ class TestE2E:
                 return "The weather is cloudy." if location == "Seattle" else "The weather is sunny."
 
             async with create_task_group() as tg:
-                tg.soonify(agent.run)()
+                tg.start_soon(agent.run)
                 await sleep(10)  # Run for 10 seconds
                 tg.cancel_scope.cancel()
 
@@ -92,23 +91,29 @@ class TestE2E:
         "credentials_llm_realtime",
         [
             pytest.param("credentials_gpt_4o_realtime", marks=[pytest.mark.openai_realtime, pytest.mark.aux_neg_flag]),
-            pytest.param("credentials_gemini_realtime", marks=[pytest.mark.gemini_realtime, pytest.mark.aux_neg_flag]),
+            pytest.param(
+                "credentials_gemini_realtime",
+                marks=[
+                    pytest.mark.gemini_realtime,
+                    pytest.mark.aux_neg_flag,
+                    pytest.mark.skip(reason="Gemini realtime API WebSocket connection issue - InvalidURI error"),
+                ],
+            ),
         ],
     )
     async def test_e2e(
-        self, credentials_llm_realtime: str, credentials_gpt_4o_mini: Credentials, request: FixtureRequest
+        self, credentials_llm_realtime: str, credentials_openai_mini: Credentials, request: FixtureRequest
     ) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Retry the test up to 5 times if it fails. Sometimes the test fails due to voice not being recognized by the Realtime API.
-
         """
         i = 0
         count = 5
         while True:
             try:
                 credentials = request.getfixturevalue(credentials_llm_realtime)
-                await self._test_e2e(credentials_llm=credentials, credentials_openai=credentials_gpt_4o_mini)
+                await self._test_e2e(credentials_llm=credentials, credentials_openai=credentials_openai_mini)
                 return  # Exit the function if the test passes
             except Exception as e:
                 logger.warning(

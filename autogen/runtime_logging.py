@@ -9,7 +9,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import uuid
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from .logger.base_logger import BaseLogger, LLMConfig
 from .logger.logger_factory import LoggerFactory
@@ -38,9 +39,9 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 def start(
-    logger: Optional[BaseLogger] = None,
+    logger: BaseLogger | None = None,
     logger_type: Literal["sqlite", "file"] = "sqlite",
-    config: Optional[dict[str, Any]] = None,
+    config: dict[str, Any] | None = None,
 ) -> str:
     """Start logging for the runtime.
 
@@ -71,7 +72,7 @@ def log_chat_completion(
     wrapper_id: int,
     agent: str | Agent,
     request: dict[str, float | str | list[dict[str, str]]],
-    response: str | "ChatCompletion",
+    response: str | ChatCompletion,
     is_cached: int,
     cost: float,
     start_time: str,

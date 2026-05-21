@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import importlib.util
 import os
 import tempfile
 import time
@@ -14,17 +15,23 @@ import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
 from autogen.import_utils import run_for_optional_imports
+from test.credentials import Credentials
+from test.utils import suppress_gemini_resource_exhausted
 
-from ..conftest import Credentials, suppress_gemini_resource_exhausted
+_SKIP_WITHOUT_DISKCACHE = pytest.mark.skipif(
+    importlib.util.find_spec("diskcache") is None,
+    reason="diskcache package is not installed; Cache.disk falls back to InMemoryCache",
+)
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
+def test_legacy_disk_cache(credentials_openai_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()
     cold_cache_messages = run_conversation(
-        credentials_gpt_4o_mini,
+        credentials_openai_mini,
         cache_seed=random_cache_seed,
     )
     end_time = time.time()
@@ -32,7 +39,7 @@ def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
 
     start_time = time.time()
     warm_cache_messages = run_conversation(
-        credentials_gpt_4o_mini,
+        credentials_openai_mini,
         cache_seed=random_cache_seed,
     )
     end_time = time.time()
@@ -75,8 +82,8 @@ def _test_redis_cache(credentials: Credentials):
 @run_for_optional_imports("openai", "openai")
 @pytest.mark.redis
 @run_for_optional_imports(["openai", "redis"], "redis")
-def test_redis_cache(credentials_gpt_4o_mini: Credentials):
-    _test_redis_cache(credentials_gpt_4o_mini)
+def test_redis_cache(credentials_openai_mini: Credentials):
+    _test_redis_cache(credentials_openai_mini)
 
 
 @pytest.mark.skip(reason="Currently not working")
@@ -96,18 +103,19 @@ def test_redis_cache_anthropic(credentials_anthropic_claude_sonnet: Credentials)
     _test_redis_cache(credentials_anthropic_claude_sonnet)
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_disk_cache(credentials_gpt_4o_mini: Credentials):
+def test_disk_cache(credentials_openai_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()
     with Cache.disk(random_cache_seed) as cache_client:
-        cold_cache_messages = run_conversation(credentials_gpt_4o_mini, cache_seed=None, cache=cache_client)
+        cold_cache_messages = run_conversation(credentials_openai_mini, cache_seed=None, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_conversation(credentials_gpt_4o_mini, cache_seed=None, cache=cache_client)
+        warm_cache_messages = run_conversation(credentials_openai_mini, cache_seed=None, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages
@@ -115,12 +123,12 @@ def test_disk_cache(credentials_gpt_4o_mini: Credentials):
 
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     with Cache.disk(random_cache_seed) as cache_client:
-        cold_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
+        cold_cache_messages = run_groupchat_conversation(credentials_openai_mini, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
+        warm_cache_messages = run_groupchat_conversation(credentials_openai_mini, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages

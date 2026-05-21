@@ -2,6 +2,8 @@
 
 To integrate `Crawl4AI` with AG2, follow these steps:
 
+**Minimum supported version:** `crawl4ai>=0.5.0` (AG2 is tested with `0.8.x`).
+
 1. Install AG2 with the `crawl4ai` extra:
     ```bash
     pip install ag2[openai,crawl4ai]
@@ -61,13 +63,15 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 </Tip>
 
 ```python
-config_list = [{"}]
-
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-4o-mini",
+    "api_key": os.environ["OPENAI_API_KEY"],
+})
 
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
-with llm_config:
-    assistant = AssistantAgent(name="assistant")
+
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 ```
 
 ### Web Browsing with `Crawl4AI`
@@ -132,13 +136,13 @@ Arguments:
 >>>>>>>> EXECUTING FUNCTION crawl4ai...
 Call ID: call_R1DUz9LKPxE3t0wiy94OotAR
 Input arguments: {'url': 'https://docs.ag2.ai/docs/blog', 'instruction': 'Extract all blog posts including titles, dates, and links.'}
-[INIT].... → Crawl4AI 0.4.247
+[INIT].... → Crawl4AI 0.8.0
 [FETCH]... ↓ https://docs.ag2.ai/docs/blog... | Status: True | Time: 8.28s
 [SCRAPE].. ◆ Processed https://docs.ag2.ai/docs/blog... | Time: 23ms
 12:16:26 - LiteLLM:INFO: utils.py:2825 -
-LiteLLM completion() model= gpt-4o-mini; provider = openai
+LiteLLM completion() model= gpt-5-nano; provider = openai
 INFO:LiteLLM:
-LiteLLM completion() model= gpt-4o-mini; provider = openai
+LiteLLM completion() model= gpt-5-nano; provider = openai
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 12:17:04 - LiteLLM:INFO: utils.py:1030 - Wrapper: Completed Call, calling success_handler
 INFO:LiteLLM:Wrapper: Completed Call, calling success_handler

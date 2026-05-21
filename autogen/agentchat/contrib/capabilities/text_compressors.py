@@ -34,11 +34,11 @@ class LLMLingua:
 
     def __init__(
         self,
-        prompt_compressor_kwargs: dict = dict(
-            model_name="microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
-            use_llmlingua2=True,
-            device_map="cpu",
-        ),
+        prompt_compressor_kwargs: dict = {
+            "model_name": "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
+            "use_llmlingua2": True,
+            "device_map": "cpu",
+        },
         structured_compression: bool = False,
     ) -> None:
         """Args:

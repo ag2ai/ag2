@@ -4,12 +4,15 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import io
 import json
+import logging
 import os
 import sqlite3
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -22,14 +25,14 @@ with optional_import_block() as result:
 
 
 import autogen.runtime_logging
-from autogen.logger.logger_utils import get_current_ts, to_dict
+from autogen.logger.logger_utils import EventStreamHandler, event_print, get_current_ts, to_dict
 
 SAMPLE_CHAT_REQUEST = json.loads(
     """
 {
     "messages": [
         {
-            "content": "You are roleplaying a high school student strugling with linear algebra. Regardless how well the teacher explains things to you, you just don't quite get it. Keep your questions short.",
+            "content": "You are roleplaying a high school student struggling with linear algebra. Regardless how well the teacher explains things to you, you just don't quite get it. Keep your questions short.",
             "role": "system"
         },
         {
@@ -209,7 +212,7 @@ def test_log_oai_wrapper(db_connection):
         saved_init_args = json.loads(row["init_args"])
         assert "config_list" in saved_init_args
         assert "api_key" not in saved_init_args["config_list"][0]
-        assert "base_url" not in saved_init_args["config_list"][0]
+        assert "base_url" in saved_init_args["config_list"][0]
         assert "base_config" in saved_init_args
 
 
@@ -319,3 +322,53 @@ def test_logging_exception_will_not_crash_only_print_error(mock_logger_error, db
     args, _ = mock_logger_error.call_args
     error_message = args[0]
     assert error_message.startswith("[sqlite logger]Error running query with query")
+
+
+class _RecordingHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+def test_event_print_with_custom_logger_and_handler() -> None:
+    handler = _RecordingHandler()
+    logger = logging.getLogger("ag2.event.processor.test")
+    logger.handlers = [handler]
+    logger.propagate = False
+
+    event_print("hello", "world", sep="-", end="!", flush=False, logger=logger, level=logging.WARNING)
+
+    assert len(handler.records) == 1
+    record = handler.records[0]
+    assert record.getMessage() == "hello-world"
+    assert getattr(record, "ag2_event_end") == "!"
+    assert getattr(record, "ag2_event_flush") is False
+    assert record.levelno == logging.WARNING
+
+
+def test_event_print_default_logger_respects_end_and_flush() -> None:
+    stream = io.StringIO()
+    logger = logging.getLogger("ag2.event.processor")
+    old_handlers = logger.handlers[:]
+    old_propagate = logger.propagate
+    try:
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+        handler = EventStreamHandler(stream)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+
+        event_print("structured", "output", sep="|", end="END", flush=True)
+
+        assert stream.getvalue() == "structured|outputEND"
+    finally:
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+        for handler in old_handlers:
+            logger.addHandler(handler)
+        logger.propagate = old_propagate

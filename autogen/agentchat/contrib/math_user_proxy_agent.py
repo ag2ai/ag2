@@ -6,10 +6,19 @@
 # SPDX-License-Identifier: MIT
 import os
 import re
+import warnings
+from collections.abc import Callable
 from time import sleep
-from typing import Any, Callable, Dict, Literal, Optional, Union
+from typing import Any, Literal
 
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel
+from pydantic.version import VERSION as PYDANTIC_VERSION
+from typing_extensions import deprecated
+
+if PYDANTIC_VERSION.startswith("2."):
+    from pydantic import model_validator
+else:
+    from pydantic import root_validator
 
 from ...code_utils import UNKNOWN, execute_code, extract_code, infer_lang
 from ...import_utils import optional_import_block, require_optional_import
@@ -133,20 +142,27 @@ def _remove_print(code):
     return "\n".join(lines)
 
 
+@deprecated(
+    "MathUserProxyAgent is deprecated and will be removed in v0.14. Use ConversableAgent with tool calling instead."
+)
 class MathUserProxyAgent(UserProxyAgent):
-    """(Experimental) A MathChat agent that can handle math problems."""
+    """(Deprecated) A MathChat agent that can handle math problems.
+
+    .. deprecated::
+        MathUserProxyAgent is deprecated and will be removed in v0.14.
+        Use ConversableAgent with tool calling instead.
+    """
 
     MAX_CONSECUTIVE_AUTO_REPLY = 15  # maximum number of consecutive auto replies (subject to future change)
     DEFAULT_REPLY = "Continue. Please keep solving the problem until you need to query. (If you get to the answer, put it in \\boxed{}.)"
 
     def __init__(
         self,
-        name: Optional[str] = "MathChatAgent",  # default set to MathChatAgent
-        is_termination_msg: Optional[
-            Callable[[Dict[str, Any]], bool]
-        ] = _is_termination_msg_mathchat,  # terminate if \boxed{} in message
+        name: str | None = "MathChatAgent",  # default set to MathChatAgent
+        is_termination_msg: Callable[[dict[str, Any]], bool]
+        | None = _is_termination_msg_mathchat,  # terminate if \boxed{} in message
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",  # Fully automated
-        default_auto_reply: Optional[Union[str, dict[str, Any]]] = DEFAULT_REPLY,
+        default_auto_reply: str | dict[str, Any] | None = DEFAULT_REPLY,
         max_invalid_q_per_step=3,  # a parameter needed in MathChat
         **kwargs: Any,
     ):
@@ -167,6 +183,12 @@ class MathUserProxyAgent(UserProxyAgent):
         max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
         **kwargs (dict): other kwargs in [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent#userproxyagent).
         """
+        warnings.warn(
+            "MathUserProxyAgent is deprecated and will be removed in v0.14. "
+            "Use ConversableAgent with tool calling instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             is_termination_msg=is_termination_msg,
@@ -294,9 +316,9 @@ class MathUserProxyAgent(UserProxyAgent):
 
     def _generate_math_reply(
         self,
-        messages: Optional[list[dict]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
+        messages: list[dict] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
     ):
         """Generate an auto reply."""
         if messages is None:
@@ -366,7 +388,7 @@ class MathUserProxyAgent(UserProxyAgent):
 # THE SOFTWARE.
 
 
-def get_from_dict_or_env(data: dict[str, Any], key: str, env_key: str, default: Optional[str] = None) -> str:
+def get_from_dict_or_env(data: dict[str, Any], key: str, env_key: str, default: str | None = None) -> str:
     """Get a value from a dictionary or an environment variable."""
     if data.get(key):
         return data[key]
@@ -395,20 +417,37 @@ class WolframAlphaAPIWrapper(BaseModel):
     """
 
     wolfram_client: Any  #: :meta private:
-    wolfram_alpha_appid: Optional[str] = None
+    wolfram_alpha_appid: str | None = None
 
-    @root_validator(skip_on_failure=True)
-    @classmethod
-    @require_optional_import("wolframalpha", "mathchat")
-    def validate_environment(cls, values: dict) -> dict:
-        """Validate that api key and python package exists in environment."""
-        wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
-        values["wolfram_alpha_appid"] = wolfram_alpha_appid
+    if PYDANTIC_VERSION.startswith("2."):
 
-        client = wolframalpha.Client(wolfram_alpha_appid)
-        values["wolfram_client"] = client
+        @model_validator(mode="before")  # type: ignore[misc]
+        @classmethod
+        @require_optional_import("wolframalpha", "mathchat")
+        def validate_environment(cls, values: dict) -> dict:
+            """Validate that api key and python package exists in environment."""
+            wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
+            values["wolfram_alpha_appid"] = wolfram_alpha_appid
 
-        return values
+            client = wolframalpha.Client(wolfram_alpha_appid)
+            values["wolfram_client"] = client
+
+            return values
+
+    else:
+
+        @root_validator(skip_on_failure=True)
+        @classmethod
+        @require_optional_import("wolframalpha", "mathchat")
+        def validate_environment(cls, values: dict) -> dict:
+            """Validate that api key and python package exists in environment."""
+            wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
+            values["wolfram_alpha_appid"] = wolfram_alpha_appid
+
+            client = wolframalpha.Client(wolfram_alpha_appid)
+            values["wolfram_client"] = client
+
+            return values
 
     def run(self, query: str) -> tuple[str, bool]:
         """Run query through WolframAlpha and parse result."""
@@ -429,7 +468,7 @@ class WolframAlphaAPIWrapper(BaseModel):
                 )
         if res is None:
             return (
-                "Wolfram Alpha wasn't able to answer it (may due to web error), you can try again or use python.",
+                "Wolfram Alpha wasn't able to answer it (may be due to web error), you can try again or use python.",
                 is_success,
             )
 

@@ -9,13 +9,12 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional
 
 import pytest
 
 
 @contextmanager
-def add_to_sys_path(path: Optional[Path]) -> Iterator[None]:
+def add_to_sys_path(path: Path | None) -> Iterator[None]:
     if path is None:
         yield
         return
@@ -30,7 +29,7 @@ def add_to_sys_path(path: Optional[Path]) -> Iterator[None]:
         sys.path.remove(str(path))
 
 
-def list_submodules(module_name: str, *, include_path: Optional[Path] = None, include_root: bool = True) -> list[str]:
+def list_submodules(module_name: str, *, include_path: Path | None = None, include_root: bool = True) -> list[str]:
     """List all submodules of a given module.
 
     Args:
@@ -81,4 +80,13 @@ def test_list_submodules() -> None:
 # todo: we should always run this
 @pytest.mark.parametrize("module", list_submodules("autogen"))
 def test_submodules(module: str) -> None:
-    importlib.import_module(module)  # nosemgrep
+    try:
+        importlib.import_module(module)  # nosemgrep
+    except ModuleNotFoundError as e:
+        if e.name and e.name.split(".")[0] == "autogen":
+            raise
+        pytest.skip(f"optional dependency missing: {e}")
+    except ImportError as e:
+        if "pip install ag2[" in str(e):
+            pytest.skip(f"optional dependency missing: {e}")
+        raise

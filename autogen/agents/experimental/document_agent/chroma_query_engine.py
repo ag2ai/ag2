@@ -4,8 +4,9 @@
 
 import logging
 import os
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
@@ -40,8 +41,7 @@ logger = logging.getLogger(__name__)
 @require_optional_import(["chromadb", "llama_index"], "rag")
 @export_module("autogen.agents.experimental")
 class VectorChromaQueryEngine:
-    """
-    This engine leverages Chromadb to persist document embeddings in a named collection
+    """This engine leverages Chromadb to persist document embeddings in a named collection
     and LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
     to natural language queries. The Chromadb collection serves as the storage layer, while
     the collection name uniquely identifies the set of documents within the persistent database.
@@ -51,14 +51,14 @@ class VectorChromaQueryEngine:
 
     def __init__(  # type: ignore[no-any-unimported]
         self,
-        db_path: Optional[str] = None,
-        embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
-        metadata: Optional[dict[str, Any]] = None,
+        db_path: str | None = None,
+        embedding_function: "EmbeddingFunction[Any] | None" = None,
+        metadata: dict[str, Any] | None = None,
         llm: Optional["LLM"] = None,
-        collection_name: Optional[str] = None,
+        collection_name: str | None = None,
     ) -> None:
-        """
-        Initializes the VectorChromaQueryEngine with db_path, metadata, and embedding function and llm.
+        """Initializes the VectorChromaQueryEngine with db_path, metadata, and embedding function and llm.
+
         Args:
             db_path: The file system path where Chromadb will store its persistent data.
                 If not specified, the default directory "./chroma" is used.
@@ -79,15 +79,12 @@ class VectorChromaQueryEngine:
             "hnsw:M": 32,
         }
         self.client = chromadb.PersistentClient(path=db_path or "./chroma")
-        self.collection_name: Optional[str] = collection_name
+        self.collection_name: str | None = collection_name
 
         self.connect_db()
 
     def connect_db(self, *args: Any, **kwargs: Any) -> bool:
-        """
-        Establish a connection to the Chromadb database and initialize the collection.
-        """
-
+        """Establish a connection to the Chromadb database and initialize the collection."""
         self.collection_name = self.collection_name or DEFAULT_COLLECTION_NAME
 
         if self._collection_exists(self.collection_name):
@@ -106,8 +103,7 @@ class VectorChromaQueryEngine:
         return True
 
     def query(self, question: str) -> str:
-        """
-        Retrieve information from indexed documents by processing a natural language query.
+        """Retrieve information from indexed documents by processing a natural language query.
 
         Args:
             question: A natural language query string used to search the indexed documents.
@@ -126,11 +122,10 @@ class VectorChromaQueryEngine:
 
     def add_docs(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
     ) -> None:
-        """
-        Add additional documents to the existing vector index.
+        """Add additional documents to the existing vector index.
 
         Loads new Docling-parsed Markdown files from a specified directory or a list of file paths
         and inserts them into the current index for future queries.
@@ -149,10 +144,9 @@ class VectorChromaQueryEngine:
             self.index.insert(doc)
 
     def _load_doc(  # type: ignore[no-any-unimported]
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
+        self, input_dir: Path | str | None, input_docs: Sequence[Path | str] | None
     ) -> list["LlamaDocument"]:
-        """
-        Load documents from a directory and/or a list of file paths.
+        """Load documents from a directory and/or a list of file paths.
 
         This helper method reads Docling-parsed Markdown files using LlamaIndex's
         SimpleDirectoryReader. It supports multiple file [formats]((https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types)),
@@ -194,8 +188,7 @@ class VectorChromaQueryEngine:
     def _create_index(  # type: ignore[no-any-unimported]
         self, collection: "Collection"
     ) -> "VectorStoreIndex":
-        """
-        Build a vector index for document retrieval using a Chromadb collection.
+        """Build a vector index for document retrieval using a Chromadb collection.
 
         Wraps the provided Chromadb collection into a vector store and uses LlamaIndex's
         StorageContext to create a VectorStoreIndex from the collection.
@@ -214,8 +207,7 @@ class VectorChromaQueryEngine:
         return index
 
     def _collection_exists(self, collection_name: str) -> bool:
-        """
-        Check if a collection with the given name exists in the database.
+        """Check if a collection with the given name exists in the database.
 
         Args:
             collection_name (str): The name of the collection to check.
@@ -227,8 +219,7 @@ class VectorChromaQueryEngine:
         return any(col == collection_name for col in existing_collections)
 
     def get_collection_name(self) -> str:
-        """
-        Get the name of the collection used by the query engine.
+        """Get the name of the collection used by the query engine.
 
         Returns:
             The name of the collection.
@@ -245,8 +236,8 @@ class VectorChromaQueryEngine:
 
     def init_db(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:
@@ -262,30 +253,25 @@ class AnswerWithCitations(BaseModel):  # type: ignore[no-any-unimported]
 @require_optional_import(["chromadb", "llama_index"], "rag")
 @export_module("autogen.agents.experimental")
 class VectorChromaCitationQueryEngine(VectorChromaQueryEngine):
-    """
-    This engine leverages VectorChromaQueryEngine and CitationQueryEngine to answer queries with citations.
-    """
+    """This engine leverages VectorChromaQueryEngine and CitationQueryEngine to answer queries with citations."""
 
     def __init__(  # type: ignore[no-any-unimported]
         self,
-        db_path: Optional[str] = None,
-        embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
-        metadata: Optional[dict[str, Any]] = None,
+        db_path: str | None = None,
+        embedding_function: "EmbeddingFunction[Any] | None" = None,
+        metadata: dict[str, Any] | None = None,
         llm: Optional["LLM"] = None,
-        collection_name: Optional[str] = None,
+        collection_name: str | None = None,
         enable_query_citations: bool = False,
         citation_chunk_size: int = 512,
     ) -> None:
-        """
-        see parent class VectorChromaQueryEngine.
-        """
+        """See parent class VectorChromaQueryEngine."""
         super().__init__(db_path, embedding_function, metadata, llm, collection_name)
         self.enable_query_citations = enable_query_citations
         self.citation_chunk_size = citation_chunk_size
 
     def query_with_citations(self, query: str) -> AnswerWithCitations:
-        """
-        Query the index with the given query and return the answer along with citations.
+        """Query the index with the given query and return the answer along with citations.
 
         Args:
             query (str): The query to be answered.
@@ -294,7 +280,6 @@ class VectorChromaCitationQueryEngine(VectorChromaQueryEngine):
         Returns:
             AnswerWithCitations: An object containing the answer and citations.
         """
-
         query_engine = CitationQueryEngine.from_args(
             index=self.index,
             citation_chunk_size=self.citation_chunk_size,

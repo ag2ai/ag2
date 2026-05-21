@@ -11,8 +11,7 @@ from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental import GoogleSearchTool
 from autogen.tools.experimental.google_search.google_search import _google_search
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 class TestGoogleSearchTool:
@@ -87,12 +86,12 @@ class TestGoogleSearchTool:
 
     @run_for_optional_imports("openai", "openai")
     def test_end_to_end_openai(
-        self, credentials_gpt_4o_mini: Credentials, expected_search_result: dict[str, Any]
+        self, credentials_openai_mini: Credentials, expected_search_result: dict[str, Any]
     ) -> None:
         google_search_tool = GoogleSearchTool(search_api_key="api_key", search_engine_id="engine_id")
         self._test_end_to_end(
             google_search_tool=google_search_tool,
-            credentials=credentials_gpt_4o_mini,
+            credentials=credentials_openai_mini,
             expected_search_result=expected_search_result,
             execute_query_called=True,
         )

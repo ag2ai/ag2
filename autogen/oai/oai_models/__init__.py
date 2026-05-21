@@ -5,7 +5,19 @@
 from .chat_completion import ChatCompletionExtended as ChatCompletion
 from .chat_completion import Choice
 from .chat_completion_message import ChatCompletionMessage
-from .chat_completion_message_tool_call import ChatCompletionMessageToolCall
+from .chat_completion_message_tool_call import (
+    ChatCompletionMessageCustomToolCall,
+    ChatCompletionMessageFunctionToolCall,
+    ChatCompletionMessageToolCall,
+)
 from .completion_usage import CompletionUsage
 
-__all__ = ["ChatCompletion", "ChatCompletionMessage", "ChatCompletionMessageToolCall", "Choice", "CompletionUsage"]
+__all__ = [
+    "ChatCompletion",
+    "ChatCompletionMessage",
+    "ChatCompletionMessageCustomToolCall",
+    "ChatCompletionMessageFunctionToolCall",
+    "ChatCompletionMessageToolCall",
+    "Choice",
+    "CompletionUsage",
+]

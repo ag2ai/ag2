@@ -6,15 +6,14 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
-from typing import Any, Optional, Union
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from autogen import OpenAIWrapper
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     # raises exception if openai>=1 is installed and something is wrong with imports
@@ -29,17 +28,18 @@ with optional_import_block() as result:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
-    response = client.create(messages=[{"role": "user", "content": "2+2="}], stream=True)
+def test_completion_stream(credentials_azure_gpt_4_1_mini: Credentials) -> None:
+    """Updated to use gpt-4.1-mini (gpt-35-turbo-instruct retired Nov 11, 2025)"""
+    client = OpenAIWrapper(config_list=credentials_azure_gpt_4_1_mini.config_list)
+    response = client.create(messages=[{"role": "user", "content": "1+1="}], stream=True)
     print(response)
     print(client.extract_text_or_completion_object(response))
 
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+def test_chat_completion_stream(credentials_openai_mini: Credentials) -> None:
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "1+1="}], stream=True)
     print(response)
     print(client.extract_text_or_completion_object(response))
@@ -49,7 +49,7 @@ def test_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
 def test__update_dict_from_chunk() -> None:
     # dictionaries and lists are not supported
     mock = MagicMock()
-    empty_collections: list[Union[list[Any], dict[str, Any]]] = [{}, []]
+    empty_collections: list[list[Any] | dict[str, Any]] = [{}, []]
     for c in empty_collections:
         mock.c = c
         with pytest.raises(NotImplementedError):
@@ -145,7 +145,7 @@ def test__update_tool_calls_from_chunk() -> None:
         ),
         ChoiceDeltaToolCall(
             index=1,
-            id="call_22HgJep4nwoKU3UOr96xaLmd",
+            id="call_22HgJep4nowKU3UOr96xaLmd",
             function=ChoiceDeltaToolCallFunction(arguments="", name="get_current_weather"),
             type="function",
         ),
@@ -169,7 +169,7 @@ def test__update_tool_calls_from_chunk() -> None:
         ),
     ]
 
-    full_tool_calls: list[Optional[dict[str, Any]]] = [None, None]
+    full_tool_calls: list[dict[str, Any] | None] = [None, None]
     completion_tokens = 0
     for tool_calls_chunk in tool_calls_chunks:
         index = tool_calls_chunk.index
@@ -185,12 +185,46 @@ def test__update_tool_calls_from_chunk() -> None:
     ChatCompletionMessage(role="assistant", tool_calls=full_tool_calls, content=None)
 
 
+@run_for_optional_imports("openai", "openai")
+def test__update_tool_calls_from_chunk_repeated_type() -> None:
+    """Regression test for gh-2058: some providers send type='function' in
+    every chunk, which caused it to be concatenated into
+    'functionfunction...' instead of staying 'function'."""
+    tool_calls_chunks = [
+        ChoiceDeltaToolCall(
+            index=0,
+            id="call_abc123",
+            function=ChoiceDeltaToolCallFunction(arguments="", name="my_tool"),
+            type="function",
+        ),
+        ChoiceDeltaToolCall(
+            index=0, id=None, function=ChoiceDeltaToolCallFunction(arguments='{"x"', name=None), type="function"
+        ),
+        ChoiceDeltaToolCall(
+            index=0, id=None, function=ChoiceDeltaToolCallFunction(arguments=": 1}", name=None), type="function"
+        ),
+    ]
+
+    full_tool_call = None
+    completion_tokens = 0
+    for chunk in tool_calls_chunks:
+        full_tool_call, completion_tokens = OpenAIWrapper._update_tool_calls_from_chunk(
+            tool_calls_chunk=chunk,
+            full_tool_call=full_tool_call,
+            completion_tokens=completion_tokens,
+        )
+
+    assert full_tool_call["type"] == "function", f"type should stay 'function' but got '{full_tool_call['type']}'"
+    assert full_tool_call["function"]["name"] == "my_tool"
+    assert full_tool_call["function"]["arguments"] == '{"x": 1}'
+
+
 # todo: remove when OpenAI removes functions from the API
 
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
+def test_chat_functions_stream(credentials_openai_mini: Credentials) -> None:
     functions = [
         {
             "name": "get_current_weather",
@@ -207,7 +241,7 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
             },
         },
     ]
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(
         messages=[{"role": "user", "content": "What's the weather like today in San Francisco?"}],
         functions=functions,
@@ -222,7 +256,7 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
+def test_chat_tools_stream(credentials_openai_mini: Credentials) -> None:
     tools = [
         {
             "type": "function",
@@ -242,7 +276,7 @@ def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
             },
         },
     ]
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(
         messages=[{"role": "user", "content": "What's the weather like today in San Francisco?"}],
         tools=tools,
@@ -260,15 +294,6 @@ def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
     tool_calls = message.tool_calls
     assert isinstance(tool_calls, list)
     assert len(tool_calls) > 0
-
-
-@run_for_optional_imports("openai", "openai")
-@run_for_optional_imports(["openai"], "openai")
-def test_completion_stream(credentials_azure_gpt_35_turbo_instruct: Credentials) -> None:
-    client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
-    response = client.create(prompt="1+1=", stream=True)
-    print(response)
-    print(client.extract_text_or_completion_object(response))
 
 
 if __name__ == "__main__":

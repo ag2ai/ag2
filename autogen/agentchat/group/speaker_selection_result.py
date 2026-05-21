@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
@@ -19,11 +19,11 @@ class SpeakerSelectionResult(BaseModel):
     This class can return an Agent, a None to end the conversation, or a string for a speaker selection method.
     """
 
-    terminate: Optional[bool] = None
-    agent_name: Optional[str] = None
-    speaker_selection_method: Optional[str] = None
+    terminate: bool | None = None
+    agent_name: str | None = None
+    speaker_selection_method: str | None = None
 
-    def get_speaker_selection_result(self, groupchat: "GroupChat") -> Optional[Union[Agent, str]]:
+    def get_speaker_selection_result(self, groupchat: "GroupChat") -> Agent | str | None:
         """Get the speaker selection result. If None, the conversation will end."""
         if self.agent_name is not None:
             # Find the agent by name in the groupchat

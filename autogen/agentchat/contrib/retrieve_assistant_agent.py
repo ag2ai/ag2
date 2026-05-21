@@ -5,14 +5,17 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import warnings
-from typing import Any, Optional, Union
+from typing import Any
+
+from typing_extensions import deprecated
 
 from ..agent import Agent
 from ..assistant_agent import AssistantAgent
 
 
+@deprecated("RetrieveAssistantAgent is deprecated and will be removed in v0.14. Please use the AssistantAgent instead.")
 class RetrieveAssistantAgent(AssistantAgent):
-    """(Experimental) Retrieve Assistant agent, designed to solve a task with LLM.
+    """(Deprecated) Retrieve Assistant agent, designed to solve a task with LLM. Will be removed in v0.14.
 
     RetrieveAssistantAgent is a subclass of AssistantAgent configured with a default system message.
     The default system message is designed to solve a task with LLM,
@@ -24,7 +27,7 @@ class RetrieveAssistantAgent(AssistantAgent):
 
     def __init__(self, *args, **kwargs):
         warnings.warn(
-            "The RetrieveAssistantAgent is deprecated. Please use the AssistantAgent instead.",
+            "RetrieveAssistantAgent is deprecated and will be removed in v0.14. Please use the AssistantAgent instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -33,10 +36,10 @@ class RetrieveAssistantAgent(AssistantAgent):
 
     def _generate_retrieve_assistant_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         if config is None:
             config = self
         if messages is None:

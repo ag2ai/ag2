@@ -1,9 +1,9 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
-from typing import Any, Optional, cast
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,6 +18,7 @@ from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.group_utils import (
     _create_on_condition_handoff_function,
     _run_oncontextconditions,
+    _validate_handoff_target,
     cleanup_temp_user_messages,
     create_group_transition,
     create_on_condition_handoff_functions,
@@ -42,6 +43,7 @@ from autogen.agentchat.group.targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
     NestedChatTarget,
+    RandomAgentTarget,
     StayTarget,
     TerminateTarget,
     TransitionTarget,
@@ -51,7 +53,7 @@ from autogen.agentchat.user_proxy_agent import UserProxyAgent
 
 
 # Helper function to create a mock agent
-def create_mock_agent(name: str, handoffs: Optional[Handoffs] = None) -> MagicMock:
+def create_mock_agent(name: str, handoffs: Handoffs | None = None) -> MagicMock:
     agent = MagicMock(spec=ConversableAgent)
     agent.name = name
     agent.context_variables = ContextVariables()
@@ -78,7 +80,7 @@ def create_mock_agent(name: str, handoffs: Optional[Handoffs] = None) -> MagicMo
         agent.handoffs.set_llm_function_names = MagicMock()
 
     # Mock initiate_chat to return a dummy ChatResult
-    chat_result = ChatResult(chat_history=[], cost={"cost": {}}, summary="", human_input=[])
+    chat_result = ChatResult()
     agent.initiate_chat = MagicMock(return_value=chat_result)
 
     return agent
@@ -110,7 +112,7 @@ def user_proxy() -> MagicMock:
     agent.handoffs.after_works = []
 
     # Mock initiate_chat
-    chat_result = ChatResult(chat_history=[], cost={"cost": {}}, summary="", human_input=[])
+    chat_result = ChatResult()
     agent.initiate_chat = MagicMock(return_value=chat_result)
     return agent
 
@@ -139,7 +141,7 @@ def mock_group_chat_manager() -> MagicMock:
     manager.groupchat.agents = []
     manager.llm_config = {"config_list": [{"model": "test-model"}]}
     # Mock initiate_chat for manager as well
-    chat_result = ChatResult(chat_history=[], cost={"cost": {}}, summary="", human_input=[])
+    chat_result = ChatResult()
     manager.initiate_chat = MagicMock(return_value=chat_result)
     manager.resume = MagicMock(return_value=(None, None))  # Default resume mock
     manager.last_speaker = None
@@ -297,6 +299,35 @@ class TestHelperFunctions:
         assert agent1._add_single_function.call_args_list[1][0][1] == cond2.llm_function_name
         assert agent1._add_single_function.call_args_list[1][0][2] == "prompt2"
 
+    def test_validate_handoff_target_agent_target_valid(self, agent2: MagicMock) -> None:
+        """Test _validate_handoff_target passes for AgentTarget in group."""
+        target = AgentTarget(agent=agent2)
+        _validate_handoff_target(target, ["agent1", "agent2"], "test")  # Should not raise
+
+    def test_validate_handoff_target_agent_target_invalid(self) -> None:
+        """Test _validate_handoff_target raises for AgentTarget not in group."""
+        target = AgentNameTarget(agent_name="missing_agent")
+        with pytest.raises(ValueError, match="Agent in test context Hand-offs must be in the agents list"):
+            _validate_handoff_target(target, ["agent1", "agent2"], "test context")
+
+    def test_validate_handoff_target_random_valid(self, agent1: MagicMock, agent2: MagicMock) -> None:
+        """Test _validate_handoff_target passes for RandomAgentTarget with all agents in group."""
+        target = RandomAgentTarget(agents=[agent1, agent2])
+        _validate_handoff_target(target, ["agent1", "agent2"], "test")  # Should not raise
+
+    def test_validate_handoff_target_random_invalid(self, agent1: MagicMock, agent2: MagicMock) -> None:
+        """Test _validate_handoff_target raises for RandomAgentTarget with agent not in group."""
+        target = RandomAgentTarget(agents=[agent1, agent2])
+        with pytest.raises(
+            ValueError, match="Agent 'agent2' in RandomAgentTarget Hand-offs must be in the agents list"
+        ):
+            _validate_handoff_target(target, ["agent1"], "test")
+
+    def test_validate_handoff_target_other_target_types(self) -> None:
+        """Test _validate_handoff_target ignores non-agent target types like StayTarget."""
+        _validate_handoff_target(StayTarget(), ["agent1"], "test")  # Should not raise
+        _validate_handoff_target(TerminateTarget(), ["agent1"], "test")  # Should not raise
+
     def test_ensure_handoff_agents_in_group(self, agent1: MagicMock, agent2: MagicMock) -> None:
         """Test validation of handoff targets."""
         # Valid case
@@ -322,6 +353,46 @@ class TestHelperFunctions:
         )
         agent1.handoffs.context_conditions = [context_cond_invalid]
         with pytest.raises(ValueError, match="Agent in OnContextCondition Hand-offs must be in the agents list"):
+            ensure_handoff_agents_in_group([agent1, agent2])
+
+    def test_ensure_handoff_random_agent_target_in_group(
+        self, agent1: MagicMock, agent2: MagicMock, agent3: MagicMock
+    ) -> None:
+        """Test validation of RandomAgentTarget handoff targets."""
+        # Valid case - all agents in group
+        random_target = RandomAgentTarget(agents=[agent1, agent2])
+        cond = OnCondition(target=random_target, condition=StringLLMCondition(prompt="prompt"))
+        agent1.handoffs.llm_conditions = [cond]
+        agent1.handoffs.context_conditions = []
+        agent1.handoffs.after_works = []
+        ensure_handoff_agents_in_group([agent1, agent2])  # Should not raise
+
+        # Invalid case (LLM condition) - agent not in group
+        random_target_invalid = RandomAgentTarget(agents=[agent1, agent3])
+        cond_invalid = OnCondition(target=random_target_invalid, condition=StringLLMCondition(prompt="prompt"))
+        agent1.handoffs.llm_conditions = [cond_invalid]
+        with pytest.raises(
+            ValueError, match="Agent 'agent3' in RandomAgentTarget Hand-offs must be in the agents list"
+        ):
+            ensure_handoff_agents_in_group([agent1, agent2])
+
+        # Invalid case (context condition)
+        agent1.handoffs.llm_conditions = []
+        context_cond_invalid = OnContextCondition(
+            target=random_target_invalid, condition=StringContextCondition(variable_name="var")
+        )
+        agent1.handoffs.context_conditions = [context_cond_invalid]
+        with pytest.raises(
+            ValueError, match="Agent 'agent3' in RandomAgentTarget Hand-offs must be in the agents list"
+        ):
+            ensure_handoff_agents_in_group([agent1, agent2])
+
+        # Invalid case (after_works)
+        agent1.handoffs.context_conditions = []
+        agent1.handoffs.after_works = [OnContextCondition(target=random_target_invalid, condition=None)]
+        with pytest.raises(
+            ValueError, match="Agent 'agent3' in RandomAgentTarget Hand-offs must be in the agents list"
+        ):
             ensure_handoff_agents_in_group([agent1, agent2])
 
     def test_ensure_guardrail_agents_in_group(self, agent1: MagicMock, agent2: MagicMock) -> None:
@@ -511,7 +582,7 @@ class TestHelperFunctions:
 
     def test_cleanup_temp_user_messages(self) -> None:
         """Test removing the temporary user name from messages."""
-        chat_result = ChatResult(chat_history=[], cost={"cost": {}}, summary="", human_input=[])
+        chat_result = ChatResult()
         chat_result.chat_history = [
             {"role": "user", "name": "_User", "content": "Hello"},
             {"role": "assistant", "name": "agent1", "content": "Hi"},

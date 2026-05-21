@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 from types import TracebackType
-from typing import Any, Optional, Union
+from typing import Any
 
 from ..doc_utils import export_module
 from .abstract_cache_base import AbstractCache
@@ -38,7 +38,7 @@ class Cache(AbstractCache):
     ]
 
     @staticmethod
-    def redis(cache_seed: Union[str, int] = 42, redis_url: str = "redis://localhost:6379/0") -> Cache:
+    def redis(cache_seed: str | int = 42, redis_url: str = "redis://localhost:6379/0") -> Cache:
         """Create a Redis cache instance.
 
         Args:
@@ -51,7 +51,7 @@ class Cache(AbstractCache):
         return Cache({"cache_seed": cache_seed, "redis_url": redis_url})
 
     @staticmethod
-    def disk(cache_seed: Union[str, int] = 42, cache_path_root: str = ".cache") -> Cache:
+    def disk(cache_seed: str | int = 42, cache_path_root: str = ".cache") -> Cache:
         """Create a Disk cache instance.
 
         Args:
@@ -65,10 +65,10 @@ class Cache(AbstractCache):
 
     @staticmethod
     def cosmos_db(
-        connection_string: Optional[str] = None,
-        container_id: Optional[str] = None,
-        cache_seed: Union[str, int] = 42,
-        client: Optional[Any] = None,
+        connection_string: str | None = None,
+        container_id: str | None = None,
+        cache_seed: str | int = 42,
+        client: Any | None = None,
     ) -> Cache:
         """Create a Cosmos DB cache instance with 'autogen_cache' as database ID.
 
@@ -131,9 +131,9 @@ class Cache(AbstractCache):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """Exit the runtime context related to the cache object.
 
@@ -159,7 +159,7 @@ class Cache(AbstractCache):
 
         return result
 
-    def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
+    def get(self, key: str, default: Any | None = None) -> Any | None:
         """Retrieve an item from the cache.
 
         Args:
@@ -189,7 +189,7 @@ class Cache(AbstractCache):
         self.cache.close()
 
     @classmethod
-    def get_current_cache(cls, cache: "Optional[Cache]" = None) -> "Optional[Cache]":
+    def get_current_cache(cls, cache: Cache | None = None) -> Cache | None:
         """Get the current cache instance.
 
         Returns:

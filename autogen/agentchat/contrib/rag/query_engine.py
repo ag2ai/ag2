@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Optional, Protocol, Sequence, Union, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from ....doc_utils import export_module
 
@@ -20,33 +21,33 @@ class RAGQueryEngine(Protocol):
 
     def init_db(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:
         """Initialize the database with the input documents or records.
 
         This method initializes database with the input documents or records.
-        Usually, it takes the following steps:
-        1. connecting to a database.
-        2. insert records
-        3. build indexes etc.
+        Usually, it takes the following steps:\n
+        1. connecting to a database.\n
+        2. insert records.\n
+        3. build indexes etc.\n
 
-        Args:
-            new_doc_dir (Optional[Union[Path, str]]): A directory containing documents to be ingested.
-            new_doc_paths_or_urls (Optional[Sequence[Union[Path, str]]]): A list of paths or URLs to documents to be ingested.
-            *args: Any additional arguments
-            **kwargs: Any additional keyword arguments
-        Returns:
-            bool: True if initialization is successful, False otherwise
+        Args:\n
+            new_doc_dir (Optional[Union[Path, str]]): A directory containing documents to be ingested.\n
+            new_doc_paths_or_urls (Optional[Sequence[Union[Path, str]]]): A list of paths or URLs to documents to be ingested.\n
+            *args: Any additional arguments\n
+            **kwargs: Any additional keyword arguments\n
+        Returns:\n
+            bool: True if initialization is successful, False otherwise\n
         """
         ...
 
     def add_docs(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -55,6 +56,7 @@ class RAGQueryEngine(Protocol):
 
     def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """Connect to the database.
+
         Args:
             *args: Any additional arguments
             **kwargs: Any additional keyword arguments

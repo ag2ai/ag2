@@ -1,6 +1,7 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+import asyncio
 import getpass
 from typing import TYPE_CHECKING
 
@@ -24,7 +25,8 @@ class ConsoleEventProcessor:
             prompt = event.content.prompt  # type: ignore[attr-defined]
             if event.content.password:  # type: ignore[attr-defined]
                 result = getpass.getpass(prompt if prompt != "" else "Password: ")
-            result = input(prompt)
+            else:
+                result = input(prompt)
             event.content.respond(result)  # type: ignore[attr-defined]
         else:
             event.print()
@@ -39,9 +41,12 @@ class AsyncConsoleEventProcessor:
     async def process_event(self, event: BaseEvent) -> None:
         if isinstance(event, InputRequestEvent):
             prompt = event.content.prompt  # type: ignore[attr-defined]
+
             if event.content.password:  # type: ignore[attr-defined]
-                result = getpass.getpass(prompt if prompt != "" else "Password: ")
-            result = input(prompt)
+                result = await asyncio.to_thread(getpass.getpass, prompt if prompt != "" else "Password: ")
+            else:
+                result = await asyncio.to_thread(input, prompt)
+
             await event.content.respond(result)  # type: ignore[attr-defined]
         else:
             event.print()

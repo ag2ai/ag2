@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional
+from typing import Any
 from unittest.mock import MagicMock, call
 from uuid import UUID
 
@@ -68,8 +68,8 @@ from autogen.events.client_events import (
     ],
 )
 def test__change_usage_summary_format(
-    actual_usage_summary: Optional[dict[str, Any]],
-    total_usage_summary: Optional[dict[str, Any]],
+    actual_usage_summary: dict[str, Any] | None,
+    total_usage_summary: dict[str, Any] | None,
     expected: dict[str, dict[str, Any]],
 ) -> None:
     summary_dict = _change_usage_summary_format(actual_usage_summary, total_usage_summary)
@@ -104,8 +104,8 @@ class TestUsageSummaryEvent:
     )
     def test_usage_summary_print_same_actual_and_total(
         self,
-        actual_usage_summary: Optional[dict[str, Any]],
-        total_usage_summary: Optional[dict[str, Any]],
+        actual_usage_summary: dict[str, Any] | None,
+        total_usage_summary: dict[str, Any] | None,
         uuid: UUID,
     ) -> None:
         actual = UsageSummaryEvent(
@@ -202,8 +202,8 @@ class TestUsageSummaryEvent:
     )
     def test_usage_summary_print_different_actual_and_total(
         self,
-        actual_usage_summary: Optional[dict[str, Any]],
-        total_usage_summary: Optional[dict[str, Any]],
+        actual_usage_summary: dict[str, Any] | None,
+        total_usage_summary: dict[str, Any] | None,
         uuid: UUID,
     ) -> None:
         actual = UsageSummaryEvent(
@@ -286,8 +286,8 @@ class TestUsageSummaryEvent:
     )
     def test_usage_summary_print_none_actual_and_total(
         self,
-        actual_usage_summary: Optional[dict[str, Any]],
-        total_usage_summary: Optional[dict[str, Any]],
+        actual_usage_summary: dict[str, Any] | None,
+        total_usage_summary: dict[str, Any] | None,
         uuid: UUID,
     ) -> None:
         actual = UsageSummaryEvent(

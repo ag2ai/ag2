@@ -3,6 +3,9 @@ Title: "Orchestration Patterns"
 sidebarTitle: "Orchestration Patterns"
 ---
 
+!!! example "Try it on the AG2 Playground"
+    See group chat patterns running live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
 Patterns are the foundation of group chat orchestration - they define how agents take turns speaking and collaborating. Each pattern offers a different approach to determining which agent speaks next, giving you control over the conversation flow.
 
 ## Pattern Types
@@ -33,6 +36,8 @@ The `DefaultPattern` gives you complete control over the conversation flow throu
 ### Configuration Example
 
 With DefaultPattern, we need to explicitly define the handoffs between agents:
+
+![DefaultPattern chat](../assets/default_pattern_process.png)
 
 ```python hl_lines="10-22"
 # Configure the pattern
@@ -66,32 +71,39 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import DefaultPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from dotenv import load_dotenv
+    load_dotenv()
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -118,11 +130,30 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
     tech_agent.handoffs.set_after_work(RevertToUserTarget())
     general_agent.handoffs.set_after_work(RevertToUserTarget())
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 
@@ -150,6 +181,8 @@ The AutoPattern uses an LLM to intelligently select the next speaker based on th
 
 Setting up the AutoPattern is simpler since it doesn't require explicit handoffs:
 
+![AutoPattern chat](../assets/autopattern_process.png)
+
 ```python
 pattern = AutoPattern(
     initial_agent=triage_agent,
@@ -166,31 +199,38 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import AutoPattern
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from dotenv import load_dotenv
+    load_dotenv()
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -201,11 +241,30 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 ### When to Use AutoPattern
@@ -231,6 +290,8 @@ The RoundRobinPattern creates a predictable rotation where agents speak in the e
 ### Configuration Example
 
 Setting up the RoundRobinPattern focuses on the order of agents:
+
+![RoundRobinPattern chat](../assets/round_robin_process.png)
 
 ```python
 pattern = RoundRobinPattern(
@@ -271,32 +332,39 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import RoundRobinPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from dotenv import load_dotenv
+    load_dotenv()
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -307,11 +375,30 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 ## RandomPattern: Non-deterministic Speaker Selection
@@ -328,6 +415,8 @@ The RandomPattern adds an element of unpredictability by randomly selecting the 
 
 Setting up the RandomPattern:
 
+![RandomPattern chat](../assets/randompattern_process.png)
+
 ```python
 pattern = RandomPattern(
     initial_agent=triage_agent,
@@ -341,32 +430,39 @@ pattern = RandomPattern(
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import RandomPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from dotenv import load_dotenv
+    load_dotenv()
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -377,11 +473,30 @@ pattern = RandomPattern(
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 ## ManualPattern: Human-Directed Speaker Selection
@@ -399,6 +514,8 @@ The ManualPattern puts you in control by always reverting to the user agent afte
 
 Setting up the ManualPattern:
 
+![manualpattern chat](../assets/manualpattern_process.png)
+
 ```python
 pattern = ManualPattern(
     initial_agent=triage_agent,
@@ -412,32 +529,39 @@ pattern = ManualPattern(
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import ManualPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from dotenv import load_dotenv
+    load_dotenv()
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -448,11 +572,30 @@ pattern = ManualPattern(
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 ### When to Use ManualPattern
 

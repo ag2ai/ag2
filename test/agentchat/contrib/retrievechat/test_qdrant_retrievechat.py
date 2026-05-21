@@ -18,8 +18,7 @@ from autogen.agentchat.contrib.qdrant_retrieve_user_proxy_agent import (
     query_qdrant,
 )
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     from qdrant_client import QdrantClient
@@ -31,7 +30,7 @@ with optional_import_block() as result:
     reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
 )
 @run_for_optional_imports(["qdrant_client", "fastembed", "openai"], "retrievechat-qdrant")
-def test_retrievechat(credentials_gpt_4o_mini: Credentials):
+def test_retrievechat(credentials_openai_mini: Credentials):
     conversations = {}
     # ChatCompletion.start_logging(conversations)  # deprecated in v0.2
 
@@ -41,7 +40,7 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
         llm_config={
             "timeout": 600,
             "seed": 42,
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
         },
     )
 

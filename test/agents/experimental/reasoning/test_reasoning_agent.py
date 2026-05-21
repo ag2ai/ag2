@@ -10,15 +10,14 @@ import os
 import random
 import sys
 from collections import defaultdict
-from typing import Any, Optional, cast
+from typing import Any, cast
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
 from autogen.agents.experimental import ReasoningAgent, ThinkNode
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -204,7 +203,7 @@ Option 3: Another option"""
         response = agent._beam_reply("Test question")
         assert len(response)
 
-    last_msg: Optional[dict[str, Any]] = agent._thinker.last_message()
+    last_msg: dict[str, Any] | None = agent._thinker.last_message()
     last_msg_content: str = last_msg["content"] if last_msg is not None else ""
     assert "TERMINATE" in last_msg_content
 

@@ -1,8 +1,7 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -22,19 +21,18 @@ class OnContextCondition(BaseModel):  # noqa: N801
 
     These are evaluated before the OnCondition and after work conditions.
 
-    Args:
+    Attributes:
         target (TransitionTarget): The transition (essentially an agent) to hand off to.
         condition (Optional[ContextCondition]): The context variable based condition for transitioning to the target agent. If None, the condition always evaluates to True.
-        available (AvailableCondition): Optional condition to determine if this OnCondition is included for the LLM to evaluate based on context variables using classes like StringAvailableCondition and ContextExpressionAvailableCondition.
+        available (Optional[AvailableCondition]): Optional condition to determine if this OnContextCondition is included based on context variables using classes like StringAvailableCondition and ContextExpressionAvailableCondition.
     """
 
     target: TransitionTarget
-    condition: Optional[ContextCondition] = None
-    available: Optional[AvailableCondition] = None
+    condition: ContextCondition | None = None
+    available: AvailableCondition | None = None
 
     def has_target_type(self, target_type: type) -> bool:
-        """
-        Check if the target type matches the specified type.
+        """Check if the target type matches the specified type.
 
         Args:
             target_type (type): The target type to check against. Should be a subclass of TransitionTarget.
@@ -45,8 +43,7 @@ class OnContextCondition(BaseModel):  # noqa: N801
         return isinstance(self.target, target_type)
 
     def target_requires_wrapping(self) -> bool:
-        """
-        Check if the target requires wrapping in an agent.
+        """Check if the target requires wrapping in an agent.
 
         Returns:
             bool: True if the target requires wrapping, False otherwise

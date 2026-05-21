@@ -9,8 +9,7 @@ import pytest
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.interop import Interoperability
-
-from ..conftest import MOCK_OPEN_AI_API_KEY
+from test.const import MOCK_OPEN_AI_API_KEY
 
 with optional_import_block():
     from crewai_tools import FileReadTool
@@ -20,9 +19,6 @@ with optional_import_block():
 class TestInteroperability:
     def test_supported_types(self) -> None:
         actual = Interoperability.get_supported_types()
-
-        if sys.version_info < (3, 9):
-            assert actual == []
 
         if sys.version_info >= (3, 9) and sys.version_info < (3, 10):
             assert actual == ["langchain", "pydanticai"]
@@ -57,6 +53,16 @@ class TestInteroperability:
             args = model_type(file_path=file_path)
 
             assert tool.func(args=args) == "Hello, World!"
+
+    def test_unsupported_type_error_message(self) -> None:
+        """The error for an unsupported interop type should list the actual type names."""
+        from unittest.mock import MagicMock, patch
+
+        mock_registry = MagicMock()
+        mock_registry.get_supported_types.return_value = ["langchain", "pydanticai"]
+
+        with patch.object(Interoperability, "registry", mock_registry), pytest.raises(ValueError, match="'langchain'"):
+            Interoperability.get_interoperability_class("nonexistent")
 
     @pytest.mark.skip("This test is not yet implemented")
     @run_for_optional_imports("langchain", "interop-langchain")

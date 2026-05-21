@@ -4,7 +4,8 @@
 
 import os
 import tempfile
-from typing import Annotated, Any, Optional
+import warnings
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
@@ -24,11 +25,10 @@ class PythonCodeExecutionTool(Tool):
         self,
         *,
         timeout: int = 30,
-        working_directory: Optional[WorkingDirectory] = None,
-        python_environment: Optional[PythonEnvironment] = None,
+        working_directory: WorkingDirectory | None = None,
+        python_environment: PythonEnvironment | None = None,
     ) -> None:
-        """
-        Initialize the PythonCodeExecutionTool.
+        """Initialize the PythonCodeExecutionTool.
 
         **CAUTION**: If provided a local environment, this tool will execute code in your local environment, which can be dangerous if the code is untrusted.
 
@@ -37,6 +37,12 @@ class PythonCodeExecutionTool(Tool):
             working_directory: Optional WorkingDirectory context manager to use.
             python_environment: Optional PythonEnvironment to use. If None, will auto-detect or create based on other parameters.
         """
+        warnings.warn(
+            "PythonCodeExecutionTool is deprecated and will be removed in v0.14. "
+            "Use autogen.beta.tools.CodeExecutionTool instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # Store configuration parameters
         self.timeout = timeout
         self.working_directory = WorkingDirectory.get_current_working_directory(working_directory)
@@ -56,8 +62,7 @@ class PythonCodeExecutionTool(Tool):
         async def execute_python_code(
             code_execution_request: Annotated[CodeExecutionRequest, "Python code and the libraries required"],
         ) -> dict[str, Any]:
-            """
-            Executes Python code in the attached environment and returns the result.
+            """Executes Python code in the attached environment and returns the result.
 
             Args:
                 code_execution_request (CodeExecutionRequest): The Python code and libraries to execute

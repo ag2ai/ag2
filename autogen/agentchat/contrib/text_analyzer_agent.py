@@ -4,7 +4,10 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Literal, Optional, Union
+import warnings
+from typing import Any, Literal
+
+from typing_extensions import deprecated
 
 from ...llm_config import LLMConfig
 from ..agent import Agent
@@ -16,15 +19,24 @@ The user will give you analysis INSTRUCTIONS copied twice, at both the beginning
 You will follow these INSTRUCTIONS in analyzing the TEXT, then give the results of your expert analysis in the format requested."""
 
 
+@deprecated(
+    "TextAnalyzerAgent is deprecated and will be removed in v0.14. "
+    "Use ConversableAgent with an appropriate system message instead."
+)
 class TextAnalyzerAgent(ConversableAgent):
-    """(Experimental) Text Analysis agent, a subclass of ConversableAgent designed to analyze text as instructed."""
+    """(Deprecated) Text Analysis agent, a subclass of ConversableAgent designed to analyze text as instructed.
+
+    .. deprecated::
+        TextAnalyzerAgent is deprecated and will be removed in v0.14.
+        Use ConversableAgent with an appropriate system message instead.
+    """
 
     def __init__(
         self,
         name="analyzer",
-        system_message: Optional[str] = system_message,
+        system_message: str | None = system_message,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], bool]] = None,
+        llm_config: LLMConfig | dict[str, Any] | bool | None = None,
         **kwargs: Any,
     ):
         """Args:
@@ -37,6 +49,12 @@ class TextAnalyzerAgent(ConversableAgent):
             To disable llm-based auto reply, set to False.
         **kwargs (dict): other kwargs in [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
+        warnings.warn(
+            "TextAnalyzerAgent is deprecated and will be removed in v0.14. "
+            "Use ConversableAgent with an appropriate system message instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             system_message=system_message,
@@ -48,10 +66,10 @@ class TextAnalyzerAgent(ConversableAgent):
 
     def _analyze_in_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Analyzes the given text as instructed, and returns the analysis as a message.
         Assumes exactly two messages containing the text to analyze and the analysis instructions.
         See Teachability.analyze for an example of how to use this method.

@@ -11,8 +11,8 @@ from anyio import move_on_after
 from autogen.agentchat.realtime.experimental.clients import GeminiRealtimeClient, RealtimeClientProtocol
 from autogen.agentchat.realtime.experimental.realtime_events import AudioDelta, SessionCreated
 from autogen.import_utils import run_for_optional_imports
-
-from ....conftest import Credentials, suppress_gemini_resource_exhausted
+from test.credentials import Credentials
+from test.utils import suppress_gemini_resource_exhausted
 
 
 class TestGeminiRealtimeClient:

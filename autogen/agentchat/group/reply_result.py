@@ -6,8 +6,6 @@
 __all__ = ["ReplyResult"]
 
 
-from typing import Optional
-
 from pydantic import BaseModel
 
 from .context_variables import ContextVariables
@@ -18,8 +16,8 @@ class ReplyResult(BaseModel):
     """Result of a tool call that is used to provide the return message and the target to transition to."""
 
     message: str
-    target: Optional[TransitionTarget] = None
-    context_variables: Optional[ContextVariables] = None
+    target: TransitionTarget | None = None
+    context_variables: ContextVariables | None = None
 
     def __str__(self) -> str:
         """The string representation for ReplyResult will be just the message."""

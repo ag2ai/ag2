@@ -1,6 +1,5 @@
 import argparse
 from pathlib import Path
-from typing import Dict, List
 
 import arxiv
 from mcp.server.fastmcp import FastMCP
@@ -17,7 +16,7 @@ STORAGE_PATH.mkdir(parents=True, exist_ok=True)
 
 
 @mcp.tool()
-def search_arxiv(query: str, max_results: int = 3) -> List[str]:
+def search_arxiv(query: str, max_results: int = 3) -> list[str]:
     """Search arXiv and return IDs of top papers."""
     results = arxiv.Search(query=query, max_results=max_results)
     return [result.entry_id.split("/")[-1] for result in results.results()]
@@ -37,13 +36,13 @@ def download_paper(arxiv_id: str) -> str:
 
 
 @mcp.tool()
-def list_papers() -> List[str]:
+def list_papers() -> list[str]:
     """List downloaded papers."""
     return [f.name for f in STORAGE_PATH.glob("*.pdf")]
 
 
 @mcp.tool()
-def get_paper_info(arxiv_id: str) -> Dict[str, str]:
+def get_paper_info(arxiv_id: str) -> dict[str, str]:
     """Extract and return title and abstract of a paper from arXiv."""
     search = arxiv.Search(id_list=[arxiv_id])
     paper = next(search.results(), None)

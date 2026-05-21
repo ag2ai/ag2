@@ -7,19 +7,13 @@
 import base64
 import json
 import os
-import sys
 import uuid
 from pathlib import Path
 from types import TracebackType
-from typing import Optional, Union
+
+from typing_extensions import Self
 
 from ...doc_utils import export_module
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
 from ..base import CodeBlock, CodeExecutor, CodeExtractor, IPythonCodeResult
 from ..markdown_code_extractor import MarkdownCodeExtractor
 from ..utils import silence_pip
@@ -31,10 +25,10 @@ from .jupyter_client import JupyterClient
 class JupyterCodeExecutor(CodeExecutor):
     def __init__(
         self,
-        jupyter_server: Union[JupyterConnectable, JupyterConnectionInfo],
+        jupyter_server: JupyterConnectable | JupyterConnectionInfo,
         kernel_name: str = "python3",
         timeout: int = 60,
-        output_dir: Union[Path, str] = Path(),
+        output_dir: Path | str = Path(),
     ):
         """(Experimental) A code executor class that executes code statefully using
         a Jupyter server supplied to this class.
@@ -155,6 +149,6 @@ class JupyterCodeExecutor(CodeExecutor):
         return self
 
     def __exit__(
-        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         self.stop()

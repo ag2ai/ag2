@@ -17,7 +17,7 @@ with optional_import_block() as result:
     from fastapi_code_generator import __main__ as fastapi_code_generator_main
     from fastapi_code_generator.parser import OpenAPIParser, Operation
 
-SUCCESFUL_IMPORT = result.is_successful
+SUCCESSFUL_IMPORT = result.is_successful
 
 logger = logging.getLogger(__name__)
 

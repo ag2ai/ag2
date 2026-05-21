@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,7 +8,8 @@ import hashlib
 import os
 import re
 import uuid
-from typing import Any, Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Any, Literal
 
 from ...code_utils import extract_code
 from ...formatting_utils import colored
@@ -101,8 +102,8 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         self,
         name="RetrieveChatAgent",  # default set to RetrieveChatAgent
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        retrieve_config: Optional[dict[str, Any]] = None,  # config for the retrieve agent
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        retrieve_config: dict[str, Any] | None = None,  # config for the retrieve agent
         **kwargs: Any,
     ):
         r"""Args:
@@ -220,7 +221,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 - `distance_threshold` (Optional, float) - the threshold for the distance score, only
                     distance smaller than it will be returned. Will be ignored if < 0. Default is -1.
 
-            `**kwargs` (dict): other kwargs in [UserProxyAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/UserProxyAgent).
+            **kwargs (dict): other kwargs in [UserProxyAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/UserProxyAgent).
 
         Example:
         Example of overriding retrieve_docs - If you have set up a customized vector db, and it's
@@ -522,10 +523,10 @@ class RetrieveUserProxyAgent(UserProxyAgent):
 
     def _generate_retrieve_user_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """In this function, we will update the context and reset the conversation based on different conditions.
         We'll update the context and reset the conversation if update_context is True and either of the following:
         (1) the last message contains "UPDATE CONTEXT",
@@ -579,7 +580,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         else:
             return False, None
 
-    def retrieve_docs(self, problem: str, n_results: int = 20, search_string: str = ""):
+    def retrieve_docs(self, problem: str, n_results: int = 20, search_string: str = "") -> None:
         """Retrieve docs based on the given problem and assign the results to the class property `_results`.
         The retrieved docs should be type of `QueryResults` which is a list of tuples containing the document and
         the distance.
@@ -591,7 +592,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 Not used if the vector_db doesn't support it.
 
         Returns:
-            None.
+            None
         """
         if isinstance(self._vector_db, VectorDB):
             if not self._collection or not self._get_or_create:
@@ -653,7 +654,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         print("doc_ids: ", [[r[0]["id"] for r in rr] for rr in results])
 
     @staticmethod
-    def message_generator(sender, recipient, context):
+    def message_generator(sender, recipient, context) -> str:
         """Generate an initial message with the given context for the RetrieveUserProxyAgent.
 
         Args:
@@ -665,7 +666,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 - `search_string` (str) - only docs that contain an exact match of this string will be retrieved. Default is "".
 
         Returns:
-            str: the generated message ready to be sent to the recipient agent.
+            The generated message ready to be sent to the recipient agent.
         """
         sender._reset()
 

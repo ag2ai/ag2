@@ -5,7 +5,6 @@
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Type
 
 import pytest
 from pydantic import BaseModel
@@ -14,8 +13,7 @@ from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.interop import CrewAIInteroperability, Interoperable
 from autogen.tools import Tool
-
-from ...conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block():
     from crewai_tools import FileReadTool
@@ -38,7 +36,7 @@ class TestCrewAIInteroperability:
         return FileReadTool()
 
     @pytest.fixture(scope="session")
-    def model_type(self, crewai_tool: "FileReadTool") -> Type[BaseModel]:  # type: ignore[no-any-unimported]
+    def model_type(self, crewai_tool: "FileReadTool") -> type[BaseModel]:  # type: ignore[no-any-unimported]
         return crewai_tool.args_schema  # type: ignore[no-any-return]
 
     @pytest.fixture(scope="session")
@@ -52,7 +50,7 @@ class TestCrewAIInteroperability:
         # runtime check
         assert isinstance(interop, Interoperable)
 
-    def test_convert_tool(self, tool: Tool, model_type: Type[BaseModel]) -> None:
+    def test_convert_tool(self, tool: Tool, model_type: type[BaseModel]) -> None:
         with TemporaryDirectory() as tmp_dir:
             file_path = f"{tmp_dir}/test.txt"
             with open(file_path, "w") as file:
@@ -71,11 +69,11 @@ class TestCrewAIInteroperability:
 
     @run_for_optional_imports("openai", "openai")
     def test_with_llm(
-        self, tool: Tool, credentials_gpt_4o_mini: Credentials, user_proxy: UserProxyAgent, tmp_path: Path
+        self, tool: Tool, credentials_openai_mini: Credentials, user_proxy: UserProxyAgent, tmp_path: Path
     ) -> None:
         chatbot = AssistantAgent(
             name="chatbot",
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
         )
 
         tool.register_for_execution(user_proxy)

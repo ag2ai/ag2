@@ -10,7 +10,7 @@ import os
 import re
 import uuid
 from contextlib import suppress
-from typing import Any, Optional, Union
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from .import_utils import optional_import_block, require_optional_import
@@ -22,7 +22,6 @@ with optional_import_block():
 
 # Optional PDF support
 with optional_import_block() as result:
-    import pdfminer
     import pdfminer.high_level
 
 IS_PDF_CAPABLE = result.is_successful
@@ -38,12 +37,12 @@ class SimpleTextBrowser:
 
     def __init__(
         self,
-        start_page: Optional[str] = None,
-        viewport_size: Optional[int] = 1024 * 8,
-        downloads_folder: Optional[Union[str, None]] = None,
+        start_page: str | None = None,
+        viewport_size: int | None = 1024 * 8,
+        downloads_folder: str | None | None = None,
         bing_base_url: str = "https://api.bing.microsoft.com/v7.0/search",
-        bing_api_key: Optional[Union[str, None]] = None,
-        request_kwargs: Optional[Union[dict[str, Any], None]] = None,
+        bing_api_key: str | None | None = None,
+        request_kwargs: dict[str, Any] | None | None = None,
     ):
         """Initialize the browser with the given parameters.
 
@@ -58,10 +57,10 @@ class SimpleTextBrowser:
         self.start_page: str = start_page if start_page else "about:blank"
         self.viewport_size = viewport_size  # Applies only to the standard uri types
         self.downloads_folder = downloads_folder
-        self.history: list[str] = list()
-        self.page_title: Optional[str] = None
+        self.history: list[str] = []
+        self.page_title: str | None = None
         self.viewport_current_page = 0
-        self.viewport_pages: list[tuple[int, int]] = list()
+        self.viewport_pages: list[tuple[int, int]] = []
         self.set_address(self.start_page)
         self.bing_base_url = bing_base_url
         self.bing_api_key = bing_api_key
@@ -152,7 +151,7 @@ class SimpleTextBrowser:
             self.viewport_pages.append((start_idx, end_idx))
             start_idx = end_idx
 
-    def _bing_api_call(self, query: str) -> dict[str, dict[str, list[dict[str, Union[str, dict[str, str]]]]]]:
+    def _bing_api_call(self, query: str) -> dict[str, dict[str, list[dict[str, str | dict[str, str]]]]]:
         # Make sure the key was set
         if self.bing_api_key is None:
             raise ValueError("Missing Bing API key.")
@@ -173,6 +172,7 @@ class SimpleTextBrowser:
         request_kwargs["stream"] = False
 
         # Make the request
+        request_kwargs.setdefault("timeout", 30)
         response = requests.get(self.bing_base_url, **request_kwargs)
         response.raise_for_status()
         results = response.json()
@@ -182,7 +182,7 @@ class SimpleTextBrowser:
     def _bing_search(self, query: str) -> None:
         results = self._bing_api_call(query)
 
-        web_snippets: list[str] = list()
+        web_snippets: list[str] = []
         idx = 0
         for page in results["webPages"]["value"]:
             idx += 1
@@ -194,7 +194,7 @@ class SimpleTextBrowser:
                         f"{idx}. [{dl['name']}]({dl['url']})\n{dl.get('snippet', '')}"  # type: ignore[index]
                     )
 
-        news_snippets = list()
+        news_snippets = []
         if "news" in results:
             for page in results["news"]["value"]:
                 idx += 1
@@ -215,8 +215,9 @@ class SimpleTextBrowser:
             # Prepare the request parameters
             request_kwargs = self.request_kwargs.copy() if self.request_kwargs is not None else {}
             request_kwargs["stream"] = True
+            request_kwargs.setdefault("timeout", 30)
 
-            # Send a HTTP request to the URL
+            # Send an HTTP request to the URL
             response = requests.get(url, **request_kwargs)
             response.raise_for_status()
 

@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Optional, Union
+import inspect
+from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel
 
@@ -15,6 +16,7 @@ from ...dependency_injection import Depends, on
 
 with optional_import_block():
     from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+    from crawl4ai import LLMConfig as Crawl4aiLLMConfig
     from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 __all__ = ["Crawl4AITool"]
@@ -23,18 +25,15 @@ __all__ = ["Crawl4AITool"]
 @require_optional_import(["crawl4ai"], "crawl4ai")
 @export_module("autogen.tools.experimental")
 class Crawl4AITool(Tool):
-    """
-    Crawl a website and extract information using the crawl4ai library.
-    """
+    """Crawl a website and extract information using the crawl4ai library."""
 
     def __init__(
         self,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        extraction_model: Optional[type[BaseModel]] = None,
-        llm_strategy_kwargs: Optional[dict[str, Any]] = None,
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        extraction_model: type[BaseModel] | None = None,
+        llm_strategy_kwargs: dict[str, Any] | None = None,
     ) -> None:
-        """
-        Initialize the Crawl4AITool.
+        """Initialize the Crawl4AITool.
 
         Args:
             llm_config: The config dictionary for the LLM model. If None, the tool will run without LLM.
@@ -70,8 +69,8 @@ class Crawl4AITool(Tool):
             url: Annotated[str, "The url to crawl and extract information from."],
             instruction: Annotated[str, "The instruction to provide on how and what to extract."],
             llm_config: Annotated[Any, Depends(on(llm_config))],
-            llm_strategy_kwargs: Annotated[Optional[dict[str, Any]], Depends(on(llm_strategy_kwargs))],
-            extraction_model: Annotated[Optional[type[BaseModel]], Depends(on(extraction_model))],
+            llm_strategy_kwargs: Annotated[dict[str, Any] | None, Depends(on(llm_strategy_kwargs))],
+            extraction_model: Annotated[type[BaseModel] | None, Depends(on(extraction_model))],
         ) -> Any:
             browser_cfg = BrowserConfig(headless=True)
             crawl_config = Crawl4AITool._get_crawl_config(
@@ -90,7 +89,7 @@ class Crawl4AITool(Tool):
         )
 
     @staticmethod
-    def _validate_llm_strategy_kwargs(llm_strategy_kwargs: Optional[dict[str, Any]], llm_config_provided: bool) -> None:
+    def _validate_llm_strategy_kwargs(llm_strategy_kwargs: dict[str, Any] | None, llm_config_provided: bool) -> None:
         if not llm_strategy_kwargs:
             return
 
@@ -120,12 +119,20 @@ class Crawl4AITool(Tool):
 
     @staticmethod
     def _get_crawl_config(  # type: ignore[no-any-unimported]
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: LLMConfig | dict[str, Any],
         instruction: str,
-        llm_strategy_kwargs: Optional[dict[str, Any]] = None,
-        extraction_model: Optional[type[BaseModel]] = None,
+        llm_strategy_kwargs: dict[str, Any] | None = None,
+        extraction_model: type[BaseModel] | None = None,
     ) -> "CrawlerRunConfig":
-        lite_llm_config = LiteLLmConfigFactory.create_lite_llm_config(llm_config)
+        def supports_llm_config() -> bool:
+            try:
+                return "llm_config" in inspect.signature(LLMExtractionStrategy.__init__).parameters
+            except (TypeError, ValueError):
+                return False
+            except NameError:
+                return False
+
+        lite_llm_adapter = LiteLLmConfigFactory.create_lite_llm_config(llm_config)
 
         if llm_strategy_kwargs is None:
             llm_strategy_kwargs = {}
@@ -139,13 +146,37 @@ class Crawl4AITool(Tool):
         extraction_type = llm_strategy_kwargs.pop("extraction_type", "schema" if schema else "block")
 
         # 1. Define the LLM extraction strategy
-        llm_strategy = LLMExtractionStrategy(
-            **lite_llm_config,
-            schema=schema,
-            extraction_type=extraction_type,
-            instruction=instruction,
-            **llm_strategy_kwargs,
-        )
+        if supports_llm_config():
+            if "LLMExtractionStrategy" not in globals() or "Crawl4aiLLMConfig" not in globals():
+                raise ValueError("crawl4ai is required for LLM extraction. Install it with `ag2[crawl4ai]`.")
+
+            llm_config_kwargs = lite_llm_adapter.as_llm_config_kwargs()
+            if not llm_config_kwargs.get("provider"):
+                raise ValueError("LLM provider is required for crawl4ai LLM extraction.")
+            try:
+                llm_config_obj = Crawl4aiLLMConfig(**llm_config_kwargs)
+            except TypeError:
+                allowed = set(inspect.signature(Crawl4aiLLMConfig.__init__).parameters)
+                allowed.discard("self")
+                filtered = {key: value for key, value in llm_config_kwargs.items() if key in allowed}
+                llm_config_obj = Crawl4aiLLMConfig(**filtered)
+
+            llm_strategy = LLMExtractionStrategy(
+                llm_config=llm_config_obj,
+                schema=schema,
+                extraction_type=extraction_type,
+                instruction=instruction,
+                **lite_llm_adapter.as_strategy_kwargs(),
+                **llm_strategy_kwargs,
+            )
+        else:
+            llm_strategy = LLMExtractionStrategy(
+                **lite_llm_adapter.as_legacy_kwargs(),
+                schema=schema,
+                extraction_type=extraction_type,
+                instruction=instruction,
+                **llm_strategy_kwargs,
+            )
 
         # 2. Build the crawler config
         crawl_config = CrawlerRunConfig(extraction_strategy=llm_strategy, cache_mode=CacheMode.BYPASS)

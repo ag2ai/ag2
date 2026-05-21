@@ -5,7 +5,7 @@
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from dataclasses import dataclass, field
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from .document import Document
 
@@ -20,18 +20,18 @@ class GraphStoreQueryResult:
     results: intermediate results to question/query, e.g. node entities.
     """
 
-    answer: Optional[str] = None
+    answer: str | None = None
     results: list[Any] = field(default_factory=list)
 
 
 @runtime_checkable
 class GraphQueryEngine(Protocol):
-    """An abstract base class that represents a graph query engine on top of a underlying graph database.
+    """An abstract base class that represents a graph query engine on top of an underlying graph database.
 
     This interface defines the basic methods for graph-based RAG.
     """
 
-    def init_db(self, input_doc: Optional[list[Document]] = None) -> None:
+    def init_db(self, input_doc: list[Document] | None = None) -> None:
         """This method initializes graph database with the input documents or records.
         Usually, it takes the following steps,
         1. connecting to a graph database.

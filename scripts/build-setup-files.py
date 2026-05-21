@@ -22,7 +22,7 @@ def get_optional_dependencies(pyproject_path: str) -> dict:
 # Example usage
 pyproject_path = Path(__file__).parent.joinpath("../pyproject.toml")
 optional_dependencies = get_optional_dependencies(pyproject_path)
-optional_groups = [group for group in optional_dependencies]
+optional_groups = list(optional_dependencies)
 
 # for group, dependencies in optional_dependencies.items():
 #     print(f"Group: {group}")

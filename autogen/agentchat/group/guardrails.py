@@ -5,9 +5,9 @@
 import json
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ...oai.client import OpenAIWrapper
 
@@ -16,37 +16,11 @@ if TYPE_CHECKING:
     from .targets.transition_target import TransitionTarget
 
 
-class GuardrailResult(BaseModel):
-    """Represents the outcome of a guardrail check."""
-
-    activated: bool
-    justification: str = Field(default="No justification provided")
-
-    def __str__(self) -> str:
-        return f"Guardrail Result: {self.activated}\nJustification: {self.justification}"
-
-    @staticmethod
-    def parse(text: str) -> "GuardrailResult":
-        """Parses a JSON string into a GuardrailResult object.
-
-        Args:
-            text (str): The JSON string to parse.
-
-        Returns:
-            GuardrailResult: The parsed GuardrailResult object.
-        """
-        try:
-            data = json.loads(text)
-            return GuardrailResult(**data)
-        except (json.JSONDecodeError, ValueError) as e:
-            raise ValueError(f"Failed to parse GuardrailResult from text: {text}") from e
-
-
 class Guardrail(ABC):
     """Abstract base class for guardrails."""
 
     def __init__(
-        self, name: str, condition: str, target: "TransitionTarget", activation_message: Optional[str] = None
+        self, name: str, condition: str, target: "TransitionTarget", activation_message: str | None = None
     ) -> None:
         self.name = name
         self.condition = condition
@@ -58,8 +32,8 @@ class Guardrail(ABC):
     @abstractmethod
     def check(
         self,
-        context: Union[str, list[dict[str, Any]]],
-    ) -> GuardrailResult:
+        context: str | list[dict[str, Any]],
+    ) -> "GuardrailResult":
         """Checks the text against the guardrail and returns a GuardrailResult.
 
         Args:
@@ -80,7 +54,7 @@ class LLMGuardrail(Guardrail):
         condition: str,
         target: "TransitionTarget",
         llm_config: "LLMConfig",
-        activation_message: Optional[str] = None,
+        activation_message: str | None = None,
     ) -> None:
         super().__init__(name, condition, target, activation_message)
 
@@ -88,7 +62,7 @@ class LLMGuardrail(Guardrail):
             raise ValueError("LLMConfig is required.")
 
         self.llm_config = llm_config.deepcopy()
-        setattr(self.llm_config, "response_format", GuardrailResult)
+        setattr(self.llm_config, "response_format", GuardrailCheckResult)
         self.client = OpenAIWrapper(**self.llm_config.model_dump())
 
         self.check_prompt = f"""You are a guardrail that checks if a condition is met in the conversation you are given.
@@ -98,8 +72,8 @@ You will activate the guardrail only if the condition is met.
 
     def check(
         self,
-        context: Union[str, list[dict[str, Any]]],
-    ) -> GuardrailResult:
+        context: str | list[dict[str, Any]],
+    ) -> "GuardrailResult":
         """Checks the context against the guardrail using an LLM.
 
         Args:
@@ -120,7 +94,7 @@ You will activate the guardrail only if the condition is met.
             raise ValueError("Context must be a string or a list of messages.")
         # Call the LLM with the check messages
         response = self.client.create(messages=check_messages)
-        return GuardrailResult.parse(response.choices[0].message.content)  # type: ignore
+        return GuardrailResult.parse(response.choices[0].message.content, guardrail=self)  # type: ignore
 
 
 class RegexGuardrail(Guardrail):
@@ -131,7 +105,7 @@ class RegexGuardrail(Guardrail):
         name: str,
         condition: str,
         target: "TransitionTarget",
-        activation_message: Optional[str] = None,
+        activation_message: str | None = None,
     ) -> None:
         super().__init__(name, condition, target, activation_message)
         # Compile the regular expression condition
@@ -142,8 +116,8 @@ class RegexGuardrail(Guardrail):
 
     def check(
         self,
-        context: Union[str, list[dict[str, Any]]],
-    ) -> GuardrailResult:
+        context: str | list[dict[str, Any]],
+    ) -> "GuardrailResult":
         """Checks the context against the guardrail using a regular expression.
 
         Args:
@@ -167,5 +141,45 @@ class RegexGuardrail(Guardrail):
             if match:
                 activated = True
                 justification = f"Match found -> {match.group(0)}"
-                return GuardrailResult(activated=activated, justification=justification)
-        return GuardrailResult(activated=False, justification="No match found in the context.")
+                return GuardrailResult(activated=activated, justification=justification, guardrail=self)
+        return GuardrailResult(activated=False, justification="No match found in the context.", guardrail=self)
+
+
+class GuardrailCheckResult(BaseModel):
+    """LLM-facing JSON schema for a guardrail check."""
+
+    activated: bool
+    justification: str = Field(default="No justification provided")
+
+
+class GuardrailResult(GuardrailCheckResult):
+    """Represents the outcome of a guardrail check."""
+
+    guardrail: Guardrail
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def __str__(self) -> str:
+        return f"Guardrail Result: {self.activated}\nJustification: {self.justification}"
+
+    @property
+    def reply(self) -> str:
+        return f"{self.guardrail.activation_message}\nJustification: {self.justification}"
+
+    @staticmethod
+    def parse(text: str, guardrail: "Guardrail") -> "GuardrailResult":
+        """Parses a JSON string into a GuardrailResult object.
+
+        Args:
+            text (str): The JSON string to parse.
+            guardrail (Guardrail): The guardrail that the result is for.
+
+        Returns:
+            GuardrailResult: The parsed GuardrailResult object.
+        """
+        try:
+            data = json.loads(text)
+            parsed = GuardrailCheckResult.model_validate(data)
+            return GuardrailResult(**parsed.model_dump(), guardrail=guardrail)
+        except (json.JSONDecodeError, ValueError) as e:
+            raise ValueError(f"Failed to parse GuardrailResult from text: {text}") from e

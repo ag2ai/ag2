@@ -5,7 +5,6 @@
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import re
-from typing import Union
 
 from ..code_utils import CODE_BLOCK_PATTERN, UNKNOWN, content_str, infer_lang
 from ..doc_utils import export_module
@@ -20,7 +19,7 @@ class MarkdownCodeExtractor(CodeExtractor):
     """(Experimental) A class that extracts code blocks from a message using Markdown syntax."""
 
     def extract_code_blocks(
-        self, message: Union[str, list[Union[UserMessageTextContentPart, UserMessageImageContentPart]], None]
+        self, message: str | list[UserMessageTextContentPart | UserMessageImageContentPart] | None
     ) -> list[CodeBlock]:
         """(Experimental) Extract code blocks from a message. If no code blocks are found,
         return an empty list.

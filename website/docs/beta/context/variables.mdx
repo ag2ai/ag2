@@ -1,0 +1,164 @@
+---
+title: Conversation Variables
+sidebarTitle: Variables
+---
+
+# Conversation Variables
+
+Variables provide a flexible way to store, share, and inject contextual information between agents and tools. Unlike hardcoded configurations, variables allow you to dynamically pass state—like API keys, session data, or user preferences—during runtime without exposing them to the underlying LLM.
+
+## Passing Variables to a Conversation
+
+You can pass variables at different levels depending on how long they need to persist and which parts of the system need access to them.
+
+### Agent Variables
+
+When you want a variable to be available across all interactions with a specific agent, you can initialize the agent with default variables.
+
+```python linenums="1"
+from autogen.beta import Agent
+
+# This variable will be available in all tool calls executed by this agent
+agent = Agent(
+    name="WeatherBot",
+    variables={"api_key": "your_global_api_key"}
+)
+```
+
+### Conversation Variables
+
+If a variable is only relevant for a specific conversation, you can pass it directly when calling the `ask` method.
+
+```python linenums="1"
+await agent.ask(
+    "What is the weather?",
+    variables={"session_id": "12345"},
+)
+```
+
+### Mixed Variables
+
+When both agent-level and call-level variables are provided, they are merged. If there is a key collision, the variables provided during the `ask` call will override the agent's default variables.
+
+```python linenums="1" hl_lines="3 10"
+agent = Agent(
+    name="Bot",
+    variables={"global_param": "A", "override_me": "AgentLevel"}
+)
+
+# Inside the tool, variables will be:
+# {"global_param": "A", "override_me": "CallLevel", "call_param": "B"}
+await agent.ask(
+    "Hello!",
+    variables={"override_me": "CallLevel", "call_param": "B"}
+)
+```
+
+## Context Variables Access
+
+The most straightforward way to access variables inside a tool is by requesting the `Context` object. By adding an argument annotated with `Context`, the framework will automatically inject the current execution context, which contains the `.variables` dictionary.
+
+```python linenums="1" hl_lines="1 4 6-7"
+from autogen.beta import Context, tool
+
+@tool
+def process_data(context: Context) -> str:
+    # Access variables directly from the context dictionary
+    api_key = context.variables.get("api_key")
+    session = context.variables.get("session_id")
+
+    return f"Processed using key: {api_key}"
+```
+
+## Special Variable Access
+
+Instead of passing the entire `Context` object, you can instruct the framework to inject specific variables directly into your tool's arguments using the `Variable` annotation. This makes your tool's signature cleaner and more explicit.
+
+```python linenums="1" hl_lines="1-2 9"
+from typing import Annotated
+from autogen.beta import Variable, tool
+
+@tool
+def fetch_user_data(
+    user_id: str,
+    # The framework automatically looks for a variable named "api_key"
+    # and injects its value here.
+    api_key: Annotated[str, Variable()],
+) -> str:
+    return f"Fetching {user_id} using {api_key}"
+```
+
+If the name of the argument in your function doesn't match the key in the variables dictionary, you can specify the key explicitly:
+
+```python linenums="1" hl_lines="5"
+@tool
+def fetch_user_data(
+    user_id: str,
+    # Looks for "api_key" in variables, but binds it to the "key" argument
+    key: Annotated[str, Variable("api_key")],
+) -> str:
+    return f"Fetching {user_id} using {key}"
+```
+
+!!! note
+    Important remark: these annotations have no effect on the tool schema for the LLM.
+    They are only used for the framework to inject the value into the function.
+
+## Variables with Default Values
+
+Sometimes a variable might not be provided by the user. You can define fallback behaviors directly within the `Variable` annotation using either `default` or `default_factory`.
+
+### Static Defaults
+
+Use `default` for simple, immutable fallback values.
+
+```python linenums="1" hl_lines="4"
+@tool
+def get_settings(
+    # If "theme" is not provided in the variables, it defaults to "dark"
+    theme: Annotated[str, Variable(default="dark")],
+) -> str:
+    return f"Using theme: {theme}"
+```
+
+### Dynamic Defaults
+
+For mutable objects (like lists or dictionaries) or values that need to be computed at runtime, use `default_factory`. The framework ensures that the factory function is only called once per execution context, preserving state across multiple tool calls in the same turn.
+
+```python linenums="1" hl_lines="9"
+def create_default_state() -> dict:
+    return {"status": "init"}
+
+@tool
+def update_status(
+    state: Annotated[
+        dict[str, str],
+        # Uses the dynamically created dictionary if "state" wasn't provided
+        Variable(default_factory=create_default_state),
+    ],
+) -> str:
+    state["status"] = "running"
+    return "Status updated"
+```
+
+## Updating Variables in Tools
+
+Variables are mutable. If a tool updates the `context.variables` dictionary, that change is preserved in the context and will be available to subsequent tool calls within the same conversation.
+
+This is highly useful for sharing state or caching results between different tools without requiring the LLM to pass the data back and forth.
+
+```python linenums="1" hl_lines="4 9 11-12"
+@tool
+def authenticate(context: Context) -> str:
+    # Generate and store a token in the context variables
+    context.variables["auth_token"] = "abc-123"
+    return "Successfully authenticated."
+
+@tool
+def fetch_secure_data(
+    auth_token: Annotated[str | None, Variable(default=None)],
+) -> str:
+    if not auth_token:
+        return "Error: Not authenticated."
+    return f"Data fetched with token {auth_token}"
+```

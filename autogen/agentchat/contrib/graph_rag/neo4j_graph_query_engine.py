@@ -2,13 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import os
-import sys
-from typing import Any, Optional, Union
-
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias
-else:
-    from typing_extensions import TypeAlias
+from typing import Any, Optional, TypeAlias
 
 from ....import_utils import optional_import_block, require_optional_import
 from .document import Document, DocumentType
@@ -34,23 +28,24 @@ with optional_import_block():
 
 @require_optional_import("llama_index", "neo4j")
 class Neo4jGraphQueryEngine:
-    """This class serves as a wrapper for a property graph query engine backed by LlamaIndex and Neo4j,
-    facilitating the creating, connecting, updating, and querying of LlamaIndex property graphs.
-
-    It builds a property graph Index from input documents,
-    storing and retrieving data from the property graph in the Neo4j database.
-
-    It extracts triplets, i.e., [entity] -> [relationship] -> [entity] sets,
-    from the input documents using llamIndex extractors.
-
-    Users can provide custom entities, relationships, and schema to guide the extraction process.
-
-    If strict is True, the engine will extract triplets following the schema
-    of allowed relationships for each entity specified in the schema.
-
-    It also leverages LlamaIndex's chat engine which has a conversation history internally to provide context-aware responses.
-
-    For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
+    """
+    This class serves as a wrapper for a property graph query engine backed by LlamaIndex and Neo4j,\n
+    facilitating the creating, connecting, updating, and querying of LlamaIndex property graphs.\n
+    \n
+    It builds a property graph Index from input documents,\n
+    storing and retrieving data from the property graph in the Neo4j database.\n
+    \n
+    It extracts triplets, i.e., [entity] -> [relationship] -> [entity] sets,\n
+    from the input documents using llamIndex extractors.\n
+    \n
+    Users can provide custom entities, relationships, and schema to guide the extraction process.\n
+    \n
+    If strict is True, the engine will extract triplets following the schema\n
+    of allowed relationships for each entity specified in the schema.\n
+    \n
+    It also leverages LlamaIndex's chat engine which has a conversation history internally to provide context-aware responses.\n
+    \n
+    For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb\n
     """
 
     def __init__(  # type: ignore[no-any-unimported]
@@ -64,8 +59,8 @@ class Neo4jGraphQueryEngine:
         embedding: Optional["BaseEmbedding"] = None,
         entities: Optional["TypeAlias"] = None,
         relations: Optional["TypeAlias"] = None,
-        schema: Optional[Union[dict[str, str], list["Triple"]]] = None,
-        strict: Optional[bool] = False,
+        schema: dict[str, str] | list["Triple"] | None = None,
+        strict: bool | None = False,
     ):
         """Initialize a Neo4j Property graph.
         Please also refer to https://docs.llamaindex.ai/en/stable/examples/property_graph/graph_store/
@@ -96,7 +91,7 @@ class Neo4jGraphQueryEngine:
         self.schema = schema
         self.strict = strict
 
-    def init_db(self, input_doc: Optional[list[Document]] = None) -> None:
+    def init_db(self, input_doc: list[Document] | None = None) -> None:
         """Build the knowledge graph with input documents."""
         self.documents = self._load_doc(input_doc if input_doc is not None else [])
 
@@ -245,7 +240,7 @@ class Neo4jGraphQueryEngine:
         # To add more extractors, please refer to https://docs.llamaindex.ai/en/latest/module_guides/indexing/lpg_index_guide/#construction
         """
         #
-        kg_extractors: list["TransformComponent"] = [  # type: ignore[no-any-unimported]
+        kg_extractors: list[TransformComponent] = [  # type: ignore[no-any-unimported]
             SchemaLLMPathExtractor(
                 llm=self.llm,
                 possible_entities=self.entities,

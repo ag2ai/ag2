@@ -7,25 +7,24 @@
 # !/usr/bin/env python3 -m pytest
 
 import io
-from contextlib import redirect_stdout
+import logging
 
 from autogen import AssistantAgent, UserProxyAgent, gather_usage_summary
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
-def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials):
+def test_gathering(credentials_gpt_4o: Credentials, credentials_openai_mini: Credentials):
     assistant1 = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
     assistant2 = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
     assistant3 = AssistantAgent(
         "assistant",
@@ -69,14 +68,10 @@ def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Cre
 
 @run_for_optional_imports("openai", "openai")
 def test_agent_usage(credentials: Credentials):
-    config_list = credentials.config_list
     assistant = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
-        llm_config={
-            "cache_seed": None,
-            "config_list": config_list,
-        },
+        llm_config=credentials.llm_config,
     )
 
     ai_user_proxy = UserProxyAgent(
@@ -84,9 +79,7 @@ def test_agent_usage(credentials: Credentials):
         human_input_mode="NEVER",
         max_consecutive_auto_reply=1,
         code_execution_config=False,
-        llm_config={
-            "config_list": config_list,
-        },
+        llm_config=credentials.llm_config,
         # In the system message the "user" always refers to the other agent.
         system_message="You ask a user for help. You check the answer from the user and provide feedback.",
     )
@@ -99,18 +92,33 @@ def test_agent_usage(credentials: Credentials):
     )
     print("Result summary:", res.summary)
 
-    # test print
-    captured_output = io.StringIO()
-    with redirect_stdout(captured_output):
-        ai_user_proxy.print_usage_summary()
-    output = captured_output.getvalue()
-    assert "Usage summary excluding cached usage:" in output
+    # test print - capture logger output since print_usage_summary uses IOStream events
+    logger = logging.getLogger("ag2.event.processor")
+    log_stream = io.StringIO()
+    handler = logging.StreamHandler(log_stream)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    old_handlers = logger.handlers[:]
+    old_level = logger.level
+    old_propagate = logger.propagate
+    logger.handlers = [handler]
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    captured_output = io.StringIO()
-    with redirect_stdout(captured_output):
+    try:
+        ai_user_proxy.print_usage_summary()
+        output = log_stream.getvalue()
+        assert "Usage summary excluding cached usage:" in output
+
+        log_stream.truncate(0)
+        log_stream.seek(0)
+
         assistant.print_usage_summary()
-    output = captured_output.getvalue()
-    assert "All completions are non-cached:" in output
+        output = log_stream.getvalue()
+        assert "All completions are non-cached:" in output
+    finally:
+        logger.handlers = old_handlers
+        logger.setLevel(old_level)
+        logger.propagate = old_propagate
 
     # test get
     print("Actual usage summary (excluding completion from cache):", assistant.get_actual_usage())
@@ -118,8 +126,3 @@ def test_agent_usage(credentials: Credentials):
 
     print("Actual usage summary (excluding completion from cache):", ai_user_proxy.get_actual_usage())
     print("Total usage summary (including completion from cache):", ai_user_proxy.get_total_usage())
-
-
-if __name__ == "__main__":
-    # test_gathering()
-    test_agent_usage()

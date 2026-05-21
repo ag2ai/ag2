@@ -6,8 +6,7 @@ from autogen.agents.experimental import WikipediaAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
 from autogen.tools.experimental import WikipediaPageLoadTool, WikipediaQueryRunTool
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports("wikipediaapi", "wikipedia")

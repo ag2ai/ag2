@@ -1,6 +1,7 @@
 ---
-title: Amazon Bedrock
+title: Amazon Bedrock Guide | Multi-Agent Framework
 sidebarTitle: Amazon Bedrock
+description: "How to use Amazon Bedrock models with AG2. IAM setup, configuration, and code examples for building multi-agent systems on AWS."
 ---
 
 AG2 allows you to use Amazon's generative AI Bedrock service to run inference with a number of open-weight models and as well as their own models.
@@ -68,6 +69,28 @@ An additional parameter can be added that denotes whether the model supports a s
 
 - supports_system_prompts
 
+### Retry Configuration
+
+AG2 supports configuring exponential backoff and retry behavior for Bedrock API calls. This helps handle transient errors, rate limits, and network issues gracefully. The following retry configuration parameters are available:
+
+- **`total_max_attempts`** (int, optional, default: 5): Maximum number of total attempts (initial request + retries). This is the preferred parameter as it aligns with AWS environment variables. Example: `10` means 1 initial attempt + 9 retries = 10 total attempts.
+
+- **`max_attempts`** (int, optional, default: 5): Legacy parameter for maximum number of retry attempts. If both `total_max_attempts` and `max_attempts` are provided, `total_max_attempts` takes precedence.
+
+- **`mode`** (str, optional, default: "standard"): Retry strategy mode. Valid values are:
+  - `"legacy"`: Pre-existing retry behavior
+  - `"standard"`: Standardized retry rules (defaults to 3 max attempts if not overridden)
+  - `"adaptive"`: Retries with additional client-side throttling (recommended for handling rate limits)
+
+**Best Practices:**
+- Use `total_max_attempts` instead of `max_attempts` (preferred parameter)
+- Use `"adaptive"` mode for high-throughput scenarios or when dealing with rate limits
+- Use `"standard"` mode for general-purpose applications
+- Set `total_max_attempts` to 5-7 for most applications, or 10+ for critical applications
+
+**Environment Variable Support:**
+You can also configure retries via the `AWS_MAX_ATTEMPTS` environment variable, which maps to `total_max_attempts`.
+
 It is important to add the `api_type` field and set it to a string that corresponds to the client type used: `bedrock`.
 
 Example:
@@ -76,7 +99,8 @@ Example:
     {
         "api_type": "bedrock",
         "model": "amazon.titan-text-premier-v1:0",
-        "aws_region": "us-east-1"
+        "api_key": BEDROCK_API_KEY,
+        "aws_region": "us-east-1",
         "aws_access_key": "",
         "aws_secret_key": "",
         "aws_session_token": "",
@@ -85,7 +109,8 @@ Example:
     {
         "api_type": "bedrock",
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
-        "aws_region": "us-east-1"
+        "api_key": BEDROCK_API_KEY,
+        "aws_region": "us-east-1",
         "aws_access_key": "",
         "aws_secret_key": "",
         "aws_session_token": "",
@@ -93,22 +118,127 @@ Example:
         "temperature": 0.5,
         "topP": 0.2,
         "maxTokens": 250,
+        "total_max_attempts": 5,  # Retry configuration
+        "mode": "standard",
     },
     {
         "api_type": "bedrock",
         "model": "mistral.mixtral-8x7b-instruct-v0:1",
-        "aws_region": "us-east-1"
+        "api_key": BEDROCK_API_KEY,
+        "aws_region": "us-east-1",
         "aws_access_key": "",
         "aws_secret_key": "",
         "supports_system_prompts": False, # Mistral Instruct models don't support a separate system prompt
+        "total_max_attempts": 8,  # More retries for reliability
+        "mode": "adaptive",  # Adaptive mode for rate limit handling
         "price": [0.00045, 0.0007] # Specific pricing for this model/region
     }
 ]
 ```
 
+### Advanced: additionalModelRequestFields
+
+Amazon Bedrock models often offer advanced, model-specific features that are not part of general AG2 config. AG2 now supports the `additional_model_request_fields` parameter, which allows you to send these advanced options directly to Bedrock.
+
+Typical use cases include (but are not limited to):
+- Anthropic Claude's *thinking configuration* (enables internal reasoning phases)
+- Model provider experimental or proprietary features
+
+**How to use:**
+- Add `"additional_model_request_fields": { ... }` to the config/dictionary you pass to AG2, filling in with the provider/model's supported fields as needed.
+
+For example, to enable Claude's 'thinking' mode:
+```python
+llm_config_bedrock = autogen.LLMConfig({
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "aws_region": "us-east-1",
+        "aws_access_key": "[FILL THIS IN]",
+        "aws_secret_key": "[FILL THIS IN]",
+        "additional_model_request_fields": {
+            # Claude thinking configuration example
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 1024,  # Must be < max_tokens and above or equal to 1024 tokens
+            },
+        },
+        "max_tokens": 4096,
+    },
+)
+```
+
+Refer to [the Amazon Bedrock model documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html) to discover which features are supported by your chosen model. AG2 will pass all fields in `additional_model_request_fields` through to Bedrock as-is;
+
 ## Using within an AWS Lambda function
 
 If you are using your AG2 code within an AWS Lambda function, you can utilise the attached role to access the Bedrock service and do not need to provide access, token, or profile values.
+
+## Retry Configuration Examples
+
+### Basic Retry Configuration
+
+The following example shows a basic configuration with default retry settings (5 total attempts, standard mode):
+
+```python
+llm_config_default = autogen.LLMConfig({
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    # Default: total_max_attempts=5, mode="standard"
+})
+```
+
+### High-Reliability Configuration
+
+For critical applications that need maximum retry attempts:
+
+```python
+llm_config_reliable = autogen.LLMConfig({
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    "total_max_attempts": 10,  # More retries for reliability
+    "mode": "adaptive",  # Best for handling various error types
+})
+```
+
+### Rate-Limit Optimized Configuration
+
+For handling rate limits and throttling:
+
+```python
+llm_config_rate_limit = autogen.LLMConfig({
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    "total_max_attempts": 8,
+    "mode": "adaptive",  # Best for rate limit handling
+})
+```
+
+### Fast-Fail Configuration
+
+For applications that need quick failure detection:
+
+```python
+llm_config_fast_fail = autogen.LLMConfig({
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    "total_max_attempts": 2,  # Minimal retries for fast failure
+    "mode": "standard",
+})
+```
+
+For more detailed information on retry configuration, see the [Exponential Backoff and Retry Configuration notebook](../../use-cases/notebooks/notebooks/agentchat_bedrock_client_exponential_backoff_and_retry_config.md).
 
 ## Two-agent Coding Example
 
@@ -123,19 +253,20 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config_bedrock = autogen.LLMConfig(
-    api_type="bedrock",
-    model="anthropic.claude-3-sonnet-20240229-v1:0",
-    aws_region="us-east-1",
-    aws_access_key="[FILL THIS IN]",
-    aws_secret_key="[FILL THIS IN]",
-    price=[0.003, 0.015],
+llm_config_bedrock = autogen.LLMConfig({
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "api_key": BEDROCK_API_KEY,
+        "aws_region": "us-east-1",
+        "aws_access_key": "[FILL THIS IN]",
+        "aws_secret_key": "[FILL THIS IN]",
+        "price": [0.003, 0.015],
+    },
     temperature=0.1,
     cache_seed=None,  # turn off caching
 )
 
-with llm_config_bedrock:
-    assistant = autogen.AssistantAgent("assistant")
+assistant = autogen.AssistantAgent("assistant", llm_config=llm_config_bedrock)
 
 user_proxy = autogen.UserProxyAgent(
     "user_proxy",
@@ -213,26 +344,27 @@ from typing import Literal
 
 import autogen
 
-llm_config_bedrock = autogen.LLMConfig(
-    api_type="bedrock",
-    model="meta.llama3-1-70b-instruct-v1:0",
-    aws_region="us-west-2",
-    aws_access_key="[FILL THIS IN]",
-    aws_secret_key="[FILL THIS IN]",
-    price=[0.00265, 0.0035],
+llm_config_bedrock = autogen.LLMConfig({
+        "api_type": "bedrock",
+        "model": "meta.llama3-1-70b-instruct-v1:0",
+        "aws_region": "us-west-2",
+        "aws_access_key": "[FILL THIS IN]",
+        "aws_secret_key": "[FILL THIS IN]",
+        "price": [0.00265, 0.0035],
+    },
     cache_seed=None,  # turn off caching
 )
 
 # Create the agent and include examples of the function calling JSON in the prompt
 # to help guide the model
-with llm_config_bedrock:
-    chatbot = autogen.AssistantAgent(
-        name="chatbot",
-        system_message="""For currency exchange and weather forecasting tasks,
-            only use the functions you have been provided with.
-            Output only the word 'TERMINATE' when an answer has been provided.
-            Use both tools together if you can.""",
-    )
+chatbot = autogen.AssistantAgent(
+    name="chatbot",
+    llm_config=llm_config_bedrock,
+    system_message="""For currency exchange and weather forecasting tasks,
+        only use the functions you have been provided with.
+        Output only the word 'TERMINATE' when an answer has been provided.
+        Use both tools together if you can.""",
+)
 
 user_proxy = autogen.UserProxyAgent(
     name="user_proxy",
@@ -379,66 +511,70 @@ Here we have a conversation that has two models (Anthropic's Claude 3 Sonnet and
 from typing import Annotated, Literal
 
 import autogen
-from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, LLMConfig
+from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
 
-llm_config_sonnet = LLMConfig(
-    api_type="bedrock",
-    model="anthropic.claude-3-sonnet-20240229-v1:0",
-    aws_region="us-east-1",
-    aws_access_key="[FILL THIS IN]",
-    aws_secret_key="[FILL THIS IN]",
-    price=[0.003, 0.015],
+llm_config_sonnet = autogen.LLMConfig({
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "aws_region": "us-east-1",
+        "aws_access_key": "[FILL THIS IN]",
+        "aws_secret_key": "[FILL THIS IN]",
+        "price": [0.003, 0.015],
+    },
     temperature=0.1,
     cache_seed=None,  # turn off caching
 )
 
-llm_config_mistral = autogen.LLMConfig(
-    api_type="bedrock",
-    model="mistral.mistral-large-2407-v1:0",
-    aws_region="us-west-2",
-    aws_access_key="[FILL THIS IN]",
-    aws_secret_key="[FILL THIS IN]",
-    price=[0.003, 0.009],
+llm_config_mistral = autogen.LLMConfig({
+        "api_type": "bedrock",
+        "model": "mistral.mistral-large-2407-v1:0",
+        "aws_region": "us-west-2",
+        "aws_access_key": "[FILL THIS IN]",
+        "aws_secret_key": "[FILL THIS IN]",
+        "price": [0.003, 0.009],
+    },
     temperature=0.1,
     cache_seed=None,  # turn off caching
 )
 
-llm_config_llama31_70b = autogen.LLMConfig(
-    api_type="bedrock",
-    model="meta.llama3-1-70b-instruct-v1:0",
-    aws_region="us-west-2",
-    aws_access_key="[FILL THIS IN]",
-    aws_secret_key="[FILL THIS IN]",
-    price=[0.00265, 0.0035],
+llm_config_llama31_70b = autogen.LLMConfig({
+        "api_type": "bedrock",
+        "model": "meta.llama3-1-70b-instruct-v1:0",
+        "aws_region": "us-west-2",
+        "aws_access_key": "[FILL THIS IN]",
+        "aws_secret_key": "[FILL THIS IN]",
+        "price": [0.00265, 0.0035],
+    },
     cache_seed=None,  # turn off caching
 )
 
-with llm_config_sonnet:
-    alice = AssistantAgent(
-        "sonnet_agent",
-        system_message="You are from Anthropic, an AI company that created the Sonnet large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to mistral_agent when you have finished. Start your response with 'I am sonnet_agent'.",
-        is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-    )
+alice = AssistantAgent(
+    "sonnet_agent",
+    system_message="You are from Anthropic, an AI company that created the Sonnet large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to mistral_agent when you have finished. Start your response with 'I am sonnet_agent'.",
+    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+    llm_config=llm_config_sonnet,
+)
 
-with llm_config_mistral:
-    bob = autogen.AssistantAgent(
-        "mistral_agent",
-        system_message="You are from Mistral, an AI company that created the Large v2 large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to the judge if you have finished. Start your response with 'I am mistral_agent'.",
-        is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-    )
+bob = autogen.AssistantAgent(
+    "mistral_agent",
+    system_message="You are from Mistral, an AI company that created the Large v2 large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to the judge if you have finished. Start your response with 'I am mistral_agent'.",
+    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+    llm_config=llm_config_mistral,
+)
 
-with llm_config_llama31_70b:
-    charlie = AssistantAgent(
-        "research_assistant",
-        system_message="You are a helpful assistant to research the latest news and headlines. You have access to call functions to get the latest news articles for research through 'code_interpreter'.",
-        is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-    )
+charlie = AssistantAgent(
+    "research_assistant",
+    system_message="You are a helpful assistant to research the latest news and headlines. You have access to call functions to get the latest news articles for research through 'code_interpreter'.",
+    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+    llm_config=llm_config_llama31_70b,
+)
 
-    dan = AssistantAgent(
-        "judge",
-        system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing. End your decision with the word 'TERMINATE' to conclude the debate.",
-        is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-    )
+dan = AssistantAgent(
+    "judge",
+    system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing. End your decision with the word 'TERMINATE' to conclude the debate.",
+    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+    llm_config=llm_config_llama31_70b,
+)
 
 code_interpreter = UserProxyAgent(
     "code_interpreter",
@@ -603,15 +739,16 @@ In this simple example, we'll use an image on the Internet and send it to Anthro
 
 Here's the image we'll use:
 
-![I -heart- AutoGen](/static/img/love.png)
+![I -heart- AutoGen](/assets/img/love.png)
 
 ```python
-llm_config_sonnet = LLMConfig(
-    api_type="bedrock",
-    model="anthropic.claude-3-sonnet-20240229-v1:0",
-    aws_region="us-east-1",
-    aws_access_key="[FILL THIS IN]",
-    aws_secret_key="[FILL THIS IN]",
+llm_config_sonnet = LLMConfig({
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "aws_region": "us-east-1",
+        "aws_access_key": "[FILL THIS IN]",
+        "aws_secret_key": "[FILL THIS IN]",
+    },
     cache_seed=None,  # turn off caching
 )
 
@@ -621,11 +758,11 @@ import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 
-with llm_config_sonnet:
-    image_agent = MultimodalConversableAgent(
-        name="image-explainer",
-        max_consecutive_auto_reply=10,
-    )
+image_agent = MultimodalConversableAgent(
+    name="image-explainer",
+    max_consecutive_auto_reply=10,
+    llm_config=llm_config_sonnet,
+)
 
 user_proxy = autogen.UserProxyAgent(
     name="User_proxy",

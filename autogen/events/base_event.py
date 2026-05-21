@@ -4,31 +4,43 @@
 
 
 from abc import ABC
-from typing import Annotated, Any, Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Annotated, Any, Literal, Union
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model
 
 from ..doc_utils import export_module
+from ..logger.logger_utils import event_print
 
-__all__ = ["BaseEvent", "get_annotated_type_for_event_classes", "get_event_classes", "wrap_event"]
+__all__ = [
+    "BaseEvent",
+    "get_annotated_type_for_event_classes",
+    "get_event_classes",
+    "resolve_print_callable",
+    "wrap_event",
+]
 
 
 @export_module("autogen.events")
 class BaseEvent(BaseModel, ABC):
     uuid: UUID
 
-    def __init__(self, uuid: Optional[UUID] = None, **kwargs: Any) -> None:
+    def __init__(self, uuid: UUID | None = None, **kwargs: Any) -> None:
         uuid = uuid or uuid4()
         super().__init__(uuid=uuid, **kwargs)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         """Print event
 
         Args:
             f (Optional[Callable[..., Any]], optional): Print function. If none, python's default print will be used.
         """
         ...
+
+
+def resolve_print_callable(f: Callable[..., Any] | None = None) -> Callable[..., Any]:
+    return f or event_print
 
 
 def camel2snake(name: str) -> str:
@@ -40,7 +52,7 @@ _event_classes: dict[str, type[BaseModel]] = {}
 
 @export_module("autogen.events")
 def wrap_event(event_cls: type[BaseEvent]) -> type[BaseModel]:
-    """Wrap a event class with a type field to be used in a union type
+    """Wrap an event class with a type field to be used in a union type
 
     This is needed for proper serialization and deserialization of events in a union type.
 
@@ -70,7 +82,7 @@ def wrap_event(event_cls: type[BaseEvent]) -> type[BaseModel]:
                 else:
                     super().__init__(content=event_cls(*args, **data), **data)
 
-        def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        def print(self, f: Callable[..., Any] | None = None) -> None:
             self.content.print(f)  # type: ignore[attr-defined]
 
     wrapper_cls = create_model(event_cls.__name__, __base__=WrapperBase)
@@ -91,7 +103,7 @@ def wrap_event(event_cls: type[BaseEvent]) -> type[BaseModel]:
 @export_module("autogen.events")
 def get_annotated_type_for_event_classes() -> type[Any]:
     # this is a dynamic type so we need to disable the type checker
-    union_type = Union[tuple(_event_classes.values())]  # type: ignore[valid-type]
+    union_type = Union[tuple(_event_classes.values())]  # type: ignore[valid-type]  # noqa: UP007
     return Annotated[union_type, Field(discriminator="type")]  # type: ignore[return-value]
 
 

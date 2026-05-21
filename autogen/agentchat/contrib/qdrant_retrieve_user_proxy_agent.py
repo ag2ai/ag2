@@ -5,7 +5,10 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import warnings
-from typing import Any, Callable, Literal, Optional
+from collections.abc import Callable
+from typing import Any, Literal, Optional
+
+from typing_extensions import deprecated
 
 from ...import_utils import optional_import_block, require_optional_import
 from ...retrieve_utils import TEXT_FORMATS, get_files_from_dir, split_files_to_chunks
@@ -24,14 +27,18 @@ with optional_import_block():
     from qdrant_client.fastembed_common import QueryResponse
 
 
+@deprecated(
+    "QdrantRetrieveUserProxyAgent is deprecated and will be removed in v0.14. "
+    "Please use RetrieveUserProxyAgent instead, set `vector_db` to `qdrant`."
+)
 @require_optional_import(["fastembed", "qdrant_client"], "retrievechat-qdrant")
 class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
     def __init__(
         self,
         name="RetrieveChatAgent",  # default set to RetrieveChatAgent
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        retrieve_config: Optional[dict[str, Any]] = None,  # config for the retrieve agent
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        retrieve_config: dict[str, Any] | None = None,  # config for the retrieve agent
         **kwargs: Any,
     ):
         """Args:
@@ -99,7 +106,7 @@ class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
 
         """
         warnings.warn(
-            "The QdrantRetrieveUserProxyAgent is deprecated. Please use the RetrieveUserProxyAgent instead, set `vector_db` to `qdrant`.",
+            "QdrantRetrieveUserProxyAgent is deprecated and will be removed in v0.14. Please use RetrieveUserProxyAgent instead, set `vector_db` to `qdrant`.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -175,7 +182,7 @@ def create_qdrant_from_dir(
     quantization_config: Optional["models.QuantizationConfig"] = None,
     hnsw_config: Optional["models.HnswConfigDiff"] = None,
     payload_indexing: bool = False,
-    qdrant_client_options: Optional[dict[str, Any]] = {},
+    qdrant_client_options: dict[str, Any] | None = {},
 ):
     """Create a Qdrant collection from all the files in a given directory, the directory can also be a single file or a
       url to a single file.
@@ -271,7 +278,7 @@ def query_qdrant(
     collection_name: str = "all-my-documents",
     search_string: str = "",
     embedding_model: str = "BAAI/bge-small-en-v1.5",
-    qdrant_client_options: Optional[dict[str, Any]] = {},
+    qdrant_client_options: dict[str, Any] | None = {},
 ) -> list[list["QueryResponse"]]:
     """Perform a similarity search with filters on a Qdrant collection
 

@@ -10,18 +10,17 @@ import autogen
 from autogen.agentchat.contrib.capabilities.transform_messages import TransformMessages
 from autogen.agentchat.contrib.capabilities.transforms import MessageHistoryLimiter, MessageTokenLimiter
 from autogen.import_utils import run_for_optional_imports
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
-def test_transform_messages_capability(credentials_gpt_4o_mini: Credentials) -> None:
+def test_transform_messages_capability(credentials_openai_mini: Credentials) -> None:
     """Test the TransformMessages capability to handle long contexts.
 
     This test is a replica of test_transform_chat_history_with_agents in test_context_handling.py
     """
     with tempfile.TemporaryDirectory() as temp_dir:
-        llm_config = credentials_gpt_4o_mini.llm_config
+        llm_config = credentials_openai_mini.llm_config
         assistant = autogen.AssistantAgent("assistant", llm_config=llm_config, max_consecutive_auto_reply=1)
 
         context_handling = TransformMessages(
@@ -42,10 +41,10 @@ def test_transform_messages_capability(credentials_gpt_4o_mini: Credentials) -> 
         # Create a very long chat history that is bound to cause a crash
         # for gpt 3.5
         for i in range(1000):
-            assitant_msg = {"role": "assistant", "content": "test " * 1000}
+            assistant_msg = {"role": "assistant", "content": "test " * 1000}
             user_msg = {"role": "user", "content": ""}
 
-            assistant.send(assitant_msg, user, request_reply=False)
+            assistant.send(assistant_msg, user, request_reply=False)
             user.send(user_msg, assistant, request_reply=False)
 
         try:

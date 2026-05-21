@@ -1,11 +1,11 @@
 import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Sequence, Tuple
 
 import requests
 
 
-def find_metablock(lines: List[str]) -> Tuple[List[str], List[str]]:
+def find_metablock(lines: list[str]) -> tuple[list[str], list[str]]:
     if lines[0] != "---":
         return [], lines
 
@@ -17,7 +17,7 @@ def find_metablock(lines: List[str]) -> Tuple[List[str], List[str]]:
     return lines[:index], lines[index:]
 
 
-def find_header(lines: List[str]) -> Tuple[str, List[str]]:
+def find_header(lines: list[str]) -> tuple[str, list[str]]:
     for i in range(len(lines)):
         if (line := lines[i]).startswith("#"):
             return line, lines[i + 1 :]
@@ -25,7 +25,7 @@ def find_header(lines: List[str]) -> Tuple[str, List[str]]:
     return "", lines
 
 
-def get_github_releases() -> Sequence[Tuple[str, str]]:
+def get_github_releases() -> Sequence[tuple[str, str]]:
     # Get the latest version from GitHub releases
     response = requests.get("https://api.github.com/repos/airtai/FastStream/releases")
     return ((x["tag_name"], x["body"]) for x in reversed(response.json()))
@@ -46,14 +46,14 @@ def convert_links_and_usernames(text):
     return text
 
 
-def collect_already_published_versions(text: str) -> List[str]:
-    data: List[str] = re.findall(r"## (\d.\d.\d.*)", text)
+def collect_already_published_versions(text: str) -> list[str]:
+    data: list[str] = re.findall(r"## (\d.\d.\d.*)", text)
     return data
 
 
-def update_release_notes(realease_notes_path: Path):
+def update_release_notes(release_notes_path: Path):
     # Get the changelog from the RELEASE.md file
-    changelog = realease_notes_path.read_text()
+    changelog = release_notes_path.read_text()
 
     metablock, lines = find_metablock(changelog.splitlines())
     metablock = "\n".join(metablock)
@@ -73,7 +73,7 @@ def update_release_notes(realease_notes_path: Path):
         changelog = version_changelog + changelog
 
     # Update the RELEASE.md file with the latest version and changelog
-    realease_notes_path.write_text(
+    release_notes_path.write_text(
         (
             metablock
             + "\n\n"
