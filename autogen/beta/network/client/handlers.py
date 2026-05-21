@@ -23,7 +23,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING
 
-from autogen.beta.events import BaseEvent
+from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, TextInput
 from autogen.beta.stream import MemoryStream
 
 from ..channel import ChannelMetadata, ChannelState
@@ -34,10 +34,11 @@ from ..envelope import (
 )
 from ..policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, HUB_DEP
 from ..task_mirror import TaskMirror
-from ..views.base import ViewPolicy
+from ..views.base import NameResolver, ViewPolicy
 from .channel import Channel
 
 if TYPE_CHECKING:
+    from ..adapters.base import ChannelAdapter
     from .agent_client import AgentClient
 
 __all__ = (
@@ -53,6 +54,40 @@ logger = logging.getLogger(__name__)
 
 def _is_task_event(event_type: str) -> bool:
     return event_type.startswith("ag2.task.")
+
+
+async def _render_current_input(
+    view: ViewPolicy,
+    envelope: Envelope,
+    adapter: "ChannelAdapter",
+    participant_id: str,
+    metadata: ChannelMetadata,
+    name_for: NameResolver,
+) -> str | None:
+    """Render the current-turn envelope through the view.
+
+    Calls ``view.project([envelope])`` so named views apply consistent
+    values between current envelope and history. Falls back to
+    ``adapter.extract_turn_input`` when the view returns nothing (e.g.
+    rich input types like images or documents that ``render_envelope``
+    cannot represent as a string).
+    """
+    projected = await view.project(
+        [envelope],
+        participant_id=participant_id,
+        channel=metadata,
+        render_envelope=adapter.render_envelope,
+        name_for=name_for,
+    )
+    if projected:
+        event = projected[0]
+        if isinstance(event, ModelRequest):
+            for part in event.parts:
+                if isinstance(part, TextInput):
+                    return part.content
+        if isinstance(event, ModelMessage):
+            return event.content
+    return adapter.extract_turn_input(envelope)
 
 
 async def read_wal_until(client: "AgentClient", envelope: Envelope) -> list[Envelope]:
@@ -166,9 +201,12 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
             participant_id=client.agent_id,
             channel=metadata,
             render_envelope=adapter.render_envelope,
+            name_for=client._hub.name_for,
         )
 
-        current_input = adapter.extract_turn_input(envelope)
+        current_input = await _render_current_input(
+            view, envelope, adapter, client.agent_id, metadata, client._hub.name_for
+        )
         if not current_input:
             return
 

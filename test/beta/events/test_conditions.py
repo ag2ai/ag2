@@ -212,6 +212,26 @@ class TestEventConditions:
         assert condition(ChildEvent(field="1"))
         assert not condition(TestEvent(field="1"))
 
+    def test_invert_event_class(self):
+        condition = ~TestEvent
+
+        assert not condition(TestEvent(field="1"))
+        assert not condition(ChildEvent(field="1"))
+        assert condition(AnotherEvent(field="test"))
+
+    def test_invert_event_class_composition(self):
+        condition = ~TestEvent & (AnotherEvent.field == "ok")
+
+        assert not condition(TestEvent(field="1"))
+        assert condition(AnotherEvent(field="ok"))
+        assert not condition(AnotherEvent(field="nope"))
+
+    def test_not_method_on_event_class(self):
+        condition = TestEvent.not_()
+
+        assert not condition(TestEvent(field="1"))
+        assert condition(AnotherEvent(field="test"))
+
     def test_different_event_with_condition(self):
         condition = TestEvent.field == "1"
 
