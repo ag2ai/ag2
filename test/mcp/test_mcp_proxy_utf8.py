@@ -1,19 +1,6 @@
 # Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Regression: MCP proxy file writes must pin UTF-8.
-
-`autogen/mcp/mcp_proxy/mcp_proxy.py` rewrites the generated `main.py` (post-
-fastapi-codegen patch) and saves the rendered server configuration template.
-Both call sites previously used the bare locale default — on Windows that
-resolves to `cp1252` and any non-cp1252 glyph in an OpenAPI spec
-(internationalized model names, smart quotes in descriptions, emoji in
-example payloads) raised `UnicodeEncodeError` mid-write, killing the proxy
-generation step.
-
-This source-level check guards the kwarg so the bug cannot silently regress.
-Runs without optional MCP extras installed.
-"""
 
 from pathlib import Path
 
