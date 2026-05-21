@@ -77,29 +77,15 @@ class XAIClient(LLMClient):
         streaming: bool = False,
         create_options: CreateOptions | None = None,
     ) -> None:
-        # Defer AsyncClient construction to call time — it eagerly opens a gRPC
-        # channel and validates XAI_API_KEY in its constructor, which would
-        # otherwise turn ``XAIConfig.create()`` into a side-effecting call.
-        self._api_key = api_key
-        self._api_host = api_host
-        self._timeout = timeout
-        self._metadata = metadata
-        self._channel_options = channel_options
-        self._client: AsyncClient | None = None
-
+        self._client = AsyncClient(
+            api_key=api_key,
+            api_host=api_host,
+            timeout=timeout,
+            metadata=metadata,
+            channel_options=channel_options,
+        )
         self._create_options: dict[str, Any] = {k: v for k, v in (create_options or {}).items() if v is not None}
         self._streaming = streaming
-
-    def _get_client(self) -> AsyncClient:
-        if self._client is None:
-            self._client = AsyncClient(
-                api_key=self._api_key,
-                api_host=self._api_host,
-                timeout=self._timeout,
-                metadata=self._metadata,
-                channel_options=self._channel_options,
-            )
-        return self._client
 
     async def __call__(
         self,
@@ -127,7 +113,7 @@ class XAIClient(LLMClient):
         if response_format is not None:
             create_kwargs["response_format"] = response_format
 
-        chat = self._get_client().chat.create(**create_kwargs)
+        chat = self._client.chat.create(**create_kwargs)
         for resp in replay_responses:
             chat.append(resp)
 

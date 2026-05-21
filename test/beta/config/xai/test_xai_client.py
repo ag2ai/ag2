@@ -61,8 +61,6 @@ def _make_client_with_stub_chat(stub_chat: MagicMock) -> tuple[object, Context]:
         mock_async_client.return_value = instance
 
         client = XAIConfig(model="grok-4-fast", api_key="t").create()
-        # Force lazy AsyncClient to materialize against our patched class
-        client._get_client()
 
     stream = MemoryStream(persist_all=True)
     return client, Context(stream=stream)
@@ -195,7 +193,6 @@ async def test_streaming_accumulates_chunks() -> None:
         mock_async_client.return_value = instance
 
         client = XAIConfig(model="grok-4-fast", api_key="t", streaming=True).create()
-        client._get_client()
 
     context = Context(stream=MemoryStream(persist_all=True))
 
@@ -254,7 +251,6 @@ async def test_response_format_passed_to_chat_create() -> None:
         mock_async_client.return_value = instance
 
         client = XAIConfig(model="grok-4-fast", api_key="t").create()
-        client._get_client()
 
     context = Context(stream=MemoryStream(persist_all=True))
 
