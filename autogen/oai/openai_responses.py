@@ -163,7 +163,7 @@ def _get_base_class():
 # -----------------------------------------------------------------------------
 # OpenAI Client that calls the /responses endpoint
 # -----------------------------------------------------------------------------
-@require_optional_import("openai", "openai")
+@require_optional_import("openai>=2.30.0", "openai")
 class OpenAIResponsesClient:
     """Minimal implementation targeting the experimental /responses endpoint.
 
@@ -225,12 +225,8 @@ class OpenAIResponsesClient:
     def _add_image_cost(self, response: "Response") -> None:
         """Add image cost to self._image_costs when an image is generated"""
         for output in response.output:
-            if (
-                isinstance(output, ImageGenerationCall)
-                and hasattr(response.output[0], "model_extra")
-                and response.output[0].model_extra
-            ):
-                extra_fields = output.model_extra
+            if isinstance(output, ImageGenerationCall) and hasattr(output, "model_extra"):
+                extra_fields = output.model_extra or {}
 
                 image_cost, image_error = calculate_openai_image_cost(
                     model="gpt-image-1",
