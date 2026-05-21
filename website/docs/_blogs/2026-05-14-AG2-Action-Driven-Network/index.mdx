@@ -19,8 +19,8 @@ That's what the **AG2 Network** is built for: a layer where stateful, identity-b
 This is the first post in a four-part series introducing the AG2 Network:
 
 1. **One Coherent Agent Isn't Enough** *(this post)* — the action-driven multi-agent network, the key primitives, and the four conversation shapes.
-2. **Choreography You Can Dial In** — setting expectations, audience addressing, deeper choreography patterns, and the orchestration cookbook.
-3. **What Survives, Survives Exactly** — the substrate: write-ahead log + fold + hub restart, plus identity (Passport / Resume / SKILL.md) and the audit log.
+2. [**Choreography You Can Dial In**](/docs/blog/2026/05/15/AG2-Network-Choreography-Dial/) — setting expectations, audience addressing, deeper choreography patterns, and the orchestration cookbook.
+3. [**What Survives, Survives Exactly**](/docs/blog/2026/05/16/AG2-Network-What-Survives/) — the substrate: write-ahead log + fold + hub restart, plus identity (Passport / Resume / SKILL.md) and the audit log.
 4. **Networks You Can Deploy** — federation across organizations (Visa), dynamic register / unregister, omni-modal streaming, and a full production-incident walk-through.
 
 In parallel, to build strong and capable agents, a companion post, **The Agent Harness: An Agent Is More Than a Loop**, zooms *inside* a single agent to make them long-running and knowledge-centric.
@@ -394,8 +394,8 @@ Reach for `workflow` when "who speaks next" is structured — pipelines, escalat
 
 You've now run all four conversation shapes. There are three more layers the network adds on top, each covered in an upcoming post:
 
-- **A choreography dial** — same primitive, more knobs. *Expectations* like `reply_within(30s, auto_close)` give the channel a deterministic response when a participant misses a deadline. *Audience* on each envelope (`audience=[a, b]`) lets a single channel carry private side-channels for free. Deeper `TransitionGraph` patterns — conditional handoffs, dynamic `Handoff` returns, context-aware routing — sit alongside. **Post 2: Choreography You Can Dial In (coming soon).**
-- **A trustworthy substrate** — what's written down and who you are. The hub's WAL is the source of truth: kill the hub, restart it, every channel comes back byte-for-byte. Identity is three records (`Passport` + `Resume` + `SKILL.md`), not a name string. The audit log records every envelope. **Post 3: What Survives, Survives Exactly (coming soon).**
+- **A choreography dial** — same primitive, more knobs. *Expectations* like `reply_within(30s, auto_close)` give the channel a deterministic response when a participant misses a deadline. *Audience* on each envelope (`audience=[a, b]`) lets a single channel carry private side-channels for free. Deeper `TransitionGraph` patterns — conditional handoffs, dynamic `Handoff` returns, context-aware routing — sit alongside. **Post 2: [Choreography You Can Dial In](/docs/blog/2026/05/15/AG2-Network-Choreography-Dial/).**
+- **A trustworthy substrate** — what's written down and who you are. The hub's WAL is the source of truth: kill the hub, restart it, every channel comes back byte-for-byte. Identity is three records (`Passport` + `Resume` + `SKILL.md`), not a name string. The audit log records every envelope. **Post 3: [What Survives, Survives Exactly](/docs/blog/2026/05/16/AG2-Network-What-Survives/).**
 - **Cross-boundary deployment** — what lets you actually ship this. A single channel can span two organizations through Passport + Visa. Participants register and unregister dynamically. Text, audio, image, and video ride the same fan-out. And a real production-incident demo ties it all together. **Post 4: Networks You Can Deploy (coming soon)**
 
 ## Interactive Playground
