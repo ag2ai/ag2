@@ -23,6 +23,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING
 
+from autogen.beta._telemetry_consts import TRACEPARENT_DEP_KEY
 from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, TextInput
 from autogen.beta.stream import MemoryStream
 
@@ -219,6 +220,12 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
             await stream.history.storage.set_history(stream.id, projection)
 
         dependencies = stamp_dependencies(client, channel)
+
+        # Relay the inbound envelope's W3C traceparent (stamped by the hub
+        # before WAL when tracing is enabled) to the agent-side
+        # TelemetryMiddleware.
+        if envelope.trace_id:
+            dependencies[TRACEPARENT_DEP_KEY] = envelope.trace_id
 
         # Adapter-scoped LLM tools for this turn (e.g. ``say`` for
         # consulting / discussion). Resolution is cached on the adapter

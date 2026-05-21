@@ -107,6 +107,13 @@ from .layout import (
 from .listener import HubListener
 from .sweepers import _IntervalSweeper
 
+try:
+    # Tracing stays fully opt-in: the Hub is OTel-free unless a
+    # ``tracer_provider`` is passed.
+    from ._envelope_tracing import EnvelopeTracer
+except ImportError:
+    EnvelopeTracer = None
+
 __all__ = ("Hub",)
 
 
@@ -173,6 +180,7 @@ class Hub:
         ttl_sweep_interval: float = 30.0,
         expectation_sweep_interval: float = 10.0,
         invite_ack_timeout: float = 30.0,
+        tracer_provider: object | None = None,
     ) -> None:
         # __init__ stores params; side effects deferred to start()/hydrate().
         self._store = store
@@ -181,6 +189,19 @@ class Hub:
         self._ttl_sweep_interval = ttl_sweep_interval
         self._expectation_sweep_interval = expectation_sweep_interval
         self._invite_ack_timeout = invite_ack_timeout
+
+        # Opt-in: when ``tracer_provider`` is given, the hub brackets WAL
+        # append + dispatch in a span and injects its W3C traceparent into
+        # ``envelope.trace_id`` before WAL (so the WAL is the source of
+        # truth).
+        self._envelope_tracer = None
+        if tracer_provider is not None:
+            if EnvelopeTracer is None:
+                raise ImportError(
+                    "tracer_provider was given but OpenTelemetry is not installed. "
+                    "Install it with: pip install ag2[tracing]"
+                )
+            self._envelope_tracer = EnvelopeTracer(tracer_provider, store)
 
         # Audit log + expectation registries. AuditLog is a HubListener;
         # see _install_default_listeners() — it installs as the first
@@ -272,6 +293,7 @@ class Hub:
         ttl_sweep_interval: float = 30.0,
         expectation_sweep_interval: float = 10.0,
         invite_ack_timeout: float = 30.0,
+        tracer_provider: object | None = None,
         register_default_adapters: bool = True,
     ) -> "Hub":
         """Construct + hydrate from disk + start sweepers. Production entry point.
@@ -295,6 +317,7 @@ class Hub:
             ttl_sweep_interval=ttl_sweep_interval,
             expectation_sweep_interval=expectation_sweep_interval,
             invite_ack_timeout=invite_ack_timeout,
+            tracer_provider=tracer_provider,
         )
         if register_default_adapters:
             hub.register_adapter(ConsultingAdapter())
@@ -619,7 +642,42 @@ class Hub:
             "registered_listeners": len(self._listeners),
             "adapters_loaded": len(self._adapters),
             "audit_log_bytes": self._audit_log.bytes_written,
+            "telemetry_log_bytes": self._telemetry_log_bytes(),
         }
+
+    def _telemetry_log_bytes(self) -> int:
+        """Sum of span bytes written by the Hub (envelope spans) and any
+        telemetry listener (channel / agent / task spans). Zero when
+        tracing is not configured.
+
+        Telemetry listeners are identified by ``channel_span_context``
+        (unique to ``HubTelemetryListener``) so the built-in ``AuditLog``
+        — which also exposes ``bytes_written`` — is not double-counted.
+        """
+        total = self._envelope_tracer.bytes_written if self._envelope_tracer is not None else 0
+        for listener in self._listeners:
+            if not hasattr(listener, "channel_span_context"):
+                continue
+            written = getattr(listener, "bytes_written", None)
+            if isinstance(written, int):
+                total += written
+        return total
+
+    def _channel_span_context(self, channel_id: str) -> object | None:
+        """Resolve an open channel span's context from a telemetry listener.
+
+        Lets the Hub attach an envelope→channel SpanLink without coupling
+        to a concrete listener type. Returns ``None`` when no telemetry
+        listener is registered or the channel span isn't open.
+        """
+        for listener in self._listeners:
+            getter = getattr(listener, "channel_span_context", None)
+            if getter is None:
+                continue
+            ctx = getter(channel_id)
+            if ctx is not None:
+                return ctx
+        return None
 
     async def _fan_out(self, method_name: str, *args: object) -> None:
         """Call ``method_name(*args)`` on every registered listener
@@ -1626,6 +1684,7 @@ class Hub:
 
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
 
+        envelope_span = None
         # Critical section: validate, append, fold, on_accepted under lock.
         async with self._wal_lock(envelope.channel_id):
             state = self._adapter_states.get(envelope.channel_id)
@@ -1643,6 +1702,16 @@ class Hub:
 
             envelope.envelope_id = make_id()
             envelope.created_at = self._clock()
+
+            # Start the network.envelope span BEFORE WAL append so its
+            # traceparent is written onto the envelope and persisted by the
+            # WAL (source of truth). Substantive events only.
+            if self._envelope_tracer is not None and not _is_protocol_event(envelope.event_type):
+                envelope_span = self._envelope_tracer.start_envelope_span(
+                    envelope,
+                    channel_span_context=self._channel_span_context(envelope.channel_id),
+                )
+                self._envelope_tracer.inject_traceparent(envelope, envelope_span)
 
             await self._wal_append(envelope)
             new_state = adapter.fold(envelope, state)
@@ -1666,7 +1735,13 @@ class Hub:
             await self._handle_invite_reject(envelope, metadata)
             return envelope.envelope_id
 
-        await self._dispatch(envelope, metadata)
+        try:
+            await self._dispatch(envelope, metadata)
+        finally:
+            # End the envelope span (and mirror it to disk) once dispatch
+            # is done.
+            if envelope_span is not None:
+                await self._envelope_tracer.finish_envelope_span(envelope_span)
 
         # Listener fan-out — read-only state-transition notification.
         # Fires for every successfully posted envelope (including
@@ -1991,6 +2066,7 @@ class Hub:
                     "reason": reason,
                     "capability": metadata.spec.capability,
                     "outcome": new_state.value,
+                    "started_at": metadata.started_at,
                     "at": metadata.completed_at,
                 },
             )

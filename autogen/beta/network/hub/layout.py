@@ -27,9 +27,11 @@ __all__ = (
     "rule_path",
     "runtime_path",
     "skill_path",
+    "spans_path",
     "task_events_path",
     "task_metadata_path",
     "tasks_root",
+    "telemetry_root",
     "wal_path",
 )
 
@@ -128,3 +130,15 @@ def task_events_path(task_id: str) -> str:
 def audit_path() -> str:
     """Single append-only audit log."""
     return "/audit/audit.jsonl"
+
+
+# ── Telemetry ──────────────────────────────────────────────────────────────────
+
+
+def telemetry_root() -> str:
+    return "/telemetry"
+
+
+def spans_path() -> str:
+    """Single append-only span log (hub-native JSONL, one span per line)."""
+    return "/telemetry/spans.jsonl"
