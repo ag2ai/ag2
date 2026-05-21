@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from xai_sdk.chat import Response as XAIResponse
+from xai_sdk.proto import sample_pb2
 
 from autogen.beta.events import BaseEvent, Field
 
@@ -23,8 +24,16 @@ class XAIAssistantEvent(BaseEvent):
 
     @classmethod
     def from_response(cls, response: XAIResponse) -> "XAIAssistantEvent":
+        # finish_reason comes back as "FINISH_REASON_STOP" / proto enum — normalise
+        # to "stop" so this metadata matches ModelResponse.finish_reason.
+        fr = response.finish_reason
+        finish_reason: str | None = None
+        if fr:
+            name = sample_pb2.FinishReason.Name(fr) if isinstance(fr, int) else str(fr)
+            finish_reason = name.removeprefix("FINISH_REASON_").removeprefix("REASON_").lower() or None
+
         return cls(
             proto_bytes=response.proto.SerializeToString(),
-            model=getattr(response, "model", None),
-            finish_reason=getattr(response, "finish_reason", None),
+            model=response.proto.model or None,
+            finish_reason=finish_reason,
         )

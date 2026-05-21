@@ -197,11 +197,9 @@ def _content_from_input(part: Input, serializer: SerializerProto) -> chat_pb2.Co
 
     if isinstance(part, UrlInput):
         if part.kind is BinaryType.IMAGE:
-            detail = part.metadata.get("detail", "auto") if isinstance(part.metadata, dict) else "auto"
-            return xai_image(part.url, detail=detail)
+            return xai_image(part.url, detail=part.metadata.get("detail", "auto"))
         if part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
-            filename = part.metadata.get("filename") if isinstance(part.metadata, dict) else None
-            return xai_file(url=part.url, filename=filename)
+            return xai_file(url=part.url, filename=part.metadata.get("filename"))
         raise UnsupportedInputError(f"UrlInput({part.kind.value})", PROVIDER)
 
     if isinstance(part, BinaryInput):
@@ -317,14 +315,10 @@ def normalize_usage(usage: usage_pb2.SamplingUsage | None) -> Usage:
     if usage is None:
         return Usage()
 
-    def _get(name: str) -> float | None:
-        v = getattr(usage, name, None)
-        return float(v) if v else None
-
     return Usage(
-        prompt_tokens=_get("prompt_tokens"),
-        completion_tokens=_get("completion_tokens"),
-        total_tokens=_get("total_tokens"),
-        cache_read_input_tokens=_get("cached_prompt_text_tokens"),
-        thinking_tokens=_get("reasoning_tokens"),
+        prompt_tokens=float(usage.prompt_tokens) if usage.prompt_tokens else None,
+        completion_tokens=float(usage.completion_tokens) if usage.completion_tokens else None,
+        total_tokens=float(usage.total_tokens) if usage.total_tokens else None,
+        cache_read_input_tokens=float(usage.cached_prompt_text_tokens) if usage.cached_prompt_text_tokens else None,
+        thinking_tokens=float(usage.reasoning_tokens) if usage.reasoning_tokens else None,
     )

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from types import SimpleNamespace
+from xai_sdk.proto import usage_pb2
 
 from autogen.beta.config.xai.mappers import normalize_usage
 from autogen.beta.events import Usage
@@ -16,7 +16,7 @@ def test_none_returns_empty_usage() -> None:
 
 
 def test_basic_token_counts() -> None:
-    raw = SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+    raw = usage_pb2.SamplingUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15)
 
     result = normalize_usage(raw)
 
@@ -24,7 +24,7 @@ def test_basic_token_counts() -> None:
 
 
 def test_cached_prompt_tokens_map_to_cache_read() -> None:
-    raw = SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15, cached_prompt_text_tokens=4)
+    raw = usage_pb2.SamplingUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15, cached_prompt_text_tokens=4)
 
     result = normalize_usage(raw)
 
@@ -32,7 +32,7 @@ def test_cached_prompt_tokens_map_to_cache_read() -> None:
 
 
 def test_reasoning_tokens_map_to_thinking_tokens() -> None:
-    raw = SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15, reasoning_tokens=3)
+    raw = usage_pb2.SamplingUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15, reasoning_tokens=3)
 
     result = normalize_usage(raw)
 
@@ -40,7 +40,7 @@ def test_reasoning_tokens_map_to_thinking_tokens() -> None:
 
 
 def test_zero_or_missing_fields_become_none() -> None:
-    raw = SimpleNamespace(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+    raw = usage_pb2.SamplingUsage()
 
     result = normalize_usage(raw)
 

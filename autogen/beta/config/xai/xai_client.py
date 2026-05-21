@@ -129,16 +129,16 @@ class XAIClient(LLMClient):
     ) -> ModelResponse:
         response = await chat.sample()
 
-        if reasoning := getattr(response, "reasoning_content", None):
-            await context.send(ModelReasoning(reasoning))
+        if response.reasoning_content:
+            await context.send(ModelReasoning(response.reasoning_content))
 
         model_msg: ModelMessage | None = None
-        if content := getattr(response, "content", None):
-            model_msg = ModelMessage(content)
+        if response.content:
+            model_msg = ModelMessage(response.content)
             await context.send(model_msg)
 
         calls: list[ToolCallEvent] = []
-        for tc in getattr(response, "tool_calls", None) or ():
+        for tc in response.tool_calls:
             cls = ToolCallEvent if tc.type == chat_pb2.TOOL_CALL_TYPE_CLIENT_SIDE_TOOL else BuiltinToolCallEvent
             ev = cls(id=tc.id, name=tc.function.name, arguments=tc.function.arguments or "{}")
             if isinstance(ev, BuiltinToolCallEvent):
@@ -150,16 +150,16 @@ class XAIClient(LLMClient):
 
         # xai-sdk returns finish_reason as either a string (e.g. "FINISH_REASON_STOP")
         # or a proto enum int — strip the prefix and lowercase to match openai's "stop".
-        fr = getattr(response, "finish_reason", None)
+        fr = response.finish_reason
         finish_reason: str | None = None
-        if fr is not None:
+        if fr:
             name = sample_pb2.FinishReason.Name(fr) if isinstance(fr, int) else str(fr)
             finish_reason = name.removeprefix("FINISH_REASON_").removeprefix("REASON_").lower() or None
 
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls),
-            usage=normalize_usage(getattr(response, "usage", None)),
+            usage=normalize_usage(response.usage),
             model=response.proto.model or None,
             provider=PROVIDER,
             finish_reason=finish_reason,
@@ -182,14 +182,14 @@ class XAIClient(LLMClient):
         async for response, chunk in chat.stream():
             last_response = response
 
-            if reasoning := getattr(chunk, "reasoning_content", None):
-                await context.send(ModelReasoning(reasoning))
+            if chunk.reasoning_content:
+                await context.send(ModelReasoning(chunk.reasoning_content))
 
-            if content := getattr(chunk, "content", None):
-                full_content += content
-                await context.send(ModelMessageChunk(content))
+            if chunk.content:
+                full_content += chunk.content
+                await context.send(ModelMessageChunk(chunk.content))
 
-            for tc in getattr(chunk, "tool_calls", None) or ():
+            for tc in chunk.tool_calls:
                 if not tc.id:
                     continue
                 if tc.id in tool_calls_by_id or tc.id in builtin_emitted:
@@ -202,11 +202,11 @@ class XAIClient(LLMClient):
                 else:
                     tool_calls_by_id[tc.id] = ev
 
-            if u := getattr(chunk, "usage", None):
-                usage = normalize_usage(u)
+            if chunk.usage:
+                usage = normalize_usage(chunk.usage)
             if model := chunk.proto.model or None:
                 resolved_model = model
-            if fr := getattr(chunk, "finish_reason", None):
+            if fr := chunk.finish_reason:
                 finish_reason_raw = fr
 
         message: ModelMessage | None = None
@@ -217,11 +217,11 @@ class XAIClient(LLMClient):
         if last_response is not None:
             await context.send(XAIAssistantEvent.from_response(last_response))
             if not usage:
-                usage = normalize_usage(getattr(last_response, "usage", None))
+                usage = normalize_usage(last_response.usage)
             if not resolved_model:
                 resolved_model = last_response.proto.model or None
             if finish_reason_raw is None:
-                finish_reason_raw = getattr(last_response, "finish_reason", None)
+                finish_reason_raw = last_response.finish_reason
 
         # xai-sdk returns finish_reason as either a string (e.g. "FINISH_REASON_STOP")
         # or a proto enum int — strip the prefix and lowercase to match openai's "stop".

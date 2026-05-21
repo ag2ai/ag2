@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fast_depends.use import SerializerCls
 from xai_sdk.chat import chat_pb2
+from xai_sdk.proto import usage_pb2
 
 from autogen.beta import Context
 from autogen.beta.config.xai import XAIConfig
@@ -41,7 +42,7 @@ def _fake_response(
         reasoning_content=reasoning_content,
         tool_calls=tool_calls or [],
         finish_reason=finish_reason,
-        usage=usage or SimpleNamespace(prompt_tokens=3, completion_tokens=5, total_tokens=8),
+        usage=usage or usage_pb2.SamplingUsage(prompt_tokens=3, completion_tokens=5, total_tokens=8),
         proto=proto,
     )
 
@@ -154,12 +155,12 @@ async def test_streaming_accumulates_chunks() -> None:
         _fake_response(content="world!", usage=None, finish_reason=""),
         _fake_response(
             content="",
-            usage=SimpleNamespace(prompt_tokens=2, completion_tokens=4, total_tokens=6),
+            usage=usage_pb2.SamplingUsage(prompt_tokens=2, completion_tokens=4, total_tokens=6),
         ),
     ]
     final_response = _fake_response(
         content="Hello, world!",
-        usage=SimpleNamespace(prompt_tokens=2, completion_tokens=4, total_tokens=6),
+        usage=usage_pb2.SamplingUsage(prompt_tokens=2, completion_tokens=4, total_tokens=6),
     )
 
     async def fake_stream() -> object:
