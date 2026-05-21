@@ -8,7 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen.agentchat.group.guardrails import Guardrail, GuardrailResult, LLMGuardrail, RegexGuardrail
+from autogen.agentchat.group.guardrails import (
+    Guardrail,
+    GuardrailCheckResult,
+    GuardrailResult,
+    LLMGuardrail,
+    RegexGuardrail,
+)
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
 
 
@@ -219,8 +225,22 @@ class TestLLMGuardrail:
                 name="test_llm_guardrail", condition="test condition", target=mock_target, llm_config=mock_llm_config
             )
 
-            # Verify that response_format was set to GuardrailResult
+            assert mock_llm_config.response_format is GuardrailCheckResult
             mock_llm_config.deepcopy.assert_called_once()
+
+    def test_check_response_format_is_json_schema_compatible(self) -> None:
+        """The LLM-facing response format must not include runtime Guardrail objects."""
+        schema = GuardrailCheckResult.model_json_schema()
+
+        assert schema["properties"] == {
+            "activated": {"title": "Activated", "type": "boolean"},
+            "justification": {
+                "default": "No justification provided",
+                "title": "Justification",
+                "type": "string",
+            },
+        }
+        assert schema["required"] == ["activated"]
 
 
 class TestRegexGuardrail:

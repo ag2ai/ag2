@@ -26,13 +26,14 @@ For the classic (non-beta) versions and their conceptual background, see the
 | 1 | [Pipeline](/docs/beta/network/pattern_cookbook/pipeline) | Clean | `#!python TransitionGraph.sequence` or `#!python FromSpeaker → AgentTarget` chain | — |
 | 2 | [Hierarchical](/docs/beta/network/pattern_cookbook/hierarchical) | Partial | `#!python Handoff` returns from delegate tools + `#!python ContextEquals` for terminate | No `#!python NestedChatTarget`; sub-flows via separate channels |
 | 3 | [Star](/docs/beta/network/pattern_cookbook/star) | Clean | `#!python ToolCalled` graph rule for spoke selection + WAL-reading synthesis tool | — |
-| 4 | [Escalation](/docs/beta/network/pattern_cookbook/escalation) | Clean | `#!python Handoff` returns from escalate tools + `#!python ToolCalled("resolve")` for terminate | — |
-| 5 | [Redundant](/docs/beta/network/pattern_cookbook/redundant) | Partial | Sequential fan-out via `#!python TransitionGraph.sequence` | No parallel dispatch; one specialist at a time |
-| 6 | [Feedback Loop](/docs/beta/network/pattern_cookbook/feedback_loop) | Clean | `#!python ContextEquals` on a `done` flag with `#!python max_turns` cap | — |
-| 7 | [Context-Aware Routing](/docs/beta/network/pattern_cookbook/context_aware_routing) | Partial | Router agent's tool sets `#!python category` → `#!python ContextEquals` per branch | No `#!python LLMCondition`; routing reasoning lives inside the coordinator's LLM, not the framework |
-| 8 | [Triage with Tasks](/docs/beta/network/pattern_cookbook/triage_with_tasks) | Clean | `#!python TransitionGraph.sequence` over a triage-produced plan; `#!python knobs["context_vars"]` seeds the queue | — |
+| 4 | [Coordinator](/docs/beta/network/pattern_cookbook/coordinator) | Clean | One generic `#!python handoff(to)` tool returning `#!python Handoff` + `#!python finish` tool returning `#!python Finish`; empty transitions list + `#!python RevertToInitiatorTarget` default | — |
+| 5 | [Escalation](/docs/beta/network/pattern_cookbook/escalation) | Clean | `#!python Handoff` returns from escalate tools + `#!python ToolCalled("resolve")` for terminate | — |
+| 6 | [Redundant](/docs/beta/network/pattern_cookbook/redundant) | Partial | Sequential fan-out via `#!python TransitionGraph.sequence` | No parallel dispatch; one specialist at a time |
+| 7 | [Feedback Loop](/docs/beta/network/pattern_cookbook/feedback_loop) | Clean | `#!python ContextEquals` on a `done` flag with `#!python max_turns` cap | — |
+| 8 | [Context-Aware Routing](/docs/beta/network/pattern_cookbook/context_aware_routing) | Partial | Router agent's tool sets `#!python category` → `#!python ContextEquals` per branch | No `#!python LLMCondition`; routing reasoning lives inside the coordinator's LLM, not the framework |
+| 9 | [Triage with Tasks](/docs/beta/network/pattern_cookbook/triage_with_tasks) | Clean | `#!python TransitionGraph.sequence` over a triage-produced plan; `#!python knobs["context_vars"]` seeds the queue | — |
 
-The "Organic" pattern from classic AG2 (LLM-driven `#!python AutoPattern` group-manager auto-selection) is not currently translatable — the beta workflow is graph-first by design — and is omitted. See [Roadmap](#roadmap) for what's tracked.
+The "Organic" pattern from classic AG2 (LLM-driven `#!python AutoPattern` group-manager auto-selection) translates to the [Coordinator](/docs/beta/network/pattern_cookbook/coordinator) pattern: one generic parameterised handoff tool on the coordinator, plus a `#!python Finish` tool to terminate. No graph rewrite when specialists are added or removed. See [Roadmap](#roadmap) for the remaining gaps.
 
 ## Routing idioms
 
@@ -111,7 +112,7 @@ Every cookbook page below uses the same close-detection primitive in
 its demo `#!python main`:
 
 ```python linenums="1"
-close_env = await intake_hc.wait_for_channel_event(
+close_env = await intake.wait_for_channel_event(
     channel_id=channel.channel_id,
     predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
     timeout=180.0,
@@ -119,7 +120,7 @@ close_env = await intake_hc.wait_for_channel_event(
 print(f"closed: reason={close_env.event_data.get('reason')!r}")
 ```
 
-`#!python HubClient.wait_for_channel_event` blocks on the per-channel
+`#!python AgentClient.wait_for_channel_event` blocks on the per-channel
 inbox until an envelope matching the predicate arrives — here, the
 `#!python EV_CHANNEL_CLOSED` envelope every termination route emits.
 The reason string distinguishes the close (e.g. `'sequence_complete'`,

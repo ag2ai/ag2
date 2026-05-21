@@ -115,3 +115,12 @@ class TestMixed:
         condition = (TestEvent.field > 10) | AnotherEvent
         expected = "Or(Is(TestEvent.field > 10) | IsType(AnotherEvent))"
         assert repr(condition) == expected
+
+    def test_invert_class_repr(self):
+        condition = ~TestEvent
+        assert repr(condition) == "~IsType(TestEvent)"
+
+    def test_invert_class_or_repr(self):
+        condition = ~TestEvent | AnotherEvent
+        expected = "Or(~IsType(TestEvent) | IsType(AnotherEvent))"
+        assert repr(condition) == expected

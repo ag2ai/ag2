@@ -10,7 +10,14 @@ from typing import Any
 from uuid import uuid4
 
 from ag_ui.core import (
+    AudioInputContent,
     BaseEvent,
+    BinaryInputContent,
+    DocumentInputContent,
+    ImageInputContent,
+    InputContent,
+    InputContentDataSource,
+    InputContentUrlSource,
     ReasoningEndEvent,
     ReasoningMessageContentEvent,
     ReasoningMessageEndEvent,
@@ -23,6 +30,7 @@ from ag_ui.core import (
     StateSnapshotEvent,
     StepFinishedEvent,
     StepStartedEvent,
+    TextInputContent,
     TextMessageChunkEvent,
     TextMessageContentEvent,
     TextMessageEndEvent,
@@ -32,6 +40,7 @@ from ag_ui.core import (
     ToolCallEndEvent,
     ToolCallResultEvent,
     ToolCallStartEvent,
+    VideoInputContent,
 )
 from ag_ui.encoder import EventEncoder
 from anyio import create_memory_object_stream, create_task_group
@@ -41,7 +50,7 @@ from pydantic_core import to_jsonable_python
 
 from autogen.beta import Agent, MemoryStream, ToolResult, events
 from autogen.beta.config import ModelConfig
-from autogen.beta.events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
+from autogen.beta.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.observers import Observer
@@ -359,6 +368,46 @@ async def run_stream(
             )
 
 
+def map_agui_content_to_input(content: InputContent) -> events.Input:
+    if isinstance(content, BinaryInputContent):
+        raise ValueError(
+            "AG-UI 'binary' content type is deprecated; "
+            "use ImageInputContent / AudioInputContent / "
+            "VideoInputContent / DocumentInputContent instead."
+        )
+
+    if isinstance(content, TextInputContent):
+        return events.TextInput(content.text)
+
+    match content:
+        case DocumentInputContent():
+            kind = BinaryType.DOCUMENT
+        case AudioInputContent():
+            kind = BinaryType.AUDIO
+        case VideoInputContent():
+            kind = BinaryType.VIDEO
+        case ImageInputContent():
+            kind = BinaryType.IMAGE
+        case _:
+            raise ValueError(f"Unexpected content type: {type(content).__name__}")
+
+    source = content.source
+    if isinstance(source, InputContentDataSource):
+        inp = events.BinaryInput(
+            b64decode(source.value),
+            media_type=source.mime_type,
+            kind=kind,
+        )
+    elif isinstance(source, InputContentUrlSource):
+        inp = events.UrlInput(source.value, kind=kind)
+    else:
+        raise ValueError(f"Unexpected source type: {type(source).__name__}")
+
+    if content.metadata:
+        inp.metadata = content.metadata
+    return inp
+
+
 def map_agui_messages_to_events(
     command: AGStreamInput,
 ) -> tuple[list[str], list[events.BaseEvent], list[events.Input]]:
@@ -382,32 +431,7 @@ def map_agui_messages_to_events(
                 continue
 
             for c in content:
-                if c.type == "text":
-                    input_buffer.append(events.TextInput(c.text))
-
-                elif c.url:
-                    input_buffer.append(
-                        events.UrlInput(
-                            c.url,
-                            kind=events.BinaryType.BINARY,
-                        )
-                    )
-
-                elif c.id:
-                    input_buffer.append(
-                        events.FileIdInput(
-                            c.id,
-                            filename=c.filename,
-                        )
-                    )
-
-                elif c.data:
-                    input_buffer.append(
-                        events.BinaryInput(
-                            b64decode(c.data),
-                            media_type=c.mime_type,
-                        )
-                    )
+                input_buffer.append(map_agui_content_to_input(c))
 
             continue
 
