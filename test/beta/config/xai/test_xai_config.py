@@ -89,7 +89,11 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
 
 def test_create_returns_xai_client() -> None:
     config = XAIConfig(model="grok-4-fast", api_key="test-key")
-    client = config.create()
+
+    # Patch AsyncClient because xai-sdk eagerly opens a gRPC channel in
+    # AsyncClient.__init__, which requires a running event loop on py3.11.
+    with patch("autogen.beta.config.xai.xai_client.AsyncClient"):
+        client = config.create()
 
     assert isinstance(client, XAIClient)
 

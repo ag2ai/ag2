@@ -15,6 +15,7 @@ from autogen.beta.events import (
     AudioInput,
     BinaryInput,
     BinaryType,
+    DataInput,
     DocumentInput,
     FileIdInput,
     ImageInput,
@@ -62,10 +63,15 @@ class TestUserContent:
         assert msg.role == chat_pb2.ROLE_USER
         assert _content_texts(msg) == ["hello"]
 
-    def test_data_input_serialized(self) -> None:
+    def test_multiple_text_parts(self) -> None:
         [msg], _ = convert_messages([], [ModelRequest([TextInput("hi"), TextInput("there")])], SerializerCls)
 
         assert _content_texts(msg) == ["hi", "there"]
+
+    def test_data_input_serialized_via_serializer(self) -> None:
+        [msg], _ = convert_messages([], [ModelRequest([DataInput({"key": "value"})])], SerializerCls)
+
+        assert _content_texts(msg) == ['{"key":"value"}']
 
     def test_image_url(self) -> None:
         [msg], _ = convert_messages([], [ModelRequest([ImageInput(url=self.IMG_URL)])], SerializerCls)
