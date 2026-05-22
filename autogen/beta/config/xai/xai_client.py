@@ -202,11 +202,11 @@ class XAIClient(LLMClient):
                 else:
                     tool_calls_by_id[tc.id] = ev
 
-            if chunk.usage:
-                usage = normalize_usage(chunk.usage)
-            if model := chunk.proto.model or None:
+            if response.usage:
+                usage = normalize_usage(response.usage)
+            if model := response.proto.model or None:
                 resolved_model = model
-            if fr := chunk.finish_reason:
+            if fr := response.finish_reason:
                 finish_reason_raw = fr
 
         message: ModelMessage | None = None
