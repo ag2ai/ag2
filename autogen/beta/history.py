@@ -26,9 +26,7 @@ class MemoryStorage(Storage):
         self.__data: defaultdict[StreamId, list[BaseEvent]] = defaultdict(list)
 
     async def save_event(self, event: "BaseEvent", context: "Context") -> None:
-        stream_id = context.stream.id
-        if event not in self.__data[stream_id]:
-            self.__data[stream_id].append(event)
+        self.__data[context.stream.id].append(event)
 
     async def get_history(self, stream_id: "StreamId") -> Iterable["BaseEvent"]:
         return self.__data[stream_id]

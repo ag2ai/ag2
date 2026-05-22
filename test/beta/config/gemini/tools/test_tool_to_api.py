@@ -19,7 +19,7 @@ def test_tool_to_api() -> None:
                 types.FunctionDeclaration(
                     name=schema.function.name,
                     description=schema.function.description,
-                    parameters=schema.function.parameters,
+                    parameters_json_schema=schema.function.parameters,
                 )
             ]
         )
@@ -43,7 +43,7 @@ def test_parameterless_tool_empty_dict_gets_object_schema() -> None:
                 types.FunctionDeclaration(
                     name="list_skills",
                     description="List installed skills.",
-                    parameters={"type": "object", "properties": {}},
+                    parameters_json_schema={"type": "object", "properties": {}},
                 )
             ]
         )
@@ -67,7 +67,7 @@ def test_parameterless_tool_null_type_gets_object_schema() -> None:
                 types.FunctionDeclaration(
                     name="list_skills",
                     description="List installed skills.",
-                    parameters={"type": "object", "properties": {}},
+                    parameters_json_schema={"type": "object", "properties": {}},
                 )
             ]
         )
@@ -108,7 +108,7 @@ def test_additional_properties_stripped_from_anyof_branches() -> None:
                 types.FunctionDeclaration(
                     name="emit",
                     description="Emit some payload.",
-                    parameters={
+                    parameters_json_schema={
                         "type": "object",
                         "properties": {
                             "payload": {

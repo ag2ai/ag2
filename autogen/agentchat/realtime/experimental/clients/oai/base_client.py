@@ -15,8 +15,8 @@ from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 from .utils import parse_oai_message
 
 with optional_import_block():
-    from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
-    from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
+    from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, not_given
+    from openai.resources.realtime.realtime import AsyncRealtimeConnection
 
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ global_logger = getLogger(__name__)
 
 
 @register_realtime_client()
-@require_optional_import("openai>=1.66.2", "openai-realtime", except_for=["get_factory", "__init__"])
+@require_optional_import("openai>=2.30.0", "openai-realtime", except_for=["get_factory", "__init__"])
 @export_module("autogen.agentchat.realtime.experimental.clients")
 class OpenAIRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API."""
@@ -52,7 +52,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         self._connection: AsyncRealtimeConnection | None = None
 
         self.config = llm_config["config_list"][0]
-        # model is passed to self._client.beta.realtime.connect function later
+        # model is passed to self._client.realtime.connect function later
         self._model: str = self.config["model"]
         self._voice: str = self.config.get("voice", "alloy")
         self._temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
@@ -154,12 +154,12 @@ class OpenAIRealtimeClient(RealtimeClientBase):
                     project=self.config.get("project", None),
                     base_url=self.config.get("base_url", None),
                     websocket_base_url=self.config.get("websocket_base_url", None),
-                    timeout=self.config.get("timeout", NOT_GIVEN),
+                    timeout=self.config.get("timeout", not_given),
                     max_retries=self.config.get("max_retries", DEFAULT_MAX_RETRIES),
                     default_headers=self.config.get("default_headers", None),
                     default_query=self.config.get("default_query", None),
                 )
-            async with self._client.beta.realtime.connect(
+            async with self._client.realtime.connect(
                 model=self._model,
             ) as self._connection:
                 await self._initialize_session()

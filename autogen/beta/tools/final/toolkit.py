@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from typing import Any, overload
 
 from fast_depends import Provider
@@ -121,7 +121,7 @@ class Toolkit(Tool):
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),

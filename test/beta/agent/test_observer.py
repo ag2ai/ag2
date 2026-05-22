@@ -52,6 +52,24 @@ async def test_observer_does_not_fire_on_non_matching_event(
 
 
 @pytest.mark.asyncio()
+async def test_observer_with_inverted_type(
+    mock: MagicMock,
+    test_config: TestConfig,
+) -> None:
+    agent = Agent(
+        "",
+        config=test_config,
+        observers=[observer(~ToolCallEvent, mock)],
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called()
+    for call in mock.call_args_list:
+        assert not isinstance(call[0][0], ToolCallEvent)
+
+
+@pytest.mark.asyncio()
 async def test_multiple_observers(
     mock: MagicMock,
     test_config: TestConfig,

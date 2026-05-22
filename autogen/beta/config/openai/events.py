@@ -20,13 +20,13 @@ from autogen.beta.events import (
     BinaryType,
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
+    Field,
     Input,
     ModelReasoning,
     TextInput,
+    ToolResult,
     UrlInput,
 )
-from autogen.beta.events.base import Field
-from autogen.beta.events.tool_events import ToolResult
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME

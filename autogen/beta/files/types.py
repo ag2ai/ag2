@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from autogen.beta.events.input_events import FileIdInput
+from autogen.beta.events import FileIdInput
 
 if TYPE_CHECKING:
     from .api import FilesAPI

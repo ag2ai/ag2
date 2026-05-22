@@ -66,6 +66,8 @@ from dataclasses import dataclass
 @dataclass
 class KnowledgeConfig:
     store: KnowledgeStore
+    expose_tool: bool = True
+    write_event_log: bool = True
     compact: CompactStrategy | None = None
     compact_trigger: CompactTrigger | None = None
     aggregate: AggregateStrategy | None = None
@@ -75,10 +77,12 @@ class KnowledgeConfig:
 
 | Field | What it does |
 |---|---|
-| `store` | Registered in `#!python context.dependencies[KnowledgeStore]` so policies like `WorkingMemoryPolicy` / `EpisodicMemoryPolicy` can read it; also given to `EventLogWriter` for stream persistence. |
+| `store` | Registered in `#!python context.dependencies[KnowledgeStore]` so policies like `WorkingMemoryPolicy` / `EpisodicMemoryPolicy` can read it. |
+| `expose_tool` | When `True` (default), the agent gets an auto-injected `knowledge` action-group tool that lets the LLM call `read` / `write` / `list` / `delete` on the store. Set to `False` when the store should be policy-only — the model never sees the tool, and the bootstrap SKILL.md text drops its "use the `knowledge` tool" sentence. |
+| `write_event_log` | When `True` (default), the agent persists its stream history to `/log/{stream_id}.jsonl` at the end of each `#!python ask()`. Set to `False` to keep the store free of stream logs (e.g. when the store is purely user-facing memory). |
 | `compact` / `compact_trigger` | Wires a compaction middleware that fires [`compact()`](/docs/beta/advanced/compaction) between turns when the trigger thresholds are exceeded. |
-| `aggregate` / `aggregate_trigger` | Wires an aggregation middleware that fires [`aggregate()`](/docs/beta/advanced/aggregation) on the configured cadence. |
-| `bootstrap` | Runs once on first use to seed the store (e.g. `DefaultBootstrap` writes SKILL.md files). |
+| `aggregate` / `aggregate_trigger` | Wires an aggregation middleware that fires [`aggregate()`](/docs/beta/advanced/aggregation) on the configured cadence. Failures emit `AggregationFailed` on the stream — see [Aggregation › Wiring onto an Agent](/docs/beta/advanced/aggregation#wiring-onto-an-agent) for the full lifecycle event triple. |
+| `bootstrap` | Runs once on first use to seed the store. `None` falls back to `#!python DefaultBootstrap(mention_tool=expose_tool)`, so the generated SKILL.md text matches whether the LLM can actually call the `knowledge` tool. |
 
 ```python linenums="1" hl_lines="12-18"
 from autogen.beta import Agent, KnowledgeConfig

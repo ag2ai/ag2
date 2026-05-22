@@ -20,9 +20,10 @@ so user-supplied overrides can replace only the parts they care about.
 """
 
 import contextlib
+import logging
 from typing import TYPE_CHECKING
 
-from autogen.beta.events import BaseEvent
+from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, TextInput
 from autogen.beta.stream import MemoryStream
 
 from ..channel import ChannelMetadata, ChannelState
@@ -33,10 +34,11 @@ from ..envelope import (
 )
 from ..policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, HUB_DEP
 from ..task_mirror import TaskMirror
-from ..views.base import ViewPolicy
+from ..views.base import NameResolver, ViewPolicy
 from .channel import Channel
 
 if TYPE_CHECKING:
+    from ..adapters.base import ChannelAdapter
     from .agent_client import AgentClient
 
 __all__ = (
@@ -47,8 +49,45 @@ __all__ = (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def _is_task_event(event_type: str) -> bool:
     return event_type.startswith("ag2.task.")
+
+
+async def _render_current_input(
+    view: ViewPolicy,
+    envelope: Envelope,
+    adapter: "ChannelAdapter",
+    participant_id: str,
+    metadata: ChannelMetadata,
+    name_for: NameResolver,
+) -> str | None:
+    """Render the current-turn envelope through the view.
+
+    Calls ``view.project([envelope])`` so named views apply consistent
+    values between current envelope and history. Falls back to
+    ``adapter.extract_turn_input`` when the view returns nothing (e.g.
+    rich input types like images or documents that ``render_envelope``
+    cannot represent as a string).
+    """
+    projected = await view.project(
+        [envelope],
+        participant_id=participant_id,
+        channel=metadata,
+        render_envelope=adapter.render_envelope,
+        name_for=name_for,
+    )
+    if projected:
+        event = projected[0]
+        if isinstance(event, ModelRequest):
+            for part in event.parts:
+                if isinstance(part, TextInput):
+                    return part.content
+        if isinstance(event, ModelMessage):
+            return event.content
+    return adapter.extract_turn_input(envelope)
 
 
 async def read_wal_until(client: "AgentClient", envelope: Envelope) -> list[Envelope]:
@@ -124,78 +163,151 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
     through ``adapter.extract_turn_input`` /
     ``adapter.build_round_envelope`` so this handler stays free of
     adapter-specific knowledge.
+
+    Per-turn LLM tools come from ``adapter.tools_for(client, metadata,
+    state, participant_id)``. Identity-level tools (``peers`` /
+    ``channels`` / ``tasks`` / ``context`` / ``delegate``) live on
+    ``agent.tools`` via ``NetworkPlugin``; adapter-scoped tools (e.g.
+    ``say`` for consulting / conversation / discussion) merge in
+    per-call via ``agent.ask(tools=...)``.
+
+    The full turn-processing path — channel resolution, view projection,
+    adapter input extraction, ``agent.ask``, round-envelope construction,
+    outbound send — is wrapped in one try/except. On exception the
+    handler routes the failure through ``HubClient.report_turn_failure``
+    (which fans out to every :class:`HubListener`, including the built-in
+    audit log) and returns cleanly. The channel stays alive and
+    subsequent envelopes flow. No reply envelope is posted on failure —
+    the framework does not invent content on the agent's behalf.
     """
-    metadata = await client._hub_client.get_channel(envelope.channel_id)
-    if metadata.is_terminal() or metadata.state != ChannelState.ACTIVE:
-        return
-
-    # "Can we respond now?" — ask the hub via the public probe surface
-    # so the handler doesn't need to reach into adapter internals.
-    if not client._hub_client.can_send(envelope.channel_id, client.agent_id):
-        return  # not our turn / channel closing — don't engage LLM
-
-    adapter = client._hub_client.adapter_for(metadata.channel_id)
-    channel = Channel(metadata=metadata, client=client)
-    view = resolve_view_policy(client, metadata)
-
-    history_envelopes = await read_wal_until(client, envelope)
-    projection: list[BaseEvent] = await view.project(
-        history_envelopes,
-        participant_id=client.agent_id,
-        channel=metadata,
-        render_envelope=adapter.render_envelope,
-    )
-
-    current_input = adapter.extract_turn_input(envelope)
-    if not current_input:
-        return
-
-    # Pre-populate a fresh stream's history with the projection so the
-    # agent's middleware sees the prior conversation context. The
-    # current turn's user message is passed via ``msg`` and gets
-    # appended to history naturally by ``Agent.ask``.
-    stream = MemoryStream()
-    if projection:
-        await stream.history.storage.set_history(stream.id, projection)
-
-    dependencies = stamp_dependencies(client, channel)
-
-    # Attach the TaskMirror for the duration of the LLM turn so any
-    # ``agent.task(...)`` (typically via the ``tasks(action="start")``
-    # tool) surfaces ``ag2.task.*`` envelopes to the hub and triggers
-    # ``record_observation`` on capability-tagged terminal events.
-    mirror = TaskMirror(
-        hub_client=client._hub_client,
-        owner_id=client.agent_id,
-        channel_id=metadata.channel_id,
-    )
-    sub_ids = mirror.attach(stream)
+    out_envelope = None
     try:
-        reply = await client.agent.ask(
-            current_input,
-            stream=stream,
-            dependencies=dependencies,
-        )
-    finally:
-        mirror.detach(stream, sub_ids)
+        metadata = await client._hub_client.get_channel(envelope.channel_id)
+        if metadata.is_terminal() or metadata.state != ChannelState.ACTIVE:
+            return
 
-    # Adapter encodes the round-end envelope.
-    # For example, Workflow returns EV_PACKET.
-    # Default implementations returns EV_TEXT(body) or None.
-    state = client._hub_client.adapter_state(metadata.channel_id)
-    events = list(await stream.history.get_events())
-    out_envelope = adapter.build_round_envelope(
-        metadata=metadata,
-        sender_id=client.agent_id,
-        reply=reply,
-        events=events,
-        state=state,
-        hub=client._hub,
-    )
-    if out_envelope is None:
+        # "Can we respond now?" — ask the hub via the public probe surface
+        # so the handler doesn't need to reach into adapter internals.
+        if not client._hub_client.can_send(envelope.channel_id, client.agent_id):
+            return  # not our turn / channel closing — don't engage LLM
+
+        adapter = client._hub_client.adapter_for(metadata.channel_id)
+        channel = Channel(metadata=metadata, client=client)
+        view = resolve_view_policy(client, metadata)
+
+        history_envelopes = await read_wal_until(client, envelope)
+        projection: list[BaseEvent] = await view.project(
+            history_envelopes,
+            participant_id=client.agent_id,
+            channel=metadata,
+            render_envelope=adapter.render_envelope,
+            name_for=client._hub.name_for,
+        )
+
+        current_input = await _render_current_input(
+            view, envelope, adapter, client.agent_id, metadata, client._hub.name_for
+        )
+        if not current_input:
+            return
+
+        # Pre-populate a fresh stream's history with the projection so the
+        # agent's middleware sees the prior conversation context. The
+        # current turn's user message is passed via ``msg`` and gets
+        # appended to history naturally by ``Agent.ask``.
+        stream = MemoryStream()
+        if projection:
+            await stream.history.storage.set_history(stream.id, projection)
+
+        dependencies = stamp_dependencies(client, channel)
+
+        # Adapter-scoped LLM tools for this turn (e.g. ``say`` for
+        # consulting / discussion). Resolution is cached on the adapter
+        # so the schema build cost is paid once per (adapter, client)
+        # — see ``ChannelAdapter.tools_for`` default implementation.
+        state = client._hub_client.adapter_state(metadata.channel_id)
+        adapter_tools: list = []
+        try:
+            adapter_tools = list(adapter.tools_for(client, metadata, state, client.agent_id))
+        except Exception:
+            logger.exception(
+                "adapter.tools_for raised: channel=%s adapter=%s",
+                envelope.channel_id,
+                type(adapter).__name__,
+            )
+
+        # Attach the TaskMirror for the duration of the LLM turn so any
+        # ``agent.task(...)`` (typically via the ``tasks(action="start")``
+        # tool) surfaces ``ag2.task.*`` envelopes to the hub and triggers
+        # ``record_observation`` on capability-tagged terminal events.
+        mirror = TaskMirror(
+            hub_client=client._hub_client,
+            owner_id=client.agent_id,
+            channel_id=metadata.channel_id,
+        )
+        sub_ids = mirror.attach(stream)
+        try:
+            reply = await client.agent.ask(
+                current_input,
+                stream=stream,
+                dependencies=dependencies,
+                tools=adapter_tools,
+            )
+
+            # Adapter encodes the round-end envelope.
+            # For example, Workflow returns EV_PACKET.
+            # Default implementations returns EV_TEXT(body) or None.
+            # State may have advanced inside the LLM turn (e.g. an
+            # ``EV_CONTEXT_SET`` fold) — re-read here.
+            state = client._hub_client.adapter_state(metadata.channel_id)
+            events = list(await stream.history.get_events())
+            out_envelope = adapter.build_round_envelope(
+                metadata=metadata,
+                sender_id=client.agent_id,
+                reply=reply,
+                events=events,
+                state=state,
+                hub=client._hub,
+            )
+        finally:
+            mirror.detach(stream, sub_ids)
+
+        if out_envelope is None:
+            return
+        out_envelope.causation_id = envelope.envelope_id
+        await client.send_envelope(out_envelope)
+    except Exception as exc:
+        logger.exception(
+            "notify handler raised: channel=%s agent=%s envelope=%s",
+            envelope.channel_id,
+            client.agent_id,
+            envelope.envelope_id,
+        )
+        await _report_turn_failure(client, envelope, exc)
         return
-    out_envelope.causation_id = envelope.envelope_id
-    await client.send_envelope(out_envelope)
+
+
+async def _report_turn_failure(
+    client: "AgentClient",
+    envelope: Envelope,
+    exc: BaseException,
+) -> None:
+    """Route an exception raised inside the notify handler through the hub.
+
+    The hub stays the single owner of audit and listener fan-out — the
+    handler calls the public ``HubClient.report_turn_failure`` surface
+    rather than touching hub internals. ``AuditLog`` (built-in listener)
+    records the failure; tenant listeners react however they choose.
+    """
+    hub_client = getattr(client, "_hub_client", None)
+    if hub_client is None:
+        return
+    with contextlib.suppress(Exception):
+        await hub_client.report_turn_failure(
+            channel_id=envelope.channel_id,
+            agent_id=client.agent_id,
+            envelope_id=envelope.envelope_id,
+            exc=exc,
+        )
 
 
 async def default_handler(envelope: Envelope, client: "AgentClient") -> None:

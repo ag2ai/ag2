@@ -126,7 +126,11 @@ def _filter_submodules_by_export_path(submodules: list[str], module_name: str) -
         if not submodule.startswith(module_name):
             continue
 
-        module = import_module(submodule)  # nosemgrep
+        try:
+            module = import_module(submodule)  # nosemgrep
+        except ImportError as e:
+            print(f"[api-docs] skipping {submodule}: {e}")
+            continue
         all = module.__all__ if hasattr(module, "__all__") else None
         for name, obj in module.__dict__.items():
             if not all:

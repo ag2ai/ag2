@@ -64,7 +64,10 @@ resume = Resume(
 | `agent_id` | hub-stamped | Issued by the hub at registration; use this for routing. |
 | `owner` | optional | Tenant id for multi-tenant deployments. |
 | `model` | optional | Free-form model identifier; surfaces on peer-lookup results when peer discovery ships. |
+| `kind` | optional | One of `#!python "agent"`, `#!python "human"`, `#!python "remote_agent"`, or `#!python None`. `#!python None` is the back-compat alias for `#!python "agent"`. `#!python "human"` is set automatically by `#!python hc.register_human(...)`; `#!python "remote_agent"` is reserved for a future federation / A2A bridge. `#!python __post_init__` rejects any other value. Exported as `#!python PassportKind` / `#!python PASSPORT_KINDS`. |
 | `created_at` | hub-stamped | ISO-Z timestamp. |
+
+`#!python hub.list_agents(kind=...)` filters the registry by participant kind — `#!python kind="human"` returns only humans, `#!python kind="agent"` returns agents (and matches `#!python kind=None` passports), `#!python kind=None` returns everything. Non-LLM participants are registered via `#!python hc.register_human(...)` — see [HumanClient (HITL)](/docs/beta/network/human_client).
 
 ### Resume — capability claims and observed track record
 
@@ -138,10 +141,10 @@ Hub calls `verify(...)` at registration. Raise `#!python AuthError` to reject. T
 
 ## Audit Log
 
-Every governance-relevant event the hub processes lands in `#!python hub._audit_log`:
+Every governance-relevant event the hub processes lands in `#!python hub.audit_log` (an `#!python AuditLog`, which is itself a registered `#!python HubListener`):
 
 ```python linenums="1"
-records = await hub._audit_log.read_all()
+records = await hub.audit_log.read_all()
 for r in records:
     print(r["kind"], r["at"], r)
 ```
@@ -160,8 +163,9 @@ Audit kinds (re-exported from `#!python autogen.beta.network`):
 | `#!python AUDIT_KIND_CHANNEL_EXPIRED` | TTL sweep |
 | `#!python AUDIT_KIND_TASK_TERMINATED` | A task observed via `#!python TaskMirror` reached a terminal state |
 | `#!python AUDIT_KIND_EXPECTATION_VIOLATED` | An expectation evaluator's threshold elapsed |
+| `#!python AUDIT_KIND_TURN_FAILED` | A notify handler crashed while processing an inbound envelope (channel stays alive — see resilience note below) |
 
-The audit log is the single trail for compliance and debugging — see [Expectations & Audit](/docs/beta/network/expectations_and_audit).
+The kind set is **open** — tenants and hub subclasses can write their own kinds via `#!python hub.audit_log.append(record)`. The audit log is the single trail for compliance and debugging — see [Governance, Audit & Observability](/docs/beta/network/expectations_and_audit).
 
 ## Reading Hub State
 
@@ -171,7 +175,8 @@ The audit log is the single trail for compliance and debugging — see [Expectat
 | `#!python await hub.get_resume(agent_id)` | Current `#!python Resume`. |
 | `#!python await hub.get_passport(agent_id)` | Current `#!python Passport`. |
 | `#!python await hub.read_wal(channel_id)` | Ordered list of `#!python Envelope`s in that channel. |
-| `#!python await hub._audit_log.read_all()` | Every audit record (the leading underscore signals "operator/test API", not user-facing). |
+| `#!python hub.audit_log` | The `#!python AuditLog` instance — `#!python await hub.audit_log.read_all()` for every record, `#!python hub.audit_log.subscribe(cb)` to live-tail. |
+| `#!python hub.health()` | Cheap in-memory operational snapshot (`active_channels`, `registered_agents`, `pending_inbox_total`, `max_pending_inbox_depth`, `registered_listeners`, `adapters_loaded`, `audit_log_bytes`). |
 
 ## Hub TTL & Sweepers
 
@@ -181,6 +186,24 @@ Two background tasks run as long as the hub is open:
 - **Expectation sweeper** — walks the expectation evaluators registered for each open channel, fires `#!python ViolationHandler`s on threshold breach.
 
 Both are tunable via `#!python ttl_sweep_interval` and `#!python expectation_sweep_interval`. Set to `0` to disable for tests; in those cases call `#!python await hub._ttl_tick()` or `#!python await hub._expectation_tick()` manually for deterministic timing.
+
+### Custom sweepers
+
+Attach your own periodic worker — protocol-specific background work like polling a chat platform's presence list or refreshing an auth token:
+
+```python linenums="1"
+async def heartbeat() -> None:
+    ...  # runs every 30s
+
+hub.register_sweeper("heartbeat", 30.0, heartbeat)
+# later, e.g. on a config reload:
+await hub.unregister_sweeper("heartbeat")
+```
+
+- `#!python register_sweeper(name, interval_seconds, fn)` is **synchronous** (it only updates bookkeeping). If the hub has already started (`#!python Hub.open(...)` calls `#!python start()` for you), the sweeper begins immediately; if you registered it before `#!python start()`, it begins then.
+- `#!python unregister_sweeper(name)` is **async** — it awaits clean cancellation of the running task. Unknown names are a no-op.
+- A duplicate `name` raises `#!python ValueError` (call `#!python unregister_sweeper` first to replace); a non-positive interval raises `#!python ValueError`.
+- `#!python hub.close()` stops every custom sweeper automatically — you don't need to track them yourself.
 
 ## Closing Down
 

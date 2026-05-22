@@ -368,8 +368,14 @@ async def test_tasks_status_unknown_task_returns_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_network_plugin_attaches_all_6_tools() -> None:
-    """Verifies the plugin wires every network tool onto ``agent.tools``."""
+async def test_network_plugin_attaches_identity_level_tools() -> None:
+    """``NetworkPlugin`` attaches the identity-level cross-cutting tools only.
+
+    ``say`` is channel-shaped: it comes from
+    ``adapter.tools_for(...)`` per turn (the default notify handler
+    resolves and merges it into ``agent.ask(tools=...)``). Workflow
+    agents see ``[]`` from the adapter — they never see ``say``.
+    """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -377,7 +383,8 @@ async def test_network_plugin_attaches_all_6_tools() -> None:
     alice_hc = HubClient(link, hub=hub)
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     tool_names = {t.name for t in alice.agent.tools}
-    assert {"say", "delegate", "peers", "channels", "tasks", "context"} <= tool_names
+    assert {"delegate", "peers", "channels", "tasks", "context"} <= tool_names
+    assert "say" not in tool_names
 
     await alice_hc.close()
     await hub.close()

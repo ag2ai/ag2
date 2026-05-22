@@ -4,14 +4,22 @@
 
 """``NetworkPlugin`` — attaches the network tool surface to an ``Agent``.
 
-* Adds the network tools (``say``, ``delegate``, ``peers``,
-  ``channels``, ``tasks``, ``context``) to ``agent.tools``.
-* Appends ``NetworkContextPolicy`` to the agent's assembly chain so
-  every LLM call sees a "you are <name>" prefix plus the available
-  tool names.
+Two streams of LLM tools compose into an agent's tool list per turn:
 
-Plugins are first-class in beta (``autogen/beta/agent.py`` ``Plugin``
-class). The network plugin uses the existing slot.
+* **Identity-level** (attached by ``NetworkPlugin`` once at registration,
+  always available): ``peers`` / ``channels`` / ``tasks`` / ``context`` /
+  ``delegate``. Cross-cutting verbs that work in any channel — discovery,
+  channel lifecycle, task observation, and the one-shot ``delegate``
+  convenience that opens its own consulting channel.
+
+* **Channel-level** (resolved per turn by the default notify handler
+  via ``adapter.tools_for(...)``): ``say`` for adapters that accept
+  free-form text (consulting / conversation / discussion), user-authored
+  handoff tools for workflow. Adapter-provided tools merge into the
+  ``tools=`` override passed to ``agent.ask``.
+
+The plugin appends ``NetworkContextPolicy`` to the agent's assembly
+chain so every LLM call sees a "you are <name>" prefix.
 """
 
 from typing import TYPE_CHECKING
@@ -25,7 +33,6 @@ from .tools import (
     make_context_tool,
     make_delegate_tool,
     make_peers_tool,
-    make_say_tool,
     make_tasks_tool,
 )
 
@@ -41,7 +48,9 @@ __all__ = ("NetworkContextPolicy", "NetworkPlugin")
 class NetworkContextPolicy:
     """Assembly policy: prepends a network-aware prefix to every LLM call.
 
-    Names the agent and lists its network tools.
+    Names the agent. The per-turn tool list is dynamic (identity-level
+    set + adapter-provided set merged by the handler) so the prefix
+    doesn't enumerate tools — the LLM sees them in its tools array.
     """
 
     name = "network_context"
@@ -56,27 +65,29 @@ class NetworkContextPolicy:
         events: list[BaseEvent],
         context: "Context",
     ) -> tuple[list[str], list[BaseEvent]]:
-        prefix = (
-            f"You are {self._client.passport.name} "
-            f"(agent_id: {self._client.agent_id}).\n"
-            "Network tools: say, delegate, peers, channels, tasks, context."
-        )
+        prefix = f"You are {self._client.passport.name} (agent_id: {self._client.agent_id})."
         return [prefix, *prompts], events
 
 
 class NetworkPlugin(Plugin):
     """Attaches an Agent to a network.
 
-    Adds ``say`` and ``delegate`` to ``agent.tools`` so the LLM sees
-    them on every turn — the verbs are stable for the life of the
-    registration. Also appends ``NetworkContextPolicy`` to the agent's
-    assembly chain.
+    Adds the identity-level cross-cutting tools to ``agent.tools``:
+    ``peers`` / ``channels`` / ``tasks`` / ``context`` / ``delegate``.
+    These are stable for the life of the registration and work in any
+    channel context.
+
+    Channel-level tools (``say``, workflow handoff tools) are NOT
+    attached here — they come from ``adapter.tools_for(...)``, resolved
+    per turn by the default notify handler and merged into
+    ``agent.ask(tools=...)``. This keeps protocol-specific verbs out of
+    an agent's tool list when they don't apply (e.g. ``say`` is hidden
+    from workflow participants who must use handoff tools).
     """
 
     def __init__(self, client: "AgentClient") -> None:
         super().__init__(
             tools=[
-                make_say_tool(client),
                 make_delegate_tool(client),
                 make_peers_tool(client),
                 make_channels_tool(client),

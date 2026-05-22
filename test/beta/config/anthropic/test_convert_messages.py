@@ -28,6 +28,7 @@ from autogen.beta.events import (
     DocumentInput,
     FileIdInput,
     ImageInput,
+    ModelMessage,
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -37,7 +38,6 @@ from autogen.beta.events import (
     ToolResultsEvent,
     VideoInput,
 )
-from autogen.beta.events.types import ModelMessage
 from autogen.beta.exceptions import UnsupportedInputError
 from autogen.beta.files.types import FileProvider, UploadedFile
 
