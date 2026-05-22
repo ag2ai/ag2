@@ -221,7 +221,8 @@ def _content_from_input(part: Input, serializer: SerializerProto) -> chat_pb2.Co
         raise UnsupportedInputError(f"BinaryInput({part.kind.value})", PROVIDER)
 
     if isinstance(part, FileIdInput):
-        return xai_file(file_id=part.file_id, filename=part.filename)
+        # xai_sdk rejects filename/mime_type when referencing by file_id
+        return xai_file(file_id=part.file_id)
 
     raise UnsupportedInputError(type(part).__name__, PROVIDER)
 
