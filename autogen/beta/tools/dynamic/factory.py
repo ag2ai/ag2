@@ -14,7 +14,7 @@ from autogen.beta.tools.tool import Tool
 
 from .handler import resolve_and_run
 
-_SINGLE_DESCRIPTION = (
+_BASE_DESCRIPTION = (
     "Create an ephemeral dynamic agent from a spec (name, system prompt, "
     "subset of available tools, optional response schema) and immediately "
     "run it on the given objective. Returns the agent's final reply as a "
@@ -41,6 +41,10 @@ def dynamic_agent(
     runs the objective via :func:`run_task` (fresh stream, shallow-copied
     deps, copied vars), and returns the reply string.
 
+    The pool's names + descriptions are appended to the returned tool's
+    ``description`` so the parent LLM learns them from the tool schema and
+    does not need them spelled out in its system prompt.
+
     Parameters:
         available_tools: Pool of tools the dynamic agent may pick from
             by name.
@@ -50,9 +54,22 @@ def dynamic_agent(
     """
     pool = list(available_tools)
 
+    description = _BASE_DESCRIPTION
+    if pool:
+        menu_lines: list[str] = []
+        for raw in pool:
+            t = FunctionTool.ensure_tool(raw)
+            if isinstance(t, FunctionTool):
+                desc = (t.schema.function.description or "").strip()
+                menu_lines.append(f"- {t.name}: {desc}" if desc else f"- {t.name}")
+            else:
+                menu_lines.append(f"- {t.name}")
+        menu = "\n".join(menu_lines)
+        description = f"{_BASE_DESCRIPTION}\n\nAvailable tools:\n{menu}"
+
     @tool(
         name="create_and_run_agent",
-        description=_SINGLE_DESCRIPTION,
+        description=description,
         middleware=middleware,
     )
     async def create_and_run_agent(

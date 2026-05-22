@@ -120,6 +120,65 @@ reply = await analyst.ask("Compare Python vs Rust for web APIs: performance, DX,
 
 The analyst's LLM may call `sub_task` multiple times — one per aspect — then synthesise the results.
 
+## Dynamic Agents
+
+`#!python dynamic_agent()` lets the calling LLM **construct** an ephemeral agent at runtime — picking a name, system prompt, and a subset of available tools per objective — instead of pre-defining each delegate as a named `#!python as_tool()`. Use it when the orchestrator should compose a focused worker on demand for each sub-task.
+
+```python linenums="1" hl_lines="2 16-19"
+from autogen.beta import Agent
+from autogen.beta.tools.dynamic import dynamic_agent
+from autogen.beta.config import OpenAIConfig
+
+config = OpenAIConfig(model="gpt-4o-mini")
+
+orchestrator = Agent(
+    "orchestrator",
+    config=config,
+    prompt=(
+        "You orchestrate sub-tasks by calling create_and_run_agent. "
+        "For each task, invent a focused agent name and system prompt, "
+        "include only the tools the child genuinely needs, "
+        "and pass a clear objective."
+    ),
+    tools=[
+        dynamic_agent(available_tools=[calc, web_search], config=config),
+    ],
+)
+
+reply = await orchestrator.ask("What is 17 * 25 + 4? Use a child agent.")
+```
+
+The orchestrator's LLM sees one tool, `#!python create_and_run_agent(spec, objective)`. Each call spawns an ephemeral child `#!python Agent` on a fresh stream, runs the objective via `#!python run_task`, and returns the reply string.
+
+`dynamic_agent()` accepts these parameters:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `available_tools` | `Iterable[Tool | Callable[..., Any]]` | Pool of tools the spawned child may pick from by name |
+| `config` | `ModelConfig` | Model configuration used for every spawned child |
+| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to `create_and_run_agent` |
+
+### The AgentSpec the LLM constructs
+
+The LLM builds an `#!python AgentSpec` on every call. It is JSON-serializable and captures the declarative parts of the child:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `name` | `str` | Display name of the spawned child |
+| `prompt` | `list[str]` | System prompt for the child |
+| `tool_names` | `list[str]` | Subset of `available_tools` names to give the child |
+| `response_schema` | `ResponseSchemaSpec | None` | Optional structured output schema |
+
+### How the LLM discovers available tool names
+
+The pool's names and descriptions are **rendered into the `#!python create_and_run_agent` tool description automatically** when the factory is built. The calling agent's system prompt does not need to enumerate them — the LLM discovers the valid names from the tool schema.
+
+!!! tip
+    If the LLM picks a name not in the pool, the framework returns `Error: unknown tools [...]. Available: [...]` as a recoverable string. The LLM reads the hint and retries with a corrected spec — no exception propagates to the caller. The auto-rendered menu prevents this in the common case.
+
+!!! warning
+    Spawned children are themselves constructed **without** `dynamic_agent`, so they cannot recursively spawn further dynamic agents. Recursion is structurally impossible — no depth limit needed.
+
 ## Sub-Task Streams
 
 ### Default Behavior
