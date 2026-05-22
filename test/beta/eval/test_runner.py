@@ -284,7 +284,7 @@ async def test_inline_list_dataset_is_loaded(tmp_path: Path) -> None:
 async def test_user_middleware_and_observers_still_fire(tmp_path: Path) -> None:
     """The runner's capture observer composes with user-supplied observers."""
     from autogen.beta.events import BaseEvent
-    from autogen.beta.observer import observer as observer_factory
+    from autogen.beta.observers import observer as observer_factory
 
     user_events: list[BaseEvent] = []
 

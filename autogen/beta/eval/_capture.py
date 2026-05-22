@@ -12,7 +12,7 @@ is just the events that landed on the stream during one task. Scorers
 grade what's in the trace.
 
 :class:`EventCapture` is how the runner consumes that substrate. It
-satisfies the framework's :class:`~autogen.beta.observer.Observer`
+satisfies the framework's :class:`~autogen.beta.observers.Observer`
 protocol — the same extension point ``LoopDetector`` and ``TokenMonitor``
 use — so it composes with any user-supplied observers without conflict.
 

@@ -20,7 +20,7 @@ implementations all satisfy the same shape; the runner doesn't change.
 from collections.abc import Iterable
 from typing import Any, Protocol, runtime_checkable
 
-from autogen.beta.observer import Observer
+from autogen.beta.observers import Observer
 from autogen.beta.stream import Stream
 
 __all__ = ("EvalTarget",)
