@@ -222,8 +222,14 @@ build `TaskResult`; aggregate → `RunResult`; persist (unchanged store schema).
    Residual: halt span (`SPAN_TYPE_HALT`), single-agent `run_subtask` traceparent
    propagation, `ag2.output.*` on root span, `ag2.eval.*` namespace. All additive to
    `_telemetry_consts.py`; independently testable; no eval coupling yet.
-2. **Trace serialization + span→Trace adapter** — load a `Trace` from stored
-   OTLP-JSON; fidelity test vs a live `EventCapture` of the same run.
+2. **Trace serialization + span→Trace adapter** — DONE (in part): pure
+   `spans_to_trace` over `SpanData` (`eval/_spans.py`); OTel `ReadableSpan`
+   bridge (`eval/_otel.py`); live round-trip fidelity test asserting the
+   span-reconstructed `Trace` matches the `EventCapture` `Trace` on
+   scorer-relevant projections (tokens, final response, tool call/result).
+   Remaining: load `SpanData` from stored JSON (format TBD); live error-path
+   fidelity (telemetry emitting ERROR tool spans on real failures — not easily
+   triggered under `TestConfig`; adapter side is unit-covered).
 3. **`TraceSource` protocol + Directory/InMemory backends + `evaluate()`** —
    demote runner to producer; `run()` = produce + evaluate.
 4. **Reference join + outputs-from-trace projection.**
