@@ -188,6 +188,11 @@ class TaskMirror:
             state=TaskState.RUNNING,
             created_at=now,
             started_at=now,
+            # Carry the agent-side absolute deadline so the hub's TTL
+            # sweeper (``expire_due``) can expire this task; without it the
+            # hub stores ``expires_at=None`` and a networked task's TTL is
+            # never enforced.
+            expires_at=event.expires_at,
             channel_id=self._channel_id,
         )
         try:

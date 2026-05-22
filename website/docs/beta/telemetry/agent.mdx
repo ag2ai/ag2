@@ -1,13 +1,14 @@
 ---
-title: Telemetry
-sidebarTitle: Telemetry
+title: Agent Telemetry
+sidebarTitle: Agent
 ---
 
-# Beta Telemetry
+AG2 Beta ships a `#!python TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/){.external-link target="_blank"} spans for a single agent's work — its turns, LLM calls, tool executions, and human-in-the-loop interactions.
 
-AG2 Beta includes a `TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/) spans for agent turns, LLM calls, tool executions, and human-in-the-loop interactions.
+The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/){.external-link target="_blank"}, so traces can be exported to **any compatible backend** — Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and others.
 
-The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/), so traces can be exported to **any compatible backend** -- Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and others.
+!!! tip
+    To trace the interactions *between* agents in a network — the hub's dispatch, channels, agent lifecycles, and tasks — see [Network Telemetry](/docs/beta/telemetry/network). The two compose: an agent's `#!python invoke_agent` span links back to the network envelope that triggered it.
 
 ## Installation
 
@@ -17,7 +18,7 @@ pip install "ag2[openai,tracing]"
 
 ## Quick Start
 
-```python
+```python linenums="1"
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -53,7 +54,7 @@ reply = asyncio.run(agent.ask("What is the capital of France?"))
 
 ## Trace Hierarchy
 
-Each `ask()` call produces a root span with child spans for LLM calls, tool executions, and human input:
+Each `#!python ask()` call produces a root span with child spans for LLM calls, tool executions, and human input:
 
 ```
 invoke_agent assistant
@@ -76,7 +77,7 @@ Every span includes an `ag2.span.type` attribute:
 
 ## Semantic Attributes
 
-Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/docs/specs/semconv/gen-ai/):
+Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/docs/specs/semconv/gen-ai/){.external-link target="_blank"}:
 
 | Attribute | Span types | Description |
 |---|---|---|
@@ -98,7 +99,7 @@ Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/d
 
 By default, message content, tool arguments, and results **are** included in spans. To disable content capture for privacy-sensitive environments:
 
-```python
+```python linenums="1"
 TelemetryMiddleware(
     tracer_provider=tracer_provider,
     agent_name="assistant",
@@ -124,7 +125,7 @@ When content capture is enabled (the default), spans include these additional at
 
 Use `span_attributes` to stamp custom key-value pairs onto spans the middleware emits. This is useful for routing or filtering traces by tenant, environment, deployment, or any other label your backend supports. Every span will carry these attributes.
 
-```python
+```python linenums="1"
 TelemetryMiddleware(
     tracer_provider=tracer_provider,
     agent_name="assistant",
@@ -143,7 +144,7 @@ TelemetryMiddleware(
 
 ## Configuration
 
-`TelemetryMiddleware` accepts:
+`#!python TelemetryMiddleware` accepts:
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -156,7 +157,7 @@ TelemetryMiddleware(
 
 ## Tool Execution Example
 
-```python
+```python linenums="1"
 from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.middleware.builtin import TelemetryMiddleware
@@ -183,4 +184,4 @@ agent = Agent(
 
 ## Backend Integration
 
-Since `TelemetryMiddleware` uses standard OpenTelemetry, any OTLP-compatible backend works. See the [V1 tracing documentation](/docs/user-guide/tracing/opentelemetry) for setup guides for Grafana Tempo, Jaeger, Langfuse, and other backends. The setup is identical -- only the agent instrumentation method differs.
+Since `#!python TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works — Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, and others. Swap the `#!python ConsoleSpanExporter` from the Quick Start above for an `#!python OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.

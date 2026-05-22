@@ -1534,11 +1534,27 @@ class Hub:
             metadata.result = result
         if error:
             metadata.error = error
+        terminal_reached = False
         if state is not None:
             metadata.state = state
             if state in TERMINAL_TASK_STATES:
                 metadata.completed_at = self._clock()
+                terminal_reached = True
         await self._persist_task_metadata(metadata)
+        if terminal_reached:
+            # Mirror the terminal fan-out ``_transition_task`` performs, so
+            # mirror-driven terminals (completed / failed / agent-side
+            # expired) reach listeners (telemetry, audit) — not just
+            # hub-driven TTL / channel-cascade expiry. The terminal guard at
+            # the top of this method means a task reaches terminal exactly
+            # once, so this and ``_transition_task`` never both fan out for
+            # the same task.
+            await self._fan_out(
+                "on_task_event",
+                task_id,
+                metadata.state.value,
+                self._task_terminal_payload(metadata, error or ""),
+            )
 
     async def list_tasks(
         self,
@@ -2040,6 +2056,25 @@ class Hub:
         # which fires the ``opened`` event directly — no need to fan
         # out again here.
 
+    def _task_terminal_payload(self, metadata: TaskMetadata, reason: str) -> dict[str, object]:
+        """Build the ``on_task_event`` payload for a terminal task transition.
+
+        Shared by ``update_task`` (mirror-driven completed / failed /
+        agent-expired) and ``_transition_task`` (hub-driven TTL /
+        channel-cascade expiry) so both terminal paths fan out an identical
+        shape. ``HubTelemetryListener`` backdates the ``network.task`` span
+        to ``started_at`` and ends it at ``at``.
+        """
+        return {
+            "owner_id": metadata.owner_id,
+            "channel_id": metadata.channel_id,
+            "reason": reason,
+            "capability": metadata.spec.capability,
+            "outcome": metadata.state.value,
+            "started_at": metadata.started_at,
+            "at": metadata.completed_at,
+        }
+
     async def _transition_task(
         self,
         task_id: str,
@@ -2060,15 +2095,7 @@ class Hub:
                 "on_task_event",
                 task_id,
                 new_state.value,
-                {
-                    "owner_id": metadata.owner_id,
-                    "channel_id": metadata.channel_id,
-                    "reason": reason,
-                    "capability": metadata.spec.capability,
-                    "outcome": new_state.value,
-                    "started_at": metadata.started_at,
-                    "at": metadata.completed_at,
-                },
+                self._task_terminal_payload(metadata, reason),
             )
 
     # ── Persistence helpers ──────────────────────────────────────────────────

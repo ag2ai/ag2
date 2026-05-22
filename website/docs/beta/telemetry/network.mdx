@@ -1,0 +1,219 @@
+---
+title: Network Telemetry
+sidebarTitle: Network
+---
+
+Where [Agent Telemetry](/docs/beta/telemetry/agent) traces what happens *inside* one agent, **network telemetry** traces what happens *between* them — the hub's envelope dispatch, channel lifecycles, agent registration, and tasks. It is emitted by the hub itself, as [OpenTelemetry](https://opentelemetry.io/){.external-link target="_blank"} spans on the same `#!python TracerProvider` your agents use, so the two stitch together into one picture.
+
+Like agent telemetry it is **opt-in**: nothing is traced unless you hand the hub a `#!python TracerProvider`.
+
+!!! tip
+    Network telemetry composes with [Agent Telemetry](/docs/beta/telemetry/agent). When an agent's turn is triggered by a network envelope, its `#!python invoke_agent` span links back to that envelope's span — so a trace can follow a message from dispatch, into the receiving agent's LLM calls and tools, and back out.
+
+## Installation
+
+```bash
+pip install "ag2[openai,tracing]"
+```
+
+## Quick Start
+
+Two opt-ins wire up the full picture: pass a `#!python tracer_provider` to `#!python Hub.open` (the hub owns **envelope** spans), and register a `#!python HubTelemetryListener` (it owns **channel**, **agent**, and **task** spans). Give each agent a `#!python TelemetryMiddleware` so its turn spans join the same provider.
+
+```python linenums="1" hl_lines="31 35 44"
+import asyncio
+
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
+
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.knowledge import DiskKnowledgeStore
+from autogen.beta.middleware.builtin import TelemetryMiddleware
+from autogen.beta.network import Hub, HubClient, LocalLink, Passport, Resume
+from autogen.beta.network.hub import HubTelemetryListener
+
+
+async def main() -> None:
+    # 1. One TracerProvider, shared by the hub and every agent. The resource
+    #    attributes identify this hub instance across all of its traces.
+    resource = Resource.create({
+        "service.name": "ag2-network",
+        "service.instance.id": "hub-001",
+        "ag2.hub.id": "hub-001",
+    })
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+    trace.set_tracer_provider(provider)
+
+    store = DiskKnowledgeStore("./hub_store")
+
+    # 2. The hub owns `network.envelope` spans — pass it the provider.
+    hub = await Hub.open(store, tracer_provider=provider)
+
+    # 3. The listener owns `network.channel`, `agent.lifetime`, and
+    #    `network.task` spans (plus channel-attached signal events).
+    hub.register_listener(HubTelemetryListener(store, tracer_provider=provider))
+
+    link = LocalLink(hub)
+
+    # 4. Each agent's TelemetryMiddleware shares the provider, so its turn
+    #    spans link back to the envelope that triggered them.
+    alice = Agent(
+        "alice",
+        config=OpenAIConfig(model="gpt-4o-mini"),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="alice")],
+    )
+
+    hc = HubClient(link, hub=hub)
+    await hc.register(alice, Passport(name="alice"), Resume())
+
+    # ... open channels and run as usual; spans are emitted automatically ...
+
+    # 5. shutdown() unregisters agents so long-lived `agent.lifetime` spans
+    #    end (and export). See "Getting a complete trace set" below.
+    await hc.shutdown()
+    await hub.close()
+    provider.shutdown()
+
+
+asyncio.run(main())
+```
+
+## What Gets Traced
+
+The hub and listener emit five span types. Each carries an `ag2.span.type` attribute, mirroring the agent-side convention.
+
+| `ag2.span.type` | Span name | Emitted by | Lifetime |
+|---|---|---|---|
+| `envelope` | `network.envelope {event_type}` | Hub | One per dispatched envelope. Brackets WAL append + dispatch; **root of its own trace** (`SpanKind.PRODUCER`). |
+| `channel` | `network.channel {type}` | listener | Long-lived: opened on `created`, ended on `closed` / `expired`. Channel-scoped signal events attach here. |
+| `agent_lifetime` | `agent.lifetime {name}` | listener | Long-lived: opened on `registered`, ended on `unregistered`. |
+| `agent_event` | `agent.resume_set` / `agent.skill_set` / `agent.rule_set` | listener | Single-shot identity-change span, nested under the agent's `agent.lifetime`. |
+| `task` | `network.task {capability}` | listener | Single-shot, created at a task's terminal event with its start time backdated to when the task began. |
+
+Agents instrumented with `#!python TelemetryMiddleware` add their own `agent` / `llm` / `tool` / `human_input` spans (see [Agent Telemetry](/docs/beta/telemetry/agent)), linked to the triggering envelope.
+
+!!! note
+    `#!python network.task` spans cover capability-tagged tasks — the same `#!python agent.task(..., capability="X")` mechanism described in [Task Observation](/docs/beta/network/task_observation). The span records the task's `capability`, `outcome`, and latency, which is what feeds task-level evaluation views.
+
+## Bounded Traces, Joined by Links
+
+Rather than forcing everything onto one enormous hub-wide trace, each entity is its **own bounded trace** — an envelope, a channel, an agent's lifetime, and a task each root a separate trace. This matches how OTLP collectors and trace viewers expect to ingest data (a long-lived channel that stays open for hours does not hold one trace open indefinitely).
+
+The causal relationships between these traces are expressed two ways:
+
+- **`#!python SpanLink`s** connect related spans across traces:
+
+    | Link | From → To | Meaning |
+    |---|---|---|
+    | `in_channel` | envelope → channel | the envelope was dispatched in this channel |
+    | `triggered_by` | envelope → caller's span | the envelope was posted by this work |
+    | `in_channel` | task → channel | the task ran in this channel |
+
+- **Resource attributes** (`service.instance.id`, `ag2.hub.id`) stamp every span the hub emits, so all of a hub's traces are joinable in your backend without a shared parent span.
+
+### Connecting agent turns to envelopes
+
+You do not wire this up yourself — adding `#!python TelemetryMiddleware` to your agents is enough. Under the hood, the hub injects the `#!python network.envelope` span's W3C `traceparent` into the envelope *before* it is written to the WAL (so the write-ahead log is the source of truth), and the receiving agent's middleware extracts it to parent the `#!python invoke_agent` span. The result: a continuous trace from dispatch into the recipient's work.
+
+## What a Single Exchange Produces
+
+To make the model concrete, here is the exact output of one **consulting** exchange — a 1-question / 1-reply channel where `alice` asks `bob`, both agents instrumented with `#!python TelemetryMiddleware`. It yields **five bounded traces** (indentation = parent → child within one trace):
+
+```text
+network.channel consulting                      # the channel: open → auto-close
+                                                 #   ← linked from each envelope below
+
+network.envelope ag2.msg.text   (alice → bob)   # dispatch of alice's question
+└─ invoke_agent bob                              #   bob's turn, triggered by the question
+   └─ chat                                       #   bob's LLM call
+                                                 #   → in_channel link to network.channel
+
+network.envelope ag2.msg.text   (bob → alice)   # dispatch of bob's reply
+                                                 #   → in_channel link to network.channel
+
+agent.lifetime alice                            # alice: registered → unregistered
+agent.lifetime bob                              # bob:   registered → unregistered
+```
+
+What to read off this:
+
+- **Each entity is its own trace.** The channel, each envelope, and each agent's lifetime are separate bounded traces — not one giant tree — joined by SpanLinks and the shared `ag2.hub.id` resource attribute.
+- **The recipient's work nests under the triggering envelope.** `#!python invoke_agent bob` (and its `#!python chat`, plus any `#!python execute_tool`) are children of the **question** envelope, because the traceparent rides that envelope into bob's turn. One trace follows the message from dispatch into the recipient's LLM call.
+- **The reply is its own envelope trace** (bob → alice) — the hub starts a fresh `#!python network.envelope` root for every dispatched message.
+- **Lifetime spans appear only once the agent is unregistered** — they stay open from `registered` until `#!python shutdown()` (see [Getting a complete trace set](#getting-a-complete-trace-set)).
+
+It scales predictably: *N* messages on a channel → *N* `#!python network.envelope` traces; each agent turn adds an `#!python invoke_agent` (with its `#!python chat` / `#!python execute_tool` children) under the envelope that triggered it; one `#!python network.channel` per channel; one `#!python agent.lifetime` per registered agent.
+
+## Two Sinks: Collector and Disk
+
+Every span the hub and listener emit goes to **two** places:
+
+1. **The OTLP collector** — via the `#!python TracerProvider` you configured, exactly like agent telemetry. Any OTLP-compatible backend works.
+2. **Disk** — each ended span is also mirrored as one JSON object per line to `/telemetry/spans.jsonl` inside the hub's `#!python KnowledgeStore`. This is hub-private storage (agents cannot read it), it survives restarts, and it can be queried offline without a running collector.
+
+The disk records use the same hex trace/span IDs as the OTLP export, so a span on disk and the same span in your backend cross-reference one another.
+
+## Span Attributes
+
+Beyond the resource attributes, spans carry `ag2.network.*` and `ag2.agent.*` attributes you can filter and aggregate on:
+
+| Attribute | Span types | Description |
+|---|---|---|
+| `ag2.network.channel_id` | envelope, channel, task | Channel the span belongs to |
+| `ag2.network.event_type` | envelope | Envelope event type (e.g. `ag2.text`) |
+| `ag2.network.sender_id` | envelope | Sender agent ID |
+| `ag2.network.envelope_id` | envelope | Envelope ID |
+| `ag2.network.manifest_type` | channel | Channel type (e.g. `workflow`, `discussion`) |
+| `ag2.network.capability` | task | The task's declared capability |
+| `ag2.network.outcome` | task | Terminal outcome (e.g. `completed`, `expired`) |
+| `ag2.network.task_id` | task | Task ID |
+| `ag2.agent.id` | agent_lifetime, agent_event | Agent ID |
+| `ag2.agent.resume_source` | agent_event | `tenant` (set by an operator) or `observed` (earned via a task) |
+
+Channel spans also record diagnostic span **events** — `dispatch_failed`, `turn_failed`, `envelope_rejected`, and expectation violations — and `agent.lifetime` spans record `inbox_pressure`, so failures and back-pressure surface in the trace without their own spans.
+
+## Custom Span Attributes
+
+`#!python HubTelemetryListener` accepts a `span_attributes` dict, stamped onto every channel / agent / task span it emits — the same pattern as the agent middleware, useful for tenant or environment labels.
+
+```python linenums="1"
+hub.register_listener(
+    HubTelemetryListener(
+        store,
+        tracer_provider=provider,
+        span_attributes={"deployment": "production", "ag2.org.id": "org-abc123"},
+    )
+)
+```
+
+!!! tip
+    For hub-wide identity that should appear on **all** spans (including the hub-owned `#!python network.envelope` spans), prefer resource attributes on the `#!python TracerProvider` (`service.instance.id`, `ag2.hub.id`) over `span_attributes`. Resource attributes stamp every span automatically.
+
+## Getting a Complete Trace Set
+
+Long-lived spans only export when they **end**. `#!python agent.lifetime` spans end when an agent is *unregistered*, and `#!python network.channel` spans end when a channel *closes*.
+
+- `#!python HubClient.shutdown()` unregisters the client's agents — ending their `#!python agent.lifetime` spans.
+- `#!python HubClient.close()` only drops the connection; registrations (and their lifetime spans) stay open.
+
+So for a clean, complete trace set at the end of a run, call `#!python shutdown()` (not just `#!python close()`) on your hub clients, then `#!python provider.shutdown()` to flush the exporter.
+
+## Configuration
+
+`#!python HubTelemetryListener` accepts:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `store` | `KnowledgeStore` | required | The hub's store; span records are appended to `/telemetry/spans.jsonl` |
+| `tracer_provider` | `TracerProvider \| None` | Global provider | OpenTelemetry TracerProvider; share it with the hub and agents |
+| `span_attributes` | `dict[str, str] \| None` | `None` | Extra key-value pairs stamped onto every channel / agent / task span |
+
+To enable hub-owned `#!python network.envelope` spans, pass the same `tracer_provider` to `#!python Hub.open(store, tracer_provider=...)`.
+
+## Backend Integration
+
+Network telemetry emits standard OpenTelemetry spans, so any OTLP-compatible backend works — Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, and others. Swap the `#!python ConsoleSpanExporter` for an `#!python OTLPSpanExporter` pointed at your backend or a local OpenTelemetry Collector; the hub and agents share the one provider, so all their spans flow to the same place.

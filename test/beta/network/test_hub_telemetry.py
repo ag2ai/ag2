@@ -7,6 +7,7 @@ Hub-owned ``network.envelope`` span, WAL-truth traceparent persistence,
 and end-to-end propagation into the agent-side ``invoke_agent`` span.
 """
 
+import asyncio
 import json
 import threading
 from collections.abc import Sequence as SequenceType
@@ -15,7 +16,7 @@ import pytest
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 
-from autogen.beta import Agent
+from autogen.beta import Agent, Context
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.middleware.builtin import TelemetryMiddleware
 from autogen.beta.network import (
@@ -26,10 +27,13 @@ from autogen.beta.network import (
     LocalLink,
     Passport,
     Resume,
+    TaskMirror,
 )
 from autogen.beta.network.hub import HubTelemetryListener
 from autogen.beta.network.hub._envelope_tracing import EnvelopeTracer
 from autogen.beta.network.hub.layout import spans_path
+from autogen.beta.stream import MemoryStream
+from autogen.beta.testing import TestConfig
 
 from ._helpers import ScriptedConfig, wait_for_text_count
 
@@ -179,6 +183,51 @@ async def test_started_and_progress_task_kinds_do_not_emit(otel_setup) -> None:
     await listener.on_task_event("t", "progress", {"capability": "x"})
 
     assert exporter.get_finished_spans() == []
+
+
+@pytest.mark.asyncio
+async def test_update_task_terminal_fans_out_network_task_span(otel_setup) -> None:
+    """Completing a capability-tagged task through the mirror path emits a
+    ``network.task`` span.
+
+    Regression: ``Hub.update_task`` must fan out ``on_task_event`` on terminal
+    transitions, not only ``_transition_task`` (hub TTL / cascade expiry).
+    Before the fix this path produced no task span at all.
+    """
+    exporter, provider = otel_setup
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, tracer_provider=provider, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    hub.register_listener(HubTelemetryListener(store, tracer_provider=provider))
+    hc = HubClient(LocalLink(hub), hub=hub)
+
+    bob_agent = Agent("bob", config=TestConfig("ack"))
+    bob = await hc.register(bob_agent, Passport(name="bob"), Resume(claimed_capabilities=["analysis"]))
+
+    stream = MemoryStream()
+    mirror = TaskMirror(hub=hub, owner_id=bob.agent_id)
+    sub_ids = mirror.attach(stream)
+    try:
+        async with bob_agent.task("analyse the data", capability="analysis", context=Context(stream=stream)) as task:
+            await task.complete(result="done")
+    finally:
+        mirror.detach(stream, sub_ids)
+
+    # Stream delivery to the mirror is async; poll briefly for the span.
+    task_spans: list[ReadableSpan] = []
+    for _ in range(50):
+        task_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "task"]
+        if task_spans:
+            break
+        await asyncio.sleep(0.01)
+
+    assert len(task_spans) == 1
+    span = task_spans[0]
+    assert span.name == "network.task analysis"
+    assert span.status.status_code.name == "OK"
+    assert span.attributes.get("ag2.network.outcome") == "completed"
+
+    await hc.shutdown()
+    await hub.close()
 
 
 @pytest.mark.asyncio

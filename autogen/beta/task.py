@@ -292,6 +292,7 @@ class Task:
                 agent_name=self._owner_id,
                 objective=self._spec.title,
                 spec=self._spec,
+                expires_at=self._metadata.expires_at,
             )
         )
         return self

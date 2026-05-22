@@ -24,6 +24,11 @@ class TaskStarted(TaskEvent):
     # framework-core ``Task`` primitive (``autogen.beta.task``); legacy
     # ``run_task`` callers leave it ``None``.
     spec: "TaskSpec | None" = Field(None)
+    # Absolute ISO deadline (start + ttl_seconds) if the task was created
+    # with a TTL, else ``None``. Carried on the event so the network's
+    # ``TaskMirror`` can hand it to the hub, whose TTL sweeper expires
+    # tasks past ``expires_at``. ``TaskSpec`` does not hold the TTL.
+    expires_at: str | None = Field(None)
 
 
 class TaskProgress(TaskEvent):
