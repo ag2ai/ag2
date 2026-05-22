@@ -11,6 +11,7 @@ and persisted run JSON suitable for run-vs-run diffing.
 
 from ._types import Feedback, ScorerReturnTypeError
 from .budgets import BudgetThresholds
+from .evaluate import evaluate
 from .result import Aggregates, RunResult, ScoreStats, TaskResult
 from .runner import run
 from .scorer import Scorer, scorer
@@ -18,12 +19,15 @@ from .suite import Suite
 from .target import EvalTarget
 from .task import Task
 from .trace import Trace
+from .trace_source import DirectoryTraceSource, InMemoryTraceSource, TraceRef, TraceSource
 
 __all__ = (
     "Aggregates",
     "BudgetThresholds",
+    "DirectoryTraceSource",
     "EvalTarget",
     "Feedback",
+    "InMemoryTraceSource",
     "RunResult",
     "ScoreStats",
     "Scorer",
@@ -32,6 +36,9 @@ __all__ = (
     "Task",
     "TaskResult",
     "Trace",
+    "TraceRef",
+    "TraceSource",
+    "evaluate",
     "run",
     "scorer",
 )

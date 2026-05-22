@@ -55,6 +55,8 @@ from .trace import Trace
 __all__ = (
     "SpanData",
     "SpanEvent",
+    "span_data_from_dict",
+    "span_data_to_dict",
     "spans_to_trace",
 )
 
@@ -222,3 +224,31 @@ def _root_duration_ms(spans: Sequence[SpanData]) -> int:
         roots = [s for s in spans if s.parent_id is None] or list(spans)
     root = min(roots, key=lambda s: s.start_ns)
     return max(0, (root.end_ns - root.start_ns) // _NS_PER_MS)
+
+
+def span_data_to_dict(span: SpanData) -> dict[str, Any]:
+    """Serialize a :class:`SpanData` to a JSON-safe dict (provisional disk format)."""
+    return {
+        "name": span.name,
+        "span_id": span.span_id,
+        "parent_id": span.parent_id,
+        "start_ns": span.start_ns,
+        "end_ns": span.end_ns,
+        "attributes": dict(span.attributes),
+        "status": span.status,
+        "events": [{"name": e.name, "attributes": dict(e.attributes)} for e in span.events],
+    }
+
+
+def span_data_from_dict(data: dict[str, Any]) -> SpanData:
+    """Rebuild a :class:`SpanData` from a dict produced by :func:`span_data_to_dict`."""
+    return SpanData(
+        name=data.get("name", ""),
+        span_id=data.get("span_id", ""),
+        parent_id=data.get("parent_id"),
+        start_ns=int(data.get("start_ns", 0)),
+        end_ns=int(data.get("end_ns", 0)),
+        attributes=dict(data.get("attributes", {})),
+        status=data.get("status", "UNSET"),
+        events=tuple(SpanEvent(e.get("name", ""), dict(e.get("attributes", {}))) for e in data.get("events", [])),
+    )

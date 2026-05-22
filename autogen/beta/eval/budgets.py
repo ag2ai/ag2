@@ -5,6 +5,10 @@
 """Per-task budget thresholds — observational guardrails for the runner."""
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .trace import Trace
 
 __all__ = ("BudgetThresholds",)
 
@@ -29,3 +33,9 @@ class BudgetThresholds:
 
     max_tokens_per_task: int | None = None
     max_seconds_per_task: float | None = None
+
+    def exceeded_by(self, trace: "Trace") -> bool:
+        """``True`` iff ``trace`` exceeds any set threshold (tokens or wall-clock)."""
+        if self.max_tokens_per_task is not None and trace.tokens.total > self.max_tokens_per_task:
+            return True
+        return self.max_seconds_per_task is not None and trace.duration_ms / 1000 > self.max_seconds_per_task

@@ -310,8 +310,4 @@ def _outputs_from_reply(reply: Any) -> dict[str, Any]:
 
 def _exceeds_budget(trace: Trace, budgets: BudgetThresholds | None) -> bool:
     """Apply the :class:`BudgetThresholds` checks to one task's trace."""
-    if budgets is None:
-        return False
-    if budgets.max_tokens_per_task is not None and trace.tokens.total > budgets.max_tokens_per_task:
-        return True
-    return budgets.max_seconds_per_task is not None and trace.duration_ms / 1000 > budgets.max_seconds_per_task
+    return budgets.exceeded_by(trace) if budgets is not None else False

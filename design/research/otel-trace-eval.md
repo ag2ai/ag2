@@ -231,8 +231,13 @@ build `TaskResult`; aggregate → `RunResult`; persist (unchanged store schema).
    fidelity (telemetry emitting ERROR tool spans on real failures — not easily
    triggered under `TestConfig`; adapter side is unit-covered).
 3. **`TraceSource` protocol + Directory/InMemory backends + `evaluate()`** —
-   demote runner to producer; `run()` = produce + evaluate.
-4. **Reference join + outputs-from-trace projection.**
+   DONE: `TraceRef`/`TraceSource` (`eval/trace_source.py`), `InMemoryTraceSource`,
+   `DirectoryTraceSource` + `save_trace` (provisional JSON-span disk format),
+   `evaluate(source, …)` (`eval/evaluate.py`), end-to-end produce→disk→evaluate
+   test. Remaining: reframe `run()` as produce-then-evaluate (kept as-is for now).
+4. **Reference join + outputs-from-trace projection** — DONE (in part): reference
+   joined via `TraceRef.task_id` → `Suite`; `outputs` projected from the final
+   `ModelResponse` content. Remaining: structured-output (`response`) projection.
 5. **Agent-as-judge** scorer (`Verdict`, compose-not-subclass) — see
    `agent-as-judge.md`.
 6. **Cloud `TraceSource` reference impl + docs**; update the eval spec; update PR.
