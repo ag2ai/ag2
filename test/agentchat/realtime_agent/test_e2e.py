@@ -21,6 +21,11 @@ logger = getLogger(__name__)
 
 
 # @run_for_optional_imports(["openai", "websockets"], "openai-realtime")
+@pytest.mark.skip(
+    reason="RealtimeAgent is deprecated and scheduled for removal in v0.14; "
+    "relies on deprecated realtime API endpoints and an aging model alias. "
+    "Revisit when (or if) the realtime path is re-architected."
+)
 class TestE2E:
     async def _test_e2e(self, credentials_llm: Credentials, credentials_openai: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
