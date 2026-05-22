@@ -314,6 +314,4 @@ def _exceeds_budget(trace: Trace, budgets: BudgetThresholds | None) -> bool:
         return False
     if budgets.max_tokens_per_task is not None and trace.tokens.total > budgets.max_tokens_per_task:
         return True
-    if budgets.max_seconds_per_task is not None and trace.duration_ms / 1000 > budgets.max_seconds_per_task:
-        return True
-    return False
+    return budgets.max_seconds_per_task is not None and trace.duration_ms / 1000 > budgets.max_seconds_per_task
