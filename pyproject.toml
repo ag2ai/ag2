@@ -83,15 +83,17 @@ dependencies = [
 [project.optional-dependencies]
 a2ui = ["jsonschema>=4.0.0,<5"]
 
-a2a = ["a2a-sdk[http-server]>=1.0.2,<2"]
+a2a = [
+    "a2a-sdk>=1.0.0,<2",
+]
 
-ag-ui = ["ag-ui-protocol>=0.1.10,<0.2"]
+ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # cache backends
 diskcache = ["diskcache"]
 
 # providers
-openai = ["openai>=1.99.3,<3.0"]
+openai = ["openai>=2.30.0,<3.0"]
 openai-realtime = ["ag2[openai]", "openai[realtime]"]
 
 deepseek = ["ag2[openai]"]

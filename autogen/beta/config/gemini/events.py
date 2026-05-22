@@ -15,10 +15,17 @@ from autogen.beta.events import (
     Field,
     Input,
     TextInput,
+    ToolCallEvent,
     ToolResult,
     UrlInput,
 )
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
+
+
+class GeminiToolCallEvent(ToolCallEvent):
+    """Function tool call from Gemini, carries thinking metadata."""
+
+    thought_signature: bytes | None = Field(default=None, repr=False)
 
 
 class GeminiServerToolCallEvent(BuiltinToolCallEvent):
