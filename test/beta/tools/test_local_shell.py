@@ -156,6 +156,18 @@ class TestShellExecution:
         await agent.ask("run it")
         assert not output.exists(), "touch was blocked but file was created anyway"
 
+    @pytest.mark.asyncio
+    async def test_allowed_blocks_command_substitution_bypass(self, tmp_path: Path) -> None:
+        output = tmp_path / "subst.txt"
+        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["echo"]))
+        # `$(touch ...)` runs `touch` inside command substitution. Even though
+        # `echo` is the head command, the substituted command must NOT execute
+        # — otherwise the allow-list is bypassable identically to the backtick
+        # form (` `cmd` `), which is already blocked.
+        agent = Agent("a", config=self._make_config(f"echo $(touch {output})"), tools=[shell])
+        await agent.ask("run it")
+        assert not output.exists(), "$() command substitution bypass was not blocked"
+
     # ── blocked ───────────────────────────────────────────────────────────────
 
     @pytest.mark.asyncio

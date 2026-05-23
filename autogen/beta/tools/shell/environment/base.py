@@ -45,7 +45,7 @@ READONLY_COMMANDS: tuple[str, ...] = (
 )
 
 
-_SHELL_OPERATORS = (">", ">>", "|", ";", "&&", "||", "`")
+_SHELL_OPERATORS = (">", ">>", "|", ";", "&&", "||", "`", "$(")
 
 
 def matches(pattern: str, command: str) -> bool:
