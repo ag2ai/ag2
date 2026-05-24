@@ -102,6 +102,7 @@ def _feedback_to_dict(fb: Feedback) -> dict[str, Any]:
         "score": fb.score,
         "value": fb.value,
         "comment": fb.comment,
+        "detail": fb.detail,
     }
 
 

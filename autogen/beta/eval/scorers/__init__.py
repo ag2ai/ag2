@@ -34,6 +34,7 @@ scorecard::
     ]
 """
 
+from .attribution import ERROR_MODES, Attribution, failure_attribution
 from .correctness import final_answer_matches
 from .cost import token_budget
 from .human_pairwise import export_pairwise_cases, human_labels, human_pairwise
@@ -42,10 +43,13 @@ from .pairwise_judge import PairwiseVerdict, pairwise_judge
 from .tools import no_tool_errors, no_tool_not_found, tool_called
 
 __all__ = (
+    "ERROR_MODES",
+    "Attribution",
     "PairwiseVerdict",
     "Verdict",
     "agent_judge",
     "export_pairwise_cases",
+    "failure_attribution",
     "final_answer_matches",
     "human_labels",
     "human_pairwise",

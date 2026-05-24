@@ -12,8 +12,8 @@ decorator; a scorer can also return a :class:`Feedback` (or list of them)
 directly to set the key explicitly or attach a comment.
 """
 
-from dataclasses import dataclass
-from typing import TypeAlias
+from dataclasses import dataclass, field
+from typing import Any, TypeAlias
 
 __all__ = (
     "Feedback",
@@ -47,12 +47,20 @@ class Feedback:
         value: Categorical label, used for slicing aggregates.
         comment: Free-form human-readable explanation. Surfaces in run
             JSON; useful for LLM-as-judge rationales or scorer error traces.
+        detail: Optional structured *evidence* behind this feedback — a
+            JSON-safe mapping serialized into the run JSON for programmatic
+            access (e.g. a failure attribution's decisive step / responsible
+            agent, or a judge's per-order swap verdicts). Supplementary only:
+            aggregation never reads ``detail`` — ``score`` / ``value`` remain
+            the graded signal. Typed at the source (producers serialize a typed
+            model into it), so it is evidence, not a grab-bag.
     """
 
     key: str
     score: ScoreValue = None
     value: ValueLabel = None
     comment: str | None = None
+    detail: dict[str, Any] | None = field(default=None, compare=False)
 
 
 class ScorerReturnTypeError(TypeError):

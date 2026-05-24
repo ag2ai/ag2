@@ -140,8 +140,8 @@ class TestTaskSerialization:
         )
         [task] = data["tasks"]
         assert task["feedback"] == [
-            {"key": "check", "score": True, "value": None, "comment": None},
-            {"key": "reason", "score": None, "value": "completed", "comment": "finished cleanly"},
+            {"key": "check", "score": True, "value": None, "comment": None, "detail": None},
+            {"key": "reason", "score": None, "value": "completed", "comment": "finished cleanly", "detail": None},
         ]
 
 
