@@ -238,8 +238,12 @@ build `TaskResult`; aggregate → `RunResult`; persist (unchanged store schema).
 4. **Reference join + outputs-from-trace projection** — DONE (in part): reference
    joined via `TraceRef.task_id` → `Suite`; `outputs` projected from the final
    `ModelResponse` content. Remaining: structured-output (`response`) projection.
-5. **Agent-as-judge** scorer (`Verdict`, compose-not-subclass) — see
-   `agent-as-judge.md`.
+5. **Agent-as-judge** scorer (`Verdict`, compose-not-subclass) — DONE:
+   `agent_judge(config, *, criterion, key, scale, include_trace, retries)` in
+   `eval/scorers/judge.py`. Single-purpose (one criterion → one `Feedback` key);
+   a multi-dimensional scorecard is a list of these → per-key `RunResult` columns.
+   Follow-ups: multi-judge voting per dimension, boolean/threshold variant,
+   judges with trace-introspection tools, pairwise (item 5 of the engagement).
 6. **Cloud `TraceSource` reference impl + docs**; update the eval spec; update PR.
 
 ## Open questions / risks

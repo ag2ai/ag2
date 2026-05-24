@@ -1,0 +1,109 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+"""Tests for the Agent-as-judge scorer (``autogen.beta.eval.scorers.judge``)."""
+
+import pytest
+
+from autogen.beta.eval import InMemoryTraceSource, Suite, TraceRef, evaluate
+from autogen.beta.eval.scorers import agent_judge
+from autogen.beta.eval.task import Task
+from autogen.beta.eval.trace import Trace
+from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent
+from autogen.beta.testing import TestConfig
+
+
+def _empty_trace() -> Trace:
+    return Trace(events=[], reply=None, exception=None, duration_ms=0)
+
+
+async def _score(scorer, *, outputs, reference_outputs=None, trace=None, inputs=None) -> list:
+    return await scorer(
+        inputs=inputs or {},
+        outputs=outputs,
+        reference_outputs=reference_outputs,
+        trace=trace if trace is not None else _empty_trace(),
+        task=Task(task_id="t", inputs={}),
+    )
+
+
+@pytest.mark.asyncio()
+async def test_verdict_maps_to_single_feedback() -> None:
+    judge = agent_judge(
+        TestConfig('{"score": 0.9, "reasoning": "looks correct", "label": "pass"}'),
+        criterion="answer is correct vs reference",
+        key="correctness",
+    )
+
+    [fb] = await _score(judge, inputs={"input": "q"}, outputs={"body": "a"}, reference_outputs={"answer": "a"})
+
+    assert fb.key == "correctness"
+    assert fb.score == 0.9
+    assert fb.value == "pass"
+    assert fb.comment == "looks correct"
+
+
+@pytest.mark.asyncio()
+async def test_verdict_without_label_has_no_value() -> None:
+    judge = agent_judge(TestConfig('{"score": 0.5, "reasoning": "meh"}'), criterion="quality", key="quality")
+
+    [fb] = await _score(judge, outputs={"body": "a"})
+
+    assert fb.score == 0.5
+    assert fb.value is None
+    assert fb.comment == "meh"
+
+
+@pytest.mark.asyncio()
+async def test_multi_dimensional_ensemble_produces_per_dimension_columns(tmp_path) -> None:
+    trace = Trace(events=[ModelResponse(message=ModelMessage("Paris"))], reply=None, exception=None, duration_ms=5)
+    source = InMemoryTraceSource([(TraceRef("t1", task_id="task-1"), trace)])
+    suite = Suite.from_list([
+        {"task_id": "task-1", "inputs": {"input": "capital of France?"}, "reference_outputs": {"answer": "Paris"}},
+    ])
+    correctness = agent_judge(
+        TestConfig('{"score": 1.0, "reasoning": "correct"}'), criterion="correct vs reference", key="correctness"
+    )
+    faithfulness = agent_judge(
+        TestConfig('{"score": 0.5, "reasoning": "partly grounded"}'),
+        criterion="grounded in tool results",
+        key="faithfulness",
+    )
+
+    result = await evaluate(source, scorers=[correctness, faithfulness], suite=suite, store_dir=tmp_path)
+
+    assert result.score_stats("correctness").mean == 1.0
+    assert result.score_stats("faithfulness").mean == 0.5
+
+
+@pytest.mark.asyncio()
+async def test_trajectory_judge_runs_with_trace() -> None:
+    trace = Trace(
+        events=[ToolCallEvent("get_weather", arguments='{"city": "NYC"}')],
+        reply=None,
+        exception=None,
+        duration_ms=0,
+    )
+    judge = agent_judge(
+        TestConfig('{"score": 1.0, "reasoning": "used the tool"}'),
+        criterion="used the right tool",
+        key="tool_use",
+        include_trace=True,
+    )
+
+    [fb] = await _score(judge, inputs={"input": "weather?"}, outputs={"body": "sunny"}, trace=trace)
+
+    assert fb.key == "tool_use"
+    assert fb.score == 1.0
+
+
+@pytest.mark.asyncio()
+async def test_invalid_judge_output_is_captured_not_raised() -> None:
+    judge = agent_judge(TestConfig("not valid json"), criterion="x", key="correctness", retries=0)
+
+    [fb] = await _score(judge, outputs={"body": "a"})
+
+    assert fb.key == "correctness"
+    assert fb.score is None
+    assert "scorer raised" in (fb.comment or "")

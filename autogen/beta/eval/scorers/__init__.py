@@ -21,16 +21,27 @@ them straight into ``scorers=[...]``::
         token_budget(2_000),
     ]
 
-These five are deliberately the only ones shipped in v0 — every new
-prebuilt is an API surface decision that ought to wait for a real
-user asking for it.
+The five deterministic prebuilts above are a deliberately small starter
+catalog. ``agent_judge`` adds LLM grading: a *single-purpose* Agent-as-judge
+(one criterion → one ``Feedback`` key). Compose several for a multi-dimensional
+scorecard::
+
+    from autogen.beta.eval.scorers import agent_judge
+
+    scorers = [
+        agent_judge(config, criterion="Answer is correct vs reference.", key="correctness"),
+        agent_judge(config, criterion="Claims are grounded in tool results.", key="faithfulness"),
+    ]
 """
 
 from .correctness import final_answer_matches
 from .cost import token_budget
+from .judge import Verdict, agent_judge
 from .tools import no_tool_errors, no_tool_not_found, tool_called
 
 __all__ = (
+    "Verdict",
+    "agent_judge",
     "final_answer_matches",
     "no_tool_errors",
     "no_tool_not_found",
