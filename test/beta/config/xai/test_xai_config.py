@@ -13,7 +13,7 @@ from xai_sdk.chat import chat_pb2
 
 from autogen.beta import Context
 from autogen.beta.config import XAIConfig
-from autogen.beta.config.xai import XAIClient
+from autogen.beta.config.xai import XAIClient, XAIFilesClient
 from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.stream import MemoryStream
 
@@ -161,8 +161,10 @@ async def test_none_fields_are_dropped_from_chat_create_kwargs() -> None:
     assert "max_tokens" not in kwargs
 
 
-def test_files_client_not_supported() -> None:
+def test_create_files_client_returns_xai_files_client() -> None:
     config = XAIConfig(model="grok-4-fast")
 
-    with pytest.raises(NotImplementedError, match="Files API"):
-        config.create_files_client()
+    with patch("autogen.beta.config.xai.files.AsyncClient"):
+        client = config.create_files_client()
+
+    assert isinstance(client, XAIFilesClient)
