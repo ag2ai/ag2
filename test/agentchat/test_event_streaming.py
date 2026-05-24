@@ -350,7 +350,9 @@ async def test_swarm_async(credentials_openai_mini: Credentials):
     assert isinstance(await response.cost, Cost)
 
 
-@pytest.mark.timeout(120)
+# Sequential multi-agent real-LLM chat; legitimately runs ~95s and can exceed a
+# 120s cap during slow-API windows (no bug — just OpenAI latency).
+@pytest.mark.timeout(240)
 @run_for_optional_imports("openai", "openai")
 def test_sequential_sync(credentials_openai_mini: Credentials):
     llm_config = credentials_openai_mini.llm_config
@@ -428,7 +430,9 @@ def test_sequential_sync(credentials_openai_mini: Credentials):
         assert isinstance(response.cost, Cost)
 
 
-@pytest.mark.timeout(120)
+# Sequential variant of the above; same real-LLM latency profile (was elevated
+# to ~57s in a slow CI window). Give the same headroom as the sync test.
+@pytest.mark.timeout(240)
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_sequential_async(credentials_openai_mini: Credentials):

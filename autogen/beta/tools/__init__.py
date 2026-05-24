@@ -18,6 +18,7 @@ from .builtin import (
     UserLocation,
     WebFetchTool,
     WebSearchTool,
+    XSearchTool,
 )
 from .code import SandboxCodeTool
 from .final import Toolkit, tool
@@ -54,5 +55,6 @@ __all__ = (
     "UserLocation",
     "WebFetchTool",
     "WebSearchTool",
+    "XSearchTool",
     "tool",
 )
