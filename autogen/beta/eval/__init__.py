@@ -12,6 +12,7 @@ and persisted run JSON suitable for run-vs-run diffing.
 from ._types import Feedback, ScorerReturnTypeError
 from .budgets import BudgetThresholds
 from .evaluate import evaluate
+from .pairwise import PairwiseComparator, PairwiseOutcome
 from .result import Aggregates, RunResult, ScoreStats, TaskResult
 from .runner import run
 from .scorer import Scorer, scorer
@@ -29,6 +30,8 @@ __all__ = (
     "EvalTarget",
     "Feedback",
     "InMemoryTraceSource",
+    "PairwiseComparator",
+    "PairwiseOutcome",
     "RunResult",
     "ScoreStats",
     "Scorer",

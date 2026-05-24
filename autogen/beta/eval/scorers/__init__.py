@@ -37,14 +37,17 @@ scorecard::
 from .correctness import final_answer_matches
 from .cost import token_budget
 from .judge import Verdict, agent_judge
+from .pairwise_judge import PairwiseVerdict, pairwise_judge
 from .tools import no_tool_errors, no_tool_not_found, tool_called
 
 __all__ = (
+    "PairwiseVerdict",
     "Verdict",
     "agent_judge",
     "final_answer_matches",
     "no_tool_errors",
     "no_tool_not_found",
+    "pairwise_judge",
     "token_budget",
     "tool_called",
 )
