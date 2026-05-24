@@ -125,8 +125,8 @@ def _system_prompt(criterion: str, low: float, high: float) -> str:
     return (
         "You are a strict evaluator grading an AI agent's response against a single criterion. "
         f"Criterion: {criterion}\n"
-        f"Return a numeric score from {low} to {high} (higher is better), a brief reasoning, "
-        "and an optional short categorical label. Judge only this criterion — nothing else."
+        f"Return a numeric score from {low} to {high} (higher is better) and a brief reasoning. "
+        "Judge only this criterion — nothing else."
     )
 
 
