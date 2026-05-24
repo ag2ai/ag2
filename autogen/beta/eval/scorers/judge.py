@@ -26,6 +26,7 @@ same judge works under both ``run()`` (live) and ``evaluate()`` (trace-based).
 """
 
 import json
+from collections.abc import Iterable
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -33,6 +34,7 @@ from pydantic import BaseModel, Field
 from autogen.beta.agent import Agent
 from autogen.beta.config import ModelConfig
 from autogen.beta.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
+from autogen.beta.middleware.base import MiddlewareFactory
 
 from .._types import Feedback
 from ..scorer import Scorer
@@ -62,6 +64,7 @@ def agent_judge(
     scale: tuple[float, float] = (0.0, 1.0),
     include_trace: bool = False,
     retries: int = 1,
+    middleware: Iterable[MiddlewareFactory] = (),
 ) -> Scorer:
     """Build a single-purpose Agent-as-judge :class:`Scorer`.
 
@@ -73,13 +76,17 @@ def agent_judge(
             for a multi-dimensional scorecard.
         key: The ``Feedback`` key this judge emits; becomes its column in
             ``RunResult`` aggregates. Use a distinct key per criterion.
-        scale: ``(low, high)`` numeric range the judge is told to score within.
-            Default ``(0.0, 1.0)``.
-        include_trace: When ``True``, the agent's tool-call trajectory is
-            rendered into the judge prompt (process grading). Default grades the
-            final answer only.
+        scale: ``(low, high)`` numeric range. **Enforced** — a score outside the
+            range is clamped to the nearest bound (and the clamp is noted in the
+            feedback comment). Default ``(0.0, 1.0)``.
+        include_trace: When ``True``, the agent's tool-call trajectory (calls,
+            results, errors) is rendered into the judge prompt (process grading).
+            Default grades the final answer only.
         retries: How many times ``content()`` re-asks the judge if its output
             fails :class:`Verdict` validation. Default ``1``.
+        middleware: Middleware factories attached to the judge agent. Pass
+            ``TelemetryMiddleware`` here to capture the judge's own LLM spans /
+            token usage (judge cost), tracked separately from the agent graded.
     """
     low, high = scale
     judge = Agent(
@@ -87,6 +94,7 @@ def agent_judge(
         _system_prompt(criterion, low, high),
         config=config,
         response_schema=Verdict,
+        middleware=middleware,
     )
 
     async def _judge(
@@ -100,7 +108,11 @@ def agent_judge(
         verdict = await reply.content(retries=retries)
         if verdict is None:
             return Feedback(key=key, score=None, comment="judge returned no verdict")
-        return Feedback(key=key, score=verdict.score, value=verdict.label, comment=verdict.reasoning)
+        score = min(max(verdict.score, low), high)
+        comment = verdict.reasoning
+        if score != verdict.score:
+            comment = f"{comment} [score clamped from {verdict.score} to scale {low}-{high}]"
+        return Feedback(key=key, score=score, value=verdict.label, comment=comment)
 
     return Scorer(_judge, key=key)
 

@@ -5,12 +5,17 @@
 """Tests for the Agent-as-judge scorer (``autogen.beta.eval.scorers.judge``)."""
 
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from autogen.beta._telemetry_consts import ATTR_SPAN_TYPE, SPAN_TYPE_AGENT, SPAN_TYPE_LLM
 from autogen.beta.eval import InMemoryTraceSource, Suite, TraceRef, evaluate
 from autogen.beta.eval.scorers import agent_judge
 from autogen.beta.eval.task import Task
 from autogen.beta.eval.trace import Trace
 from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent
+from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware
 from autogen.beta.testing import TestConfig
 
 
@@ -107,3 +112,37 @@ async def test_invalid_judge_output_is_captured_not_raised() -> None:
     assert fb.key == "correctness"
     assert fb.score is None
     assert "scorer raised" in (fb.comment or "")
+
+
+@pytest.mark.asyncio()
+async def test_score_is_clamped_to_scale() -> None:
+    judge = agent_judge(
+        TestConfig('{"score": 5.0, "reasoning": "way over"}'),
+        criterion="x",
+        key="correctness",
+        scale=(0.0, 1.0),
+    )
+
+    [fb] = await _score(judge, outputs={"body": "a"})
+
+    assert fb.score == 1.0
+    assert "clamped" in (fb.comment or "")
+
+
+@pytest.mark.asyncio()
+async def test_telemetry_middleware_observes_the_judge() -> None:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    judge = agent_judge(
+        TestConfig('{"score": 1.0, "reasoning": "ok"}'),
+        criterion="x",
+        key="correctness",
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="judge", model_name="mock")],
+    )
+
+    await _score(judge, outputs={"body": "a"})
+
+    span_types = {s.attributes.get(ATTR_SPAN_TYPE) for s in exporter.get_finished_spans()}
+    assert SPAN_TYPE_AGENT in span_types  # the judge's own invoke_agent span
+    assert SPAN_TYPE_LLM in span_types  # the judge's own LLM call -> token usage observable
