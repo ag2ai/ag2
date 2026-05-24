@@ -18,6 +18,7 @@ from .scorer import Scorer, scorer
 from .suite import Suite
 from .target import EvalTarget
 from .task import Task
+from .tempo import TempoTraceSource
 from .trace import Trace
 from .trace_source import DirectoryTraceSource, InMemoryTraceSource, TraceRef, TraceSource
 
@@ -35,6 +36,7 @@ __all__ = (
     "Suite",
     "Task",
     "TaskResult",
+    "TempoTraceSource",
     "Trace",
     "TraceRef",
     "TraceSource",
