@@ -212,3 +212,9 @@ remote-examples
 .cursor/
 .claude/
 .vercel/
+
+# Local eval scratch / planning (never commit)
+eval_development/
+ms_code/
+design/
+design/
