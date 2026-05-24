@@ -125,10 +125,10 @@ async def test_peers_then_delegate_consults_a_specialist(
 
 @pytest.mark.gemini
 @pytest.mark.asyncio()
-async def test_3way_discussion_round_robin_via_say_tool(
+async def test_3way_discussion_round_robin(
     gemini_config: GeminiConfig,
 ) -> None:
-    """Three Gemini agents take round-robin turns via the ``say`` tool."""
+    """Three Gemini agents take round-robin turns by replying with text."""
     hub = await Hub.open(
         MemoryKnowledgeStore(),
         ttl_sweep_interval=0,
@@ -143,9 +143,9 @@ async def test_3way_discussion_round_robin_via_say_tool(
             name=name,
             prompt=(
                 f"You are {name}, a participant in a 3-way discussion on a "
-                "topic. When it is your turn, contribute exactly one short "
-                "opinion (one sentence) by calling say(content=<your "
-                "sentence>). Do not ask questions. Do not call any other tool."
+                "topic. When it is your turn, reply with exactly one short "
+                "opinion (one sentence) as plain text. Do not ask questions "
+                "and do not call any tools — just state your opinion."
             ),
             config=gemini_config,
         )
