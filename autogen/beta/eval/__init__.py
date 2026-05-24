@@ -22,7 +22,7 @@ from .pairwise import (
     evaluate_pairwise,
 )
 from .result import Aggregates, RunResult, ScoreStats, TaskResult
-from .runner import run
+from .runner import run, run_pairwise
 from .scorer import Scorer, scorer
 from .suite import Suite
 from .target import EvalTarget
@@ -58,5 +58,6 @@ __all__ = (
     "evaluate",
     "evaluate_pairwise",
     "run",
+    "run_pairwise",
     "scorer",
 )

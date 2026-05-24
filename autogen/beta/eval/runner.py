@@ -35,14 +35,16 @@ from autogen.beta.stream import MemoryStream
 
 from ._capture import EventCapture
 from .budgets import BudgetThresholds
+from .pairwise import PairwiseComparator, PairwiseRunResult, evaluate_pairwise
 from .result import RunResult, TaskResult
 from .scorer import Scorer
 from .suite import Suite
 from .target import EvalTarget
 from .task import Task
 from .trace import Trace
+from .trace_source import InMemoryTraceSource, TraceRef
 
-__all__ = ("run",)
+__all__ = ("run", "run_pairwise")
 
 
 logger = logging.getLogger(__name__)
@@ -311,3 +313,87 @@ def _outputs_from_reply(reply: Any) -> dict[str, Any]:
 def _exceeds_budget(trace: Trace, budgets: BudgetThresholds | None) -> bool:
     """Apply the :class:`BudgetThresholds` checks to one task's trace."""
     return budgets.exceeded_by(trace) if budgets is not None else False
+
+
+async def run_pairwise(
+    suite: Suite | str | os.PathLike[str] | list[dict[str, Any]],
+    *,
+    variant_a: Callable[..., EvalTarget],
+    variant_b: Callable[..., EvalTarget],
+    comparators: Iterable[PairwiseComparator],
+    store_dir: str | os.PathLike[str],
+    model_config: ModelConfig | dict[str, ModelConfig] | None = None,
+    variant_a_name: str = "A",
+    variant_b_name: str = "B",
+    concurrency: int = 4,
+    run_id: str | None = None,
+) -> PairwiseRunResult:
+    """Produce traces for two variants over a suite, then compare them.
+
+    Convenience over :func:`~autogen.beta.eval.evaluate_pairwise`: runs each
+    variant factory across the suite (capturing a :class:`Trace` per task,
+    keyed by ``task_id``), then pairwise-compares the two sets. Mirrors how
+    :func:`run` is produce-then-:func:`~autogen.beta.eval.evaluate` for one
+    variant. For decoupled grading of pre-existing traces, call
+    ``evaluate_pairwise`` directly.
+    """
+    resolved_suite = _resolve_suite(suite)
+    source_a = await _produce(resolved_suite, variant_a, model_config=model_config, concurrency=concurrency)
+    source_b = await _produce(resolved_suite, variant_b, model_config=model_config, concurrency=concurrency)
+    return await evaluate_pairwise(
+        source_a,
+        source_b,
+        comparators=comparators,
+        variant_a=variant_a_name,
+        variant_b=variant_b_name,
+        suite=resolved_suite,
+        store_dir=store_dir,
+        concurrency=concurrency,
+        run_id=run_id,
+    )
+
+
+async def _produce(
+    suite: Suite,
+    factory: Callable[..., EvalTarget],
+    *,
+    model_config: ModelConfig | dict[str, ModelConfig] | None,
+    concurrency: int,
+) -> InMemoryTraceSource:
+    """Run ``factory``'s agent across the suite, returning one Trace per task."""
+    accepts_config = _factory_accepts_config(factory)
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+    produced = await asyncio.gather(
+        *(_produce_one(semaphore, task, factory, accepts_config, model_config) for task in suite)
+    )
+    return InMemoryTraceSource(produced)
+
+
+async def _produce_one(
+    semaphore: asyncio.Semaphore,
+    task: Task,
+    factory: Callable[..., EvalTarget],
+    accepts_config: bool,
+    model_config: ModelConfig | dict[str, ModelConfig] | None,
+) -> tuple[TraceRef, Trace]:
+    async with semaphore:
+        config = _resolve_task_config(task, model_config)
+        capture = EventCapture()
+        stream = MemoryStream()
+        reply = None
+        exception: BaseException | None = None
+        duration_ms = 0
+        try:
+            target = _build_target(factory, accepts_config=accepts_config, config=config)
+        except Exception as exc:
+            exception = exc
+        else:
+            started = time.perf_counter()
+            try:
+                reply = await target.ask(task.inputs.get("input", ""), stream=stream, observers=[capture])
+            except Exception as exc:
+                exception = exc
+            finally:
+                duration_ms = int((time.perf_counter() - started) * 1000)
+        trace = Trace(events=capture.events, reply=reply, exception=exception, duration_ms=duration_ms)
+        return (TraceRef(trace_id=uuid4().hex, task_id=task.task_id), trace)
