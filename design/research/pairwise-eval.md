@@ -18,6 +18,12 @@ grades pre-produced traces, never runs the agent itself.
 - **Two entry points** — `evaluate_pairwise` (decoupled foundation) and
   `run_pairwise` (sugar: produce both variants + compare, stamping the keys).
 - **Deferred:** Bradley-Terry/Elo for >2 variants; length-controlled win-rate.
+- **Multimodal (future):** not now, but the architecture supports it — Trace carries
+  `ModelResponse.files` + Image/Audio/Video/Document parts, the judge is a real
+  multimodal-capable `Agent`, and the protocols/verdict schemas are modality-agnostic.
+  Only the answer projection + judge prompt rendering are text-bound; extending them
+  (pass `ImageInput` to `judge.ask`) is additive — no protocol/swap/result changes.
+  Reference large binaries in the trace, don't inline.
 
 ## Industry-standard methodology (what makes it standard)
 - Win / Loss / Tie per comparison (not absolute scores).
