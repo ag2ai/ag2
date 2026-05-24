@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 
 from autogen.beta.agent import Agent
 from autogen.beta.config import ModelConfig
-from autogen.beta.events import ToolCallEvent
+from autogen.beta.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
 
 from .._types import Feedback
 from ..scorer import Scorer
@@ -136,5 +136,19 @@ def _render_prompt(
 
 
 def _render_trajectory(trace: Trace) -> str:
-    lines = [f"- {call.name}({call.arguments})" for call in trace.events_of(ToolCallEvent)]
+    lines: list[str] = []
+    for event in trace.events:
+        if isinstance(event, ToolErrorEvent):
+            lines.append(f"  -> ERROR: {event.error}")
+        elif isinstance(event, ToolResultEvent):
+            lines.append(f"  -> result: {_first_text(event)}")
+        elif isinstance(event, ToolCallEvent):
+            lines.append(f"- call {event.name}({event.arguments})")
     return "\n".join(lines) if lines else "(no tool calls)"
+
+
+def _first_text(event: ToolResultEvent) -> str:
+    parts = event.result.parts
+    if parts and hasattr(parts[0], "content"):
+        return str(parts[0].content)
+    return "(result)"
