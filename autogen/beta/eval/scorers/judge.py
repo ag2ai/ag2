@@ -47,13 +47,17 @@ __all__ = (
 
 
 class Verdict(BaseModel):
-    """One judge's structured grade on a single criterion."""
+    """One judge's structured grade on a single criterion.
+
+    Both fields are required (no optionals): OpenAI's strict structured-output
+    mode rejects a schema whose ``required`` omits any property, so an optional
+    field would make the judge unusable on OpenAI.
+    """
 
     score: float = Field(
         description="Numeric grade for this one criterion, within the judge's scale (higher is better)."
     )
     reasoning: str = Field(description="A brief justification for the score.")
-    label: str | None = Field(default=None, description="Optional short categorical label for this criterion.")
 
 
 def agent_judge(
@@ -112,7 +116,7 @@ def agent_judge(
         comment = verdict.reasoning
         if score != verdict.score:
             comment = f"{comment} [score clamped from {verdict.score} to scale {low}-{high}]"
-        return Feedback(key=key, score=score, value=verdict.label, comment=comment)
+        return Feedback(key=key, score=score, comment=comment)
 
     return Scorer(_judge, key=key)
 

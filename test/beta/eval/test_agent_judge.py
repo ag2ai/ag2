@@ -36,7 +36,7 @@ async def _score(scorer, *, outputs, reference_outputs=None, trace=None, inputs=
 @pytest.mark.asyncio()
 async def test_verdict_maps_to_single_feedback() -> None:
     judge = agent_judge(
-        TestConfig('{"score": 0.9, "reasoning": "looks correct", "label": "pass"}'),
+        TestConfig('{"score": 0.9, "reasoning": "looks correct"}'),
         criterion="answer is correct vs reference",
         key="correctness",
     )
@@ -45,7 +45,6 @@ async def test_verdict_maps_to_single_feedback() -> None:
 
     assert fb.key == "correctness"
     assert fb.score == 0.9
-    assert fb.value == "pass"
     assert fb.comment == "looks correct"
 
 
