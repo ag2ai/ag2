@@ -36,6 +36,7 @@ scorecard::
 
 from .correctness import final_answer_matches
 from .cost import token_budget
+from .human_pairwise import export_pairwise_cases, human_labels, human_pairwise
 from .judge import Verdict, agent_judge
 from .pairwise_judge import PairwiseVerdict, pairwise_judge
 from .tools import no_tool_errors, no_tool_not_found, tool_called
@@ -44,7 +45,10 @@ __all__ = (
     "PairwiseVerdict",
     "Verdict",
     "agent_judge",
+    "export_pairwise_cases",
     "final_answer_matches",
+    "human_labels",
+    "human_pairwise",
     "no_tool_errors",
     "no_tool_not_found",
     "pairwise_judge",
