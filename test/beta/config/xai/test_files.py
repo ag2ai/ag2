@@ -37,7 +37,7 @@ class TestXAIFilesClient:
         mock_client.files.upload.return_value = SimpleNamespace(
             id="file_123",
             filename="hello.txt",
-            bytes=5,
+            size=5,
             created_at=123,
         )
 
@@ -61,12 +61,12 @@ class TestXAIFilesClient:
     async def test_read(self, mock_async_client: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_async_client.return_value = mock_client
-        mock_client.files.get.return_value = SimpleNamespace(filename="hello.txt", mime_type="text/plain")
+        mock_client.files.get.return_value = SimpleNamespace(filename="hello.txt")
         mock_client.files.content.return_value = b"file-bytes"
 
         result = await XAIFilesClient(XAIConfig(model="grok-4-fast")).read("file_123")
 
-        assert result == FileContent(name="hello.txt", data=b"file-bytes", media_type="text/plain")
+        assert result == FileContent(name="hello.txt", data=b"file-bytes")
 
     @patch("autogen.beta.config.xai.files.AsyncClient")
     async def test_list(self, mock_async_client: MagicMock) -> None:
@@ -77,8 +77,7 @@ class TestXAIFilesClient:
                 SimpleNamespace(
                     id="file_1",
                     filename="a.txt",
-                    bytes=100,
-                    purpose="assistants",
+                    size=100,
                     created_at=123,
                 ),
             ]
@@ -92,7 +91,6 @@ class TestXAIFilesClient:
                 filename="a.txt",
                 provider=FileProvider.XAI,
                 bytes_count=100,
-                purpose="assistants",
                 created_at=123.0,
             ),
         ]

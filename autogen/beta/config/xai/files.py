@@ -32,7 +32,7 @@ class XAIFilesClient:
             file_id=result.id,
             filename=result.filename,
             provider=FileProvider.XAI,
-            bytes_count=result.bytes,
+            bytes_count=result.size,
             purpose=purpose,
             created_at=_created_at_to_float(result.created_at),
         )
@@ -43,7 +43,6 @@ class XAIFilesClient:
         return FileContent(
             name=metadata.filename,
             data=data,
-            media_type=metadata.mime_type,
         )
 
     async def list(self) -> list[UploadedFile]:
@@ -53,8 +52,7 @@ class XAIFilesClient:
                 file_id=f.id,
                 filename=f.filename,
                 provider=FileProvider.XAI,
-                bytes_count=f.bytes,
-                purpose=f.purpose,
+                bytes_count=f.size,
                 created_at=_created_at_to_float(f.created_at),
             )
             for f in result.data
