@@ -3,7 +3,7 @@
 from autogen import AssistantAgent, LLMConfig
 
 config = LLMConfig(
-    {"model": "gemini-3.1-flash-lite-preview", "api_type": "google"},
+    {"model": "gemini-3.1-flash-lite", "api_type": "google"},
 )
 
 agent = AssistantAgent(
