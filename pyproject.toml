@@ -87,13 +87,13 @@ a2a = [
     "a2a-sdk>=1.0.0,<2",
 ]
 
-ag-ui = ["ag-ui-protocol>=0.1.10,<0.2"]
+ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # cache backends
 diskcache = ["diskcache"]
 
 # providers
-openai = ["openai>=1.99.3,<3.0"]
+openai = ["openai>=2.30.0,<3.0"]
 openai-realtime = ["ag2[openai]", "openai[realtime]"]
 
 deepseek = ["ag2[openai]"]
@@ -120,6 +120,8 @@ gemini-realtime = [
 ]
 
 groq = ["groq>=0.9.0"]
+
+xai = ["xai-sdk>=1.12.2,<2"]
 
 ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 
@@ -335,6 +337,7 @@ docs = [
     "ag2[gemini]",                     # Gemini is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[ollama]",                     # Ollama is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[dashscope]",                  # DashScope is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[xai]",                        # xAI is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[redis]",                      # Redis is exposed in the public API by the optional `autogen.beta.streams` module
     "ag2[watchdog]",                   # Watchdog is exposed in the public API by the optional `autogen.beta.knowledge` module
     "ag2[tavily,exa,ddgs,perplexity]", # Search tools are exposed in the public API by the optional `autogen.beta.tools.search` module
@@ -400,6 +403,7 @@ optionals = [
     "ag2[gemini]",
     "ag2[ollama]",
     "ag2[dashscope]",
+    "ag2[xai]",
 ]
 
 testing = [

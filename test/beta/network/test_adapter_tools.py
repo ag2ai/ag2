@@ -113,7 +113,11 @@ async def test_conversation_tools_for_always_offers_say() -> None:
 
 
 @pytest.mark.asyncio
-async def test_discussion_tools_for_gates_by_round_robin() -> None:
+async def test_discussion_tools_for_returns_empty() -> None:
+    """Discussion ships no adapter tools — round-robin turn-passing posts the
+    speaker's reply via the handler's round-end envelope, so no per-turn
+    ``say`` tool is needed.
+    """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
     link = LocalLink(hub)
@@ -134,8 +138,8 @@ async def test_discussion_tools_for_gates_by_round_robin() -> None:
 
     adapter = DiscussionAdapter()
     state = hub.adapter_state(channel.channel_id)
-    # Initial expected_next_speaker is the creator (alice).
-    assert [t.name for t in adapter.tools_for(alice, channel.metadata, state, alice.agent_id)] == ["say"]
+    # No adapter tools for any participant, regardless of whose turn it is.
+    assert adapter.tools_for(alice, channel.metadata, state, alice.agent_id) == []
     assert adapter.tools_for(bob, channel.metadata, state, bob.agent_id) == []
     assert adapter.tools_for(carol, channel.metadata, state, carol.agent_id) == []
 

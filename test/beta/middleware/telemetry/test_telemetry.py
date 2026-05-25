@@ -472,6 +472,94 @@ async def test_thinking_tokens_when_nonzero(otel_setup):
 
 
 @pytest.mark.asyncio()
+async def test_span_attributes_stamped_on_all_spans(otel_setup):
+    """Extra span_attributes are applied to every span type the middleware emits."""
+    exporter, provider = otel_setup
+
+    @tool
+    def echo(msg: str) -> str:
+        """Echo."""
+        return msg
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="call_1", name="echo", arguments='{"msg": "hi"}')]),
+            ),
+            ModelResponse(ModelMessage("Done")),
+        ),
+        tools=[echo],
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider,
+                agent_name="assistant",
+                span_attributes={"ag2.org.id": "org-123", "deployment": "prod"},
+            )
+        ],
+    )
+
+    await agent.ask("Go")
+
+    spans = exporter.get_finished_spans()
+    for span in spans:
+        assert span.attributes.get("ag2.org.id") == "org-123", f"missing on span {span.name!r}"
+        assert span.attributes.get("deployment") == "prod", f"missing on span {span.name!r}"
+
+
+@pytest.mark.asyncio()
+async def test_intrinsic_attributes_win_on_collision(otel_setup):
+    """Middleware-owned attributes overwrite span_attributes when keys collide."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hi!"))),
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider,
+                agent_name="assistant",
+                span_attributes={
+                    "ag2.span.type": "SHOULD_BE_OVERWRITTEN",
+                    "gen_ai.operation.name": "SHOULD_BE_OVERWRITTEN",
+                    "gen_ai.agent.name": "SHOULD_BE_OVERWRITTEN",
+                },
+            )
+        ],
+    )
+
+    await agent.ask("Hi")
+
+    spans = exporter.get_finished_spans()
+    agent_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "agent")
+    assert agent_span.attributes["ag2.span.type"] == "agent"
+    assert agent_span.attributes["gen_ai.operation.name"] == "invoke_agent"
+    assert agent_span.attributes["gen_ai.agent.name"] == "assistant"
+
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert llm_span.attributes["ag2.span.type"] == "llm"
+    assert llm_span.attributes["gen_ai.operation.name"] == "chat"
+
+
+@pytest.mark.asyncio()
+async def test_span_attributes_omitted_when_not_provided(otel_setup):
+    """No extra attributes appear when span_attributes is not passed."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hi!"))),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    for span in spans:
+        assert "ag2.org.id" not in span.attributes
+
+
+@pytest.mark.asyncio()
 async def test_thinking_tokens_omitted_when_zero(otel_setup):
     """thinking_tokens=0 is treated as absent and not exported."""
     exporter, provider = otel_setup
