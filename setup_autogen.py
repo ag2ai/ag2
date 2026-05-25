@@ -39,6 +39,7 @@ setuptools.setup(
         "gemini": ["ag2[gemini]==" + __version__],
         "gemini-realtime": ["ag2[gemini-realtime]==" + __version__],
         "groq": ["ag2[groq]==" + __version__],
+        "xai": ["ag2[xai]==" + __version__],
         "ollama": ["ag2[ollama]==" + __version__],
         "bedrock": ["ag2[bedrock]==" + __version__],
         "mistral": ["ag2[mistral]==" + __version__],
