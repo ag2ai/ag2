@@ -12,7 +12,7 @@ from autogen.beta.config.config import ModelConfig
 from autogen.beta.exceptions import ToolResolutionError
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
-from autogen.beta.observer import Observer
+from autogen.beta.observers import Observer
 from autogen.beta.response.proto import ResponseProto
 from autogen.beta.response.schema import RawSchema
 from autogen.beta.tools.final import FunctionTool, Toolkit

@@ -116,10 +116,6 @@ with optional_import_block():
         BetaToolUseBlock = None  # type: ignore[misc, assignment]
         BETA_BLOCKS_AVAILABLE = False
 
-    TOOL_ENABLED = anthropic_version >= "0.23.1"
-    if TOOL_ENABLED:
-        pass
-
 
 ANTHROPIC_PRICING_1k = {
     "claude-3-haiku-20240307": (0.00025, 0.00125),
@@ -1098,13 +1094,10 @@ class AnthropicClient:
                 return normalized_content
 
         # Handle tool/function calls - return full message object
-        if TOOL_ENABLED:
-            return [  # type: ignore [return-value]
-                (choice.message if choice.message.tool_calls is not None else _format_content(choice.message.content))
-                for choice in choices
-            ]
-        else:
-            return [_format_content(choice.message.content) for choice in choices]  # type: ignore [return-value]
+        return [  # type: ignore [return-value]
+            (choice.message if choice.message.tool_calls is not None else _format_content(choice.message.content))
+            for choice in choices
+        ]
 
     @staticmethod
     def openai_func_to_anthropic(openai_func: dict) -> dict:

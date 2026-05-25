@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from autogen.a2a.constants import A2UI_MIME_TYPE
 from autogen.agents.experimental.a2ui.a2a_helpers import (
     A2UI_EXTENSION_URI,
@@ -17,7 +19,7 @@ from autogen.agents.experimental.a2ui.a2a_helpers import (
 
 class TestA2UIPartHelpers:
     def test_create_a2ui_part_single_dict(self) -> None:
-        from a2a.types import DataPart
+        from a2a.compat.v0_3.types import DataPart
 
         data = {"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}}
         part = create_a2ui_part(data)
@@ -29,7 +31,7 @@ class TestA2UIPartHelpers:
         assert part.root.metadata["mimeType"] == A2UI_MIME_TYPE  # type: ignore[union-attr]
 
     def test_create_a2ui_part_list(self) -> None:
-        from a2a.types import DataPart
+        from a2a.compat.v0_3.types import DataPart
 
         ops = [
             {"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}},
@@ -50,19 +52,19 @@ class TestA2UIPartHelpers:
         assert is_a2ui_part(part) is True  # type: ignore[arg-type]
 
     def test_is_a2ui_part_false_wrong_mime(self) -> None:
-        from a2a.types import DataPart, Part
+        from a2a.compat.v0_3.types import DataPart, Part
 
         part = Part(root=DataPart(data={"test": "data"}, metadata={"mimeType": "application/json"}))
         assert is_a2ui_part(part) is False
 
     def test_is_a2ui_part_false_no_metadata(self) -> None:
-        from a2a.types import DataPart, Part
+        from a2a.compat.v0_3.types import DataPart, Part
 
         part = Part(root=DataPart(data={"test": "data"}, metadata=None))
         assert is_a2ui_part(part) is False
 
     def test_is_a2ui_part_false_text_part(self) -> None:
-        from a2a.types import Part, TextPart
+        from a2a.compat.v0_3.types import Part, TextPart
 
         part = Part(root=TextPart(text="hello"))
         assert is_a2ui_part(part) is False
@@ -74,7 +76,7 @@ class TestA2UIPartHelpers:
         assert datapart.data == {"test": "data"}  # type: ignore[union-attr]
 
     def test_get_a2ui_datapart_absent(self) -> None:
-        from a2a.types import Part, TextPart
+        from a2a.compat.v0_3.types import Part, TextPart
 
         part = Part(root=TextPart(text="hello"))
         assert get_a2ui_datapart(part) is None
@@ -99,29 +101,23 @@ class TestA2UIExtension:
         class MockContext:
             def __init__(self) -> None:
                 self.requested_extensions = {A2UI_EXTENSION_URI}
-                self._activated: set[str] = set()
-
-            def add_activated_extension(self, uri: str) -> None:
-                self._activated.add(uri)
+                self.metadata: dict[str, Any] = {}
 
         ctx = MockContext()
         result = try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
         assert result is True
-        assert A2UI_EXTENSION_URI in ctx._activated
+        assert A2UI_EXTENSION_URI in ctx.metadata.get("activated_extensions", [])
 
     def test_try_activate_not_requested(self) -> None:
         class MockContext:
             def __init__(self) -> None:
                 self.requested_extensions: set[str] = set()
-                self._activated: set[str] = set()
-
-            def add_activated_extension(self, uri: str) -> None:
-                self._activated.add(uri)
+                self.metadata: dict[str, Any] = {}
 
         ctx = MockContext()
         result = try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
         assert result is False
-        assert len(ctx._activated) == 0
+        assert "activated_extensions" not in ctx.metadata
 
     def test_try_activate_wrong_version_uri(self) -> None:
         """Client requests a different A2UI version — should not activate."""
@@ -130,15 +126,12 @@ class TestA2UIExtension:
             def __init__(self) -> None:
                 # Client requests a hypothetical v1.0, but server only supports v0.9
                 self.requested_extensions = {"https://a2ui.org/a2a-extension/a2ui/v1.0"}
-                self._activated: set[str] = set()
-
-            def add_activated_extension(self, uri: str) -> None:
-                self._activated.add(uri)
+                self.metadata: dict[str, Any] = {}
 
         ctx = MockContext()
         result = try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
         assert result is False
-        assert len(ctx._activated) == 0
+        assert "activated_extensions" not in ctx.metadata
 
     def test_try_activate_multiple_extensions_only_a2ui_activated(self) -> None:
         """Client requests multiple extensions — only A2UI should be activated."""
@@ -149,15 +142,12 @@ class TestA2UIExtension:
                     A2UI_EXTENSION_URI,
                     "https://example.com/some-other-extension/v1.0",
                 }
-                self._activated: set[str] = set()
-
-            def add_activated_extension(self, uri: str) -> None:
-                self._activated.add(uri)
+                self.metadata: dict[str, Any] = {}
 
         ctx = MockContext()
         result = try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
         assert result is True
-        assert ctx._activated == {A2UI_EXTENSION_URI}
+        assert ctx.metadata.get("activated_extensions") == [A2UI_EXTENSION_URI]
 
     def test_try_activate_empty_extensions(self) -> None:
         """Client sends no extensions at all."""
@@ -165,10 +155,7 @@ class TestA2UIExtension:
         class MockContext:
             def __init__(self) -> None:
                 self.requested_extensions: set[str] = set()
-                self._activated: set[str] = set()
-
-            def add_activated_extension(self, uri: str) -> None:
-                self._activated.add(uri)
+                self.metadata: dict[str, Any] = {}
 
         ctx = MockContext()
         result = try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]

@@ -4,11 +4,13 @@
 
 import base64
 import json
+import logging
 from collections.abc import Iterable
 from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 
+from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -18,10 +20,15 @@ from autogen.beta.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
+    ToolErrorEvent,
+    ToolResultEvent,
     ToolResultsEvent,
     UrlInput,
     Usage,
 )
+
+logger = logging.getLogger(__name__)
+
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.files import FileProvider
 from autogen.beta.response import ResponseProto
@@ -144,8 +151,12 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         return {"type": t.version, "name": "memory"}
 
     elif isinstance(t, ShellToolSchema):
-        # https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
-        return {"type": t.version, "name": "bash"}
+        # Anthropic's bash tool is client-side — it ships a typed schema but the
+        # application must execute the command itself and return a tool_result.
+        # autogen/beta does not provide a default executor for this here.
+        # Use LocalShellTool (tools/shell/) instead, which runs commands via subprocess
+        # and works with any provider.
+        raise UnsupportedToolError(t.type, "anthropic")
 
     elif isinstance(t, SkillsToolSchema):
         # Skills are handled via the container parameter, not the tools[] array.
@@ -236,14 +247,79 @@ def convert_messages(
     messages: Iterable[BaseEvent],
     serializer: SerializerProto,
 ) -> list[dict[str, Any]]:
+    event_list = list(messages)
+
+    # Collect all tool_use IDs present in the conversation so we can
+    # drop orphaned tool_result blocks whose matching tool_use was
+    # trimmed by a reduction policy (SlidingWindow, TokenBudget, etc.).
+    valid_tool_ids: set[str] = set()
+    for message in event_list:
+        if isinstance(message, ModelResponse):
+            for call in message.tool_calls.calls:
+                valid_tool_ids.add(call.id)
+
+    # Collect all parent_ids referenced by ToolResultsEvent blocks so we
+    # can also drop orphaned tool_use blocks — the mirror case of the
+    # above. An orphan tool_use with no matching tool_result makes the
+    # payload invalid under Anthropic's API contract ("`tool_use` ids
+    # were found without `tool_result` blocks immediately after"). This
+    # happens when:
+    #   - A ToolResultsEvent failed to persist (crash mid-turn, storage
+    #     failure, concurrent write on a shared stream).
+    #   - Compaction/reduction kept the ModelResponse(tool_use) but
+    #     dropped the following ToolResultsEvent.
+    # Rather than fail the whole conversation, skip unresolved tool_use
+    # blocks. Any accompanying assistant text is still delivered.
+    resolved_tool_ids: set[str] = set()
+    for message in event_list:
+        if isinstance(message, ToolResultsEvent):
+            for r in message.results:
+                parent = getattr(r, "parent_id", None)
+                if parent:
+                    resolved_tool_ids.add(parent)
+        # Loose ToolResultEvent / ToolErrorEvent entries appear when the
+        # ToolResultsEvent wrapper failed to save. Treat them as
+        # resolving their parent so the tool_use stays valid.
+        elif isinstance(message, (ToolResultEvent, ToolErrorEvent)):
+            parent = getattr(message, "parent_id", None)
+            if parent:
+                resolved_tool_ids.add(parent)
+
     result: list[dict[str, Any]] = []
+    # Track tool_use_ids we've emitted tool_result blocks for, so the
+    # individual-ToolResultEvent fallback below doesn't double-emit when
+    # both the wrapper and the leaves are present. Pre-populate from any
+    # ToolResultsEvent wrappers we'll encounter — individuals arrive in
+    # event_list BEFORE the wrapper that aggregates them, so without this
+    # pre-scan the fallback branch would emit first and the wrapper would
+    # emit again, yielding duplicate tool_result blocks for the same
+    # tool_use_id.
+    emitted_result_ids: set[str] = set()
+    for message in event_list:
+        if isinstance(message, ToolResultsEvent):
+            for r in message.results:
+                if r.parent_id in valid_tool_ids:
+                    emitted_result_ids.add(r.parent_id)
 
     for message in messages:
         if isinstance(message, ModelResponse):
             content: list[dict[str, Any]] = []
             if message.message:
                 content.append({"type": "text", "text": message.message.content})
+            # Skip tool_use blocks whose matching tool_result is missing
+            # from the event list. See the `resolved_tool_ids` block above
+            # for why this asymmetry exists. Keeping the assistant's text
+            # (if any) means the model's reasoning is preserved even when
+            # the tool execution record is lost.
             for call in message.tool_calls.calls:
+                if call.id not in resolved_tool_ids:
+                    logger.warning(
+                        "Dropping orphan tool_use id=%s name=%s (no matching tool_result). "
+                        "See mappers.py comment for context.",
+                        call.id,
+                        call.name,
+                    )
+                    continue
                 content.append({
                     "type": "tool_use",
                     "id": call.id,
@@ -253,9 +329,23 @@ def convert_messages(
             if content:
                 result.append({"role": "assistant", "content": content})
 
+        elif isinstance(message, (AnthropicServerToolCallEvent, AnthropicServerToolResultEvent)):
+            block = message.block.model_dump(exclude_none=True, mode="json")
+            if result and result[-1]["role"] == "assistant":
+                result[-1]["content"].append(block)
+            else:
+                result.append({"role": "assistant", "content": [block]})
+
         elif isinstance(message, ToolResultsEvent):
             tool_results = []
             for r in message.results:
+                # Drop orphan tool_result whose matching tool_use was
+                # trimmed by a reduction policy (SlidingWindow, etc.).
+                # If the conversation has no tool_use blocks at all,
+                # skip the filter — caller passed only tool_results
+                # (e.g. unit-testing the rendering in isolation).
+                if valid_tool_ids and r.parent_id not in valid_tool_ids:
+                    continue
                 parts: list[dict[str, Any]] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
@@ -302,7 +392,9 @@ def convert_messages(
                     "tool_use_id": r.parent_id,
                     "content": tool_content,
                 })
-            result.append({"role": "user", "content": tool_results})
+            if tool_results:
+                emitted_result_ids.update(r["tool_use_id"] for r in tool_results)
+                result.append({"role": "user", "content": tool_results})
 
         elif isinstance(message, ModelRequest):
             content_parts: list[dict[str, Any]] = []
@@ -365,6 +457,26 @@ def convert_messages(
                 else:
                     content = content_parts
                 result.append({"role": "user", "content": content})
+
+        elif isinstance(message, (ToolResultEvent, ToolErrorEvent)):
+            # Fallback path — an individual result event without a
+            # ToolResultsEvent wrapper. This happens when the wrapper
+            # fails to persist (the exact failure mode that motivated
+            # `resolved_tool_ids` above). Emit as its own user turn so
+            # the conversation stays consistent.
+            parent = getattr(message, "parent_id", None)
+            if parent and parent in valid_tool_ids and parent not in emitted_result_ids:
+                emitted_result_ids.add(parent)
+                result.append({
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": parent,
+                            "content": message.content,
+                        }
+                    ],
+                })
 
     return result
 

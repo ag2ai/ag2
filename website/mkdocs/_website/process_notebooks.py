@@ -259,7 +259,7 @@ def post_process_mdx(
 
     # Each intermediate path needs to be resolved for this to work reliably
     repo_root = Path(__file__).resolve().parents[3]
-    repo_relative_notebook = source_notebooks.resolve().relative_to(repo_root)
+    repo_relative_notebook = source_notebooks.resolve().relative_to(repo_root).as_posix()
     front_matter["source_notebook"] = f"/{repo_relative_notebook}"
     front_matter["custom_edit_url"] = f"https://github.com/ag2ai/ag2/edit/main/{repo_relative_notebook}"
 

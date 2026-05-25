@@ -10,7 +10,19 @@ from typing import Any
 from uuid import uuid4
 
 from ag_ui.core import (
+    AudioInputContent,
     BaseEvent,
+    BinaryInputContent,
+    DocumentInputContent,
+    ImageInputContent,
+    InputContent,
+    InputContentDataSource,
+    InputContentUrlSource,
+    ReasoningEndEvent,
+    ReasoningMessageContentEvent,
+    ReasoningMessageEndEvent,
+    ReasoningMessageStartEvent,
+    ReasoningStartEvent,
     RunAgentInput,
     RunErrorEvent,
     RunFinishedEvent,
@@ -18,6 +30,7 @@ from ag_ui.core import (
     StateSnapshotEvent,
     StepFinishedEvent,
     StepStartedEvent,
+    TextInputContent,
     TextMessageChunkEvent,
     TextMessageContentEvent,
     TextMessageEndEvent,
@@ -27,6 +40,7 @@ from ag_ui.core import (
     ToolCallEndEvent,
     ToolCallResultEvent,
     ToolCallStartEvent,
+    VideoInputContent,
 )
 from ag_ui.encoder import EventEncoder
 from anyio import create_memory_object_stream, create_task_group
@@ -36,10 +50,10 @@ from pydantic_core import to_jsonable_python
 
 from autogen.beta import Agent, MemoryStream, ToolResult, events
 from autogen.beta.config import ModelConfig
-from autogen.beta.events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
+from autogen.beta.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
-from autogen.beta.observer import Observer
+from autogen.beta.observers import Observer
 from autogen.beta.tools.final import ClientTool
 from autogen.beta.tools.tool import Tool
 
@@ -131,7 +145,7 @@ async def run_stream(
         client_tools.append(tool)
         client_tools_names.add(tool.name)
 
-    extracted_prompt, history_messages = map_agui_messages_to_events(command)
+    extracted_prompt, history_messages, current_turn = map_agui_messages_to_events(command)
     if extracted_prompt:
         command.prompt.extend(extracted_prompt)
     if client_tools:
@@ -141,12 +155,60 @@ async def run_stream(
     await stream.history.replace(history_messages)
 
     streaming_msg_id: str | None = None
+    reasoning_msg_id: str | None = None
 
     @stream.subscribe
     async def map_events_to_ag_ui(event: events.BaseEvent) -> None:
-        nonlocal streaming_msg_id
+        nonlocal streaming_msg_id, reasoning_msg_id
+
+        if reasoning_msg_id is not None and not isinstance(event, events.ModelReasoning):
+            await write_events_stream.send(
+                ReasoningMessageEndEvent(
+                    message_id=reasoning_msg_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            await write_events_stream.send(
+                ReasoningEndEvent(
+                    message_id=reasoning_msg_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            reasoning_msg_id = None
+
+        if isinstance(event, events.ModelReasoning):
+            if not event.content:
+                return
+
+            if reasoning_msg_id is None:
+                reasoning_msg_id = str(uuid4())
+                await write_events_stream.send(
+                    ReasoningStartEvent(
+                        message_id=reasoning_msg_id,
+                        timestamp=_get_timestamp(),
+                    )
+                )
+                await write_events_stream.send(
+                    ReasoningMessageStartEvent(
+                        message_id=reasoning_msg_id,
+                        role="reasoning",
+                        timestamp=_get_timestamp(),
+                    )
+                )
+
+            await write_events_stream.send(
+                ReasoningMessageContentEvent(
+                    message_id=reasoning_msg_id,
+                    delta=event.content,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            return
 
         if isinstance(event, events.ModelMessageChunk):
+            if not event.content:
+                return
+
             if streaming_msg_id is None:
                 streaming_msg_id = str(uuid4())
                 await write_events_stream.send(
@@ -174,7 +236,7 @@ async def run_stream(
                 )
                 streaming_msg_id = None
 
-            else:
+            elif event.content:
                 await write_events_stream.send(
                     TextMessageChunkEvent(
                         message_id=str(uuid4()),
@@ -267,6 +329,7 @@ async def run_stream(
             initial_state = (command.incoming.state or {}) | initial_vars
 
             result = await agent.ask(
+                *current_turn,
                 prompt=command.prompt,
                 tools=command.tools,
                 variables=initial_state,
@@ -305,10 +368,61 @@ async def run_stream(
             )
 
 
-def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list[events.BaseEvent]]:
+def map_agui_content_to_input(content: InputContent) -> events.Input:
+    if isinstance(content, BinaryInputContent):
+        raise ValueError(
+            "AG-UI 'binary' content type is deprecated; "
+            "use ImageInputContent / AudioInputContent / "
+            "VideoInputContent / DocumentInputContent instead."
+        )
+
+    if isinstance(content, TextInputContent):
+        return events.TextInput(content.text)
+
+    match content:
+        case DocumentInputContent():
+            kind = BinaryType.DOCUMENT
+        case AudioInputContent():
+            kind = BinaryType.AUDIO
+        case VideoInputContent():
+            kind = BinaryType.VIDEO
+        case ImageInputContent():
+            kind = BinaryType.IMAGE
+        case _:
+            raise ValueError(f"Unexpected content type: {type(content).__name__}")
+
+    source = content.source
+    if isinstance(source, InputContentDataSource):
+        inp = events.BinaryInput(
+            b64decode(source.value),
+            media_type=source.mime_type,
+            kind=kind,
+        )
+    elif isinstance(source, InputContentUrlSource):
+        inp = events.UrlInput(source.value, kind=kind)
+    else:
+        raise ValueError(f"Unexpected source type: {type(source).__name__}")
+
+    if content.metadata:
+        inp.metadata = content.metadata
+    return inp
+
+
+def map_agui_messages_to_events(
+    command: AGStreamInput,
+) -> tuple[list[str], list[events.BaseEvent], list[events.Input]]:
+    """Translate AG-UI history into the parts ``run_stream`` hands to the agent.
+
+    Returns the system/developer ``prompt`` strings, the prior-turn ``history``
+    events, and the parts of the current user turn (trailing run of
+    ``UserMessage`` entries). The current turn is kept separate because
+    ``Agent.ask`` always constructs a ``ModelRequest`` from ``*msg`` and sends
+    it as the loop's initial event — putting the current turn there gives the
+    LLM a meaningful ``messages[-1]`` instead of an empty placeholder.
+    """
     prompt, messages = [], []
 
-    input_buffer = []
+    input_buffer: list[events.Input] = []
     for m in command.incoming.messages:
         if m.role == "user":
             content = m.content
@@ -317,38 +431,13 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
                 continue
 
             for c in content:
-                if c.type == "text":
-                    input_buffer.append(events.TextInput(c.text))
-
-                elif c.url:
-                    input_buffer.append(
-                        events.UrlInput(
-                            c.url,
-                            kind=events.BinaryType.BINARY,
-                        )
-                    )
-
-                elif c.id:
-                    input_buffer.append(
-                        events.FileIdInput(
-                            c.id,
-                            filename=c.filename,
-                        )
-                    )
-
-                elif c.data:
-                    input_buffer.append(
-                        events.BinaryInput(
-                            b64decode(c.data),
-                            media_type=c.mime_type,
-                        )
-                    )
+                input_buffer.append(map_agui_content_to_input(c))
 
             continue
 
         if input_buffer:
             messages.append(events.ModelRequest(input_buffer))
-            input_buffer.clear()
+            input_buffer = []
 
         if m.role in ["system", "developer"]:
             prompt.append(m.content)
@@ -365,10 +454,14 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
 
             messages.append(
                 events.ModelResponse(
-                    events.ModelMessage(m.content),
+                    events.ModelMessage(m.content) if m.content else None,
                     tool_calls=events.ToolCallsEvent(tool_calls),
                 )
             )
+
+        elif m.role == "reasoning":
+            if m.content:
+                messages.append(events.ModelReasoning(m.content))
 
         elif m.role == "tool":
             messages.append(
@@ -380,10 +473,7 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
                 ])
             )
 
-    if input_buffer:
-        messages.append(events.ModelRequest(input_buffer))
-
-    return prompt, messages
+    return prompt, messages, input_buffer
 
 
 def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> str:

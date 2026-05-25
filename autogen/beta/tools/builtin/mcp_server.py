@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass, field
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import BuiltinToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
@@ -68,9 +69,14 @@ class MCPServerTool(Tool):
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        pass
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            pass
+
+        stack.enter_context(
+            context.stream.where(BuiltinToolCallEvent.name == MCP_SERVER_TOOL_NAME).sub_scope(execute),
+        )

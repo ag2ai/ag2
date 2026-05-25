@@ -4,13 +4,15 @@
 
 import json
 import traceback
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from itertools import chain
 from typing import Any
 from uuid import uuid4
 
 from autogen.beta.types import SendableMessage
 
-from .base import BaseEvent, Field
+from .base import BaseEvent, Field, truncate_repr
 from .input_events import Input
 
 
@@ -22,11 +24,12 @@ class ToolResult:
 
     def __init__(
         self,
-        *parts: SendableMessage | Input,
+        *inputs: SendableMessage | Input,
+        parts: Iterable[SendableMessage | Input] = (),
         final: bool = False,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        self.parts = [Input.ensure_input(p) for p in parts]
+        self.parts = [Input.ensure_input(p) for p in chain(inputs, parts)]
         self.final = final
         self.metadata = metadata or {}
 
@@ -65,7 +68,6 @@ class ToolCallEvent(ToolEvent):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str = Field(kw_only=False)
     arguments: str = "{}"
-    provider_data: dict[str, Any] = Field(default_factory=dict, compare=False)
 
     _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False, compare=False)
 
@@ -82,7 +84,7 @@ class ToolCallEvent(ToolEvent):
     def __repr__(self) -> str:
         text = f"id={self.id}, name='{self.name}'"
         if c := self.arguments:
-            text += f", arguments='{c}'"
+            text += f", arguments={truncate_repr(c)}"
         return f"{self.__class__.__name__}({text})"
 
     def to_api(self) -> dict[str, Any]:

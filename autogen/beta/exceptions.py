@@ -56,7 +56,7 @@ class HumanInputNotProvidedError(AG2Error):
             message
             or (
                 "Human input was requested but not provided. "
-                "Please set it for actor using `Actor(..., hitl_hook=func)` or `@actor.hitl_hook`."
+                "Please set it for agent using `Agent(..., hitl_hook=func)` or `@agent.hitl_hook`."
             )
         )
 
@@ -67,7 +67,7 @@ class ConfigNotProvidedError(AG2Error):
     def __init__(self, message: str | None = None) -> None:
         super().__init__(
             message
-            or "No model config provided. Set config on the `Actor(config=...)` creation or pass it to call `ask(config=...)`."
+            or "No model config provided. Set config on the `Agent(config=...)` creation or pass it to call `ask(config=...)`."
         )
 
 
@@ -95,10 +95,14 @@ class SkillInstallError(SkillError):
     """Raised when a downloaded skill archive cannot be extracted or validated."""
 
 
-def missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
+def missing_additional_dependency(name: str, dependency: str, error: ImportError) -> Mock:
     def _raise(*args: object, **kwargs: object) -> None:
         raise ImportError(
-            f'{name} requires optional dependencies. Install with `pip install "ag2[{extra}]"`'
+            f'{name} requires optional dependencies. Install with `pip install "{dependency}"`'
         ) from error
 
     return Mock(side_effect=_raise)
+
+
+def missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
+    return missing_additional_dependency(name, f"ag2[{extra}]", error)

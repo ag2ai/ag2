@@ -4,7 +4,7 @@
 
 from abc import ABC
 from collections.abc import Iterable
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 
 from fast_depends import Provider
 
@@ -24,7 +24,7 @@ class Tool(ABC):
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),

@@ -14,6 +14,7 @@ from autogen.beta.events import (
     AudioInput,
     BinaryInput,
     BinaryType,
+    DataInput,
     DocumentInput,
     FileIdInput,
     ImageInput,
@@ -22,7 +23,6 @@ from autogen.beta.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.beta.events.input_events import DataInput
 from autogen.beta.exceptions import UnsupportedInputError
 from autogen.beta.files.types import FileProvider, UploadedFile
 
@@ -217,31 +217,84 @@ class TestBinaryInput:
             SerializerCls,
         )
 
-        assert result[1] == IsPartialDict({
+        expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
+        assert result[1] == {
             "role": "user",
-            "content": [IsPartialDict({"type": "image_url", "detail": "low"})],
-        })
+            "content": [{"type": "image_url", "image_url": {"url": expected_url, "detail": "low"}}],
+        }
+
+    def test_completions_image_path_no_vendor_leak(self, tmp_path) -> None:
+        """ImageInput(path=...) auto-sets vendor_metadata={'filename': ...}; mapper must not leak it."""
+        png = tmp_path / "plot.png"
+        png.write_bytes(self.SAMPLE_BYTES)
+
+        result = convert_messages([], [ModelRequest([ImageInput(path=str(png))])], SerializerCls)
+
+        image_block = result[1]["content"][0]
+        assert image_block == {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"},
+        }
 
     def test_responses(self) -> None:
         result = events_to_responses_input(
-            [ModelRequest([BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])],
+            [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])],
             SerializerCls,
         )
 
-        expected_data = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
+        expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
         assert result == [
             {
                 "role": "user",
-                "content": [{"type": "input_file", "file_data": expected_data}],
+                "content": [{"type": "input_image", "image_url": expected_url}],
             }
         ]
 
-    def test_responses_with_vendor_metadata(self) -> None:
+    def test_responses_image_path_no_vendor_leak(self, tmp_path) -> None:
+        """ImageInput(path=...) on Responses must produce input_image with no filename leak."""
+        png = tmp_path / "plot.png"
+        png.write_bytes(self.SAMPLE_BYTES)
+
+        result = events_to_responses_input([ModelRequest([ImageInput(path=str(png))])], SerializerCls)
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}",
+                    }
+                ],
+            }
+        ]
+
+    def test_responses_image_with_detail(self) -> None:
+        """Responses input_image carries 'detail' as a top-level key (schema differs from Chat Completions)."""
         result = events_to_responses_input(
             [
                 ModelRequest([
                     BinaryInput(
-                        data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"filename": "test.png"}
+                        data=self.SAMPLE_BYTES,
+                        media_type="image/png",
+                        vendor_metadata={"detail": "high"},
+                        kind=BinaryType.IMAGE,
+                    )
+                ])
+            ],
+            SerializerCls,
+        )
+
+        assert result[0]["content"][0] == IsPartialDict({"type": "input_image", "detail": "high"})
+
+    def test_responses_document_with_vendor_metadata(self) -> None:
+        result = events_to_responses_input(
+            [
+                ModelRequest([
+                    BinaryInput(
+                        data=self.SAMPLE_BYTES,
+                        media_type="application/pdf",
+                        vendor_metadata={"filename": "test.pdf"},
                     )
                 ])
             ],
@@ -251,7 +304,7 @@ class TestBinaryInput:
         assert result == [
             IsPartialDict({
                 "role": "user",
-                "content": [IsPartialDict({"type": "input_file", "filename": "test.png"})],
+                "content": [IsPartialDict({"type": "input_file", "filename": "test.pdf"})],
             })
         ]
 
@@ -469,6 +522,8 @@ class TestResponsesToolResult:
         ]
 
     def test_mixed_text_and_image(self) -> None:
+        # Responses API rejects 'output_text' inside function_call_output.output;
+        # only input_text / input_image / input_file / scoped_content are allowed.
         png = b"\x89PNG\r\n"
         event = ToolResultsEvent(
             results=[
@@ -487,8 +542,34 @@ class TestResponsesToolResult:
                 "type": "function_call_output",
                 "call_id": "c1",
                 "output": [
-                    {"type": "output_text", "text": "here is an image"},
+                    {"type": "input_text", "text": "here is an image"},
                     {"type": "input_image", "image_url": expected_url},
+                ],
+            }
+        ]
+
+    def test_data_input_with_image_url(self) -> None:
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult(
+                        DataInput({"query": "everest"}),
+                        ImageInput(url="https://example.com/a.jpg"),
+                    ),
+                )
+            ]
+        )
+        result = events_to_responses_input([event], SerializerCls)
+
+        assert result == [
+            {
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": [
+                    {"type": "input_text", "text": '{"query":"everest"}'},
+                    {"type": "input_image", "image_url": "https://example.com/a.jpg"},
                 ],
             }
         ]

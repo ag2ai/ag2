@@ -398,6 +398,68 @@ It uses a character-based estimate controlled by `chars_per_token`.
 
 Use it when you need lightweight context budgeting without depending on a model-specific tokenizer.
 
+## Conditional Middleware
+
+`ConditionalMiddleware` lets you gate any middleware so each hook only activates when a condition matches the hook's own event. When the condition is not met, that hook passes through to the next middleware in the chain.
+
+This is useful when you have middleware that should only run for certain event types — for example, approval middleware that only fires for a specific tool — without writing condition checks inside every hook method.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.events import ToolCallEvent
+from autogen.beta.middleware import ConditionalMiddleware, Middleware
+
+agent = Agent(
+    "assistant",
+    prompt="Be helpful.",
+    config=OpenAIConfig("gpt-4o-mini"),
+    middleware=[
+        ConditionalMiddleware(
+            Middleware(ApprovalMiddleware),
+            condition=ToolCallEvent.name == "execute_code",
+        ),
+    ],
+)
+```
+
+In this example, `ApprovalMiddleware` only activates during `on_tool_execution` when the tool name is `"execute_code"`. The `on_turn` hook receives a different event type (`ModelRequest`), so the condition does not match there and the middleware passes through.
+
+Each hook — `on_turn`, `on_tool_execution`, `on_human_input` — checks the condition against its own event. `on_llm_call` checks against the initial turn event, since it receives a sequence of events rather than a single one. When a condition targets a specific event type like `ToolCallEvent`, hooks that receive a different type will naturally pass through.
+
+### Composing Conditions
+
+Conditions support `&` (and), `|` (or), and `~` (not) operators, so you can build expressive gates:
+
+```python linenums="1"
+from autogen.beta.events import ToolCallEvent
+from autogen.beta.middleware import ConditionalMiddleware, Middleware
+
+# Activate only for tool calls named "search" or "browse"
+conditional = ConditionalMiddleware(
+    Middleware(MyAuditMiddleware, logger=logger),
+    condition=(ToolCallEvent.name == "search") | (ToolCallEvent.name == "browse"),
+)
+
+# Activate for all tool calls EXCEPT "calculate"
+conditional = ConditionalMiddleware(
+    Middleware(MyAuditMiddleware, logger=logger),
+    condition=~(ToolCallEvent.name == "calculate"),
+)
+```
+
+You can also pass a bare event type as the condition — it is automatically wrapped:
+
+```python linenums="1"
+# Activate only when the hook receives a ToolCallEvent
+conditional = ConditionalMiddleware(
+    Middleware(MyAuditMiddleware, logger=logger),
+    condition=ToolCallEvent,
+)
+```
+
+`ConditionalMiddleware` wraps any `MiddlewareFactory` — including `Middleware(...)` instances, bare `BaseMiddleware` subclasses, and other `ConditionalMiddleware` wrappers.
+
 ## Choosing the Right Hook
 
 If you are unsure where a behavior belongs, use this rule of thumb:
@@ -405,7 +467,7 @@ If you are unsure where a behavior belongs, use this rule of thumb:
 - Use `on_turn()` when the behavior is about the entire request/response lifecycle.
 - Use `on_llm_call()` when the behavior is about what goes into or comes out of the model.
 - Use `on_tool_execution()` when the behavior is about tool safety, auditing, or result shaping across tools (or when branching on `event.name` is acceptable).
-  - Use **tool-scoped** `middleware=[...]` on `@tool` / `Agent.tool` / `Toolkit.tool` when the behavior applies only to that tool’s definition; see [Tool middleware](/docs/beta/tools/tool_middleware){.internal-link}.
+    - Use **tool-scoped** `middleware=[...]` on `@tool` / `Agent.tool` / `Toolkit.tool` when the behavior applies only to that tool’s definition; see [Tool middleware](/docs/beta/tools/tool_middleware){.internal-link}.
 - Use `on_human_input()` when the behavior is about intercepting, logging, or transforming human-in-the-loop requests and responses.
 
 For related runtime customization patterns, see [Tools](/docs/beta/tools/tools), [Tool middleware](/docs/beta/tools/tool_middleware), [Prompt Management](../system_prompts), and [Events Streaming](../advanced/stream).

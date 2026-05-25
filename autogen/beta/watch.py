@@ -157,13 +157,18 @@ class CadenceWatch(_BaseWatch):
 
     async def _wait_and_fire(self, stream: Stream) -> None:
         assert self._max_wait is not None
-        try:
-            await asyncio.sleep(self._max_wait)
-        except asyncio.CancelledError:
-            return
-        if self._buffer and self._callback is not None:
-            ctx = ContextType(stream=stream)
+        ctx = ContextType(stream=stream)
+        # Loop ensures draining of events that arrive while slow callbacks await.
+        while True:
+            try:
+                await asyncio.sleep(self._max_wait)
+            except asyncio.CancelledError:
+                return
+            if not (self._buffer and self._callback is not None):
+                return
             await self._fire(ctx)
+            if not self._buffer:
+                return
 
     async def _fire(self, ctx: Context) -> None:
         if not self._buffer or self._callback is None:

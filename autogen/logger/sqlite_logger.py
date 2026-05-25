@@ -206,7 +206,7 @@ class SqliteLogger(BaseLogger):
         migrations_to_apply = [m for m in migrations if int(m.split("_")[0]) > current_version]
 
         for script in migrations_to_apply:
-            with open(script) as f:
+            with open(os.path.join(migrations_dir, script)) as f:
                 migration_sql = f.read()
                 self._run_query_script(script=migration_sql)
 
