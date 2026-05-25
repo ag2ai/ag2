@@ -20,8 +20,17 @@ from .pairwise import (
     WinRate,
     evaluate_pairwise,
 )
+from .reporters import console_reporter
 from .results import Aggregates, BudgetThresholds, RunResult, ScoreStats, TaskResult
-from .runtime import evaluate, run, run_pairwise
+from .runtime import (
+    LeaderboardRow,
+    VariantRunResult,
+    Variants,
+    evaluate,
+    run,
+    run_pairwise,
+    run_variants,
+)
 from .scorer import Scorer, scorer
 from .sources import DirectoryTraceSource, InMemoryTraceSource, TempoTraceSource, TraceRef, TraceSource
 from .trace import Trace
@@ -34,6 +43,7 @@ __all__ = (
     "EvalTarget",
     "Feedback",
     "InMemoryTraceSource",
+    "LeaderboardRow",
     "PairwiseCase",
     "PairwiseComparator",
     "PairwiseOutcome",
@@ -49,10 +59,14 @@ __all__ = (
     "Trace",
     "TraceRef",
     "TraceSource",
+    "VariantRunResult",
+    "Variants",
     "WinRate",
+    "console_reporter",
     "evaluate",
     "evaluate_pairwise",
     "run",
     "run_pairwise",
+    "run_variants",
     "scorer",
 )

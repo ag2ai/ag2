@@ -46,7 +46,7 @@ def _result(*task_results: TaskResult, run_id: str = "test-run") -> RunResult:
         run_id=run_id,
         tasks=tuple(task_results),
         suite=suite,
-        target_factory_path="test_module:test_factory",
+        target_path="test_module:test_factory",
         concurrency=1,
         duration_ms=42,
         created_at="2026-05-11T00:00:00+00:00",
@@ -176,7 +176,8 @@ class TestSummary:
         assert "abc123" in summary
         assert "42ms" in summary
         assert "ok" in summary
-        assert "50.0%" in summary
+        assert "50.0% (1/2)" in summary  # pass-rate shows the (passed/total) denominator
+        assert "Runs:" in summary  # number of runs executed is surfaced
 
     def test_renders_score_stats_and_value_counts(self) -> None:
         result = _result(
@@ -221,7 +222,7 @@ class TestSave:
             run_id="cfg-run",
             tasks=(_task_result("t1", (Feedback(key="ok", score=True),)),),
             suite=suite,
-            target_factory_path="x:y",
+            target_path="x:y",
             concurrency=1,
             duration_ms=1,
             created_at="2026-05-11T00:00:00+00:00",

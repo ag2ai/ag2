@@ -52,3 +52,21 @@ async def test_run_pairwise_produces_then_compares(tmp_path) -> None:
     assert result.tally("quality") == (0, 2, 0)  # B wins both produced pairs
     assert result.win_rate("quality").rate == 1.0
     assert (tmp_path / f"{result.run_id}.json").exists()
+
+
+@pytest.mark.asyncio()
+async def test_run_pairwise_accepts_agent_instances(tmp_path) -> None:
+    """``variant_a`` / ``variant_b`` accept prebuilt Agent instances, not just factories."""
+    suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Q?"}}])
+    judge = _Scripted("quality", {"t1": "b"})
+
+    result = await run_pairwise(
+        suite,
+        variant_a=Agent("variant-a", config=TestConfig("answer from A")),
+        variant_b=Agent("variant-b", config=TestConfig("answer from B")),
+        comparators=[judge],
+        store_dir=tmp_path,
+    )
+
+    assert result.tally("quality") == (0, 1, 0)
+    assert result.win_rate("quality").rate == 1.0

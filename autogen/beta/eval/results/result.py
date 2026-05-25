@@ -84,10 +84,11 @@ class RunResult:
         "_run_id",
         "_tasks",
         "_suite",
-        "_target_factory_path",
+        "_target_path",
         "_concurrency",
         "_duration_ms",
         "_created_at",
+        "_label",
         "_store_dir",
         "_aggregates",
     )
@@ -98,19 +99,21 @@ class RunResult:
         run_id: str,
         tasks: tuple[TaskResult, ...],
         suite: Suite,
-        target_factory_path: str,
+        target_path: str,
         concurrency: int,
         duration_ms: int,
         created_at: str,
+        label: str | None = None,
         store_dir: str | os.PathLike[str] | None = None,
     ) -> None:
         self._run_id = run_id
         self._tasks = tasks
         self._suite = suite
-        self._target_factory_path = target_factory_path
+        self._target_path = target_path
         self._concurrency = concurrency
         self._duration_ms = duration_ms
         self._created_at = created_at
+        self._label = label
         self._store_dir = Path(store_dir) if store_dir is not None else None
         self._aggregates = _compute_aggregates(tasks)
 
@@ -135,9 +138,9 @@ class RunResult:
         return self._suite
 
     @property
-    def target_factory_path(self) -> str:
-        """``"<module>:<callable>"`` import path of the target factory."""
-        return self._target_factory_path
+    def target_path(self) -> str:
+        """``"<module>:<name>"`` provenance of the evaluated target (factory or instance type)."""
+        return self._target_path
 
     @property
     def concurrency(self) -> int:
@@ -153,6 +156,11 @@ class RunResult:
     def created_at(self) -> str:
         """ISO-8601 UTC timestamp of when this run started."""
         return self._created_at
+
+    @property
+    def label(self) -> str | None:
+        """User-defined identifier grouping runs of the same eval over time (``None`` if unset)."""
+        return self._label
 
     @property
     def aggregates(self) -> Aggregates:
@@ -286,6 +294,18 @@ def _percentile(sorted_values: list[float], p: float) -> float:
     return sorted_values[lower] + fraction * (sorted_values[upper] - sorted_values[lower])
 
 
+def _pass_counts(tasks: tuple[TaskResult, ...]) -> dict[str, tuple[int, int]]:
+    """(passed, total) per boolean scorer key — for showing pass-rate denominators."""
+    passed: dict[str, int] = {}
+    total: dict[str, int] = {}
+    for tr in tasks:
+        for fb in tr.feedback:
+            if isinstance(fb.score, bool):
+                total[fb.key] = total.get(fb.key, 0) + 1
+                passed[fb.key] = passed.get(fb.key, 0) + (1 if fb.score else 0)
+    return {key: (passed[key], total[key]) for key in total}
+
+
 def _render_summary(result: RunResult) -> str:
     """Format a printable multi-line summary table."""
     lines: list[str] = []
@@ -294,6 +314,7 @@ def _render_summary(result: RunResult) -> str:
     lines.append(f"  Created:     {result.created_at}")
     lines.append(f"  Duration:    {result.duration_ms}ms")
     lines.append(f"  Suite:       {result.suite.name} ({len(result.suite)} tasks, source: {result.suite.source})")
+    lines.append(f"  Runs:        {len(result.tasks)}")
     lines.append(f"  Concurrency: {result.concurrency}")
 
     aggs = result.aggregates
@@ -304,10 +325,12 @@ def _render_summary(result: RunResult) -> str:
     if aggs.pass_rate:
         lines.append("")
         lines.append("Pass rates:")
+        counts = _pass_counts(result.tasks)
         width = max(len(k) for k in aggs.pass_rate)
         for key in sorted(aggs.pass_rate):
             rate = aggs.pass_rate[key]
-            lines.append(f"  {key:<{width}}  {rate * 100:5.1f}%")
+            passed, total = counts.get(key, (0, 0))
+            lines.append(f"  {key:<{width}}  {rate * 100:5.1f}% ({passed}/{total})")
 
     if aggs.score_stats:
         lines.append("")

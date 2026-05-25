@@ -41,6 +41,7 @@ def to_dict(result: "RunResult") -> dict[str, Any]:
     return {
         "schema_version": result.schema_version,
         "run_id": result.run_id,
+        "label": result.label,
         "created_at": result.created_at,
         "duration_ms": result.duration_ms,
         "suite": {
@@ -48,7 +49,7 @@ def to_dict(result: "RunResult") -> dict[str, Any]:
             "size": len(result.suite),
             "source": result.suite.source,
         },
-        "target_factory": result.target_factory_path,
+        "target": result.target_path,
         "concurrency": result.concurrency,
         "tasks": [_task_to_dict(tr) for tr in result.tasks],
         "aggregates": _aggregates_to_dict(result.aggregates),

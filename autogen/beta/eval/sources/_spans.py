@@ -19,9 +19,17 @@ Coverage today mirrors what ``TelemetryMiddleware`` emits: ``llm`` →
 :class:`ModelResponse` (with :class:`Usage`), ``tool`` → :class:`ToolCallEvent`
 plus a :class:`ToolResultEvent` / :class:`ToolErrorEvent`, ``human_input`` →
 :class:`HumanInputRequest` / :class:`HumanMessage`, and the root ``agent`` span
-for wall-clock duration. Gaps tracked in ``design/research/otel-trace-eval.md``:
-halt is not yet a span, and ``ToolNotFoundEvent`` is not distinguished from a
-generic tool error without a dedicated span marker.
+for wall-clock duration **and ``trace.exception``** (reconstructed when the turn
+raised — see :func:`_agent_span_exception`).
+
+Dormant on the OTEL path (so ``failure_attribution``'s halt/loop and
+tool-not-found branches don't fire when grading reconstructed traces): ``HaltEvent``
+and ``ToolNotFoundEvent`` are **stream-only** AG2 events — emitted by the
+alert/policy layer and the tool executor's fallback subscriber, *not* through any
+``TelemetryMiddleware`` hook — so they never become spans. Closing this would mean
+expanding ``TelemetryMiddleware`` to *subscribe* to the stream for those events
+(idiomatic — mirrors ``_HaltCheckMiddleware``, a middleware that already subscribes
+to ``HaltEvent``). Deferred: niche, AG2-specific, irrelevant to non-AG2 producers.
 """
 
 import json
@@ -137,7 +145,7 @@ def spans_to_trace(spans: Sequence[SpanData], *, duration_ms: int | None = None)
             events.extend(_human_span_to_events(span))
 
     resolved_duration = duration_ms if duration_ms is not None else _root_duration_ms(ordered)
-    return Trace(events=events, reply=None, exception=None, duration_ms=resolved_duration)
+    return Trace(events=events, reply=None, exception=_agent_span_exception(ordered), duration_ms=resolved_duration)
 
 
 def _llm_span_to_response(span: SpanData) -> ModelResponse:
@@ -202,6 +210,23 @@ def _exception_from_span(span: SpanData) -> Exception:
         if event.name == _EXCEPTION_EVENT:
             return RuntimeError(str(event.attributes.get(_ATTR_EXC_MESSAGE, "")))
     return RuntimeError("")
+
+
+def _agent_span_exception(spans: Sequence[SpanData]) -> Exception | None:
+    """Reconstruct a top-level ``trace.exception`` from the root agent span if it errored.
+
+    ``TelemetryMiddleware.on_turn`` records the exception on the ``invoke_agent`` span
+    (``record_exception`` + ``ERROR`` status) when a turn raises. A handled tool error
+    leaves the agent span ``OK`` (surfaced only as a ``ToolErrorEvent``), so this fires
+    only when the run actually crashed — matching live ``trace.exception`` semantics.
+    """
+    roots = [s for s in spans if s.parent_id is None and s.attributes.get(ATTR_SPAN_TYPE) == SPAN_TYPE_AGENT]
+    if not roots:
+        return None
+    root = min(roots, key=lambda s: s.start_ns)
+    if root.status == "ERROR" or any(e.name == _EXCEPTION_EVENT for e in root.events):
+        return _exception_from_span(root)
+    return None
 
 
 def _human_span_to_events(span: SpanData) -> list[BaseEvent]:

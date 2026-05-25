@@ -173,3 +173,26 @@ def test_duration_from_root_agent_span() -> None:
 def test_explicit_duration_override() -> None:
     trace = spans_to_trace([_agent_span(end_ns=750 * _MS)], duration_ms=1234)
     assert trace.duration_ms == 1234
+
+
+def test_errored_agent_span_reconstructs_trace_exception() -> None:
+    """A root agent span recorded with an exception → trace.exception, so crash detection survives."""
+    errored = SpanData(
+        name="invoke_agent test",
+        span_id="root",
+        parent_id=None,
+        start_ns=0,
+        end_ns=500 * _MS,
+        attributes={ATTR_SPAN_TYPE: SPAN_TYPE_AGENT},
+        status="ERROR",
+        events=(SpanEvent("exception", {"exception.message": "boom"}),),
+    )
+    trace = spans_to_trace([errored, _llm_span(100 * _MS)])
+    assert trace.exception is not None
+    assert "boom" in str(trace.exception)
+
+
+def test_ok_agent_span_leaves_trace_exception_none() -> None:
+    """A successful agent span → trace.exception is None (handled errors don't count as a crash)."""
+    trace = spans_to_trace([_agent_span(), _llm_span(100 * _MS)])
+    assert trace.exception is None

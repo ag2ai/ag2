@@ -69,7 +69,7 @@ def called_get_weather(trace) -> bool:
 async def main():
     result = await run(
         dataset,
-        target_factory=build_agent,
+        target=build_agent,
         scorers=[
             called_get_weather,
             tool_called("get_weather"),  # prebuilt
@@ -86,12 +86,13 @@ Output is a printed summary table plus a JSON file under `./runs/`.
 ```
 Run abc123def
   Suite:       inline (2 tasks, source: inline)
+  Runs:        2
   Duration:    3120ms
   Tokens:      input=423 output=78 total=501
 
 Pass rates:
-  called_get_weather        100.0%
-  tool_called[get_weather]  100.0%
+  called_get_weather        100.0% (2/2)
+  tool_called[get_weather]  100.0% (2/2)
 ```
 
 That's the whole framework in 30 lines. Everything else in these docs is variations on this shape.
@@ -113,7 +114,7 @@ cassettes = {
 
 result = await run(
     dataset,
-    target_factory=build_agent,
+    target=build_agent,
     scorers=[called_get_weather],
     model_config=cassettes,  # dict keyed by task_id
     store_dir=Path("./runs"),
@@ -138,7 +139,7 @@ The JSON file is the persistence format. It's schema-versioned (`"0.1"`) and is 
 ## Where to next
 
 - **[Scorers](/docs/beta/evaluation/scorers/)** — how to write them, the five prebuilts, return-shape rules, exception handling.
-- **[Runs](/docs/beta/evaluation/runs/)** — `Suite`, the `run()` signature, `RunResult` deep dive, the JSON schema, budget thresholds.
+- **[Runs](/docs/beta/evaluation/runs/)** — `Suite`, the `run()` signature, `RunResult` deep dive, the JSON schema, budget thresholds. Also: **`repeats=`** for consistency, **`run_variants` + `Variants`** to compare models / prompts / tools and rank them, and **`stream=`** to observe a run live via its event stream.
 
 ## What's in scope
 

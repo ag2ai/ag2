@@ -62,9 +62,12 @@ suite = Suite.from_list([
 
 Same shape as JSONL lines. Use this in notebooks or for ad-hoc suites that don't deserve a file yet.
 
-## The target factory
+## The target — an instance or a factory
 
-The runner calls your factory once per task. **Don't pre-construct an agent and reuse it** — the framework wants a clean instance per task so dependencies, variables, and tool state don't leak between runs.
+`run(target=...)` accepts either a built **agent instance** or a **factory** that builds one:
+
+- **An instance** is the simplest path — `target=my_agent`. The runner reuses it across tasks, but each task gets a fresh stream, so conversation history never leaks. Fine for any stateless agent (i.e. most agents).
+- **A factory** (a callable returning a fresh target) is what you want when you need a clean instance per task — for per-task `model_config` injection (cassette-based CI), or for an agent that carries mutable instance state (e.g. a knowledge bootstrap). The runner calls it once per task.
 
 ```python linenums="1" hl_lines="6 11"
 from autogen.beta import Agent, tool
@@ -82,8 +85,8 @@ def build_weather_agent(*, config: ModelConfig | None = None) -> Agent:
 
 The `config=` keyword is what the runner uses to inject either a live `ModelConfig` (when you pass `model_config=` to `run()`) or a `TestConfig` cassette for deterministic CI. A factory without a `config=` parameter still works — the runner warns and falls through to the factory's default.
 
-!!! note "Why `target_factory`, not `agent_factory`"
-    The runner is typed against the `EvalTarget` Protocol — anything with `async def ask(prompt, *, stream, observers)` qualifies. In v0 that's `Agent` and lightweight `Agent` wrappers (e.g. for multi-turn `reply.ask` drivers). In v1 it extends to multi-agent `NetworkTarget` / `WorkflowTarget` / `DiscussionTarget` implementations. Same runner, same scorers — only the target shape changes.
+!!! note "`target` — an instance or a factory"
+    The runner is typed against the `EvalTarget` Protocol — anything with `async def ask(prompt, *, stream, observers)` qualifies — so `target=` accepts either an `EvalTarget` *instance* or a *factory* that builds a fresh one per task. Pass a factory (with a keyword-only `config`) when you want the runner to inject per-task `model_config`; pass an instance when you just want to evaluate the agent you already have. In v0 that's `Agent` and lightweight `Agent` wrappers (e.g. for multi-turn `reply.ask` drivers); in v1 it extends to multi-agent `NetworkTarget` / `WorkflowTarget` / `DiscussionTarget` implementations — same runner, same scorers, only the target shape changes.
 
 ## Running
 
@@ -92,7 +95,7 @@ from autogen.beta.eval import BudgetThresholds, run
 
 result = await run(
     suite,                                 # Suite, str/Path (JSONL), or list[dict]
-    target_factory=build_weather_agent,
+    target=build_weather_agent,
     scorers=[...],                         # list of Scorer instances
     store_dir=Path("./runs"),              # required — where the JSON lands
     model_config=cassettes,                # optional — None / ModelConfig / dict[task_id, ModelConfig]
@@ -101,7 +104,10 @@ result = await run(
         max_seconds_per_task=15.0,
     ),
     concurrency=4,                         # parallel task cap
+    repeats=1,                             # run each task N times (consistency); pools the pass-rate
     run_id="2026-05-11-weather-suite",     # optional — overrides the UUID4 default
+    label="weather-eval",                  # optional — groups runs of the same eval over time
+    stream=my_stream,                      # optional — observe lifecycle events (see "Observing a run")
 )
 ```
 
@@ -114,6 +120,20 @@ The same parameter is overloaded three ways:
 | `#!python None` (default) | Factory's default config wins. |
 | A single `ModelConfig` | Same config for every task. |
 | A `#!python dict[task_id, ModelConfig]` | Per-task config. Standard pattern for cassette-based CI. |
+
+### Repeats — consistency
+
+`repeats=N` runs **each task N times** — the simplest way to ask "does my agent do this *consistently*?". The per-key `pass_rate` / `score_stats` pool across every run (so 8 of 10 passing shows as `80%`), and each run gets a distinct `task_id` suffix (`"weather-001#1"`, `"weather-001#2"`, …).
+
+```python
+result = await run(suite, target=build_weather_agent, scorers=[...], store_dir="runs", repeats=10)
+```
+
+(At `temperature=0` consistency is near-trivial; `repeats` earns its keep when there's real nondeterminism.)
+
+### Labels
+
+`label="weather-eval"` stamps a **user-defined** identifier on the run, recorded at the top of the run JSON. Unlike `run_id` (unique per run), a `label` is meant to be *shared* across runs of the same eval — so a sequence of runs can be grouped and trended over time. The framework never fills it in.
 
 ### Concurrency
 
@@ -132,7 +152,8 @@ Tasks run in parallel up to `concurrency`, bounded by an `asyncio.Semaphore`. De
 result = await run(...)
 
 # Run-level metadata
-result.run_id              # str (UUID4 hex unless you set it)
+result.run_id              # str (UUID4 hex unless you set it) — unique per run
+result.label               # str | None — user-defined; groups runs of the same eval over time
 result.schema_version      # "0.1"
 result.created_at          # ISO-8601 UTC
 result.duration_ms         # int
@@ -169,18 +190,19 @@ Run 25be826dc1a94a4b9d50a4f94449139e
   Created:     2026-05-11T01:38:04.157919+00:00
   Duration:    5292ms
   Suite:       dataset (5 tasks, source: eval/dataset.jsonl)
+  Runs:        5
   Concurrency: 4
   Errors:      0
   Budget violations: 0
   Tokens:      input=1544 output=174 total=1718
 
 Pass rates:
-  called_get_weather_once   100.0%
-  final_answer_matches      100.0%
-  no_tool_errors            100.0%
-  no_tool_not_found         100.0%
-  token_budget              100.0%
-  tool_called[get_weather]  100.0%
+  called_get_weather_once   100.0% (5/5)
+  final_answer_matches      100.0% (5/5)
+  no_tool_errors            100.0% (5/5)
+  no_tool_not_found         100.0% (5/5)
+  token_budget              100.0% (5/5)
+  tool_called[get_weather]  100.0% (5/5)
 
 Score stats:
   extra_tool_calls  mean=0.00 p50=0.00 p95=0.00 n=5
@@ -197,10 +219,11 @@ Every `run()` writes a JSON file to `store_dir/<run_id>.json` before returning. 
 {
   "schema_version": "0.1",
   "run_id": "01J7Z3M4QF8X9Y0K1V2N3P4Q5R",
+  "label": "weather-eval",
   "created_at": "2026-05-11T14:23:00+00:00",
   "duration_ms": 5292,
   "suite": { "name": "dataset", "size": 5, "source": "eval/dataset.jsonl" },
-  "target_factory": "weather_agent.agent:build_weather_agent",
+  "target": "weather_agent.agent:build_weather_agent",
   "concurrency": 4,
   "tasks": [
     {
@@ -234,6 +257,73 @@ Every `run()` writes a JSON file to `store_dir/<run_id>.json` before returning. 
 ```
 
 The schema is forward-compatible: future versions add fields at the end of objects; existing fields don't change name or type. **Don't rely on this shape for in-tree code** — use the `RunResult` Python API. The JSON is for cross-process / cross-time persistence: a future dashboard, a CI artifact, a diff between two releases.
+
+## Comparing variants — `run_variants`
+
+To answer "which is best?" — across models, prompts, tools, middleware, or whole builds — run the same suite under several named **variants** and rank them. A `Variants` is a *single-axis* set, built with a typed `from_*` constructor:
+
+```python linenums="1"
+from autogen.beta.config import GeminiConfig, OpenAIConfig
+from autogen.beta.eval import Variants, run_variants
+
+board = await run_variants(
+    suite,
+    variants=Variants.from_configs(build_weather_agent, {
+        "gpt-4o": OpenAIConfig("gpt-4o"),
+        "flash":  GeminiConfig("gemini-3-flash-preview"),
+    }),
+    scorers=[...],
+    store_dir="runs",
+    repeats=5,                                # optional — N runs per variant for stability
+)
+
+print(board.summary("final_answer_matches"))  # ranked leaderboard
+board.best("final_answer_matches")             # the winning variant's name
+board.results["gpt-4o"]                        # each variant's full RunResult
+```
+
+Each `from_*` constructor fixes one axis and types its values, so a single call only varies one thing — a controlled comparison (vary one axis, hold the rest fixed):
+
+| Constructor | Varies | Value type |
+|---|---|---|
+| `Variants.from_configs(factory, {...})` | model / provider / params | `ModelConfig` |
+| `Variants.from_prompts(factory, {...})` | system prompt | `str` |
+| `Variants.from_tools(factory, {...})` | tool set | `Sequence[Tool]` |
+| `Variants.from_middleware(factory, {...})` | middleware stack | `Sequence[MiddlewareFactory]` |
+| `Variants.from_targets({...})` | the whole build | a factory or instance each |
+
+Each variant runs via `run()` (so `repeats`, persistence, everything applies) and is saved as its own `<run_id>-<variant>.json`. `VariantRunResult.leaderboard(key)` ranks variants by a scorer — pass-rate for boolean scorers, mean for numeric — best first; **tied scores share a rank**, and `best(key)` returns `None` when there's no unique winner. (A 3-way 100% tie usually means the eval isn't *discriminating* — make the task harder, or score quality with a judge — not that there's a true winner.)
+
+## Observing a run
+
+Just like `agent.ask(stream=...)`, both `run` and `run_variants` accept a `stream`. Pass one and the runner publishes **eval lifecycle events** to it as the run unfolds — so you observe an evaluation with the same machinery you use on an agent (`subscribe`, `where`, the watch system, persistent backends). Nothing is printed for you; you attach the observer and render however you like.
+
+```python linenums="1"
+from autogen.beta.stream import MemoryStream
+from autogen.beta.eval import run_variants
+from autogen.beta.eval.events import VariantCompleted
+
+stream = MemoryStream()
+
+async def on_variant(event: VariantCompleted) -> None:
+    print(f"{event.variant}: {event.result.pass_rate('final_answer_matches'):.0%}")
+
+stream.where(VariantCompleted).subscribe(on_variant)
+
+board = await run_variants(suite, variants=variants, scorers=[...], store_dir="runs", stream=stream)
+```
+
+The events live in `autogen.beta.eval.events` and are all transient — observational only, since the durable record of a run is its persisted JSON:
+
+| Event | Emitted by | When |
+|---|---|---|
+| `EvalStarted` | `run` | a run begins |
+| `TaskEvaluated` | `run` | each task finishes (carries its `feedback`) |
+| `EvalCompleted` | `run` | a run finishes (carries the `RunResult`) |
+| `VariantStarted` / `VariantCompleted` | `run_variants` | around each variant (carries the variant's `RunResult`) |
+
+!!! tip "Ready-made console output"
+    For a quick console view without writing a callback, subscribe the built-in `console_reporter` (from `autogen.beta.eval`): `#!python stream.subscribe(console_reporter)`. It's just an opt-in observer — no `run()` flag — so swap in your own callback whenever you want different output.
 
 ## Comparing runs
 

@@ -4,81 +4,93 @@
 
 """run() — the eval runner.
 
-The runner builds a fresh :class:`~autogen.beta.eval.EvalTarget` per task
-via the user-supplied factory, attaches the framework's
-:class:`~autogen.beta.eval.runtime._capture.EventCapture` observer, and calls
-``target.ask(task.inputs["input"], stream=stream, observers=[capture])``.
-The observer rides on the same extension point users pass their own
-observers through, so the runner composes with rather than replaces user
-setup.
+``run`` is *produce-then-grade*, and produces its trace **through OpenTelemetry** —
+the same substrate :func:`~autogen.beta.eval.evaluate` grades. Per task it builds a
+fresh :class:`~autogen.beta.eval.EvalTarget`, runs it with a
+:class:`~autogen.beta.middleware.builtin.telemetry.TelemetryMiddleware` exporting to an
+**in-memory** span exporter, then reconstructs the :class:`~autogen.beta.eval.Trace`
+from those spans via ``readable_spans_to_trace`` — exactly the span→Trace path the
+trace-based sources use. So ``run()`` and ``evaluate()`` don't merely match; they share
+the *same* reconstruction and the *same* grading core
+(:func:`~autogen.beta.eval.runtime.evaluate._grade`) — one path, no drift.
 
-After the turn finishes, the captured events plus wall-clock duration
-and the final reply (or exception) are bundled into a
-:class:`~autogen.beta.eval.Trace`, the scorers run over the trace, and a
-per-task :class:`~autogen.beta.eval.TaskResult` is produced. Tasks run
-in parallel up to ``concurrency``, bounded by an :class:`asyncio.Semaphore`.
+Because the trace is reconstructed from spans, ``run`` inherits the OTEL path's
+fidelity (e.g. ``trace.reply`` is ``None``; halt / tool-not-found are not spanned —
+see ``sources/_spans.py``). Failures that emit no spans (a factory that raises, or an
+``ask`` that errors before the agent span starts) fall back to the caught exception so
+they still surface. Tasks run in parallel up to ``concurrency``, bounded by an
+:class:`asyncio.Semaphore`.
 """
 
 import asyncio
 import inspect
-import logging
 import os
 import time
 import warnings
 from collections.abc import Callable, Iterable
-from datetime import datetime, timezone
+from dataclasses import replace
+from functools import partial
 from typing import Any
 from uuid import uuid4
 
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
 from autogen.beta.config import ModelConfig
-from autogen.beta.stream import MemoryStream
+from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware
+from autogen.beta.stream import MemoryStream, Stream
 
 from ..dataset import EvalTarget, Suite, Task
 from ..pairwise import PairwiseComparator, PairwiseRunResult, evaluate_pairwise
-from ..results import BudgetThresholds, RunResult, TaskResult
+from ..results import BudgetThresholds, RunResult
 from ..scorer import Scorer
 from ..sources import InMemoryTraceSource, TraceRef
+from ..sources._otel import readable_spans_to_trace
 from ..trace import Trace
-from ._capture import EventCapture
+from .evaluate import _grade
 
 __all__ = ("run", "run_pairwise")
-
-
-logger = logging.getLogger(__name__)
 
 
 async def run(
     suite: Suite | str | os.PathLike[str] | list[dict[str, Any]],
     *,
-    target_factory: Callable[..., EvalTarget],
+    target: EvalTarget | Callable[..., EvalTarget],
     scorers: Iterable[Scorer],
     store_dir: str | os.PathLike[str],
     model_config: ModelConfig | dict[str, ModelConfig] | None = None,
+    repeats: int = 1,
     budgets: BudgetThresholds | None = None,
     concurrency: int = 4,
     run_id: str | None = None,
+    label: str | None = None,
+    stream: Stream | None = None,
 ) -> RunResult:
     """Run an evaluation suite end-to-end.
 
     Each task gets a fresh :class:`~autogen.beta.eval.EvalTarget` built
-    via ``target_factory``. Events emitted during ``target.ask(...)`` are
-    captured through an Observer registered alongside any user observers
-    the target uses internally. Wall-clock duration is measured around
-    the whole ``ask`` call. Scorers then run over the resulting Trace,
-    and the run is persisted as ``<store_dir>/<run_id>.json``.
+    from ``target`` (an instance, reused, or a factory), run with a
+    :class:`~autogen.beta.middleware.builtin.telemetry.TelemetryMiddleware` exporting to an
+    in-memory span exporter; the :class:`~autogen.beta.eval.Trace` is then reconstructed
+    from those spans (per-task duration timed around the ``ask``) — the same span→Trace
+    path the trace-based sources use. Those traces are graded through the same core
+    :func:`~autogen.beta.eval.evaluate` uses, and the run is persisted as
+    ``<store_dir>/<run_id>.json``.
 
     Args:
         suite: A :class:`Suite`, a JSONL path, or an inline list of dict
             task records. Strings / paths are loaded via
             :meth:`Suite.from_jsonl`; lists are loaded via
             :meth:`Suite.from_list`.
-        target_factory: Callable that returns a fresh
-            :class:`~autogen.beta.eval.EvalTarget` — most often an
-            :class:`~autogen.beta.Agent`, but any async-``.ask(prompt, *,
-            stream, observers)`` shape qualifies. Should accept a
+        target: The thing to evaluate — either an
+            :class:`~autogen.beta.eval.EvalTarget` *instance* (an
+            :class:`~autogen.beta.Agent` today; a hub/network target
+            later), reused for every task, or a *factory* callable that
+            builds a fresh target per task. A factory may take a
             keyword-only ``config`` parameter so the runner can inject
-            per-task or global model configs; factories without
-            ``config`` are called with no arguments (with a warning).
+            per-task or global model configs (use a factory, not an
+            instance, when you want per-task ``model_config``).
         scorers: Scorer instances (typically produced by ``@scorer``).
             Each is called once per task; the resulting feedback is
             recorded on the task's :class:`TaskResult`.
@@ -91,12 +103,24 @@ async def run(
             a single ``ModelConfig`` to use everywhere, or a
             ``dict[task_id, ModelConfig]`` for per-task configs (e.g.
             one ``TestConfig`` cassette per task).
+        repeats: Run each task this many times (default ``1``) — for
+            measuring consistency. ``pass_rate`` / ``score_stats`` pool
+            all runs; with ``repeats > 1`` each run gets a distinct
+            ``task_id`` suffix (``"<id>#1"``, ``"<id>#2"``, …).
         budgets: Optional :class:`BudgetThresholds`. Violations are
             recorded on each task's ``budget_violation`` flag but never
             abort the run.
         concurrency: Maximum number of tasks executed in parallel.
             Clamped to ``>= 1``.
-        run_id: Override for the auto-generated UUID4 run id.
+        run_id: Override for the auto-generated UUID4 run id (unique per run).
+        label: Optional user-defined identifier recorded on the run. Unlike
+            ``run_id`` (unique per run), a ``label`` is meant to be *shared*
+            across runs of the same eval, so a sequence of runs can be grouped
+            and trended over time. ``None`` if unset; the framework never fills it.
+        stream: Optional :class:`~autogen.beta.stream.Stream` to publish eval
+            lifecycle events to (``EvalStarted`` / ``TaskEvaluated`` /
+            ``EvalCompleted``) — observe a run like you observe an agent.
+            Subscribe your own observer to render progress / a live view.
 
     Returns:
         A :class:`RunResult` containing per-task results and metadata.
@@ -105,44 +129,27 @@ async def run(
     """
     resolved_suite = _resolve_suite(suite)
     scorer_list = tuple(scorers)
-    accepts_config = _factory_accepts_config(target_factory)
-    semaphore = asyncio.Semaphore(max(1, concurrency))
+    factory, accepts_config, target_path = _normalize_target(target)
+    tasks_to_run = _expand_repeats(resolved_suite, repeats)
+    suite_to_grade = Suite(tuple(tasks_to_run), name=resolved_suite.name, source=resolved_suite.source)
 
-    actual_run_id = run_id if run_id is not None else uuid4().hex
-    created_at = datetime.now(timezone.utc).isoformat()
-    run_started = time.perf_counter()
-
-    coros = [
-        _execute_with_limit(
-            semaphore,
-            task,
-            target_factory=target_factory,
-            accepts_config=accepts_config,
-            model_config=model_config,
-            scorers=scorer_list,
-            budgets=budgets,
-        )
-        for task in resolved_suite
-    ]
-    task_results = await asyncio.gather(*coros)
-
-    duration_ms = int((time.perf_counter() - run_started) * 1000)
-
-    result = RunResult(
-        run_id=actual_run_id,
-        tasks=tuple(task_results),
-        suite=resolved_suite,
-        target_factory_path=_factory_path(target_factory),
-        concurrency=max(1, concurrency),
-        duration_ms=duration_ms,
-        created_at=created_at,
-        store_dir=store_dir,
+    started = time.perf_counter()
+    source = await _produce(
+        tasks_to_run, factory, accepts_config=accepts_config, model_config=model_config, concurrency=concurrency
     )
-
-    saved_path = result.save()
-    logger.info("Run %s saved to %s", actual_run_id, saved_path)
-
-    return result
+    return await _grade(
+        source,
+        scorers=scorer_list,
+        suite=suite_to_grade,
+        store_dir=store_dir,
+        budgets=budgets,
+        concurrency=concurrency,
+        run_id=run_id,
+        label=label,
+        stream=stream,
+        target_path=target_path,
+        started_at=started,
+    )
 
 
 def _resolve_suite(
@@ -176,89 +183,33 @@ def _factory_path(factory: Callable[..., EvalTarget]) -> str:
     return f"{module}:{qualname}"
 
 
-async def _execute_with_limit(
-    semaphore: asyncio.Semaphore,
-    task: Task,
-    **kwargs: Any,
-) -> TaskResult:
-    async with semaphore:
-        return await _execute_task(task, **kwargs)
+def _return_instance(instance: EvalTarget) -> EvalTarget:
+    return instance
 
 
-async def _execute_task(
-    task: Task,
-    *,
-    target_factory: Callable[..., EvalTarget],
-    accepts_config: bool,
-    model_config: ModelConfig | dict[str, ModelConfig] | None,
-    scorers: tuple[Scorer, ...],
-    budgets: BudgetThresholds | None,
-) -> TaskResult:
-    """Execute one task and return its :class:`TaskResult`.
+def _normalize_target(
+    target: EvalTarget | Callable[..., EvalTarget],
+) -> tuple[Callable[..., EvalTarget], bool, str]:
+    """Normalize ``target`` into ``(factory, accepts_config, provenance_path)``.
 
-    Construction-time and ``target.ask`` exceptions are both captured —
-    neither aborts the run. They surface on ``trace.exception`` for
-    scorers and reports to consume.
+    An :class:`EvalTarget` instance (an ``Agent`` today; a hub/network target
+    later) is reused for every task. A callable is treated as a factory built
+    fresh per task and may accept a keyword-only ``config`` for per-task model
+    injection.
     """
-    capture = EventCapture()
-    config = _resolve_task_config(task, model_config)
+    if isinstance(target, EvalTarget):
+        path = f"{type(target).__module__}:{type(target).__qualname__}"
+        return partial(_return_instance, target), False, path
+    if callable(target):
+        return target, _factory_accepts_config(target), _factory_path(target)
+    raise TypeError("target must be an EvalTarget (e.g. an Agent) or a callable returning one")
 
-    stream = MemoryStream()
-    reply = None
-    exception: BaseException | None = None
-    duration_ms = 0
 
-    try:
-        target = _build_target(target_factory, accepts_config=accepts_config, config=config)
-    except Exception as exc:
-        logger.warning("target_factory raised for task %r: %s", task.task_id, exc)
-        exception = exc
-    else:
-        prompt = task.inputs.get("input", "")
-        # Time around ``target.ask`` (not via middleware) so any internal
-        # ``reply.ask`` continuations the target drives are included in
-        # the total task duration.
-        task_started = time.perf_counter()
-        try:
-            reply = await target.ask(
-                prompt,
-                stream=stream,
-                observers=[capture],
-            )
-        except Exception as exc:
-            logger.warning("target.ask raised for task %r: %s", task.task_id, exc)
-            exception = exc
-        finally:
-            duration_ms = int((time.perf_counter() - task_started) * 1000)
-
-    trace = Trace(
-        events=capture.events,
-        reply=reply,
-        exception=exception,
-        duration_ms=duration_ms,
-    )
-    outputs = _outputs_from_reply(reply)
-
-    feedback: list = []
-    for scorer in scorers:
-        feedback.extend(
-            await scorer(
-                inputs=task.inputs,
-                outputs=outputs,
-                reference_outputs=task.reference_outputs,
-                trace=trace,
-                task=task,
-            )
-        )
-
-    budget_violation = _exceeds_budget(trace, budgets)
-
-    return TaskResult(
-        task=task,
-        trace=trace,
-        feedback=tuple(feedback),
-        budget_violation=budget_violation,
-    )
+def _expand_repeats(suite: Suite, repeats: int) -> list[Task]:
+    """Expand each task into ``repeats`` runs with distinct ids (consistency sugar)."""
+    if repeats <= 1:
+        return list(suite)
+    return [replace(task, task_id=f"{task.task_id}#{i + 1}") for task in suite for i in range(repeats)]
 
 
 def _resolve_task_config(
@@ -279,44 +230,26 @@ def _build_target(
     accepts_config: bool,
     config: ModelConfig | None,
 ) -> EvalTarget:
-    """Call the user's factory, threading ``config`` only if it accepts one."""
+    """Call the user's factory, injecting ``config`` only when there is one to inject."""
+    if config is None:
+        # Nothing to inject — let the factory use its own default or a pre-bound
+        # config (e.g. a ``partial(build, config=...)`` produced by run_variants).
+        return factory()
     if not accepts_config:
-        if config is not None:
-            warnings.warn(
-                "target_factory does not accept a 'config' parameter; model_config will be ignored for this run.",
-                category=RuntimeWarning,
-                stacklevel=3,
-            )
+        warnings.warn(
+            "target does not accept a 'config' parameter; model_config will be ignored for this run.",
+            category=RuntimeWarning,
+            stacklevel=3,
+        )
         return factory()
     return factory(config=config)
-
-
-def _outputs_from_reply(reply: Any) -> dict[str, Any]:
-    """Normalize the target's reply into the dict scorers receive as ``outputs``.
-
-    ``reply.response`` is used if present (structured output mode), else
-    ``{"body": reply.body}``. When the run raised, an empty dict is used
-    so reference-free scorers can still inspect ``trace``.
-    """
-    if reply is None:
-        return {}
-    response = getattr(reply, "response", None)
-    if isinstance(response, dict):
-        return response
-    body = getattr(reply, "body", None)
-    return {"body": body}
-
-
-def _exceeds_budget(trace: Trace, budgets: BudgetThresholds | None) -> bool:
-    """Apply the :class:`BudgetThresholds` checks to one task's trace."""
-    return budgets.exceeded_by(trace) if budgets is not None else False
 
 
 async def run_pairwise(
     suite: Suite | str | os.PathLike[str] | list[dict[str, Any]],
     *,
-    variant_a: Callable[..., EvalTarget],
-    variant_b: Callable[..., EvalTarget],
+    variant_a: EvalTarget | Callable[..., EvalTarget],
+    variant_b: EvalTarget | Callable[..., EvalTarget],
     comparators: Iterable[PairwiseComparator],
     store_dir: str | os.PathLike[str],
     model_config: ModelConfig | dict[str, ModelConfig] | None = None,
@@ -328,15 +261,21 @@ async def run_pairwise(
     """Produce traces for two variants over a suite, then compare them.
 
     Convenience over :func:`~autogen.beta.eval.evaluate_pairwise`: runs each
-    variant factory across the suite (capturing a :class:`Trace` per task,
+    variant across the suite (capturing a :class:`Trace` per task,
     keyed by ``task_id``), then pairwise-compares the two sets. Mirrors how
     :func:`run` is produce-then-:func:`~autogen.beta.eval.evaluate` for one
     variant. For decoupled grading of pre-existing traces, call
     ``evaluate_pairwise`` directly.
     """
     resolved_suite = _resolve_suite(suite)
-    source_a = await _produce(resolved_suite, variant_a, model_config=model_config, concurrency=concurrency)
-    source_b = await _produce(resolved_suite, variant_b, model_config=model_config, concurrency=concurrency)
+    factory_a, accepts_a, _ = _normalize_target(variant_a)
+    factory_b, accepts_b, _ = _normalize_target(variant_b)
+    source_a = await _produce(
+        resolved_suite, factory_a, accepts_config=accepts_a, model_config=model_config, concurrency=concurrency
+    )
+    source_b = await _produce(
+        resolved_suite, factory_b, accepts_config=accepts_b, model_config=model_config, concurrency=concurrency
+    )
     return await evaluate_pairwise(
         source_a,
         source_b,
@@ -351,17 +290,17 @@ async def run_pairwise(
 
 
 async def _produce(
-    suite: Suite,
+    tasks: Iterable[Task],
     factory: Callable[..., EvalTarget],
     *,
+    accepts_config: bool,
     model_config: ModelConfig | dict[str, ModelConfig] | None,
     concurrency: int,
 ) -> InMemoryTraceSource:
-    """Run ``factory``'s agent across the suite, returning one Trace per task."""
-    accepts_config = _factory_accepts_config(factory)
+    """Run ``factory``'s agent across ``tasks``, returning one Trace per task (in order)."""
     semaphore = asyncio.Semaphore(max(1, concurrency))
     produced = await asyncio.gather(
-        *(_produce_one(semaphore, task, factory, accepts_config, model_config) for task in suite)
+        *(_produce_one(semaphore, task, factory, accepts_config, model_config) for task in tasks)
     )
     return InMemoryTraceSource(produced)
 
@@ -375,9 +314,10 @@ async def _produce_one(
 ) -> tuple[TraceRef, Trace]:
     async with semaphore:
         config = _resolve_task_config(task, model_config)
-        capture = EventCapture()
+        exporter = InMemorySpanExporter()
+        provider = TracerProvider()
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
         stream = MemoryStream()
-        reply = None
         exception: BaseException | None = None
         duration_ms = 0
         try:
@@ -385,12 +325,22 @@ async def _produce_one(
         except Exception as exc:
             exception = exc
         else:
+            telemetry = TelemetryMiddleware(
+                tracer_provider=provider,
+                agent_name=getattr(target, "name", "agent"),
+                capture_content=True,
+            )
             started = time.perf_counter()
             try:
-                reply = await target.ask(task.inputs.get("input", ""), stream=stream, observers=[capture])
+                await target.ask(task.inputs.get("input", ""), stream=stream, middleware=[telemetry])
             except Exception as exc:
                 exception = exc
             finally:
                 duration_ms = int((time.perf_counter() - started) * 1000)
-        trace = Trace(events=capture.events, reply=reply, exception=exception, duration_ms=duration_ms)
+        # run()'s Trace is reconstructed from the emitted spans — the same span→Trace path
+        # evaluate() uses, so the two grade identically. Pre-span failures (factory raise, or
+        # ask erroring before the agent span starts) emit no spans → fall back to the caught exception.
+        trace = readable_spans_to_trace(exporter.get_finished_spans(), duration_ms=duration_ms)
+        if trace.exception is None and exception is not None:
+            trace = Trace(events=trace.events, reply=None, exception=exception, duration_ms=duration_ms)
         return (TraceRef(trace_id=uuid4().hex, task_id=task.task_id), trace)

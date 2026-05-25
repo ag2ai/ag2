@@ -7,8 +7,9 @@
 The trace-based counterpart to :func:`~autogen.beta.eval.run`. Where ``run``
 executes an agent and captures its event stream, ``evaluate`` takes traces that
 already exist — from a just-finished run, from disk, or from a cloud backend —
-and grades them. The two share everything downstream (``Scorer``, ``Trace``,
-``RunResult``); the only difference is that ``evaluate`` never runs an agent.
+and grades them. Both funnel through one private grading core (:func:`_grade`),
+so ``run(agent)`` and ``evaluate(the trace that agent produced)`` grade through
+identical code — there is no second scoring path to drift.
 
 ``outputs`` is projected from the trace (the final model response's content)
 rather than read from a live reply, so reference-based scorers like
@@ -18,23 +19,30 @@ come from the paired :class:`~autogen.beta.eval.Suite` task (via
 """
 
 import asyncio
+import logging
 import os
 import time
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime, timezone
+from functools import partial
 from typing import Any
 from uuid import uuid4
 
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import ModelResponse
+from autogen.beta.stream import Stream
 
 from .._types import Feedback
 from ..dataset import Suite, Task
+from ..events import EvalCompleted, EvalStarted, TaskEvaluated
 from ..results import BudgetThresholds, RunResult, TaskResult
 from ..scorer import Scorer
 from ..sources import TraceRef, TraceSource
 from ..trace import Trace
 
 __all__ = ("evaluate",)
+
+logger = logging.getLogger(__name__)
 
 
 async def evaluate(
@@ -46,6 +54,8 @@ async def evaluate(
     budgets: BudgetThresholds | None = None,
     concurrency: int = 4,
     run_id: str | None = None,
+    label: str | None = None,
+    stream: Stream | None = None,
 ) -> RunResult:
     """Grade every trace from ``source`` and persist a :class:`RunResult`.
 
@@ -60,34 +70,100 @@ async def evaluate(
             never aborting.
         concurrency: Max traces graded in parallel.
         run_id: Override for the auto-generated run id.
+        label: Optional user-defined identifier recorded on the run — meant to
+            be *shared* across runs of the same eval so they can be grouped and
+            trended. ``None`` if unset; the framework never fills it.
+        stream: Optional :class:`~autogen.beta.stream.Stream` to publish eval
+            lifecycle events to (``EvalStarted`` / ``TaskEvaluated`` /
+            ``EvalCompleted``) — observe a grading pass like you observe an agent.
     """
-    scorer_list = tuple(scorers)
+    started = time.perf_counter()
+    return await _grade(
+        source,
+        scorers=tuple(scorers),
+        suite=suite,
+        store_dir=store_dir,
+        budgets=budgets,
+        concurrency=concurrency,
+        run_id=run_id,
+        label=label,
+        stream=stream,
+        target_path=f"trace-source:{type(source).__name__}",
+        started_at=started,
+    )
+
+
+async def _grade(
+    source: TraceSource,
+    *,
+    scorers: tuple[Scorer, ...],
+    suite: Suite | None,
+    store_dir: str | os.PathLike[str],
+    budgets: BudgetThresholds | None,
+    concurrency: int,
+    run_id: str | None,
+    label: str | None,
+    stream: Stream | None,
+    target_path: str,
+    started_at: float,
+) -> RunResult:
+    """Grade every trace from ``source`` into a persisted :class:`RunResult`.
+
+    The single grading path shared by :func:`evaluate` and :func:`~autogen.beta.eval.run`
+    (the latter produces traces first, then grades them here). Projects ``outputs``
+    from each trace, runs the scorers, applies budgets, aggregates, persists, and —
+    when ``stream`` is set — publishes the lifecycle events. ``target_path`` records
+    provenance (the agent for ``run``; the trace source for ``evaluate``);
+    ``started_at`` is the caller's ``perf_counter`` start so the run-level duration
+    spans the caller's whole operation.
+    """
     refs = [ref async for ref in source.list()]
     tasks_by_id = {task.task_id: task for task in suite} if suite is not None else {}
+    resolved_suite = suite if suite is not None else _suite_from_refs(refs)
     semaphore = asyncio.Semaphore(max(1, concurrency))
 
     actual_run_id = run_id if run_id is not None else uuid4().hex
     created_at = datetime.now(timezone.utc).isoformat()
-    started = time.perf_counter()
 
+    eval_stream = stream
+    eval_ctx = ConversationContext(stream=eval_stream) if eval_stream is not None else None
+    if eval_stream is not None:
+        await eval_stream.send(
+            EvalStarted(run_id=actual_run_id, label=label, suite=resolved_suite.name, total=len(refs)),
+            eval_ctx,
+        )
+
+    on_result = (
+        partial(_publish_task_evaluated, eval_stream, eval_ctx, actual_run_id, label)
+        if eval_stream is not None
+        else None
+    )
     coros = [
-        _evaluate_ref(semaphore, source, ref, scorers=scorer_list, tasks_by_id=tasks_by_id, budgets=budgets)
+        _evaluate_ref(
+            semaphore, source, ref, scorers=scorers, tasks_by_id=tasks_by_id, budgets=budgets, on_result=on_result
+        )
         for ref in refs
     ]
     task_results = await asyncio.gather(*coros)
-    duration_ms = int((time.perf_counter() - started) * 1000)
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
 
     result = RunResult(
         run_id=actual_run_id,
         tasks=tuple(task_results),
-        suite=suite if suite is not None else _suite_from_refs(refs),
-        target_factory_path=f"trace-source:{type(source).__name__}",
+        suite=resolved_suite,
+        target_path=target_path,
         concurrency=max(1, concurrency),
         duration_ms=duration_ms,
         created_at=created_at,
+        label=label,
         store_dir=store_dir,
     )
-    result.save()
+    saved_path = result.save()
+    logger.info("Run %s saved to %s", actual_run_id, saved_path)
+
+    if eval_stream is not None:
+        await eval_stream.send(EvalCompleted(run_id=actual_run_id, label=label, result=result), eval_ctx)
+
     return result
 
 
@@ -99,6 +175,7 @@ async def _evaluate_ref(
     scorers: tuple[Scorer, ...],
     tasks_by_id: dict[str, Task],
     budgets: BudgetThresholds | None,
+    on_result: Callable[[Task, TaskResult], Awaitable[None]] | None = None,
 ) -> TaskResult:
     async with semaphore:
         trace = await source.load(ref)
@@ -120,7 +197,22 @@ async def _evaluate_ref(
             )
 
         budget_violation = budgets.exceeded_by(trace) if budgets is not None else False
-        return TaskResult(task=task, trace=trace, feedback=tuple(feedback), budget_violation=budget_violation)
+        result = TaskResult(task=task, trace=trace, feedback=tuple(feedback), budget_violation=budget_violation)
+        if on_result is not None:
+            await on_result(task, result)
+        return result
+
+
+async def _publish_task_evaluated(
+    stream: Stream,
+    ctx: ConversationContext,
+    run_id: str,
+    label: str | None,
+    task: Task,
+    result: TaskResult,
+) -> None:
+    """Publish a :class:`TaskEvaluated` event when one trace finishes scoring."""
+    await stream.send(TaskEvaluated(run_id=run_id, label=label, task_id=task.task_id, feedback=result.feedback), ctx)
 
 
 def _outputs_from_trace(trace: Trace) -> dict[str, Any]:

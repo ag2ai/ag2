@@ -6,9 +6,14 @@
 
 from .evaluate import evaluate
 from .runner import run, run_pairwise
+from .variants import LeaderboardRow, VariantRunResult, Variants, run_variants
 
 __all__ = (
+    "LeaderboardRow",
+    "VariantRunResult",
+    "Variants",
     "evaluate",
     "run",
     "run_pairwise",
+    "run_variants",
 )

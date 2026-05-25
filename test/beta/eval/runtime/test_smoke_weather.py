@@ -36,7 +36,7 @@ from autogen.beta.eval.scorers import (
     token_budget,
     tool_called,
 )
-from autogen.beta.events import ToolCallEvent
+from autogen.beta.events import ModelResponse, ToolCallEvent
 from autogen.beta.testing import TestConfig
 
 _DATASET_PATH = Path(__file__).parent / "weather_dataset.jsonl"
@@ -79,7 +79,8 @@ def termination_reason(trace: Trace) -> str:
         return "exception"
     if trace.halted:
         return "halted"
-    if trace.reply is not None and trace.reply.body:
+    responses = trace.events_of(ModelResponse)
+    if responses and responses[-1].content:
         return "completed"
     return "empty"
 
@@ -123,7 +124,7 @@ async def test_smoke_weather_end_to_end(tmp_path: Path) -> None:
 
     result = await run(
         suite,
-        target_factory=_build_weather_agent,
+        target=_build_weather_agent,
         scorers=[*_PREBUILT_SCORERS, *_CUSTOM_SCORERS],
         model_config=_CASSETTES,
         budgets=BudgetThresholds(max_tokens_per_task=2_000, max_seconds_per_task=10.0),
@@ -172,10 +173,11 @@ def _assert_schema_0_1(data: dict) -> None:
     assert data["schema_version"] == "0.1"
     for key in (
         "run_id",
+        "label",
         "created_at",
         "duration_ms",
         "suite",
-        "target_factory",
+        "target",
         "concurrency",
         "tasks",
         "aggregates",
@@ -216,7 +218,7 @@ async def test_smoke_weather_summary_is_printable(tmp_path: Path) -> None:
 
     result = await run(
         suite,
-        target_factory=_build_weather_agent,
+        target=_build_weather_agent,
         scorers=[*_PREBUILT_SCORERS, *_CUSTOM_SCORERS],
         store_dir=tmp_path,
         model_config=_CASSETTES,
