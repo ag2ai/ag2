@@ -46,7 +46,7 @@ def judge_config(request):
     if request.param == "anthropic":
         return AnthropicConfig(model="claude-haiku-4-5", api_key=_require("ANTHROPIC_API_KEY"), temperature=0)
     return GeminiConfig(
-        model="gemini-3.1-flash-lite-preview", api_key=_require("GEMINI_API_KEY", "GOOGLE_API_KEY"), temperature=0
+        model="gemini-3.1-flash-lite", api_key=_require("GEMINI_API_KEY", "GOOGLE_API_KEY"), temperature=0
     )
 
 
