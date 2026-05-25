@@ -132,7 +132,7 @@ async def test_smoke_weather_end_to_end(tmp_path: Path) -> None:
         store_dir=tmp_path,
     )
 
-    # ----- boolean scorers all pass on every task -----
+    # boolean scorers all pass on every task
     assert result.pass_rate("tool_called[get_weather]") == 1.0
     assert result.pass_rate("no_tool_errors") == 1.0
     assert result.pass_rate("no_tool_not_found") == 1.0
@@ -140,20 +140,20 @@ async def test_smoke_weather_end_to_end(tmp_path: Path) -> None:
     assert result.pass_rate("token_budget") == 1.0
     assert result.pass_rate("called_get_weather_once") == 1.0
 
-    # ----- numeric scorer surfaces in score_stats -----
+    # numeric scorer surfaces in score_stats
     stats = result.score_stats("extra_tool_calls")
     assert stats.n == 5
     assert stats.mean == 0.0
     assert stats.p95 == 0.0
 
-    # ----- categorical scorer surfaces in value_counts -----
+    # categorical scorer surfaces in value_counts
     assert result.value_counts("termination_reason") == {"completed": 5}
 
-    # ----- error / budget counters are zero -----
+    # error / budget counters are zero
     assert result.aggregates.errors == 0
     assert result.aggregates.budget_violations == 0
 
-    # ----- the runner auto-persisted because store_dir was set -----
+    # the runner auto-persisted because store_dir was set
     expected_path = tmp_path / f"{result.run_id}.json"
     assert expected_path.exists()
 

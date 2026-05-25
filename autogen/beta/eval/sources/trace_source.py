@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from ..trace import Trace
-from ._spans import SpanData, span_data_from_dict, span_data_to_dict, spans_to_trace
+from ._spans import SpanConvention, SpanData, span_data_from_dict, span_data_to_dict, spans_to_trace
 
 __all__ = (
     "DirectoryTraceSource",
@@ -96,8 +96,9 @@ class DirectoryTraceSource:
     Write the files with :func:`save_trace`. Format is provisional.
     """
 
-    def __init__(self, path: str | os.PathLike[str]) -> None:
+    def __init__(self, path: str | os.PathLike[str], *, conventions: Sequence[SpanConvention] | None = None) -> None:
         self._path = Path(path)
+        self._conventions = conventions
 
     async def list(self) -> AsyncIterator[TraceRef]:
         for file in sorted(self._path.glob("*.json")):
@@ -111,7 +112,7 @@ class DirectoryTraceSource:
     async def load(self, ref: TraceRef) -> Trace:
         doc = json.loads((self._path / f"{ref.trace_id}.json").read_text(encoding="utf-8"))
         spans = [span_data_from_dict(s) for s in doc.get("spans", [])]
-        return spans_to_trace(spans)
+        return spans_to_trace(spans, conventions=self._conventions)
 
 
 def save_trace(

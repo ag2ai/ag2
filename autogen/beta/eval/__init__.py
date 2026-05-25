@@ -32,10 +32,22 @@ from .runtime import (
     run_variants,
 )
 from .scorer import Scorer, scorer
-from .sources import DirectoryTraceSource, InMemoryTraceSource, TempoTraceSource, TraceRef, TraceSource
+from .sources import (
+    DEFAULT_CONVENTIONS,
+    AG2GenAIConvention,
+    DirectoryTraceSource,
+    InMemoryTraceSource,
+    OpenInferenceConvention,
+    SpanConvention,
+    TempoTraceSource,
+    TraceRef,
+    TraceSource,
+)
 from .trace import Trace
 
 __all__ = (
+    "DEFAULT_CONVENTIONS",
+    "AG2GenAIConvention",
     "Aggregates",
     "Agreement",
     "BudgetThresholds",
@@ -44,6 +56,7 @@ __all__ = (
     "Feedback",
     "InMemoryTraceSource",
     "LeaderboardRow",
+    "OpenInferenceConvention",
     "PairwiseCase",
     "PairwiseComparator",
     "PairwiseOutcome",
@@ -52,6 +65,7 @@ __all__ = (
     "ScoreStats",
     "Scorer",
     "ScorerReturnTypeError",
+    "SpanConvention",
     "Suite",
     "Task",
     "TaskResult",

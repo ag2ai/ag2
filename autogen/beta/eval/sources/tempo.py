@@ -16,14 +16,14 @@ store, correlated by ``trace_id`` — execution and grading fully decoupled.
 """
 
 import time
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
 
 import httpx
 
 from ..trace import Trace
 from ._otlp_json import otlp_json_to_spans
-from ._spans import spans_to_trace
+from ._spans import SpanConvention, spans_to_trace
 from .trace_source import TraceRef
 
 __all__ = ("TempoTraceSource",)
@@ -53,6 +53,7 @@ class TempoTraceSource:
         limit: int = 20,
         headers: Mapping[str, str] | None = None,
         task_id_attribute: str = "ag2.eval.task_id",
+        conventions: Sequence[SpanConvention] | None = None,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
@@ -61,6 +62,7 @@ class TempoTraceSource:
         self._limit = limit
         self._headers = {"Accept": "application/json", **(headers or {})}
         self._task_id_attribute = task_id_attribute
+        self._conventions = conventions
         self._client = client
 
     async def list(self) -> AsyncIterator[TraceRef]:
@@ -79,7 +81,7 @@ class TempoTraceSource:
 
     async def load(self, ref: TraceRef) -> Trace:
         doc = await self._get(f"/api/traces/{ref.trace_id}")
-        return spans_to_trace(otlp_json_to_spans(doc))
+        return spans_to_trace(otlp_json_to_spans(doc), conventions=self._conventions)
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         url = f"{self._base_url}{path}"

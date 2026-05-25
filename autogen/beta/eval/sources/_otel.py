@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from opentelemetry.sdk.trace import ReadableSpan
 
 from ..trace import Trace
-from ._spans import SpanData, SpanEvent, spans_to_trace
+from ._spans import SpanConvention, SpanData, SpanEvent, spans_to_trace
 
 __all__ = (
     "readable_span_to_data",
@@ -42,6 +42,11 @@ def readable_span_to_data(span: ReadableSpan) -> SpanData:
     )
 
 
-def readable_spans_to_trace(spans: Sequence[ReadableSpan], *, duration_ms: int | None = None) -> Trace:
+def readable_spans_to_trace(
+    spans: Sequence[ReadableSpan],
+    *,
+    conventions: Sequence[SpanConvention] | None = None,
+    duration_ms: int | None = None,
+) -> Trace:
     """Reconstruct a :class:`Trace` from a list of OpenTelemetry ``ReadableSpan``."""
-    return spans_to_trace([readable_span_to_data(s) for s in spans], duration_ms=duration_ms)
+    return spans_to_trace([readable_span_to_data(s) for s in spans], conventions=conventions, duration_ms=duration_ms)
