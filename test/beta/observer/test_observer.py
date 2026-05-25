@@ -108,6 +108,38 @@ class TestBaseObserver:
             assert obs.process_count == 1
 
 
+class InvertedObserver(BaseObserver):
+    """Observer that watches everything except ToolCallEvent."""
+
+    def __init__(self):
+        super().__init__("inverted-observer", watch=EventWatch(~ToolCallEvent))
+        self.process_count = 0
+        self.seen_types: list[type] = []
+
+    async def process(self, events, ctx) -> ObserverAlert | None:
+        self.process_count += 1
+        self.seen_types.extend(type(e) for e in events)
+        return None
+
+
+@pytest.mark.asyncio
+class TestInvertedConditionObserver:
+    async def test_inverted_watch_excludes_matching_type(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        obs = InvertedObserver()
+
+        with ExitStack() as stack:
+            obs.register(stack, ctx)
+
+            await stream.send(ToolCallEvent(name="t", arguments="{}"), ctx)
+            assert obs.process_count == 0
+
+            await stream.send(ModelMessage(content="hello"), ctx)
+            assert obs.process_count == 1
+            assert obs.seen_types == [ModelMessage]
+
+
 class _CrashingObserver(BaseObserver):
     """Observer whose ``process()`` always raises."""
 
