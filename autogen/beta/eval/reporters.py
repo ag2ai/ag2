@@ -20,7 +20,15 @@ subscribe it the same way — ``console_reporter`` is just the convenient defaul
 
 from autogen.beta.events import BaseEvent
 
-from .events import EvalStarted, TaskEvaluated, VariantCompleted, VariantStarted
+from .events import (
+    EvalStarted,
+    PairwiseCompared,
+    PairwiseCompleted,
+    PairwiseStarted,
+    TaskEvaluated,
+    VariantCompleted,
+    VariantStarted,
+)
 
 __all__ = ("console_reporter",)
 
@@ -38,3 +46,10 @@ def console_reporter(event: BaseEvent) -> None:
         print(f"    {where}{event.task_id}: {passed}/{len(event.feedback)} passed")
     elif isinstance(event, VariantCompleted):
         print(f"  ✓ variant {event.variant} done")
+    elif isinstance(event, PairwiseStarted):
+        tag = f"[{event.label}] " if event.label else ""
+        print(f"{tag}comparing {event.variant_b!r} (B) vs {event.variant_a!r} (A) over {event.total} pair(s)...")
+    elif isinstance(event, PairwiseCompared):
+        print(f"    {event.task_id} [{event.key}]: {event.winner}")
+    elif isinstance(event, PairwiseCompleted):
+        print(f"  ✓ pairwise {event.result.run_id} done")

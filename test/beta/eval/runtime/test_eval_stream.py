@@ -2,12 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Eval observability — run / run_variants publish lifecycle events on a stream."""
+"""Eval observability — run / run_variants / run_pairwise publish lifecycle events on a stream."""
 
 import pytest
 
 from autogen.beta import Agent
-from autogen.beta.eval import Variants, console_reporter, run, run_variants, scorer
+from autogen.beta.eval import Variants, console_reporter, run, run_pairwise, run_variants, scorer
+from autogen.beta.eval.pairwise import PairwiseOutcome
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
@@ -15,6 +16,15 @@ from autogen.beta.testing import TestConfig
 @scorer
 def _ok(outputs) -> bool:
     return bool(outputs.get("body"))
+
+
+class _PickB:
+    """A PairwiseComparator that always prefers variant B (fixed, for lifecycle tests)."""
+
+    key = "quality"
+
+    async def compare(self, *, task, trace_a, trace_b, reference_outputs) -> PairwiseOutcome:
+        return PairwiseOutcome(winner="b")
 
 
 def _collector() -> tuple[MemoryStream, list[str]]:
@@ -67,6 +77,53 @@ async def test_run_variants_publishes_variant_events(tmp_path) -> None:
 
 
 @pytest.mark.asyncio()
+async def test_run_variants_tags_task_evaluated_with_variant(tmp_path) -> None:
+    """Each variant's per-task events flow to the sweep stream, tagged with the variant name."""
+    stream = MemoryStream()
+    tagged: list[tuple[str, str | None]] = []
+
+    async def collect(event) -> None:
+        if type(event).__name__ == "TaskEvaluated":
+            tagged.append((event.task_id, event.variant))
+
+    stream.subscribe(collect, sync_to_thread=False)
+    variants = Variants.from_targets({
+        "a": lambda: Agent("a", config=TestConfig("hi a")),
+        "b": lambda: Agent("b", config=TestConfig("hi b")),
+    })
+
+    await run_variants(
+        [{"task_id": "t1", "inputs": {"input": "hi"}}],
+        variants=variants,
+        scorers=[_ok],
+        store_dir=tmp_path,
+        stream=stream,
+    )
+
+    assert ("t1", "a") in tagged
+    assert ("t1", "b") in tagged
+
+
+@pytest.mark.asyncio()
+async def test_run_pairwise_publishes_lifecycle_events(tmp_path) -> None:
+    stream, seen = _collector()
+
+    await run_pairwise(
+        [{"task_id": "t1", "inputs": {"input": "hi"}}],
+        variant_a=lambda: Agent("a", config=TestConfig("from a")),
+        variant_b=lambda: Agent("b", config=TestConfig("from b")),
+        comparators=[_PickB()],
+        store_dir=tmp_path,
+        stream=stream,
+        label="bake-off",
+    )
+
+    assert seen[0] == "PairwiseStarted"
+    assert "PairwiseCompared" in seen
+    assert seen[-1] == "PairwiseCompleted"
+
+
+@pytest.mark.asyncio()
 async def test_console_reporter_prints_progress(tmp_path, capsys) -> None:
     """The built-in console_reporter, subscribed to a run's stream, prints progress."""
     stream = MemoryStream()
@@ -83,3 +140,23 @@ async def test_console_reporter_prints_progress(tmp_path, capsys) -> None:
     out = capsys.readouterr().out
     assert "task-run" in out  # EvalStarted line
     assert "t1" in out  # per-task line
+
+
+@pytest.mark.asyncio()
+async def test_console_reporter_prints_pairwise_progress(tmp_path, capsys) -> None:
+    """The console_reporter renders the pairwise lifecycle events too."""
+    stream = MemoryStream()
+    stream.subscribe(console_reporter, sync_to_thread=False)
+
+    await run_pairwise(
+        [{"task_id": "t1", "inputs": {"input": "hi"}}],
+        variant_a=lambda: Agent("a", config=TestConfig("from a")),
+        variant_b=lambda: Agent("b", config=TestConfig("from b")),
+        comparators=[_PickB()],
+        store_dir=tmp_path,
+        stream=stream,
+    )
+
+    out = capsys.readouterr().out
+    assert "comparing" in out  # PairwiseStarted line
+    assert "t1" in out  # PairwiseCompared line

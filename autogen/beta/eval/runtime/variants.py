@@ -162,9 +162,10 @@ async def run_variants(
     parallel (and ``repeats`` times each). Every variant's run is persisted as
     its own schema-0.1 JSON under ``store_dir`` (``<run_id>-<variant>.json``).
 
-    Pass ``stream`` to observe ``VariantStarted`` / ``VariantCompleted``
-    lifecycle events as the sweep runs — same as observing an agent. The
-    per-variant ``run`` events stay on each variant's own run.
+    Pass ``stream`` to observe the sweep: ``VariantStarted`` / ``VariantCompleted``
+    wrap each variant, and that variant's own ``EvalStarted`` / ``TaskEvaluated``
+    (tagged with the variant name) / ``EvalCompleted`` flow through the same
+    stream — so a single observer sees both the sweep and the per-task detail.
     """
     scorer_list = tuple(scorers)
     base_run_id = run_id if run_id is not None else uuid4().hex
@@ -191,6 +192,8 @@ async def run_variants(
             concurrency=concurrency,
             run_id=f"{base_run_id}-{_slug(name)}",
             label=label,
+            stream=eval_stream,
+            variant=name,
         )
         if eval_stream is not None:
             await eval_stream.send(

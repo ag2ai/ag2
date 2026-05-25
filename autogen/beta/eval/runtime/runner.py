@@ -66,6 +66,7 @@ async def run(
     run_id: str | None = None,
     label: str | None = None,
     stream: Stream | None = None,
+    variant: str | None = None,
 ) -> RunResult:
     """Run an evaluation suite end-to-end.
 
@@ -121,6 +122,9 @@ async def run(
             lifecycle events to (``EvalStarted`` / ``TaskEvaluated`` /
             ``EvalCompleted``) — observe a run like you observe an agent.
             Subscribe your own observer to render progress / a live view.
+        variant: Tags this run's ``TaskEvaluated`` events with a variant name.
+            Set by :func:`~autogen.beta.eval.run_variants` for each variant in a
+            sweep; leave ``None`` for a standalone run.
 
     Returns:
         A :class:`RunResult` containing per-task results and metadata.
@@ -147,6 +151,7 @@ async def run(
         run_id=run_id,
         label=label,
         stream=stream,
+        variant=variant,
         target_path=target_path,
         started_at=started,
     )
@@ -257,6 +262,8 @@ async def run_pairwise(
     variant_b_name: str = "B",
     concurrency: int = 4,
     run_id: str | None = None,
+    label: str | None = None,
+    stream: Stream | None = None,
 ) -> PairwiseRunResult:
     """Produce traces for two variants over a suite, then compare them.
 
@@ -266,6 +273,10 @@ async def run_pairwise(
     :func:`run` is produce-then-:func:`~autogen.beta.eval.evaluate` for one
     variant. For decoupled grading of pre-existing traces, call
     ``evaluate_pairwise`` directly.
+
+    ``label`` is a shared identifier recorded on the result (like :func:`run`);
+    pass ``stream`` to observe ``PairwiseStarted`` / ``PairwiseCompared`` /
+    ``PairwiseCompleted`` lifecycle events as the comparison runs.
     """
     resolved_suite = _resolve_suite(suite)
     factory_a, accepts_a, _ = _normalize_target(variant_a)
@@ -286,6 +297,8 @@ async def run_pairwise(
         store_dir=store_dir,
         concurrency=concurrency,
         run_id=run_id,
+        label=label,
+        stream=stream,
     )
 
 

@@ -21,12 +21,16 @@ from autogen.beta.events.base import BaseEvent, Field
 from ._types import Feedback
 
 if TYPE_CHECKING:
+    from .pairwise import PairwiseRunResult
     from .results import RunResult
 
 __all__ = (
     "EvalCompleted",
     "EvalEvent",
     "EvalStarted",
+    "PairwiseCompared",
+    "PairwiseCompleted",
+    "PairwiseStarted",
     "TaskEvaluated",
     "VariantCompleted",
     "VariantStarted",
@@ -84,3 +88,31 @@ class VariantCompleted(EvalEvent):
 
     variant: str
     result: "RunResult"
+
+
+class PairwiseStarted(EvalEvent):
+    """Emitted once when a pairwise comparison begins."""
+
+    __transient__ = True
+
+    variant_a: str = Field("")
+    variant_b: str = Field("")
+    total: int = Field(0)  # number of task_id-matched pairs to compare
+
+
+class PairwiseCompared(EvalEvent):
+    """Emitted when one comparator finishes one paired task (per case)."""
+
+    __transient__ = True
+
+    task_id: str
+    key: str
+    winner: str = Field("tie")  # "a" / "b" / "tie"
+
+
+class PairwiseCompleted(EvalEvent):
+    """Emitted once when a pairwise comparison finishes; carries the result."""
+
+    __transient__ = True
+
+    result: "PairwiseRunResult"

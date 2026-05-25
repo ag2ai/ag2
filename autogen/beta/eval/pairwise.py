@@ -23,14 +23,19 @@ import logging
 import math
 import os
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 from uuid import uuid4
 
+from autogen.beta.context import ConversationContext
+from autogen.beta.stream import Stream
+
 from .dataset import Suite, Task
+from .events import PairwiseCompared, PairwiseCompleted, PairwiseStarted
 from .sources import TraceRef, TraceSource
 from .trace import Trace
 
@@ -119,6 +124,7 @@ class PairwiseRunResult:
 
     __slots__ = (
         "_run_id",
+        "_label",
         "_cases",
         "_variant_a",
         "_variant_b",
@@ -140,9 +146,11 @@ class PairwiseRunResult:
         created_at: str,
         duration_ms: int,
         n_pairs: int,
+        label: str | None = None,
         store_dir: str | os.PathLike[str] | None = None,
     ) -> None:
         self._run_id = run_id
+        self._label = label
         self._cases = cases
         self._variant_a = variant_a
         self._variant_b = variant_b
@@ -155,6 +163,10 @@ class PairwiseRunResult:
     @property
     def run_id(self) -> str:
         return self._run_id
+
+    @property
+    def label(self) -> str | None:
+        return self._label
 
     @property
     def cases(self) -> tuple[PairwiseCase, ...]:
@@ -227,6 +239,7 @@ class PairwiseRunResult:
         return {
             "schema_version": _SCHEMA_VERSION,
             "run_id": self._run_id,
+            "label": self._label,
             "created_at": self._created_at,
             "duration_ms": self._duration_ms,
             "variant_a": self._variant_a,
@@ -273,11 +286,20 @@ async def evaluate_pairwise(
     suite: Suite | None = None,
     concurrency: int = 4,
     run_id: str | None = None,
+    label: str | None = None,
+    stream: Stream | None = None,
 ) -> PairwiseRunResult:
     """Compare variant A vs variant B over the tasks both produced traces for.
 
     Traces are paired by ``TraceRef.task_id`` (stamp ``ag2.eval.task_id`` at
     produce time). Each comparator runs over every pair; results roll up per key.
+
+    Args:
+        label: Optional user-defined identifier recorded on the run — meant to be
+            *shared* across runs so a sequence of comparisons can be grouped.
+        stream: Optional :class:`~autogen.beta.stream.Stream` to publish pairwise
+            lifecycle events to (``PairwiseStarted`` / ``PairwiseCompared`` per
+            case / ``PairwiseCompleted``) — observe a comparison like an agent.
     """
     comparator_list = tuple(comparators)
     keys = tuple(c.key for c in comparator_list)
@@ -299,8 +321,23 @@ async def evaluate_pairwise(
     created_at = datetime.now(timezone.utc).isoformat()
     started = time.perf_counter()
 
+    eval_ctx = ConversationContext(stream=stream) if stream is not None else None
+    if stream is not None:
+        await stream.send(
+            PairwiseStarted(
+                run_id=actual_run_id, label=label, variant_a=variant_a, variant_b=variant_b, total=len(pairs)
+            ),
+            eval_ctx,
+        )
+    on_case = (
+        partial(_publish_pairwise_compared, stream, eval_ctx, actual_run_id, label) if stream is not None else None
+    )
+
     case_lists = await asyncio.gather(
-        *(_evaluate_pair(semaphore, source_a, source_b, ra, rb, comparator_list, tasks_by_id) for ra, rb in pairs)
+        *(
+            _evaluate_pair(semaphore, source_a, source_b, ra, rb, comparator_list, tasks_by_id, on_case)
+            for ra, rb in pairs
+        )
     )
     cases = tuple(case for case_list in case_lists for case in case_list)
     duration_ms = int((time.perf_counter() - started) * 1000)
@@ -314,9 +351,12 @@ async def evaluate_pairwise(
         created_at=created_at,
         duration_ms=duration_ms,
         n_pairs=len(pairs),
+        label=label,
         store_dir=store_dir,
     )
     result.save()
+    if stream is not None:
+        await stream.send(PairwiseCompleted(run_id=actual_run_id, label=label, result=result), eval_ctx)
     return result
 
 
@@ -328,6 +368,7 @@ async def _evaluate_pair(
     ref_b: TraceRef,
     comparators: tuple[PairwiseComparator, ...],
     tasks_by_id: dict[str, Task],
+    on_case: Callable[[PairwiseCase], Awaitable[None]] | None = None,
 ) -> list[PairwiseCase]:
     async with semaphore:
         trace_a = await source_a.load(ref_a)
@@ -346,16 +387,30 @@ async def _evaluate_pair(
                 outcome = PairwiseOutcome(
                     winner="tie", reasoning=f"comparator raised: {type(exc).__name__}: {exc}", detail={"error": True}
                 )
-            out.append(
-                PairwiseCase(
-                    task_id=task.task_id,
-                    key=comparator.key,
-                    winner=outcome.winner,
-                    reasoning=outcome.reasoning,
-                    detail=dict(outcome.detail),
-                )
+            case = PairwiseCase(
+                task_id=task.task_id,
+                key=comparator.key,
+                winner=outcome.winner,
+                reasoning=outcome.reasoning,
+                detail=dict(outcome.detail),
             )
+            out.append(case)
+            if on_case is not None:
+                await on_case(case)
         return out
+
+
+async def _publish_pairwise_compared(
+    stream: Stream,
+    ctx: ConversationContext,
+    run_id: str,
+    label: str | None,
+    case: PairwiseCase,
+) -> None:
+    """Publish a :class:`PairwiseCompared` event when one comparator finishes one pair."""
+    await stream.send(
+        PairwiseCompared(run_id=run_id, label=label, task_id=case.task_id, key=case.key, winner=case.winner), ctx
+    )
 
 
 def _pos_to_ab(preferred: str, first: str, second: str) -> str:

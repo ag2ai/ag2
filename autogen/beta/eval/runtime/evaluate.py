@@ -106,6 +106,7 @@ async def _grade(
     stream: Stream | None,
     target_path: str,
     started_at: float,
+    variant: str | None = None,
 ) -> RunResult:
     """Grade every trace from ``source`` into a persisted :class:`RunResult`.
 
@@ -134,7 +135,7 @@ async def _grade(
         )
 
     on_result = (
-        partial(_publish_task_evaluated, eval_stream, eval_ctx, actual_run_id, label)
+        partial(_publish_task_evaluated, eval_stream, eval_ctx, actual_run_id, label, variant)
         if eval_stream is not None
         else None
     )
@@ -208,11 +209,15 @@ async def _publish_task_evaluated(
     ctx: ConversationContext,
     run_id: str,
     label: str | None,
+    variant: str | None,
     task: Task,
     result: TaskResult,
 ) -> None:
     """Publish a :class:`TaskEvaluated` event when one trace finishes scoring."""
-    await stream.send(TaskEvaluated(run_id=run_id, label=label, task_id=task.task_id, feedback=result.feedback), ctx)
+    await stream.send(
+        TaskEvaluated(run_id=run_id, label=label, task_id=task.task_id, feedback=result.feedback, variant=variant),
+        ctx,
+    )
 
 
 def _outputs_from_trace(trace: Trace) -> dict[str, Any]:

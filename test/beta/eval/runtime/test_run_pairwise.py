@@ -4,6 +4,8 @@
 
 """Test run_pairwise: produce two variants over a suite, then compare them."""
 
+import json
+
 import pytest
 
 from autogen.beta import Agent
@@ -70,3 +72,23 @@ async def test_run_pairwise_accepts_agent_instances(tmp_path) -> None:
 
     assert result.tally("quality") == (0, 1, 0)
     assert result.win_rate("quality").rate == 1.0
+
+
+@pytest.mark.asyncio()
+async def test_run_pairwise_label_is_recorded_and_serialized(tmp_path) -> None:
+    """A user-defined ``label`` is carried on the result and persisted to the run JSON."""
+    suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Q?"}}])
+    judge = _Scripted("quality", {"t1": "b"})
+
+    result = await run_pairwise(
+        suite,
+        variant_a=_build_a,
+        variant_b=_build_b,
+        comparators=[judge],
+        store_dir=tmp_path,
+        label="bake-off",
+    )
+
+    assert result.label == "bake-off"
+    data = json.loads((tmp_path / f"{result.run_id}.json").read_text(encoding="utf-8"))
+    assert data["label"] == "bake-off"
