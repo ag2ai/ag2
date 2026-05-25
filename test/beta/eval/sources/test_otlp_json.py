@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the OTLP-JSON -> SpanData parser (``autogen.beta.eval._otlp_json``).
+"""Tests for the OTLP-JSON -> SpanData parser (``autogen.beta.eval.sources._otlp_json``).
 
 The fixture mirrors the real shape returned by Tempo's ``GET /api/traces/{id}``:
 ``batches`` of ``scopeSpans``, attributes as ``{"key","value":{"<type>Value"}}``,
 nanosecond times as strings, int attrs as strings, numeric/string status codes.
 """
 
-from autogen.beta.eval._otlp_json import otlp_json_to_spans
-from autogen.beta.eval._spans import spans_to_trace
+from autogen.beta.eval.sources._otlp_json import otlp_json_to_spans
+from autogen.beta.eval.sources._spans import spans_to_trace
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolErrorEvent
 
 _OTLP = {

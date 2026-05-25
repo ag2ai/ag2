@@ -20,7 +20,7 @@ from autogen.beta.eval import (
     TaskResult,
     Trace,
 )
-from autogen.beta.eval.store import to_dict
+from autogen.beta.eval.results.store import to_dict
 from autogen.beta.events import HaltEvent, ModelResponse, ToolCallEvent, Usage
 
 

@@ -29,11 +29,10 @@ from typing import Any
 
 from autogen.beta.events import ModelResponse
 
+from ..dataset import Suite, Task
 from ..pairwise import PairwiseComparator, PairwiseOutcome
-from ..suite import Suite
-from ..task import Task
+from ..sources import TraceRef, TraceSource
 from ..trace import Trace
-from ..trace_source import TraceRef, TraceSource
 
 __all__ = (
     "export_pairwise_cases",

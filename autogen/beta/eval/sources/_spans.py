@@ -50,7 +50,7 @@ from autogen.beta.events import (
     Usage,
 )
 
-from .trace import Trace
+from ..trace import Trace
 
 __all__ = (
     "SpanData",

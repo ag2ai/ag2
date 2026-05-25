@@ -45,7 +45,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, TypeAlias
 
 from ._types import Feedback, ScorerReturnTypeError
-from .task import Task
+from .dataset import Task
 from .trace import Trace
 
 __all__ = (

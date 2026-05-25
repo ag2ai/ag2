@@ -10,8 +10,7 @@ and persisted run JSON suitable for run-vs-run diffing.
 """
 
 from ._types import Feedback, ScorerReturnTypeError
-from .budgets import BudgetThresholds
-from .evaluate import evaluate
+from .dataset import EvalTarget, Suite, Task
 from .pairwise import (
     Agreement,
     PairwiseCase,
@@ -21,15 +20,11 @@ from .pairwise import (
     WinRate,
     evaluate_pairwise,
 )
-from .result import Aggregates, RunResult, ScoreStats, TaskResult
-from .runner import run, run_pairwise
+from .results import Aggregates, BudgetThresholds, RunResult, ScoreStats, TaskResult
+from .runtime import evaluate, run, run_pairwise
 from .scorer import Scorer, scorer
-from .suite import Suite
-from .target import EvalTarget
-from .task import Task
-from .tempo import TempoTraceSource
+from .sources import DirectoryTraceSource, InMemoryTraceSource, TempoTraceSource, TraceRef, TraceSource
 from .trace import Trace
-from .trace_source import DirectoryTraceSource, InMemoryTraceSource, TraceRef, TraceSource
 
 __all__ = (
     "Aggregates",

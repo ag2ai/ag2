@@ -18,9 +18,9 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from autogen.beta import Agent
-from autogen.beta.eval._capture import EventCapture
-from autogen.beta.eval._otel import readable_spans_to_trace
+from autogen.beta.eval.runtime._capture import EventCapture
 from autogen.beta.eval.scorers import no_tool_errors, tool_called
+from autogen.beta.eval.sources._otel import readable_spans_to_trace
 from autogen.beta.eval.trace import Trace
 from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent, ToolResultEvent, Usage
 from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware

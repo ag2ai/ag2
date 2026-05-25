@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for TempoTraceSource (``autogen.beta.eval.tempo``) with mocked HTTP.
+"""Tests for TempoTraceSource (``autogen.beta.eval.sources.tempo``) with mocked HTTP.
 
 Uses ``httpx.MockTransport`` so the search/fetch contract is exercised without
 a running Tempo. A live integration check lives in the agent_judge tryout.
@@ -11,7 +11,7 @@ a running Tempo. A live integration check lives in the agent_judge tryout.
 import httpx
 import pytest
 
-from autogen.beta.eval.tempo import TempoTraceSource
+from autogen.beta.eval.sources.tempo import TempoTraceSource
 from autogen.beta.events import ToolCallEvent
 
 _TRACE_DOC = {

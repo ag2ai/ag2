@@ -11,8 +11,8 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from autogen.beta._telemetry_consts import ATTR_SPAN_TYPE, SPAN_TYPE_AGENT, SPAN_TYPE_LLM
 from autogen.beta.eval import InMemoryTraceSource, Suite, TraceRef, evaluate
+from autogen.beta.eval.dataset.task import Task
 from autogen.beta.eval.scorers import agent_judge
-from autogen.beta.eval.task import Task
 from autogen.beta.eval.trace import Trace
 from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent
 from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware

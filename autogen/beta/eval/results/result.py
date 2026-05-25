@@ -21,10 +21,9 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from ._types import Feedback
-from .suite import Suite
-from .task import Task
-from .trace import TokenUsage, Trace
+from .._types import Feedback
+from ..dataset import Suite, Task
+from ..trace import TokenUsage, Trace
 
 __all__ = (
     "Aggregates",

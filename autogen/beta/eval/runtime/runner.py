@@ -6,7 +6,7 @@
 
 The runner builds a fresh :class:`~autogen.beta.eval.EvalTarget` per task
 via the user-supplied factory, attaches the framework's
-:class:`~autogen.beta.eval._capture.EventCapture` observer, and calls
+:class:`~autogen.beta.eval.runtime._capture.EventCapture` observer, and calls
 ``target.ask(task.inputs["input"], stream=stream, observers=[capture])``.
 The observer rides on the same extension point users pass their own
 observers through, so the runner composes with rather than replaces user
@@ -33,16 +33,13 @@ from uuid import uuid4
 from autogen.beta.config import ModelConfig
 from autogen.beta.stream import MemoryStream
 
+from ..dataset import EvalTarget, Suite, Task
+from ..pairwise import PairwiseComparator, PairwiseRunResult, evaluate_pairwise
+from ..results import BudgetThresholds, RunResult, TaskResult
+from ..scorer import Scorer
+from ..sources import InMemoryTraceSource, TraceRef
+from ..trace import Trace
 from ._capture import EventCapture
-from .budgets import BudgetThresholds
-from .pairwise import PairwiseComparator, PairwiseRunResult, evaluate_pairwise
-from .result import RunResult, TaskResult
-from .scorer import Scorer
-from .suite import Suite
-from .target import EvalTarget
-from .task import Task
-from .trace import Trace
-from .trace_source import InMemoryTraceSource, TraceRef
 
 __all__ = ("run", "run_pairwise")
 

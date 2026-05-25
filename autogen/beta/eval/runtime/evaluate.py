@@ -27,14 +27,12 @@ from uuid import uuid4
 
 from autogen.beta.events import ModelResponse
 
-from ._types import Feedback
-from .budgets import BudgetThresholds
-from .result import RunResult, TaskResult
-from .scorer import Scorer
-from .suite import Suite
-from .task import Task
-from .trace import Trace
-from .trace_source import TraceRef, TraceSource
+from .._types import Feedback
+from ..dataset import Suite, Task
+from ..results import BudgetThresholds, RunResult, TaskResult
+from ..scorer import Scorer
+from ..sources import TraceRef, TraceSource
+from ..trace import Trace
 
 __all__ = ("evaluate",)
 

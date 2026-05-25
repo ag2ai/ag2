@@ -30,10 +30,9 @@ from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 from uuid import uuid4
 
-from .suite import Suite
-from .task import Task
+from .dataset import Suite, Task
+from .sources import TraceRef, TraceSource
 from .trace import Trace
-from .trace_source import TraceRef, TraceSource
 
 __all__ = (
     "Agreement",

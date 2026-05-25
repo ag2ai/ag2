@@ -16,9 +16,9 @@ from typing import Any
 import pytest
 
 from autogen.beta.config import LLMClient, ModelConfig
+from autogen.beta.eval.dataset.task import Task
 from autogen.beta.eval.pairwise import PairwiseComparator
 from autogen.beta.eval.scorers import pairwise_judge
-from autogen.beta.eval.task import Task
 from autogen.beta.eval.trace import Trace
 from autogen.beta.events import ModelMessage, ModelResponse
 from autogen.beta.testing import TestConfig

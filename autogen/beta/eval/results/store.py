@@ -19,8 +19,8 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ._types import Feedback
-from .trace import TokenUsage
+from .._types import Feedback
+from ..trace import TokenUsage
 
 if TYPE_CHECKING:
     from .result import Aggregates, RunResult, ScoreStats, TaskResult

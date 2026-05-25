@@ -4,7 +4,7 @@
 
 """OpenTelemetry ``ReadableSpan`` → :class:`Trace` bridge (producer-side).
 
-Unlike :mod:`autogen.beta.eval._spans` (which is SDK-free), this module imports
+Unlike :mod:`autogen.beta.eval.sources._spans` (which is SDK-free), this module imports
 the OpenTelemetry SDK: it turns the spans a live run produced — or spans read
 back from an exporter — into the normalized :class:`SpanData` the pure adapter
 consumes. It is deliberately **not** re-exported from ``autogen.beta.eval`` so
@@ -16,8 +16,8 @@ from collections.abc import Sequence
 
 from opentelemetry.sdk.trace import ReadableSpan
 
+from ..trace import Trace
 from ._spans import SpanData, SpanEvent, spans_to_trace
-from .trace import Trace
 
 __all__ = (
     "readable_span_to_data",

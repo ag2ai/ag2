@@ -29,8 +29,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from ..trace import Trace
 from ._spans import SpanData, span_data_from_dict, span_data_to_dict, spans_to_trace
-from .trace import Trace
 
 __all__ = (
     "DirectoryTraceSource",

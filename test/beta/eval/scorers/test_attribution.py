@@ -7,8 +7,8 @@
 import pytest
 
 from autogen.beta.eval import InMemoryTraceSource, TraceRef, evaluate
+from autogen.beta.eval.dataset.task import Task
 from autogen.beta.eval.scorers import failure_attribution
-from autogen.beta.eval.task import Task
 from autogen.beta.eval.trace import Trace
 from autogen.beta.events import HaltEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent, ToolNotFoundEvent
 from autogen.beta.testing import TestConfig

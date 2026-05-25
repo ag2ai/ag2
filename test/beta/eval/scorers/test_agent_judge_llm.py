@@ -19,8 +19,8 @@ import os
 import pytest
 
 from autogen.beta.config import AnthropicConfig, GeminiConfig, OpenAIConfig
+from autogen.beta.eval.dataset.task import Task
 from autogen.beta.eval.scorers import agent_judge
-from autogen.beta.eval.task import Task
 from autogen.beta.eval.trace import Trace
 from autogen.beta.events import ModelMessage, ModelResponse
 

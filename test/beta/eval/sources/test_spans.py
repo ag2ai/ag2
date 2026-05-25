@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the span -> Trace adapter (``autogen.beta.eval._spans``)."""
+"""Tests for the span -> Trace adapter (``autogen.beta.eval.sources._spans``)."""
 
 import json
 
@@ -15,8 +15,8 @@ from autogen.beta._telemetry_consts import (
     SPAN_TYPE_LLM,
     SPAN_TYPE_TOOL,
 )
-from autogen.beta.eval._spans import SpanData, SpanEvent, spans_to_trace
 from autogen.beta.eval.scorers import no_tool_errors, tool_called
+from autogen.beta.eval.sources._spans import SpanData, SpanEvent, spans_to_trace
 from autogen.beta.events import (
     HumanInputRequest,
     HumanMessage,

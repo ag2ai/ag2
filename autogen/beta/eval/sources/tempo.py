@@ -21,9 +21,9 @@ from typing import Any
 
 import httpx
 
+from ..trace import Trace
 from ._otlp_json import otlp_json_to_spans
 from ._spans import spans_to_trace
-from .trace import Trace
 from .trace_source import TraceRef
 
 __all__ = ("TempoTraceSource",)

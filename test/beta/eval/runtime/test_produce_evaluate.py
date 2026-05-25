@@ -14,9 +14,9 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from autogen.beta import Agent
 from autogen.beta.eval import DirectoryTraceSource, Suite, evaluate
-from autogen.beta.eval._otel import readable_span_to_data
 from autogen.beta.eval.scorers import final_answer_matches, no_tool_errors, tool_called
-from autogen.beta.eval.trace_source import save_trace
+from autogen.beta.eval.sources._otel import readable_span_to_data
+from autogen.beta.eval.sources.trace_source import save_trace
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware
 from autogen.beta.testing import TestConfig

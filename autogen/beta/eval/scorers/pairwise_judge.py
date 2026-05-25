@@ -27,8 +27,8 @@ from autogen.beta.config import ModelConfig
 from autogen.beta.events import ModelResponse
 from autogen.beta.middleware.base import MiddlewareFactory
 
+from ..dataset import Task
 from ..pairwise import PairwiseComparator, PairwiseOutcome
-from ..task import Task
 from ..trace import Trace
 from .judge import _render_trajectory
 
