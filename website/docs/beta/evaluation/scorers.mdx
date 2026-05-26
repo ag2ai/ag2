@@ -72,7 +72,7 @@ The framework routes by return type:
 - A `Feedback` instance or `#!python list[Feedback]` lets you set the key explicitly, attach a comment, or emit multiple records from one call.
 
 !!! note
-    `#!python bool` is a subclass of `#!python int` in Python, so the framework checks `#!python isinstance(value, bool)` first — `#!python True` always becomes a pass-rate feedback, never a numeric one.
+    `#!python bool` is a subclass of `#!python int` in Python, so the framework checks `#!python isinstance(value, bool)` first — `#!python True` always becomes a pass-rate feedback, never a numeric one. On the flip side, returning `#!python 1` / `#!python 0` (an `#!python int`) is a *numeric* score and lands in `score_stats`, **not** `pass_rate` — return `#!python True` / `#!python False` for pass/fail.
 
 ## Reference-based vs reference-free
 
