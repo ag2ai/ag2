@@ -197,11 +197,11 @@ async def test_factory_without_config_parameter_works_with_warning(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_missing_input_key_warns(tmp_path: Path) -> None:
-    """A task whose inputs lack 'input' warns — the agent is asked with an empty prompt."""
+async def test_missing_input_key_raises(tmp_path: Path) -> None:
+    """A task whose inputs lack 'input' fails fast — run_agent grades inputs['input']."""
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"question": "Tokyo?"}}])
 
-    with pytest.warns(RuntimeWarning, match="no 'input'"):
+    with pytest.raises(ValueError, match=r"no 'input' key"):
         await run_agent(
             suite,
             agent=_build_weather_agent,
@@ -210,6 +210,22 @@ async def test_missing_input_key_warns(tmp_path: Path) -> None:
             model_config=_cassette("Tokyo"),
             concurrency=1,
         )
+
+
+@pytest.mark.asyncio
+async def test_explicit_empty_input_is_allowed(tmp_path: Path) -> None:
+    """An explicit empty ``"input": ""`` is intentional and runs (distinguished from a missing key)."""
+    suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": ""}}])
+
+    result = await run_agent(
+        suite,
+        agent=_build_weather_agent,
+        scorers=[called_get_weather],
+        store_dir=tmp_path,
+        model_config=_cassette("Tokyo"),
+        concurrency=1,
+    )
+    assert len(result.tasks) == 1
 
 
 @pytest.mark.asyncio

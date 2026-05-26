@@ -22,9 +22,9 @@ def final_answer_matches(
     """Pass iff the agent's final answer matches the task's reference output.
 
     Reads ``reference_outputs[field]`` for the expected value and compares it
-    against the agent's final answer: ``outputs[field]`` when a structured field
-    of that name is present, otherwise ``outputs["body"]`` — the final response
-    text, which is what the trace projection provides today.
+    against the agent's final answer: ``outputs["content"][field]`` when the agent
+    returned a structured (JSON-object) answer carrying that field — e.g. via
+    ``response_schema`` — otherwise ``outputs["body"]``, the final response text.
 
     Args:
         field: Key to read from ``reference_outputs`` and (when
@@ -50,7 +50,8 @@ def final_answer_matches(
         if reference_outputs is None or field not in reference_outputs:
             return False
         expected = reference_outputs[field]
-        actual = outputs.get(field, outputs.get("body"))
+        content = outputs.get("content")
+        actual = content[field] if isinstance(content, dict) and field in content else outputs.get("body")
         if actual is None:
             return False
         if matcher == "exact":

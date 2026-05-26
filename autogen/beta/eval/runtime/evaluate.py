@@ -19,6 +19,7 @@ come from the paired :class:`~autogen.beta.eval.Suite` task (via
 """
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -221,11 +222,22 @@ async def _publish_task_evaluated(
 
 
 def _outputs_from_trace(trace: Trace) -> dict[str, Any]:
-    """Project scorer ``outputs`` from a trace: the final model response's text."""
+    """Project scorer ``outputs`` from a trace's final model response, mirroring the
+    reply API: ``outputs["body"]`` is the response text (like :attr:`AgentReply.body`)
+    and ``outputs["content"]`` is the answer in its most-typed form (like
+    :meth:`AgentReply.content`) — the parsed value when the body is JSON, else the text
+    itself. A ``response_schema`` agent emits its answer as JSON, so a scorer reads its
+    structured fields via ``outputs["content"]["answer"]``.
+    """
     responses = trace.events_of(ModelResponse)
-    if responses and responses[-1].content is not None:
-        return {"body": responses[-1].content}
-    return {}
+    if not responses or responses[-1].content is None:
+        return {}
+    text = responses[-1].content
+    try:
+        content = json.loads(text)
+    except (ValueError, TypeError):
+        content = text
+    return {"body": text, "content": content}
 
 
 def _suite_from_refs(refs: list[TraceRef]) -> Suite:

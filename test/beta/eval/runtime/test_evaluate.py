@@ -34,6 +34,19 @@ def has_one_response(trace: Trace) -> bool:
     return len(trace.events_of(ModelResponse)) == 1
 
 
+@scorer
+def answer_is_paris(outputs: dict) -> bool:
+    """True iff the parsed ``content`` carries answer == 'Paris'."""
+    content = outputs.get("content")
+    return isinstance(content, dict) and content.get("answer") == "Paris"
+
+
+@scorer
+def free_text_content_mirrors_body(outputs: dict) -> bool:
+    """For a non-JSON answer, ``content`` is the text itself (mirrors reply.content())."""
+    return isinstance(outputs.get("content"), str) and outputs["content"] == outputs.get("body")
+
+
 @pytest.mark.asyncio()
 async def test_evaluate_scores_persists_and_joins_reference(tmp_path) -> None:
     source = InMemoryTraceSource([
@@ -76,3 +89,35 @@ async def test_evaluate_records_budget_violation(tmp_path) -> None:
     )
 
     assert result.aggregates.budget_violations == 1
+
+
+@pytest.mark.asyncio()
+async def test_json_object_answer_projects_structured_content(tmp_path) -> None:
+    """A JSON-object final answer is parsed into outputs["content"] (mirrors reply.content())."""
+    source = InMemoryTraceSource([
+        (TraceRef("t1", task_id="task-1"), _trace('{"answer": "Paris", "confidence": 0.9}')),
+    ])
+    suite = Suite.from_list([
+        {"task_id": "task-1", "inputs": {"input": "capital of France?"}, "reference_outputs": {"answer": "Paris"}},
+    ])
+
+    result = await evaluate_traces(
+        source,
+        # exact match only passes if "Paris" came from the parsed content, not the raw JSON text
+        scorers=[answer_is_paris, final_answer_matches(field="answer", matcher="exact")],
+        suite=suite,
+        store_dir=tmp_path,
+    )
+
+    assert result.pass_rate("answer_is_paris") == 1.0
+    assert result.pass_rate("final_answer_matches") == 1.0
+
+
+@pytest.mark.asyncio()
+async def test_free_text_answer_content_mirrors_body(tmp_path) -> None:
+    """A non-JSON answer leaves content as the text itself (== body)."""
+    source = InMemoryTraceSource([(TraceRef("t1", task_id="task-1"), _trace("Paris is the capital."))])
+
+    result = await evaluate_traces(source, scorers=[free_text_content_mirrors_body], store_dir=tmp_path)
+
+    assert result.pass_rate("free_text_content_mirrors_body") == 1.0

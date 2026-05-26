@@ -5,11 +5,23 @@
 """Public-API tests for :class:`Suite`, :meth:`Suite.from_list`, and :meth:`Suite.from_jsonl`."""
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel
 
 from autogen.beta.eval import Suite, Task
+
+
+class _RefModel(BaseModel):
+    answer: str
+    confidence: float = 1.0
+
+
+@dataclass
+class _RefDataclass:
+    answer: str
 
 
 class TestFromList:
@@ -157,3 +169,35 @@ def test_suite_tasks_is_a_tuple() -> None:
 
     assert isinstance(suite.tasks, tuple)
     assert len(suite.tasks) == len(suite)
+
+
+class TestReferenceOutputsCoercion:
+    """reference_outputs is normalised to a plain dict; non-mapping values raise."""
+
+    def test_pydantic_model_is_coerced_to_dict(self) -> None:
+        task = Task(task_id="t", inputs={"input": "q"}, reference_outputs=_RefModel(answer="Paris"))
+
+        assert task.reference_outputs == {"answer": "Paris", "confidence": 1.0}
+
+    def test_dataclass_instance_is_coerced_to_dict(self) -> None:
+        task = Task(task_id="t", inputs={"input": "q"}, reference_outputs=_RefDataclass(answer="Paris"))
+
+        assert task.reference_outputs == {"answer": "Paris"}
+
+    def test_dict_is_kept(self) -> None:
+        task = Task(task_id="t", inputs={"input": "q"}, reference_outputs={"answer": "Paris"})
+
+        assert task.reference_outputs == {"answer": "Paris"}
+
+    def test_none_is_kept(self) -> None:
+        assert Task(task_id="t", inputs={"input": "q"}).reference_outputs is None
+
+    def test_non_mapping_raises_type_error(self) -> None:
+        with pytest.raises(TypeError, match="reference_outputs must be a dict"):
+            Task(task_id="t", inputs={"input": "q"}, reference_outputs=["Paris"])
+
+    def test_coercion_applies_through_from_list(self) -> None:
+        suite = Suite.from_list([{"inputs": {"input": "q"}, "reference_outputs": _RefModel(answer="Paris")}])
+
+        [task] = list(suite)
+        assert task.reference_outputs == {"answer": "Paris", "confidence": 1.0}

@@ -162,10 +162,10 @@ class TestFinalAnswerMatches:
 
     @pytest.mark.asyncio
     async def test_uses_structured_field_when_outputs_has_one(self) -> None:
-        """When the agent used response_schema=, outputs is the response dict."""
+        """When the agent used response_schema=, outputs["content"] is the response dict."""
         feedback = await _run(
             final_answer_matches(field="city"),
-            outputs={"city": "Tokyo", "temperature": "72F"},
+            outputs={"content": {"city": "Tokyo", "temperature": "72F"}},
             reference_outputs={"city": "Tokyo"},
         )
 

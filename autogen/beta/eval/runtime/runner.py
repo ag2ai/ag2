@@ -309,6 +309,13 @@ async def _produce(
     concurrency: int,
 ) -> InMemoryTraceSource:
     """Run ``factory``'s agent across ``tasks``, returning one Trace per task (in order)."""
+    tasks = list(tasks)
+    missing = [t.task_id for t in tasks if "input" not in t.inputs]
+    if missing:
+        raise ValueError(
+            f"run_agent asks the agent inputs['input'], but these task(s) have no 'input' key: {missing}. "
+            'Add an "input" to each (use "" for an intentionally empty prompt).'
+        )
     semaphore = asyncio.Semaphore(max(1, concurrency))
     produced = await asyncio.gather(
         *(_produce_one(semaphore, task, factory, accepts_config, model_config) for task in tasks)
@@ -336,15 +343,6 @@ async def _produce_one(
         except Exception as exc:
             exception = exc
         else:
-            prompt = task.inputs.get("input")
-            if prompt is None:
-                warnings.warn(
-                    f"task {task.task_id!r} has no 'input' in its inputs; asking the agent with an empty "
-                    "prompt — put the user prompt under inputs['input'].",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-                prompt = ""
             telemetry = TelemetryMiddleware(
                 tracer_provider=provider,
                 agent_name=getattr(target, "name", "agent"),
@@ -352,7 +350,7 @@ async def _produce_one(
             )
             started = time.perf_counter()
             try:
-                await target.ask(prompt, stream=stream, middleware=[telemetry])
+                await target.ask(task.inputs["input"], stream=stream, middleware=[telemetry])
             except Exception as exc:
                 exception = exc
             finally:

@@ -32,7 +32,7 @@ A scorer can declare any subset of these five parameters, by name:
 | Parameter | Type | What it is |
 |---|---|---|
 | `inputs` | `#!python dict[str, Any]` | The task's input payload — typically `{"input": "the user's prompt"}`. |
-| `outputs` | `#!python dict[str, Any]` | The agent's final answer, projected from the trace — `{"body": <final model-response text>}`. |
+| `outputs` | `#!python dict[str, Any]` | The agent's final answer projected from the trace, mirroring the reply API: `{"body": <final text>, "content": <typed answer>}`. `body` is the text (like `#!python reply.body`); `content` is the parsed value when the answer is JSON — e.g. a `response_schema` agent — otherwise the text (like `#!python await reply.content()`). Read structured fields via `#!python outputs["content"]["answer"]`. |
 | `reference_outputs` | `#!python dict[str, Any] \| None` | The task's expected output, if the dataset provided one. |
 | `trace` | `Trace` | The typed events (model responses, tool calls / results, …) plus tokens, duration, and exception. |
 | `task` | `Task` | The task record (id, tags, metadata). |
