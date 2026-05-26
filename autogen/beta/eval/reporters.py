@@ -37,7 +37,7 @@ def console_reporter(event: BaseEvent) -> None:
     """Print eval lifecycle progress to stdout. Subscribe to a run's stream to use it."""
     if isinstance(event, EvalStarted):
         tag = f"[{event.label}] " if event.label else ""
-        print(f"{tag}running {event.total} task-run_agent(s) over {event.suite!r}...")
+        print(f"{tag}running {event.total} task-run(s) over {event.suite!r}...")
     elif isinstance(event, VariantStarted):
         print(f"  → variant {event.variant} ({event.index}/{event.total})")
     elif isinstance(event, TaskEvaluated):
