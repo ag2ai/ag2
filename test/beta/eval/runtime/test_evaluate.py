@@ -26,7 +26,7 @@ def _trace(answer: str, *, tool_name: str | None = None, in_tok: int = 0, out_to
     events.append(
         ModelResponse(message=ModelMessage(answer), usage=Usage(prompt_tokens=in_tok, completion_tokens=out_tok))
     )
-    return Trace(events=events, reply=None, exception=None, duration_ms=10)
+    return Trace(events=events, exception=None, duration_ms=10)
 
 
 @scorer

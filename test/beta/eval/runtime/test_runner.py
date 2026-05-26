@@ -197,6 +197,22 @@ async def test_factory_without_config_parameter_works_with_warning(tmp_path: Pat
 
 
 @pytest.mark.asyncio
+async def test_missing_input_key_warns(tmp_path: Path) -> None:
+    """A task whose inputs lack 'input' warns — the agent is asked with an empty prompt."""
+    suite = Suite.from_list([{"task_id": "t1", "inputs": {"question": "Tokyo?"}}])
+
+    with pytest.warns(RuntimeWarning, match="no 'input'"):
+        await run(
+            suite,
+            target=_build_weather_agent,
+            scorers=[called_get_weather],
+            store_dir=tmp_path,
+            model_config=_cassette("Tokyo"),
+            concurrency=1,
+        )
+
+
+@pytest.mark.asyncio
 async def test_run_id_is_generated_unless_provided(tmp_path: Path) -> None:
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}}])
 

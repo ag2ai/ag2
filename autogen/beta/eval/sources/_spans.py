@@ -32,12 +32,13 @@ A span recognized by no convention is skipped; if a whole trace reconstructs to
 **zero** events, :func:`spans_to_trace` logs a warning (a likely unrecognized
 dialect) rather than silently grading an empty trace.
 
-Dormant on the OTEL path (so ``failure_attribution``'s halt/loop and
-tool-not-found branches don't fire): ``HaltEvent`` and ``ToolNotFoundEvent`` are
+Never reconstructed on the OTEL path: ``HaltEvent`` and ``ToolNotFoundEvent`` are
 **stream-only** AG2 events — emitted outside the ``TelemetryMiddleware`` hooks —
-so they never become spans. Closing this would mean expanding
-``TelemetryMiddleware`` to *subscribe* to the stream for them (mirrors
-``_HaltCheckMiddleware``). Deferred: niche, AG2-specific.
+so they never become spans. Eval therefore has no deterministic detectors for
+them (the LLM attributor can still classify a loop / hallucinated tool
+semantically). Closing this would mean expanding ``TelemetryMiddleware`` to
+*subscribe* to the stream for them (mirrors ``_HaltCheckMiddleware``). Deferred:
+niche, AG2-specific.
 """
 
 import json
@@ -233,7 +234,7 @@ def spans_to_trace(
         )
 
     resolved_duration = duration_ms if duration_ms is not None else _root_duration_ms(ordered)
-    return Trace(events=events, reply=None, exception=_root_exception(ordered), duration_ms=resolved_duration)
+    return Trace(events=events, exception=_root_exception(ordered), duration_ms=resolved_duration)
 
 
 # ── GenAI dialect readers (ag2.span.type + gen_ai.*) ────────────────────────

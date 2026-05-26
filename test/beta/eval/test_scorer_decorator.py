@@ -20,7 +20,7 @@ from autogen.beta.events import ToolCallEvent
 
 
 def _trace(*events: Any, duration_ms: int = 0) -> Trace:
-    return Trace(events=list(events), reply=None, exception=None, duration_ms=duration_ms)
+    return Trace(events=list(events), exception=None, duration_ms=duration_ms)
 
 
 def _task(task_id: str = "t-0", **kwargs: Any) -> Task:

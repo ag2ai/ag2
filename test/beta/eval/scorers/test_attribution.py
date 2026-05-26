@@ -10,12 +10,12 @@ from autogen.beta.eval import InMemoryTraceSource, TraceRef, evaluate
 from autogen.beta.eval.dataset.task import Task
 from autogen.beta.eval.scorers import failure_attribution
 from autogen.beta.eval.trace import Trace
-from autogen.beta.events import HaltEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent, ToolNotFoundEvent
+from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent
 from autogen.beta.testing import TestConfig
 
 
 def _trace(events: list, *, exception: BaseException | None = None) -> Trace:
-    return Trace(events=events, reply=None, exception=exception, duration_ms=0)
+    return Trace(events=events, exception=exception, duration_ms=0)
 
 
 async def _attribute(scorer, trace: Trace, *, outputs: dict | None = None) -> list:
@@ -48,19 +48,6 @@ async def test_tool_failure_records_decisive_step() -> None:
     [fb] = await _attribute(failure_attribution(), _trace([call, err]))
     assert fb.value == "tool_failure"
     assert fb.detail["decisive_step"] == 1  # index of the error event
-
-
-@pytest.mark.asyncio()
-async def test_hallucinated_tool() -> None:
-    not_found = ToolNotFoundEvent.from_call(ToolCallEvent("ghost", arguments="{}"), RuntimeError("nf"))
-    [fb] = await _attribute(failure_attribution(), _trace([not_found]))
-    assert fb.value == "hallucinated_tool"
-
-
-@pytest.mark.asyncio()
-async def test_halt_is_loop() -> None:
-    [fb] = await _attribute(failure_attribution(), _trace([HaltEvent(reason="loop detected", source="LoopDetector")]))
-    assert fb.value == "loop"
 
 
 @pytest.mark.asyncio()

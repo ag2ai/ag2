@@ -7,7 +7,7 @@ This page covers the rest of the offline eval pipeline: building a `Suite` of ta
 
 ## The stream is the foundation
 
-Every action inside `agent.ask(...)` — model requests, model responses, tool calls, tool results, halts, sub-task lifecycle — flows through the agent's event stream as a typed event. The eval framework subscribes to that stream and a `Trace` is just the events that landed on it during one task. Scorers grade what's in the trace.
+Every action inside `agent.ask(...)` — model requests, model responses, tool calls, tool results — is recorded as an OpenTelemetry span. The eval framework reconstructs a `Trace` (the typed events) from those spans — the same path it uses to grade stored or cloud traces. Scorers grade what's in the trace.
 
 That framing has three concrete consequences:
 
@@ -43,7 +43,7 @@ Fields:
 | `task_id` | optional | Stable identifier. If absent, auto-filled as `task-0000`, `task-0001`, …. |
 | `inputs` | **required** | Dict containing at least `"input"` — the prompt passed to `agent.ask(...)`. |
 | `reference_outputs` | optional | Expected output for reference-based scorers. |
-| `tags` | optional | List of labels. Useful for filtering / slicing later. |
+| `tags` | optional | List of labels. Slice results by them — `result.pass_rate(key, tag="happy-path")`. |
 | `metadata` | optional | Free-form dict. Surfaces in the persisted run JSON. |
 
 !!! tip
@@ -144,7 +144,7 @@ Tasks run in parallel up to `concurrency`, bounded by an `asyncio.Semaphore`. De
 `BudgetThresholds` records violations on each task's `budget_violation` flag but never aborts a task that goes over. The aggregate count surfaces in `result.aggregates.budget_violations` — useful as a CI regression signal ("zero tasks may exceed budget").
 
 !!! warning
-    Budgets are **observational** in v0. If you need a hard kill switch, use [observers](/docs/beta/advanced/observers/) (`TokenMonitor` with `AlertPolicy(severity=FATAL)`) — the agent will halt on `HaltEvent`, which `trace.halted` then surfaces.
+    Budgets are **observational** in v0. If you need a hard kill switch, use [observers](/docs/beta/advanced/observers/) (`TokenMonitor` with `AlertPolicy(severity=FATAL)`) — the agent halts via a `HaltEvent` at runtime.
 
 ## What you get back — `RunResult`
 
@@ -170,6 +170,8 @@ result.tasks[0].budget_violation  # bool
 result.pass_rate("scorer_name")    # float — boolean scorers
 result.score_stats("scorer_name")  # ScoreStats(mean, p50, p95, n) — numeric scorers
 result.value_counts("scorer_name") # dict[label, count] — categorical scorers
+result.pass_rate("scorer_name", tag="hard")  # any accessor takes tag= to slice to one segment
+result.tags                        # frozenset[str] — the tags present, for slicing
 result.aggregates                  # Aggregates — everything together
 result.aggregates.tokens           # TokenUsage(input, output, cache_creation, cache_read)
 result.aggregates.errors           # int — tasks where the agent raised
@@ -200,7 +202,6 @@ Pass rates:
   called_get_weather_once   100.0% (5/5)
   final_answer_matches      100.0% (5/5)
   no_tool_errors            100.0% (5/5)
-  no_tool_not_found         100.0% (5/5)
   token_budget              100.0% (5/5)
   tool_called[get_weather]  100.0% (5/5)
 
@@ -236,7 +237,6 @@ Every `run()` writes a JSON file to `store_dir/<run_id>.json` before returning. 
       "events": [
         { "type": "ToolCallEvent", "name": "get_weather", "arguments": "..." }
       ],
-      "reply": { "body": "Tokyo is sunny...", "response": null },
       "exception": null,
       "tokens": { "input": 423, "output": 78, "cache_creation": 0, "cache_read": 0 },
       "feedback": [
@@ -337,7 +337,7 @@ The framework catches exceptions at three levels and records them on the task in
 
 | Level | What happens |
 |---|---|
-| Target factory raises | Task gets `trace.exception = <the error>`, no events, no reply. Other tasks continue. |
+| Target factory raises | Task gets `trace.exception = <the error>`, no events. Other tasks continue. |
 | `agent.ask()` raises | Same — exception lands on `trace.exception`, other tasks continue. |
 | A scorer raises | The scorer's feedback becomes `Feedback(score=None, comment="scorer raised: ...")`. Other scorers run normally. |
 

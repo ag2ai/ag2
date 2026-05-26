@@ -19,7 +19,7 @@ _TASKS = ("t1", "t2", "t3", "t4")
 
 
 def _trace(answer: str) -> Trace:
-    return Trace(events=[ModelResponse(message=ModelMessage(answer))], reply=None, exception=None, duration_ms=0)
+    return Trace(events=[ModelResponse(message=ModelMessage(answer))], exception=None, duration_ms=0)
 
 
 def _source(label: str) -> InMemoryTraceSource:

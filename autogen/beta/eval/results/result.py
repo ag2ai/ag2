@@ -91,6 +91,7 @@ class RunResult:
         "_label",
         "_store_dir",
         "_aggregates",
+        "_sliced",
     )
 
     def __init__(
@@ -116,6 +117,7 @@ class RunResult:
         self._label = label
         self._store_dir = Path(store_dir) if store_dir is not None else None
         self._aggregates = _compute_aggregates(tasks)
+        self._sliced: dict[str, Aggregates] = {}
 
     @property
     def run_id(self) -> str:
@@ -167,17 +169,40 @@ class RunResult:
         """Run-level rollups computed from the per-task feedback and traces."""
         return self._aggregates
 
-    def pass_rate(self, key: str) -> float:
-        """Pass rate for a boolean scorer (``0.0`` if no boolean feedback under ``key``)."""
-        return self._aggregates.pass_rate.get(key, 0.0)
+    @property
+    def tags(self) -> frozenset[str]:
+        """Every tag present across the run's tasks — the values usable in ``tag=`` lookups."""
+        return frozenset(tag for tr in self._tasks for tag in tr.task.tags)
 
-    def score_stats(self, key: str) -> ScoreStats:
-        """Numeric stats for a scorer (zeros when nothing numeric was recorded under ``key``)."""
-        return self._aggregates.score_stats.get(key, ScoreStats(mean=0.0, p50=0.0, p95=0.0, n=0))
+    def pass_rate(self, key: str, *, tag: str | None = None) -> float:
+        """Pass rate for a boolean scorer (``0.0`` if no boolean feedback under ``key``).
 
-    def value_counts(self, key: str) -> dict[str, int]:
-        """Categorical label counts for a scorer (empty dict when nothing categorical was recorded)."""
-        return dict(self._aggregates.value_counts.get(key, {}))
+        Pass ``tag`` to compute it over only the tasks carrying that tag — e.g.
+        ``pass_rate("tool_called", tag="adversarial")``. Unset slices the whole run.
+        """
+        return self._agg(tag).pass_rate.get(key, 0.0)
+
+    def score_stats(self, key: str, *, tag: str | None = None) -> ScoreStats:
+        """Numeric stats for a scorer (zeros when nothing numeric under ``key``).
+
+        Pass ``tag`` to restrict to tasks carrying that tag.
+        """
+        return self._agg(tag).score_stats.get(key, ScoreStats(mean=0.0, p50=0.0, p95=0.0, n=0))
+
+    def value_counts(self, key: str, *, tag: str | None = None) -> dict[str, int]:
+        """Categorical label counts for a scorer (empty dict when nothing categorical under ``key``).
+
+        Pass ``tag`` to restrict to tasks carrying that tag.
+        """
+        return dict(self._agg(tag).value_counts.get(key, {}))
+
+    def _agg(self, tag: str | None) -> Aggregates:
+        """Aggregates for the whole run (``tag`` is ``None``) or only the tasks carrying ``tag`` (memoized)."""
+        if tag is None:
+            return self._aggregates
+        if tag not in self._sliced:
+            self._sliced[tag] = _compute_aggregates(tuple(tr for tr in self._tasks if tag in tr.task.tags))
+        return self._sliced[tag]
 
     def summary(self) -> str:
         """Human-readable multi-line table of run metadata and aggregates.

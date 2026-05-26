@@ -19,14 +19,13 @@ The closures inside each factory are created once per scorer instance
 which AGENTS.md explicitly permits.
 """
 
-from autogen.beta.events import ToolCallEvent, ToolErrorEvent, ToolNotFoundEvent
+from autogen.beta.events import ToolCallEvent, ToolErrorEvent
 
 from ..scorer import Scorer
 from ..trace import Trace
 
 __all__ = (
     "no_tool_errors",
-    "no_tool_not_found",
     "tool_called",
 )
 
@@ -54,29 +53,9 @@ def tool_called(name: str, *, exactly: int | None = None) -> Scorer:
 
 
 def no_tool_errors() -> Scorer:
-    """Pass iff zero :class:`ToolErrorEvent`\\ s fired during the run.
-
-    Note: ``ToolNotFoundEvent`` is a subclass of ``ToolErrorEvent``, so a
-    hallucinated tool name fails this check as well. Use
-    :func:`no_tool_not_found` alongside this one when you want to tell
-    those two failure modes apart in your aggregates.
-    """
+    """Pass iff zero :class:`ToolErrorEvent`\\ s fired during the run."""
 
     def _check(trace: Trace) -> bool:
         return len(trace.events_of(ToolErrorEvent)) == 0
 
     return Scorer(_check, key="no_tool_errors")
-
-
-def no_tool_not_found() -> Scorer:
-    """Pass iff zero :class:`ToolNotFoundEvent`\\ s fired during the run.
-
-    A ``ToolNotFoundEvent`` means the model invoked a tool name the
-    agent didn't have — usually a hallucination. Distinct signal from
-    a tool that *exists* but raised, which is :func:`no_tool_errors`.
-    """
-
-    def _check(trace: Trace) -> bool:
-        return len(trace.events_of(ToolNotFoundEvent)) == 0
-
-    return Scorer(_check, key="no_tool_not_found")

@@ -11,14 +11,15 @@ __all__ = ("token_budget",)
 
 
 def token_budget(max_tokens: int) -> Scorer:
-    """Pass iff total ``input + output`` tokens across the run stay at or under ``max_tokens``.
+    """Pass iff a task's total ``input + output`` tokens stay at or under ``max_tokens``.
 
-    Cache tokens are not counted — they are reported separately on
-    :class:`~autogen.beta.eval.trace.TokenUsage` and (in most providers'
-    pricing) charged at a different rate. If you want to enforce a
-    *hard* per-task cap that aborts the run, use
-    :class:`~autogen.beta.eval.BudgetThresholds` instead; this scorer
-    only records a pass/fail signal that flows into aggregates.
+    The check is **per task** — ``trace.tokens.total`` is one task's usage. Cache
+    tokens are excluded; they're reported separately on
+    :class:`~autogen.beta.eval.trace.TokenUsage` and priced differently by most
+    providers. This emits a pass/fail signal into the run's pass-rate aggregate;
+    for the same per-task limit recorded as a dedicated ``budget_violation`` count
+    instead, use :class:`~autogen.beta.eval.BudgetThresholds` (also observational —
+    neither aborts the run).
     """
 
     def _check(trace: Trace) -> bool:

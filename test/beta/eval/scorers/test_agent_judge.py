@@ -20,7 +20,7 @@ from autogen.beta.testing import TestConfig
 
 
 def _empty_trace() -> Trace:
-    return Trace(events=[], reply=None, exception=None, duration_ms=0)
+    return Trace(events=[], exception=None, duration_ms=0)
 
 
 async def _score(scorer, *, outputs, reference_outputs=None, trace=None, inputs=None) -> list:
@@ -61,7 +61,7 @@ async def test_verdict_without_label_has_no_value() -> None:
 
 @pytest.mark.asyncio()
 async def test_multi_dimensional_ensemble_produces_per_dimension_columns(tmp_path) -> None:
-    trace = Trace(events=[ModelResponse(message=ModelMessage("Paris"))], reply=None, exception=None, duration_ms=5)
+    trace = Trace(events=[ModelResponse(message=ModelMessage("Paris"))], exception=None, duration_ms=5)
     source = InMemoryTraceSource([(TraceRef("t1", task_id="task-1"), trace)])
     suite = Suite.from_list([
         {"task_id": "task-1", "inputs": {"input": "capital of France?"}, "reference_outputs": {"answer": "Paris"}},
@@ -85,7 +85,6 @@ async def test_multi_dimensional_ensemble_produces_per_dimension_columns(tmp_pat
 async def test_trajectory_judge_runs_with_trace() -> None:
     trace = Trace(
         events=[ToolCallEvent("get_weather", arguments='{"city": "NYC"}')],
-        reply=None,
         exception=None,
         duration_ms=0,
     )

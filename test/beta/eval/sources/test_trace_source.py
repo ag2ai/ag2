@@ -17,8 +17,8 @@ _MS = 1_000_000
 
 @pytest.mark.asyncio()
 async def test_in_memory_source_lists_and_loads() -> None:
-    t1 = Trace(events=[], reply=None, exception=None, duration_ms=5)
-    t2 = Trace(events=[], reply=None, exception=None, duration_ms=7)
+    t1 = Trace(events=[], exception=None, duration_ms=5)
+    t2 = Trace(events=[], exception=None, duration_ms=7)
     source = InMemoryTraceSource([(TraceRef("a", task_id="task-a"), t1), (TraceRef("b"), t2)])
 
     refs = [ref async for ref in source.list()]

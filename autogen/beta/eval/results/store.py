@@ -11,7 +11,7 @@ existing fields keep their names and types.
 The serializer relies on :class:`~autogen.beta.events.BaseEvent.to_dict`
 for event payload shapes rather than inventing a parallel event
 serializer. Anything outside ``autogen.beta.events`` (``Feedback``,
-exceptions, reply bodies) is handled here.
+exceptions) is handled here.
 """
 
 import json
@@ -76,7 +76,6 @@ def _task_to_dict(tr: "TaskResult") -> dict[str, Any]:
         "metadata": tr.task.metadata,
         "duration_ms": tr.trace.duration_ms,
         "events": [_event_to_dict(e) for e in tr.trace.events],
-        "reply": _reply_to_dict(tr.trace.reply),
         "exception": _exception_to_dict(tr.trace.exception),
         "tokens": _tokens_to_dict(tr.trace.tokens),
         "feedback": [_feedback_to_dict(fb) for fb in tr.feedback],
@@ -111,17 +110,6 @@ def _exception_to_dict(exc: BaseException | None) -> dict[str, Any] | None:
     if exc is None:
         return None
     return {"type": type(exc).__name__, "message": str(exc)}
-
-
-def _reply_to_dict(reply: Any) -> dict[str, Any] | None:
-    """Serialize the target's reply as ``{"body": str | None, "response": dict | None}``."""
-    if reply is None:
-        return None
-    body = getattr(reply, "body", None)
-    response = getattr(reply, "response", None)
-    if not isinstance(response, dict):
-        response = None
-    return {"body": body, "response": response}
 
 
 def _tokens_to_dict(tokens: TokenUsage) -> dict[str, int]:

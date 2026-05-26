@@ -8,7 +8,6 @@ from autogen.beta.eval import Trace
 from autogen.beta.eval.trace import TokenUsage
 from autogen.beta.events import (
     BaseEvent,
-    HaltEvent,
     ModelMessage,
     ModelResponse,
     ToolCallEvent,
@@ -23,7 +22,6 @@ def _trace(
 ) -> Trace:
     return Trace(
         events=list(events),
-        reply=None,
         exception=exception,
         duration_ms=duration_ms,
     )
@@ -59,19 +57,6 @@ class TestEventsOf:
         trace = _trace(ToolCallEvent(name="get_weather", arguments="{}"))
 
         assert trace.events_of(ToolCallEvent, name="get_news") == ()
-
-
-class TestHalted:
-    def test_true_when_halt_event_present(self) -> None:
-        halt = HaltEvent(reason="fatal alert", source="test")
-        trace = _trace(ModelMessage("..."), halt)
-
-        assert trace.halted is True
-
-    def test_false_when_no_halt_event(self) -> None:
-        trace = _trace(ModelMessage("clean"))
-
-        assert trace.halted is False
 
 
 class TestTokens:
@@ -138,8 +123,3 @@ class TestProperties:
         trace = _trace(exception=err)
 
         assert trace.exception is err
-
-    def test_reply_defaults_to_none(self) -> None:
-        trace = _trace()
-
-        assert trace.reply is None

@@ -2,22 +2,26 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Trace — a read-only view of one captured eval run.
+"""Trace — a read-only view of one graded unit of work.
 
-A :class:`Trace` is what every scorer sees: the full ordered sequence of
-events the agent emitted, the final :class:`~autogen.beta.AgentReply` (or
-exception), and wall-clock duration. Trace is the AG2-native equivalent
-of LangSmith's ``Run`` object — but the events are *typed*
-(``ToolCallEvent``, ``ToolResultEvent``, ``HaltEvent``, …), so scorers
-consume structure directly instead of parsing free-form text.
+A :class:`Trace` is what every scorer sees: the ordered sequence of *typed*
+events (``ModelResponse``, ``ToolCallEvent``, ``ToolResultEvent``, …) plus the
+run-level signals — wall-clock duration and the exception, if the run crashed.
+Scorers consume structure directly (``trace.events_of(ToolCallEvent)``) rather
+than parsing free-form text.
+
+A Trace is **reconstructed from OpenTelemetry spans** — the same path for a live
+``run`` and for grading stored / cloud traces via ``evaluate`` — so it carries
+exactly what those spans captured. Stream-only events that never become spans
+(``HaltEvent``, ``ToolNotFoundEvent``) are absent on this path; see
+:mod:`autogen.beta.eval.sources._spans`.
 """
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import TypeVar
 
-from autogen.beta.agent import AgentReply
-from autogen.beta.events import BaseEvent, HaltEvent, ModelResponse
+from autogen.beta.events import BaseEvent, ModelResponse
 
 __all__ = (
     "TokenUsage",
@@ -54,25 +58,23 @@ class Trace:
 
     Scorers receive a Trace through the ``trace`` parameter (resolved by
     name by the ``@scorer`` decorator). Use :meth:`events_of` to filter
-    by event type, and :attr:`tokens` / :attr:`duration_ms` / :attr:`halted`
-    / :attr:`exception` for run-level signals.
+    by event type, and :attr:`tokens` / :attr:`duration_ms` / :attr:`exception`
+    for run-level signals.
 
     Trace is constructed by the eval runner and has no equivalent inside
     ``autogen.beta`` itself — it is an eval-only view object.
     """
 
-    __slots__ = ("_events", "_reply", "_exception", "_duration_ms")
+    __slots__ = ("_events", "_exception", "_duration_ms")
 
     def __init__(
         self,
         *,
         events: Iterable[BaseEvent],
-        reply: AgentReply[Any, Any] | None,
         exception: BaseException | None,
         duration_ms: int,
     ) -> None:
         self._events: tuple[BaseEvent, ...] = tuple(events)
-        self._reply = reply
         self._exception = exception
         self._duration_ms = duration_ms
 
@@ -82,19 +84,9 @@ class Trace:
         return self._events
 
     @property
-    def reply(self) -> AgentReply[Any, Any] | None:
-        """Final ``AgentReply`` from ``agent.ask(...)``, or ``None`` if the run raised."""
-        return self._reply
-
-    @property
     def exception(self) -> BaseException | None:
         """Exception raised by ``agent.ask(...)``, or ``None`` on clean completion."""
         return self._exception
-
-    @property
-    def halted(self) -> bool:
-        """``True`` iff a :class:`HaltEvent` was emitted (e.g. by an ``AlertPolicy``)."""
-        return any(isinstance(e, HaltEvent) for e in self._events)
 
     @property
     def duration_ms(self) -> int:

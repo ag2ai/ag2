@@ -8,8 +8,8 @@ The Who&When-style question: when a run fails, *what* went wrong, *where*, and
 (in a multi-agent trace) *who* was responsible. Two complementary detectors:
 
 * **Deterministic** — scans the typed :class:`Trace` for unambiguous mechanical
-  failures (crash, halt/loop, hallucinated tool, terminal tool error, no
-  answer) and names the exact event. Fast, free, reproducible.
+  failures (crash, terminal tool error, no answer) and names the exact event.
+  Fast, free, reproducible.
 * **LLM attributor** (when a ``config`` is given) — reads the numbered
   trajectory and attributes *semantic* failures (incorrect/incomplete answer,
   ignored constraint, hallucinated fact) the rules can't see.
@@ -32,11 +32,9 @@ from autogen.beta.agent import Agent
 from autogen.beta.config import ModelConfig
 from autogen.beta.events import (
     BaseEvent,
-    HaltEvent,
     ModelResponse,
     ToolCallEvent,
     ToolErrorEvent,
-    ToolNotFoundEvent,
     ToolResultEvent,
 )
 from autogen.beta.middleware.base import MiddlewareFactory
@@ -56,8 +54,8 @@ __all__ = (
 ERROR_MODES: tuple[str, ...] = (
     "none",  # no failure
     "tool_failure",  # a tool errored (terminally)
-    "hallucinated_tool",  # called a tool that does not exist
-    "loop",  # halted by a loop / cadence / alert guard
+    "hallucinated_tool",  # called a tool that does not exist (semantic)
+    "loop",  # stuck repeating without progress (semantic)
     "crash",  # the run raised an exception
     "no_answer",  # finished with no final answer
     "incorrect_answer",  # answered, but wrong (semantic)
@@ -159,16 +157,6 @@ def _detect_mechanical(trace: Trace, agent_name: str | None) -> Attribution | No
             f"run raised {type(trace.exception).__name__}: {trace.exception}",
         )
 
-    halts = trace.events_of(HaltEvent)
-    if halts:
-        return _mech(events, halts[-1], "loop", agent_name, f"run halted: {halts[-1].reason}")
-
-    not_found = trace.events_of(ToolNotFoundEvent)
-    if not_found:
-        return _mech(
-            events, not_found[0], "hallucinated_tool", agent_name, f"called unknown tool {not_found[0].name!r}"
-        )
-
     has_answer = any(r.content for r in trace.events_of(ModelResponse))
     tool_errors = trace.events_of(ToolErrorEvent)
     if tool_errors and not has_answer:
@@ -268,8 +256,6 @@ def _describe(event: BaseEvent) -> str:
         return f"tool result: {event.name}"
     if isinstance(event, ToolCallEvent):
         return f"tool call: {event.name}({event.arguments})"
-    if isinstance(event, HaltEvent):
-        return f"HALT: {event.reason}"
     if isinstance(event, ModelResponse):
         return f"model: {event.content!r}"
     return type(event).__name__

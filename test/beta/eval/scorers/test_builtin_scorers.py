@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Public-API tests for the five prebuilt scorers in ``autogen.beta.eval.scorers``."""
+"""Public-API tests for the prebuilt scorers in ``autogen.beta.eval.scorers``."""
 
 from typing import Any
 
@@ -12,7 +12,6 @@ from autogen.beta.eval import Feedback, Scorer, Task, Trace
 from autogen.beta.eval.scorers import (
     final_answer_matches,
     no_tool_errors,
-    no_tool_not_found,
     token_budget,
     tool_called,
 )
@@ -21,13 +20,12 @@ from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolErrorEvent,
-    ToolNotFoundEvent,
     Usage,
 )
 
 
 def _trace(*events: BaseEvent) -> Trace:
-    return Trace(events=list(events), reply=None, exception=None, duration_ms=0)
+    return Trace(events=list(events), exception=None, duration_ms=0)
 
 
 async def _run(
@@ -119,48 +117,6 @@ class TestNoToolErrors:
         feedback = await _run(no_tool_errors(), trace=trace)
 
         assert feedback[0].score is False
-
-    @pytest.mark.asyncio
-    async def test_tool_not_found_also_counts_as_a_tool_error(self) -> None:
-        """ToolNotFoundEvent is a subclass of ToolErrorEvent — both fail this check."""
-        call = ToolCallEvent(name="hallucinated", arguments="{}")
-        nf = ToolNotFoundEvent.from_call(call, RuntimeError("no such tool"))
-        trace = _trace(call, nf)
-
-        feedback = await _run(no_tool_errors(), trace=trace)
-
-        assert feedback[0].score is False
-
-
-class TestNoToolNotFound:
-    @pytest.mark.asyncio
-    async def test_passes_when_no_not_found(self) -> None:
-        trace = _trace(ToolCallEvent(name="ok", arguments="{}"))
-
-        feedback = await _run(no_tool_not_found(), trace=trace)
-
-        assert feedback[0].score is True
-
-    @pytest.mark.asyncio
-    async def test_fails_on_tool_not_found(self) -> None:
-        call = ToolCallEvent(name="hallucinated", arguments="{}")
-        nf = ToolNotFoundEvent.from_call(call, RuntimeError("no such tool"))
-        trace = _trace(call, nf)
-
-        feedback = await _run(no_tool_not_found(), trace=trace)
-
-        assert feedback[0].score is False
-
-    @pytest.mark.asyncio
-    async def test_a_regular_tool_error_does_not_trip_this_check(self) -> None:
-        """no_tool_not_found is the *specific* check — a normal error doesn't fail it."""
-        call = ToolCallEvent(name="real_tool", arguments="{}")
-        err = ToolErrorEvent.from_call(call, RuntimeError("kaboom"))
-        trace = _trace(call, err)
-
-        feedback = await _run(no_tool_not_found(), trace=trace)
-
-        assert feedback[0].score is True
 
 
 class TestFinalAnswerMatches:

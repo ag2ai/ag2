@@ -32,7 +32,6 @@ from autogen.beta.eval import (
 from autogen.beta.eval.scorers import (
     final_answer_matches,
     no_tool_errors,
-    no_tool_not_found,
     token_budget,
     tool_called,
 )
@@ -77,8 +76,6 @@ def termination_reason(trace: Trace) -> str:
     """Custom categorical scorer — used for slicing, not pass/fail."""
     if trace.exception is not None:
         return "exception"
-    if trace.halted:
-        return "halted"
     responses = trace.events_of(ModelResponse)
     if responses and responses[-1].content:
         return "completed"
@@ -88,7 +85,6 @@ def termination_reason(trace: Trace) -> str:
 _PREBUILT_SCORERS = [
     tool_called("get_weather"),
     no_tool_errors(),
-    no_tool_not_found(),
     final_answer_matches(field="city", matcher="contains"),
     token_budget(2_000),
 ]
@@ -135,7 +131,6 @@ async def test_smoke_weather_end_to_end(tmp_path: Path) -> None:
     # boolean scorers all pass on every task
     assert result.pass_rate("tool_called[get_weather]") == 1.0
     assert result.pass_rate("no_tool_errors") == 1.0
-    assert result.pass_rate("no_tool_not_found") == 1.0
     assert result.pass_rate("final_answer_matches") == 1.0
     assert result.pass_rate("token_budget") == 1.0
     assert result.pass_rate("called_get_weather_once") == 1.0
@@ -195,7 +190,6 @@ def _assert_schema_0_1(data: dict) -> None:
             "metadata",
             "duration_ms",
             "events",
-            "reply",
             "exception",
             "tokens",
             "feedback",

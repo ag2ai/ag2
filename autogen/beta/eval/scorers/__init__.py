@@ -21,7 +21,7 @@ them straight into ``scorers=[...]``::
         token_budget(2_000),
     ]
 
-The five deterministic prebuilts above are a deliberately small starter
+The four deterministic prebuilts above are a deliberately small starter
 catalog. ``agent_judge`` adds LLM grading: a *single-purpose* Agent-as-judge
 (one criterion → one ``Feedback`` key). Compose several for a multi-dimensional
 scorecard::
@@ -40,7 +40,7 @@ from .cost import token_budget
 from .human_pairwise import export_pairwise_cases, human_labels, human_pairwise
 from .judge import Verdict, agent_judge
 from .pairwise_judge import PairwiseVerdict, pairwise_judge
-from .tools import no_tool_errors, no_tool_not_found, tool_called
+from .tools import no_tool_errors, tool_called
 
 __all__ = (
     "ERROR_MODES",
@@ -54,7 +54,6 @@ __all__ = (
     "human_labels",
     "human_pairwise",
     "no_tool_errors",
-    "no_tool_not_found",
     "pairwise_judge",
     "token_budget",
     "tool_called",

@@ -131,6 +131,7 @@ Every `run()` returns a `RunResult` and writes a JSON file to `store_dir`. The r
 - `result.pass_rate("scorer_name")` — float between 0 and 1 for boolean scorers
 - `result.score_stats("scorer_name")` — `mean / p50 / p95 / n` for numeric scorers
 - `result.value_counts("scorer_name")` — `{label: count}` for categorical scorers
+- `result.pass_rate("scorer_name", tag="hard")` — any accessor takes `tag=` to slice to one segment (`result.tags` lists them)
 - `result.aggregates` — everything together
 - `result.tasks` — per-task records with full `Trace`, feedback list, and budget status
 

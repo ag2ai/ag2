@@ -51,7 +51,7 @@ def judge_config(request):
 
 
 def _answer_trace(answer: str) -> Trace:
-    return Trace(events=[ModelResponse(message=ModelMessage(answer))], reply=None, exception=None, duration_ms=0)
+    return Trace(events=[ModelResponse(message=ModelMessage(answer))], exception=None, duration_ms=0)
 
 
 async def _grade(scorer, *, answer: str, reference: dict | None) -> object:

@@ -15,8 +15,8 @@ the *same* reconstruction and the *same* grading core
 (:func:`~autogen.beta.eval.runtime.evaluate._grade`) — one path, no drift.
 
 Because the trace is reconstructed from spans, ``run`` inherits the OTEL path's
-fidelity (e.g. ``trace.reply`` is ``None``; halt / tool-not-found are not spanned —
-see ``sources/_spans.py``). Failures that emit no spans (a factory that raises, or an
+fidelity (halt / tool-not-found are stream-only, so never spanned — see
+``sources/_spans.py``). Failures that emit no spans (a factory that raises, or an
 ``ask`` that errors before the agent span starts) fall back to the caught exception so
 they still surface. Tasks run in parallel up to ``concurrency``, bounded by an
 :class:`asyncio.Semaphore`.
@@ -338,6 +338,15 @@ async def _produce_one(
         except Exception as exc:
             exception = exc
         else:
+            prompt = task.inputs.get("input")
+            if prompt is None:
+                warnings.warn(
+                    f"task {task.task_id!r} has no 'input' in its inputs; asking the agent with an empty "
+                    "prompt — put the user prompt under inputs['input'].",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                prompt = ""
             telemetry = TelemetryMiddleware(
                 tracer_provider=provider,
                 agent_name=getattr(target, "name", "agent"),
@@ -345,7 +354,7 @@ async def _produce_one(
             )
             started = time.perf_counter()
             try:
-                await target.ask(task.inputs.get("input", ""), stream=stream, middleware=[telemetry])
+                await target.ask(prompt, stream=stream, middleware=[telemetry])
             except Exception as exc:
                 exception = exc
             finally:
@@ -355,5 +364,5 @@ async def _produce_one(
         # ask erroring before the agent span starts) emit no spans → fall back to the caught exception.
         trace = readable_spans_to_trace(exporter.get_finished_spans(), duration_ms=duration_ms)
         if trace.exception is None and exception is not None:
-            trace = Trace(events=trace.events, reply=None, exception=exception, duration_ms=duration_ms)
+            trace = Trace(events=trace.events, exception=exception, duration_ms=duration_ms)
         return (TraceRef(trace_id=uuid4().hex, task_id=task.task_id), trace)

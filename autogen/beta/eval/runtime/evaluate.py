@@ -11,9 +11,9 @@ and grades them. Both funnel through one private grading core (:func:`_grade`),
 so ``run(agent)`` and ``evaluate(the trace that agent produced)`` grade through
 identical code — there is no second scoring path to drift.
 
-``outputs`` is projected from the trace (the final model response's content)
-rather than read from a live reply, so reference-based scorers like
-``final_answer_matches`` work against a reconstructed trace. ``reference_outputs``
+``outputs`` is projected from the trace (the final model response's content),
+so reference-based scorers like ``final_answer_matches`` work against a
+reconstructed trace. ``reference_outputs``
 come from the paired :class:`~autogen.beta.eval.Suite` task (via
 ``TraceRef.task_id``); traces with no paired task are graded reference-free.
 """

@@ -294,12 +294,9 @@ async def evaluate_pairwise(
     Traces are paired by ``TraceRef.task_id`` (stamp ``ag2.eval.task_id`` at
     produce time). Each comparator runs over every pair; results roll up per key.
 
-    Args:
-        label: Optional user-defined identifier recorded on the run — meant to be
-            *shared* across runs so a sequence of comparisons can be grouped.
-        stream: Optional :class:`~autogen.beta.stream.Stream` to publish pairwise
-            lifecycle events to (``PairwiseStarted`` / ``PairwiseCompared`` per
-            case / ``PairwiseCompleted``) — observe a comparison like an agent.
+    ``label`` is a shared identifier recorded on the run; pass ``stream`` to publish
+    pairwise lifecycle events (``PairwiseStarted`` / ``PairwiseCompared`` per case /
+    ``PairwiseCompleted``) for live observation.
     """
     comparator_list = tuple(comparators)
     keys = tuple(c.key for c in comparator_list)

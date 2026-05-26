@@ -21,10 +21,10 @@ def final_answer_matches(
 ) -> Scorer:
     """Pass iff the agent's final answer matches the task's reference output.
 
-    Reads ``reference_outputs[field]`` for the expected value, then
-    compares it against ``outputs[field]`` if present (which is the
-    case when ``response_schema=`` was used), falling back to
-    ``outputs["body"]`` (the free-form reply text) otherwise.
+    Reads ``reference_outputs[field]`` for the expected value and compares it
+    against the agent's final answer: ``outputs[field]`` when a structured field
+    of that name is present, otherwise ``outputs["body"]`` — the final response
+    text, which is what the trace projection provides today.
 
     Args:
         field: Key to read from ``reference_outputs`` and (when

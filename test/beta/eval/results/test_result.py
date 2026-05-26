@@ -22,7 +22,7 @@ from autogen.beta.eval import (
 
 
 def _empty_trace(duration_ms: int = 0) -> Trace:
-    return Trace(events=[], reply=None, exception=None, duration_ms=duration_ms)
+    return Trace(events=[], exception=None, duration_ms=duration_ms)
 
 
 def _task_result(
@@ -31,10 +31,11 @@ def _task_result(
     *,
     budget_violation: bool = False,
     exception: BaseException | None = None,
+    tags: tuple[str, ...] = (),
 ) -> TaskResult:
     return TaskResult(
-        task=Task(task_id=task_id, inputs={"input": "?"}),
-        trace=Trace(events=[], reply=None, exception=exception, duration_ms=0),
+        task=Task(task_id=task_id, inputs={"input": "?"}, tags=tags),
+        trace=Trace(events=[], exception=exception, duration_ms=0),
         feedback=feedback,
         budget_violation=budget_violation,
     )
@@ -161,6 +162,42 @@ class TestAggregates:
             _task_result("t2", (Feedback(key="ok", score=True),), budget_violation=False),
         )
         assert result.aggregates.budget_violations == 1
+
+
+class TestTagSlicing:
+    def test_pass_rate_by_tag(self) -> None:
+        result = _result(
+            _task_result("t1", (Feedback(key="check", score=True),), tags=("easy",)),
+            _task_result("t2", (Feedback(key="check", score=True),), tags=("easy",)),
+            _task_result("t3", (Feedback(key="check", score=False),), tags=("hard",)),
+            _task_result("t4", (Feedback(key="check", score=False),), tags=("hard",)),
+        )
+
+        assert result.pass_rate("check") == 0.5  # whole run
+        assert result.pass_rate("check", tag="easy") == 1.0
+        assert result.pass_rate("check", tag="hard") == 0.0
+
+    def test_value_counts_by_tag(self) -> None:
+        result = _result(
+            _task_result("t1", (Feedback(key="reason", value="completed"),), tags=("easy",)),
+            _task_result("t2", (Feedback(key="reason", value="error"),), tags=("hard",)),
+        )
+
+        assert result.value_counts("reason", tag="easy") == {"completed": 1}
+        assert result.value_counts("reason", tag="hard") == {"error": 1}
+
+    def test_tags_lists_all_present(self) -> None:
+        result = _result(
+            _task_result("t1", (Feedback(key="check", score=True),), tags=("easy", "smoke")),
+            _task_result("t2", (Feedback(key="check", score=True),), tags=("hard",)),
+        )
+
+        assert result.tags == frozenset({"easy", "smoke", "hard"})
+
+    def test_unknown_tag_is_an_empty_slice(self) -> None:
+        result = _result(_task_result("t1", (Feedback(key="check", score=True),), tags=("easy",)))
+
+        assert result.pass_rate("check", tag="nope") == 0.0
 
 
 class TestSummary:

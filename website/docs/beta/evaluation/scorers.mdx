@@ -32,9 +32,9 @@ A scorer can declare any subset of these five parameters, by name:
 | Parameter | Type | What it is |
 |---|---|---|
 | `inputs` | `#!python dict[str, Any]` | The task's input payload — typically `{"input": "the user's prompt"}`. |
-| `outputs` | `#!python dict[str, Any]` | The agent's normalized output — `reply.response` if a `response_schema=` was used, else `{"body": reply.body}`. |
+| `outputs` | `#!python dict[str, Any]` | The agent's final answer, projected from the trace — `{"body": <final model-response text>}`. |
 | `reference_outputs` | `#!python dict[str, Any] \| None` | The task's expected output, if the dataset provided one. |
-| `trace` | `Trace` | The full event stream plus reply, tokens, duration, halted flag. |
+| `trace` | `Trace` | The typed events (model responses, tool calls / results, …) plus tokens, duration, and exception. |
 | `task` | `Task` | The task record (id, tags, metadata). |
 
 Declare only what you use:
@@ -67,7 +67,7 @@ The framework routes by return type:
 
 - **`#!python bool`** lands in `result.pass_rate("scorer_name")` as `passes / total`.
 - **`#!python int` / `#!python float`** lands in `result.score_stats("scorer_name")` as `ScoreStats(mean, p50, p95, n)`.
-- **`#!python str`** lands in `result.value_counts("scorer_name")` as `{label: count}`. Useful for slicing — "of 100 runs, 95 completed, 5 halted".
+- **`#!python str`** lands in `result.value_counts("scorer_name")` as `{label: count}`. Useful for slicing — "of 100 runs, 95 completed, 5 errored".
 - **`#!python None`** is treated as "skip — no feedback recorded for this task".
 - A `Feedback` instance or `#!python list[Feedback]` lets you set the key explicitly, attach a comment, or emit multiple records from one call.
 
@@ -89,10 +89,10 @@ Don't bundle. A god-scorer like
 
 ```python linenums="1"
 @scorer
-def everything_is_fine(trace, reference_outputs) -> bool:
+def everything_is_fine(trace, outputs, reference_outputs) -> bool:
     return (
         len(trace.events_of(ToolCallEvent, name="get_weather")) == 1
-        and reference_outputs["city"] in (trace.reply.body or "")
+        and reference_outputs["city"] in (outputs.get("body") or "")
         and trace.tokens.total < 2000
     )
 ```
@@ -105,8 +105,8 @@ def called_get_weather_once(trace) -> bool:
     return len(trace.events_of(ToolCallEvent, name="get_weather")) == 1
 
 @scorer
-def answer_mentions_city(trace, reference_outputs) -> bool:
-    return reference_outputs["city"] in (trace.reply.body or "")
+def answer_mentions_city(outputs, reference_outputs) -> bool:
+    return reference_outputs["city"] in (outputs.get("body") or "")
 
 @scorer
 def under_token_budget(trace) -> bool:
@@ -115,23 +115,21 @@ def under_token_budget(trace) -> bool:
 
 ## Prebuilt scorers
 
-Five are shipped under `autogen.beta.eval.scorers` — frozen versions of the most common patterns.
+Four are shipped under `autogen.beta.eval.scorers` — frozen versions of the most common patterns.
 
 | Scorer | Question | Type | When to use |
 |---|---|---|---|
 | `tool_called(name, *, exactly=None)` | Did the agent call this tool? | bool | Most tool-use scenarios. `exactly=N` for strict count. |
 | `no_tool_errors()` | Were there zero `ToolErrorEvent`s? | bool | Catch tools that exploded. |
-| `no_tool_not_found()` | Were there zero `ToolNotFoundEvent`s? | bool | Catch hallucinated tool names. |
 | `final_answer_matches(field, matcher)` | Does the answer match `reference_outputs[field]`? | bool | Closed-form correctness. Matcher: `"exact"`, `"casefold"`, `"contains"`. |
 | `token_budget(max_tokens)` | Did the run stay under `max_tokens` total? | bool | Cost discipline as a pass/fail signal. |
 
 Each is a *factory* — calling it returns a `Scorer`. Drop them straight into the `scorers=` list:
 
-```python linenums="1" hl_lines="3-7"
+```python linenums="1" hl_lines="3-6"
 from autogen.beta.eval.scorers import (
     final_answer_matches,
     no_tool_errors,
-    no_tool_not_found,
     token_budget,
     tool_called,
 )
@@ -139,7 +137,6 @@ from autogen.beta.eval.scorers import (
 scorers = [
     tool_called("get_weather"),
     no_tool_errors(),
-    no_tool_not_found(),
     final_answer_matches(field="city", matcher="contains"),
     token_budget(2_000),
 ]
@@ -154,14 +151,14 @@ A scorer that raises does NOT fail the run. The framework catches the exception,
 
 ```python linenums="1"
 @scorer
-def fragile(trace) -> bool:
-    return trace.reply.body.startswith("Tokyo")  # raises if body is None
+def fragile(outputs) -> bool:
+    return outputs["body"].startswith("Tokyo")  # raises if there's no final answer
 ```
 
-If `reply.body` is `None` this raises `AttributeError`. The feedback for that task becomes:
+If the trace had no final answer (`outputs` has no `"body"`) this raises `KeyError`. The feedback for that task becomes:
 
 ```python
-Feedback(key="fragile", score=None, comment="scorer raised: AttributeError: ...")
+Feedback(key="fragile", score=None, comment="scorer raised: KeyError: ...")
 ```
 
 This is by design — one broken scorer should never kill an eval over 100 tasks. But it also means you should treat `#!python score=None` as a signal worth investigating, not noise.
@@ -170,7 +167,7 @@ This is by design — one broken scorer should never kill an eval over 100 tasks
 
 - **Be specific.** "Did the agent call `get_weather`?" beats "Was the output good?"
 - **Be cheap.** Scorers run for every task. No API calls inside a scorer.
-- **Prefer structured fields over text.** `trace.events_of(ToolCallEvent, name="get_weather")` beats regex-matching `reply.body`.
+- **Prefer structured fields over text.** `trace.events_of(ToolCallEvent, name="get_weather")` beats regex-matching `outputs["body"]`.
 - **Don't share state.** Two scorers grade independently. No mutable globals.
 - **Return `#!python None` when you can't grade.** A scorer that doesn't apply to a task should skip rather than fail.
 

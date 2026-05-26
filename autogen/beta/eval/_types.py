@@ -27,7 +27,7 @@ ScoreValue: TypeAlias = bool | int | float | None
 """A numeric or boolean grade. ``True`` / ``1`` count as "pass" for pass-rate aggregates."""
 
 ValueLabel: TypeAlias = str | None
-"""A categorical label (e.g. ``"completed"`` / ``"halted"``), used for slicing."""
+"""A categorical label (e.g. ``"completed"`` / ``"timeout"``), used for slicing."""
 
 
 @dataclass(frozen=True, slots=True)

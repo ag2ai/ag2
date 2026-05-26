@@ -27,7 +27,7 @@ _TASK = Task(task_id="t", inputs={"input": "Which is better?"})
 
 
 def _trace(answer: str) -> Trace:
-    return Trace(events=[ModelResponse(message=ModelMessage(answer))], reply=None, exception=None, duration_ms=0)
+    return Trace(events=[ModelResponse(message=ModelMessage(answer))], exception=None, duration_ms=0)
 
 
 async def _compare(judge: PairwiseComparator):

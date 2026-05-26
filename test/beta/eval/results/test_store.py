@@ -21,7 +21,7 @@ from autogen.beta.eval import (
     Trace,
 )
 from autogen.beta.eval.results.store import to_dict
-from autogen.beta.events import HaltEvent, ModelResponse, ToolCallEvent, Usage
+from autogen.beta.events import HumanMessage, ModelResponse, ToolCallEvent, Usage
 
 
 def _make_result(
@@ -41,7 +41,7 @@ def _make_result(
             "metadata": {"difficulty": "easy"},
         }
     ])
-    trace = Trace(events=list(events), reply=None, exception=exception, duration_ms=123)
+    trace = Trace(events=list(events), exception=exception, duration_ms=123)
     task_result = TaskResult(
         task=suite.tasks[0],
         trace=trace,
@@ -96,7 +96,6 @@ class TestTaskSerialization:
             "metadata",
             "duration_ms",
             "events",
-            "reply",
             "exception",
             "tokens",
             "feedback",
@@ -119,11 +118,6 @@ class TestTaskSerialization:
         data = to_dict(_make_result())
         [task] = data["tasks"]
         assert task["exception"] is None
-
-    def test_reply_is_null_when_run_raised(self) -> None:
-        data = to_dict(_make_result(exception=RuntimeError("x")))
-        [task] = data["tasks"]
-        assert task["reply"] is None
 
     def test_tokens_block_present_per_task(self) -> None:
         data = to_dict(_make_result())
@@ -151,12 +145,12 @@ class TestEventSerialization:
         events = [
             ToolCallEvent(name="get_weather", arguments='{"city": "Tokyo"}'),
             ModelResponse(usage=Usage(prompt_tokens=10, completion_tokens=5)),
-            HaltEvent(reason="fatal", source="alert"),
+            HumanMessage("noted"),
         ]
         data = to_dict(_make_result(events=events))
         [task] = data["tasks"]
         types = [e["type"] for e in task["events"]]
-        assert types == ["ToolCallEvent", "ModelResponse", "HaltEvent"]
+        assert types == ["ToolCallEvent", "ModelResponse", "HumanMessage"]
 
     def test_event_order_preserved(self) -> None:
         first = ToolCallEvent(name="a", arguments="{}")

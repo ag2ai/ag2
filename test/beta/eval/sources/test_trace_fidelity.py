@@ -29,7 +29,7 @@ from autogen.beta.tools import tool
 
 
 def _live_trace(capture: EventCapture) -> Trace:
-    return Trace(events=capture.events, reply=None, exception=None, duration_ms=0)
+    return Trace(events=capture.events, exception=None, duration_ms=0)
 
 
 @pytest.fixture()
