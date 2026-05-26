@@ -11,7 +11,7 @@ from fast_depends.use import SerializerCls
 from autogen.beta import Context, MemoryStream
 from autogen.beta.config.openai import OpenAIClient
 from autogen.beta.events import ModelRequest, TextInput
-from autogen.beta.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
+from autogen.beta.tools import tool
 
 
 def _capturing_client(captured: dict[str, object]) -> httpx.AsyncClient:
@@ -38,16 +38,6 @@ def _capturing_client(captured: dict[str, object]) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
-def _weather_tool() -> FunctionToolSchema:
-    return FunctionToolSchema(
-        function=FunctionDefinition(
-            name="get_weather",
-            description="Get weather",
-            parameters={"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
-        )
-    )
-
-
 @pytest.mark.asyncio
 async def test_empty_tools_omits_tools_field() -> None:
     captured: dict[str, object] = {}
@@ -71,6 +61,14 @@ async def test_empty_tools_omits_tools_field() -> None:
 @pytest.mark.asyncio
 async def test_non_empty_tools_serialized() -> None:
     captured: dict[str, object] = {}
+    context = Context(stream=MemoryStream())
+
+    @tool(description="Get weather")
+    def get_weather(city: str) -> str:
+        return f"Weather in {city}"
+
+    [weather_schema] = await get_weather.schemas(context)
+
     client = OpenAIClient(
         api_key="test",
         http_client=_capturing_client(captured),
@@ -79,8 +77,8 @@ async def test_non_empty_tools_serialized() -> None:
 
     await client(
         messages=[ModelRequest([TextInput("weather?")])],
-        context=Context(stream=MemoryStream()),
-        tools=[_weather_tool()],
+        context=context,
+        tools=[weather_schema],
         response_schema=None,
         serializer=SerializerCls,
     )
