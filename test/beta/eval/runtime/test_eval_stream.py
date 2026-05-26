@@ -7,7 +7,7 @@
 import pytest
 
 from autogen.beta import Agent
-from autogen.beta.eval import Variants, console_reporter, run, run_pairwise, run_variants, scorer
+from autogen.beta.eval import Variants, console_reporter, run_agent, run_pairwise, run_variants, scorer
 from autogen.beta.eval.pairwise import PairwiseOutcome
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
@@ -42,9 +42,9 @@ def _collector() -> tuple[MemoryStream, list[str]]:
 async def test_run_publishes_lifecycle_events(tmp_path) -> None:
     stream, seen = _collector()
 
-    await run(
+    await run_agent(
         [{"task_id": "t1", "inputs": {"input": "hi"}}],
-        target=Agent("a", config=TestConfig("ok")),
+        agent=Agent("a", config=TestConfig("ok")),
         scorers=[_ok],
         store_dir=tmp_path,
         stream=stream,
@@ -129,9 +129,9 @@ async def test_console_reporter_prints_progress(tmp_path, capsys) -> None:
     stream = MemoryStream()
     stream.subscribe(console_reporter, sync_to_thread=False)
 
-    await run(
+    await run_agent(
         [{"task_id": "t1", "inputs": {"input": "hi"}}],
-        target=Agent("a", config=TestConfig("ok")),
+        agent=Agent("a", config=TestConfig("ok")),
         scorers=[_ok],
         store_dir=tmp_path,
         stream=stream,

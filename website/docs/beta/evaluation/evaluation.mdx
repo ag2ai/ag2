@@ -21,7 +21,7 @@ Every eval suite has four pieces. That's it.
 1. A **dataset** — a list of tasks with inputs and (optional) expected outputs.
 2. An **agent factory** — a callable that builds a fresh agent for each task.
 3. One or more **scorers** — functions that grade a run.
-4. A call to **run** — the framework's entry point.
+4. A call to **run_agent** — the framework's entry point.
 
 The rest of these docs cover each piece in depth. Read the quick-start below first.
 
@@ -36,7 +36,7 @@ from pathlib import Path
 from autogen.beta import Agent, tool
 from autogen.beta.config import GeminiConfig
 from autogen.beta.events import ToolCallEvent
-from autogen.beta.eval import run, scorer
+from autogen.beta.eval import run_agent, scorer
 from autogen.beta.eval.scorers import tool_called
 
 
@@ -67,9 +67,9 @@ def called_get_weather(trace) -> bool:
 
 # 4. Run
 async def main():
-    result = await run(
+    result = await run_agent(
         dataset,
-        target=build_agent,
+        agent=build_agent,
         scorers=[
             called_get_weather,
             tool_called("get_weather"),  # prebuilt
@@ -98,7 +98,7 @@ Pass rates:
 That's the whole framework in 30 lines. Everything else in these docs is variations on this shape.
 
 !!! tip
-    Building an actual eval? See the [runnable weather example](https://github.com/ag2ai/ag2/tree/main/eval_development/runnable_weather_eval){.external-link target="_blank"} — five tasks, eight scorers (five prebuilt + three custom), deterministic mode for CI plus a live-model mode.
+    Building an actual eval? See the [runnable weather example](https://github.com/ag2ai/ag2/tree/main/eval_development/runnable_weather_eval){.external-link agent="_blank"} — five tasks, eight scorers (five prebuilt + three custom), deterministic mode for CI plus a live-model mode.
 
 ## Determinism for CI
 
@@ -112,9 +112,9 @@ cassettes = {
     "t2": TestConfig(ToolCallEvent(name="get_weather", arguments='{"city":"Paris"}'), "Paris is sunny."),
 }
 
-result = await run(
+result = await run_agent(
     dataset,
-    target=build_agent,
+    agent=build_agent,
     scorers=[called_get_weather],
     model_config=cassettes,  # dict keyed by task_id
     store_dir=Path("./runs"),
@@ -125,7 +125,7 @@ Same suite, same scorers, no API key required. Output is identical on every mach
 
 ## What you get back
 
-Every `run()` returns a `RunResult` and writes a JSON file to `store_dir`. The result exposes:
+Every `run_agent()` returns a `RunResult` and writes a JSON file to `store_dir`. The result exposes:
 
 - `result.summary()` — a printable text table (above)
 - `result.pass_rate("scorer_name")` — float between 0 and 1 for boolean scorers
@@ -141,7 +141,7 @@ The JSON file is the persistence format. It's schema-versioned (`"0.1"`) and is 
 ## Where to next
 
 - **[Scorers](/docs/beta/evaluation/scorers/)** — how to write them, the five prebuilts, return-shape rules, exception handling.
-- **[Runs](/docs/beta/evaluation/runs/)** — `Suite`, the `run()` signature, `RunResult` deep dive, the JSON schema, budget thresholds. Also: **`repeats=`** for consistency, **`run_variants` + `Variants`** to compare models / prompts / tools and rank them, and **`stream=`** to observe a run live via its event stream.
+- **[Runs](/docs/beta/evaluation/runs/)** — `Suite`, the `run_agent()` signature, `RunResult` deep dive, the JSON schema, budget thresholds. Also: **`repeats=`** for consistency, **`run_variants` + `Variants`** to compare models / prompts / tools and rank them, and **`stream=`** to observe a run live via its event stream.
 
 ## What's in scope
 

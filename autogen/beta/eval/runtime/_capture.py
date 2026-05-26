@@ -25,7 +25,7 @@ didn't pre-attach to) is still captured. The stream is per-task and
 discarded by the runner after the task ends, so the subscription dies
 with the stream — no explicit unsubscribe needed.
 
-Per-task wall-clock duration is measured in :func:`run` directly with
+Per-task wall-clock duration is measured in :func:`run_agent` directly with
 ``time.perf_counter`` — that captures the whole agent-side workload
 including any internal ``reply.ask`` continuations, which a per-turn
 middleware can't see.

@@ -5,11 +5,9 @@
 """Dataset layer: the tasks an evaluation runs over, and the target it drives."""
 
 from .suite import Suite
-from .target import EvalTarget
 from .task import Task
 
 __all__ = (
-    "EvalTarget",
     "Suite",
     "Task",
 )

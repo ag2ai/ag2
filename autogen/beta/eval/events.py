@@ -4,7 +4,7 @@
 
 """Eval lifecycle events — published on a run's stream for live observation.
 
-Pass a ``stream`` to :func:`~autogen.beta.eval.run` / :func:`~autogen.beta.eval.evaluate`
+Pass a ``stream`` to :func:`~autogen.beta.eval.run_agent` / :func:`~autogen.beta.eval.evaluate_traces`
 / :func:`~autogen.beta.eval.run_variants` and you can observe an evaluation exactly
 like you observe an agent: subscribe to these events
 (``stream.where(VariantCompleted).subscribe(...)``), or attach the ready-made

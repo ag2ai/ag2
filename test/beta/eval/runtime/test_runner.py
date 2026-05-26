@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Public-API tests for :func:`run` — the eval runner.
+"""Public-API tests for :func:`run_agent` — the eval runner.
 
 Drives a ``TestConfig``-mocked agent through one or more tasks and
 asserts that events are captured, scorers run, exceptions are surfaced
-on the Trace (never raised out of ``run``), observers / middleware the
+on the Trace (never raised out of ``run_agent``), observers / middleware the
 user passes through the factory still work, and the run is persisted
 to ``store_dir`` automatically.
 """
@@ -25,8 +25,8 @@ from autogen.beta.eval import (
     Suite,
     Trace,
     TraceRef,
-    evaluate,
-    run,
+    evaluate_traces,
+    run_agent,
     scorer,
 )
 from autogen.beta.events import ModelResponse, ToolCallEvent
@@ -73,9 +73,9 @@ async def test_runs_one_task_and_captures_events(tmp_path: Path) -> None:
         {"task_id": "t-tokyo", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}},
     ])
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather, city_argument_correct],
         store_dir=tmp_path,
         model_config={"t-tokyo": _cassette("Tokyo")},
@@ -103,9 +103,9 @@ async def test_runs_multiple_tasks_concurrently(tmp_path: Path) -> None:
         {"task_id": "sydney", "inputs": {"input": "Sydney?"}, "reference_outputs": {"city": "Sydney"}},
     ])
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather, city_argument_correct],
         store_dir=tmp_path,
         model_config={
@@ -128,9 +128,9 @@ async def test_global_model_config_applied_to_every_task(tmp_path: Path) -> None
         {"task_id": "t1", "inputs": {"input": "London?"}, "reference_outputs": {"city": "London"}},
     ])
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config=_cassette("London"),
@@ -150,9 +150,9 @@ async def test_target_factory_exception_is_captured_not_raised(tmp_path: Path) -
 
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}])
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=broken_factory,
+        agent=broken_factory,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         concurrency=1,
@@ -183,9 +183,9 @@ async def test_factory_without_config_parameter_works_with_warning(tmp_path: Pat
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Anywhere?"}}])
 
     with pytest.warns(RuntimeWarning, match="does not accept a 'config' parameter"):
-        result = await run(
+        result = await run_agent(
             suite,
-            target=bare_factory,
+            agent=bare_factory,
             scorers=[constant],
             store_dir=tmp_path,
             model_config=_cassette("Anywhere"),  # would normally be injected; ignored here
@@ -202,9 +202,9 @@ async def test_missing_input_key_warns(tmp_path: Path) -> None:
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"question": "Tokyo?"}}])
 
     with pytest.warns(RuntimeWarning, match="no 'input'"):
-        await run(
+        await run_agent(
             suite,
-            target=_build_weather_agent,
+            agent=_build_weather_agent,
             scorers=[called_get_weather],
             store_dir=tmp_path,
             model_config=_cassette("Tokyo"),
@@ -216,17 +216,17 @@ async def test_missing_input_key_warns(tmp_path: Path) -> None:
 async def test_run_id_is_generated_unless_provided(tmp_path: Path) -> None:
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}}])
 
-    auto = await run(
+    auto = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
         concurrency=1,
     )
-    explicit = await run(
+    explicit = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -244,9 +244,9 @@ async def test_run_persists_to_store_dir(tmp_path: Path) -> None:
     """Every successful run is written to <store_dir>/<run_id>.json."""
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}}])
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -264,9 +264,9 @@ async def test_budget_violation_recorded_not_aborted(tmp_path: Path) -> None:
         {"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}},
     ])
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -287,9 +287,9 @@ async def test_inline_list_dataset_is_loaded(tmp_path: Path) -> None:
     """``suite=[...]`` is sugar for ``Suite.from_list([...])``."""
     items = [{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}]
 
-    result = await run(
+    result = await run_agent(
         items,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -326,9 +326,9 @@ async def test_user_middleware_and_observers_still_fire(tmp_path: Path) -> None:
         {"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}},
     ])
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=factory,
+        agent=factory,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -346,9 +346,9 @@ async def test_user_middleware_and_observers_still_fire(tmp_path: Path) -> None:
 async def test_run_duration_is_recorded(tmp_path: Path) -> None:
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}}])
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -397,9 +397,9 @@ async def test_reply_ask_continuations_are_captured(tmp_path: Path) -> None:
     def saw_at_least_two_model_responses(trace: Trace) -> bool:
         return len(trace.events_of(ModelResponse)) >= 2
 
-    result = await run(
+    result = await run_agent(
         [{"task_id": "t1", "inputs": {"input": "Tokyo weather?"}}],
-        target=factory,
+        agent=factory,
         scorers=[saw_at_least_two_model_responses],
         model_config={"t1": cassette},
         store_dir=tmp_path,
@@ -414,13 +414,13 @@ async def test_reply_ask_continuations_are_captured(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_store_dir_is_required(tmp_path: Path) -> None:
-    """Calling run() without store_dir is a TypeError — the kwarg is mandatory."""
+    """Calling run_agent() without store_dir is a TypeError — the kwarg is mandatory."""
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "?"}}])
 
     with pytest.raises(TypeError, match="store_dir"):
-        await run(  # type: ignore[call-arg]
+        await run_agent(  # type: ignore[call-arg]
             suite,
-            target=_build_weather_agent,
+            agent=_build_weather_agent,
             scorers=[called_get_weather],
             model_config={"t1": _cassette("Tokyo")},
         )
@@ -428,12 +428,12 @@ async def test_store_dir_is_required(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_accepts_an_agent_instance(tmp_path: Path) -> None:
-    """``target=`` accepts a prebuilt Agent instance, not just a factory."""
+    """``agent=`` accepts a prebuilt Agent instance, not just a factory."""
     agent = Agent("weather", config=_cassette("Tokyo"), tools=[get_weather])
 
-    result = await run(
+    result = await run_agent(
         [{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}],
-        target=agent,
+        agent=agent,
         scorers=[called_get_weather, city_argument_correct],
         store_dir=tmp_path,
         concurrency=1,
@@ -449,9 +449,9 @@ async def test_run_accepts_an_agent_instance(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_repeats_runs_each_task_n_times(tmp_path: Path) -> None:
     """``repeats=N`` runs each task N times (distinct ids) and pools the pass-rate."""
-    result = await run(
+    result = await run_agent(
         [{"task_id": "tokyo", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}],
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config=_cassette("Tokyo"),  # one config, applied to every repeat
@@ -467,9 +467,9 @@ async def test_repeats_runs_each_task_n_times(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_label_is_recorded_and_serialized(tmp_path: Path) -> None:
     """A user-defined ``label`` is carried on the result and persisted to the run JSON."""
-    result = await run(
+    result = await run_agent(
         [{"task_id": "t1", "inputs": {"input": "Tokyo?"}}],
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -483,9 +483,9 @@ async def test_label_is_recorded_and_serialized(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_label_defaults_to_none(tmp_path: Path) -> None:
-    result = await run(
+    result = await run_agent(
         [{"task_id": "t1", "inputs": {"input": "Tokyo?"}}],
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -495,11 +495,11 @@ async def test_label_defaults_to_none(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_and_evaluate_of_its_trace_agree(tmp_path: Path) -> None:
-    """``run(agent)`` and ``evaluate(the trace it produced)`` grade identically.
+    """``run_agent(agent)`` and ``evaluate_traces(the trace it produced)`` grade identically.
 
-    The whole point of the produce-then-grade design: ``run`` and ``evaluate``
-    funnel through one grading core, so taking the exact trace ``run`` produced
-    and grading it again via ``evaluate`` yields the same feedback — there is no
+    The whole point of the produce-then-grade design: ``run_agent`` and ``evaluate_traces``
+    funnel through one grading core, so taking the exact trace ``run_agent`` produced
+    and grading it again via ``evaluate_traces`` yields the same feedback — there is no
     second scoring path that could drift.
     """
     suite = Suite.from_list([
@@ -508,11 +508,11 @@ async def test_run_and_evaluate_of_its_trace_agree(tmp_path: Path) -> None:
     agent = Agent("weather", config=_cassette("Tokyo"), tools=[get_weather])
     scorers = [called_get_weather, city_argument_correct]
 
-    run_result = await run(suite, target=agent, scorers=scorers, store_dir=tmp_path)
+    run_result = await run_agent(suite, agent=agent, scorers=scorers, store_dir=tmp_path)
 
     produced = run_result.tasks[0].trace
     source = InMemoryTraceSource([(TraceRef(trace_id="trace-1", task_id="t1"), produced)])
-    eval_result = await evaluate(source, scorers=scorers, store_dir=tmp_path, suite=suite)
+    eval_result = await evaluate_traces(source, scorers=scorers, store_dir=tmp_path, suite=suite)
 
     assert eval_result.tasks[0].feedback == run_result.tasks[0].feedback
     assert eval_result.tasks[0].budget_violation == run_result.tasks[0].budget_violation

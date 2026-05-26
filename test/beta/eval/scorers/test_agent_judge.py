@@ -10,7 +10,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from autogen.beta._telemetry_consts import ATTR_SPAN_TYPE, SPAN_TYPE_AGENT, SPAN_TYPE_LLM
-from autogen.beta.eval import InMemoryTraceSource, Suite, TraceRef, evaluate
+from autogen.beta.eval import InMemoryTraceSource, Suite, TraceRef, evaluate_traces
 from autogen.beta.eval.dataset.task import Task
 from autogen.beta.eval.scorers import agent_judge
 from autogen.beta.eval.trace import Trace
@@ -75,7 +75,7 @@ async def test_multi_dimensional_ensemble_produces_per_dimension_columns(tmp_pat
         key="faithfulness",
     )
 
-    result = await evaluate(source, scorers=[correctness, faithfulness], suite=suite, store_dir=tmp_path)
+    result = await evaluate_traces(source, scorers=[correctness, faithfulness], suite=suite, store_dir=tmp_path)
 
     assert result.score_stats("correctness").mean == 1.0
     assert result.score_stats("faithfulness").mean == 0.5

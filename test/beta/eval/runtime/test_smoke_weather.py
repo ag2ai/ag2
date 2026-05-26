@@ -26,7 +26,7 @@ from autogen.beta.eval import (
     BudgetThresholds,
     Suite,
     Trace,
-    run,
+    run_agent,
     scorer,
 )
 from autogen.beta.eval.scorers import (
@@ -118,9 +118,9 @@ async def test_smoke_weather_end_to_end(tmp_path: Path) -> None:
     """Acceptance gate — 5 tasks, 8 scorers, 100% pass, persisted JSON validates."""
     suite = Suite.from_jsonl(_DATASET_PATH)
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[*_PREBUILT_SCORERS, *_CUSTOM_SCORERS],
         model_config=_CASSETTES,
         budgets=BudgetThresholds(max_tokens_per_task=2_000, max_seconds_per_task=10.0),
@@ -210,9 +210,9 @@ async def test_smoke_weather_summary_is_printable(tmp_path: Path) -> None:
     """The summary string contains the things you'd want in a CI log."""
     suite = Suite.from_jsonl(_DATASET_PATH)
 
-    result = await run(
+    result = await run_agent(
         suite,
-        target=_build_weather_agent,
+        agent=_build_weather_agent,
         scorers=[*_PREBUILT_SCORERS, *_CUSTOM_SCORERS],
         store_dir=tmp_path,
         model_config=_CASSETTES,

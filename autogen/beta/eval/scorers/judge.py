@@ -22,7 +22,7 @@ not just in a rendered summary.
 The judge is composed, not subclassed: the factory builds and holds an
 ``Agent`` whose ``response_schema`` is locked to :class:`Verdict`. Because the
 scorer only reads the injected :class:`~autogen.beta.eval.Trace` and dicts, the
-same judge works under both ``run()`` (live) and ``evaluate()`` (trace-based).
+same judge works under both ``run_agent()`` (live) and ``evaluate_traces()`` (trace-based).
 """
 
 import json

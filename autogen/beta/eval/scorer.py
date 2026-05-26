@@ -193,7 +193,7 @@ def scorer(fn: ScorerFn) -> Scorer:
             return len(trace.events_of(ToolCallEvent, name="get_weather")) == 1
 
     The decorated object is a :class:`Scorer` instance. Pass it directly
-    to :func:`autogen.beta.eval.run` via the ``scorers=`` argument.
+    to :func:`autogen.beta.eval.run_agent` via the ``scorers=`` argument.
     """
     return Scorer(fn)
 

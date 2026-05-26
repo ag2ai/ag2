@@ -13,7 +13,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from autogen.beta import Agent
-from autogen.beta.eval import DirectoryTraceSource, Suite, evaluate
+from autogen.beta.eval import DirectoryTraceSource, Suite, evaluate_traces
 from autogen.beta.eval.scorers import final_answer_matches, no_tool_errors, tool_called
 from autogen.beta.eval.sources._otel import readable_span_to_data
 from autogen.beta.eval.sources.trace_source import save_trace
@@ -50,7 +50,7 @@ async def test_produce_to_disk_then_evaluate(tmp_path) -> None:
     suite = Suite.from_list([
         {"task_id": "task-1", "inputs": {"input": "weather in Paris?"}, "reference_outputs": {"answer": "Paris"}},
     ])
-    result = await evaluate(
+    result = await evaluate_traces(
         DirectoryTraceSource(traces_dir),
         scorers=[
             tool_called("get_weather"),

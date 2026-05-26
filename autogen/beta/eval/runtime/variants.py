@@ -7,7 +7,7 @@
 A :class:`Variants` is a *single-axis* set of named builds — all configs, or
 all prompts, … — constructed via the typed ``Variants.from_*`` classmethods
 (mirroring ``Suite.from_*``). :func:`run_variants` runs each variant over the
-suite via :func:`~autogen.beta.eval.run` and returns a :class:`VariantRunResult`
+suite via :func:`~autogen.beta.eval.run_agent` and returns a :class:`VariantRunResult`
 whose ``leaderboard(key)`` ranks the variants by a scorer.
 
 Each ``from_*`` fixes the axis and types its values, so one call can only vary
@@ -26,17 +26,18 @@ from operator import itemgetter
 from typing import Any
 from uuid import uuid4
 
+from autogen.beta.agent import Agent
 from autogen.beta.config import ModelConfig
 from autogen.beta.context import ConversationContext
 from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.stream import Stream
 from autogen.beta.tools.tool import Tool
 
-from ..dataset import EvalTarget, Suite
+from ..dataset import Suite
 from ..events import VariantCompleted, VariantStarted
 from ..results import RunResult
 from ..scorer import Scorer
-from .runner import run
+from .runner import run_agent
 
 __all__ = (
     "LeaderboardRow",
@@ -45,7 +46,7 @@ __all__ = (
     "run_variants",
 )
 
-_Build = Callable[..., EvalTarget] | EvalTarget
+_Build = Callable[..., Agent] | Agent
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,25 +57,25 @@ class Variants:
     builds: Mapping[str, _Build]
 
     @classmethod
-    def from_configs(cls, factory: Callable[..., EvalTarget], variants: Mapping[str, ModelConfig]) -> "Variants":
+    def from_configs(cls, factory: Callable[..., Agent], variants: Mapping[str, ModelConfig]) -> "Variants":
         """One variant per model config — varies ``config`` on a shared factory."""
         return cls("config", {name: partial(factory, config=cfg) for name, cfg in variants.items()})
 
     @classmethod
-    def from_prompts(cls, factory: Callable[..., EvalTarget], variants: Mapping[str, str]) -> "Variants":
+    def from_prompts(cls, factory: Callable[..., Agent], variants: Mapping[str, str]) -> "Variants":
         """One variant per system prompt — varies ``prompt`` on a shared factory."""
         return cls("prompt", {name: partial(factory, prompt=prompt) for name, prompt in variants.items()})
 
     @classmethod
     def from_tools(
-        cls, factory: Callable[..., EvalTarget], variants: Mapping[str, Sequence[Callable[..., Any] | Tool]]
+        cls, factory: Callable[..., Agent], variants: Mapping[str, Sequence[Callable[..., Any] | Tool]]
     ) -> "Variants":
         """One variant per tool set — varies ``tools`` on a shared factory."""
         return cls("tools", {name: partial(factory, tools=list(tools)) for name, tools in variants.items()})
 
     @classmethod
     def from_middleware(
-        cls, factory: Callable[..., EvalTarget], variants: Mapping[str, Sequence[MiddlewareFactory]]
+        cls, factory: Callable[..., Agent], variants: Mapping[str, Sequence[MiddlewareFactory]]
     ) -> "Variants":
         """One variant per middleware stack — varies ``middleware`` on a shared factory."""
         return cls("middleware", {name: partial(factory, middleware=list(mw)) for name, mw in variants.items()})
@@ -183,9 +184,9 @@ async def run_variants(
                 VariantStarted(run_id=base_run_id, label=label, variant=name, index=index, total=total),
                 eval_ctx,
             )
-        results[name] = await run(
+        results[name] = await run_agent(
             suite,
-            target=build,
+            agent=build,
             scorers=scorer_list,
             store_dir=store_dir,
             repeats=repeats,

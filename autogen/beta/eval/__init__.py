@@ -10,7 +10,7 @@ and persisted run JSON suitable for run-vs-run diffing.
 """
 
 from ._types import Feedback, ScorerReturnTypeError
-from .dataset import EvalTarget, Suite, Task
+from .dataset import Suite, Task
 from .pairwise import (
     Agreement,
     PairwiseCase,
@@ -35,8 +35,8 @@ from .runtime import (
     LeaderboardRow,
     VariantRunResult,
     Variants,
-    evaluate,
-    run,
+    evaluate_traces,
+    run_agent,
     run_pairwise,
     run_variants,
 )
@@ -61,7 +61,6 @@ __all__ = (
     "Agreement",
     "BudgetThresholds",
     "DirectoryTraceSource",
-    "EvalTarget",
     "Feedback",
     "InMemoryTraceSource",
     "LeaderboardRow",
@@ -88,10 +87,10 @@ __all__ = (
     "Variants",
     "WinRate",
     "console_reporter",
-    "evaluate",
     "evaluate_pairwise",
+    "evaluate_traces",
     "load_run",
-    "run",
+    "run_agent",
     "run_pairwise",
     "run_variants",
     "scorer",

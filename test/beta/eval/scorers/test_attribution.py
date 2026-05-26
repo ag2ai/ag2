@@ -6,7 +6,7 @@
 
 import pytest
 
-from autogen.beta.eval import InMemoryTraceSource, TraceRef, evaluate
+from autogen.beta.eval import InMemoryTraceSource, TraceRef, evaluate_traces
 from autogen.beta.eval.dataset.task import Task
 from autogen.beta.eval.scorers import failure_attribution
 from autogen.beta.eval.trace import Trace
@@ -78,6 +78,6 @@ async def test_failure_mode_distribution_via_value_counts(tmp_path) -> None:
     clean = _trace([ModelResponse(message=ModelMessage("ok"))])
     source = InMemoryTraceSource([(TraceRef("t1", task_id="t1"), crash), (TraceRef("t2", task_id="t2"), clean)])
 
-    result = await evaluate(source, scorers=[failure_attribution(key="failure")], store_dir=tmp_path)
+    result = await evaluate_traces(source, scorers=[failure_attribution(key="failure")], store_dir=tmp_path)
 
     assert result.value_counts("failure") == {"crash": 1, "none": 1}

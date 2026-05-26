@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""evaluate() — grade traces from a :class:`TraceSource`.
+"""evaluate_traces() — grade traces from a :class:`TraceSource`.
 
-The trace-based counterpart to :func:`~autogen.beta.eval.run`. Where ``run``
-executes an agent and captures its event stream, ``evaluate`` takes traces that
+The trace-based counterpart to :func:`~autogen.beta.eval.run_agent`. Where ``run_agent``
+executes an agent and captures its event stream, ``evaluate_traces`` takes traces that
 already exist — from a just-finished run, from disk, or from a cloud backend —
 and grades them. Both funnel through one private grading core (:func:`_grade`),
-so ``run(agent)`` and ``evaluate(the trace that agent produced)`` grade through
+so ``run_agent(agent)`` and ``evaluate_traces(the trace that agent produced)`` grade through
 identical code — there is no second scoring path to drift.
 
 ``outputs`` is projected from the trace (the final model response's content),
@@ -40,12 +40,12 @@ from ..scorer import Scorer
 from ..sources import TraceRef, TraceSource
 from ..trace import Trace
 
-__all__ = ("evaluate",)
+__all__ = ("evaluate_traces",)
 
 logger = logging.getLogger(__name__)
 
 
-async def evaluate(
+async def evaluate_traces(
     source: TraceSource,
     *,
     scorers: Iterable[Scorer],
@@ -110,11 +110,11 @@ async def _grade(
 ) -> RunResult:
     """Grade every trace from ``source`` into a persisted :class:`RunResult`.
 
-    The single grading path shared by :func:`evaluate` and :func:`~autogen.beta.eval.run`
+    The single grading path shared by :func:`evaluate_traces` and :func:`~autogen.beta.eval.run_agent`
     (the latter produces traces first, then grades them here). Projects ``outputs``
     from each trace, runs the scorers, applies budgets, aggregates, persists, and —
     when ``stream`` is set — publishes the lifecycle events. ``target_path`` records
-    provenance (the agent for ``run``; the trace source for ``evaluate``);
+    provenance (the agent for ``run_agent``; the trace source for ``evaluate_traces``);
     ``started_at`` is the caller's ``perf_counter`` start so the run-level duration
     spans the caller's whole operation.
     """

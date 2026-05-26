@@ -27,7 +27,7 @@ class Suite:
 
     Use :meth:`from_jsonl` to load from disk or :meth:`from_list` to
     build inline. Suites are iterable and sized, so they can be passed
-    directly to :func:`autogen.beta.eval.run`.
+    directly to :func:`autogen.beta.eval.run_agent`.
     """
 
     __slots__ = ("_tasks", "_name", "_source")

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""RunResult, TaskResult, Aggregates, ScoreStats — what :func:`run` hands back.
+"""RunResult, TaskResult, Aggregates, ScoreStats — what :func:`run_agent` hands back.
 
 Aggregation rules:
 
@@ -73,7 +73,7 @@ class Aggregates:
 
 
 class RunResult:
-    """The result of a full :func:`run`.
+    """The result of a full :func:`run_agent`.
 
     Holds per-task records, run-level metadata, and computed aggregates.
     Lookup helpers (``pass_rate``, ``score_stats``, ``value_counts``)
@@ -235,7 +235,7 @@ class RunResult:
         """Write the run as schema-0.1 JSON.
 
         If ``path`` is ``None``, saves under the run's configured
-        ``store_dir`` (set by the runner via ``run(..., store_dir=...)``)
+        ``store_dir`` (set by the runner via ``run_agent(..., store_dir=...)``)
         as ``<run_id>.json``. If ``path`` ends in ``.json`` it's used
         verbatim; otherwise ``path`` is treated as a directory and
         ``<run_id>.json`` is appended.
@@ -261,7 +261,7 @@ class RunResult:
             if self._store_dir is None:
                 raise ValueError(
                     "RunResult.save(): no path given and no store_dir was set on the run; "
-                    "pass an explicit path or pass store_dir= to run()."
+                    "pass an explicit path or pass store_dir= to run_agent()."
                 )
             return self._store_dir / f"{self._run_id}.json"
         p = Path(path)

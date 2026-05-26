@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for evaluate() — grading traces from a TraceSource."""
+"""Tests for evaluate_traces() — grading traces from a TraceSource."""
 
 import pytest
 
@@ -11,7 +11,7 @@ from autogen.beta.eval import (
     InMemoryTraceSource,
     Suite,
     TraceRef,
-    evaluate,
+    evaluate_traces,
     scorer,
 )
 from autogen.beta.eval.scorers import final_answer_matches, tool_called
@@ -43,7 +43,7 @@ async def test_evaluate_scores_persists_and_joins_reference(tmp_path) -> None:
         {"task_id": "task-1", "inputs": {"input": "capital of France?"}, "reference_outputs": {"answer": "Paris"}},
     ])
 
-    result = await evaluate(
+    result = await evaluate_traces(
         source,
         scorers=[tool_called("get_weather"), final_answer_matches(field="answer", matcher="contains")],
         suite=suite,
@@ -60,7 +60,7 @@ async def test_evaluate_scores_persists_and_joins_reference(tmp_path) -> None:
 async def test_evaluate_reference_free_without_suite(tmp_path) -> None:
     source = InMemoryTraceSource([(TraceRef("only"), _trace("hello"))])
 
-    result = await evaluate(source, scorers=[has_one_response], store_dir=tmp_path)
+    result = await evaluate_traces(source, scorers=[has_one_response], store_dir=tmp_path)
 
     assert result.pass_rate("has_one_response") == 1.0
     assert len(result.tasks) == 1
@@ -71,6 +71,8 @@ async def test_evaluate_reference_free_without_suite(tmp_path) -> None:
 async def test_evaluate_records_budget_violation(tmp_path) -> None:
     source = InMemoryTraceSource([(TraceRef("big"), _trace("x", in_tok=100, out_tok=100))])
 
-    result = await evaluate(source, scorers=[], store_dir=tmp_path, budgets=BudgetThresholds(max_tokens_per_task=50))
+    result = await evaluate_traces(
+        source, scorers=[], store_dir=tmp_path, budgets=BudgetThresholds(max_tokens_per_task=50)
+    )
 
     assert result.aggregates.budget_violations == 1

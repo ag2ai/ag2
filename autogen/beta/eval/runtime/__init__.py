@@ -4,16 +4,16 @@
 
 """Runtime layer: execute targets (live) or replay traces to produce results."""
 
-from .evaluate import evaluate
-from .runner import run, run_pairwise
+from .evaluate import evaluate_traces
+from .runner import run_agent, run_pairwise
 from .variants import LeaderboardRow, VariantRunResult, Variants, run_variants
 
 __all__ = (
     "LeaderboardRow",
     "VariantRunResult",
     "Variants",
-    "evaluate",
-    "run",
+    "evaluate_traces",
+    "run_agent",
     "run_pairwise",
     "run_variants",
 )

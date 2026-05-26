@@ -2,19 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""run() — the eval runner.
+"""run_agent() — the eval runner.
 
-``run`` is *produce-then-grade*, and produces its trace **through OpenTelemetry** —
-the same substrate :func:`~autogen.beta.eval.evaluate` grades. Per task it builds a
-fresh :class:`~autogen.beta.eval.EvalTarget`, runs it with a
+``run_agent`` is *produce-then-grade*, and produces its trace **through OpenTelemetry** —
+the same substrate :func:`~autogen.beta.eval.evaluate_traces` grades. Per task it builds a
+fresh :class:`~autogen.beta.Agent`, runs it with a
 :class:`~autogen.beta.middleware.builtin.telemetry.TelemetryMiddleware` exporting to an
 **in-memory** span exporter, then reconstructs the :class:`~autogen.beta.eval.Trace`
 from those spans via ``readable_spans_to_trace`` — exactly the span→Trace path the
-trace-based sources use. So ``run()`` and ``evaluate()`` don't merely match; they share
+trace-based sources use. So ``run_agent()`` and ``evaluate_traces()`` don't merely match; they share
 the *same* reconstruction and the *same* grading core
 (:func:`~autogen.beta.eval.runtime.evaluate._grade`) — one path, no drift.
 
-Because the trace is reconstructed from spans, ``run`` inherits the OTEL path's
+Because the trace is reconstructed from spans, ``run_agent`` inherits the OTEL path's
 fidelity (halt / tool-not-found are stream-only, so never spanned — see
 ``sources/_spans.py``). Failures that emit no spans (a factory that raises, or an
 ``ask`` that errors before the agent span starts) fall back to the caught exception so
@@ -37,11 +37,12 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from autogen.beta.agent import Agent
 from autogen.beta.config import ModelConfig
 from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware
 from autogen.beta.stream import MemoryStream, Stream
 
-from ..dataset import EvalTarget, Suite, Task
+from ..dataset import Suite, Task
 from ..pairwise import PairwiseComparator, PairwiseRunResult, evaluate_pairwise
 from ..results import BudgetThresholds, RunResult
 from ..scorer import Scorer
@@ -50,13 +51,13 @@ from ..sources._otel import readable_spans_to_trace
 from ..trace import Trace
 from .evaluate import _grade
 
-__all__ = ("run", "run_pairwise")
+__all__ = ("run_agent", "run_pairwise")
 
 
-async def run(
+async def run_agent(
     suite: Suite | str | os.PathLike[str] | list[dict[str, Any]],
     *,
-    target: EvalTarget | Callable[..., EvalTarget],
+    agent: Agent | Callable[..., Agent],
     scorers: Iterable[Scorer],
     store_dir: str | os.PathLike[str],
     model_config: ModelConfig | dict[str, ModelConfig] | None = None,
@@ -70,13 +71,13 @@ async def run(
 ) -> RunResult:
     """Run an evaluation suite end-to-end.
 
-    Each task gets a fresh :class:`~autogen.beta.eval.EvalTarget` built
-    from ``target`` (an instance, reused, or a factory), run with a
+    Each task gets a fresh :class:`~autogen.beta.Agent` built
+    from ``agent`` (an instance, reused, or a factory), run with a
     :class:`~autogen.beta.middleware.builtin.telemetry.TelemetryMiddleware` exporting to an
     in-memory span exporter; the :class:`~autogen.beta.eval.Trace` is then reconstructed
     from those spans (per-task duration timed around the ``ask``) — the same span→Trace
     path the trace-based sources use. Those traces are graded through the same core
-    :func:`~autogen.beta.eval.evaluate` uses, and the run is persisted as
+    :func:`~autogen.beta.eval.evaluate_traces` uses, and the run is persisted as
     ``<store_dir>/<run_id>.json``.
 
     Args:
@@ -84,14 +85,12 @@ async def run(
             task records. Strings / paths are loaded via
             :meth:`Suite.from_jsonl`; lists are loaded via
             :meth:`Suite.from_list`.
-        target: The thing to evaluate — either an
-            :class:`~autogen.beta.eval.EvalTarget` *instance* (an
-            :class:`~autogen.beta.Agent` today; a hub/network target
-            later), reused for every task, or a *factory* callable that
-            builds a fresh target per task. A factory may take a
-            keyword-only ``config`` parameter so the runner can inject
-            per-task or global model configs (use a factory, not an
-            instance, when you want per-task ``model_config``).
+        agent: The agent to evaluate — either an :class:`~autogen.beta.Agent`
+            *instance*, reused for every task, or a *factory* callable that
+            builds a fresh :class:`~autogen.beta.Agent` per task. A factory may
+            take a keyword-only ``config`` parameter so the runner can inject
+            per-task or global model configs (use a factory, not an instance,
+            when you want per-task ``model_config``).
         scorers: Scorer instances (typically produced by ``@scorer``).
             Each is called once per task; the resulting feedback is
             recorded on the task's :class:`TaskResult`.
@@ -133,7 +132,7 @@ async def run(
     """
     resolved_suite = _resolve_suite(suite)
     scorer_list = tuple(scorers)
-    factory, accepts_config, target_path = _normalize_target(target)
+    factory, accepts_config, target_path = _normalize_target(agent)
     tasks_to_run = _expand_repeats(resolved_suite, repeats)
     suite_to_grade = Suite(tuple(tasks_to_run), name=resolved_suite.name, source=resolved_suite.source)
 
@@ -168,7 +167,7 @@ def _resolve_suite(
     return Suite.from_jsonl(suite)
 
 
-def _factory_accepts_config(factory: Callable[..., EvalTarget]) -> bool:
+def _factory_accepts_config(factory: Callable[..., Agent]) -> bool:
     """Detect whether the factory takes a ``config`` parameter.
 
     A bare factory like ``def build() -> Agent`` is supported — the
@@ -181,33 +180,32 @@ def _factory_accepts_config(factory: Callable[..., EvalTarget]) -> bool:
     return "config" in sig.parameters
 
 
-def _factory_path(factory: Callable[..., EvalTarget]) -> str:
+def _factory_path(factory: Callable[..., Agent]) -> str:
     """Return ``"<module>:<qualname>"`` for the factory, for the run JSON."""
     module = getattr(factory, "__module__", "<unknown>")
     qualname = getattr(factory, "__qualname__", getattr(factory, "__name__", "<unknown>"))
     return f"{module}:{qualname}"
 
 
-def _return_instance(instance: EvalTarget) -> EvalTarget:
+def _return_instance(instance: Agent) -> Agent:
     return instance
 
 
 def _normalize_target(
-    target: EvalTarget | Callable[..., EvalTarget],
-) -> tuple[Callable[..., EvalTarget], bool, str]:
+    target: Agent | Callable[..., Agent],
+) -> tuple[Callable[..., Agent], bool, str]:
     """Normalize ``target`` into ``(factory, accepts_config, provenance_path)``.
 
-    An :class:`EvalTarget` instance (an ``Agent`` today; a hub/network target
-    later) is reused for every task. A callable is treated as a factory built
-    fresh per task and may accept a keyword-only ``config`` for per-task model
-    injection.
+    An :class:`Agent` instance is reused for every task. A callable is treated
+    as a factory built fresh per task and may accept a keyword-only ``config``
+    for per-task model injection.
     """
-    if isinstance(target, EvalTarget):
+    if isinstance(target, Agent):
         path = f"{type(target).__module__}:{type(target).__qualname__}"
         return partial(_return_instance, target), False, path
     if callable(target):
         return target, _factory_accepts_config(target), _factory_path(target)
-    raise TypeError("target must be an EvalTarget (e.g. an Agent) or a callable returning one")
+    raise TypeError("target must be an Agent or a callable returning one")
 
 
 def _expand_repeats(suite: Suite, repeats: int) -> list[Task]:
@@ -230,11 +228,11 @@ def _resolve_task_config(
 
 
 def _build_target(
-    factory: Callable[..., EvalTarget],
+    factory: Callable[..., Agent],
     *,
     accepts_config: bool,
     config: ModelConfig | None,
-) -> EvalTarget:
+) -> Agent:
     """Call the user's factory, injecting ``config`` only when there is one to inject."""
     if config is None:
         # Nothing to inject — let the factory use its own default or a pre-bound
@@ -253,8 +251,8 @@ def _build_target(
 async def run_pairwise(
     suite: Suite | str | os.PathLike[str] | list[dict[str, Any]],
     *,
-    variant_a: EvalTarget | Callable[..., EvalTarget],
-    variant_b: EvalTarget | Callable[..., EvalTarget],
+    variant_a: Agent | Callable[..., Agent],
+    variant_b: Agent | Callable[..., Agent],
     comparators: Iterable[PairwiseComparator],
     store_dir: str | os.PathLike[str],
     model_config: ModelConfig | dict[str, ModelConfig] | None = None,
@@ -270,11 +268,11 @@ async def run_pairwise(
     Convenience over :func:`~autogen.beta.eval.evaluate_pairwise`: runs each
     variant across the suite (capturing a :class:`Trace` per task,
     keyed by ``task_id``), then pairwise-compares the two sets. Mirrors how
-    :func:`run` is produce-then-:func:`~autogen.beta.eval.evaluate` for one
+    :func:`run_agent` is produce-then-:func:`~autogen.beta.eval.evaluate_traces` for one
     variant. For decoupled grading of pre-existing traces, call
     ``evaluate_pairwise`` directly.
 
-    ``label`` is a shared identifier recorded on the result (like :func:`run`);
+    ``label`` is a shared identifier recorded on the result (like :func:`run_agent`);
     pass ``stream`` to observe ``PairwiseStarted`` / ``PairwiseCompared`` /
     ``PairwiseCompleted`` lifecycle events as the comparison runs.
     """
@@ -304,7 +302,7 @@ async def run_pairwise(
 
 async def _produce(
     tasks: Iterable[Task],
-    factory: Callable[..., EvalTarget],
+    factory: Callable[..., Agent],
     *,
     accepts_config: bool,
     model_config: ModelConfig | dict[str, ModelConfig] | None,
@@ -321,7 +319,7 @@ async def _produce(
 async def _produce_one(
     semaphore: asyncio.Semaphore,
     task: Task,
-    factory: Callable[..., EvalTarget],
+    factory: Callable[..., Agent],
     accepts_config: bool,
     model_config: ModelConfig | dict[str, ModelConfig] | None,
 ) -> tuple[TraceRef, Trace]:
@@ -359,8 +357,8 @@ async def _produce_one(
                 exception = exc
             finally:
                 duration_ms = int((time.perf_counter() - started) * 1000)
-        # run()'s Trace is reconstructed from the emitted spans — the same span→Trace path
-        # evaluate() uses, so the two grade identically. Pre-span failures (factory raise, or
+        # run_agent()'s Trace is reconstructed from the emitted spans — the same span→Trace path
+        # evaluate_traces() uses, so the two grade identically. Pre-span failures (factory raise, or
         # ask erroring before the agent span starts) emit no spans → fall back to the caught exception.
         trace = readable_spans_to_trace(exporter.get_finished_spans(), duration_ms=duration_ms)
         if trace.exception is None and exception is not None:

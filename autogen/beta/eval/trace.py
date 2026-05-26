@@ -11,7 +11,7 @@ Scorers consume structure directly (``trace.events_of(ToolCallEvent)``) rather
 than parsing free-form text.
 
 A Trace is **reconstructed from OpenTelemetry spans** — the same path for a live
-``run`` and for grading stored / cloud traces via ``evaluate`` — so it carries
+``run_agent`` and for grading stored / cloud traces via ``evaluate_traces`` — so it carries
 exactly what those spans captured. Stream-only events that never become spans
 (``HaltEvent``, ``ToolNotFoundEvent``) are absent on this path; see
 :mod:`autogen.beta.eval.sources._spans`.
