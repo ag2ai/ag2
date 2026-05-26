@@ -3,19 +3,21 @@ title: "Datasets & Runs"
 sidebarTitle: "Runs"
 ---
 
-This page covers the rest of the offline eval pipeline: building a `Suite` of tasks, calling `run_agent()`, reading the `RunResult`, and the persistence format that makes runs comparable over time.
+This page covers the core of the offline eval pipeline: building a `Suite` of tasks, calling `run_agent()`, reading the `RunResult`, and grading traces that already exist. (Saving runs and comparing them over time has its own page — [Persistence & tracking](/docs/beta/evaluation/persistence/).)
 
-## The stream is the foundation
+## The trace is the foundation
 
-Every action inside `agent.ask(...)` — model requests, model responses, tool calls, tool results — is recorded as an OpenTelemetry span. The eval framework reconstructs a `Trace` (the typed events) from those spans — the same path it uses to grade stored or cloud traces. Scorers grade what's in the trace.
+Grading is a pure function of one thing: a **`Trace`** — the typed record of what the agent did on a task (model responses, tool calls, tool results, human input) plus token usage, duration, and any exception. Each of those steps is emitted as an OpenTelemetry span while the agent runs, and the framework reconstructs the `Trace` from those spans. Scorers only ever read the `Trace`.
 
-That framing has three concrete consequences:
+It's the **same** reconstruction no matter where the spans came from — a `run_agent` call here, a folder of saved traces, or live production telemetry in Grafana Tempo. That's exactly what lets the framework's two halves — *producing* a trace and *grading* one — share one code path and the same scorers.
 
-- **Multi-turn just works.** A `reply.ask(...)` continuation re-enters the agent loop on the same stream — those events are captured too. Scorers see the full conversation, not just the first turn.
-- **The boundary between offline and online is just where the stream came from.** Offline = replay against a curated dataset. Online (v1) = subscribe to a live production stream. *Same scorers, different source.*
-- **No special primitives required for trajectory scoring.** Assembly-policy correctness, compaction faithfulness, sub-task tree quality — they're all event-pattern questions. The substrate that answers them is already in the stream.
+Three concrete consequences:
 
-You don't need to reach for the stream APIs to use the eval framework — the runner takes care of subscription, capture, and teardown. But the conceptual frame matters when you're writing custom scorers or thinking about what's possible.
+- **Multi-turn just works.** A `reply.ask(...)` continuation re-enters the agent loop, so its spans land in the same trace. Scorers see the whole conversation, not just the first turn.
+- **Offline vs online is just where the trace came from.** Offline = run a curated dataset with `run_agent`. Online = grade traces captured from production with `evaluate_traces` (e.g. from Grafana Tempo). *Same scorers, different source.*
+- **No special primitives for trajectory scoring.** Assembly-policy correctness, compaction faithfulness, sub-task tree quality — all event-pattern questions, answered by the events already in the trace.
+
+You don't manage any of this: `run_agent` attaches a telemetry middleware, collects the spans the agent emits, and reconstructs the `Trace` for you. But the frame matters when you write a custom scorer — you're always reading a `Trace`, never a live stream.
 
 ## Datasets — the `Suite`
 
@@ -174,7 +176,7 @@ result.pass_rate("scorer_name", tag="hard")  # any accessor takes tag= to slice 
 result.tags                        # frozenset[str] — the tags present, for slicing
 result.aggregates                  # Aggregates — everything together
 result.aggregates.tokens           # TokenUsage(input, output, cache_creation, cache_read)
-result.diff(baseline)              # RunDiff vs a prior run — regressions (see "Comparing runs")
+result.diff(baseline)              # RunDiff vs a prior run — see the Persistence & tracking page
 result.aggregates.errors           # int — tasks where the agent raised
 result.aggregates.budget_violations  # int
 
@@ -213,120 +215,39 @@ Value counts:
   termination_reason  completed=5
 ```
 
-## Persistence — the schema-0.1 JSON
+## Grading existing traces — `evaluate_traces`
 
-Every `run_agent()` writes a JSON file to `store_dir/<run_id>.json` before returning. The file is the run's permanent record — comparable across days, releases, and pull requests. Shape:
-
-```json
-{
-  "schema_version": "0.1",
-  "run_id": "01J7Z3M4QF8X9Y0K1V2N3P4Q5R",
-  "label": "weather-eval",
-  "created_at": "2026-05-11T14:23:00+00:00",
-  "duration_ms": 5292,
-  "suite": { "name": "dataset", "size": 5, "source": "eval/dataset.jsonl" },
-  "target": "weather_agent.agent:build_weather_agent",
-  "concurrency": 4,
-  "tasks": [
-    {
-      "task_id": "weather-001",
-      "inputs": { "input": "What's the weather in Tokyo?" },
-      "reference_outputs": { "city": "Tokyo" },
-      "tags": ["happy-path"],
-      "metadata": {},
-      "duration_ms": 1234,
-      "events": [
-        { "type": "ToolCallEvent", "name": "get_weather", "arguments": "..." }
-      ],
-      "exception": null,
-      "tokens": { "input": 423, "output": 78, "cache_creation": 0, "cache_read": 0 },
-      "feedback": [
-        { "key": "tool_called[get_weather]", "score": true, "value": null, "comment": null }
-      ],
-      "budget_violation": false
-    }
-  ],
-  "aggregates": {
-    "pass_rate": { "tool_called[get_weather]": 1.0 },
-    "score_stats": { "extra_tool_calls": { "mean": 0.0, "p50": 0.0, "p95": 0.0, "n": 5 } },
-    "value_counts": { "termination_reason": { "completed": 5 } },
-    "tokens": { "input": 2115, "output": 390, "total": 2505 },
-    "errors": 0,
-    "budget_violations": 0
-  }
-}
-```
-
-The schema is forward-compatible: future versions add fields at the end of objects; existing fields don't change name or type. **Don't rely on this shape for in-tree code** — use the `RunResult` Python API. The JSON is for cross-process / cross-time persistence: a future dashboard, a CI artifact, a diff between two releases.
-
-## Comparing runs — regressions
-
-Persistence pays off when you compare two runs: *"did my change make the agent better or worse?"*. Load a past run with `load_run(path)` and `diff` the current one against it.
+`run_agent` is the *produce-and-grade* path: it runs your agent, then grades the trace. `evaluate_traces` is the *grade-only* path — for traces that already exist, captured elsewhere. The grading is identical; only the source differs.
 
 ```python linenums="1"
-from autogen.beta.eval import load_run, run_agent
+from autogen.beta.eval import DirectoryTraceSource, evaluate_traces
 
-baseline = load_run("runs/last_release.json")          # a previously saved run
-current = await run_agent(suite, agent=my_new_agent, scorers=[...], store_dir="runs")
-
-delta = current.diff(baseline)
-print(delta.summary())
-#   correctness    88.0% -> 71.0%   -17.0   REGRESSION
-#   tool_called    90.0% -> 95.0%    +5.0
-#   flipped pass->fail: ['correctness:task-12']
-```
-
-`diff` joins the two runs by `task_id` and scorer key and reports per-scorer pass-rate / mean deltas plus the tasks that flipped pass↔fail. `RunDiff.regressions` is the `(scorer, task_id)` pairs that went pass → fail — the CI gate:
-
-```python linenums="1"
-assert not current.diff(baseline).regressions   # fail the build if anything regressed
-```
-
-!!! warning "Runs must be comparable"
-    By default (`strict=True`) `diff` raises `RunsNotComparableError` when the two runs didn't grade the same tasks with the same checks — a task or scorer present in only one run, or a task whose `inputs` / `reference_outputs` changed under the same id (*content drift*). The error itemizes every mismatch and tells you to pass **`strict=False`** to diff the overlap instead. With `strict=False`, only the genuinely comparable `(task, scorer)` pairs are diffed and everything excluded is reported on the `RunDiff` (`content_changed`, `only_in_current` / `only_in_baseline`, `scorers_only_in_*`) — so you are never silently shown an apples-to-oranges number.
-
-!!! note
-    `load_run` reconstructs each run's **scores and task identity** — enough for `diff` and the `pass_rate` / `score_stats` / `value_counts` accessors. It does not replay event traces, so a loaded run's `aggregates.tokens` reads zero; read the JSON directly if you need event-level detail.
-
-## Comparing variants — `run_variants`
-
-To answer "which is best?" — across models, prompts, tools, middleware, or whole builds — run the same suite under several named **variants** and rank them. A `Variants` is a *single-axis* set, built with a typed `from_*` constructor:
-
-```python linenums="1"
-from autogen.beta.config import GeminiConfig, OpenAIConfig
-from autogen.beta.eval import Variants, run_variants
-
-board = await run_variants(
-    suite,
-    variants=Variants.from_configs(build_weather_agent, {
-        "gpt-4o": OpenAIConfig("gpt-4o"),
-        "flash":  GeminiConfig("gemini-3-flash-preview"),
-    }),
+result = await evaluate_traces(
+    DirectoryTraceSource("./captured-traces"),   # a folder of saved traces
     scorers=[...],
+    suite=suite,            # optional — only needed for reference-based scorers (joined by task_id)
     store_dir="runs",
-    repeats=5,                                # optional — N runs per variant for stability
 )
-
-print(board.summary("final_answer_matches"))  # ranked leaderboard
-board.best("final_answer_matches")             # the winning variant's name
-board.results["gpt-4o"]                        # each variant's full RunResult
 ```
 
-Each `from_*` constructor fixes one axis and types its values, so a single call only varies one thing — a controlled comparison (vary one axis, hold the rest fixed):
+A **`TraceSource`** is anything that yields traces. Three ship:
 
-| Constructor | Varies | Value type |
-|---|---|---|
-| `Variants.from_configs(factory, {...})` | model / provider / params | `ModelConfig` |
-| `Variants.from_prompts(factory, {...})` | system prompt | `str` |
-| `Variants.from_tools(factory, {...})` | tool set | `Sequence[Tool]` |
-| `Variants.from_middleware(factory, {...})` | middleware stack | `Sequence[MiddlewareFactory]` |
-| `Variants.from_targets({...})` | the whole build | a factory or instance each |
+| Source | Reads from |
+|---|---|
+| `InMemoryTraceSource` | traces you already hold in memory |
+| `DirectoryTraceSource` | a folder of saved trace files (`save_trace` writes them) |
+| `TempoTraceSource` | Grafana Tempo over OTLP — grade real production telemetry |
 
-Each variant runs via `run_agent()` (so `repeats`, persistence, everything applies) and is saved as its own `<run_id>-<variant>.json`. `VariantRunResult.leaderboard(key)` ranks variants by a scorer — pass-rate for boolean scorers, mean for numeric — best first; **tied scores share a rank**, and `best(key)` returns `None` when there's no unique winner. (A 3-way 100% tie usually means the eval isn't *discriminating* — make the task harder, or score quality with a judge — not that there's a true winner.)
+Because grading depends only on the reconstructed `Trace`, the **same scorers** work whether the trace came from `run_agent`, a directory, or production.
+
+Reconstruction understands **two span dialects**, auto-detected per trace, so traces from a range of tools and frameworks grade unchanged:
+
+- the [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/){.external-link target="_blank"} — `gen_ai.*` spans, what AG2's own `TelemetryMiddleware` emits, and
+- [OpenInference](https://github.com/Arize-ai/openinference){.external-link target="_blank"} — `openinference.span.kind` + `llm.*` / `tool.*`, emitted by the Arize/Phoenix instrumentors.
 
 ## Observing a run
 
-Just like `agent.ask(stream=...)`, both `run_agent` and `run_variants` accept a `stream`. Pass one and the runner publishes **eval lifecycle events** to it as the run unfolds — so you observe an evaluation with the same machinery you use on an agent (`subscribe`, `where`, the watch system, persistent backends). Nothing is printed for you; you attach the observer and render however you like.
+Just like `agent.ask(stream=...)`, `run_agent`, `run_variants`, and `run_pairwise` all accept a `stream`. Pass one and the runner publishes **eval lifecycle events** to it as the run unfolds — so you observe an evaluation with the same machinery you use on an agent (`subscribe`, `where`, the watch system, persistent backends). Nothing is printed for you; you attach the observer and render however you like.
 
 ```python linenums="1"
 from autogen.beta.stream import MemoryStream
@@ -351,15 +272,10 @@ The events live in `autogen.beta.eval.events` and are all transient — observat
 | `TaskEvaluated` | `run_agent` | each task finishes (carries its `feedback`) |
 | `EvalCompleted` | `run_agent` | a run finishes (carries the `RunResult`) |
 | `VariantStarted` / `VariantCompleted` | `run_variants` | around each variant (carries the variant's `RunResult`) |
+| `PairwiseStarted` / `PairwiseCompared` / `PairwiseCompleted` | `run_pairwise` | around the run and each head-to-head comparison |
 
 !!! tip "Ready-made console output"
     For a quick console view without writing a callback, subscribe the built-in `console_reporter` (from `autogen.beta.eval`): `#!python stream.subscribe(console_reporter)`. It's just an opt-in observer — no `run_agent()` flag — so swap in your own callback whenever you want different output.
-
-## Comparing runs
-
-v0 ships *persistence* but not a built-in `diff` command — that lands in v1 as the `ag2-eval diff` CLI. For now, the schema-0.1 JSONs are pre-computed aggregates you can diff with whatever tool you like.
-
-A minimal stand-in lives in the [runnable weather example](https://github.com/ag2ai/ag2/tree/main/eval_development/runnable_weather_eval){.external-link agent="_blank"} as `compare.py` — about 80 lines, loads two JSONs and prints side-by-side deltas. Worth copying into your project if you want run-vs-run comparison today.
 
 ## Exceptions don't abort the run
 
@@ -375,6 +291,9 @@ The aggregate count of agent-level errors surfaces in `result.aggregates.errors`
 
 ## Where to next
 
-- **[Scorers](/docs/beta/evaluation/scorers/)** — if you haven't already, the scorers page covers what goes into `scorers=[...]`.
+- **[Scorers](/docs/beta/evaluation/scorers/)** — what goes into `scorers=[...]`.
+- **[Variants](/docs/beta/evaluation/variants/)** — run several builds over the suite and rank them on a leaderboard.
+- **[Pairwise](/docs/beta/evaluation/pairwise/)** — judge two builds head-to-head.
+- **[Persistence & tracking](/docs/beta/evaluation/persistence/)** — compare runs over time, catch regressions, and track an agent across iterations.
 - **[Testing](/docs/beta/testing/)** — `TestConfig` cassettes for deterministic CI runs.
-- **[Observers](/docs/beta/advanced/observers/)** — for runtime safety guards (token budgets that actually halt, loop detection).
+- **[Observers](/docs/beta/advanced/observers/)** — runtime safety guards (token budgets that actually halt, loop detection).

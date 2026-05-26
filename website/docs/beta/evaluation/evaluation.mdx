@@ -5,6 +5,8 @@ sidebarTitle: "Overview"
 
 Evaluation is how you measure whether your agent actually works. The framework runs your agent over a dataset of tasks, scores each run on multiple properties, and gives you aggregate metrics you can track over time.
 
+One idea ties the whole framework together: a scorer grades the **recorded trace** of a run — the typed log of what the agent did. That's why the same scorers work whether you produce the trace by running the agent here, or grade a trace captured from production — and why runs persist as data you can compare over time.
+
 ## Testing vs evaluation
 
 These sound similar but aren't.
@@ -18,12 +20,15 @@ The framework supports both. You can wrap eval metrics in pytest assertions ("pa
 
 Every eval suite has four pieces. That's it.
 
-1. A **dataset** — a list of tasks with inputs and (optional) expected outputs.
-2. An **agent factory** — a callable that builds a fresh agent for each task.
+1. A **dataset** — a suite of tasks with inputs and (optional) expected outputs.
+2. An **agent** — an `Agent` instance, or a factory that builds a fresh one per task.
 3. One or more **scorers** — functions that grade a run.
 4. A call to **run_agent** — the framework's entry point.
 
 The rest of these docs cover each piece in depth. Read the quick-start below first.
+
+!!! note "Two ways in"
+    `run_agent` runs your agent and grades it. If the traces already exist — captured from production, or produced by another tool — grade them directly with `evaluate_traces`, no agent run required. It reads both OpenTelemetry GenAI-semconv and OpenInference spans. Same scorers either way; see [Runs](/docs/beta/evaluation/runs/).
 
 ## Quick start
 
@@ -98,7 +103,7 @@ Pass rates:
 That's the whole framework in 30 lines. Everything else in these docs is variations on this shape.
 
 !!! tip
-    Building an actual eval? See the [runnable weather example](https://github.com/ag2ai/ag2/tree/main/eval_development/runnable_weather_eval){.external-link agent="_blank"} — five tasks, eight scorers (five prebuilt + three custom), deterministic mode for CI plus a live-model mode.
+    New to evals and this moved fast? The [Get started](/docs/beta/evaluation/getting-started/) tutorial builds the same thing up one concept at a time.
 
 ## Determinism for CI
 
@@ -140,9 +145,12 @@ The JSON file is the persistence format. It's schema-versioned (`"0.1"`) and is 
 
 ## Where to next
 
-- **[Scorers](/docs/beta/evaluation/scorers/)** — how to write them, the five prebuilts, return-shape rules, exception handling.
-- **[Runs](/docs/beta/evaluation/runs/)** — `Suite`, the `run_agent()` signature, `RunResult` deep dive, the JSON schema, budget thresholds. Also: **`repeats=`** for consistency, **`run_variants` + `Variants`** to compare models / prompts / tools and rank them, and **`stream=`** to observe a run live via its event stream.
+- **[Get started](/docs/beta/evaluation/getting-started/)** — a paced, step-by-step first eval if this quick-start moved too fast.
+- **[Scorers](/docs/beta/evaluation/scorers/)** — how to write them, the six prebuilts (including `agent_judge` and `failure_attribution`), return-shape rules, exception handling.
+- **[Runs](/docs/beta/evaluation/runs/)** — `Suite`, the `run_agent()` signature, `RunResult` deep dive, `evaluate_traces` for existing traces, `repeats=`, and `stream=` to observe a run live.
+- **[Variants](/docs/beta/evaluation/variants/)** & **[Pairwise](/docs/beta/evaluation/pairwise/)** — compare builds on a leaderboard, or head-to-head.
+- **[Persistence & tracking](/docs/beta/evaluation/persistence/)** — the run JSON, comparing runs for regressions, and tracking an agent across iterations.
 
 ## What's in scope
 
-v0 ships **offline evaluation** — you run a curated dataset against your agent and grade it. Online evaluation (live production traces) and a hosted dashboard are on the roadmap; the offline framework is designed so the same scorer code will work in both modes when online lights up.
+v0 ships **offline evaluation** (run a curated dataset with `run_agent`) **and grading of existing traces** (`evaluate_traces` over a directory or Grafana Tempo) — so you can already grade captured production traces with the same scorers. Still on the roadmap: *continuous* online evaluation and a hosted dashboard.

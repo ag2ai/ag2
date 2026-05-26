@@ -78,10 +78,10 @@ The framework routes by return type:
 
 A load-bearing distinction:
 
-- **Reference-based** scorers compare what happened to what *should have* happened. They require `reference_outputs[field]` from the dataset. Only work offline.
-- **Reference-free** scorers judge from the trace alone. Work offline AND will work online (against live production traces) when v1 lights up online evaluation.
+- **Reference-based** scorers compare what happened to what *should have* happened. They need `reference_outputs` from a labelled dataset — so they can't grade arbitrary production traffic that has no gold answer.
+- **Reference-free** scorers judge from the trace alone — so the same code grades `run_agent` traces, stored traces, and live production traces (via `evaluate_traces`).
 
-Write scorers reference-free whenever you can — the same code runs in both modes.
+Write scorers reference-free whenever you can — the same code then runs everywhere.
 
 ## One question per scorer
 
@@ -115,7 +115,7 @@ def under_token_budget(trace) -> bool:
 
 ## Prebuilt scorers
 
-Four are shipped under `autogen.beta.eval.scorers` — frozen versions of the most common patterns.
+Six ship under `autogen.beta.eval.scorers`. Four are simple, deterministic checks (below); two richer ones — `agent_judge` and `failure_attribution` — get their own sections after.
 
 | Scorer | Question | Type | When to use |
 |---|---|---|---|
@@ -144,6 +144,39 @@ scorers = [
 
 !!! tip
     Two distinct `tool_called(...)` calls produce distinct keys (`tool_called[get_weather]` vs `tool_called[get_news]`), so multiple instances coexist in one run.
+
+## Agent-as-a-judge — `agent_judge`
+
+Some properties can't be checked with `==`: *is the answer helpful? well-reasoned? on-brand?* `agent_judge` hands the answer plus a criterion you write to a judge model, which returns a numeric score. This is a more capable take on a LLM-as-a-judge evaluation.
+
+```python linenums="1"
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.eval.scorers import agent_judge
+
+scorers = [
+    agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer resolves the user's request.", key="helpfulness"),
+    agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer is concise.", key="conciseness"),
+]
+```
+
+One judge = one criterion = one column. The score lands in `result.score_stats(key)`, so a *list* of judges is a multi-dimension **scorecard** — each criterion scored and aggregated independently. The numeric range defaults to `(0.0, 1.0)` and is **enforced** (out-of-range scores are clamped); pass `scale=(1, 5)` for a Likert range. The judge is an ordinary `Agent`, so it can be made deterministic using a `TestConfig` in CI.
+
+## Failure attribution — `failure_attribution`
+
+When a task fails, *why?* `failure_attribution` labels each run with a failure mode (a `str`, so it rolls up in `result.value_counts(key)`):
+
+```python linenums="1"
+from autogen.beta.eval.scorers import failure_attribution
+
+scorers = [failure_attribution(key="failure_mode")]
+# result.value_counts("failure_mode")  ->  {"none": 41, "tool_failure": 6, "crash": 3}
+```
+
+Out of the box it runs **deterministic detectors** (a crash/exception, no final answer, a tool error) — no model needed. Pass a `config` to add an **LLM attributor** that classifies the subtler, semantic failures the detectors can't see (wrong answer, gave up, looped):
+
+```python linenums="1"
+failure_attribution(OpenAIConfig(model="gpt-4o-mini"), key="failure_mode")
+```
 
 ## Exception handling
 
@@ -182,7 +215,7 @@ async def llm_judge(trace, reference_outputs) -> bool:
     return verdict
 ```
 
-Async is rarely needed for v0 scorers (they consume an in-memory `Trace`), but the option is there for v1 LLM-as-judge scorers.
+Most scorers consume an in-memory `Trace` and stay sync; async is there for scorers that call out — `agent_judge`, for instance, runs its judge model under the hood.
 
 ## Custom keys with `Scorer` directly
 
