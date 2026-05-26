@@ -13,8 +13,9 @@ from fast_depends import Provider
 
 from autogen.beta.types import ClassInfo
 
-from .events import BaseEvent, HumanInputRequest, HumanMessage
+from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, ModelRequest
 from .events.conditions import Condition
+from .pending import PendingMessage, PendingMessagePriority
 
 StreamId: TypeAlias = UUID
 SubId: TypeAlias = UUID
@@ -90,6 +91,33 @@ class ConversationContext:
     dependencies: dict[Any, Any] = field(default_factory=dict)
 
     prompt: list[str] = field(default_factory=list)
+
+    pending_messages: list[PendingMessage] | None = field(default=None, repr=False)
+
+    def enqueue(
+        self,
+        *content: str | Input | ModelRequest,
+        priority: PendingMessagePriority = "asap",
+    ) -> None:
+        """Queue input for the currently running agent loop.
+
+        ``asap`` messages are delivered at the next model-call opportunity,
+        including redirecting a turn that would otherwise finish into one more
+        request. ``when_idle`` messages are delivered only when the current
+        turn would otherwise finish, after any ``asap`` messages.
+
+        Enqueued messages are consumed only by a live ``Agent.ask`` run. If the
+        run has already returned, callers should resume the conversation with a
+        new ask call instead.
+        """
+        message = PendingMessage.from_content(*content, priority=priority)
+        if message is None:
+            return
+
+        if self.pending_messages is None:
+            raise RuntimeError("Cannot enqueue a pending message outside a live Agent.ask run.")
+
+        self.pending_messages.append(message)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
         request_msg = HumanInputRequest(message)

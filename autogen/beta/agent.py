@@ -74,6 +74,7 @@ from .middleware.base import (
 )
 from .observers import Observer
 from .observers import observer as observer_factory
+from .pending import PendingMessagePriority, combine_model_requests, drain_pending_messages
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .task import Task, TaskSpec
@@ -320,6 +321,8 @@ class AgentReply(Generic[TResult, TAgent]):
             context.prompt = list(prompt)
 
         client = config.create() if config else self.__client
+        if context.pending_messages is None:
+            context.pending_messages = []
 
         return await self.__agent._execute(
             initial_event,
@@ -334,6 +337,7 @@ class AgentReply(Generic[TResult, TAgent]):
 
 
 _STREAM_TURN_LOCK_ATTR = "_ag2_turn_lock"
+_SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL = "_ag2_suppress_next_tool_results_model_call"
 
 
 def _get_stream_turn_lock(stream: Any) -> asyncio.Lock:
@@ -849,6 +853,7 @@ class Agent(Generic[TResult]):
             variables=self._agent_variables | (variables or {}),
             dependency_provider=self.dependency_provider,
         )
+        context.pending_messages = []
 
         if not context.prompt:
             context.prompt.extend(self._system_prompt)
@@ -886,6 +891,8 @@ class Agent(Generic[TResult]):
         client = config.create()
 
         initial_event = ModelRequest.ensure_request(msg)
+        if context.pending_messages is None:
+            context.pending_messages = []
 
         if not context.prompt:
             context.prompt.extend(self._system_prompt)
@@ -979,16 +986,19 @@ class Agent(Generic[TResult]):
         # with the parent turn's lock.
         stream_lock = _get_stream_turn_lock(context.stream)
         async with stream_lock:
-            return await self._execute_locked(
-                event,
-                context=context,
-                client=client,
-                hitl_hook=hitl_hook,
-                additional_tools=additional_tools,
-                additional_middleware=additional_middleware,
-                additional_observers=additional_observers,
-                response_schema=response_schema,
-            )
+            try:
+                return await self._execute_locked(
+                    event,
+                    context=context,
+                    client=client,
+                    hitl_hook=hitl_hook,
+                    additional_tools=additional_tools,
+                    additional_middleware=additional_middleware,
+                    additional_observers=additional_observers,
+                    response_schema=response_schema,
+                )
+            finally:
+                context.pending_messages = None
 
     async def _execute_locked(
         self,
@@ -1109,7 +1119,13 @@ class Agent(Generic[TResult]):
                 agent_turn = partial(mw.on_turn, agent_turn)
                 llm_call = partial(mw.on_llm_call, llm_call)
 
-            async def _call_client(context: Context) -> None:
+            async def _call_client(event: BaseEvent, context: Context) -> None:
+                if isinstance(event, ToolResultsEvent) and context.dependencies.pop(
+                    _SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL,
+                    False,
+                ):
+                    return
+
                 messages = await context.stream.history.get_events()
                 result = await llm_call(messages, context)
                 await context.send(result)
@@ -1212,16 +1228,85 @@ class Agent(Generic[TResult]):
 
 
 async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
-    async with context.stream.get(ModelResponse) as result:
-        await context.send(event)
-        message: ModelResponse = await result
-
-    while message.tool_calls and not message.response_force:
+    if not isinstance(event, ModelRequest):
         async with context.stream.get(ModelResponse) as result:
-            await context.send(message.tool_calls)
-            message = await result
+            await context.send(event)
+            message: ModelResponse = await result
+    else:
+        message = await _send_model_request(event, context)
 
+    return await _continue_turn(message, context)
+
+
+async def _continue_turn(message: ModelResponse, context: Context) -> ModelResponse:
+    while True:
+        if message.tool_calls and not message.response_force:
+            with context.stream.where(ToolResultsEvent | ModelResponse).join(max_events=1) as result:
+                context.dependencies[_SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL] = True
+                await context.send(message.tool_calls)
+                next_event: ToolResultsEvent | ModelResponse = await anext(result)
+
+            if isinstance(next_event, ModelResponse):
+                context.dependencies.pop(_SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL, None)
+                message = next_event
+            else:
+                message = await _send_model_request_with_tool_results(next_event, context)
+            continue
+
+        pending = _drain_pending_on_end(context)
+        if pending:
+            message = await _send_model_request(_combine_requests(pending), context)
+            continue
+
+        return message
+
+
+async def _send_model_request(request: ModelRequest, context: Context) -> ModelResponse:
+    requests = [*_drain_pending_asap(context), request]
+    async with context.stream.get(ModelResponse) as result:
+        await context.send(_combine_requests(requests))
+        message: ModelResponse = await result
     return message
+
+
+async def _send_model_request_with_tool_results(
+    tool_results: ToolResultsEvent,
+    context: Context,
+) -> ModelResponse:
+    if _has_pending_asap(context):
+        pending = _drain_pending_asap(context)
+        return await _send_model_request(_combine_requests(pending), context)
+
+    context.dependencies.pop(_SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL, None)
+    async with context.stream.get(ModelResponse) as result:
+        await context.send(tool_results)
+        message: ModelResponse = await result
+    return message
+
+
+def _drain_pending_asap(context: Context) -> list[ModelRequest]:
+    return _drain_pending(context, "asap")
+
+
+def _has_pending_asap(context: Context) -> bool:
+    queue = context.pending_messages
+    return bool(queue and any(message.priority == "asap" for message in queue))
+
+
+def _drain_pending_on_end(context: Context) -> list[ModelRequest]:
+    return [*_drain_pending(context, "asap"), *_drain_pending(context, "when_idle")]
+
+
+def _drain_pending(context: Context, priority: PendingMessagePriority) -> list[ModelRequest]:
+    queue = context.pending_messages
+    if queue is None:
+        return []
+    messages = drain_pending_messages(queue, priority)
+    return [message.request for message in messages]
+
+
+def _combine_requests(requests: Iterable[ModelRequest]) -> ModelRequest:
+    return combine_model_requests(requests)
 
 
 def _wrap_prompt_hook(
