@@ -5,12 +5,17 @@
 """Results layer: per-run aggregation, persistence, and budget thresholds."""
 
 from .budgets import BudgetThresholds
+from .diff import RunDiff, RunsNotComparableError
 from .result import Aggregates, RunResult, ScoreStats, TaskResult
+from .store import load_run
 
 __all__ = (
     "Aggregates",
     "BudgetThresholds",
+    "RunDiff",
     "RunResult",
+    "RunsNotComparableError",
     "ScoreStats",
     "TaskResult",
+    "load_run",
 )

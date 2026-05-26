@@ -20,10 +20,14 @@ Aggregation rules:
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .._types import Feedback
 from ..dataset import Suite, Task
 from ..trace import TokenUsage, Trace
+
+if TYPE_CHECKING:
+    from .diff import RunDiff
 
 __all__ = (
     "Aggregates",
@@ -203,6 +207,21 @@ class RunResult:
         if tag not in self._sliced:
             self._sliced[tag] = _compute_aggregates(tuple(tr for tr in self._tasks if tag in tr.task.tags))
         return self._sliced[tag]
+
+    def diff(self, baseline: "RunResult", *, strict: bool = True) -> "RunDiff":
+        """Compare this run against ``baseline`` — "did my change help or hurt?".
+
+        Reports per-scorer pass-rate / mean deltas and the tasks that flipped
+        pass<->fail, over the tasks and checks the two runs **share**. By default
+        (``strict=True``) raises :class:`~autogen.beta.eval.RunsNotComparableError` if the
+        runs didn't grade the same tasks + checks; pass ``strict=False`` to diff the
+        overlap and have the mismatches reported on the returned
+        :class:`~autogen.beta.eval.RunDiff`.
+        """
+        # Local import: result.py <-> diff.py circular-import shim (AGENTS.md exempt).
+        from .diff import compute_diff
+
+        return compute_diff(self, baseline, strict=strict)
 
     def summary(self) -> str:
         """Human-readable multi-line table of run metadata and aggregates.

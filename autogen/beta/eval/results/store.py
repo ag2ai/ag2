@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "dump",
+    "load_run",
     "to_dict",
 )
 
@@ -143,3 +144,75 @@ def _score_stats_to_dict(stats: "ScoreStats") -> dict[str, float | int]:
         "p95": stats.p95,
         "n": stats.n,
     }
+
+
+def load_run(path: str | os.PathLike[str]) -> "RunResult":
+    """Load a persisted run JSON back into a :class:`RunResult`, for comparison.
+
+    Reconstructs each task's identity (id, inputs, reference, tags, metadata) and its
+    scorer :class:`Feedback` — enough for :meth:`RunResult.diff` and the pass-rate /
+    score / value accessors. Event traces are **not** reconstructed: the per-task
+    :class:`~autogen.beta.eval.Trace` carries no events, so ``aggregates.tokens`` reads
+    zero on a loaded run. The JSON is a record for cross-time comparison, not a full
+    trace round-trip — read it directly if you need event-level detail.
+    """
+    # Local imports: store.py is the writer; importing the result/dataset types at
+    # module top would invert the result.py -> store.py dependency (AGENTS.md exempts
+    # circular-import shims).
+    from ..dataset import Suite, Task
+    from ..trace import Trace
+    from .result import RunResult, TaskResult
+
+    doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    task_results: list[TaskResult] = []
+    for t in doc.get("tasks", []):
+        task = Task(
+            task_id=t["task_id"],
+            inputs=dict(t.get("inputs") or {}),
+            reference_outputs=t.get("reference_outputs"),
+            tags=tuple(t.get("tags", ())),
+            metadata=dict(t.get("metadata") or {}),
+        )
+        feedback = tuple(
+            Feedback(
+                key=f["key"],
+                score=f.get("score"),
+                value=f.get("value"),
+                comment=f.get("comment"),
+                detail=f.get("detail"),
+            )
+            for f in t.get("feedback", [])
+        )
+        trace = Trace(
+            events=[], exception=_exception_from_dict(t.get("exception")), duration_ms=int(t.get("duration_ms", 0))
+        )
+        task_results.append(
+            TaskResult(
+                task=task, trace=trace, feedback=feedback, budget_violation=bool(t.get("budget_violation", False))
+            )
+        )
+
+    suite_doc = doc.get("suite", {})
+    suite = Suite(
+        tuple(tr.task for tr in task_results),
+        name=suite_doc.get("name", "loaded"),
+        source=suite_doc.get("source", str(path)),
+    )
+    return RunResult(
+        run_id=doc.get("run_id", ""),
+        tasks=tuple(task_results),
+        suite=suite,
+        target_path=doc.get("target", ""),
+        concurrency=int(doc.get("concurrency", 1)),
+        duration_ms=int(doc.get("duration_ms", 0)),
+        created_at=doc.get("created_at", ""),
+        label=doc.get("label"),
+        store_dir=None,
+    )
+
+
+def _exception_from_dict(exc: dict[str, Any] | None) -> BaseException | None:
+    """Rebuild a placeholder exception (carrying the serialized type + message)."""
+    if not exc:
+        return None
+    return RuntimeError(f"{exc.get('type', 'Exception')}: {exc.get('message', '')}")

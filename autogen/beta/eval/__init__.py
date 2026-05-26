@@ -21,7 +21,16 @@ from .pairwise import (
     evaluate_pairwise,
 )
 from .reporters import console_reporter
-from .results import Aggregates, BudgetThresholds, RunResult, ScoreStats, TaskResult
+from .results import (
+    Aggregates,
+    BudgetThresholds,
+    RunDiff,
+    RunResult,
+    RunsNotComparableError,
+    ScoreStats,
+    TaskResult,
+    load_run,
+)
 from .runtime import (
     LeaderboardRow,
     VariantRunResult,
@@ -61,7 +70,9 @@ __all__ = (
     "PairwiseComparator",
     "PairwiseOutcome",
     "PairwiseRunResult",
+    "RunDiff",
     "RunResult",
+    "RunsNotComparableError",
     "ScoreStats",
     "Scorer",
     "ScorerReturnTypeError",
@@ -79,6 +90,7 @@ __all__ = (
     "console_reporter",
     "evaluate",
     "evaluate_pairwise",
+    "load_run",
     "run",
     "run_pairwise",
     "run_variants",
