@@ -43,9 +43,8 @@ class LocalShellTool(Tool):
         # Read-only local inspection
         sh = LocalShellTool(LocalShellEnvironment(path="/tmp/my_project", readonly=True))
 
-        # Future: Docker or SSH (not yet implemented)
-        # sh = LocalShellTool(DockerEnvironment(image="python:3.12"))
-        # sh = LocalShellTool(SSHEnvironment(host="server.com", user="ubuntu"))
+        # Any custom ShellEnvironment implementation can be supplied here,
+        # including container or remote backends.
     """
 
     def __init__(

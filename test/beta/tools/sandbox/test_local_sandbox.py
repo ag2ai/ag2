@@ -17,12 +17,14 @@ class TestLocalSandboxExec:
         assert result == ExecResult(output="hi", exit_code=0)
 
     async def test_shell_mode_runs_pipeline(self) -> None:
-        # No spaces around `&&`: cmd.exe preserves trailing whitespace as
-        # part of echo's argument, bash trims either way.  Tight form gives
-        # identical output on both shells.
         sandbox = LocalSandbox()
         result = await sandbox.exec(["echo hello&&echo world"], shell=True)
         assert result == ExecResult(output="hello\nworld", exit_code=0)
+
+    async def test_shell_mode_joins_multiple_argv_items(self) -> None:
+        sandbox = LocalSandbox()
+        result = await sandbox.exec(["echo", "hello"], shell=True)
+        assert result == ExecResult(output="hello", exit_code=0)
 
     async def test_workdir_is_used_as_cwd(self, tmp_path: Path) -> None:
         (tmp_path / "marker.txt").write_text("hello")

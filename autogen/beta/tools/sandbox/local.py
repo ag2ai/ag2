@@ -110,7 +110,7 @@ class LocalSandbox(Sandbox):
 
         if cleanup_flag:
             workdir_str = str(self._workdir)
-            atexit.register(lambda: shutil.rmtree(workdir_str, ignore_errors=True))
+            atexit.register(shutil.rmtree, workdir_str, ignore_errors=True)
 
         self._default_timeout = timeout
         self._max_output = max_output

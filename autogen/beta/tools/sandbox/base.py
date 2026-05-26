@@ -34,10 +34,10 @@ class Sandbox(Protocol):
     combined output with an exit code. It is the shared primitive on top of
     which the higher-level adapters are built:
 
-    - :class:`~autogen.beta.tools.shell.ShellEnvironment` — a sync
+    - :class:`~autogen.beta.tools.shell.ShellEnvironment` - a sync
       adapter for arbitrary shell commands. Each ``run(command)`` call
       becomes ``sandbox.exec(["sh", "-c", command], shell=True)``.
-    - :class:`~autogen.beta.tools.code.CodeEnvironment` — an async
+    - :class:`~autogen.beta.tools.code.CodeEnvironment` - an async
       adapter for typed code snippets. Each ``run(code, language)`` call
       becomes ``sandbox.exec([interpreter, "-c", code])``.
 
@@ -81,16 +81,17 @@ class Sandbox(Protocol):
         Args:
             argv: Command and arguments.  When ``shell=False`` (default)
                   this is a normal argv list (no shell parsing on our side).
-                  When ``shell=True`` the elements are joined with spaces
-                  and passed to the system shell — pipelines, ``&&``,
-                  redirects and other shell features are then honoured.
+                  When ``shell=True``, the backend may treat ``argv`` as a
+                  shell command string and run it through the system shell.
+                  Pipelines, ``&&``, redirects and other shell features are
+                  then honoured by the backend shell.
             env: Extra environment variables merged into the process
                  environment.  ``None`` inherits the parent environment as-is.
             timeout: Per-call timeout in seconds.  ``None`` uses the
                      backend's default.  On timeout, the implementation
                      must terminate the process and return
                      ``exit_code=124``.
-            shell: If ``True``, run ``argv`` through the system shell.
+            shell: If ``True``, run ``argv`` through the backend's system shell.
             context: Active conversation context. Forwarded by the
                      :class:`~autogen.beta.tools.shell.ShellEnvironment` /
                      :class:`~autogen.beta.tools.code.CodeEnvironment`
