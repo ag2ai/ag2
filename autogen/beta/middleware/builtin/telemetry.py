@@ -5,18 +5,6 @@
 import json
 from collections.abc import Sequence
 
-from autogen.beta._telemetry_consts import (
-    ATTR_HUMAN_INPUT_PROMPT,
-    ATTR_HUMAN_INPUT_RESPONSE,
-    ATTR_SPAN_TYPE,
-    OTEL_INSTRUMENTING_MODULE,
-    OTEL_SCHEMA_URL,
-    SPAN_TYPE_AGENT,
-    SPAN_TYPE_HUMAN_INPUT,
-    SPAN_TYPE_LLM,
-    SPAN_TYPE_TOOL,
-    TRACEPARENT_DEP_KEY,
-)
 from autogen.beta.annotations import Context
 from autogen.beta.events import (
     BaseEvent,
@@ -26,7 +14,6 @@ from autogen.beta.events import (
     ModelResponse,
     TextInput,
     ToolCallEvent,
-    ToolErrorEvent,
     ToolResultEvent,
 )
 from autogen.beta.middleware.base import (
@@ -41,7 +28,6 @@ from autogen.beta.middleware.base import (
 
 try:
     from opentelemetry import trace
-    from opentelemetry.propagate import extract
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.trace import SpanKind, StatusCode
 except ImportError as _err:
@@ -49,10 +35,15 @@ except ImportError as _err:
         "OpenTelemetry packages are required for TelemetryMiddleware. Install them with: pip install ag2[tracing]"
     ) from _err
 
+from autogen.beta.events import ToolErrorEvent
+
+_SCHEMA_URL = "https://opentelemetry.io/schemas/1.11.0"
+_INSTRUMENTING_MODULE = "opentelemetry.instrumentation.ag2.beta"
+
 
 def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
     provider = tracer_provider or trace.get_tracer_provider()
-    return provider.get_tracer(OTEL_INSTRUMENTING_MODULE, schema_url=OTEL_SCHEMA_URL)
+    return provider.get_tracer(_INSTRUMENTING_MODULE, schema_url=_SCHEMA_URL)
 
 
 class TelemetryMiddleware(MiddlewareFactory):
@@ -126,23 +117,13 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         event: BaseEvent,
         context: Context,
     ) -> ModelResponse:
-        # When this turn was triggered by a network envelope, the hub's
-        # network.envelope span traceparent is relayed via dependencies
-        # (the Envelope itself never reaches middleware). Parent the
-        # invoke_agent span under it. Absent → fresh root, as before.
-        parent_ctx = None
-        traceparent = (context.dependencies or {}).get(TRACEPARENT_DEP_KEY)
-        if traceparent:
-            parent_ctx = extract({"traceparent": traceparent})
-
         with self._tracer.start_as_current_span(
             f"invoke_agent {self._agent_name}",
             kind=SpanKind.INTERNAL,
-            context=parent_ctx,
         ) as span:
             for k, v in self._span_attributes.items():
                 span.set_attribute(k, v)
-            span.set_attribute(ATTR_SPAN_TYPE, SPAN_TYPE_AGENT)
+            span.set_attribute("ag2.span.type", "agent")
             span.set_attribute("gen_ai.operation.name", "invoke_agent")
             span.set_attribute("gen_ai.agent.name", self._agent_name)
             if self._provider_name:
@@ -173,7 +154,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         ) as span:
             for k, v in self._span_attributes.items():
                 span.set_attribute(k, v)
-            span.set_attribute(ATTR_SPAN_TYPE, SPAN_TYPE_LLM)
+            span.set_attribute("ag2.span.type", "llm")
             span.set_attribute("gen_ai.operation.name", "chat")
             if self._provider_name:
                 span.set_attribute("gen_ai.provider.name", self._provider_name)
@@ -240,7 +221,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         ) as span:
             for k, v in self._span_attributes.items():
                 span.set_attribute(k, v)
-            span.set_attribute(ATTR_SPAN_TYPE, SPAN_TYPE_TOOL)
+            span.set_attribute("ag2.span.type", "tool")
             span.set_attribute("gen_ai.operation.name", "execute_tool")
             span.set_attribute("gen_ai.tool.name", event.name)
             span.set_attribute("gen_ai.tool.call.id", event.id)
@@ -278,12 +259,12 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         ) as span:
             for k, v in self._span_attributes.items():
                 span.set_attribute(k, v)
-            span.set_attribute(ATTR_SPAN_TYPE, SPAN_TYPE_HUMAN_INPUT)
+            span.set_attribute("ag2.span.type", "human_input")
             span.set_attribute("gen_ai.operation.name", "await_human_input")
             span.set_attribute("gen_ai.agent.name", self._agent_name)
 
             if self._capture_content:
-                span.set_attribute(ATTR_HUMAN_INPUT_PROMPT, event.content)
+                span.set_attribute("ag2.human_input.prompt", event.content)
 
             try:
                 response = await call_next(event, context)
@@ -293,6 +274,6 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 raise
 
             if self._capture_content:
-                span.set_attribute(ATTR_HUMAN_INPUT_RESPONSE, response.content)
+                span.set_attribute("ag2.human_input.response", response.content)
 
             return response
