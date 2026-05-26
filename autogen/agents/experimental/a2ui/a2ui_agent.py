@@ -36,7 +36,7 @@ class A2UIAgent(ConversableAgent):
 
         agent = A2UIAgent(
             name="ui_agent",
-            llm_config={"api_type": "google", "model": "gemini-3.1-flash-lite-preview"},
+            llm_config={"api_type": "google", "model": "gemini-3.1-flash-lite"},
             validate_responses=True,
             validation_retries=2,
         )
