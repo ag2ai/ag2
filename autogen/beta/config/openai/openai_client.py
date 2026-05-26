@@ -123,7 +123,6 @@ class OpenAIClient(LLMClient):
             **self._create_options,
             **kwargs,
             messages=openai_messages,
-            # Omit `tools` when empty; strict OpenAI-compatible servers (e.g. vLLM) reject `tools: []`.
             tools=openai_tools or omit,
         )
 
