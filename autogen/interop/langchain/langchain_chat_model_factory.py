@@ -15,6 +15,7 @@ with optional_import_block():
     from langchain_anthropic import ChatAnthropic
     from langchain_core.language_models import BaseChatModel
     from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_google_vertexai import ChatVertexAI
     from langchain_ollama import ChatOllama
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
@@ -25,7 +26,14 @@ T = TypeVar("T", bound="LangChainChatModelFactory")
 
 
 @require_optional_import(
-    ["langchain_anthropic", "langchain_google_genai", "langchain_ollama", "langchain_openai", "langchain_core"],
+    [
+        "langchain_anthropic",
+        "langchain_google_genai",
+        "langchain_google_vertexai",
+        "langchain_ollama",
+        "langchain_openai",
+        "langchain_core",
+    ],
     "browser-use",
     except_for=["__init__", "register_factory"],
 )
@@ -111,6 +119,15 @@ class ChatAnthropicFactory(LangChainChatModelFactory):
 
 @LangChainChatModelFactory.register_factory()
 class ChatGoogleGenerativeAIFactory(LangChainChatModelFactory):
+    """Route LLMConfig -> langchain_google_genai.ChatGoogleGenerativeAI.
+
+    Targets the AI Studio endpoint (generativelanguage.googleapis.com).
+    Use this api_type when authenticating with a Gemini / AI Studio API
+    key. For Vertex AI (aiplatform.googleapis.com) with ADC / service
+    account auth and project/location, use ``api_type="google_vertex"``
+    instead (see ChatVertexAIFactory).
+    """
+
     @classmethod
     def create(cls, first_llm_config: dict[str, Any]) -> "ChatGoogleGenerativeAI":  # type: ignore [no-any-unimported]
         first_llm_config = cls.prepare_config(first_llm_config)
@@ -120,6 +137,37 @@ class ChatGoogleGenerativeAIFactory(LangChainChatModelFactory):
     @classmethod
     def get_api_type(cls) -> str:
         return "google"
+
+
+@LangChainChatModelFactory.register_factory()
+class ChatVertexAIFactory(LangChainChatModelFactory):
+    """Route LLMConfig -> langchain_google_vertexai.ChatVertexAI.
+
+    Targets the Vertex AI endpoint (aiplatform.googleapis.com) with
+    Google Cloud auth (ADC / service account). Use this api_type when
+    your GCP project authenticates via application default credentials
+    and needs Vertex AI billing + quota — not the AI Studio endpoint
+    that ``api_type="google"`` targets.
+
+    Accepts the usual ChatVertexAI kwargs: ``project``, ``location``,
+    ``credentials``, ``model`` and the temperature / request-options
+    common across langchain chat models. The AG2-typical
+    ``project_id`` field is normalized to ``project`` for convenience.
+    """
+
+    @classmethod
+    def create(cls, first_llm_config: dict[str, Any]) -> "ChatVertexAI":  # type: ignore [no-any-unimported]
+        first_llm_config = cls.prepare_config(first_llm_config)
+        # ChatVertexAI takes `project`, not `project_id`. Normalize so callers
+        # using the AG2-style `project_id` field don't need to learn the
+        # langchain name.
+        if "project_id" in first_llm_config:
+            first_llm_config.setdefault("project", first_llm_config.pop("project_id"))
+        return ChatVertexAI(**first_llm_config)
+
+    @classmethod
+    def get_api_type(cls) -> str:
+        return "google_vertex"
 
 
 @LangChainChatModelFactory.register_factory()

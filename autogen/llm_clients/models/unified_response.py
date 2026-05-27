@@ -37,7 +37,7 @@ class UnifiedResponse(BaseModel):
     messages: list[UnifiedMessage]
 
     # Usage tracking
-    usage: dict[str, int] = Field(default_factory=dict)  # prompt_tokens, completion_tokens, etc.
+    usage: dict[str, int | float] = Field(default_factory=dict)  # prompt_tokens, completion_tokens, etc.
     cost: float | None = None
 
     # Provider-specific

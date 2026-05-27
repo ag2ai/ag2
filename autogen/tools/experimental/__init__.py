@@ -19,9 +19,11 @@ from .messageplatform import (
     TelegramSendTool,
 )
 from .perplexity import PerplexitySearchTool
+from .quick_research import QuickResearchTool
 from .reliable import ReliableTool, ReliableToolError, SuccessfulExecutionParameters, ToolExecutionDetails
 from .searxng import SearxngSearchTool
 from .tavily import TavilySearchTool
+from .tinyfish import TinyFishTool
 from .web_search_preview import WebSearchPreviewTool
 from .wikipedia import WikipediaPageLoadTool, WikipediaQueryRunTool
 
@@ -36,6 +38,7 @@ __all__ = [
     "GoogleSearchTool",
     "PerplexitySearchTool",
     "PythonCodeExecutionTool",
+    "QuickResearchTool",
     "ReliableTool",
     "ReliableToolError",
     "SearxngSearchTool",
@@ -46,6 +49,7 @@ __all__ = [
     "TavilySearchTool",
     "TelegramRetrieveTool",
     "TelegramSendTool",
+    "TinyFishTool",
     "ToolExecutionDetails",
     "WebSearchPreviewTool",
     "WikipediaPageLoadTool",

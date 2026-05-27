@@ -117,7 +117,7 @@ Note that the previous experts will forget everything after you obtain the respo
 
 # Some useful instructions
 - You only have one tool called "seek_experts_help".
-- Provide a answer yourself after "seek_experts_help".
+- Provide an answer yourself after "seek_experts_help".
 - You should suggest python code in a python coding block (```python...```). If you need to get the value of a variable, you must use the print statement.
 - When using code, you must indicate the script type in the code block.
 - Do not suggest incomplete code which requires users to modify.
@@ -181,8 +181,6 @@ Note that the previous experts will forget everything after you obtain the respo
             **kwargs,
         )
 
-        llm_config = LLMConfig.get_current_llm_config(llm_config)
-
         if system_message is None:
             system_message = self.AUTOBUILD_SYSTEM_MESSAGE
         nested_config = self._update_config(self.DEFAULT_NESTED_CONFIG, nested_config)
@@ -190,9 +188,9 @@ Note that the previous experts will forget everything after you obtain the respo
             "llm_config" not in nested_config["autobuild_init_config"]
             or nested_config["autobuild_init_config"]["llm_config"] is None
         ):
-            nested_config["autobuild_init_config"]["llm_config"] = llm_config.copy()
+            nested_config["autobuild_init_config"]["llm_config"] = self.llm_config.copy()
         if nested_config["group_chat_llm_config"] is None:
-            nested_config["group_chat_llm_config"] = llm_config.copy()
+            nested_config["group_chat_llm_config"] = self.llm_config.copy()
         if agent_lib:
             nested_config["autobuild_build_config"]["library_path_or_json"] = agent_lib
         if tool_lib:
@@ -470,7 +468,9 @@ Collect information from the general task, follow the suggestions from manager t
 
         if self._agent_config_save_path is not None:
             building_task_md5 = hashlib.md5(building_task.encode("utf-8")).hexdigest()
-            with open(f"{self._agent_config_save_path}/build_history_{building_task_md5}.json", "w") as f:
+            with open(
+                f"{self._agent_config_save_path}/build_history_{building_task_md5}.json", "w", encoding="utf-8"
+            ) as f:
                 json.dump(self.build_history, f)
 
         self.build_times += 1
@@ -499,7 +499,8 @@ Collect information from the general task, follow the suggestions from manager t
         # Review the group chat history
         summary_model = builder.builder_model
         summarized_history = (
-            summary_model.create(
+            summary_model
+            .create(
                 messages=[
                     {
                         "role": "user",

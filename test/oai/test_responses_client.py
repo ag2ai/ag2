@@ -181,6 +181,8 @@ def test_message_retrieval_handles_various_item_types():
 
     # 1) Plain text block
     assert blocks[0]["text"] == "Hi"
+    # Only expected keys should be present (no raw message fields leaking through)
+    assert set(blocks[0].keys()) == {"type", "role", "text"}
 
     # 2) Tool-call block (web_search)
     assert blocks[1]["name"] == "web_search"
@@ -190,6 +192,41 @@ def test_message_retrieval_handles_various_item_types():
     assert len(tool_calls) == 1
     func_call = tool_calls[0]
     assert func_call["function"]["name"] == "foo"
+
+
+def test_message_retrieval_strips_extra_fields():
+    """message_retrieval() must not leak raw message fields like phase, status, id."""
+
+    output = [
+        _FakeResponse(
+            output=[
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "hello"}],
+                    "phase": None,
+                    "status": "completed",
+                    "id": "msg_abc123",
+                    "role": "assistant",
+                }
+            ]
+        ).output[0],
+    ]
+
+    resp = _FakeResponse(output=output)
+    client = OpenAIResponsesClient(MagicMock())
+    msgs = client.message_retrieval(resp)
+
+    assert len(msgs) == 1
+    text_block = msgs[0]["content"][0]
+
+    # Only the fields we explicitly construct should be present
+    assert set(text_block.keys()) == {"type", "role", "text"}
+    assert text_block["text"] == "hello"
+
+    # Specifically verify no raw fields leaked through
+    assert "phase" not in text_block
+    assert "status" not in text_block
+    assert "id" not in text_block
 
 
 # -----------------------------------------------------------------------------
@@ -252,9 +289,9 @@ def test_create_converts_multimodal_blocks(mocked_openai_client):
     assert blocks[1]["type"] == "input_image"
     assert blocks[1]["image_url"] == "https://example.com/cat.png"
 
-    # The requested built-in tools should map to image_generation and web_search_preview
+    # The requested built-in tools should map to image_generation and web_search
     tool_types = {t["type"] for t in kwargs["tools"]}
-    assert {"image_generation", "web_search_preview"}.issubset(tool_types)
+    assert {"image_generation", "web_search"}.issubset(tool_types)
 
 
 # -----------------------------------------------------------------------------
@@ -443,15 +480,14 @@ def test_add_image_cost_defaults(mocked_openai_client):
     mock_call = MagicMock(spec=ImageGenerationCall)
     mock_call.model_extra = {}  # Empty dict
 
-    # Note: Due to the bug in line 193, empty dict is falsy so no cost will be added
     output = [mock_call]
     resp = _FakeResponse(output=output)
 
     # Process the response
     client._add_image_cost(resp)
 
-    # Empty model_extra dict is falsy, so the condition fails and no cost is added
-    assert client.image_costs == 0
+    # Empty model_extra dict should still use the Responses image defaults.
+    assert client.image_costs == 0.25
 
 
 def test_total_cost_includes_image_costs(mocked_openai_client):
@@ -493,13 +529,13 @@ def test_image_costs_persist_across_calls(mocked_openai_client):
     assert client.image_costs == 0.011 + 0.042
 
 
-def test_add_image_cost_bug_demonstration(mocked_openai_client):
-    """Demonstrate the bug in _add_image_cost where it checks output[0] instead of current item."""
+def test_add_image_cost_uses_each_image_item_model_extra(mocked_openai_client):
+    """Test _add_image_cost reads model_extra from each image output item."""
     client = OpenAIResponsesClient(mocked_openai_client)
 
-    # Create two mocks: first with model_extra (required by bug), second with model_extra
+    # Create two image outputs with different size/quality metadata.
     mock_call1 = MagicMock(spec=ImageGenerationCall)
-    mock_call1.model_extra = {"size": "1024x1024", "quality": "high"}  # Need this due to bug
+    mock_call1.model_extra = {"size": "1024x1024", "quality": "high"}
 
     mock_call2 = MagicMock(spec=ImageGenerationCall)
     mock_call2.model_extra = {"size": "1024x1024", "quality": "low"}
@@ -510,7 +546,6 @@ def test_add_image_cost_bug_demonstration(mocked_openai_client):
     # Process the response
     client._add_image_cost(resp)
 
-    # Due to the bug checking output[0], both images will be processed
     # First: 1024x1024 high = 0.167, Second: 1024x1024 low = 0.011
     assert client.image_costs == 0.167 + 0.011
 
@@ -551,9 +586,8 @@ def test_add_image_cost_with_non_image_first(mocked_openai_client):
     # Process the response
     client._add_image_cost(resp)
 
-    # The bug will try to check output[0].model_extra on a dict, which will fail
-    # So no image cost will be added
-    assert client.image_costs == 0
+    # Non-image output items should not prevent later image outputs from being counted.
+    assert client.image_costs == 0.011
 
 
 # -----------------------------------------------------------------------------
@@ -926,7 +960,7 @@ def test_apply_patch_with_other_built_in_tools(mocked_openai_client):
 
     # All three built-in tools should be present
     tool_types = {t["type"] for t in kwargs["tools"]}
-    assert {"web_search_preview", "apply_patch", "image_generation"}.issubset(tool_types)
+    assert {"web_search", "apply_patch", "image_generation"}.issubset(tool_types)
 
 
 def test_message_retrieval_handles_apply_patch_call():
@@ -1863,6 +1897,113 @@ def test_convert_messages_to_input_handles_empty_content_blocks(mocked_openai_cl
 
     # Message should not be added since all content was filtered
     assert len(input_items) == 0
+
+
+def test_convert_messages_to_input_null_content_assistant_message(mocked_openai_client):
+    """Test _convert_messages_to_input handles assistant message with None content (Issue #2297).
+
+    When the assistant response contains only tool calls and no text, message_retrieval
+    sets content to None. When this message is later converted back to API input format,
+    the text field must be an empty string, not null/None, or the Responses API rejects it.
+    """
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # This is what message_retrieval produces for a tool-call-only response
+    messages = [
+        {"role": "user", "content": "What is 1 + 2?"},
+        {
+            "role": "assistant",
+            "id": "resp_123",
+            "content": None,  # tool-call-only response has None content
+            "tool_calls": [
+                {
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": {"name": "calculator", "arguments": '{"a":1,"b":2,"operator":"+"}'},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_abc", "content": "3"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
+
+    # Find the assistant message in input_items
+    assistant_items = [item for item in input_items if item.get("role") == "assistant"]
+    assert len(assistant_items) == 1
+
+    # The text field must be an empty string, NOT None
+    text_block = assistant_items[0]["content"][0]
+    assert text_block["type"] == "output_text"
+    assert text_block["text"] == ""
+    assert text_block["text"] is not None
+
+
+def test_convert_messages_to_input_empty_string_content_assistant_message(mocked_openai_client):
+    """Test _convert_messages_to_input handles assistant message with empty string content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_xyz",
+                    "type": "function",
+                    "function": {"name": "some_tool", "arguments": "{}"},
+                }
+            ],
+        },
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
+
+    assistant_items = [item for item in input_items if item.get("role") == "assistant"]
+    assert len(assistant_items) == 1
+
+    text_block = assistant_items[0]["content"][0]
+    assert text_block["type"] == "output_text"
+    assert text_block["text"] == ""
+    assert text_block["text"] is not None
+
+
+def test_message_retrieval_tool_call_only_produces_none_content():
+    """Test that message_retrieval sets content to None for tool-call-only responses.
+
+    This verifies the upstream behavior that causes Issue #2297 — the fix is in
+    _convert_messages_to_input which must handle None content gracefully.
+    """
+
+    class _Block:
+        def __init__(self, d):
+            self._d = d
+
+        def model_dump(self):
+            return self._d
+
+    # Response with only a function call, no text output
+    output = [
+        _Block({"type": "function_call", "name": "calculator", "arguments": '{"a":1}', "call_id": "call_1"}),
+    ]
+
+    resp = _FakeResponse(output=output)
+    client = OpenAIResponsesClient(MagicMock())
+
+    msgs = client.message_retrieval(resp)
+
+    assert len(msgs) == 1
+    msg = msgs[0]
+    assert msg["role"] == "assistant"
+    # content is None for tool-call-only responses
+    assert msg["content"] is None
+    # tool_calls should be populated
+    assert len(msg["tool_calls"]) == 1
+    assert msg["tool_calls"][0]["function"]["name"] == "calculator"
 
 
 def test_convert_messages_to_input_preserves_order_in_reverse(mocked_openai_client):

@@ -365,8 +365,8 @@ Task Message:
 ```
 
 Files:
-- [docagent_tests_story1.md](./assets/docagent_tests_story1.md)
-- [docagent_tests_story2.md](./assets/docagent_tests_story2.md)
+- docagent_tests_story1.md
+- docagent_tests_story2.md
 
 | Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
 | :---: | :---: | :---: |
@@ -593,7 +593,7 @@ from autogen import ConversableAgent, LLMConfig
 from autogen.agents.experimental import DocAgent, InMemoryQueryEngine
 import json
 
-llm_config = LLMConfig(config_list={"model": "gpt-5-nano", "cache_seed": None})
+llm_config = LLMConfig({"model": "gpt-5-nano", "cache_seed": None})
 
 # InMemory Query Engine
 inmemory_qe = InMemoryQueryEngine(llm_config=llm_config)

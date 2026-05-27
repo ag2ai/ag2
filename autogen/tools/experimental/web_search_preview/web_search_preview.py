@@ -6,6 +6,7 @@
 import copy
 import logging
 import os
+import warnings
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel
@@ -21,7 +22,7 @@ with optional_import_block():
     from openai.types.responses.web_search_tool import UserLocation
 
 
-@require_optional_import("openai>=1.66.2", "openai")
+@require_optional_import("openai>=2.30.0", "openai")
 @export_module("autogen.tools.experimental")
 class WebSearchPreviewTool(Tool):
     """WebSearchPreviewTool is a tool that uses OpenAI's web_search_preview tool to perform a search."""
@@ -48,6 +49,12 @@ class WebSearchPreviewTool(Tool):
             text_format: The format of the text to be returned. This should be a subclass of `BaseModel`.
                 The default is `None`, which means the text will be returned as a string.
         """
+        warnings.warn(
+            "WebSearchPreviewTool is deprecated and will be removed in v0.14. "
+            "Use autogen.beta.tools.WebSearchTool instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.web_search_tool_param = WebSearchToolParam(
             type="web_search_preview",  # type: ignore[typeddict-item]
             search_context_size=search_context_size,

@@ -99,6 +99,32 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+def _coerce_summary_to_str(value: Any) -> str:
+    """Reduce arbitrary chat-summary return values to a plain string.
+
+    Some providers (Ollama, Cohere, structured-output models) return the chat
+    completion as a nested message dict like
+    ``{"content": "...", "tool_calls": None}`` instead of a bare string. The
+    summary path used to forward such a dict straight to ``RunCompletionEvent``,
+    which then failed pydantic validation with::
+
+        ValidationError: 1 validation error for RunCompletionEvent
+        summary
+          Input should be a valid string ...
+
+    This helper unwraps a single ``content`` key from each nested dict, falls
+    back to ``""`` for ``None``, and stringifies everything else, so the
+    returned value is always safe to assign to a ``str`` field.
+    """
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        return _coerce_summary_to_str(value.get("content", ""))
+    return str(value)
+
+
 @dataclass
 @export_module("autogen")
 class UpdateSystemMessage:
@@ -498,9 +524,7 @@ class ConversableAgent(LLMAgent):
         cls, llm_config: LLMConfig | dict[str, Any] | Literal[False] | None
     ) -> LLMConfig | Literal[False]:
         if llm_config is None:
-            llm_config = LLMConfig.get_current_llm_config()
-            if llm_config is None:
-                return cls.DEFAULT_CONFIG
+            return cls.DEFAULT_CONFIG
 
         elif llm_config is False:
             return False
@@ -1001,13 +1025,14 @@ class ConversableAgent(LLMAgent):
                 return None
             if n_conversations == 1:
                 for conversation in self._oai_messages.values():
-                    return conversation[-1]
+                    return conversation[-1] if conversation else None
             raise ValueError("More than one conversation is found. Please specify the sender to get the last message.")
         if agent not in self._oai_messages:
             raise KeyError(
                 f"The agent '{agent.name}' is not present in any conversation. No history available for this agent."
             )
-        return self._oai_messages[agent][-1]
+        messages = self._oai_messages[agent]
+        return messages[-1] if messages else None
 
     @property
     def use_docker(self) -> bool | str | None:
@@ -1377,7 +1402,7 @@ class ConversableAgent(LLMAgent):
                     return recipient.last_message(sender)["content"]
                 ```
             summary_args (dict): a dictionary of arguments to be passed to the summary_method.
-                One example key is "summary_prompt", and value is a string of text used to prompt a LLM-based agent (the sender or recipient agent) to reflect
+                One example key is "summary_prompt", and value is a string of text used to prompt an LLM-based agent (the sender or recipient agent) to reflect
                 on the conversation and extract a summary when summary_method is "reflection_with_llm".
                 The default summary_prompt is DEFAULT_SUMMARY_PROMPT, i.e., "Summarize takeaway from the conversation. Do not add any introductory phrases. If the intended request is NOT properly addressed, please point it out."
                 Another available key is "summary_role", which is the role of the message sent to the agent in charge of summarizing. Default is "system".
@@ -2152,9 +2177,7 @@ class ConversableAgent(LLMAgent):
             raise ValueError(
                 "If not None, the summary_method must be a string from [`reflection_with_llm`, `last_msg`] or a callable."
             )
-        if isinstance(summary, dict):
-            summary = str(summary.get("content", ""))
-        return summary
+        return _coerce_summary_to_str(summary)
 
     @staticmethod
     def _last_msg_as_summary(sender, recipient, summary_args) -> str:
@@ -2169,6 +2192,10 @@ class ConversableAgent(LLMAgent):
                 summary = "\n".join(
                     x["text"].replace("TERMINATE", "") for x in content if isinstance(x, dict) and "text" in x
                 )
+            elif isinstance(content, dict):
+                # Some providers wrap the assistant content as a nested message
+                # dict (e.g. {"content": "...", "tool_calls": None}). Unwrap it.
+                summary = _coerce_summary_to_str(content).replace("TERMINATE", "")
         except (IndexError, AttributeError) as e:
             warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
         return summary
@@ -3267,9 +3294,14 @@ class ConversableAgent(LLMAgent):
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_all_messages_before_reply(messages)
 
+        # Get sync functions to skip (those with async equivalents)
+        sync_to_skip = self._get_sync_funcs_to_skip_in_async_chat()
+
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
             if reply_func in exclude:
+                continue
+            if reply_func in sync_to_skip:
                 continue
 
             if self._match_trigger(reply_func_tuple["trigger"], sender):
@@ -3285,6 +3317,30 @@ class ConversableAgent(LLMAgent):
                 if final:
                     return reply
         return self._default_auto_reply
+
+    def _get_sync_funcs_to_skip_in_async_chat(self) -> set[Callable[..., Any]]:
+        """Get sync reply functions that should be skipped in async chat.
+
+        When an async reply function is registered with ignore_async_in_sync_chat=True,
+        it indicates that a sync equivalent exists. In async chat, we should skip the
+        sync version and use the async version instead.
+
+        Returns:
+            A set of sync reply functions that have async equivalents.
+        """
+        sync_to_skip: set[Callable[..., Any]] = set()
+        for reply_func_tuple in self._reply_func_list:
+            reply_func = reply_func_tuple["reply_func"]
+            if is_coroutine_callable(reply_func) and reply_func_tuple.get("ignore_async_in_sync_chat"):
+                func_name = reply_func.__name__
+                if func_name.startswith("a_"):
+                    sync_name = func_name[2:]  # Remove "a_" prefix
+                    for other_tuple in self._reply_func_list:
+                        other_func = other_tuple["reply_func"]
+                        if not is_coroutine_callable(other_func) and other_func.__name__ == sync_name:
+                            sync_to_skip.add(other_func)
+                            break
+        return sync_to_skip
 
     def _match_trigger(self, trigger: None | str | type | Agent | Callable | list, sender: Agent | None) -> bool:
         """Check if the sender matches the trigger.
@@ -3570,6 +3626,8 @@ class ConversableAgent(LLMAgent):
                     else:
                         # Fallback to sync function if the function is not async
                         content = func(**arguments)
+                    if inspect.isawaitable(content):
+                        content = await content
                     is_exec_success = True
                 except Exception as e:
                     content = f"Error: {e}"
@@ -4324,10 +4382,13 @@ class ConversableAgent(LLMAgent):
         if executor_kwargs is None:
             executor_kwargs = {}
         if "is_termination_msg" not in executor_kwargs:
-            executor_kwargs["is_termination_msg"] = lambda x: "TERMINATE" in (
-                content_str(x.get("content"))
-                if isinstance(x.get("content"), (str, list)) or x.get("content") is None
-                else str(x.get("content"))
+            executor_kwargs["is_termination_msg"] = lambda x: (
+                "TERMINATE"
+                in (
+                    content_str(x.get("content"))
+                    if isinstance(x.get("content"), (str, list)) or x.get("content") is None
+                    else str(x.get("content"))
+                )
             )
 
         try:

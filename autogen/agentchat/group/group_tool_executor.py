@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import json
 from collections.abc import Callable
 from copy import deepcopy
 from typing import Annotated, Any
@@ -11,6 +12,7 @@ from autogen.agentchat.group.events.transition_events import OnConditionLLMTrans
 from autogen.code_utils import content_str
 from autogen.io.base import IOStream
 
+from ...fast_depends.utils import is_coroutine_callable
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
@@ -95,8 +97,18 @@ class GroupToolExecutor(ConversableAgent):
         """
         sig = inspect.signature(f)
 
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return f(*args, **kwargs)
+        if is_coroutine_callable(f):
+
+            async def _async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return await f(*args, **kwargs)
+
+            wrapper: Callable[..., Any] = _async_wrapper
+        else:
+
+            def _sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return f(*args, **kwargs)
+
+            wrapper = _sync_wrapper
 
         # Check if context_variables parameter exists and update it if so
         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
@@ -240,6 +252,40 @@ class GroupToolExecutor(ConversableAgent):
                 )
             )
 
+    def _normalize_tool_content(self, content: Any) -> str:
+        """Normalize tool return content to a string.
+
+        Handles both OpenAI message format (list of dicts with 'type' keys) and
+        plain Python objects (lists, tuples, dicts, primitives).
+
+        Args:
+            content: The content to normalize, can be any Python object
+
+        Returns:
+            str: String representation of the content
+        """
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return content
+
+        # Check if it's a list in OpenAI message format (list of dicts with "type" keys)
+        if isinstance(content, list):
+            # Check if all items are dicts with "type" keys (OpenAI message format)
+            if content and all(isinstance(item, dict) and "type" in item for item in content):
+                return content_str(content)
+            # Otherwise, it's a plain Python list - serialize it
+            try:
+                return json.dumps(content)
+            except (TypeError, ValueError):
+                return str(content)
+
+        # For all other types (tuples, dicts, primitives, etc.), convert to string
+        try:
+            return json.dumps(content)
+        except (TypeError, ValueError):
+            return str(content)
+
     def _generate_group_tool_reply(
         self,
         agent: ConversableAgent,
@@ -309,9 +355,7 @@ class GroupToolExecutor(ConversableAgent):
                         next_target = content
 
                     # Serialize the content to a string
-                    normalized_content = (
-                        content_str(content) if isinstance(content, (str, list)) or content is None else str(content)
-                    )
+                    normalized_content = self._normalize_tool_content(content)
                     tool_response["content"] = normalized_content
 
                     tool_responses_inner.append(tool_response)
@@ -387,9 +431,7 @@ class GroupToolExecutor(ConversableAgent):
                         self._send_llm_handoff_event(message_copy, content)
                         next_target = content
 
-                    normalized_content = (
-                        content_str(content) if isinstance(content, (str, list)) or content is None else str(content)
-                    )
+                    normalized_content = self._normalize_tool_content(content)
                     tool_response["content"] = normalized_content
 
                     tool_responses_inner.append(tool_response)

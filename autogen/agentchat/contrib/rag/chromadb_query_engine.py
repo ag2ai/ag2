@@ -43,7 +43,7 @@ class ChromaDBQueryEngine:
     to natural language queries. Collection can be regarded as an abstraction of group of documents in the database.
 
     It expects a Chromadb server to be running and accessible at the specified host and port.
-    Refer to this [link](https://docs.trychroma.com/production/containers/docker) for running Chromadb in a Docker container.
+    Refer to this [link](https://docs.trychroma.com/guides/deploy/docker) for running Chromadb in a Docker container.
     If the host and port are not provided, the engine will create an in-memory ChromaDB client.
 
 

@@ -18,7 +18,10 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from hashlib import md5
 from types import SimpleNamespace
 
-import docker
+from .import_utils import optional_import_block
+
+with optional_import_block():
+    import docker
 
 from .types import UserMessageImageContentPart, UserMessageTextContentPart
 
@@ -212,8 +215,11 @@ def is_docker_running() -> bool:
     """Check if docker is running.
 
     Returns:
-        bool: True if docker is running; False otherwise.
+        bool: True if docker is running; False otherwise. Also returns False
+        if the optional `docker` package is not installed.
     """
+    if "docker" not in sys.modules:
+        return False
     try:
         client = docker.from_env()
         client.ping()

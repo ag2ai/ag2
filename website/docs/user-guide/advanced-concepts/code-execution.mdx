@@ -14,6 +14,7 @@ For each type of executor, AG2 provides two ways to execute code: locally and in
 | [`DockerCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor) | Shell       | Docker |
 | [`RemyxCodeExecutor`](/docs/api-reference/autogen/coding/RemyxCodeExecutor) | Pre-built Docker | Remyx Cloud |
 | [`YepCodeCodeExecutor`](/docs/api-reference/autogen/coding/YepCodeCodeExecutor) | Serverless | YepCode Cloud |
+| [`DaytonaCodeExecutor`](/docs/api-reference/autogen/coding/DaytonaCodeExecutor) | Sandbox | Daytona Cloud |
 | [`jupyter.JupyterCodeExecutor`](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)           | Jupyter Kernel (e.g., python3) | Local/Docker |
 
 ## Local Execution
@@ -127,10 +128,17 @@ The figure below illustrates how docker execution works.
 Similar to the local command line code executor, the docker executor extracts code blocks from input messages, writes them to code files. For each code file, it starts a docker container to execute the code file,
 and reads the console output of the code execution.
 
-To use docker execution, you need to [install Docker](https://docs.docker.com/engine/install/) on your machine.
+To use docker execution, you need to [install Docker](https://docs.docker.com/engine/install/) on your machine **and** install AG2 with the `docker` extra:
+
+```bash
+pip install ag2[docker]
+```
+
 Once you have Docker installed and running, you can set up your code executor agent as follow:
 
 ```python
+import tempfile
+from autogen import ConversableAgent
 from autogen.coding import DockerCommandLineCodeExecutor
 
 # Create a temporary directory to store the code files.
@@ -195,7 +203,7 @@ Reply 'TERMINATE' in the end when everything is done.
 code_writer_agent = ConversableAgent(
     "code_writer_agent",
     system_message=code_writer_system_message,
-    llm_config=LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}),
+    llm_config=LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}),
     code_execution_config=False,  # Turn off code execution for this agent.
 )
 
@@ -524,7 +532,7 @@ for paper in papers:
 
 Remyx-hosted images replicate codebases with all dependencies, CUDA versions, and system libraries pre-installed, eliminating hours of environment setup and manual exploration.
 
-For interactive examples, see the [Remyx Executor Notebook](notebook/agentchat_remyx_executor.ipynb).
+For interactive examples, see the Remyx Executor Notebook.
 
 ## Serverless Execution with YepCode
 
@@ -660,6 +668,119 @@ YepCode provides enterprise-grade security:
 
 For more examples, see the [YepCode Executor Notebook](/docs/use-cases/notebooks/notebooks/agentchat_yepcode_executor).
 
+## Sandboxed Execution with Daytona
+
+For secure, isolated code execution in the cloud, AG2 supports [Daytona's](https://www.daytona.io) sandbox runtime through the [`DaytonaCodeExecutor`](/docs/api-reference/autogen/coding/DaytonaCodeExecutor). This executor runs code in fast, isolated sandboxes with full support for Python, Bash, JavaScript, and TypeScript.
+
+### Key Benefits
+
+- **🔒 Secure Sandboxes**: Each executor gets its own isolated environment — no LLM-generated code touches your local machine
+- **🚀 Fast Startup**: Sandboxes spin up on demand with near-instant startup
+- **🐳 Custom Images**: Bring your own Docker image or use Daytona's declarative `Image` builder
+- **🌐 Multi-Language**: Python, Bash, sh, JavaScript, TypeScript supported out of the box
+- **☁️ Cloud-Native**: No local Docker or infrastructure required
+- **♻️ Single Sandbox**: One sandbox reused across all code blocks in a session for efficiency
+
+### Prerequisites
+
+1. **Get a Daytona API key** from [app.daytona.io](https://app.daytona.io/dashboard/keys)
+2. **Install Daytona dependencies**:
+   ```bash
+   pip install "ag2[daytona]"
+   ```
+3. **Set your API key**:
+   ```bash
+   export DAYTONA_API_KEY=your_daytona_api_key
+   ```
+
+### Basic Usage
+
+```python
+from autogen import ConversableAgent, LLMConfig
+from autogen.coding import DaytonaCodeExecutor
+
+# Create Daytona executor — sandbox is created immediately
+executor = DaytonaCodeExecutor(
+    timeout=60,  # Per-execution timeout in seconds
+)
+
+# Create an agent with Daytona executor
+code_executor_agent = ConversableAgent(
+    "code_executor_agent",
+    llm_config=False,
+    code_execution_config={"executor": executor},
+    human_input_mode="NEVER",
+)
+```
+
+Or use it as a context manager for automatic sandbox cleanup:
+
+```python
+with DaytonaCodeExecutor(timeout=60) as executor:
+    code_executor_agent = ConversableAgent(
+        "code_executor_agent",
+        llm_config=False,
+        code_execution_config={"executor": executor},
+        human_input_mode="NEVER",
+    )
+    # Sandbox is automatically deleted when the with-block exits
+```
+
+### Snapshots
+
+A Daytona **snapshot** is a pre-configured environment template registered in your Daytona account:
+
+```python
+executor = DaytonaCodeExecutor(snapshot="my-data-science-snapshot", timeout=60)
+```
+
+Snapshots take priority over `image` — you cannot set both.
+
+### Custom Images
+
+Bring a custom Docker image using a plain string or Daytona's declarative `Image` builder:
+
+```python
+from autogen.coding import DaytonaCodeExecutor, DaytonaSandboxResources
+from daytona import Image
+
+# Plain image string
+executor = DaytonaCodeExecutor(image="python:3.12-slim", timeout=60)
+
+# Declarative image with pre-installed packages
+custom_image = Image.base("python:3.12-slim").pip_install("pandas", "numpy", "matplotlib")
+executor = DaytonaCodeExecutor(image=custom_image, timeout=120)
+
+# With resource limits (only applied when using a custom image)
+executor = DaytonaCodeExecutor(
+    image=custom_image,
+    resources=DaytonaSandboxResources(cpu=2, memory=4, disk=4),
+    timeout=120,
+)
+```
+
+### Configuration Options
+
+- **`api_key`**: Daytona API key (or set `DAYTONA_API_KEY` environment variable)
+- **`api_url`**: Daytona API URL (or set `DAYTONA_API_URL` environment variable)
+- **`target`**: Target region e.g. `"us"`, `"eu"` (or set `DAYTONA_TARGET` environment variable)
+- **`timeout`**: Per-execution timeout in seconds (default: 60)
+- **`snapshot`**: Named Daytona snapshot to use as the sandbox base
+- **`image`**: Custom Docker image — string name or declarative `Image` object
+- **`name`**: Human-readable sandbox name (auto-generated if not set)
+- **`env_vars`**: Environment variables available inside the sandbox (useful for passing secrets to code)
+- **`resources`**: CPU/memory/disk limits via `DaytonaSandboxResources` (only applied with custom images)
+
+### Use Cases
+
+Daytona execution is ideal for:
+
+- **🔒 Security-First Environments**: LLM-generated code runs in isolated cloud sandboxes, not on your machine
+- **📦 Custom Environments**: Pre-install packages via declarative `Image` builds
+- **🌐 Multi-Language Tasks**: Mix Python, Bash, JavaScript, and TypeScript in the same session
+- **☁️ Cloud Workflows**: No local Docker or infrastructure setup required
+- **🔑 Secret Injection**: Pass API keys and credentials via `env_vars` without hardcoding them in code
+
 #### Command Line or Jupyter Code Executor?
 
 The command line code executor does not keep any state in memory between executions of different code blocks it receives, as it writes each code block to a separate file and executes the code block in a new process.
@@ -671,8 +792,9 @@ The choice between command line and Jupyter code executor depends on the nature 
 ### More Code Execution examples
 - [Task Solving with Code Generation, Execution, and Debugging](/docs/use-cases/notebooks/notebooks/agentchat_auto_feedback_from_code_execution)
 - [Auto-Generated Agent Chat: Task Solving with Code Gen, Execution, Debugging & Human Feedback](/docs/use-cases/notebooks/notebooks/agentchat_human_feedback)
-- [Research Paper Execution with Remyx](/docs/use-cases/notebooks/notebooks/agentchat_remyx_executor)
+- Research Paper Execution with Remyx
 - [YepCode Serverless Code Execution](/docs/use-cases/notebooks/notebooks/agentchat_yepcode_executor)
+- [Daytona Sandboxed Code Execution](/docs/use-cases/notebooks/notebooks/agentchat_daytona_executor)
 
 ### API
 - [ConversableAgent.code_execution_config](/docs/api-reference/autogen/ConversableAgent#conversableagent)
@@ -680,4 +802,5 @@ The choice between command line and Jupyter code executor depends on the nature 
 - [DockerCommandLineCodeExecutor](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor)
 - [RemyxCodeExecutor](/docs/api-reference/autogen/coding/RemyxCodeExecutor)
 - [YepCodeCodeExecutor](/docs/api-reference/autogen/coding/YepCodeCodeExecutor)
+- [DaytonaCodeExecutor](/docs/api-reference/autogen/coding/DaytonaCodeExecutor)
 - [jupyter.JupyterCodeExecutor](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)

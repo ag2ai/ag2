@@ -8,6 +8,7 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.interop.litellm.litellm_config_factory import is_crawl4ai_v05_or_higher
 from autogen.tools.experimental.crawl4ai import Crawl4AITool
 from test.credentials import Credentials
 
@@ -65,7 +66,10 @@ class TestCrawl4AITool:
             mock_credentials.llm_config, instruction="dummy", extraction_model=extraction_model
         )
         assert isinstance(config, CrawlerRunConfig)
-        assert config.extraction_strategy.provider == f"openai/{mock_credentials.model}"
+        if is_crawl4ai_v05_or_higher():
+            assert config.extraction_strategy.llm_config.provider == f"openai/{mock_credentials.model}"
+        else:
+            assert config.extraction_strategy.provider == f"openai/{mock_credentials.model}"
 
         if use_extraction_model:
             assert config.extraction_strategy.schema == Product.model_json_schema()
@@ -74,8 +78,8 @@ class TestCrawl4AITool:
 
     @run_for_optional_imports("openai", "openai")
     @pytest.mark.asyncio
-    async def test_with_llm(self, credentials_gpt_4o_mini: Credentials) -> None:
-        tool_with_llm = Crawl4AITool(llm_config=credentials_gpt_4o_mini.llm_config)
+    async def test_with_llm(self, credentials_openai_mini: Credentials) -> None:
+        tool_with_llm = Crawl4AITool(llm_config=credentials_openai_mini.llm_config)
         assert isinstance(tool_with_llm, Crawl4AITool)
 
         result = await tool_with_llm(
@@ -85,13 +89,13 @@ class TestCrawl4AITool:
 
     @run_for_optional_imports("openai", "openai")
     @pytest.mark.asyncio
-    async def test_with_llm_and_extraction_schema(self, credentials_gpt_4o_mini: Credentials) -> None:
+    async def test_with_llm_and_extraction_schema(self, credentials_openai_mini: Credentials) -> None:
         class Product(BaseModel):
             name: str
             price: str
 
         tool_with_llm = Crawl4AITool(
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
             extraction_model=Product,
         )
         assert isinstance(tool_with_llm, Crawl4AITool)

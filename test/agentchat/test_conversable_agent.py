@@ -1118,8 +1118,8 @@ def test_register_functions(mock_credentials: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_function_registration_e2e_sync(credentials_openai_mini: Credentials) -> None:
+    llm_config = credentials_openai_mini.llm_config
 
     coder = autogen.AssistantAgent(
         name="chatbot",
@@ -1249,18 +1249,16 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
 async def test_function_registration_e2e_async(
     credentials_from_test_param: Credentials,
 ) -> None:
-    if credentials_from_test_param.api_type == "google":
-        pytest.skip("This test currently fails with gemini flash model")
     await _test_function_registration_e2e_async(credentials_from_test_param)
 
 
 @run_for_optional_imports("openai", "openai")
-def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
+def test_max_turn(credentials_openai_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
         max_consecutive_auto_reply=10,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
 
     user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)
@@ -1275,7 +1273,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 @run_for_optional_imports("openai", "openai")
-def test_message_func(credentials_gpt_4o_mini: Credentials):
+def test_message_func(credentials_openai_mini: Credentials):
     import random
 
     class Function:
@@ -1306,7 +1304,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
         name="Player",
         system_message="You will use function `get_random_number` to get a random number. Stop only when you get at least 1 even number and 1 odd number. Reply TERMINATE to stop.",
         description="A player that makes function_calls.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
 
@@ -1326,7 +1324,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_summary(credentials_gpt_4o_mini: Credentials):
+def test_summary(credentials_openai_mini: Credentials):
     import random
 
     class Function:
@@ -1361,7 +1359,7 @@ def test_summary(credentials_gpt_4o_mini: Credentials):
         name="Player",
         system_message="You will use function `get_random_number` to get a random number. Stop only when you get at least 1 even number and 1 odd number. Reply TERMINATE to stop.",
         description="A player that makes function_calls.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
 
@@ -1414,6 +1412,80 @@ def test_summarize_chat_with_dict_summary():
         summary_args={"summary_prompt": "Summarize the conversation."},
     )
     assert chat_res.summary == "This is a summary of the conversation."
+
+
+@pytest.mark.parametrize(
+    "summary_return, expected",
+    [
+        # Single-level message dict (existing behaviour).
+        ({"content": "plain string", "tool_calls": None}, "plain string"),
+        # Nested dict where "content" is itself a message dict — this is the
+        # shape some Ollama / Cohere responses produce and was the trigger
+        # for the RunCompletionEvent validation failure in #1811.
+        ({"content": {"content": "nested string", "tool_calls": None}}, "nested string"),
+        # Provider returns the message envelope without ever populating content.
+        ({"role": "assistant", "content": None}, ""),
+        # Callable returns None (e.g. summary computation failed silently).
+        (None, ""),
+        # Callable returns a non-string scalar.
+        (42, "42"),
+    ],
+    ids=["dict_with_str_content", "dict_with_nested_dict_content", "dict_with_none_content", "none", "scalar"],
+)
+def test_summarize_chat_coerces_arbitrary_returns_to_str(summary_return, expected):
+    """``RunCompletionEvent.summary`` is typed ``str``; whatever a callable
+    summary_method (or a provider-returned reflection response) yields must
+    therefore be reduced to a string before it reaches the event. Regression
+    coverage for #1811."""
+    user = UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        default_auto_reply="Hello.",
+        llm_config=False,
+        code_execution_config=False,
+    )
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply="This is a test assistant.",
+    )
+
+    def my_summary(sender, recipient, summary_args):
+        return summary_return
+
+    chat_res = user.initiate_chat(
+        assistant,
+        message="Hello",
+        max_turns=1,
+        summary_method=my_summary,
+    )
+    assert isinstance(chat_res.summary, str)
+    assert chat_res.summary == expected
+
+
+def test_last_msg_summary_unwraps_dict_content():
+    """``_last_msg_as_summary`` previously dropped to "" when the recipient's
+    last message had a dict-shaped ``content`` field (some providers wrap the
+    assistant content as a nested message dict). The summary should follow
+    the inner ``content`` instead. Regression coverage for #1811."""
+    user = UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        default_auto_reply="Hello.",
+        llm_config=False,
+        code_execution_config=False,
+    )
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply={"content": "This is a test assistant. TERMINATE", "tool_calls": None},
+    )
+
+    chat_res = user.initiate_chat(assistant, message="Hello", max_turns=1)
+    assert isinstance(chat_res.summary, str)
+    assert "This is a test assistant." in chat_res.summary
+    # TERMINATE should still be stripped on the dict-content path.
+    assert "TERMINATE" not in chat_res.summary
 
 
 def test_process_before_send():
@@ -1723,7 +1795,7 @@ def test_conversable_agent_with_whitespaces_in_name_end2end(
 
     # Get the parameter name request node
     current_llm = request.node.callspec.id
-    if "gpt_4" in current_llm:
+    if "gpt_4" in current_llm or "openai" in current_llm:
         with pytest.raises(
             ValueError,
             match="This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.",
@@ -2113,13 +2185,13 @@ def test_validate_llm_config(
 
 
 @run_for_optional_imports("openai", "openai")
-def test_cache_context(credentials_gpt_4o_mini: Credentials) -> None:
+def test_cache_context(credentials_openai_mini: Credentials) -> None:
     message = "Hello, make a joke about AI."
 
     assistant = autogen.AssistantAgent(
         name="assistant",
         max_consecutive_auto_reply=10,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
 
     user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)
@@ -2245,3 +2317,260 @@ def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
         assert len(executor.function_map) == 2
         assert "pre_tool" in executor.function_map
         assert "runtime_tool" in executor.function_map
+
+
+class TestAsyncReplyFunctionSkipping:
+    """Tests for skipping sync reply functions in async chat when async equivalents exist."""
+
+    def test_get_sync_funcs_to_skip_in_async_chat(self):
+        """Test that _get_sync_funcs_to_skip_in_async_chat identifies correct sync functions."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+
+        sync_to_skip = agent._get_sync_funcs_to_skip_in_async_chat()
+
+        # Should identify all sync functions that have async equivalents
+        sync_names = {f.__name__ for f in sync_to_skip}
+        expected = {
+            "check_termination_and_human_reply",
+            "generate_oai_reply",
+            "generate_tool_calls_reply",
+            "generate_function_call_reply",
+        }
+        assert sync_names == expected
+
+    def test_get_sync_funcs_to_skip_excludes_sync_only_functions(self):
+        """Test that sync-only functions (no async equivalent) are not in skip set."""
+        agent = ConversableAgent(
+            name="test",
+            llm_config=False,
+            human_input_mode="NEVER",
+            code_execution_config={"executor": "commandline-local"},
+        )
+
+        sync_to_skip = agent._get_sync_funcs_to_skip_in_async_chat()
+        sync_names = {f.__name__ for f in sync_to_skip}
+
+        # Code execution reply is sync-only, should NOT be in skip set
+        assert "_generate_code_execution_reply_using_executor" not in sync_names
+
+    def test_custom_sync_only_function_not_skipped(self):
+        """Test that user-registered sync-only functions are not skipped in async chat."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+
+        def custom_sync_reply(recipient, messages, sender, config):
+            return (True, "custom sync response")
+
+        agent.register_reply([autogen.Agent, None], custom_sync_reply)
+
+        sync_to_skip = agent._get_sync_funcs_to_skip_in_async_chat()
+
+        # Custom sync function should NOT be in skip set
+        assert custom_sync_reply not in sync_to_skip
+
+    def test_custom_async_with_sync_equivalent_skips_sync(self):
+        """Test that when user registers async with ignore_async_in_sync_chat, sync is skipped."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+
+        def my_reply(recipient, messages, sender, config):
+            return (True, "sync response")
+
+        async def a_my_reply(recipient, messages, sender, config):
+            return (True, "async response")
+
+        # Register both with the naming convention and flag
+        agent.register_reply([autogen.Agent, None], my_reply)
+        agent.register_reply([autogen.Agent, None], a_my_reply, ignore_async_in_sync_chat=True)
+
+        sync_to_skip = agent._get_sync_funcs_to_skip_in_async_chat()
+        sync_names = {f.__name__ for f in sync_to_skip}
+
+        # my_reply should be in skip set because a_my_reply has ignore_async_in_sync_chat=True
+        assert "my_reply" in sync_names
+
+    @pytest.mark.asyncio
+    async def test_a_generate_reply_skips_sync_with_async_equivalent(self):
+        """Test that a_generate_reply skips sync functions when async equivalents exist."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+        sender = ConversableAgent(name="sender", llm_config=False)
+        agent._oai_messages[sender] = [{"role": "user", "content": "hello"}]
+
+        # Reset counter to verify it's only incremented once
+        agent._consecutive_auto_reply_counter[sender] = 0
+
+        await agent.a_generate_reply(sender=sender)
+
+        # Counter should be incremented exactly once (by async version only)
+        # If sync was also called, it would be 2
+        assert agent._consecutive_auto_reply_counter[sender] == 1
+
+    @pytest.mark.asyncio
+    async def test_a_generate_reply_calls_sync_only_functions(self):
+        """Test that a_generate_reply still calls sync-only functions."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+        sender = ConversableAgent(name="sender", llm_config=False)
+
+        sync_only_called = []
+
+        def sync_only_reply(recipient, messages, sender, config):
+            sync_only_called.append(True)
+            return (False, None)  # Don't finalize, let other functions run
+
+        agent.register_reply([autogen.Agent, None], sync_only_reply)
+        agent._oai_messages[sender] = [{"role": "user", "content": "hello"}]
+
+        await agent.a_generate_reply(sender=sender)
+
+        # sync_only_reply should have been called
+        assert len(sync_only_called) == 1
+
+    @pytest.mark.asyncio
+    async def test_a_generate_reply_prefers_async_over_sync(self):
+        """Test that when both sync and async exist, only async is called."""
+        agent = ConversableAgent(name="test", llm_config=False, human_input_mode="NEVER")
+        sender = ConversableAgent(name="sender", llm_config=False)
+
+        call_log = []
+
+        def my_reply(recipient, messages, sender, config):
+            call_log.append("sync")
+            return (True, "sync response")
+
+        async def a_my_reply(recipient, messages, sender, config):
+            call_log.append("async")
+            return (True, "async response")
+
+        # Register both with naming convention and flag
+        agent.register_reply([autogen.Agent, None], my_reply)
+        agent.register_reply([autogen.Agent, None], a_my_reply, ignore_async_in_sync_chat=True)
+        agent._oai_messages[sender] = [{"role": "user", "content": "hello"}]
+
+        result = await agent.a_generate_reply(sender=sender)
+
+        # Only async should be called
+        assert call_log == ["async"]
+        assert result == "async response"
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_two_agent_async_chat_skips_sync_with_async_equivalent(self):
+        """Integration test: Two-agent async chat via a_run properly skips sync functions when async equivalents exist."""
+        call_log = []
+
+        # Termination condition for both agents
+        def is_termination(x):
+            return x.get("content", "").find("TERMINATE") >= 0
+
+        # Create two agents that will have a conversation
+        assistant = ConversableAgent(
+            name="assistant",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=2,
+            is_termination_msg=is_termination,
+        )
+        user_proxy = ConversableAgent(
+            name="user_proxy",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=2,
+            is_termination_msg=is_termination,
+        )
+
+        # Define sync and async reply function pairs for the assistant
+        def assistant_sync_reply(recipient, messages, sender, config):
+            call_log.append("assistant_sync")
+            return (True, "sync response from assistant TERMINATE")
+
+        async def a_assistant_sync_reply(recipient, messages, sender, config):
+            call_log.append("assistant_async")
+            return (True, "async response from assistant TERMINATE")
+
+        # Define sync and async reply function pairs for the user_proxy
+        def user_proxy_sync_reply(recipient, messages, sender, config):
+            call_log.append("user_proxy_sync")
+            return (True, "sync response from user_proxy TERMINATE")
+
+        async def a_user_proxy_sync_reply(recipient, messages, sender, config):
+            call_log.append("user_proxy_async")
+            return (True, "async response from user_proxy TERMINATE")
+
+        # Register both sync and async reply functions with the naming convention and flag
+        assistant.register_reply([autogen.Agent, None], assistant_sync_reply)
+        assistant.register_reply([autogen.Agent, None], a_assistant_sync_reply, ignore_async_in_sync_chat=True)
+
+        user_proxy.register_reply([autogen.Agent, None], user_proxy_sync_reply)
+        user_proxy.register_reply([autogen.Agent, None], a_user_proxy_sync_reply, ignore_async_in_sync_chat=True)
+
+        # Initiate async chat using a_run
+        response = await user_proxy.a_run(
+            recipient=assistant,
+            message="Hello, let's have a conversation!",
+            max_turns=2,
+        )
+
+        # Process all events from the response
+        async for event in response.events:
+            pass  # Just consume events to let the chat complete
+
+        # Verify only async functions were called, not their sync counterparts
+        assert "assistant_sync" not in call_log, "Sync assistant reply should be skipped in async chat"
+        assert "user_proxy_sync" not in call_log, "Sync user_proxy reply should be skipped in async chat"
+        assert "assistant_async" in call_log, "Async assistant reply should be called"
+
+        # Verify the conversation completed
+        messages = await response.messages
+        assert len(messages) > 0, "Messages should not be empty"
+        assert "async response" in messages[-1]["content"]
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_two_agent_async_chat_calls_sync_only_functions(self):
+        """Integration test: Two-agent async chat via a_run calls sync-only functions (no async equivalent)."""
+        call_log = []
+
+        # Termination condition for both agents
+        def is_termination(x):
+            return x.get("content", "").find("TERMINATE") >= 0
+
+        assistant = ConversableAgent(
+            name="assistant",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=1,
+            is_termination_msg=is_termination,
+        )
+        user_proxy = ConversableAgent(
+            name="user_proxy",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=1,
+            is_termination_msg=is_termination,
+        )
+
+        # Sync-only reply function (no async equivalent) - should still be called
+        def sync_only_reply(recipient, messages, sender, config):
+            call_log.append("sync_only")
+            return (False, None)  # Continue to next reply function
+
+        # Final async reply to end conversation
+        async def final_async_reply(recipient, messages, sender, config):
+            call_log.append("final_async")
+            return (True, "TERMINATE")
+
+        assistant.register_reply([autogen.Agent, None], final_async_reply, ignore_async_in_sync_chat=True)
+        assistant.register_reply([autogen.Agent, None], sync_only_reply)
+
+        # Initiate async chat using a_run
+        response = await user_proxy.a_run(
+            recipient=assistant,
+            message="Hello!",
+            max_turns=1,
+        )
+
+        # Process all events
+        async for event in response.events:
+            pass
+
+        # Sync-only function should still be called in async chat
+        assert "sync_only" in call_log, "Sync-only function should be called in async chat"
+        assert "final_async" in call_log, "Final async function should be called"

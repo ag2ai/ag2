@@ -15,15 +15,18 @@ from time import sleep
 from types import TracebackType
 from typing import Any, ClassVar
 
-import docker
-from docker.errors import ImageNotFound
 from typing_extensions import Self
 
 from ..code_utils import TIMEOUT_MSG, _cmd
 from ..doc_utils import export_module
+from ..import_utils import optional_import_block, require_optional_import
 from .base import CodeBlock, CodeExecutor, CodeExtractor, CommandLineCodeResult
 from .markdown_code_extractor import MarkdownCodeExtractor
 from .utils import _get_file_name_from_content, silence_pip
+
+with optional_import_block():
+    import docker
+    from docker.errors import ImageNotFound
 
 
 def _wait_for_ready(container: Any, timeout: int = 60, stop_time: float = 0.1) -> None:
@@ -40,6 +43,7 @@ def _wait_for_ready(container: Any, timeout: int = 60, stop_time: float = 0.1) -
 __all__ = ("DockerCommandLineCodeExecutor",)
 
 
+@require_optional_import(["docker"], "docker")
 @export_module("autogen.coding")
 class DockerCommandLineCodeExecutor(CodeExecutor):
     DEFAULT_EXECUTION_POLICY: ClassVar[dict[str, bool]] = {
@@ -103,6 +107,7 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
 
         Raises:
             ValueError: On argument error, or if the container fails to start.
+            RuntimeError: If Docker is not available or the daemon is not running.
         """
         work_dir = work_dir if work_dir is not None else Path()
 
@@ -118,7 +123,16 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         elif isinstance(bind_dir, str):
             bind_dir = Path(bind_dir)
 
-        client = docker.from_env()
+        try:
+            client = docker.from_env()
+            # Fail fast with a clearer error when the daemon/socket is unavailable.
+            client.ping()
+        except docker.errors.DockerException as exc:
+            raise RuntimeError(
+                "Docker is not available. Make sure the Docker daemon/service is running "
+                "and that your user can access the Docker socket. On macOS/Windows, "
+                "start Docker Desktop, then retry."
+            ) from exc
         # Check if the image exists
         try:
             client.images.get(image)

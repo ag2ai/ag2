@@ -9,7 +9,7 @@ The easiest pattern to get started with is one where a group manager agent autom
 In the following example we will use the `AutoPattern` group chat to create lesson plans for our classroom.
 
 <Tip>
-Group chats afford you a great deal of flexibility and control, see the [Group Chat](/docs/user-guide/basic-concepts/group-chat/introduction) documentation for a step-by-step walkthrough of the components of group chats.
+Group chats afford you a great deal of flexibility and control, see the [Group Chat](/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction) documentation for a step-by-step walkthrough of the components of group chats.
 </Tip>
 
 ```python
@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 1. Create our agents
 planner_message = """You are a classroom lesson planner.

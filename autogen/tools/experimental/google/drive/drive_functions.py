@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -58,6 +58,26 @@ def _get_file_extension(mime_type: str) -> str | None:
     return mime_extensions.get(mime_type)
 
 
+def _validate_download_path(download_folder: Path, subfolder_path: str | None, file_name: str) -> Path:
+    """Validate and return the file path, raising ValueError on path traversal.
+
+    Ensures both subfolder_path and file_name resolve inside download_folder.
+    Creates the subfolder directory if it doesn't exist.
+    """
+    destination_dir = download_folder
+    if subfolder_path:
+        destination_dir = download_folder / subfolder_path
+        if not destination_dir.resolve().is_relative_to(download_folder.resolve()):
+            raise ValueError(f"subfolder_path escapes download_folder: {subfolder_path}")
+        destination_dir.mkdir(parents=True, exist_ok=True)
+
+    file_path = destination_dir / file_name
+    if not file_path.resolve().is_relative_to(download_folder.resolve()):
+        raise ValueError(f"file_name escapes download_folder: {file_name}")
+
+    return file_path
+
+
 @require_optional_import(
     [
         "googleapiclient",
@@ -91,15 +111,8 @@ def download_file(
         # Download normal files (videos, images, etc.)
         request = service.files().get_media(fileId=file_id)
 
-    # Determine the final destination directory
-    destination_dir = download_folder
-    if subfolder_path:
-        destination_dir = download_folder / subfolder_path
-        # Ensure the subfolder exists, create it if necessary
-        destination_dir.mkdir(parents=True, exist_ok=True)
-
-    # Construct the full path for the file
-    file_path = destination_dir / file_name
+    # Validate and construct the download path (guards against path traversal)
+    file_path = _validate_download_path(download_folder, subfolder_path, file_name)
 
     # Save file
     try:

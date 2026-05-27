@@ -1,0 +1,178 @@
+---
+title: Code Execution
+sidebarTitle: Code Execution
+---
+
+# Code Execution
+
+AG2 supports two ways to let an agent run code: have the LLM provider execute it inside their own sandbox, or run it client-side through a sandboxed backend you control. Both produce the same conversational pattern — the model writes code, code runs, results come back — but the trade-offs are different.
+
+| | Built-in Provider | Remote (`SandboxCodeTool`) |
+| :--- | :--- | :--- |
+| **Where it runs** | Provider's sandbox | A `CodeEnvironment` you supply (Daytona, Docker, custom) |
+| **Setup** | Add the tool, done | Choose / configure a backend |
+| **Cost** | Bundled in provider tokens | Your sandbox bill (Daytona) or free (local Docker) |
+| **Custom packages, images** | No | Yes |
+| **State persistence** | Provider-defined | Per-environment instance |
+| **Provider support** | Only providers with native code-exec | Any provider |
+
+## Built-in Provider Code Execution
+
+Some providers expose a server-side Python sandbox the model can drive directly. AG2 surfaces this through [`CodeExecutionTool`](/docs/beta/tools/builtin_tools#code-execution) — a declaration-only tool that maps to each provider's native capability:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import CodeExecutionTool
+
+agent = Agent(
+    "analyst",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[CodeExecutionTool()],
+)
+```
+
+See the [Built-in Tools page](/docs/beta/tools/builtin_tools#code-execution) for the provider support matrix and version pinning.
+
+!!! note "When to use this"
+    Cheapest to wire up, no infrastructure to run. The trade-off is no control over the runtime — you can't preinstall packages, persist files between calls, or use this on a provider without native code-execution support.
+
+## Remote Code Execution
+
+`SandboxCodeTool` exposes a `run_code(code, language)` function the agent can call. Because it's a regular function tool, it works on **any** model provider. Where the code actually runs is decided by the [`CodeEnvironment`](https://github.com/ag2ai/ag2/blob/main/autogen/beta/tools/code/environment/base.py){.external-link target="_blank"} you hand it.
+
+!!! note "`environment` is required"
+    `SandboxCodeTool` has no default backend. Pass `DaytonaCodeEnvironment`, `DockerCodeEnvironment`, or your own `CodeEnvironment` implementation.
+
+!!! note "When to use this"
+    You need custom packages or images, persistent state across calls, your own infrastructure, or you're working with a provider that doesn't have a native code-execution capability.
+
+Two environments are available: **Daytona** (hosted) and **Docker** (local container). You can also implement your own — see the **Custom** tab below.
+
+<Tabs>
+  <Tab title="Daytona">
+[Daytona](https://www.daytona.io/){.external-link target="_blank"} is a hosted sandbox service. Strongest isolation; pay per use.
+
+```bash
+pip install "ag2[daytona]"
+```
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import SandboxCodeTool
+from autogen.beta.extensions.daytona import DaytonaCodeEnvironment
+
+agent = Agent(
+    "analyst",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SandboxCodeTool(DaytonaCodeEnvironment())],
+)
+
+reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
+print(await reply.content())
+```
+
+`DaytonaCodeEnvironment` reads `DAYTONA_API_KEY`, `DAYTONA_API_URL`, and `DAYTONA_TARGET` from the environment by default. Out-of-the-box supported languages: `python`, `bash`, `javascript`, `typescript`.
+  </Tab>
+
+  <Tab title="Docker">
+A local container managed via the Docker daemon. Free, cross-platform (Mac/Linux/Win via Docker Desktop), real container isolation.
+
+```bash
+pip install "ag2[docker]"
+```
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import SandboxCodeTool
+from autogen.beta.extensions.docker import DockerCodeEnvironment
+
+agent = Agent(
+    "analyst",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SandboxCodeTool(DockerCodeEnvironment(image="python:3.12-slim"))],
+)
+```
+
+Default supported languages: `python` and `bash` (both ship in `python:3.12-slim`). Add `"javascript"` / `"typescript"` only if your image has `node` / `ts-node` installed.
+
+Safety defaults are deliberately strict:
+
+- `network_mode="none"` — no network access. Set to `"bridge"` to opt in.
+- `mem_limit="512m"` — caps runaway processes.
+- `auto_remove=True` — container is removed on stop.
+- `user=None` — runs as the image's default user. For images that ship a `nobody` user, `user="nobody"` is recommended.
+  </Tab>
+
+  <Tab title="Custom">
+`SandboxCodeTool` only depends on the `CodeEnvironment` protocol, so any backend that satisfies it works — e2b, an SSH host, an internal CI runner.
+
+```python linenums="1"
+from autogen.beta.tools import SandboxCodeTool
+from autogen.beta.tools.code import CodeEnvironment, CodeLanguage, CodeRunResult
+
+
+class MyEnvironment(CodeEnvironment):
+    @property
+    def supported_languages(self) -> tuple[CodeLanguage, ...]:
+        return ("python",)
+
+    async def run(self, code: str, language: CodeLanguage, *, context=None) -> CodeRunResult:
+        # ship code to wherever you run it; return stdout + exit code
+        ...
+        return CodeRunResult(output="...", exit_code=0)
+
+
+sandbox = SandboxCodeTool(MyEnvironment())
+```
+
+The `context` argument is the active `ConversationContext`, forwarded so backends can resolve [`Variable`](/docs/beta/tools/tools#variables) markers from `context.variables` (e.g. per-tenant credentials). Backends with no runtime-configurable parameters can ignore it.
+  </Tab>
+</Tabs>
+
+### Lifecycle
+
+The sandbox / container is created lazily on the first `run_code` call and reused for the lifetime of the environment instance. Cleanup is registered via `atexit` so resources are released even if you forget to close the environment. For tighter scoping, use the environment as an async context manager:
+
+```python linenums="1"
+async with DaytonaCodeEnvironment(image="python:3.12") as env:
+    agent = Agent(
+        "analyst",
+        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        tools=[SandboxCodeTool(env)],
+    )
+    await agent.ask("...")
+# sandbox deleted here
+```
+
+The same pattern works with `DockerCodeEnvironment` (container stopped + removed) and any other backend that implements `__aenter__` / `__aexit__`.
+
+### Credentials and runtime config
+
+`DaytonaCodeEnvironment` accepts `Variable` markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerCodeEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
+
+```python linenums="1"
+from autogen.beta import Variable
+from autogen.beta.extensions.daytona import DaytonaCodeEnvironment
+
+env = DaytonaCodeEnvironment(
+    api_key=Variable("daytona_key"),  # resolved from ctx.variables["daytona_key"]
+    image=Variable("tenant_image"),
+)
+```
+
+### State persistence
+
+A single `CodeEnvironment` instance reuses the **same** sandbox / container across every `run_code` call routed through it. Files written in one call are visible in the next, and packages installed once stay installed. Each snippet still runs as a fresh process, so Python globals defined in one call are not visible to the next — persist state on disk.
+
+| Scenario | Same sandbox? |
+| :--- | :---: |
+| Multiple `run_code` calls within one `agent.ask(...)` | yes |
+| `agent.ask(...)` → `reply.ask(...)` (same agent, same tool) | yes |
+| Two agents sharing the same `SandboxCodeTool` instance | yes (shared filesystem state) |
+| New `CodeEnvironment(...)` per request | no — each spins up its own sandbox |
+| After `await env.aclose()` or process exit | no — sandbox is deleted |
+
+For most chat-style agents, instantiate one `CodeEnvironment` per agent (or per conversation) so state is scoped the way you'd expect. The first tool call pays the sandbox-creation round-trip; subsequent calls reuse it.

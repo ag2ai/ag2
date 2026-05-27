@@ -1,0 +1,145 @@
+---
+sidebarTitle: AG-UI
+title: "AG-UI (Agent-User Interaction) Integration"
+description: "Expose AG2 ConversableAgent agents to AG-UI-compatible frontends using AGUIStream."
+---
+
+## Overview
+
+The Agent-User Interaction (AG-UI) protocol standardizes how frontend applications communicate with agents.
+In AG2, `autogen.ag_ui.AGUIStream` bridges a `ConversableAgent` to AG-UI event streams.
+
+This solves common integration problems:
+
+- Streaming agent output to UI clients
+- Emitting tool-call lifecycle events
+- Synchronizing shared state snapshots
+- Supporting human-in-the-loop checkpoints through frontend actions and input-required flows
+
+For protocol background, see [AG-UI Protocol introduction](https://docs.ag-ui.com/introduction){.external-link target="_blank"}.
+
+## When to use AG-UI vs direct integration
+
+| Approach | Use it when | Trade-offs |
+| --- | --- | --- |
+| AG-UI integration (`AGUIStream`) | You need streaming UI, tool rendering, shared state sync, and a protocol-compatible client ecosystem | Adds protocol event semantics you need to expose from your endpoint |
+| Direct integration (custom REST/WebSocket contract) | You only need a narrow, app-specific API and will own protocol design end-to-end | You must define and maintain your own streaming/tool/state contract |
+
+Use AG-UI when you want a reusable UI contract across clients and frameworks.
+
+## Supported capabilities
+
+Verified AG-UI features are supported in AG2:
+
+* [x] Streaming text events (`TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END`, `TEXT_MESSAGE_CHUNK`)
+* [x] [Backend tool lifecycle events](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools){.external-link target="_blank"} (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_RESULT`, `TOOL_CALL_END`)
+* [x] [Frontend-tool dispatch](https://docs.copilotkit.ai/ag2/generative-ui/frontend-tools){.external-link target="_blank"} (`TOOL_CALL_CHUNK` for client tools in `RunAgentInput.tools`)
+* [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state){.external-link target="_blank"} (`STATE_SNAPSHOT`) from context and agent state
+* [x] [Human input checkpoints](https://docs.copilotkit.ai/ag2/human-in-the-loop){.external-link target="_blank"} (`input_required` surfaced as user-visible message events)
+
+## Installation
+
+Install AG2 with AG-UI support:
+
+```bash
+pip install "ag2[ag-ui]"
+```
+
+## Basic server example
+
+Use the manual-dispatch pattern when you want full control over auth, logging, and middleware:
+
+```python title="run_ag_ui.py" linenums="1" hl_lines="14 17-25"
+from fastapi import FastAPI, Header
+from fastapi.responses import StreamingResponse
+
+from autogen.beta import Agent
+from autogen.beta.ag_ui import AGUIStream, RunAgentInput
+from autogen.beta.config import OpenAIConfig
+
+agent = Agent(
+    name="support_bot",
+    prompt="You help users with billing questions.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+)
+
+stream = AGUIStream(agent)
+app = FastAPI()
+
+
+@app.post("/chat")
+async def run_agent(
+    message: RunAgentInput,
+    accept: str | None = Header(None),
+) -> StreamingResponse:
+    return StreamingResponse(
+        stream.dispatch(message, accept=accept),
+        media_type=accept or "text/event-stream",
+    )
+```
+
+Run it:
+
+```bash
+uvicorn run_ag_ui:app --reload --port 8000
+```
+
+!!! note "Simpler way"
+    If you want to use ASGI endpoint without additional logic, you can use the `AGUIStream.build_asgi()` method to build an ASGI endpoint and mount it to your ASGI application.
+
+    ```python linenums="1" hl_lines="5-6"
+    from autogen.beta.ag_ui import AGUIStream
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    stream = AGUIStream(agent)
+    app.mount("/chat", stream.build_asgi())
+    ```
+
+### Test the endpoint
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "thread_id": "thread-1",
+    "run_id": "run-1",
+    "messages": [{"id": "m1", "role": "user", "content": "Hello"}],
+    "state": {},
+    "context": [],
+    "tools": []
+  }'
+```
+
+Example stream (truncated):
+
+```text
+data: {"type":"RUN_STARTED","threadId":"thread-1","runId":"run-1",...}
+data: {"type":"TEXT_MESSAGE_CHUNK","delta":"Hello! How can I help?",...}
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",...}
+```
+
+## UI clients
+
+Any AG-UI client works with this endpoint.
+
+For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs because it provides:
+
+- Streaming chat components
+- Tool UI rendering hooks/components
+- Shared state patterns for interactive workflows
+
+Start from the [CopilotKit UI quickstart](./copilotkit-quickstart).
+
+## AG-UI Dojo
+
+For protocol-level testing and event inspection, use the AG2 Dojo profile:
+
+- [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat){.external-link target="_blank"}
+
+## Next steps
+
+1. Build the AG-UI endpoint from the minimal example above.
+2. Follow the [CopilotKit UI quickstart](./copilotkit-quickstart) to connect a React/Next.js client.
+3. Validate runtime behavior with the [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat){.external-link target="_blank"}.

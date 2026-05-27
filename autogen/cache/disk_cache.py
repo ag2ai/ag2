@@ -7,10 +7,20 @@
 from types import TracebackType
 from typing import Any
 
-import diskcache
 from typing_extensions import Self
 
+from ..import_utils import optional_import_block
 from .abstract_cache_base import AbstractCache
+
+with optional_import_block() as result:
+    import diskcache
+
+if not result.is_successful:
+    _import_error = ImportError(
+        "diskcache is not installed. Please install it with: pip install 'ag2[diskcache]'\n"
+        "Note: diskcache uses pickle serialization which has a critical security vulnerability (CVE-2025-69872).\n"
+        "Consider using InMemoryCache for development or RedisCache for production instead."
+    )
 
 
 class DiskCache(AbstractCache):
@@ -38,7 +48,12 @@ class DiskCache(AbstractCache):
             seed (Union[str, int]): A seed or namespace for the cache. This is used to create
                         a unique storage location for the cache data.
 
+        Raises:
+            ImportError: If diskcache is not installed.
+
         """
+        if not result.is_successful:
+            raise _import_error
         self.cache = diskcache.Cache(seed)
 
     def get(self, key: str, default: Any | None = None) -> Any | None:

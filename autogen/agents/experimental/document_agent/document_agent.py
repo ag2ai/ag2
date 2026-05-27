@@ -182,7 +182,7 @@ class DocAgent(ConversableAgent):
         - Summary Agent: responsible for generating a summary of the user's questions.
         """
         name = name or "DocAgent"
-        llm_config = llm_config or LLMConfig.get_current_llm_config()
+        llm_config = llm_config
         system_message = system_message or DEFAULT_SYSTEM_MESSAGE
         parsed_docs_path = parsed_docs_path or "./parsed_docs"
 

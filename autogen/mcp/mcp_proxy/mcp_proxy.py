@@ -292,14 +292,14 @@ class MCPProxy:
 
         main_path = output_dir / "main.py"
 
-        with main_path.open("r") as f:
+        with main_path.open("r", encoding="utf-8") as f:
             main_py_code = f.read()
         # main_py_code = main_py_code.replace("from .models import", "from models import")
         main_py_code = main_py_code.replace("from .models", "from models")
         # Removing "from __future__ import annotations" to avoid ForwardRef issues, should be fixed in fastapi_code_generator
         main_py_code = main_py_code.replace("from __future__ import annotations", "")
 
-        with main_path.open("w") as f:
+        with main_path.open("w", encoding="utf-8") as f:
             f.write(main_py_code)
 
         return main_path.stem
@@ -322,6 +322,7 @@ class MCPProxy:
         rename_functions: bool = False,
         group_functions: bool = False,
         configuration_type: Literal["json", "yaml"] = "json",
+        llm_config: Any = None,
     ) -> "MCPProxy":
         if (openapi_specification is None) == (openapi_url is None):
             raise ValueError("Either openapi_specification or openapi_url should be provided")
@@ -349,6 +350,10 @@ class MCPProxy:
                 custom_visitors.append(Path(__file__).parent / "operation_renaming.py")
 
             if group_functions:
+                if llm_config is not None:
+                    from .operation_grouping import set_llm_config
+
+                    set_llm_config(llm_config)
                 custom_visitors.append(Path(__file__).parent / "operation_grouping.py")
 
             main_name = cls.generate_code(  # noqa F841
@@ -430,11 +435,11 @@ class MCPProxy:
         rendered_config = template.render(context)
 
         # Save the output to a file
-        with open(output_file, "w") as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             f.write(rendered_config)
 
     def load_configuration(self, config_file: str) -> None:
-        with Path(config_file).open("r") as f:
+        with Path(config_file).open("r", encoding="utf-8") as f:
             config_data_str = f.read()
 
         self.load_configuration_from_string(config_data_str)

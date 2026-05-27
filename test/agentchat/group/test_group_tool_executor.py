@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+import json
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -12,7 +13,9 @@ from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import __TOOL_EXECUTOR_NAME__, GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
+from autogen.code_utils import content_str
 from autogen.tools import Tool
+from autogen.types import UserMessageImageContentPart, UserMessageTextContentPart
 
 
 class TestGroupToolExecutor:
@@ -89,6 +92,44 @@ class TestGroupToolExecutor:
         # The function's signature should be updated
         assert hasattr(result, "__signature__")
         assert result.__signature__ == mock_new_sig
+
+    @pytest.mark.asyncio
+    async def test_modify_context_variables_param_preserves_async(self, executor: GroupToolExecutor) -> None:
+        """Test that _modify_context_variables_param preserves async nature of functions."""
+        import asyncio
+
+        async def async_tool(text: str, context_variables: ContextVariables) -> str:
+            await asyncio.sleep(0)
+            return f"result:{text}"
+
+        context_vars = ContextVariables()
+        result_func = executor._modify_context_variables_param(async_tool, context_vars)
+
+        # The wrapper should be a coroutine function
+        assert asyncio.iscoroutinefunction(result_func), (
+            "_modify_context_variables_param should preserve async nature of functions"
+        )
+
+        # Calling it should return an awaitable that resolves correctly
+        result = await result_func(text="hello", context_variables=context_vars)
+        assert result == "result:hello"
+
+    def test_modify_context_variables_param_preserves_sync(self, executor: GroupToolExecutor) -> None:
+        """Test that _modify_context_variables_param keeps sync functions as sync."""
+        import asyncio
+
+        def sync_tool(text: str, context_variables: ContextVariables) -> str:
+            return f"result:{text}"
+
+        context_vars = ContextVariables()
+        result_func = executor._modify_context_variables_param(sync_tool, context_vars)
+
+        # The wrapper should NOT be a coroutine function
+        assert not asyncio.iscoroutinefunction(result_func)
+
+        # Calling it should work correctly
+        result = result_func(text="hello", context_variables=context_vars)
+        assert result == "result:hello"
 
     @patch("autogen.agentchat.group.group_tool_executor.inject_params")
     def test_change_tool_context_variables_to_depends(
@@ -504,6 +545,80 @@ class TestGroupToolExecutor:
             result = executor.is_handoff_function(message8)
             assert result is True
             assert mock_check.call_count == 2
+
+    def test_normalize_tool_content_none(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with None."""
+        result = executor._normalize_tool_content(None)
+        assert result == ""
+
+    def test_normalize_tool_content_string(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a string."""
+        result = executor._normalize_tool_content("hello world")
+        assert result == "hello world"
+
+    def test_normalize_tool_content_plain_list(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a plain Python list."""
+        content = [5, 3, 10]
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_empty_list(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with an empty list."""
+        result = executor._normalize_tool_content([])
+        assert result == json.dumps([])
+
+    def test_normalize_tool_content_openai_format(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with OpenAI message format (list of dicts with 'type' keys)."""
+        content = [
+            {"type": "text", "text": "hello"},
+            {"type": "image_url", "image_url": {"url": "test.jpg"}},
+        ]
+        result = executor._normalize_tool_content(content)
+        assert result == content_str(cast(list[UserMessageTextContentPart | UserMessageImageContentPart], content))
+
+    def test_normalize_tool_content_list_of_dicts_no_type(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a list of dicts without 'type' keys."""
+        content = [{"key": "value"}, {"another": "dict"}]
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_tuple(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a tuple."""
+        content = (5, 3, 10)
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_dict(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a dictionary."""
+        content = {"key": "value", "nested": {"a": 1}}
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_int(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with an integer."""
+        result = executor._normalize_tool_content(42)
+        assert result == json.dumps(42)
+
+    def test_normalize_tool_content_float(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a float."""
+        result = executor._normalize_tool_content(3.14)
+        assert result == json.dumps(3.14)
+
+    def test_normalize_tool_content_bool(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a boolean."""
+        result = executor._normalize_tool_content(True)
+        assert result == json.dumps(True)
+
+    def test_normalize_tool_content_non_json_serializable(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a non-JSON-serializable object."""
+
+        class CustomObject:
+            def __str__(self) -> str:
+                return "custom_object"
+
+        content = CustomObject()
+        result = executor._normalize_tool_content(content)
+        assert result == str(content)
 
 
 class TestGroupToolExecutorAsync:

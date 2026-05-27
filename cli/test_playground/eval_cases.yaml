@@ -1,0 +1,21 @@
+name: "basic-eval"
+description: "Basic evaluation suite for testing ag2 test eval"
+
+cases:
+  - name: "capital_city"
+    input: "What is the capital of France? Answer in one word."
+    assertions:
+      - type: contains
+        value: "Paris"
+      - type: max_turns
+        value: 5
+      - type: no_error
+
+  - name: "math_check"
+    input: "What is 2 + 2? Answer with just the number."
+    assertions:
+      - type: contains
+        value: "4"
+      - type: max_length
+        value: 500
+      - type: no_error
