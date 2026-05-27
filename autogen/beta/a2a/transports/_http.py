@@ -11,7 +11,7 @@ from a2a.client import Client, ClientCallInterceptor, ClientConfig, ClientFactor
 from a2a.client.client_factory import TransportProtocol
 from a2a.types import AgentCard
 
-from ..errors import A2AInvalidCardError
+from ..errors import A2AIncompatibleProtocolVersionError, A2AInvalidCardError
 from . import TransportName
 from .grpc import default_grpc_channel_factory
 
@@ -27,6 +27,48 @@ _TRANSPORT_BINDINGS: dict[str, str] = {
 }
 
 _BINDING_TO_TRANSPORT: dict[str, TransportName] = {v: k for k, v in _TRANSPORT_BINDINGS.items()}  # type: ignore[misc]
+
+# Minimum A2A protocol version AG2 will negotiate. The v1.0 release was
+# called out as a breaking change vs. the 0.x drafts (see
+# https://a2a-protocol.org/latest/announcing-1.0/), so we refuse anything
+# below it rather than letting it surface as obscure RPC failures later.
+_MIN_PROTOCOL_VERSION: tuple[int, ...] = (1, 0)
+
+
+def _parse_protocol_version(raw: str) -> tuple[int, ...] | None:
+    """Parse a dotted protocol-version string (e.g. ``"1.0"``, ``"0.3"``).
+
+    Returns ``None`` when the string is empty or not parseable, so callers
+    can decide whether unknown == reject or unknown == accept.
+    """
+    if not raw:
+        return None
+    parts = raw.split(".")
+    try:
+        return tuple(int(p) for p in parts)
+    except ValueError:
+        return None
+
+
+def validate_selected_protocol_version(card: AgentCard, *, url: str, transport: TransportName) -> None:
+    """Raise ``A2AIncompatibleProtocolVersionError`` if the interface picked
+    for ``transport`` advertises a protocol version older than 1.0.
+
+    A missing / empty / unparseable ``protocol_version`` is treated as
+    incompatible — every spec-conforming v1.0+ server fills it in.
+    """
+    target_binding = _TRANSPORT_BINDINGS[transport]
+    for iface in card.supported_interfaces:
+        if iface.protocol_binding != target_binding:
+            continue
+        parsed = _parse_protocol_version(iface.protocol_version)
+        if parsed is None or parsed < _MIN_PROTOCOL_VERSION:
+            raise A2AIncompatibleProtocolVersionError(
+                url=url,
+                transport=transport,
+                protocol_version=iface.protocol_version or "<unset>",
+            )
+        return
 
 
 def binding_to_transport(binding: str) -> TransportName | None:

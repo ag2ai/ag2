@@ -20,6 +20,26 @@ class A2AInvalidCardError(A2AError):
     """Raised when an ``AgentCard`` is missing data required to connect."""
 
 
+class A2AIncompatibleProtocolVersionError(A2AError):
+    """Raised when the selected interface on an ``AgentCard`` advertises an
+    A2A protocol version older than 1.0.
+
+    The 1.0 protocol is not backwards-compatible with earlier drafts
+    (see https://a2a-protocol.org/latest/announcing-1.0/), so AG2 refuses
+    to connect rather than silently negotiating a broken session.
+    """
+
+    def __init__(self, *, url: str, transport: str, protocol_version: str) -> None:
+        self.url = url
+        self.transport = transport
+        self.protocol_version = protocol_version
+        super().__init__(
+            f"AgentCard at {url!r} declares an incompatible A2A protocol version "
+            f"{protocol_version!r} for transport {transport!r}; AG2 requires "
+            f">= 1.0 (see https://a2a-protocol.org/latest/announcing-1.0/)."
+        )
+
+
 class A2AReconnectError(A2AError):
     """Raised when reconnect attempts on a streaming Task are exhausted."""
 
