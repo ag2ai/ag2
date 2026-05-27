@@ -85,7 +85,7 @@ class GoogleCredentialsLocalProvider(GoogleCredentialsProvider):
 
             if self.token_file:
                 # Save the credentials for the next run
-                with open(self.token_file, "w") as token:
+                with open(self.token_file, "w", encoding="utf-8") as token:
                     token.write(creds.to_json())  # type: ignore[no-untyped-call]
 
         return creds  # type: ignore[no-any-return]
