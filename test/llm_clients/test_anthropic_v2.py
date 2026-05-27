@@ -142,10 +142,12 @@ def patch_helper_functions():
         except Exception:
             return False
 
-    with patch("autogen.llm_clients.anthropic_v2._is_text_block", side_effect=_is_text_block_mock):
-        with patch("autogen.llm_clients.anthropic_v2._is_thinking_block", side_effect=_is_thinking_block_mock):
-            with patch("autogen.llm_clients.anthropic_v2._is_tool_use_block", side_effect=_is_tool_use_block_mock):
-                yield
+    with (
+        patch("autogen.llm_clients.anthropic_v2._is_text_block", side_effect=_is_text_block_mock),
+        patch("autogen.llm_clients.anthropic_v2._is_thinking_block", side_effect=_is_thinking_block_mock),
+        patch("autogen.llm_clients.anthropic_v2._is_tool_use_block", side_effect=_is_tool_use_block_mock),
+    ):
+        yield
 
 
 @pytest.fixture
@@ -264,20 +266,17 @@ class TestStandardCompletion:
 class TestNativeStructuredOutputs:
     """Test native structured outputs (beta API)."""
 
-    def test_structured_output_with_parse_method(self, anthropic_v2_client, mock_anthropic_client):
-        """Test structured output using .parse() method (Pydantic model, no tools)."""
+    def test_structured_output_pydantic_no_tools(self, anthropic_v2_client, mock_anthropic_client):
+        """Structured output for a Pydantic model with no tools is parsed from create() JSON."""
 
         class ContactInfo(BaseModel):
             name: str
             email: str
 
-        # Setup mock parsed output
-        parsed_model = ContactInfo(name="John Doe", email="john@example.com")
         mock_response = MockAnthropicMessage(
             content=[TextBlock('{"name": "John Doe", "email": "john@example.com"}')],
-            parsed_output=parsed_model,
         )
-        mock_anthropic_client.beta.messages.parse.return_value = mock_response
+        mock_anthropic_client.beta.messages.create.return_value = mock_response
 
         # Make request
         params = {
@@ -286,6 +285,13 @@ class TestNativeStructuredOutputs:
             "response_format": ContactInfo,
         }
         response = anthropic_v2_client.create(params)
+
+        # create() is used with output_config.format
+        mock_anthropic_client.beta.messages.create.assert_called_once()
+        _, create_kwargs = mock_anthropic_client.beta.messages.create.call_args
+        assert "output_config" in create_kwargs
+        assert create_kwargs["output_config"]["format"]["type"] == "json_schema"
+        assert "output_format" not in create_kwargs
 
         # Verify parsed output is stored
         assert len(response.messages[0].content) == 2  # GenericContent + TextContent
@@ -384,7 +390,7 @@ class TestNativeStructuredOutputs:
             "messages": [{"role": "user", "content": "Return JSON"}],
             "response_format": TestModel,
         }
-        response = anthropic_v2_client.create(params)
+        anthropic_v2_client.create(params)
 
         # Should fallback to JSON Mode
         assert mock_anthropic_client.messages.create.called

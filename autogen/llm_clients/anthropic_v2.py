@@ -258,7 +258,7 @@ class AnthropicV2Client(ModelClient):
         has_strict_tools = any(tool.get("strict") for tool in anthropic_params.get("tools", []))
 
         if has_strict_tools:
-            # Use beta API for strict tools (anthropic>=0.79.0 is guaranteed by the package pin)
+            # Use beta API for strict tools
             anthropic_params["betas"] = ["structured-outputs-2025-11-13"]
             response = self._client.beta.messages.create(**anthropic_params)  # type: ignore[misc]
         else:
@@ -316,24 +316,14 @@ class AnthropicV2Client(ModelClient):
                 "Anthropic SDK does not support beta.messages API. Please upgrade to anthropic>=0.39.0"
             )
 
-        # When both tools and structured output are configured, must use create() (not parse())
-        # parse() doesn't support tools, so we convert Pydantic models to dict schemas
-        has_tools = "tools" in anthropic_params and anthropic_params["tools"]
-
-        if has_tools or isinstance(self._response_format, dict):
-            # Use create() with output_format for:
-            # 1. Dict schemas (always)
-            # 2. Pydantic models when tools are present (parse() doesn't support tools)
-            anthropic_params["output_format"] = {
+        # Native structured outputs via create() + output_config.format.
+        anthropic_params["output_config"] = {
+            "format": {
                 "type": "json_schema",
                 "schema": transformed_schema,
             }
-            response = self._client.beta.messages.create(**anthropic_params)  # type: ignore[misc]
-        else:
-            # Pydantic model without tools - use parse() for automatic validation
-            # parse() provides parsed_output attribute for direct model access
-            anthropic_params["output_format"] = self._response_format
-            response = self._client.beta.messages.parse(**anthropic_params)  # type: ignore[misc]
+        }
+        response = self._client.beta.messages.create(**anthropic_params)  # type: ignore[misc]
 
         # Transform to UnifiedResponse with is_native_structured_output=True
         return self._transform_response(
