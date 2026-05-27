@@ -478,16 +478,18 @@ class OllamaClient:
                     else:
                         ollama_messages.append({"role": "user", "content": content_to_append})
 
-        # Convert tool call and tool result messages to normal text messages for Ollama
+        # Convert tool call and tool result messages to normal text messages for Ollama.
+        # The model should only see tool results, so the assistant tool-call message is removed
+        # and each call's metadata is folded into its matching result (keyed by tool_call_id).
+        tool_call_meta_by_id: dict[str, str] = {}
         for i, message in enumerate(ollama_messages):
             if "tool_calls" in message:
-                # The model should only see tool results
-                ollama_messages[i] = None
                 for tool_call in message["tool_calls"]:
-                    tool_call_meta = str(tool_call)
+                    tool_call_meta_by_id[tool_call.get("id")] = str(tool_call)
+                ollama_messages[i] = None
             if "tool_call_id" in message:
-                # Executed tool results
-                # add tool meta to tool message result
+                # Executed tool results — prepend the matching tool call's metadata (if known)
+                tool_call_meta = tool_call_meta_by_id.get(message["tool_call_id"], "")
                 message["result"] = tool_call_meta + message["content"]
                 del message["content"]
                 del message["role"]

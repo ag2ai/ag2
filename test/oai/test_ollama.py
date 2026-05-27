@@ -518,14 +518,8 @@ def test_oai_messages_to_ollama_messages_tool_conversion(ollama_client):
 
     messages = ollama_client.oai_messages_to_ollama_messages(test_messages, None)
 
-    # The tool_calls message should be removed (set to None and filtered out)
-    # The tool result message should be converted to a user message
-    expected_messages = [
-        {"role": "system", "content": "You are a helpful AI bot."},
-        {"role": "user", "content": "What's the weather in New York?"},
-        # tool_calls message should be removed
-        # tool result should be converted to user message with tool meta
-    ]
+    # The tool_calls message should be removed (set to None and filtered out);
+    # the tool result message should be converted to a user message with tool meta.
 
     # Verify that tool_calls message was removed
     assert len(messages) == 3, "Tool calls message should be removed"
@@ -590,3 +584,33 @@ def test_oai_messages_to_ollama_messages_multiple_tool_calls(ollama_client):
         msg for msg in messages if msg["role"] == "user" and "The following function was run:" in msg.get("content", "")
     ]
     assert len(tool_result_messages) == 2, "Should have 2 converted tool result messages"
+
+    # Each result must carry its OWN tool call's metadata, not the last call's.
+    weather_result = next(m for m in tool_result_messages if '"temperature": 70' in m["content"])
+    currency_result = next(m for m in tool_result_messages if '"converted": 110' in m["content"])
+    assert "get_weather" in weather_result["content"], "Weather result should carry get_weather metadata"
+    assert "convert_currency" not in weather_result["content"], (
+        "Weather result must not carry convert_currency metadata"
+    )
+    assert "convert_currency" in currency_result["content"], "Currency result should carry convert_currency metadata"
+    assert "get_weather" not in currency_result["content"], "Currency result must not carry get_weather metadata"
+
+
+# Test conversion when a tool result has no preceding tool-call message (e.g. truncated history)
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_oai_messages_to_ollama_messages_tool_result_without_tool_call(ollama_client):
+    # A tool result whose originating tool_calls message is not present must not crash the
+    # conversion (regression for an UnboundLocalError on the tool-call metadata).
+    test_messages = [
+        {"role": "system", "content": "You are a helpful AI bot."},
+        {"role": "tool", "tool_call_id": "orphan_call", "content": '{"ok": true}'},
+        {"role": "user", "content": "continue"},
+    ]
+
+    messages = ollama_client.oai_messages_to_ollama_messages(test_messages, None)
+
+    tool_result_messages = [
+        msg for msg in messages if msg["role"] == "user" and "The following function was run:" in msg.get("content", "")
+    ]
+    assert len(tool_result_messages) == 1, "Orphan tool result should still be converted"
+    assert '{"ok": true}' in tool_result_messages[0]["content"]
