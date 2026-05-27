@@ -17,7 +17,7 @@ from .events import (
 )
 from .files import FilesAPI
 from .middleware import Middleware
-from .observer import observer
+from .observers import observer
 from .response import PromptedSchema, ResponseSchema, response_schema
 from .spec import AgentSpec
 from .stream import MemoryStream

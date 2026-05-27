@@ -220,6 +220,12 @@ class CallModel(Generic[P, T]):
                 kw[arg] = v
 
         if self.var_keyword_arg is not None:
+            # POSITIONAL_OR_KEYWORD params can be supplied by name; without this
+            # explicit pop they leak into **var_keyword_arg and never reach their
+            # own slot, so the underlying call sees them as missing (#1790).
+            for arg in self.positional_args:
+                if (v := kwargs.pop(arg, Parameter.empty)) is not Parameter.empty:
+                    kw[arg] = v
             kw[self.var_keyword_arg] = kwargs
         else:
             kw.update(kwargs)

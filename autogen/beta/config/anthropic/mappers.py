@@ -20,11 +20,12 @@ from autogen.beta.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
+    ToolErrorEvent,
+    ToolResultEvent,
     ToolResultsEvent,
     UrlInput,
     Usage,
 )
-from autogen.beta.events.tool_events import ToolErrorEvent, ToolResultEvent
 
 logger = logging.getLogger(__name__)
 

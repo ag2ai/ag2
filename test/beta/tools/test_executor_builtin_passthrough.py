@@ -7,8 +7,7 @@ from contextlib import ExitStack
 import pytest
 from fast_depends.use import SerializerCls
 
-from autogen.beta import MemoryStream, ToolResult
-from autogen.beta.context import ConversationContext
+from autogen.beta import Context, MemoryStream, ToolResult
 from autogen.beta.events import (
     ToolCallEvent,
     ToolNotFoundEvent,
@@ -27,7 +26,7 @@ class TestToolNotFoundFallback:
 
     async def test_regular_unknown_tool_triggers_not_found(self) -> None:
         stream = MemoryStream()
-        context = ConversationContext(stream=stream)
+        context = Context(stream=stream)
 
         with ExitStack() as stack:
             ToolExecutor(SerializerCls).register(stack, context, tools=[], known_tools={"known_func"})
@@ -46,7 +45,7 @@ class TestToolNotFoundFallback:
 
     async def test_regular_known_tool_is_skipped(self) -> None:
         stream = MemoryStream()
-        context = ConversationContext(stream=stream)
+        context = Context(stream=stream)
 
         with ExitStack() as stack:
             ToolExecutor(SerializerCls).register(stack, context, tools=[], known_tools={"known_func"})

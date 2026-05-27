@@ -52,7 +52,7 @@ sequenceDiagram
     Note over User,Fulfilment: TerminateTarget("sequence_complete") fires after fulfilment's reply
 ```
 
-## Migration Notes
+## Migrating from Classic to Beta?
 
 | Classic | Beta |
 |---|---|
@@ -182,7 +182,7 @@ async def main() -> None:
     # Wait for the workflow to terminate (any of the five close routes
     # documented in /docs/beta/network/termination — this demo uses
     # TerminateTarget("sequence_complete") as its happy path).
-    close_env = await intake_hc.wait_for_channel_event(
+    close_env = await intake.wait_for_channel_event(
         channel_id=channel.channel_id,
         predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=180.0,

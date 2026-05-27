@@ -54,6 +54,14 @@ jobs:
     env:
       AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
       YEPCODE_API_TOKEN: ${{ secrets.YEPCODE_API_TOKEN }}
+      # `import autogen` loads the Gemini client -> vertexai -> grpc. On macOS
+      # grpc uses the legacy `poll` engine, and its pthread_atfork handler
+      # writes INFO logs ("ev_poll_posix.cc: FD from fork parent still in poll
+      # list") into the child's stderr when the code executor forks a
+      # subprocess. The executor captures that stderr into command output,
+      # breaking output assertions. Silence grpc's fork-time logging.
+      GRPC_VERBOSITY: NONE
+      GRPC_ENABLE_FORK_SUPPORT: "0"
     strategy:
       fail-fast: false
       matrix:

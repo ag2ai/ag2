@@ -18,12 +18,17 @@ If you're migrating a classic `GroupChat` orchestration, see [Migrating from Gro
 
 ## The Adapter Protocol
 
-All four adapters implement the same `#!python ChannelAdapter` Protocol:
+An adapter exposes **three concentric layers** of surface:
+
+1. **Capabilities** — what the *hub* calls: `#!python validate_create` / `#!python validate_send` / `#!python fold` / `#!python on_accepted` / `#!python initial_state`. `#!python fold` is replayed on `#!python Hub.hydrate()`, so it must be a pure function.
+2. **Envelope helpers** — what *any client* calls: `#!python build_text_envelope` / `#!python build_packet_envelope`. Pure constructors that produce a correctly-shaped `#!python Envelope` for this adapter's protocol. Framework-agnostic — not LLM-specific. This is the surface a non-AG2 bridge drives (see [below](#driving-a-channel-without-an-agent)).
+3. **LLM tools** — what the *AG2 agent loop* sees: `#!python tools_for`. The presentation layer; the default handler merges its result with the identity-level tools `#!python NetworkPlugin` attaches. Adapters that take no LLM input (e.g. workflow, where handoff tools are user-authored) return `#!python []`.
 
 ```python
 class ChannelAdapter(Protocol):
     manifest: ChannelManifest
 
+    # Layer 1 — capabilities (hub-called)
     def initial_state(self, metadata: ChannelMetadata) -> AdapterState: ...
     def fold(self, envelope: Envelope, state: AdapterState) -> AdapterState: ...
     def validate_create(self, metadata: ChannelMetadata) -> None: ...
@@ -33,20 +38,68 @@ class ChannelAdapter(Protocol):
     def on_accepted(
         self, metadata: ChannelMetadata, envelope: Envelope, state: AdapterState
     ) -> AdapterResult: ...
+
+    # Layer 2 — envelope helpers (any client)
+    def build_text_envelope(
+        self, channel_id: str, sender_id: str, text: str, *,
+        audience: list[str] | None = None, causation_id: str | None = None,
+    ) -> Envelope: ...
+    def build_packet_envelope(
+        self, channel_id: str, sender_id: str, body: str, *,
+        handoff: Handoff | None = None, context_set: dict | None = None,
+        audience: list[str] | None = None, causation_id: str | None = None,
+    ) -> Envelope: ...
+
+    # Layer 3 — LLM tools (agent loop)
+    def tools_for(
+        self, client: AgentClient, metadata: ChannelMetadata,
+        state: AdapterState, participant_id: str,
+    ) -> list[Tool]: ...
 ```
 
-Each method runs at a specific moment in a channel's lifecycle:
+Each method runs at a specific moment:
 
-| Method | When | Purpose |
-|---|---|---|
-| `manifest` | Adapter registration | Static description: type, version, participant counts, knobs schema, default view, default expectations |
-| `initial_state` | Channel creation | Build the per-channel bookkeeping (e.g. `expected_next_speaker`, turn count) |
-| `validate_create` | Channel creation | Reject the create if the manifest's invariants are violated |
-| `fold` | Each accepted envelope | Update the per-channel state (turn-taking, flags, last speaker) |
-| `validate_send` | Each prospective send | Reject sends that would violate the protocol (out-of-turn, post-terminal) |
-| `on_accepted` | Each accepted envelope | Decide whether to auto-close (`#!python AdapterResult(next_state=CLOSING, ...)`) |
+| Method | Layer | When | Purpose |
+|---|---|---|---|
+| `manifest` | 1 | Adapter registration | Static description: type, version, participant counts, knobs schema, default view, default expectations |
+| `initial_state` | 1 | Channel creation | Build the per-channel bookkeeping (e.g. `expected_next_speaker`, turn count) |
+| `validate_create` | 1 | Channel creation | Reject the create if the manifest's invariants are violated |
+| `fold` | 1 | Each accepted envelope | Update the per-channel state (turn-taking, flags, last speaker) |
+| `validate_send` | 1 | Each prospective send | Reject sends that would violate the protocol (out-of-turn, post-terminal) |
+| `on_accepted` | 1 | Each accepted envelope | Decide whether to auto-close (`#!python AdapterResult(next_state=CLOSING, ...)`) |
+| `build_text_envelope` | 2 | Any time, by any client | Construct an `#!python EV_TEXT` envelope shaped for this adapter |
+| `build_packet_envelope` | 2 | Any time, by any client | Construct an `#!python EV_PACKET` envelope (workflow encodes `handoff` / `context_set` here) |
+| `tools_for` | 3 | Per turn, by the default handler | The LLM tools this participant gets this turn — see [Network Tools → Channel-level tools](/docs/beta/network/network_assigned_tools#channel-level-tools-adaptertools_for) |
+
+Module-level defaults are public, so a custom adapter (or a bridge) can delegate to them directly: `#!python default_build_text_envelope` / `#!python default_build_packet_envelope` (emit plain `#!python EV_TEXT` / `#!python EV_PACKET`) and `#!python default_tools_for` (returns `#!python []`). All three are importable from `#!python autogen.beta.network`.
 
 You don't normally implement this protocol yourself — the four built-ins cover most cases, and the workflow adapter is parameterised via `#!python TransitionGraph` for custom orchestrations. The `#!python ChannelAdapter` Protocol is exposed for completeness and for advanced use cases.
+
+### Driving a channel without an Agent
+
+The Layer-2 helpers exist so that code with no AG2 plumbing — a chat-platform gateway, a batch harness, a non-AG2 framework — can advance a turn manually. Build the adapter-shaped envelope, then post it through `#!python Hub.post_envelope`:
+
+```python linenums="1"
+# Two pure identities — no Agent, no NetworkPlugin, no @tool.
+alice = await alice_hc.register_human(Passport(name="alice"), resume=Resume())
+bob = await bob_hc.register_human(Passport(name="bob"), resume=Resume())
+
+channel = await alice.open(type="workflow", target=[bob.agent_id], knobs={"graph": graph.to_dict()})
+
+adapter = hub.adapter_for(channel.channel_id)
+env = adapter.build_packet_envelope(
+    channel_id=channel.channel_id,
+    sender_id=alice.agent_id,
+    body="alice opens the discussion",
+)
+await hub.post_envelope(env)
+
+# The workflow's transition graph advanced state purely from the bridge-supplied envelope.
+state = hub.adapter_state(channel.channel_id)
+assert state.expected_next_speaker == bob.agent_id
+```
+
+`#!python hub.adapter_for(channel_id)` returns the bound adapter; `#!python hub.adapter_state(channel_id)` returns the current fold state (and stays available after the channel closes — useful for post-mortem inspection). A bridge that pre-builds envelopes offline can skip the adapter lookup entirely and call `#!python default_build_packet_envelope(...)` directly.
 
 ## Channel Lifecycle
 

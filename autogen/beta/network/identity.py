@@ -20,17 +20,23 @@ files but readers should treat it as cache-only.
 """
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Literal, get_args
 
 __all__ = (
+    "PASSPORT_KINDS",
     "AgentRuntime",
     "AuthBlock",
     "CostProfile",
     "ObservedStat",
     "Passport",
+    "PassportKind",
     "Resume",
     "ResumeExample",
 )
+
+
+PassportKind = Literal["agent", "human", "remote_agent"]
+PASSPORT_KINDS: tuple[str, ...] = get_args(PassportKind)
 
 
 @dataclass(slots=True)
@@ -59,6 +65,13 @@ class Passport:
 
     ``agent_id`` is hub-stamped at registration. Mutating any field
     requires unregister + re-register, which yields a fresh ``agent_id``.
+
+    ``kind`` discriminates participant types — ``"agent"`` (default LLM
+    participant), ``"human"`` (out-of-band non-LLM participant driven by
+    an external UI), or ``"remote_agent"`` (reserved for a future
+    federation / A2A bridge; not yet activated). ``None`` is treated as
+    ``"agent"`` for back-compat with passports persisted before this
+    field existed.
     """
 
     name: str  # human/LLM-facing address; unique per hub
@@ -68,11 +81,18 @@ class Passport:
     cost: CostProfile | None = None
     region: str | None = None
     auth: AuthBlock = field(default_factory=AuthBlock)
+    kind: PassportKind | None = None  # None ≡ "agent" for back-compat
     version: int = 1
 
     # Hub-stamped at registration. None on construction.
     agent_id: str | None = None
     created_at: str = ""  # ISO-Z, hub-stamped
+
+    def __post_init__(self) -> None:
+        # Validate kind at construction so a typo (e.g. ``kind="huMAn"``)
+        # fails loudly instead of being silently coerced downstream.
+        if self.kind is not None and self.kind not in PASSPORT_KINDS:
+            raise ValueError(f"Passport.kind must be one of {PASSPORT_KINDS} or None; got {self.kind!r}")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -85,6 +105,11 @@ class Passport:
         if isinstance(payload.get("cost"), dict):
             payload["cost"] = CostProfile(**payload["cost"])
         return cls(**payload)
+
+    @property
+    def effective_kind(self) -> PassportKind:
+        """Resolved ``kind`` — ``None`` falls through to ``"agent"``."""
+        return self.kind or "agent"
 
 
 @dataclass(slots=True)

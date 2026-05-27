@@ -33,7 +33,7 @@ from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearc
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
-from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent
+from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
 
 
 def response_proto_to_config(response: ResponseProto | None) -> dict[str, Any]:
@@ -98,7 +98,7 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
                 types.FunctionDeclaration(
                     name=t.function.name,
                     description=t.function.description,
-                    parameters=_ensure_object_schema(t.function.parameters),
+                    parameters_json_schema=_ensure_object_schema(t.function.parameters),
                 )
             )
 
@@ -210,8 +210,8 @@ def convert_messages(
                     name=call.name,
                     args=json.loads(call.arguments or "{}"),
                 )
-                if "thought_signature" in call.provider_data:
-                    fc_part.thought_signature = call.provider_data["thought_signature"]
+                if isinstance(call, GeminiToolCallEvent) and call.thought_signature is not None:
+                    fc_part.thought_signature = call.thought_signature
                 parts.append(fc_part)
             if parts:
                 result.append(types.Content(role="model", parts=parts))

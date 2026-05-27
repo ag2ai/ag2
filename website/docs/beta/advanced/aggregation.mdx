@@ -106,6 +106,22 @@ await strategy.aggregate(events, ctx, store)
 
 Unlike `ConversationSummaryAggregate`, this one is destructive toward its own prior output — each call overwrites `/memory/working.md` with the merged version. That is the point: working memory is a rolling single-file state, not an append log.
 
+The default prompt is journal-style: *preserve facts that are still relevant, drop outdated content*. For other memory shapes — procedural memory (what tactics worked), reflection (what to do differently next time), or task-state memory — pass a `prompt=` template with `{existing}` and `{events}` placeholders:
+
+```python linenums="1" hl_lines="3-8"
+strategy = WorkingMemoryAggregate(
+    config=OpenAIConfig(model="gpt-5-mini"),
+    prompt=(
+        "You maintain a research agent's working memory. Track tactics, "
+        "not topical facts: which phrasings worked, which sources were "
+        "reliable, which dead ends to avoid.\n\n"
+        "## Current Notes\n{existing}\n\n## Latest Round\n{events}"
+    ),
+)
+```
+
+If a `prompt=` override is not enough — different storage path, multi-call extraction, schema-validated output — write a custom strategy (see [below](#writing-a-custom-strategy)). The protocol is small and the framework's wiring stays the same.
+
 ## Pairing with assembly policies
 
 The intended pattern: aggregate at the end of a conversation (or on a cadence), then read back in on the next turn via the matching assembly policy.
@@ -148,7 +164,17 @@ agent = Agent(
 )
 ```
 
-Each completed aggregation emits an `AggregationCompleted` lifecycle event with `strategy` / `usage` fields for observability.
+Every aggregation attempt emits a triple on the agent's stream:
+
+| Event | When | Use it to |
+|---|---|---|
+| `AggregationStarted` | Just before `aggregate()` runs | Mark the start of work in dashboards |
+| `AggregationCompleted` | `aggregate()` returned | Read `strategy` / `usage` / `event_count` |
+| `AggregationFailed` | `aggregate()` raised | Inspect `error_type` + `error`; the agent turn itself is not interrupted |
+
+The failure path is the important one: the strategy exception is also logged via the module logger, but the stream event is the durable signal. Subscribe to `AggregationFailed` if you want failed aggregations to surface in your application's UI or alerting — relying on `AggregationCompleted` alone makes silent failures undebuggable.
+
+Compaction emits the symmetric `CompactionStarted` / `CompactionCompleted` / `CompactionFailed` triple.
 
 ## Driving a strategy directly
 

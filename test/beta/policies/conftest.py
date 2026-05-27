@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta.context import ConversationContext as Context
+from autogen.beta import Context
 
 
 @pytest.fixture

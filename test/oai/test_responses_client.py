@@ -480,15 +480,14 @@ def test_add_image_cost_defaults(mocked_openai_client):
     mock_call = MagicMock(spec=ImageGenerationCall)
     mock_call.model_extra = {}  # Empty dict
 
-    # Note: Due to the bug in line 193, empty dict is falsy so no cost will be added
     output = [mock_call]
     resp = _FakeResponse(output=output)
 
     # Process the response
     client._add_image_cost(resp)
 
-    # Empty model_extra dict is falsy, so the condition fails and no cost is added
-    assert client.image_costs == 0
+    # Empty model_extra dict should still use the Responses image defaults.
+    assert client.image_costs == 0.25
 
 
 def test_total_cost_includes_image_costs(mocked_openai_client):
@@ -530,13 +529,13 @@ def test_image_costs_persist_across_calls(mocked_openai_client):
     assert client.image_costs == 0.011 + 0.042
 
 
-def test_add_image_cost_bug_demonstration(mocked_openai_client):
-    """Demonstrate the bug in _add_image_cost where it checks output[0] instead of current item."""
+def test_add_image_cost_uses_each_image_item_model_extra(mocked_openai_client):
+    """Test _add_image_cost reads model_extra from each image output item."""
     client = OpenAIResponsesClient(mocked_openai_client)
 
-    # Create two mocks: first with model_extra (required by bug), second with model_extra
+    # Create two image outputs with different size/quality metadata.
     mock_call1 = MagicMock(spec=ImageGenerationCall)
-    mock_call1.model_extra = {"size": "1024x1024", "quality": "high"}  # Need this due to bug
+    mock_call1.model_extra = {"size": "1024x1024", "quality": "high"}
 
     mock_call2 = MagicMock(spec=ImageGenerationCall)
     mock_call2.model_extra = {"size": "1024x1024", "quality": "low"}
@@ -547,7 +546,6 @@ def test_add_image_cost_bug_demonstration(mocked_openai_client):
     # Process the response
     client._add_image_cost(resp)
 
-    # Due to the bug checking output[0], both images will be processed
     # First: 1024x1024 high = 0.167, Second: 1024x1024 low = 0.011
     assert client.image_costs == 0.167 + 0.011
 
@@ -588,9 +586,8 @@ def test_add_image_cost_with_non_image_first(mocked_openai_client):
     # Process the response
     client._add_image_cost(resp)
 
-    # The bug will try to check output[0].model_extra on a dict, which will fail
-    # So no image cost will be added
-    assert client.image_costs == 0
+    # Non-image output items should not prevent later image outputs from being counted.
+    assert client.image_costs == 0.011
 
 
 # -----------------------------------------------------------------------------

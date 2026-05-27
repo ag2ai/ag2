@@ -12,8 +12,7 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("exa_py")
 
-from autogen.beta import Agent, DataInput, Variable
-from autogen.beta.context import ConversationContext
+from autogen.beta import Agent, Context, DataInput, Variable
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools.search.exa import (
@@ -65,7 +64,7 @@ def _exa_result(
 
 @pytest.mark.asyncio
 class TestSchema:
-    async def test_default_schemas(self, context: ConversationContext) -> None:
+    async def test_default_schemas(self, context: Context) -> None:
         toolkit = ExaToolkit(api_key="test")
 
         schemas = list(await toolkit.schemas(context))
@@ -73,7 +72,7 @@ class TestSchema:
         names = [s.function.name for s in schemas]
         assert names == ["exa_search", "exa_find_similar", "exa_get_contents", "exa_answer"]
 
-    async def test_search_schema_has_query_param(self, context: ConversationContext) -> None:
+    async def test_search_schema_has_query_param(self, context: Context) -> None:
         toolkit = ExaToolkit(api_key="test")
 
         schemas = list(await toolkit.schemas(context))
@@ -84,7 +83,7 @@ class TestSchema:
             "properties": IsPartialDict({"query": IsPartialDict({"type": "string"})}),
         })
 
-    async def test_custom_tool_name_and_description(self, context: ConversationContext) -> None:
+    async def test_custom_tool_name_and_description(self, context: Context) -> None:
         toolkit = ExaToolkit(api_key="test")
         custom = toolkit.search(name="neural_search", description="Custom neural search.")
 

@@ -166,7 +166,7 @@ class EmbeddedIPythonCodeExecutor(BaseModel):
         # Randomly generate a filename.
         filename = f"{uuid.uuid4().hex}.html"
         path = os.path.join(self.output_dir, filename)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(html_data)
         return os.path.abspath(path)
 
