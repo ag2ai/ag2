@@ -74,7 +74,6 @@ from .middleware.base import (
 )
 from .observers import Observer
 from .observers import observer as observer_factory
-from .pending import PendingMessagePriority, combine_model_requests, drain_pending_messages
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .task import Task, TaskSpec
@@ -321,8 +320,6 @@ class AgentReply(Generic[TResult, TAgent]):
             context.prompt = list(prompt)
 
         client = config.create() if config else self.__client
-        if context.pending_messages is None:
-            context.pending_messages = []
 
         return await self.__agent._execute(
             initial_event,
@@ -337,7 +334,6 @@ class AgentReply(Generic[TResult, TAgent]):
 
 
 _STREAM_TURN_LOCK_ATTR = "_ag2_turn_lock"
-_SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL = "_ag2_suppress_next_tool_results_model_call"
 
 
 def _get_stream_turn_lock(stream: Any) -> asyncio.Lock:
@@ -853,7 +849,6 @@ class Agent(Generic[TResult]):
             variables=self._agent_variables | (variables or {}),
             dependency_provider=self.dependency_provider,
         )
-        context.pending_messages = []
 
         if not context.prompt:
             context.prompt.extend(self._system_prompt)
@@ -891,8 +886,6 @@ class Agent(Generic[TResult]):
         client = config.create()
 
         initial_event = ModelRequest.ensure_request(msg)
-        if context.pending_messages is None:
-            context.pending_messages = []
 
         if not context.prompt:
             context.prompt.extend(self._system_prompt)
@@ -986,6 +979,12 @@ class Agent(Generic[TResult]):
         # with the parent turn's lock.
         stream_lock = _get_stream_turn_lock(context.stream)
         async with stream_lock:
+            # Per-run state. Initialize only if not already owned by an outer
+            # _execute — nested calls share the parent's queue and tg.
+            owns_lifecycle = context.pending_messages is None
+            if owns_lifecycle:
+                context.pending_messages = []
+                context._background_tasks = set()
             try:
                 return await self._execute_locked(
                     event,
@@ -998,7 +997,16 @@ class Agent(Generic[TResult]):
                     response_schema=response_schema,
                 )
             finally:
-                context.pending_messages = None
+                if owns_lifecycle:
+                    # Cancel leftover background tasks (exception path only —
+                    # normal exit drains them in _continue_turn).
+                    if context._background_tasks:
+                        for bg_task in list(context._background_tasks):
+                            if not bg_task.done():
+                                bg_task.cancel()
+                    context._background_tasks = None
+                    context.pending_messages = None
+                    context._skip_next_llm_call = False
 
     async def _execute_locked(
         self,
@@ -1120,11 +1128,21 @@ class Agent(Generic[TResult]):
                 llm_call = partial(mw.on_llm_call, llm_call)
 
             async def _call_client(event: BaseEvent, context: Context) -> None:
-                if isinstance(event, ToolResultsEvent) and context.dependencies.pop(
-                    _SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL,
-                    False,
-                ):
+                # Recursion guard: triggered when we re-send a drained pending
+                # ModelRequest inside this same handler (see below).
+                if context._skip_next_llm_call:
+                    context._skip_next_llm_call = False
                     return
+
+                # Drain any pending enqueued input into the conversation before
+                # the LLM sees the next call. Re-send as a single ModelRequest
+                # so other subscribers (observers, logging middleware, history
+                # storage) see it too — the recursion guard above prevents
+                # this from spawning extra LLM calls.
+                merged = _drain_pending(context)
+                if merged is not None:
+                    context._skip_next_llm_call = True
+                    await context.send(merged)
 
                 messages = await context.stream.history.get_events()
                 result = await llm_call(messages, context)
@@ -1228,12 +1246,11 @@ class Agent(Generic[TResult]):
 
 
 async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
-    if not isinstance(event, ModelRequest):
-        async with context.stream.get(ModelResponse) as result:
-            await context.send(event)
-            message: ModelResponse = await result
-    else:
-        message = await _send_model_request(event, context)
+    # Sending the event triggers _call_client via the stream subscriber,
+    # which drains any pending enqueued input before the LLM call.
+    async with context.stream.get(ModelResponse) as result:
+        await context.send(event)
+        message: ModelResponse = await result
 
     return await _continue_turn(message, context)
 
@@ -1241,72 +1258,59 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
 async def _continue_turn(message: ModelResponse, context: Context) -> ModelResponse:
     while True:
         if message.tool_calls and not message.response_force:
-            with context.stream.where(ToolResultsEvent | ModelResponse).join(max_events=1) as result:
-                context.dependencies[_SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL] = True
+            # Sending tool_calls triggers the tool executor, which produces a
+            # ToolResultsEvent (or, for `final` tool results, a ModelResponse
+            # directly). _call_client (auto-subscribed to ToolResultsEvent)
+            # drains pending input and calls the LLM; we capture whichever
+            # ModelResponse lands first.
+            async with context.stream.get(ModelResponse) as result:
                 await context.send(message.tool_calls)
-                next_event: ToolResultsEvent | ModelResponse = await anext(result)
-
-            if isinstance(next_event, ModelResponse):
-                context.dependencies.pop(_SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL, None)
-                message = next_event
-            else:
-                message = await _send_model_request_with_tool_results(next_event, context)
+                message = await result
             continue
 
-        pending = _drain_pending_on_end(context)
-        if pending:
-            message = await _send_model_request(_combine_requests(pending), context)
+        # Model has nothing more to do this turn. Drain any leftover enqueued
+        # input into one more request to give it a chance to react.
+        merged = _drain_pending(context)
+        if merged is not None:
+            message = await _send_model_request(merged, context)
+            continue
+
+        # No tool calls, no pending. If background tasks are still in flight,
+        # wait for one to finish — it must enqueue its result via
+        # `context.enqueue`, which the next iteration picks up.
+        if context._background_tasks:
+            done, _ = await asyncio.wait(
+                context._background_tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for bg_task in done:
+                if not bg_task.cancelled() and (exc := bg_task.exception()):
+                    raise exc
             continue
 
         return message
 
 
 async def _send_model_request(request: ModelRequest, context: Context) -> ModelResponse:
-    requests = [*_drain_pending_asap(context), request]
     async with context.stream.get(ModelResponse) as result:
-        await context.send(_combine_requests(requests))
+        await context.send(request)
         message: ModelResponse = await result
     return message
 
 
-async def _send_model_request_with_tool_results(
-    tool_results: ToolResultsEvent,
-    context: Context,
-) -> ModelResponse:
-    if _has_pending_asap(context):
-        pending = _drain_pending_asap(context)
-        return await _send_model_request(_combine_requests(pending), context)
+def _drain_pending(context: Context) -> ModelRequest | None:
+    """Drain the pending queue and return a single merged ``ModelRequest``.
 
-    context.dependencies.pop(_SUPPRESS_NEXT_TOOL_RESULTS_MODEL_CALL, None)
-    async with context.stream.get(ModelResponse) as result:
-        await context.send(tool_results)
-        message: ModelResponse = await result
-    return message
-
-
-def _drain_pending_asap(context: Context) -> list[ModelRequest]:
-    return _drain_pending(context, "asap")
-
-
-def _has_pending_asap(context: Context) -> bool:
+    Returns ``None`` if the queue was empty (so callers can short-circuit).
+    Multiple enqueues are merged because the wire form only cares about the
+    flat list of parts — one merged request keeps history compact.
+    """
     queue = context.pending_messages
-    return bool(queue and any(message.priority == "asap" for message in queue))
-
-
-def _drain_pending_on_end(context: Context) -> list[ModelRequest]:
-    return [*_drain_pending(context, "asap"), *_drain_pending(context, "when_idle")]
-
-
-def _drain_pending(context: Context, priority: PendingMessagePriority) -> list[ModelRequest]:
-    queue = context.pending_messages
-    if queue is None:
-        return []
-    messages = drain_pending_messages(queue, priority)
-    return [message.request for message in messages]
-
-
-def _combine_requests(requests: Iterable[ModelRequest]) -> ModelRequest:
-    return combine_model_requests(requests)
+    if not queue:
+        return None
+    parts: list[Input] = [part for request in queue for part in request.parts]
+    queue.clear()
+    return ModelRequest(parts)
 
 
 def _wrap_prompt_hook(
