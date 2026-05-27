@@ -117,7 +117,7 @@ Note that the previous experts will forget everything after you obtain the respo
 
 # Some useful instructions
 - You only have one tool called "seek_experts_help".
-- Provide a answer yourself after "seek_experts_help".
+- Provide an answer yourself after "seek_experts_help".
 - You should suggest python code in a python coding block (```python...```). If you need to get the value of a variable, you must use the print statement.
 - When using code, you must indicate the script type in the code block.
 - Do not suggest incomplete code which requires users to modify.
@@ -468,7 +468,9 @@ Collect information from the general task, follow the suggestions from manager t
 
         if self._agent_config_save_path is not None:
             building_task_md5 = hashlib.md5(building_task.encode("utf-8")).hexdigest()
-            with open(f"{self._agent_config_save_path}/build_history_{building_task_md5}.json", "w") as f:
+            with open(
+                f"{self._agent_config_save_path}/build_history_{building_task_md5}.json", "w", encoding="utf-8"
+            ) as f:
                 json.dump(self.build_history, f)
 
         self.build_times += 1
@@ -497,7 +499,8 @@ Collect information from the general task, follow the suggestions from manager t
         # Review the group chat history
         summary_model = builder.builder_model
         summarized_history = (
-            summary_model.create(
+            summary_model
+            .create(
                 messages=[
                     {
                         "role": "user",

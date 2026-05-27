@@ -100,13 +100,13 @@ class CaseInSensitiveEnum(str, enum.Enum):
             except KeyError:
                 warnings.warn(f"{value} is not a valid {cls.__name__}")
                 try:
-                    # Creating a enum instance based on the value
+                    # Creating an enum instance based on the value
                     # We need to use super() to avoid infinite recursion.
                     unknown_enum_val = super().__new__(cls, value)
                     unknown_enum_val._name_ = str(value)  # pylint: disable=protected-access
                     unknown_enum_val._value_ = value  # pylint: disable=protected-access
                     return unknown_enum_val
-                except:  # noqa: E722
+                except Exception:
                     return None
 
 
@@ -170,3 +170,6 @@ class ToolConfig(CommonBaseModel):
         default=None, description="""Optional. Function calling config."""
     )
     retrieval_config: RetrievalConfig | None = Field(default=None, description="""Optional. Retrieval config.""")
+    include_server_side_tool_invocations: bool | None = Field(
+        default=None, description="""Optional. If true, the server will include tool invocations."""
+    )

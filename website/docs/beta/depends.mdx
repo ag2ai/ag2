@@ -1,0 +1,167 @@
+---
+title: Depends
+sidebarTitle: Depends
+---
+
+# Depends
+
+The `Depends` mechanism allows you to calculate and inject dependencies dynamically at execution time.
+
+The key difference with [Dependency Injection](../context/inject){.internal-link} is their execution model. `Inject` is used to retrieve static objects or configurations that have already been created (like an existing database connection or API key). `Depends`, on the other hand, executes a callable function *during* the tool's invocation to resolve the dependency.
+
+Under the hood, `Depends` uses the exact same mechanism and design philosophy as [FastAPI's dependency injection system](https://fastapi.tiangolo.com/tutorial/dependencies/){.external-link target="_blank"}.
+
+## Side-execution
+
+You can use `Depends` to execute side-effects before your tool runs—even if your tool doesn't actually need the return value of the dependency. This is extremely useful for things like authentication, logging, or permission verification.
+
+To do this, simply declare the dependency in your tool's signature. The framework will execute it, and you can safely ignore the injected value.
+
+```python linenums="1" hl_lines="2 13"
+from typing import Annotated
+from autogen.beta import Depends, tool
+
+def verify_permissions(user_id: int) -> None:
+    # Perform complex verification here
+    # Raises an exception if permissions are invalid
+    raise PermissionDenied(user_id)
+
+@tool
+def delete_user(
+    user_id: int,
+    # The dependency is executed, acting as a gatekeeper
+    auth: Annotated[None, Depends(verify_permissions)]
+) -> str:
+    return f"User {user_id} deleted."
+```
+
+!!! note "Sync/Async"
+    `Depends` can be used with both synchronous and asynchronous functions.
+
+## Depends with yield
+
+Just like in [FastAPI](https://fastapi.tiangolo.com/), you can create dependencies that use `yield` instead of `return`. This allows you to execute "teardown" or "cleanup" code *after* the tool has finished executing.
+
+This is the recommended approach for managing resource lifecycles, such as opening and closing database sessions or file handlers.
+
+```python linenums="1" hl_lines="6 13"
+def get_db_session():
+    print("Opening database session...")
+    session = "db_session_object"
+
+    # The tool execution happens here
+    yield session
+
+    # This runs after the tool finishes
+    print("Closing database session...")
+
+@tool
+def fetch_records(
+    db: Annotated[str, Depends(get_db_session)],
+) -> str:
+    return "Records fetched."
+```
+
+### Combining Depends and Inject
+
+A powerful pattern is to combine `Depends` with `Inject`. You can use `Inject` to retrieve a static configuration or persistent resource (like a database connection pool), and then use `Depends` to manage a short-lived resource (like a database session) based on that configuration.
+
+```python linenums="1" hl_lines="5 7-9 13 20"
+from typing import Annotated
+from autogen.beta import Depends, Inject, tool, Agent
+
+def get_db_session(
+    db_pool: Annotated[Pool, Inject("database_pool")],
+) -> Session:
+    session = db_pool.acquire()
+    yield session
+    session.release()
+
+@tool
+def fetch_records(
+    db_session: Annotated[object, Depends(get_db_session)],
+) -> str:
+    return "Records fetched."
+
+agent = Agent(
+    "TestAgent",
+    tools=[fetch_records],
+    dependencies={"database_pool": Pool()},
+)
+```
+
+## Dependencies caching
+
+By default, if multiple parameters in your tool (or multiple sub-dependencies) depend on the exact same `Depends` function, the framework will only execute that function **once** per tool call. The result is cached and reused for any subsequent injections within that specific execution step.
+
+```python linenums="1" hl_lines="6 14"
+def get_expensive_config() -> dict:
+    print("Calculating config...") # This will only print once!
+    return {"timeout": 30}
+
+def get_timeout(
+    config: Annotated[dict, Depends(get_expensive_config)],
+) -> int:
+    return config["timeout"]
+
+@tool
+def process_data(
+    timeout: Annotated[int, Depends(get_timeout)],
+    # cached dependency
+    config: Annotated[dict, Depends(get_expensive_config)],
+) -> str:
+    return "Done"
+```
+
+If you explicitly want the dependency to be re-calculated every single time it is injected, you can disable the cache by passing `use_cache=False`:
+
+```python linenums="1" hl_lines="4-5"
+@tool
+def random_tool(
+    val1: Annotated[int, Depends(get_random_number, use_cache=False)],
+    val2: Annotated[int, Depends(get_random_number, use_cache=False)]
+) -> str:
+    # val1 and val2 will be different numbers
+    pass
+```
+
+## Dependencies Overrides
+
+During testing, you often need to mock or override complex dependencies (like replacing a production database with a mock test database).
+
+You can easily override any `Depends` function at the agent level using the `dependency_provider`. When the agent executes, it will automatically route all requests for the original dependency to your override function.
+
+```python linenums="1" hl_lines="3-4 13-14 17"
+from autogen.beta import Agent, tool
+
+def get_production_db():
+    raise Exception("Do not call this in tests!")
+
+@tool
+def read_data(db: Annotated[object, Depends(get_production_db)]) -> str:
+    return "Data"
+
+agent = Agent("TestAgent", tools=[read_data])
+
+# Create a mock function
+def get_test_db():
+    return "mock_database"
+
+# Override the production dependency with the test dependency
+agent.dependency_provider.override(get_production_db, get_test_db)
+
+# When the tool is called, it will use `get_test_db` instead
+await agent.ask("Read some data")
+```
+
+To override `Inject` dependencies, you can just set `dependencies={...}` in the `ask` call.
+
+```python linenums="1" hl_lines="6"
+agent = Agent("TestAgent", tools=[read_data])
+
+# Override the production `Inject` dependency with the test dependency
+await agent.ask(
+    "Read some data",
+    dependencies={"database_pool": Pool()},
+)
+```

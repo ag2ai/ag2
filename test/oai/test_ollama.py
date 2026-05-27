@@ -207,7 +207,7 @@ def test_ollama_client_host_value(ollama_client):
         {
             "model": "llama3.3",
             "api_type": "ollama",
-            "api_key": "NULL",
+            "api_key": "NULL",  # pragma: allowlist secret
             "client_host": "http://localhost:11434",
             "stream": False,
         }

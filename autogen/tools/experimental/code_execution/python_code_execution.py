@@ -4,6 +4,7 @@
 
 import os
 import tempfile
+import warnings
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
@@ -36,6 +37,12 @@ class PythonCodeExecutionTool(Tool):
             working_directory: Optional WorkingDirectory context manager to use.
             python_environment: Optional PythonEnvironment to use. If None, will auto-detect or create based on other parameters.
         """
+        warnings.warn(
+            "PythonCodeExecutionTool is deprecated and will be removed in v0.14. "
+            "Use autogen.beta.tools.CodeExecutionTool instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # Store configuration parameters
         self.timeout = timeout
         self.working_directory = WorkingDirectory.get_current_working_directory(working_directory)

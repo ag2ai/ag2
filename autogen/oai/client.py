@@ -41,9 +41,8 @@ with optional_import_block() as openai_result:
     import openai
 
 if openai_result.is_successful:
-    # raises exception if openai>=1 is installed and something is wrong with imports
+    # raises exception if openai>=2 is installed and something is wrong with imports
     from openai import APIError, APITimeoutError, AzureOpenAI, OpenAI
-    from openai import __version__ as openai_version
     from openai.lib._parsing._completions import type_to_response_format_param
     from openai.types.chat import ChatCompletion, ChatCompletionChunk
     from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # type: ignore [attr-defined]
@@ -57,12 +56,11 @@ if openai_result.is_successful:
 
     from autogen.oai.openai_responses import OpenAIResponsesClient
 
-    if openai.__version__ >= "1.1.0":
-        TOOL_ENABLED = True
+    TOOL_ENABLED = True
     ERROR: ImportError | None = None
     from openai.lib._pydantic import _ensure_strict_json_schema
 else:
-    ERROR = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")  # type: ignore[assignment]
+    ERROR = ImportError("Please install openai>=2.0.0 to use autogen.OpenAIWrapper.")  # type: ignore[assignment]
 
     # OpenAI = object
     # AzureOpenAI = object
@@ -111,10 +109,10 @@ else:
     anthropic_import_exception = ImportError("anthropic not found")
 
 with optional_import_block() as mistral_result:
-    from mistralai.models import (  # noqa
+    from mistralai.client.errors.httpvalidationerror import (  # noqa
         HTTPValidationError as mistral_HTTPValidationError,
-        SDKError as mistral_SDKError,
     )
+    from mistralai.client.errors.sdkerror import SDKError as mistral_SDKError  # noqa
 
     from .mistral import MistralAIClient
 
@@ -217,6 +215,9 @@ OPENAI_FALLBACK_KWARGS = {
     "http_client",
     "_strict_response_validation",
     "webhook_secret",
+    "workload_identity",
+    "_enforce_credentials",
+    "admin_api_key",
 }
 
 AOPENAI_FALLBACK_KWARGS = {
@@ -237,6 +238,9 @@ AOPENAI_FALLBACK_KWARGS = {
     "base_url",
     "project",
     "webhook_secret",
+    "workload_identity",
+    "_enforce_credentials",
+    "admin_api_key",
 }
 
 
@@ -254,6 +258,7 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     verbosity: Literal["low", "medium", "high"] | None
     extra_body: dict[str, Any] | None
+    extra_headers: dict[str, str] | None
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None
     max_completion_tokens: int | None
 
@@ -274,6 +279,9 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     extra_body: dict[str, Any] | None = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
+    extra_headers: dict[str, str] | None = (
+        None  # For VLLM and other OpenAI-compatible servers - See: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-http-headers
+    )
     # reasoning models - see: https://platform.openai.com/docs/api-reference/chat/create#chat-create-reasoning_effort
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None = None
     max_completion_tokens: int | None = None
@@ -289,6 +297,7 @@ class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     tool_choice: Literal["none", "auto", "required"] | None
     user: str | None
+    extra_headers: dict[str, str] | None
     reasoning_effort: Literal["low", "minimal", "medium", "high"] | None
     max_completion_tokens: int | None
 
@@ -300,6 +309,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     tool_choice: Literal["none", "auto", "required"] | None = None
     user: str | None = None
+    extra_headers: dict[str, str] | None = None
     # reasoning models - see:
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/reference-preview
@@ -310,7 +320,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError
 
 
-class DeepSeekEntyDict(LLMConfigEntryDict, total=False):
+class DeepSeekEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["deepseek"]
 
     base_url: HttpUrl
@@ -338,7 +348,7 @@ class PlaceHolderClient:
         self.config = config
 
 
-@require_optional_import("openai>=1.66.2", "openai")
+@require_optional_import("openai>=2.30.0", "openai")
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
@@ -642,31 +652,17 @@ class OpenAIClient:
                 ),
             )
             for i in range(len(response_contents)):
-                if openai_version >= "1.5":  # pragma: no cover
-                    # OpenAI versions 1.5.0 and above
-                    choice = Choice(
-                        index=i,
-                        finish_reason=finish_reasons[i],
-                        message=ChatCompletionMessage(
-                            role="assistant",
-                            content=response_contents[i],
-                            function_call=full_function_call,
-                            tool_calls=full_tool_calls,
-                        ),
-                        logprobs=None,
-                    )
-                else:
-                    # OpenAI versions below 1.5.0
-                    choice = Choice(  # type: ignore [call-arg]
-                        index=i,
-                        finish_reason=finish_reasons[i],
-                        message=ChatCompletionMessage(
-                            role="assistant",
-                            content=response_contents[i],
-                            function_call=full_function_call,
-                            tool_calls=full_tool_calls,
-                        ),
-                    )
+                choice = Choice(
+                    index=i,
+                    finish_reason=finish_reasons[i],
+                    message=ChatCompletionMessage(
+                        role="assistant",
+                        content=response_contents[i],
+                        function_call=full_function_call,
+                        tool_calls=full_tool_calls,
+                    ),
+                    logprobs=None,
+                )
 
                 response.choices.append(choice)
         else:
@@ -955,7 +951,7 @@ class OpenAIWrapper:
         after removing extra kwargs.
 
         For Azure models/deployment names there's a convenience modification of model removing dots in
-        the it's value (Azure deployment names can't have dots). I.e. if you have Azure deployment name
+        its value (Azure deployment names can't have dots). I.e. if you have Azure deployment name
         "gpt-35-turbo" and define model "gpt-3.5-turbo" in the config the function will remove the dot
         from the name and create a client that connects to "gpt-35-turbo" Azure deployment.
         """
@@ -975,7 +971,7 @@ class OpenAIWrapper:
         else:
             if api_type is not None and api_type.startswith("azure"):
 
-                @require_optional_import("openai>=1.66.2", "openai")
+                @require_optional_import("openai>=2.30.0", "openai")
                 def create_azure_openai_client() -> AzureOpenAI:
                     self._configure_azure_openai(config, openai_config)
                     client = AzureOpenAI(**openai_config)
@@ -1044,7 +1040,7 @@ class OpenAIWrapper:
                 client = self._create_v2_client(V2Client, openai_config, response_format)
             elif api_type is not None and api_type.startswith("responses"):
                 # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
-                @require_optional_import("openai>=1.66.2", "openai")
+                @require_optional_import("openai>=2.30.0", "openai")
                 def create_responses_client() -> OpenAI:
                     client = OpenAI(**openai_config)
                     self._clients.append(OpenAIResponsesClient(client, response_format=response_format))  # type: ignore[arg-type]
@@ -1053,7 +1049,7 @@ class OpenAIWrapper:
                 client = create_responses_client()
             else:
 
-                @require_optional_import("openai>=1.66.2", "openai")
+                @require_optional_import("openai>=2.30.0", "openai")
                 def create_openai_client() -> OpenAI:
                     client = OpenAI(**openai_config)
                     self._clients.append(OpenAIClient(client, response_format))  # type: ignore[arg-type]
@@ -1481,8 +1477,13 @@ class OpenAIWrapper:
         if tool_calls_chunk:
             if full_tool_call is None:
                 full_tool_call = {}
-            for field in ["index", "id", "type"]:
+            for field in ["index", "id"]:
                 completion_tokens += OpenAIWrapper._update_dict_from_chunk(tool_calls_chunk, full_tool_call, field)
+            # "type" is a fixed identifier (e.g. "function"), not a streamed
+            # delta — set it directly so repeated chunks don't concatenate it
+            # into "functionfunction..." (gh-2058)
+            if tool_calls_chunk.type:
+                full_tool_call["type"] = tool_calls_chunk.type
 
             if hasattr(tool_calls_chunk, "function") and tool_calls_chunk.function:
                 if "function" not in full_tool_call:

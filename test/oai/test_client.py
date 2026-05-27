@@ -7,6 +7,7 @@
 # !/usr/bin/env python3 -m pytest
 
 import copy
+import importlib.util
 import inspect
 import os
 import shutil
@@ -41,6 +42,11 @@ except ImportError:
 
 
 from test.credentials import Credentials
+
+_SKIP_WITHOUT_DISKCACHE = pytest.mark.skipif(
+    importlib.util.find_spec("diskcache") is None,
+    reason="diskcache package is not installed; Cache.disk falls back to InMemoryCache",
+)
 
 
 class MockModelClient:
@@ -284,8 +290,8 @@ def test_fallback_kwargs():
 @run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
 @run_for_optional_imports(["openai"], "openai")
-def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+def test_oai_tool_calling_extraction(credentials_openai_mini: Credentials):
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(
         messages=[
             {
@@ -317,8 +323,8 @@ def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_chat_completion(credentials_gpt_4o_mini: Credentials):
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+def test_chat_completion(credentials_openai_mini: Credentials):
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "1+1="}])
     print(response)
     print(client.extract_text_or_completion_object(response))
@@ -384,6 +390,7 @@ def test_usage_summary(credentials_azure_gpt_4_1_mini: Credentials):
     assert client.total_usage_summary is None, "total_usage_summary should be None"
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports(["openai"], "openai")
 def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest.MonkeyPatch):
     chat_completion = ChatCompletion(**{
@@ -440,9 +447,10 @@ def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
+def test_legacy_cache(credentials_openai_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of human civilization."
 
@@ -451,7 +459,7 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
         shutil.rmtree(LEGACY_CACHE_DIR)
 
     # Test default cache seed.
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list, cache_seed=LEGACY_DEFAULT_CACHE_SEED)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list, cache_seed=LEGACY_DEFAULT_CACHE_SEED)
     start_time = time.time()
     cold_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
     end_time = time.time()
@@ -466,7 +474,7 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(LEGACY_DEFAULT_CACHE_SEED)))
 
     # Test with cache seed set through constructor
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list, cache_seed=13)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list, cache_seed=13)
     start_time = time.time()
     cold_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
     end_time = time.time()
@@ -481,7 +489,7 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(13)))
 
     # Test with cache seed set through create method
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     start_time = time.time()
     cold_cache_response = client.create(messages=[{"role": "user", "content": prompt}], cache_seed=17)
     end_time = time.time()
@@ -504,8 +512,9 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(21)))
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports(["openai"], "openai")
-def test_no_default_cache(credentials_gpt_4o_mini: Credentials):
+def test_no_default_cache(credentials_openai_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of human civilization."
 
@@ -514,7 +523,7 @@ def test_no_default_cache(credentials_gpt_4o_mini: Credentials):
         shutil.rmtree(LEGACY_CACHE_DIR)
 
     # Test default cache which is no cache
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     start_time = time.time()
     no_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
     end_time = time.time()
@@ -524,7 +533,7 @@ def test_no_default_cache(credentials_gpt_4o_mini: Credentials):
     assert not os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(LEGACY_DEFAULT_CACHE_SEED)))
 
     # Create cold cache
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list, cache_seed=LEGACY_DEFAULT_CACHE_SEED)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list, cache_seed=LEGACY_DEFAULT_CACHE_SEED)
     start_time = time.time()
     cold_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
     end_time = time.time()
@@ -548,9 +557,10 @@ def test_no_default_cache(credentials_gpt_4o_mini: Credentials):
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(LEGACY_DEFAULT_CACHE_SEED)))
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_cache(credentials_gpt_4o_mini: Credentials):
+def test_cache(credentials_openai_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of artificial intelligence."
 
@@ -564,7 +574,7 @@ def test_cache(credentials_gpt_4o_mini: Credentials):
 
     # Test cache set through constructor.
     with Cache.disk(cache_seed=49, cache_path_root=cache_dir) as cache:
-        client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list, cache=cache)
+        client = OpenAIWrapper(config_list=credentials_openai_mini.config_list, cache=cache)
         start_time = time.time()
         cold_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
         end_time = time.time()
@@ -582,7 +592,7 @@ def test_cache(credentials_gpt_4o_mini: Credentials):
         assert not os.path.exists(os.path.join(cache_dir, str(LEGACY_DEFAULT_CACHE_SEED)))
 
     # Test cache set through method.
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     with Cache.disk(cache_seed=312, cache_path_root=cache_dir) as cache:
         start_time = time.time()
         cold_cache_response = client.create(messages=[{"role": "user", "content": prompt}], cache=cache)
@@ -1085,3 +1095,50 @@ class TestO1:
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
+
+
+def test_openai_llm_config_entry_extra_headers():
+    """Test that extra_headers is stored correctly on OpenAILLMConfigEntry."""
+    headers = {"X-Custom-Header": "test-value", "Authorization": "Bearer token123"}
+    entry = OpenAILLMConfigEntry(
+        model="gpt-4o-mini",
+        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        extra_headers=headers,
+    )
+    assert entry.extra_headers == headers
+
+
+def test_openai_llm_config_entry_extra_headers_default_none():
+    """Test that extra_headers defaults to None."""
+    entry = OpenAILLMConfigEntry(
+        model="gpt-4o-mini",
+        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+    )
+    assert entry.extra_headers is None
+
+
+def test_azure_llm_config_entry_extra_headers():
+    """Test that extra_headers is stored correctly on AzureOpenAILLMConfigEntry."""
+    headers = {"X-Custom-Header": "test-value"}
+    entry = AzureOpenAILLMConfigEntry(
+        model="gpt-4o-mini",
+        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        base_url="https://api.openai.com/v1",
+        api_version="2024-02-01",
+        extra_headers=headers,
+    )
+    assert entry.extra_headers == headers
+
+
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
+def test_extra_headers_chat_completion(credentials_openai_mini: Credentials):
+    """Test that extra_headers flows through to the API without error."""
+    config_list = [
+        {**config, "extra_headers": {"X-Custom-Test": "ag2-extra-headers"}}
+        for config in credentials_openai_mini.config_list
+    ]
+    client = OpenAIWrapper(config_list=config_list)
+    response = client.create(messages=[{"role": "user", "content": "1+1="}], cache_seed=None)
+    print(response)
+    print(client.extract_text_or_completion_object(response))

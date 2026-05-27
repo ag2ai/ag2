@@ -1,11 +1,25 @@
 ---
-title: DeepSeek
+title: DeepSeek API Guide | Multi-Agent Framework
 sidebarTitle: DeepSeek
+description: "Use DeepSeek API models (deepseek-chat, deepseek-reasoner) with AG2 for multi-agent workflows. Configuration, tool calling, and code examples."
 ---
 
-[DeepSeek-V3](https://github.com/deepseek-ai/DeepSeek-V3) is a strong Mixture-of-Experts (MoE) language model that delivers exceptional performance and speed, surpassing its predecessors. With its advanced capabilities, DeepSeek-V3 ranks among the top open-source models and matches the performance of leading closed-source models.
+[DeepSeek](https://www.deepseek.com/) is a family of high-performance Mixture-of-Experts (MoE) language models. DeepSeek models rank among the top open-source models and match the performance of leading closed-source alternatives, with competitive pricing.
 
-In this notebook, we will demonstrate how to use the DeepSeek-V3 model for AgentChat within the AG2 framework.
+## Available DeepSeek Models
+
+The table below lists DeepSeek API models (as of March 2026). See [DeepSeek API Pricing](https://api-docs.deepseek.com/quick_start/pricing) for the full and up-to-date list.
+
+| Model ID | Version | Context | Input / Output (per 1M tokens) | Capabilities |
+|----------|---------|---------|-------------------------------|--------------|
+| `deepseek-chat` | DeepSeek-V3.2 | 128K | $0.28 / $0.42 | Chat, tool calling, JSON output, FIM completion |
+| `deepseek-reasoner` | DeepSeek-V3.2 (thinking) | 128K | $0.28 / $0.42 | Reasoning, tool calling, JSON output |
+
+Both models support cache hits at $0.028 per 1M input tokens.
+
+## Getting Started
+
+This guide demonstrates how to use DeepSeek models with AG2.
 
 ## Requirements
 
@@ -35,55 +49,50 @@ To get started, ensure you meet the following requirements:
 
 ## Set the config for the DeepSeek API
 
-Next, you need to configure the `OAI_CONFIG_LIST` to grant the agent access to the DeepSeek-V3 model.
-
-Here’s an example configuration:
+Here’s the basic configuration for DeepSeek:
 
 ```python
-[
+import os
+from autogen import LLMConfig
+
+llm_config = LLMConfig(
     {
         "model": "deepseek-chat",
         "base_url": "https://api.deepseek.com/v1",
-        "api_key": "your DeepSeek Key goes here",
+        "api_key": os.environ.get("DEEPSEEK_API_KEY"),
         "api_type": "deepseek",
-        "tags": ["deepseek"]
-    }
-]
+    },
+)
 ```
 
-## API parameters
+## API Parameters
 
-You can include additional parameters in your configuration that are supported by the DeepSeek API. For a full list of parameters and their default values, refer to the [DeepSeek API documentation](https://api-docs.deepseek.com/api/create-chat-completion).
+DeepSeek supports standard OpenAI-compatible parameters. For the full list, see the [DeepSeek API documentation](https://api-docs.deepseek.com/api/create-chat-completion).
 
-Some examples of such parameters include:
+- **temperature** (number 0..1): Controls randomness in outputs
+- **top_p** (number 0..1): Nucleus sampling parameter
+- **max_tokens** (integer): Maximum tokens in the response
 
-    - temperature (number 0..1)
-    - top_p (number 0..1)
-    - max_tokens (null, integer >= 0)
-
-Example Configuration:
+<Tip>
+It is recommended to set `temperature` or `top_p` but not both.
+</Tip>
 
 ```python
-[
-
+llm_config = LLMConfig(
     {
         "model": "deepseek-chat",
         "base_url": "https://api.deepseek.com/v1",
-        "api_key": "your DeepSeek Key goes here",
+        "api_key": os.environ.get("DEEPSEEK_API_KEY"),
         "api_type": "deepseek",
-        "temperature": 0.5,
-        "top_p": 0.2, # Note: It is recommended to set temperature or top_p but not both.
-        "max_tokens": 10000,
-        "tags": ["deepseek"]
-    }
-]
+    },
+    temperature=0.5,
+    max_tokens=8192,
+)
 ```
 
 ## Two-Agent Coding Example
 
 In this example, we run a two-agent chat with an AssistantAgent (primarily a coding agent) to generate code to count the number of prime numbers between 1 and 10,000 and then it will be executed.
-
-We'll use DeepSeek-V3 in our example.
 
 ```python
 import os
@@ -104,7 +113,6 @@ llm_config = LLMConfig({
         "api_key": os.environ.get("DEEPSEEK_API_KEY"),
         "api_type": "deepseek",
     },
-    tags=["deepseek"],
 )
 
 # Setting up the agents
@@ -208,11 +216,7 @@ FINISH.
 
 ## Tool Call Example
 
-In this example, instead of writing code, we will show how we can use DeepSeek-V3 model to perform parallel tool calling, where it recommends calling more than one tool at a time.
-
-We’ll use a simple travel agent assistant program where we have a couple of tools for weather and currency conversion.
-
-We start by importing libraries and setting up our configuration to use DeepSeek-V3 model.
+DeepSeek supports parallel tool calling — it can recommend calling multiple tools at once. Here’s a travel agent example with weather and currency tools.
 
 ```python
 import json
@@ -230,7 +234,6 @@ llm_config = autogen.LLMConfig(
         "api_key": os.environ.get("DEEPSEEK_API_KEY"),
         "api_type": "deepseek",
     },
-    tags=["deepseek"],
 )
 
 # Create the agent for tool calling
@@ -378,4 +381,4 @@ HAVE FUN!
 --------------------------------------------------------------------------------
 ```
 
-We can see that DeepSeek-V3 recommended invoking both tools with the appropriate parameters. The user_proxy executed these calls, and the results were passed back to DeepSeek-V3 for interpretation and response.
+DeepSeek recommended invoking both tools with the appropriate parameters. The user_proxy executed these calls, and the results were passed back to DeepSeek for interpretation and response.

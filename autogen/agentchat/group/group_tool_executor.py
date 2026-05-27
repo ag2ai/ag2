@@ -12,6 +12,7 @@ from autogen.agentchat.group.events.transition_events import OnConditionLLMTrans
 from autogen.code_utils import content_str
 from autogen.io.base import IOStream
 
+from ...fast_depends.utils import is_coroutine_callable
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
@@ -96,8 +97,18 @@ class GroupToolExecutor(ConversableAgent):
         """
         sig = inspect.signature(f)
 
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return f(*args, **kwargs)
+        if is_coroutine_callable(f):
+
+            async def _async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return await f(*args, **kwargs)
+
+            wrapper: Callable[..., Any] = _async_wrapper
+        else:
+
+            def _sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return f(*args, **kwargs)
+
+            wrapper = _sync_wrapper
 
         # Check if context_variables parameter exists and update it if so
         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:

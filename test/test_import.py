@@ -80,4 +80,13 @@ def test_list_submodules() -> None:
 # todo: we should always run this
 @pytest.mark.parametrize("module", list_submodules("autogen"))
 def test_submodules(module: str) -> None:
-    importlib.import_module(module)  # nosemgrep
+    try:
+        importlib.import_module(module)  # nosemgrep
+    except ModuleNotFoundError as e:
+        if e.name and e.name.split(".")[0] == "autogen":
+            raise
+        pytest.skip(f"optional dependency missing: {e}")
+    except ImportError as e:
+        if "pip install ag2[" in str(e):
+            pytest.skip(f"optional dependency missing: {e}")
+        raise

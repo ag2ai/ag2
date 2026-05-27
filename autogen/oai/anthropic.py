@@ -87,6 +87,7 @@ from ..events.client_events import StreamEvent
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+from ..version import __version__ as ag2_version
 
 logger = logging.getLogger(__name__)
 from .client_utils import FormatterProtocol, validate_parameter
@@ -114,10 +115,6 @@ with optional_import_block():
         BetaTextBlock = None  # type: ignore[misc, assignment]
         BetaToolUseBlock = None  # type: ignore[misc, assignment]
         BETA_BLOCKS_AVAILABLE = False
-
-    TOOL_ENABLED = anthropic_version >= "0.23.1"
-    if TOOL_ENABLED:
-        pass
 
 
 ANTHROPIC_PRICING_1k = {
@@ -408,12 +405,15 @@ class AnthropicClient:
                 raise ValueError("API key or AWS credentials or GCP credentials are required to use the Anthropic API.")
 
         if self._api_key is not None:
-            client_kwargs = {"api_key": self._api_key}
+            client_kwargs = {
+                "api_key": self._api_key,
+                "default_headers": {"User-Agent": f"ag2/{ag2_version} Anthropic/Python {anthropic_version}"},
+            }
             if self._base_url:
                 client_kwargs["base_url"] = self._base_url
             self._client = Anthropic(**client_kwargs)
         elif self._gcp_region is not None:
-            kw = {}
+            kw = {"default_headers": {"User-Agent": f"ag2/{ag2_version} Anthropic/Python {anthropic_version}"}}
             for p in inspect.signature(AnthropicVertex).parameters:
                 if hasattr(self, f"_gcp_{p}"):
                     kw[p] = getattr(self, f"_gcp_{p}")
@@ -426,6 +426,7 @@ class AnthropicClient:
                 "aws_secret_key": self._aws_secret_key,
                 "aws_session_token": self._aws_session_token,
                 "aws_region": self._aws_region,
+                "default_headers": {"User-Agent": f"ag2/{ag2_version} Anthropic/Python {anthropic_version}"},
             }
             if self._base_url:
                 client_kwargs["base_url"] = self._base_url
@@ -1093,13 +1094,10 @@ class AnthropicClient:
                 return normalized_content
 
         # Handle tool/function calls - return full message object
-        if TOOL_ENABLED:
-            return [  # type: ignore [return-value]
-                (choice.message if choice.message.tool_calls is not None else _format_content(choice.message.content))
-                for choice in choices
-            ]
-        else:
-            return [_format_content(choice.message.content) for choice in choices]  # type: ignore [return-value]
+        return [  # type: ignore [return-value]
+            (choice.message if choice.message.tool_calls is not None else _format_content(choice.message.content))
+            for choice in choices
+        ]
 
     @staticmethod
     def openai_func_to_anthropic(openai_func: dict) -> dict:

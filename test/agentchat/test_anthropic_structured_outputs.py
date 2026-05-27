@@ -82,22 +82,6 @@ def config_list_sonnet_4_5_structured(credentials_anthropic_claude_sonnet):
     return config_list
 
 
-# Fixture for older Claude model (JSON Mode fallback)
-@pytest.fixture
-def config_list_haiku_structured():
-    """Config for Claude Haiku with structured outputs (JSON Mode)."""
-    import os
-
-    return [
-        {
-            "model": "claude-3-haiku-20240307",
-            "api_key": os.getenv("ANTHROPIC_API_KEY"),
-            "api_type": "anthropic",
-            "response_format": MathReasoning,
-        }
-    ]
-
-
 # ==============================================================================
 # E2E Test 1: Two-Agent Chat with Structured Outputs
 # ==============================================================================
@@ -143,48 +127,6 @@ def test_two_agent_chat_native_structured_output(config_list_sonnet_4_5_structur
     assert "Step" in last_message_content, "Should contain formatted steps"
     assert "Final Answer:" in last_message_content, "Should contain 'Final Answer:'"
     assert "x = 5" in last_message_content or "5" in last_message_content, "Should contain the answer"
-
-
-@pytest.mark.anthropic
-@pytest.mark.aux_neg_flag
-@run_for_optional_imports(["anthropic"], "anthropic")
-def test_two_agent_chat_json_mode_fallback(config_list_haiku_structured):
-    """Test two-agent chat with older Claude model using JSON Mode fallback."""
-
-    llm_config = {
-        "config_list": config_list_haiku_structured,
-    }
-
-    user_proxy = autogen.UserProxyAgent(
-        name="User",
-        system_message="A human user asking math questions.",
-        human_input_mode="NEVER",
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
-
-    math_assistant = autogen.AssistantAgent(
-        name="MathAssistant",
-        system_message="You are a math tutor. Solve problems step by step.",
-        llm_config=llm_config,
-    )
-
-    # Initiate chat
-    chat_result = user_proxy.initiate_chat(
-        math_assistant,
-        message="Solve: 2x - 5 = 15",
-        max_turns=1,
-        summary_method="last_msg",
-    )
-
-    # Verify JSON Mode produces formatted output (FormatterProtocol applied in message_retrieval)
-    last_message_content = chat_result.chat_history[-1]["content"]
-
-    # Content should be formatted text, not JSON (FormatterProtocol.format() was applied)
-    assert isinstance(last_message_content, str), "Content should be a string"
-    assert "Step" in last_message_content, "Should contain formatted steps"
-    assert "Final Answer:" in last_message_content, "Should contain 'Final Answer:'"
-    assert "10" in last_message_content or "x = 10" in last_message_content.lower(), "Should contain the answer (x=10)"
 
 
 # ==============================================================================
@@ -410,71 +352,7 @@ def test_structured_output_with_format_method(config_list_sonnet_4_5_structured)
 
 
 # ==============================================================================
-# E2E Test 5: Mixed Models in GroupChat (Native + JSON Mode)
-# ==============================================================================
-
-
-@pytest.mark.anthropic
-@pytest.mark.aux_neg_flag
-@run_for_optional_imports(["anthropic"], "anthropic")
-def test_groupchat_mixed_models(config_list_sonnet_4_5_structured, config_list_haiku_structured):
-    """Test GroupChat with mixed Claude models (Sonnet 4.5 + Haiku)."""
-
-    user_proxy = autogen.UserProxyAgent(
-        name="User",
-        human_input_mode="NEVER",
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
-
-    # Sonnet 4.5 agent (native structured outputs)
-    sonnet_agent = autogen.AssistantAgent(
-        name="SonnetExpert",
-        system_message="Advanced math expert using latest Claude.",
-        llm_config={"config_list": config_list_sonnet_4_5_structured},
-    )
-
-    # Haiku agent (JSON Mode fallback)
-    haiku_agent = autogen.AssistantAgent(
-        name="HaikuHelper",
-        system_message="Quick math helper.",
-        llm_config={"config_list": config_list_haiku_structured},
-    )
-
-    groupchat = GroupChat(
-        agents=[user_proxy, sonnet_agent, haiku_agent],
-        messages=[],
-        max_round=3,
-        speaker_selection_method="round_robin",
-    )
-
-    manager = GroupChatManager(
-        groupchat=groupchat,
-        llm_config={"config_list": config_list_sonnet_4_5_structured},
-    )
-
-    chat_result = user_proxy.initiate_chat(
-        manager,
-        message="Calculate: (10 + 5) * 2",
-        max_turns=2,
-    )
-
-    # Both agents should produce valid formatted outputs (via different methods)
-    valid_outputs = 0
-
-    for message in chat_result.chat_history:
-        # Check messages from SonnetExpert and HaikuHelper agents
-        if message.get("name") in ["SonnetExpert", "HaikuHelper"]:
-            content = message["content"]
-            # Check for formatted MathReasoning (contains Step and Final Answer)
-            if isinstance(content, str) and "Step" in content and "Final Answer:" in content:
-                valid_outputs += 1
-
-    assert valid_outputs >= 1, "At least one agent should produce valid formatted output"
-
-
-# ==============================================================================
-# E2E Test 6: Error Handling and Fallback
+# E2E Test 5: Error Handling and Fallback
 # ==============================================================================
 
 

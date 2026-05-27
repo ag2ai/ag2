@@ -93,6 +93,44 @@ class TestGroupToolExecutor:
         assert hasattr(result, "__signature__")
         assert result.__signature__ == mock_new_sig
 
+    @pytest.mark.asyncio
+    async def test_modify_context_variables_param_preserves_async(self, executor: GroupToolExecutor) -> None:
+        """Test that _modify_context_variables_param preserves async nature of functions."""
+        import asyncio
+
+        async def async_tool(text: str, context_variables: ContextVariables) -> str:
+            await asyncio.sleep(0)
+            return f"result:{text}"
+
+        context_vars = ContextVariables()
+        result_func = executor._modify_context_variables_param(async_tool, context_vars)
+
+        # The wrapper should be a coroutine function
+        assert asyncio.iscoroutinefunction(result_func), (
+            "_modify_context_variables_param should preserve async nature of functions"
+        )
+
+        # Calling it should return an awaitable that resolves correctly
+        result = await result_func(text="hello", context_variables=context_vars)
+        assert result == "result:hello"
+
+    def test_modify_context_variables_param_preserves_sync(self, executor: GroupToolExecutor) -> None:
+        """Test that _modify_context_variables_param keeps sync functions as sync."""
+        import asyncio
+
+        def sync_tool(text: str, context_variables: ContextVariables) -> str:
+            return f"result:{text}"
+
+        context_vars = ContextVariables()
+        result_func = executor._modify_context_variables_param(sync_tool, context_vars)
+
+        # The wrapper should NOT be a coroutine function
+        assert not asyncio.iscoroutinefunction(result_func)
+
+        # Calling it should work correctly
+        result = result_func(text="hello", context_variables=context_vars)
+        assert result == "result:hello"
+
     @patch("autogen.agentchat.group.group_tool_executor.inject_params")
     def test_change_tool_context_variables_to_depends(
         self, mock_inject_params: MagicMock, executor: GroupToolExecutor, mock_agent: MagicMock
