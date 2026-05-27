@@ -32,7 +32,7 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
     reason=reason,
 )
 @run_for_optional_imports(["chromadb", "IPython", "openai"], "retrievechat")
-def test_retrievechat(credentials_gpt_4o_mini: Credentials):
+def test_retrievechat(credentials_openai_mini: Credentials):
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)  # deprecated in v0.2
 
@@ -42,7 +42,7 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
         llm_config={
             "timeout": 600,
             "seed": 42,
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
         },
     )
 
@@ -54,7 +54,7 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
         retrieve_config={
             "docs_path": "./website/docs",
             "chunk_token_size": 2000,
-            "model": credentials_gpt_4o_mini.config_list[0]["model"],
+            "model": credentials_openai_mini.config_list[0]["model"],
             "client": chromadb.PersistentClient(path="/tmp/chromadb"),
             "embedding_function": sentence_transformer_ef,
             "get_or_create": True,

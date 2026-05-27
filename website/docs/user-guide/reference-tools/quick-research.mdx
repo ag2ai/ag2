@@ -1,0 +1,131 @@
+---
+title: Quick Research Tool
+description: "Perform parallel web research across multiple queries with AG2's QuickResearchTool. Combines Tavily search, Crawl4AI web scraping, and LLM summarization for fast, multi-topic fact-finding."
+---
+
+The [`QuickResearchTool`](/docs/api-reference/autogen/tools/experimental/QuickResearchTool) performs parallel web research across multiple queries. For each query, it searches the web using Tavily, crawls result pages with Crawl4AI, and summarizes page content via any AG2-supported LLM.
+
+This is a lightweight alternative to [DeepResearchTool](/docs/user-guide/reference-tools/deep-research) for quick fact-finding across multiple topics in parallel.
+
+## How It Works
+
+For each query provided, the tool:
+
+1. **Searches** the web using [Tavily](https://tavily.com/) to get the top results
+2. **Crawls** each result URL using [Crawl4AI](https://crawl4ai.com/) to extract page content
+3. **Summarizes** each page using the `llm_config` LLM — raw page content (often 50,000+ tokens) is condensed into a short summary so it fits within the calling agent's context window
+
+The tool returns structured JSON containing per-page summaries. The calling agent then synthesizes these into a final cohesive answer.
+
+All queries are researched in parallel for fast results.
+
+## Package Installation
+
+Install AG2 with the `quick-research` extra (and `openai` for the example below):
+
+```bash
+pip install -U "ag2[openai,quick-research]"
+```
+
+> **Note:** `autogen` and `ag2` are aliases for the same PyPI package:
+> ```bash
+> pip install -U "autogen[openai,quick-research]"
+> ```
+
+## Environment Setup
+
+A [Tavily API key](https://tavily.com/) is required for web search (free tier available):
+
+```bash
+export TAVILY_API_KEY="your_tavily_api_key"
+export OPENAI_API_KEY="your_openai_api_key"
+```
+
+## Implementation
+
+### Imports
+
+```python
+import os
+from autogen import AssistantAgent, LLMConfig
+from autogen.tools.experimental import QuickResearchTool
+```
+
+### Agent Configuration
+
+```python
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_type": "openai"})
+
+assistant = AssistantAgent(
+    name="researcher",
+    system_message=(
+        "You are a research assistant. Use the quick_research tool to look up information, "
+        "then synthesize the results into a clear answer."
+    ),
+    llm_config=llm_config,
+)
+```
+
+### Tool Setup
+
+```python
+research_tool = QuickResearchTool(
+    llm_config=llm_config,
+    tavily_api_key=os.getenv("TAVILY_API_KEY"),
+    num_results_per_query=2,
+)
+```
+
+### Usage Example
+
+```python
+assistant.run(
+    message="Research the latest developments in quantum computing and summarize your findings.",
+    tools=[research_tool],
+    max_turns=2,
+).process()
+```
+
+## Parameters
+
+`QuickResearchTool` accepts the following initialization parameters:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `llm_config` | `LLMConfig` | *required* | LLM used internally to summarize each crawled page before returning results. Supports any AG2-compatible provider. This can be a different (smaller/cheaper) model than the one powering your agent. |
+| `tavily_api_key` | `str \| None` | `None` | Tavily API key. Falls back to `TAVILY_API_KEY` env var. |
+| `num_results_per_query` | `int` | `3` | Number of search results to crawl per query. |
+
+At call time, the agent provides:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `queries` | `list[str]` | *required* | List of search queries to research (max 5). |
+| `chunk_prompt` | `str` | `"Summarise the chunk, preserving all facts."` | Prompt for summarizing individual text chunks. |
+| `merger_prompt` | `str` | `"Merge the partial summaries into one coherent overview."` | Prompt for merging chunk summaries. |
+| `full_prompt` | `str` | `"Provide a concise but complete summary."` | Prompt for summarizing short texts in one pass. |
+
+## Output
+
+The tool returns a JSON string containing a list of objects, one per query:
+
+```json
+[
+  {
+    "query": "quantum computing breakthroughs",
+    "sources": [
+      {
+        "title": "Page Title",
+        "url": "https://example.com/article",
+        "summary": "A concise summary of the page content..."
+      }
+    ]
+  }
+]
+```
+
+## See Also
+
+- [Tavily Search Tool](/docs/user-guide/reference-tools/tavily-search) — standalone Tavily search without crawling or summarization
+- [Deep Research](/docs/user-guide/reference-tools/deep-research) — for complex, multi-step autonomous research tasks
+- [Crawl4AI Tool](/docs/user-guide/reference-tools/crawl4ai) — standalone web crawling without search or summarization

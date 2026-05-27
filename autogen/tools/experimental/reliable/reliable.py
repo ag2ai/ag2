@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -589,31 +589,31 @@ class ReliableTool(Tool):
                 the function's result. It can be the same as `runner_llm_config` or different.
                 Example: `LLMConfig(config_list=oai_config_list, model="gpt-4o-mini")`
 
-            description (Optional[str], default: None):
+            description (Optional[str]):
                 A human-readable description of what this `ReliableTool` achieves.
                 If `None`, the description is inferred from the docstring of the
                 provided `func_or_tool`. This description is primarily for the public-facing
                 `ReliableTool` (e.g., when registered with an outer agent for it to decide
-                when to use this tool).
+                when to use this tool). Defaults to None.
                 Example: `"Reliably fetches and validates current weather information for a specified city."`
 
-            system_message_addition_for_tool_calling (str, default: ""):
+            system_message_addition_for_tool_calling (str):
                 Additional text appended to the system message of the internal "Runner Agent".
                 This allows you to provide specific instructions, context, or constraints
                 to the LLM responsible for deciding *how* to call your underlying `func_or_tool`.
                 Use this when the Runner Agent needs more guidance than just the task
-                description and the function's signature to correctly formulate arguments.
+                description and the function's signature to correctly formulate arguments. Defaults to "".
                 Example: `"When calling 'search_products', if the task mentions 'budget', ensure the 'max_price' argument is set accordingly. Prioritize items in stock."`
 
-            system_message_addition_for_result_validation (str, default: ""):
+            system_message_addition_for_result_validation (str):
                 Additional text appended to the system message of the internal "Validator Agent".
                 This is where you define the *base* or *static* criteria for validating the
                 *result* (string representation) of your `func_or_tool`. These criteria
                 are applied on every validation attempt unless overridden or supplemented by
-                dynamic validation.
+                dynamic validation. Defaults to "".
                 Example: `"The stock price must be a positive number. The company name in the result must match the one in the task. If data is unavailable, the result should explicitly state 'Data not found'."`
 
-            max_tool_invocations (int, default: 3):
+            max_tool_invocations (int):
                 The maximum number of times the internal "Runner Agent" can attempt to
                 call the underlying `func_or_tool`. This limit includes the initial attempt
                 and any subsequent retries that occur due to:
@@ -621,36 +621,36 @@ class ReliableTool(Tool):
                 2. The Runner Agent failing to generate a valid tool call.
                 3. The Validator Agent deeming a successful execution's result as invalid.
                 Adjust this to control retries and prevent excessive LLM calls, considering
-                the potential flakiness of the `func_or_tool` or complexity of parameterization.
+                the potential flakiness of the `func_or_tool` or complexity of parameterization. Defaults to 3.
                 Example: `max_tool_invocations=2` (allows one initial attempt and one retry if needed).
 
-            enable_dynamic_validation (bool, default: False):
+            enable_dynamic_validation (bool):
                 If `True`, the public-facing `run` (or `a_run`) method of this `ReliableTool`
                 (accessible via its `func` attribute after initialization) will accept an
                 additional optional argument: `validation_prompt_addition: Optional[str]`.
                 If a string is provided for this argument during a call, it will be appended
                 to the Validator Agent's system message *for that specific run*, allowing
-                validation criteria to be tailored on-the-fly based on the task.
+                validation criteria to be tailored on-the-fly based on the task. Defaults to False.
                 Example: If `True`, `my_tool.func(task="search for AG2 examples", validation_prompt_addition="Result must include Python code snippets.")`
 
-            messages (Optional[List[dict[str, Any]]], default: None):
+            messages (Optional[list[dict[str, Any]]]):
                 A list of initial messages (e.g., from a prior conversation history) to
                 provide context to the internal Runner and Validator agents. These messages
                 are prepended to the message history seen by these agents during their
                 internal chat, helping them understand the `task` in a broader context.
                 Use when the `task` for the `ReliableTool` might refer to entities or
-                intentions established in preceding turns of a conversation.
+                intentions established in preceding turns of a conversation. Defaults to None.
                 Example: `messages=[{"role": "user", "content": "I'm interested in large-cap tech stocks."}, {"role": "assistant", "content": "Okay, any specific ones?"}]`
                          (Then a task like "Fetch the latest price for 'the one we just discussed'.")
 
-            ground_truth (Optional[List[str]], default: None):
+            ground_truth (Optional[list[str]]):
                 A list of strings representing factual information, examples, or specific
                 constraints that should be considered by the internal Runner and Validator
                 agents. These are injected into the conversation history as distinct user
                 messages (e.g., "[[Provided Ground Truth 1]]: ...").
                 Use to provide specific, factual data or strong hints that might not fit
                 naturally into system messages or prior conversation history, guiding the
-                agents towards correct interpretation or validation.
+                agents towards correct interpretation or validation. Defaults to None.
                 Example: `ground_truth=["The API rate limit is 10 requests per minute.", "User preference: only show results from the last 7 days."]`
         """
         self._original_func, original_name, original_description = self._extract_func_details(func_or_tool)

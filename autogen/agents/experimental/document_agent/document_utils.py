@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
-from .url_utils import ExtensionToFormat, InputFormat, URLAnalyzer
+from .url_utils import ExtensionToFormat, InputFormat, URLAnalyzer, validate_url
 
 with optional_import_block():
     import requests
@@ -63,7 +63,13 @@ def _download_rendered_html(url: str) -> str:
 
     Returns:
         str: The rendered HTML content of the page.
+
+    Raises:
+        UnsafeURLError: if the URL targets a non-public host.
     """
+    # SSRF guard: block file://, internal/private hosts, cloud metadata IPs, etc.
+    validate_url(url)
+
     # Set up Chrome options
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")  # Enable headless mode
@@ -102,7 +108,13 @@ def _download_binary_file(url: str, output_dir: Path) -> Path:
 
     Returns:
         Path: Path to the saved file.
+
+    Raises:
+        UnsafeURLError: if the URL targets a non-public host.
     """
+    # SSRF guard: block file://, internal/private hosts, cloud metadata IPs, etc.
+    validate_url(url)
+
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -112,6 +124,8 @@ def _download_binary_file(url: str, output_dir: Path) -> Path:
 
     # Get file info
     final_url = analysis.get("final_url", url)
+    # SSRF guard: re-validate the post-redirect URL before downloading
+    validate_url(final_url)
     file_type = analysis.get("file_type")
     content_type = analysis.get("mime_type", "")
 

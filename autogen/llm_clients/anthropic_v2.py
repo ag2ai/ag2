@@ -65,11 +65,10 @@ from autogen.oai.anthropic import (
     _is_text_block,
     _is_thinking_block,
     _is_tool_use_block,
-    has_beta_messages_api,
+    has_messages_parse_api,
     oai_messages_to_anthropic_messages,
     supports_native_structured_outputs,
     transform_schema_for_anthropic,
-    validate_structured_outputs_version,
 )
 from autogen.oai.client_utils import FormatterProtocol, validate_parameter
 
@@ -225,7 +224,7 @@ class AnthropicV2Client(ModelClient):
             params["response_format"] = response_format
 
             # Try native structured outputs if model supports it
-            if supports_native_structured_outputs(model) and has_beta_messages_api():
+            if supports_native_structured_outputs(model) and has_messages_parse_api():
                 try:
                     return self._create_with_native_structured_output(params)
                 except (BadRequestError, AttributeError, ValueError) as e:  # type: ignore[misc]
@@ -259,9 +258,7 @@ class AnthropicV2Client(ModelClient):
         has_strict_tools = any(tool.get("strict") for tool in anthropic_params.get("tools", []))
 
         if has_strict_tools:
-            # Validate SDK version supports structured outputs beta
-            validate_structured_outputs_version()
-            # Use beta API for strict tools
+            # Use beta API for strict tools (anthropic>=0.79.0 is guaranteed by the package pin)
             anthropic_params["betas"] = ["structured-outputs-2025-11-13"]
             response = self._client.beta.messages.create(**anthropic_params)  # type: ignore[misc]
         else:
@@ -309,9 +306,6 @@ class AnthropicV2Client(ModelClient):
 
         # Prepare Anthropic API parameters using helper
         anthropic_params = self._prepare_anthropic_params(params, anthropic_messages)
-
-        # Validate SDK version supports structured outputs beta
-        validate_structured_outputs_version()
 
         # Add native structured output parameters
         anthropic_params["betas"] = ["structured-outputs-2025-11-13"]

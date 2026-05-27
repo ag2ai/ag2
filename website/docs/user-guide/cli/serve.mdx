@@ -1,0 +1,60 @@
+---
+sidebarTitle: Serve
+title: "ag2 serve"
+description: "Expose agents as REST APIs, MCP servers, or A2A endpoints."
+---
+
+The `ag2 serve` command starts a server that exposes your agent via one of three protocols.
+
+```bash
+ag2 serve <agent_file> [--protocol <protocol>] [--port <port>]
+```
+
+## Protocols
+
+### REST API (default)
+
+Serves a FastAPI application with the following endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/chat` | POST | Send a message, get a response |
+| `/chat/stream` | POST | Streaming response via SSE |
+| `/agents` | GET | List available agents |
+| `/health` | GET | Health check |
+| `/docs` | GET | Swagger UI |
+
+```bash
+ag2 serve my_agent.py --protocol rest --port 8000
+```
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello, agent!"}'
+```
+
+### MCP Server
+
+Wraps your agent as an MCP (Model Context Protocol) server, exposing `chat` and `list_agents` tools.
+
+```bash
+ag2 serve my_agent.py --protocol mcp
+```
+
+### A2A Endpoint
+
+Serves the agent using the [A2A protocol](/docs/user-guide/a2a/index) with a well-known agent card.
+
+```bash
+ag2 serve my_agent.py --protocol a2a --port 8000
+```
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--protocol` | `rest` (default), `mcp`, or `a2a` |
+| `--port` | Port to listen on (default: 8000) |
+| `--reload` | Hot-reload on file changes |
+| `--ngrok` | Expose to internet via ngrok tunnel |

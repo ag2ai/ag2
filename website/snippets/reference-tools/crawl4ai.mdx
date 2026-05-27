@@ -2,6 +2,8 @@
 
 To integrate `Crawl4AI` with AG2, follow these steps:
 
+**Minimum supported version:** `crawl4ai>=0.5.0` (AG2 is tested with `0.8.x`).
+
 1. Install AG2 with the `crawl4ai` extra:
     ```bash
     pip install ag2[openai,crawl4ai]
@@ -134,7 +136,7 @@ Arguments:
 >>>>>>>> EXECUTING FUNCTION crawl4ai...
 Call ID: call_R1DUz9LKPxE3t0wiy94OotAR
 Input arguments: {'url': 'https://docs.ag2.ai/docs/blog', 'instruction': 'Extract all blog posts including titles, dates, and links.'}
-[INIT].... → Crawl4AI 0.4.247
+[INIT].... → Crawl4AI 0.8.0
 [FETCH]... ↓ https://docs.ag2.ai/docs/blog... | Status: True | Time: 8.28s
 [SCRAPE].. ◆ Processed https://docs.ag2.ai/docs/blog... | Time: 23ms
 12:16:26 - LiteLLM:INFO: utils.py:2825 -

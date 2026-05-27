@@ -28,7 +28,7 @@ def get_youtube_caption(video_id: str) -> str:
 
     headers = {"X-RapidAPI-Key": rapid_api_key, "X-RapidAPI-Host": "youtube-transcript3.p.rapidapi.com"}
 
-    response = requests.get(url, headers=headers, params=querystring)
+    response = requests.get(url, headers=headers, params=querystring, timeout=30)
     response = response.json()
     print(response)
     return response["transcript"]

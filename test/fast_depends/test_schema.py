@@ -38,7 +38,7 @@ class TestNoType:
             "type": "object",
         }, schema
 
-    def test_no_type_embeded(self) -> None:
+    def test_no_type_embedded(self) -> None:
         def handler(a) -> None:
             pass
 
@@ -197,7 +197,7 @@ class TestOneArgWithModel:
             "type": "object",
         }, schema
 
-    def test_optional_embeded_model(self) -> None:
+    def test_optional_embedded_model(self) -> None:
         class Model(BaseModel):
             a: int
 
@@ -254,7 +254,7 @@ class TestOneArgWithModel:
             "type": "object",
         }, schema
 
-    def test_embeded_model(self) -> None:
+    def test_embedded_model(self) -> None:
         class Model(BaseModel):
             a: int
 
@@ -269,7 +269,7 @@ class TestOneArgWithModel:
             "type": "object",
         }, schema
 
-    def test_embeded_resolved_model(self) -> None:
+    def test_embedded_resolved_model(self) -> None:
         class Model2(BaseModel):
             a: int
 
@@ -323,7 +323,7 @@ class TestMultiArgs:
             "type": "object",
         }, schema
 
-    def test_ignores_embed(self) -> None:
+    def test_ignores_embedded(self) -> None:
         def handler(a: str, b: int = 0) -> None:
             pass
 

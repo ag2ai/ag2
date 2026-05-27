@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import inspect
 from unittest.mock import MagicMock
 
 import pytest
@@ -15,6 +17,7 @@ from test.credentials import Credentials
 
 with optional_import_block():
     from langchain.tools import tool as langchain_tool
+    from langchain_core.tools import BaseTool as LangchainBaseTool
 
 
 # skip if python version is not >= 3.9
@@ -73,6 +76,77 @@ class TestLangChainInteroperability:
 
     def test_get_unsupported_reason(self) -> None:
         assert LangChainInteroperability.get_unsupported_reason() is None
+
+
+@run_for_optional_imports("langchain", "interop-langchain")
+class TestLangChainInteroperabilityAsync:
+    """Async langchain tools must be converted to async AG2 tools.
+
+    Regression for https://github.com/ag2ai/ag2/issues/1402 — async langchain
+    tools were previously wrapped with the synchronous ``run`` dispatcher,
+    blocking the event loop when invoked from ``a_initiate_chat``.
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup(self) -> None:
+        self.mock = MagicMock()
+
+        @langchain_tool  # type: ignore[misc]
+        async def search_tool(query: str) -> str:
+            """Look up things online asynchronously."""
+            self.mock(query)
+            return "Async LangChain Integration"
+
+        self.search_tool = search_tool
+        self.tool = LangChainInteroperability.convert_tool(search_tool)
+
+    def test_async_tool_wrapper_is_coroutine_function(self) -> None:
+        assert inspect.iscoroutinefunction(self.tool.func)
+
+    def test_async_tool_executes_via_arun(self) -> None:
+        model_type = self.search_tool.get_input_schema()
+        tool_input = model_type(query="LangChain")  # type: ignore[misc]
+        result = asyncio.run(self.tool.func(tool_input=tool_input))
+        assert result == "Async LangChain Integration"
+        self.mock.assert_called_once_with("LangChain")
+
+
+@run_for_optional_imports("langchain", "interop-langchain")
+class TestLangChainInteroperabilityClassBasedAsync:
+    """``BaseTool`` subclasses that override ``_arun`` must also use the async path."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self) -> None:
+        mock = MagicMock()
+
+        class AsyncSearchInput(BaseModel):
+            query: str = Field(description="search query")
+
+        class AsyncSearchTool(LangchainBaseTool):  # type: ignore[no-any-unimported,misc]
+            name: str = "async-search-tool"
+            description: str = "Look up things online asynchronously."
+            args_schema: type[BaseModel] = AsyncSearchInput
+
+            def _run(self, query: str) -> str:
+                raise NotImplementedError("sync path must not be used")
+
+            async def _arun(self, query: str) -> str:
+                mock(query)
+                return f"async:{query}"
+
+        self.mock = mock
+        self.search_tool = AsyncSearchTool()
+        self.tool = LangChainInteroperability.convert_tool(self.search_tool)
+
+    def test_async_tool_wrapper_is_coroutine_function(self) -> None:
+        assert inspect.iscoroutinefunction(self.tool.func)
+
+    def test_async_tool_executes_via_arun(self) -> None:
+        model_type = self.search_tool.get_input_schema()
+        tool_input = model_type(query="hello")  # type: ignore[misc]
+        result = asyncio.run(self.tool.func(tool_input=tool_input))
+        assert result == "async:hello"
+        self.mock.assert_called_once_with("hello")
 
 
 @run_for_optional_imports("langchain", "interop-langchain")

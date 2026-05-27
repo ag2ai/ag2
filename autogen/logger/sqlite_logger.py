@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig
-from .logger_utils import get_current_ts, to_dict
+from .logger_utils import get_current_ts, get_sensitive_exclude_keys, to_dict
+from .logger_utils import redact as _redact
 
 if TYPE_CHECKING:
     from openai import AzureOpenAI, OpenAI
@@ -205,7 +206,7 @@ class SqliteLogger(BaseLogger):
         migrations_to_apply = [m for m in migrations if int(m.split("_")[0]) > current_version]
 
         for script in migrations_to_apply:
-            with open(script) as f:
+            with open(os.path.join(migrations_dir, script)) as f:
                 migration_sql = f.read()
                 self._run_query_script(script=migration_sql)
 
@@ -294,7 +295,7 @@ class SqliteLogger(BaseLogger):
             client_id,
             wrapper_id,
             self.session_id,
-            json.dumps(to_dict(request)),
+            json.dumps(_redact(to_dict(request))),
             response_messages,
             is_cached,
             cost,
@@ -319,16 +320,7 @@ class SqliteLogger(BaseLogger):
 
         args = to_dict(
             init_args,
-            exclude=(
-                "self",
-                "__class__",
-                "api_key",
-                "organization",
-                "base_url",
-                "azure_endpoint",
-                "azure_ad_token",
-                "azure_ad_token_provider",
-            ),
+            exclude=get_sensitive_exclude_keys(),
             no_recursive=(Agent,),
         )
 
@@ -366,7 +358,7 @@ class SqliteLogger(BaseLogger):
         if self.con is None:
             return
 
-        json_args = json.dumps(kwargs, default=lambda o: f"<<non-serializable: {type(o).__qualname__}>>")
+        json_args = json.dumps(_redact(kwargs), default=lambda o: f"<<non-serializable: {type(o).__qualname__}>>")
 
         if isinstance(source, Agent):
             query = """
@@ -407,16 +399,7 @@ class SqliteLogger(BaseLogger):
 
         args = to_dict(
             init_args,
-            exclude=(
-                "self",
-                "__class__",
-                "api_key",
-                "organization",
-                "base_url",
-                "azure_endpoint",
-                "azure_ad_token",
-                "azure_ad_token_provider",
-            ),
+            exclude=get_sensitive_exclude_keys(),
         )
 
         query = """
@@ -450,8 +433,8 @@ class SqliteLogger(BaseLogger):
             id(source),
             source.name if hasattr(source, "name") else source,
             function.__name__,
-            safe_serialize(args),
-            safe_serialize(returns),
+            safe_serialize(_redact(args) if isinstance(args, dict) else args),
+            safe_serialize(_redact(returns) if isinstance(returns, dict) else returns),
             get_current_ts(),
         )
         self._run_query(query=query, args=query_args)
@@ -486,16 +469,7 @@ class SqliteLogger(BaseLogger):
 
         args = to_dict(
             init_args,
-            exclude=(
-                "self",
-                "__class__",
-                "api_key",
-                "organization",
-                "base_url",
-                "azure_endpoint",
-                "azure_ad_token",
-                "azure_ad_token_provider",
-            ),
+            exclude=get_sensitive_exclude_keys(),
         )
 
         query = """

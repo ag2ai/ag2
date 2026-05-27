@@ -206,6 +206,101 @@ class TestDoclingParseDocs:
         assert assistant.llm_config and "tools" in assistant.llm_config
         assert assistant.llm_config["tools"] == expected_tools
 
+    def test_exports_use_utf8_encoding_for_non_ascii_content(
+        self, tmp_path: Path, mock_conversion_result: MagicMock
+    ) -> None:
+        """Markdown / JSON / table-HTML exports must round-trip as UTF-8.
+
+        Regression test for #1731: without an explicit ``encoding="utf-8"`` the
+        ``Path.open("w", ...)`` calls inherit ``locale.getpreferredencoding()``,
+        which on Windows is typically ``cp1252`` / charmap. Any non-ASCII glyph
+        produced by Docling (e.g. accented characters in scanned PDFs, smart
+        quotes from extracted text, the table HTML for non-Latin headers) then
+        raises ``UnicodeEncodeError`` and breaks the pipeline.
+
+        The bytes-on-disk assertion below catches a regression on every
+        platform: on Windows the pre-fix code raises, on POSIX it would only
+        survive because the default is already UTF-8, so we assert against
+        the explicit UTF-8 byte sequence rather than against the OS default.
+        """
+        input_file_path = tmp_path / "input_file_path"
+        output_dir_path = tmp_path / "output"
+
+        non_ascii_md = "# Café — Beberenice ☕ — 例"
+        non_ascii_dict = {"title": "Beberenice — 例", "note": "smart-quotes“”"}
+        non_ascii_html = "<table><tr><th>Café</th><th>例</th></tr></table>"
+
+        mock_conversion_result.document.export_to_markdown.return_value = non_ascii_md
+        mock_conversion_result.document.export_to_dict.return_value = non_ascii_dict
+        mock_conversion_result.document.tables[0].export_to_html.return_value = non_ascii_html
+
+        with (
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[input_file_path]
+            ),
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
+                return_value=iter([mock_conversion_result]),
+            ),
+        ):
+            docling_parse_docs(
+                input_file_path,
+                output_dir_path,
+                output_formats=["markdown", "json"],
+                table_output_format="html",
+            )
+
+        md_path = output_dir_path / "input_file_path.md"
+        json_path = output_dir_path / "input_file_path.json"
+        html_path = output_dir_path / "input_file_path-table-1.html"
+
+        # Read raw bytes and decode as UTF-8 explicitly. If parser_utils opens
+        # the file with the platform default encoding, the bytes on disk will
+        # not match the UTF-8 encoding of the source string (on Windows; on
+        # POSIX the test still pins the contract by asserting the exact
+        # UTF-8 byte sequence).
+        assert md_path.read_bytes() == non_ascii_md.encode("utf-8")
+        import json as _json
+
+        assert json_path.read_bytes() == _json.dumps(non_ascii_dict).encode("utf-8")
+        assert html_path.read_bytes() == non_ascii_html.encode("utf-8")
+
+    def test_exports_pass_utf8_encoding_to_path_open(self, tmp_path: Path, mock_conversion_result: MagicMock) -> None:
+        """Every ``Path.open("w", ...)`` writer in ``docling_parse_docs`` must
+        pass ``encoding="utf-8"`` so the charmap default cannot leak in on
+        Windows. The byte-content test above proves the user-visible outcome
+        on POSIX; this one pins the call shape directly so a future refactor
+        that drops the kwarg fails immediately, even on POSIX where the
+        default would otherwise mask the regression.
+        """
+        input_file_path = tmp_path / "input_file_path"
+        output_dir_path = tmp_path / "output"
+
+        with (
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[input_file_path]
+            ),
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
+                return_value=iter([mock_conversion_result]),
+            ),
+            patch("pathlib.Path.open", mock_open()) as mock_path_open,
+        ):
+            docling_parse_docs(
+                input_file_path,
+                output_dir_path,
+                output_formats=["markdown", "json"],
+                table_output_format="html",
+            )
+
+        write_calls = [call for call in mock_path_open.call_args_list if call.args and call.args[0] == "w"]
+        # markdown + json + 1 html table = 3 writers in the mock.
+        assert len(write_calls) == 3, f"expected 3 write opens, got {write_calls!r}"
+        for call in write_calls:
+            assert call.kwargs.get("encoding") == "utf-8", (
+                f'Path.open("w", ...) must specify encoding="utf-8", got kwargs={call.kwargs!r}'
+            )
+
     def test_default_output_dir_path(self, tmp_path: Path, mock_conversion_result: MagicMock) -> None:
         """Test that the function uses './output' as the default output directory path when None is provided."""
         input_file_path = tmp_path / "input_file_path"

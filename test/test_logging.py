@@ -32,7 +32,7 @@ SAMPLE_CHAT_REQUEST = json.loads(
 {
     "messages": [
         {
-            "content": "You are roleplaying a high school student strugling with linear algebra. Regardless how well the teacher explains things to you, you just don't quite get it. Keep your questions short.",
+            "content": "You are roleplaying a high school student struggling with linear algebra. Regardless how well the teacher explains things to you, you just don't quite get it. Keep your questions short.",
             "role": "system"
         },
         {
@@ -212,7 +212,7 @@ def test_log_oai_wrapper(db_connection):
         saved_init_args = json.loads(row["init_args"])
         assert "config_list" in saved_init_args
         assert "api_key" not in saved_init_args["config_list"][0]
-        assert "base_url" not in saved_init_args["config_list"][0]
+        assert "base_url" in saved_init_args["config_list"][0]
         assert "base_config" in saved_init_args
 
 

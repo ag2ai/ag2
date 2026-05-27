@@ -3,4 +3,3 @@ branch = True
 source = autogen
 omit =
   autogen/agentchat/contrib/*
-  autogen/_website/*

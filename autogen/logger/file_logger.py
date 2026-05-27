@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig
 from .logger_utils import get_current_ts, to_dict
+from .logger_utils import redact as _redact
 
 if TYPE_CHECKING:
     from openai import AzureOpenAI, OpenAI
@@ -107,7 +108,7 @@ class FileLogger(BaseLogger):
                 "invocation_id": str(invocation_id),
                 "client_id": client_id,
                 "wrapper_id": wrapper_id,
-                "request": to_dict(request),
+                "request": _redact(to_dict(request)),
                 "response": str(response),
                 "is_cached": is_cached,
                 "cost": cost,
@@ -135,7 +136,7 @@ class FileLogger(BaseLogger):
                 "session_id": self.session_id,
                 "current_time": get_current_ts(),
                 "agent_type": type(agent).__name__,
-                "args": to_dict(init_args),
+                "args": _redact(to_dict(init_args)),
                 "thread_id": thread_id,
             })
             self.logger.info(log_data)
@@ -148,7 +149,7 @@ class FileLogger(BaseLogger):
 
         # This takes an object o as input and returns a string. If the object o cannot be serialized, instead of raising an error,
         # it returns a string indicating that the object is non-serializable, along with its type's qualified name obtained using __qualname__.
-        json_args = json.dumps(kwargs, default=lambda o: f"<<non-serializable: {type(o).__qualname__}>>")
+        json_args = json.dumps(_redact(kwargs), default=lambda o: f"<<non-serializable: {type(o).__qualname__}>>")
         thread_id = threading.get_ident()
 
         if isinstance(source, Agent):
@@ -188,7 +189,7 @@ class FileLogger(BaseLogger):
             log_data = json.dumps({
                 "wrapper_id": id(wrapper),
                 "session_id": self.session_id,
-                "json_state": json.dumps(init_args),
+                "json_state": json.dumps(_redact(init_args) if isinstance(init_args, dict) else init_args),
                 "timestamp": get_current_ts(),
                 "thread_id": thread_id,
             })
@@ -223,7 +224,7 @@ class FileLogger(BaseLogger):
                 "wrapper_id": id(wrapper),
                 "session_id": self.session_id,
                 "class": type(client).__name__,
-                "json_state": json.dumps(init_args),
+                "json_state": json.dumps(_redact(init_args)),
                 "timestamp": get_current_ts(),
                 "thread_id": thread_id,
             })
@@ -243,8 +244,8 @@ class FileLogger(BaseLogger):
                 "agent_class": source.__class__.__name__,
                 "timestamp": get_current_ts(),
                 "thread_id": thread_id,
-                "input_args": safe_serialize(args),
-                "returns": safe_serialize(returns),
+                "input_args": safe_serialize(_redact(args) if isinstance(args, dict) else args),
+                "returns": safe_serialize(_redact(returns) if isinstance(returns, dict) else returns),
             })
             self.logger.info(log_data)
         except Exception as e:

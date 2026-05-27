@@ -1577,7 +1577,7 @@ def test_speaker_selection_agent_name_match():
 
 
 def test_role_for_reflection_summary():
-    llm_config = {"config_list": [{"model": "mock", "api_key": "mock"}]}
+    llm_config = {"config_list": [{"model": "mock", "api_key": "mock"}]}  # pragma: allowlist secret
     agent1 = autogen.ConversableAgent(
         "alice",
         max_consecutive_auto_reply=10,
@@ -1670,7 +1670,7 @@ def test_speaker_selection_auto_process_result():
     # Invalid result messages, will return the next agent
     chat_result.chat_history[3]["content"] = "This text should not be here."
 
-    # The next speaker in the list will be selected, which will be the Chief_Marketing_Officer (as the last speaker is the Product_Maanger)
+    # The next speaker in the list will be selected, which will be the Chief_Marketing_Officer (as the last speaker is the Product_Manager)
     assert groupchat._process_speaker_selection_result(chat_result, pm, agent_list) == cmo
 
 
@@ -2330,11 +2330,15 @@ def test_manager_resume_message_assignment():
     assert list(agent_a.chat_messages.values())[0] == prev_messages[:-1]
 
 
+@pytest.mark.skip(
+    reason="deepseek-reasoner's chain-of-thought makes this test run >7 minutes locally; "
+    "too slow for CI. Revisit with a tighter prompt / lower max_round."
+)
 @pytest.mark.deepseek
 @suppress_json_decoder_error
 @run_for_optional_imports(["openai"], "deepseek")
 def test_groupchat_with_deepseek_reasoner(
-    credentials_gpt_4o_mini: Credentials,
+    credentials_openai_mini: Credentials,
     credentials_deepseek_reasoner: Credentials,
 ) -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -2367,7 +2371,7 @@ def test_groupchat_with_deepseek_reasoner(
         manager = autogen.GroupChatManager(
             groupchat=groupchat,
             llm_config={
-                "config_list": credentials_gpt_4o_mini.config_list,
+                "config_list": credentials_openai_mini.config_list,
             },
         )
 

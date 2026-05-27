@@ -2,6 +2,9 @@
 Title: Sequential chat
 ---
 
+!!! example "Try it on the AG2 Playground"
+    See sequential chat running live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
 As a sequence of chats between two agents chained together by a mechanism called *carryover*, the sequential chat pattern is useful for complex tasks that can be broken down into interdependent sub-tasks.
 
 ### Understanding the Sequential Chat Pattern
@@ -44,4 +47,4 @@ The result of the [`initiate_chats`](/docs/api-reference/autogen/ConversableAgen
 
 ### Different senders
 
-In the above example, the teacher agent was the sender in each chat, however you can use the high-level [`initiate_chats`](/docs/api-reference/autogen/initiate_chats) function to start a sequence of two-agent chats with different sender agents. See this [notebook](/docs/use-cases/notebooks/notebooks/agentchats_sequential_chats#example-1%3A-solve-tasks-with-a-series-of-chats) for an example.
+In the above example, the teacher agent was the sender in each chat, however you can use the high-level [`initiate_chats`](/docs/api-reference/autogen/initiate_chats) function to start a sequence of two-agent chats with different sender agents. See this [notebook](/docs/use-cases/notebooks/notebooks/agentchat_sequential_chats#example-1-solve-tasks-with-a-series-of-chats) for an example.

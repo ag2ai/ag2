@@ -69,7 +69,7 @@ class SafeguardEnforcer:
 
             self.mask_agent = ConversableAgent(
                 name="mask_agent",
-                system_message="You are a agent responsible for masking sensitive information.",
+                system_message="You are an agent responsible for masking sensitive information.",
                 llm_config=self.mask_llm_config,
                 human_input_mode="NEVER",
                 max_consecutive_auto_reply=1,
@@ -158,7 +158,7 @@ class SafeguardEnforcer:
                 # Create LLM guardrail - handle dict config by converting to LLMConfig
                 llm_config = self.safeguard_llm_config
                 if isinstance(llm_config, dict):
-                    llm_config = LLMConfig(config_list=[llm_config])
+                    llm_config = LLMConfig(llm_config)
 
                 guardrail = LLMGuardrail(
                     name=f"llm_guard_{rule['message_source']}_{rule['message_destination']}",
@@ -516,7 +516,7 @@ class SafeguardEnforcer:
         # Handle dict config by converting to LLMConfig
         llm_config = self.safeguard_llm_config
         if isinstance(llm_config, dict):
-            llm_config = LLMConfig(config_list=[llm_config])
+            llm_config = LLMConfig(llm_config)
 
         from ..targets.transition_target import TransitionTarget
 

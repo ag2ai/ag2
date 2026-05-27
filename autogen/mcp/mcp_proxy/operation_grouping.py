@@ -17,6 +17,14 @@ from pydantic import BaseModel
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.llm_config import LLMConfig
 
+_module_llm_config: LLMConfig | None = None
+
+
+def set_llm_config(config: LLMConfig) -> None:
+    """Set the module-level LLMConfig for operation grouping."""
+    global _module_llm_config
+    _module_llm_config = config
+
 
 class Group(BaseModel):
     name: str
@@ -62,7 +70,9 @@ def chunk_list(items: list, size: int) -> list[list]:
 
 
 def discover_groups(operations: list["Operation"], chunk_size: int = 30) -> dict[str, str]:
-    llm_config = LLMConfig.get_current_llm_config().copy()
+    if _module_llm_config is None:
+        raise ValueError("LLMConfig not set. Call set_llm_config() before using operation grouping.")
+    llm_config = _module_llm_config.copy()
 
     for config in llm_config.config_list:
         config.response_format = GroupSuggestions
@@ -109,7 +119,9 @@ def discover_groups(operations: list["Operation"], chunk_size: int = 30) -> dict
 
 
 def assign_operation_to_group(operation: "Operation", groups: dict[str, str]) -> str:
-    llm_config = LLMConfig.get_current_llm_config().copy()
+    if _module_llm_config is None:
+        raise ValueError("LLMConfig not set. Call set_llm_config() before using operation grouping.")
+    llm_config = _module_llm_config.copy()
 
     for config in llm_config.config_list:
         config.response_format = GroupNames
