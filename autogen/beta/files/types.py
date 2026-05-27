@@ -25,6 +25,7 @@ class FileProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
+    XAI = "xai"
 
 
 class UploadedFile(FileIdInput):

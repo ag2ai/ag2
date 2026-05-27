@@ -10,6 +10,7 @@ from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 
+from .files import XAIFilesClient
 from .xai_client import CreateOptions, IncludeOption, ReasoningEffort, XAIClient
 
 XAI_DEFAULT_API_HOST = "api.x.ai"
@@ -110,5 +111,5 @@ class XAIConfig(ModelConfig):
             create_options=options,
         )
 
-    def create_files_client(self) -> None:
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+    def create_files_client(self) -> XAIFilesClient:
+        return XAIFilesClient(self)
