@@ -6,10 +6,27 @@ sidebarTitle: Quick Start
 Get up and running with AG2 in just **3 minutes**! This guide will help you set up your environment and build your very first agent workflow.
 
 !!! tip "Prerequisites"
-    Make sure you've [installed AG2](/docs/user-guide/basic-concepts/installing-ag2) before continuing. Need just 30 seconds: `pip install "ag2[openai]"`
+    Make sure you've [installed AG2](/docs/user-guide/basic-concepts/installing-ag2) before continuing. Need just 30 seconds for your provider of choice:
+
+    === "OpenAI"
+
+        ```
+        pip install "ag2[openai]"
+        ```
+
+    === "Gemini"
+
+        ```
+        pip install "ag2[gemini]"
+        ```
+
+    === "Azure OpenAI"
+
+        ```
+        pip install "ag2[openai]"
+        ```
 
 ### Set Up Your Environment
-
 
 **Python Version**
 
@@ -17,60 +34,155 @@ AG2 requires **Python version >= 3.10, < 3.14**. We recommend using a virtual en
 
 **Set Your API Key**
 
-Make sure to set your LLM API key as an environment variable:
+Make sure to set your LLM API key (and any provider-specific endpoint values) as environment variables. Pick the provider you plan to use:
 
-=== "macOS / Linux"
+=== "OpenAI"
 
-    ```
-    export OPENAI_API_KEY="YOUR_API_KEY"
-    ```
+    === "macOS / Linux"
 
-=== "Windows"
+        ```
+        export OPENAI_API_KEY="YOUR_API_KEY"
+        ```
 
-    ```
-    setx OPENAI_API_KEY "YOUR_API_KEY"
-    ```
+    === "Windows"
 
+        ```
+        setx OPENAI_API_KEY "YOUR_API_KEY"
+        ```
+
+=== "Gemini"
+
+    === "macOS / Linux"
+
+        ```
+        export GEMINI_API_KEY="YOUR_API_KEY"
+        ```
+
+    === "Windows"
+
+        ```
+        setx GEMINI_API_KEY "YOUR_API_KEY"
+        ```
+
+=== "Azure OpenAI"
+
+    === "macOS / Linux"
+
+        ```
+        export AZURE_OPENAI_API_KEY="YOUR_API_KEY"
+        export AZURE_OPENAI_ENDPOINT="https://YOUR-RESOURCE.openai.azure.com/"
+        ```
+
+    === "Windows"
+
+        ```
+        setx AZURE_OPENAI_API_KEY "YOUR_API_KEY"
+        setx AZURE_OPENAI_ENDPOINT "https://YOUR-RESOURCE.openai.azure.com/"
+        ```
 
 ### Build Your First Agent Workflow
 
+Let's build a poetic AI assistant that responds in rhymes using AG2 and your model provider of choice.
 
-Let's build a poetic AI assistant that responds in rhymes using AG2 and OpenAI's gpt-5-nano model.
+Create a Python script called `first_agent.py`, and paste the code for your provider into it. The agent behaviour is identical across providers — only the `LLMConfig` differs.
 
-Create a Python script called `first_agent.py`, and paste the following code into it:
+=== "OpenAI"
 
-```python
-import os
+    ```python
+    import os
 
-from autogen import ConversableAgent, LLMConfig
+    from autogen import ConversableAgent, LLMConfig
 
-# 1. Define our LLM configuration for OpenAI's gpt-5-nano
-#    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(
-    {"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+    # 1. Define our LLM configuration for OpenAI's gpt-5-nano
+    #    uses the OPENAI_API_KEY environment variable
+    llm_config = LLMConfig(
+        {"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}
+    )
 
-# 2. Create our LLM agent
-my_agent = ConversableAgent(
-    name="helpful_agent",
-    system_message="You are a poetic AI assistant, respond in rhyme.",
-    llm_config=llm_config,
-)
+    # 2. Create our LLM agent
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant, respond in rhyme.",
+        llm_config=llm_config,
+    )
 
-# 3. Run the agent with a prompt and process the response
-response = my_agent.run(
-    message="In one sentence, what's the big deal about AI?",
-    max_turns=3,
-    user_input=True,
-)
-response.process()
-```
+    # 3. Run the agent with a prompt and process the response
+    response = my_agent.run(
+        message="In one sentence, what's the big deal about AI?",
+        max_turns=3,
+        user_input=True,
+    )
+    response.process()
+    ```
+
+=== "Gemini"
+
+    ```python
+    import os
+
+    from autogen import ConversableAgent, LLMConfig
+
+    # 1. Define our LLM configuration for Google Gemini
+    #    uses the GEMINI_API_KEY environment variable
+    llm_config = LLMConfig(
+        {"api_type": "google", "model": "gemini-2.5-flash", "api_key": os.environ["GEMINI_API_KEY"]}
+    )
+
+    # 2. Create our LLM agent
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant, respond in rhyme.",
+        llm_config=llm_config,
+    )
+
+    # 3. Run the agent with a prompt and process the response
+    response = my_agent.run(
+        message="In one sentence, what's the big deal about AI?",
+        max_turns=3,
+        user_input=True,
+    )
+    response.process()
+    ```
+
+=== "Azure OpenAI"
+
+    ```python
+    import os
+
+    from autogen import ConversableAgent, LLMConfig
+
+    # 1. Define our LLM configuration for Azure OpenAI
+    #    "model" must match your Azure *deployment name*, not the underlying model name
+    llm_config = LLMConfig(
+        {
+            "api_type": "azure",
+            "model": "my-gpt-deployment",
+            "api_key": os.environ["AZURE_OPENAI_API_KEY"],
+            "base_url": os.environ["AZURE_OPENAI_ENDPOINT"],
+            "api_version": "2025-01-01",
+        }
+    )
+
+    # 2. Create our LLM agent
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant, respond in rhyme.",
+        llm_config=llm_config,
+    )
+
+    # 3. Run the agent with a prompt and process the response
+    response = my_agent.run(
+        message="In one sentence, what's the big deal about AI?",
+        max_turns=3,
+        user_input=True,
+    )
+    response.process()
+    ```
 
 !!! note "Why `run()` then `process()`?"
     `run()` prepares the conversation, `process()` executes it. This two-step pattern gives you a chance to inspect or modify the workflow before it runs.
 
 ### Run Your Example
-
 
 In your terminal, run:
 

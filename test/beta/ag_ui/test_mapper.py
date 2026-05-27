@@ -28,6 +28,8 @@ from autogen.beta import ToolResult
 from autogen.beta.ag_ui.stream import AGStreamInput, map_agui_messages_to_events
 from autogen.beta.events import (
     AudioInput,
+    BinaryInput,
+    BinaryType,
     DocumentInput,
     ImageInput,
     ModelMessage,
@@ -38,6 +40,7 @@ from autogen.beta.events import (
     ToolCallsEvent,
     ToolResultEvent,
     ToolResultsEvent,
+    UrlInput,
     VideoInput,
 )
 
@@ -71,16 +74,16 @@ class TestUserMessageString:
 
 
 @pytest.mark.parametrize(
-    "content_cls,factory,mime",
+    "content_cls,factory,kind,mime",
     [
-        (ImageInputContent, ImageInput, "image/jpeg"),
-        (AudioInputContent, AudioInput, "audio/wav"),
-        (VideoInputContent, VideoInput, "video/mp4"),
-        (DocumentInputContent, DocumentInput, "application/pdf"),
+        (ImageInputContent, ImageInput, BinaryType.IMAGE, "image/jpeg"),
+        (AudioInputContent, AudioInput, BinaryType.AUDIO, "audio/wav"),
+        (VideoInputContent, VideoInput, BinaryType.VIDEO, "video/mp4"),
+        (DocumentInputContent, DocumentInput, BinaryType.DOCUMENT, "application/pdf"),
     ],
 )
 class TestMediaContentMapping:
-    def test_url_source_maps_to_url_input(self, content_cls: type, factory: Any, mime: str) -> None:
+    def test_url_source_maps_to_url_input(self, content_cls: type, factory: Any, kind: BinaryType, mime: str) -> None:
         url = "https://example.com/file"
         content = content_cls(source=InputContentUrlSource(value=url))
         command = _command(UserMessage(id="m1", content=[content]))
@@ -89,8 +92,13 @@ class TestMediaContentMapping:
 
         assert messages == []
         assert current_turn == [factory(url)]
+        [part] = current_turn
+        assert isinstance(part, UrlInput)
+        assert part.kind == kind
 
-    def test_data_source_maps_to_binary_input(self, content_cls: type, factory: Any, mime: str) -> None:
+    def test_data_source_maps_to_binary_input(
+        self, content_cls: type, factory: Any, kind: BinaryType, mime: str
+    ) -> None:
         content = content_cls(source=InputContentDataSource(value=B64_VALUE, mime_type=mime))
         command = _command(UserMessage(id="m1", content=[content]))
 
@@ -98,6 +106,9 @@ class TestMediaContentMapping:
 
         assert messages == []
         assert current_turn == [factory(data=RAW_BYTES, media_type=mime)]
+        [part] = current_turn
+        assert isinstance(part, BinaryInput)
+        assert part.kind == kind
 
 
 class TestBinaryContentRejected:

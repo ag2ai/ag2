@@ -468,7 +468,9 @@ Collect information from the general task, follow the suggestions from manager t
 
         if self._agent_config_save_path is not None:
             building_task_md5 = hashlib.md5(building_task.encode("utf-8")).hexdigest()
-            with open(f"{self._agent_config_save_path}/build_history_{building_task_md5}.json", "w") as f:
+            with open(
+                f"{self._agent_config_save_path}/build_history_{building_task_md5}.json", "w", encoding="utf-8"
+            ) as f:
                 json.dump(self.build_history, f)
 
         self.build_times += 1
