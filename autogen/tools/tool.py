@@ -51,6 +51,8 @@ class Tool:
             self._description: str = description or func_or_tool.description
             self._func: Callable[..., Any] = func_or_tool.func
             self._chat_context_param_names: list[str] = func_or_tool._chat_context_param_names
+            if parameters_json_schema is None:
+                parameters_json_schema = func_or_tool._parameters_json_schema
         elif inspect.isfunction(func_or_tool) or inspect.ismethod(func_or_tool):
             self._chat_context_param_names = get_context_params(func_or_tool, subclass=ChatContext)
             self._func = inject_params(func_or_tool)
@@ -61,12 +63,13 @@ class Tool:
                 f"Parameter 'func_or_tool' must be a function, method or a Tool instance, it is '{type(func_or_tool)}' instead."
             )
 
+        self._parameters_json_schema: dict[str, Any] | None = parameters_json_schema
         self._func_schema = (
             {
                 "type": "function",
                 "function": {
-                    "name": name,
-                    "description": description,
+                    "name": self._name,
+                    "description": self._description,
                     "parameters": parameters_json_schema,
                 },
             }
@@ -85,6 +88,10 @@ class Tool:
     @property
     def func(self) -> Callable[..., Any]:
         return self._func
+
+    @property
+    def parameters_json_schema(self) -> dict[str, Any] | None:
+        return self._parameters_json_schema
 
     def register_for_llm(self, agent: "ConversableAgent") -> None:
         """Registers the tool for use with a ConversableAgent's language model (LLM).

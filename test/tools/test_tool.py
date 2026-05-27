@@ -60,3 +60,34 @@ class TestTool:
 
     def test__call__(self) -> None:
         assert self.tool("Hello") == "Hello!"
+
+    def test_parameters_json_schema_round_trip(self) -> None:
+        # Pin issue #1814: parameters_json_schema must survive Tool-from-Tool copies
+        # (which is the path _create_tool_if_needed takes when rewrapping a tool for
+        # context_variables dependency injection in group/swarm flows).
+        custom_schema = {
+            "type": "object",
+            "properties": {"x": {"type": "string", "enum": ["a", "b"]}},
+            "required": ["x"],
+        }
+
+        def f(x: str) -> str:
+            return x + "!"
+
+        original = Tool(name="enum_tool", description="enum-using tool", func_or_tool=f, parameters_json_schema=custom_schema)
+        assert original.parameters_json_schema == custom_schema
+        assert original._func_schema is not None
+        assert original._func_schema["function"]["parameters"] == custom_schema
+
+        # Copy without explicit parameters_json_schema must carry the original through.
+        copied = Tool(func_or_tool=original)
+        assert copied.parameters_json_schema == custom_schema
+        assert copied._func_schema is not None
+        assert copied._func_schema["function"]["parameters"] == custom_schema
+
+        # Explicit override on copy still wins.
+        override_schema = {"type": "object", "properties": {"x": {"type": "string"}}, "required": ["x"]}
+        overridden = Tool(func_or_tool=original, parameters_json_schema=override_schema)
+        assert overridden.parameters_json_schema == override_schema
+        assert overridden._func_schema is not None
+        assert overridden._func_schema["function"]["parameters"] == override_schema

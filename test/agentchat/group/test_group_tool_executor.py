@@ -170,6 +170,35 @@ class TestGroupToolExecutor:
             mock_agent.remove_tool_for_llm.assert_called_once_with(mock_tool)
             mock_agent.register_for_llm.assert_called_once()
 
+    def test_make_tool_copy_preserves_parameters_json_schema(self, executor: GroupToolExecutor) -> None:
+        """Pin issue #1814: user-supplied parameters_json_schema must survive
+        the context_variables rewrap performed by GroupToolExecutor."""
+
+        def real_tool_func(arg1: str, context_variables: ContextVariables) -> str:
+            return f"Result: {arg1}"
+
+        custom_schema = {
+            "type": "object",
+            "properties": {
+                "arg1": {"type": "string", "enum": ["a", "b"]},
+                "context_variables": {"type": "object"},
+            },
+            "required": ["arg1"],
+        }
+        original_tool = Tool(
+            name="enum_tool",
+            description="enum-using tool",
+            func_or_tool=real_tool_func,
+            parameters_json_schema=custom_schema,
+        )
+        assert original_tool.parameters_json_schema == custom_schema
+
+        new_tool = executor.make_tool_copy_with_context_variables(original_tool, ContextVariables())
+        assert new_tool is not None
+        assert new_tool.parameters_json_schema == custom_schema
+        assert new_tool._func_schema is not None
+        assert new_tool._func_schema["function"]["parameters"] == custom_schema
+
     def test_register_agents_functions(self, executor: GroupToolExecutor) -> None:
         """Test registering functions from multiple agents."""
         # Create mock agents with tools and function_map
