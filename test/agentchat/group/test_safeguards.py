@@ -52,6 +52,38 @@ class TestSafeguardEnforcer:
             enforcer = SafeguardEnforcer(policy="/fake/path/policy.json")
             assert enforcer.policy == policy_content
 
+    def test_policy_file_loading_handles_non_ascii_payload(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        # Regression for the UTF-8 encoding pin on `_load_policy`. Safeguard
+        # policies routinely carry non-ASCII content (localized rule
+        # descriptions, regex patterns against non-Latin text, agent names
+        # in mixed scripts), and the JSON format itself is UTF-8 per
+        # RFC 8259 §8.1. On platforms whose default `locale.getencoding()`
+        # is not UTF-8 — notably Windows, which defaults to cp1252 / cp932 —
+        # the load fails mid-parse without an explicit `encoding="utf-8"`.
+        policy_content: dict[str, Any] = {
+            "inter_agent_safeguards": {
+                "agent_transitions": [
+                    {
+                        "message_source": "代理_alpha",
+                        "message_destination": "agent_bêta",
+                        "check_method": "regex",
+                        "pattern": r"\b(秘密|secret|geheim)\b",
+                        "violation_response": "block",
+                        "description": "Bloquer la fuite de données — 防止数据泄露",
+                    }
+                ]
+            }
+        }
+        policy_path = tmp_path / "policy.json"
+        policy_path.write_text(json.dumps(policy_content, ensure_ascii=False), encoding="utf-8")
+
+        enforcer = SafeguardEnforcer(policy=str(policy_path))
+        loaded_rules = enforcer.policy["inter_agent_safeguards"]["agent_transitions"]
+        assert loaded_rules[0]["message_source"] == "代理_alpha"
+        assert loaded_rules[0]["message_destination"] == "agent_bêta"
+        assert loaded_rules[0]["pattern"] == r"\b(秘密|secret|geheim)\b"
+        assert loaded_rules[0]["description"] == "Bloquer la fuite de données — 防止数据泄露"
+
     def test_missing_required_fields(self) -> None:
         """Test validation fails when required fields are missing."""
         invalid_policy = {"inter_agent_safeguards": {"agent_transitions": [{"message_source": "agent1"}]}}

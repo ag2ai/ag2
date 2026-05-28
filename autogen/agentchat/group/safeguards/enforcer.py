@@ -111,7 +111,15 @@ class SafeguardEnforcer:
     def _load_policy(self, policy: dict[str, Any] | str) -> dict[str, Any]:
         """Load policy from file or use provided dict."""
         if isinstance(policy, str):
-            with open(policy) as f:
+            # Pin UTF-8 so policy files load on platforms whose default
+            # `locale.getencoding()` is not UTF-8 (notably Windows, which
+            # defaults to cp1252 / cp932). JSON is defined over UTF-8 per
+            # RFC 8259 §8.1, and safeguard policies routinely carry
+            # non-ASCII content (localized rule descriptions, regex
+            # patterns matching non-Latin text, agent names in mixed
+            # scripts) where the locale-default decoder raises
+            # `UnicodeDecodeError` mid-parse.
+            with open(policy, encoding="utf-8") as f:
                 result: dict[str, Any] = json.load(f)
                 return result
         return policy
