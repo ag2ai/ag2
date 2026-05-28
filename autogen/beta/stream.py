@@ -12,6 +12,7 @@ from fast_depends.core import CallModel
 
 from autogen.beta.types import ClassInfo
 
+from .annotations import Context as AnnotatedContext
 from .context import ConversationContext, Stream, StreamId, SubId
 from .events import BaseEvent
 from .events.conditions import Condition, TypeCondition
@@ -85,12 +86,30 @@ class ABCStream(Stream):
             yield result
 
 
+class _FilteredStorage:
+    """Wraps a Storage backend, skipping events marked ``__transient__``."""
+
+    __slots__ = ("_inner",)
+
+    def __init__(self, inner: Storage) -> None:
+        self._inner = inner
+
+    async def save_event(self, event: BaseEvent, context: AnnotatedContext) -> None:
+        if not getattr(type(event), "__transient__", False):
+            await self._inner.save_event(event, context)
+
+
 class MemoryStream(ABCStream):
     __slots__ = (
         "id",
         "_subscribers",
         "_interrupters",
         "history",
+        # Lazy per-stream asyncio.Lock used by Agent._execute to serialize
+        # concurrent turns on a shared stream. See agent.py's
+        # `_get_stream_turn_lock`. Declared here (not initialized in
+        # __init__) so __slots__ doesn't reject the attribute set.
+        "_ag2_turn_lock",
     )
 
     def __init__(
@@ -98,6 +117,7 @@ class MemoryStream(ABCStream):
         storage: Storage | None = None,
         *,
         id: StreamId | None = None,
+        persist_all: bool = False,
     ) -> None:
         self.id: StreamId = id or uuid4()
 
@@ -107,7 +127,18 @@ class MemoryStream(ABCStream):
 
         storage = storage or MemoryStorage()
         self.history = History(self.id, storage)
-        self.subscribe(storage.save_event)
+        # Agent._execute populates this lazily on first turn — setting it
+        # to None here so `getattr(..., None)` returns None instead of
+        # hitting a slot-uninitialized AttributeError.
+        self._ag2_turn_lock = None  # type: ignore[assignment]
+
+        if persist_all:
+            # Persist every event including transient ones (streaming chunks, lifecycle, etc.)
+            self.subscribe(storage.save_event)
+        else:
+            # Default: skip events marked __transient__ (ModelMessageChunk, TaskProgress, etc.)
+            # These are real-time streaming artifacts superseded by their final counterparts.
+            self.subscribe(_FilteredStorage(storage).save_event)
 
     @overload
     def subscribe(

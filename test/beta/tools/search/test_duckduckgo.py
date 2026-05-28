@@ -9,11 +9,9 @@ import pytest
 from dirty_equals import IsPartialDict
 
 pytest.importorskip("ddgs")
-final_reply: str = "done"
-from autogen.beta import Agent, DataInput, Variable
-from autogen.beta.context import ConversationContext
-from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.beta.events.types import ModelResponse
+
+from autogen.beta import Agent, Context, DataInput, Variable
+from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools.search.duckduckgo import DuckDuckSearchTool, SearchResponse, SearchResult
 
@@ -43,7 +41,7 @@ def _make_config(
 
 @pytest.mark.asyncio
 class TestSchema:
-    async def test_default_schema(self, context: ConversationContext) -> None:
+    async def test_default_schema(self, context: Context) -> None:
         ddg = DuckDuckSearchTool(client=MagicMock())
 
         [schema] = await ddg.schemas(context)
@@ -54,7 +52,7 @@ class TestSchema:
             "required": ["query"],
         })
 
-    async def test_custom_schema(self, context: ConversationContext) -> None:
+    async def test_custom_schema(self, context: Context) -> None:
         ddg = DuckDuckSearchTool(client=MagicMock(), name="my_search", description="Custom search tool.")
 
         [schema] = await ddg.schemas(context)

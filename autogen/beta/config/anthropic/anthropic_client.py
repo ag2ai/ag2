@@ -11,6 +11,7 @@ import httpx
 from anthropic import NOT_GIVEN, AsyncAnthropic
 from anthropic.types import (
     Message,
+    ServerToolUseBlock,
     TextBlock,
     ThinkingBlock,
     ToolUseBlock,
@@ -33,10 +34,12 @@ from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
+from .events import AnthropicServerToolCallEvent, AnthropicServerToolResultBlockType, AnthropicServerToolResultEvent
 from .mappers import (
     convert_messages,
     extract_mcp_servers,
     extract_skills_for_container,
+    has_file_id_references,
     normalize_usage,
     response_proto_to_output_config,
     tool_to_api,
@@ -66,6 +69,7 @@ class AnthropicClient(LLMClient):
         http_client: httpx.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
         prompt_caching: bool = True,
+        extra_body: dict[str, Any] | None = None,
     ) -> None:
         self._client = AsyncAnthropic(
             api_key=api_key,
@@ -79,6 +83,7 @@ class AnthropicClient(LLMClient):
         self._create_options = {k: v for k, v in (create_options or {}).items() if k != "stream"}
         self._streaming = (create_options or {}).get("stream", False)
         self._prompt_caching = prompt_caching
+        self._extra_body = extra_body
 
     async def __call__(
         self,
@@ -142,6 +147,18 @@ class AnthropicClient(LLMClient):
             create_kwargs.setdefault("extra_headers", {})
             create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
 
+        if has_file_id_references(messages):
+            existing_betas = set((create_kwargs.get("extra_headers") or {}).get("anthropic-beta", "").split(","))
+            existing_betas.discard("")
+            existing_betas.add("files-api-2025-04-14")
+            create_kwargs.setdefault("extra_headers", {})
+            create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
+
+        # User keys win over framework-set keys (e.g. mcp_servers) on collision.
+        if self._extra_body:
+            existing = create_kwargs.get("extra_body") or {}
+            create_kwargs["extra_body"] = {**existing, **self._extra_body}
+
         max_continuations = 5
 
         if self._streaming:
@@ -165,11 +182,27 @@ class AnthropicClient(LLMClient):
             for _ in range(max_continuations):
                 if response.stop_reason != "pause_turn":
                     break
+                await self._emit_builtin_tool_events(response.content, context)
                 anthropic_messages.append({"role": "assistant", "content": response.content})
                 create_kwargs["messages"] = anthropic_messages
                 response = await self._client.messages.create(**create_kwargs)
 
             return await self._process_response(response, context)
+
+    async def _emit_builtin_tool_events(
+        self,
+        content_blocks: list[Any],
+        context: "ConversationContext",
+    ) -> None:
+        """Emit typed server-tool events for server-side tool blocks."""
+        for block in content_blocks:
+            if isinstance(block, ServerToolUseBlock):
+                if call_event := AnthropicServerToolCallEvent.from_block(block):
+                    await context.send(call_event)
+            elif isinstance(block, AnthropicServerToolResultBlockType) and (
+                result_event := AnthropicServerToolResultEvent.from_block(block)
+            ):
+                await context.send(result_event)
 
     def _build_system(self, prompt: Iterable[str]) -> Any:
         text = "\n".join(prompt)
@@ -193,7 +226,7 @@ class AnthropicClient(LLMClient):
         response: Message,
         context: "ConversationContext",
     ) -> ModelResponse:
-        text_parts: list[str] = []
+        model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
 
         for block in response.content:
@@ -202,7 +235,8 @@ class AnthropicClient(LLMClient):
                     await context.send(ModelReasoning(block.thinking))
 
             elif isinstance(block, TextBlock):
-                text_parts.append(block.text)
+                model_msg = ModelMessage(block.text)
+                await context.send(model_msg)
 
             elif isinstance(block, ToolUseBlock):
                 calls.append(
@@ -213,10 +247,14 @@ class AnthropicClient(LLMClient):
                     )
                 )
 
-        model_msg: ModelMessage | None = None
-        if text_parts:
-            model_msg = ModelMessage("\n\n".join(text_parts))
-            await context.send(model_msg)
+            elif isinstance(block, ServerToolUseBlock):
+                if call_event := AnthropicServerToolCallEvent.from_block(block):
+                    await context.send(call_event)
+
+            elif isinstance(block, AnthropicServerToolResultBlockType) and (
+                result_event := AnthropicServerToolResultEvent.from_block(block)
+            ):
+                await context.send(result_event)
 
         usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
@@ -244,12 +282,20 @@ class AnthropicClient(LLMClient):
 
             if event_type == "content_block_start":
                 block = event.content_block
-                if getattr(block, "type", None) == "tool_use":
+                block_type = getattr(block, "type", None)
+                if block_type == "tool_use":
                     current_tool = {
                         "id": block.id,
                         "name": block.name,
                         "arguments": "",
                     }
+                elif block_type == "server_tool_use":
+                    if call_event := AnthropicServerToolCallEvent.from_block(block):
+                        await context.send(call_event)
+                elif isinstance(block, AnthropicServerToolResultBlockType) and (
+                    result_event := AnthropicServerToolResultEvent.from_block(block)
+                ):
+                    await context.send(result_event)
 
             elif event_type == "content_block_delta":
                 delta = event.delta

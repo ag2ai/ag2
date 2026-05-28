@@ -3,14 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 
+import httpx
 from pydantic import Field
-from tavily import TavilyClient
+from tavily import AsyncTavilyClient
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import ToolResult
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.final.function_tool import FunctionToolSchema, tool
@@ -60,7 +62,9 @@ class TavilySearchTool(Tool):
         country: str | Variable | None = None,
         auto_parameters: bool | Variable | None = None,
         include_favicon: bool | Variable | None = None,
-        client: TavilyClient | None = None,
+        proxy: str | None = None,
+        verify: bool = True,
+        timeout: float | None = None,
         name: str = "tavily_search",
         *,
         description: str = (
@@ -68,18 +72,17 @@ class TavilySearchTool(Tool):
             "and optional LLM-generated answer, raw content, and images."
         ),
         middleware: Iterable[ToolMiddleware] = (),
+        **client_kwargs: Any,
     ) -> None:
-        _client = client if client is not None else TavilyClient(api_key=api_key)
-
         @tool(
             name=name,
             description=description,
             middleware=middleware,
         )
-        def tavily_search(
+        async def tavily_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
-        ) -> SearchResponse:
+        ) -> ToolResult:
             """Search the web using Tavily and return structured results."""
             params: dict[str, Any] = {
                 "max_results": resolve_variable(max_results, ctx, param_name="max_results"),
@@ -100,7 +103,10 @@ class TavilySearchTool(Tool):
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
 
-            raw = _client.search(query, **kwargs)
+            async with httpx.AsyncClient(proxy=proxy, verify=verify, timeout=timeout) as http:
+                sdk = AsyncTavilyClient(api_key=api_key, client=http, **client_kwargs)
+                raw = await sdk.search(query, **kwargs)
+
             results = [
                 SearchResult(
                     title=r.get("title", ""),
@@ -110,11 +116,13 @@ class TavilySearchTool(Tool):
                 )
                 for r in (raw.get("results") or [])
             ]
-            return SearchResponse(
-                query=raw.get("query", query),
-                results=results,
-                answer=raw.get("answer"),
-                images=list(raw.get("images") or []),
+            return ToolResult(
+                SearchResponse(
+                    query=raw.get("query", query),
+                    results=results,
+                    answer=raw.get("answer"),
+                    images=list(raw.get("images") or []),
+                )
             )
 
         self._tool = tavily_search
@@ -125,7 +133,7 @@ class TavilySearchTool(Tool):
 
     def register(
         self,
-        stack: ExitStack,
+        stack: ExitStack | AsyncExitStack,
         context: Context,
         *,
         middleware: Iterable[BaseMiddleware] = (),

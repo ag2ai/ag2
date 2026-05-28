@@ -6,8 +6,7 @@ from collections.abc import Callable
 
 import pytest
 
-from autogen.beta import Context
-from autogen.beta.annotations import Variable
+from autogen.beta import Context, Variable
 from autogen.beta.tools import ImageGenerationTool, UserLocation, WebSearchTool
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
@@ -15,6 +14,7 @@ from autogen.beta.tools.builtin.mcp_server import MCPServerTool, MCPServerToolSc
 from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ShellTool, ShellToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchTool, WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
+from autogen.beta.tools.builtin.x_search import XSearchTool, XSearchToolSchema
 
 
 class TestResolveVariable:
@@ -149,4 +149,23 @@ class TestMCPServerToolVariable:
         tool = MCPServerTool(server_url=Variable("url"), server_label="test-mcp")
 
         with pytest.raises(KeyError, match="url"):
+            await tool.schemas(context)
+
+
+class TestXSearchToolVariable:
+    @pytest.mark.asyncio
+    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
+        ctx = make_context(handles=["xai"])
+        tool = XSearchTool(allowed_x_handles=Variable("handles"))
+
+        [schema] = await tool.schemas(ctx)
+
+        assert isinstance(schema, XSearchToolSchema)
+        assert schema.allowed_x_handles == ["xai"]
+
+    @pytest.mark.asyncio
+    async def test_missing_raises(self, context: Context) -> None:
+        tool = XSearchTool(allowed_x_handles=Variable("handles"))
+
+        with pytest.raises(KeyError, match="handles"):
             await tool.schemas(context)

@@ -1,8 +1,72 @@
 # test/beta/ Guidelines
 
+Use `just test-beta` as alias for `pytest` execution to run beta tests.
+
 ## Testing Conventions
 
-Use `just test-beta` as alias for `pytest` execution to run beta tests.
+Always write public API-based tests. Do not assert implementation details.
+
+```python
+# === BAD - digging into implementation details ===
+async def test_collects_events_in_window(self) -> None:
+    stream = MemoryStream()
+    ctx = Context(stream=stream)
+    batches: list = []
+
+    async def callback(events, _ctx):
+        batches.append(events)
+
+    watch = CadenceWatch(max_wait=0.1, condition=ToolCallEvent)
+    watch.arm(stream, callback)
+
+    await stream.send(ToolCallEvent(name="t1", arguments="{}"), ctx)
+    await stream.send(ToolCallEvent(name="t2", arguments="{}"), ctx)
+
+    await asyncio.sleep(0.2)
+
+    assert len(batches) == 1
+    assert len(batches[0]) == 2
+
+# === GOOD - public-api based test ===
+async def test_collects_events_in_window(self) -> None:
+    # arrange stream
+    stream = MemoryStream()
+    batches: list[BaseEvent] = []
+
+    async def callback(events: BaseEvent, ctx: Context) -> None:
+        batches.append(events)
+
+    watch = CadenceWatch(max_wait=0.01, condition=ToolCallEvent)
+    watch.arm(stream, callback)
+
+    # arrange agent
+    tool_calls = [
+        ToolCallEvent(name="t1", arguments="{}"),
+        ToolCallEvent(name="t2", arguments="{}"),
+    ]
+
+    agent = Agent(
+        "test-agent",
+        config=testing.TestConfig(tool_calls, "Done"),
+    )
+
+    @agent.tool
+    def t1(): ...
+    @agent.tool
+    def t2(): ...
+
+    # act
+    await agent.ask("Hello, world!", stream=stream)
+    await asyncio.sleep(0.02)
+
+    # assert
+    assert batches == [
+        IsList(*tool_calls, check_order=False),
+    ]
+```
+
+- Always use `autogen.beta.testing.TestConfig` to mock LLM responses in agent-based tests.
+- Always use `autogen.beta.testing.TrackingConfig` to validate messages the framework sends to the LLM (for example: tool results and user input).
 
 ### Assertion style
 

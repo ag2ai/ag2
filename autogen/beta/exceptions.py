@@ -95,10 +95,14 @@ class SkillInstallError(SkillError):
     """Raised when a downloaded skill archive cannot be extracted or validated."""
 
 
-def missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
+def missing_additional_dependency(name: str, dependency: str, error: ImportError) -> Mock:
     def _raise(*args: object, **kwargs: object) -> None:
         raise ImportError(
-            f'{name} requires optional dependencies. Install with `pip install "ag2[{extra}]"`'
+            f'{name} requires optional dependencies. Install with `pip install "{dependency}"`'
         ) from error
 
     return Mock(side_effect=_raise)
+
+
+def missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
+    return missing_additional_dependency(name, f"ag2[{extra}]", error)

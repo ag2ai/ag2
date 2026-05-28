@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .alert import HaltEvent, ObserverAlert, Severity
 from .base import BaseEvent, Field
 from .conditions import Condition
 from .input_events import (
@@ -18,7 +19,19 @@ from .input_events import (
     UrlInput,
     VideoInput,
 )
-from .task_events import TaskCompleted, TaskFailed, TaskStarted
+from .lifecycle import (
+    AggregationCompleted,
+    AggregationFailed,
+    AggregationStarted,
+    CompactionCompleted,
+    CompactionFailed,
+    CompactionStarted,
+    EventLogFailed,
+    ObserverCompleted,
+    ObserverStarted,
+    UnknownEvent,
+)
+from .task_events import TaskCompleted, TaskExpired, TaskFailed, TaskProgress, TaskStarted
 from .tool_events import (
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
@@ -27,6 +40,7 @@ from .tool_events import (
     ToolCallsEvent,
     ToolErrorEvent,
     ToolNotFoundEvent,
+    ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
 )
@@ -40,8 +54,17 @@ from .types import (
     ModelResponse,
     Usage,
 )
+from .voice import (
+    RecordedAudioEvent,
+    SynthesizedAudioEvent,
+    TranscriptionChunkEvent,
+    TranscriptionCompletedEvent,
+)
 
 __all__ = (
+    "AggregationCompleted",
+    "AggregationFailed",
+    "AggregationStarted",
     "AudioInput",
     "BaseEvent",
     "BinaryInput",
@@ -50,11 +73,16 @@ __all__ = (
     "BuiltinToolCallEvent",
     "BuiltinToolResultEvent",
     "ClientToolCallEvent",
+    "CompactionCompleted",
+    "CompactionFailed",
+    "CompactionStarted",
     "Condition",
     "DataInput",
     "DocumentInput",
+    "EventLogFailed",
     "Field",
     "FileIdInput",
+    "HaltEvent",
     "HumanInputRequest",
     "HumanMessage",
     "ImageInput",
@@ -64,16 +92,28 @@ __all__ = (
     "ModelReasoning",
     "ModelRequest",
     "ModelResponse",
+    "ObserverAlert",
+    "ObserverCompleted",
+    "ObserverStarted",
+    "RecordedAudioEvent",
+    "Severity",
+    "SynthesizedAudioEvent",
     "TaskCompleted",
+    "TaskExpired",
     "TaskFailed",
+    "TaskProgress",
     "TaskStarted",
     "TextInput",
     "ToolCallEvent",
     "ToolCallsEvent",
     "ToolErrorEvent",
     "ToolNotFoundEvent",
+    "ToolResult",
     "ToolResultEvent",
     "ToolResultsEvent",
+    "TranscriptionChunkEvent",
+    "TranscriptionCompletedEvent",
+    "UnknownEvent",
     "UrlInput",
     "Usage",
     "VideoInput",

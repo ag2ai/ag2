@@ -1,9 +1,9 @@
 ---
-title: Task Delegation
-sidebarTitle: Task Delegation
+title: Sub-task Delegation
+sidebarTitle: Sub-task Delegation
 ---
 
-Task delegation allows agents to delegate work to other agents through tool calling. The calling agent's LLM decides when and what to delegate, and each sub-task runs on its own isolated stream with independent history.
+Sub-task delegation allows agents to delegate work to other agents through tool calling. The calling agent's LLM decides when and what to delegate, and each sub-task runs on its own isolated stream with independent history.
 
 ## Why Use Subagents
 
@@ -15,6 +15,9 @@ Breaking work across multiple agents gives you:
 
 !!! note
     When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other.
+
+!!! tip
+    For lightweight self-delegation where the parent doesn't need a *named* delegate, opt in to the auto-injected `#!python run_subtask` / `#!python run_subtasks` tools by passing `#!python tasks=TaskConfig(...)` — see [`tasks=` in The Agent Harness](/docs/beta/agent_harness#tasks-taskconfig). Use `Agent.as_tool()` (below) when you want a distinct, purpose-named tool exposed to the LLM.
 
 ## Subagents API
 
@@ -73,7 +76,7 @@ task_writer(
 | `description` | `str` | Tool description shown to the LLM (required) |
 | `name` | `str | None` | Override the default `task_{agent.name}` tool name |
 | `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
-| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `depth_limiter`, `approval_required`) |
+| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
 
 You can also use `#!python subagent_tool()` directly for more control:
 
@@ -117,29 +120,64 @@ reply = await analyst.ask("Compare Python vs Rust for web APIs: performance, DX,
 
 The analyst's LLM may call `sub_task` multiple times — one per aspect — then synthesise the results.
 
-### Depth Limiter
+## Dynamic Agents
 
-Self-delegation and deep chains (A → B → C → …) can cause infinite recursion. Use `#!python depth_limiter()` to cap the nesting depth:
+`#!python dynamic_agent()` lets the calling LLM **construct** an ephemeral agent at runtime — picking a name, system prompt, and a subset of available tools per objective — instead of pre-defining each delegate as a named `#!python as_tool()`. Use it when the orchestrator should compose a focused worker on demand for each sub-task.
 
-```python linenums="1" hl_lines="1 7"
-from autogen.beta.tools.subagents import depth_limiter
+```python linenums="1" hl_lines="2 16-19"
+from autogen.beta import Agent
+from autogen.beta.tools.dynamic import dynamic_agent
+from autogen.beta.config import OpenAIConfig
 
-analyst.add_tool(
-    analyst.as_tool(
-        description="Break work into a focused sub-task.",
-        name="sub_task",
-        middleware=[depth_limiter(max_depth=2)],
-    )
+config = OpenAIConfig(model="gpt-4o-mini")
+
+orchestrator = Agent(
+    "orchestrator",
+    config=config,
+    prompt=(
+        "You orchestrate sub-tasks by calling create_and_run_agent. "
+        "For each task, invent a focused agent name and system prompt, "
+        "include only the tools the child genuinely needs, "
+        "and pass a clear objective."
+    ),
+    tools=[
+        dynamic_agent(available_tools=[calc, web_search], config=config),
+    ],
 )
+
+reply = await orchestrator.ask("What is 17 * 25 + 4? Use a child agent.")
 ```
 
-When a sub-agent tries to delegate beyond the limit, its tool call returns an error message instead of executing. The calling LLM sees the error and can respond accordingly.
+The orchestrator's LLM sees one tool, `#!python create_and_run_agent(spec, objective)`. Each call spawns an ephemeral child `#!python Agent` on a fresh stream, runs the objective via `#!python run_task`, and returns the reply string.
 
-`depth_limiter` accepts a single parameter:
+`dynamic_agent()` accepts these parameters:
 
-| Parameter | Default | Description |
+| Parameter | Type | Description |
 |---|---|---|
-| `max_depth` | `3` | Maximum nesting depth. `1` means the top-level agent can delegate once; sub-tasks cannot delegate further. |
+| `available_tools` | `Iterable[Tool | Callable[..., Any]]` | Pool of tools the spawned child may pick from by name |
+| `config` | `ModelConfig` | Model configuration used for every spawned child |
+| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to `create_and_run_agent` |
+
+### The AgentSpec the LLM constructs
+
+The LLM builds an `#!python AgentSpec` on every call. It is JSON-serializable and captures the declarative parts of the child:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `name` | `str` | Display name of the spawned child |
+| `prompt` | `list[str]` | System prompt for the child |
+| `tool_names` | `list[str]` | Subset of `available_tools` names to give the child |
+| `response_schema` | `ResponseSchemaSpec | None` | Optional structured output schema |
+
+### How the LLM discovers available tool names
+
+The pool's names and descriptions are **rendered into the `#!python create_and_run_agent` tool description automatically** when the factory is built. The calling agent's system prompt does not need to enumerate them — the LLM discovers the valid names from the tool schema.
+
+!!! tip
+    If the LLM picks a name not in the pool, the framework returns `Error: unknown tools [...]. Available: [...]` as a recoverable string. The LLM reads the hint and retries with a corrected spec — no exception propagates to the caller. The auto-rendered menu prevents this in the common case.
+
+!!! warning
+    Spawned children are themselves constructed **without** `dynamic_agent`, so they cannot recursively spawn further dynamic agents. Recursion is structurally impossible — no depth limit needed.
 
 ## Sub-Task Streams
 

@@ -4,7 +4,7 @@
 
 import os
 from collections.abc import Iterable
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from pathlib import Path
 
 from autogen.beta.annotations import Context
@@ -81,7 +81,7 @@ class LocalShellTool(Tool):
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),

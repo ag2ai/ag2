@@ -71,18 +71,18 @@ reply = await agent.ask("Compare these two images.", image1, image2)
 
 Not all providers support all input types. The table below shows what each provider accepts:
 
-| Input Type | OpenAI | OpenAI Responses | Gemini | Anthropic |
-| :--- | :---: | :---: | :---: | :---: |
-| **Text** | Yes | Yes | Yes | Yes |
-| **Image (URL)** | Yes | Yes | Yes | Yes |
-| **Image (binary)** | Yes | Yes | Yes | Yes |
-| **Audio (URL)** | - | - | Yes | - |
-| **Audio (binary)** | Yes | - | Yes | - |
-| **Video (URL)** | - | - | Yes | - |
-| **Video (binary)** | - | - | Yes | - |
-| **Document (URL)** | - | Yes | Yes | Yes |
-| **Document (binary)** | - | - | Yes | Yes |
-| **File ID** | - | Yes | - | Yes |
+| Input Type | OpenAI | OpenAI Responses | Gemini | Anthropic | xAI |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Text** | Yes | Yes | Yes | Yes | Yes |
+| **Image (URL)** | Yes | Yes | Yes | Yes | Yes |
+| **Image (binary)** | Yes | Yes | Yes | Yes | Yes |
+| **Audio (URL)** | - | - | Yes | - | - |
+| **Audio (binary)** | Yes | - | Yes | - | - |
+| **Video (URL)** | - | - | Yes | - | - |
+| **Video (binary)** | - | - | Yes | - | - |
+| **Document (URL)** | - | Yes | Yes | Yes | Yes |
+| **Document (binary)** | - | - | Yes | Yes | Yes |
+| **File ID** | - | Yes | - | Yes | Yes |
 
 If you pass an unsupported input type to a provider, an `#!python UnsupportedInputError` is raised with a clear message indicating what is not supported and by which provider.
 
@@ -226,5 +226,63 @@ from autogen.beta.events import DocumentInput
 doc = DocumentInput(
     path="report.pdf",
     vendor_metadata={"cache_control": {"type": "ephemeral"}},
+)
+```
+
+### xAI
+
+xAI supports images (URL and binary), documents (URL and binary), and pre-uploaded file IDs. Audio and video are not currently supported — passing them raises `#!python UnsupportedInputError`.
+
+**File ID** — reference a file previously uploaded via the xAI Files API:
+
+```python linenums="1"
+from autogen.beta.events import ImageInput, DocumentInput
+
+image = ImageInput(file_id="file-abc123", filename="photo.jpg")
+doc = DocumentInput(file_id="file-xyz789", filename="report.pdf")
+```
+
+#### Vendor Metadata
+
+xAI reads `detail` for image quality control from two **different** attributes depending on the input source — `#!python vendor_metadata` for binary, `#!python metadata` for URL. Mixing them up means the value is silently ignored and xAI falls back to `"auto"`.
+
+**Binary image** — set `detail` via `#!python vendor_metadata`:
+
+```python linenums="1"
+from autogen.beta.events import BinaryInput, BinaryType
+
+image = BinaryInput(
+    raw_bytes,
+    media_type="image/png",
+    kind=BinaryType.IMAGE,
+    vendor_metadata={"detail": "low"},  # "low", "high", or "auto"
+)
+```
+
+**URL image** — set `detail` via `#!python metadata` (not `vendor_metadata`):
+
+```python linenums="1"
+from autogen.beta.events import UrlInput, BinaryType
+
+image = UrlInput(
+    "https://example.com/photo.jpg",
+    kind=BinaryType.IMAGE,
+    metadata={"detail": "low"},
+)
+```
+
+!!! note
+    The factory `#!python ImageInput(url=...)` does not forward `metadata`. To configure `detail` on a URL image, construct `#!python UrlInput` directly as shown above.
+
+**Document filename** — xAI requires a filename for binary documents. When sending raw bytes, either provide one via `#!python vendor_metadata={"filename": ...}`, or rely on the auto-derived fallback (`file.<subtype>` from the media type, e.g. `file.pdf` for `application/pdf`):
+
+```python linenums="1"
+from autogen.beta.events import BinaryInput, BinaryType
+
+doc = BinaryInput(
+    pdf_bytes,
+    media_type="application/pdf",
+    kind=BinaryType.DOCUMENT,
+    vendor_metadata={"filename": "Q4-report.pdf"},
 )
 ```

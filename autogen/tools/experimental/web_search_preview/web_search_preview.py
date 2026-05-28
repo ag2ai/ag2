@@ -22,7 +22,7 @@ with optional_import_block():
     from openai.types.responses.web_search_tool import UserLocation
 
 
-@require_optional_import("openai>=1.66.2", "openai")
+@require_optional_import("openai>=2.30.0", "openai")
 @export_module("autogen.tools.experimental")
 class WebSearchPreviewTool(Tool):
     """WebSearchPreviewTool is a tool that uses OpenAI's web_search_preview tool to perform a search."""

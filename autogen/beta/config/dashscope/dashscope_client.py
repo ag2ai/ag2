@@ -8,7 +8,7 @@ from itertools import chain
 from typing import Any, TypedDict
 
 import dashscope
-from dashscope.aigc.generation import AioGeneration
+from dashscope import AioMultiModalConversation
 from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.config.client import LLMClient
@@ -97,7 +97,7 @@ class DashScopeClient(LLMClient):
         kwargs: dict[str, Any],
         context: "ConversationContext",
     ) -> ModelResponse:
-        response = await AioGeneration.call(
+        response = await AioMultiModalConversation.call(
             model=self._model,
             messages=messages,
             api_key=self._api_key,
@@ -110,15 +110,19 @@ class DashScopeClient(LLMClient):
         choice = response.output.choices[0]
         msg = choice.message
 
-        # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
-        # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
         if reasoning := msg.get("reasoning_content"):
             await context.send(ModelReasoning(reasoning))
 
         model_msg: ModelMessage | None = None
-        if content := msg.get("content"):
+        content = msg.get("content")
+        if isinstance(content, str) and content:
             model_msg = ModelMessage(content)
             await context.send(model_msg)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and (text := block.get("text")):
+                    model_msg = ModelMessage(text)
+                    await context.send(model_msg)
 
         calls = []
         for tc in msg.get("tool_calls") or []:
@@ -155,7 +159,7 @@ class DashScopeClient(LLMClient):
         kwargs: dict[str, Any],
         context: "ConversationContext",
     ) -> ModelResponse:
-        responses = await AioGeneration.call(
+        responses = await AioMultiModalConversation.call(
             model=self._model,
             messages=messages,
             api_key=self._api_key,
@@ -193,9 +197,15 @@ class DashScopeClient(LLMClient):
                 if rc := msg.get("reasoning_content"):
                     await context.send(ModelReasoning(rc))
 
-                if c := msg.get("content"):
-                    full_content += c
-                    await context.send(ModelMessageChunk(c))
+                content = msg.get("content")
+                if isinstance(content, str) and content:
+                    full_content += content
+                    await context.send(ModelMessageChunk(content))
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and (text := block.get("text")):
+                            full_content += text
+                            await context.send(ModelMessageChunk(text))
 
                 for tc in msg.get("tool_calls") or []:
                     args = tc["function"]["arguments"]

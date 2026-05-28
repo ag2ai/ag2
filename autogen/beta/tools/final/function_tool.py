@@ -13,7 +13,7 @@ from fast_depends.core import CallModel
 from fast_depends.pydantic.schema import get_schema
 
 from autogen.beta.annotations import Context
-from autogen.beta.events.tool_events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
+from autogen.beta.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
 from autogen.beta.middleware import BaseMiddleware, ToolExecution, ToolMiddleware, ToolResultType
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
@@ -102,7 +102,7 @@ class FunctionTool(Tool):
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),

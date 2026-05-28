@@ -6,13 +6,13 @@ from dataclasses import dataclass, replace
 from typing import Any, TypedDict
 
 import httpx
-from openai import DEFAULT_MAX_RETRIES, not_given, omit
-from openai._types import Omit
+from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
 from openai.types import ChatModel
 from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 
+from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, OpenAIClient, ReasoningEffort
 from .openai_responses_client import CreateOptions as ResponseCreateOptions
 from .openai_responses_client import OpenAIResponsesClient
@@ -150,16 +150,19 @@ class OpenAIConfig(ModelConfig):
             create_options=options,
         )
 
+    def create_files_client(self) -> OpenAIFilesClient:
+        return OpenAIFilesClient(self)
+
 
 class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     model: ChatModel | str
     api_key: str | None
     base_url: str | None
-    temperature: float | None
-    top_p: float | None
+    temperature: float | None | Omit
+    top_p: float | None | Omit
     streaming: bool
-    max_output_tokens: int | None
-    max_tool_calls: int | None
+    max_output_tokens: int | None | Omit
+    max_tool_calls: int | None | Omit
     store: bool | None
     websocket_base_url: str | None
     organization: str | None
@@ -170,11 +173,11 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     default_query: dict[str, object] | None
     http_client: httpx.AsyncClient | None
     parallel_tool_calls: bool
-    top_logprobs: int | None
-    metadata: dict[str, str] | None
-    service_tier: str | None
+    top_logprobs: int | None | Omit
+    metadata: dict[str, str] | None | Omit
+    service_tier: str | None | Omit
     user: str
-    truncation: str | None
+    truncation: str | None | Omit
 
 
 @dataclass(slots=True)
@@ -182,11 +185,11 @@ class OpenAIResponsesConfig(ModelConfig):
     model: ChatModel | str
     api_key: str | None = None
     base_url: str | None = None
-    temperature: float | None = None
-    top_p: float | None = None
+    temperature: float | None | Omit = omit
+    top_p: float | None | Omit = omit
     streaming: bool = False
-    max_output_tokens: int | None = None
-    max_tool_calls: int | None = None
+    max_output_tokens: int | None | Omit = omit
+    max_tool_calls: int | None | Omit = omit
     store: bool | None = True
     websocket_base_url: str | None = None
     organization: str | None = None
@@ -197,11 +200,11 @@ class OpenAIResponsesConfig(ModelConfig):
     default_query: dict[str, object] | None = None
     http_client: httpx.AsyncClient | None = None
     parallel_tool_calls: bool = True
-    top_logprobs: int | None = None
-    metadata: dict[str, str] | None = None
-    service_tier: str | None = None
+    top_logprobs: int | None | Omit = omit
+    metadata: dict[str, str] | None | Omit = omit
+    service_tier: str | None | Omit = omit
     user: str = ""
-    truncation: str | None = None
+    truncation: str | None | Omit = omit
 
     def copy(self, /, **overrides: Unpack[OpenAIResponsesConfigOverrides]) -> "OpenAIResponsesConfig":
         return replace(self, **overrides)
@@ -239,3 +242,6 @@ class OpenAIResponsesConfig(ModelConfig):
             http_client=self.http_client,
             create_options=options,
         )
+
+    def create_files_client(self) -> OpenAIFilesClient:
+        return OpenAIFilesClient(self)

@@ -41,9 +41,8 @@ with optional_import_block() as openai_result:
     import openai
 
 if openai_result.is_successful:
-    # raises exception if openai>=1 is installed and something is wrong with imports
+    # raises exception if openai>=2 is installed and something is wrong with imports
     from openai import APIError, APITimeoutError, AzureOpenAI, OpenAI
-    from openai import __version__ as openai_version
     from openai.lib._parsing._completions import type_to_response_format_param
     from openai.types.chat import ChatCompletion, ChatCompletionChunk
     from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # type: ignore [attr-defined]
@@ -57,12 +56,11 @@ if openai_result.is_successful:
 
     from autogen.oai.openai_responses import OpenAIResponsesClient
 
-    if openai.__version__ >= "1.1.0":
-        TOOL_ENABLED = True
+    TOOL_ENABLED = True
     ERROR: ImportError | None = None
     from openai.lib._pydantic import _ensure_strict_json_schema
 else:
-    ERROR = ImportError("Please install openai>=1 to use autogen.OpenAIWrapper.")  # type: ignore[assignment]
+    ERROR = ImportError("Please install openai>=2.0.0 to use autogen.OpenAIWrapper.")  # type: ignore[assignment]
 
     # OpenAI = object
     # AzureOpenAI = object
@@ -217,6 +215,9 @@ OPENAI_FALLBACK_KWARGS = {
     "http_client",
     "_strict_response_validation",
     "webhook_secret",
+    "workload_identity",
+    "_enforce_credentials",
+    "admin_api_key",
 }
 
 AOPENAI_FALLBACK_KWARGS = {
@@ -237,6 +238,9 @@ AOPENAI_FALLBACK_KWARGS = {
     "base_url",
     "project",
     "webhook_secret",
+    "workload_identity",
+    "_enforce_credentials",
+    "admin_api_key",
 }
 
 
@@ -344,7 +348,7 @@ class PlaceHolderClient:
         self.config = config
 
 
-@require_optional_import("openai>=1.66.2", "openai")
+@require_optional_import("openai>=2.30.0", "openai")
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
@@ -648,31 +652,17 @@ class OpenAIClient:
                 ),
             )
             for i in range(len(response_contents)):
-                if openai_version >= "1.5":  # pragma: no cover
-                    # OpenAI versions 1.5.0 and above
-                    choice = Choice(
-                        index=i,
-                        finish_reason=finish_reasons[i],
-                        message=ChatCompletionMessage(
-                            role="assistant",
-                            content=response_contents[i],
-                            function_call=full_function_call,
-                            tool_calls=full_tool_calls,
-                        ),
-                        logprobs=None,
-                    )
-                else:
-                    # OpenAI versions below 1.5.0
-                    choice = Choice(  # type: ignore [call-arg]
-                        index=i,
-                        finish_reason=finish_reasons[i],
-                        message=ChatCompletionMessage(
-                            role="assistant",
-                            content=response_contents[i],
-                            function_call=full_function_call,
-                            tool_calls=full_tool_calls,
-                        ),
-                    )
+                choice = Choice(
+                    index=i,
+                    finish_reason=finish_reasons[i],
+                    message=ChatCompletionMessage(
+                        role="assistant",
+                        content=response_contents[i],
+                        function_call=full_function_call,
+                        tool_calls=full_tool_calls,
+                    ),
+                    logprobs=None,
+                )
 
                 response.choices.append(choice)
         else:
@@ -981,7 +971,7 @@ class OpenAIWrapper:
         else:
             if api_type is not None and api_type.startswith("azure"):
 
-                @require_optional_import("openai>=1.66.2", "openai")
+                @require_optional_import("openai>=2.30.0", "openai")
                 def create_azure_openai_client() -> AzureOpenAI:
                     self._configure_azure_openai(config, openai_config)
                     client = AzureOpenAI(**openai_config)
@@ -1000,7 +990,7 @@ class OpenAIWrapper:
                 self._configure_openai_config_for_gemini(config, openai_config)
                 client = GeminiClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
-            elif api_type is not None and api_type.startswith("anthropic"):
+            elif api_type is not None and api_type.startswith("anthropic") and not api_type.startswith("anthropic_v2"):
                 if "api_key" not in config and "aws_region" in config:
                     self._configure_openai_config_for_bedrock(config, openai_config)
                 elif "api_key" not in config and "gcp_region" in config:
@@ -1044,13 +1034,17 @@ class OpenAIWrapper:
                 from autogen.llm_clients import OpenAICompletionsClient as V2Client
 
                 client = self._create_v2_client(V2Client, openai_config, response_format)
+            elif api_type is not None and api_type.startswith("anthropic_v2"):
+                from autogen.llm_clients import AnthropicV2Client as V2Client
+
+                client = self._create_v2_client(V2Client, openai_config, response_format)
             elif api_type is not None and api_type.startswith("responses_v2"):
                 from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client as V2Client
 
                 client = self._create_v2_client(V2Client, openai_config, response_format)
             elif api_type is not None and api_type.startswith("responses"):
                 # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
-                @require_optional_import("openai>=1.66.2", "openai")
+                @require_optional_import("openai>=2.30.0", "openai")
                 def create_responses_client() -> OpenAI:
                     client = OpenAI(**openai_config)
                     self._clients.append(OpenAIResponsesClient(client, response_format=response_format))  # type: ignore[arg-type]
@@ -1059,7 +1053,7 @@ class OpenAIWrapper:
                 client = create_responses_client()
             else:
 
-                @require_optional_import("openai>=1.66.2", "openai")
+                @require_optional_import("openai>=2.30.0", "openai")
                 def create_openai_client() -> OpenAI:
                     client = OpenAI(**openai_config)
                     self._clients.append(OpenAIClient(client, response_format))  # type: ignore[arg-type]
