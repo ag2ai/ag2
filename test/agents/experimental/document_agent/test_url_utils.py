@@ -7,7 +7,151 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from autogen.agents.experimental.document_agent.url_utils import ExtensionToFormat, InputFormat, URLAnalyzer
+from autogen.agents.experimental.document_agent.url_utils import (
+    ExtensionToFormat,
+    InputFormat,
+    URLAnalyzer,
+    UnsafeURLError,
+    validate_url,
+)
+
+
+class TestValidateUrl:
+    @pytest.fixture(autouse=True)
+    def _resolve_public(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def fake_getaddrinfo(host: str, *args: object, **kwargs: object) -> list[tuple]:  # type: ignore[type-arg]
+            return [(0, 0, 0, "", ("93.184.216.34", 0))]  # example.com public IP
+
+        monkeypatch.setattr("autogen.agents.experimental.document_agent.url_utils.socket.getaddrinfo", fake_getaddrinfo)
+
+    def test_https_public_ok(self) -> None:
+        validate_url("https://example.com/file.pdf")
+
+    def test_http_public_ok(self) -> None:
+        validate_url("http://example.com/file.pdf")
+
+    def test_url_with_whitespace_is_stripped(self) -> None:
+        validate_url("  https://example.com  ")
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "file:///etc/passwd",
+            "ftp://example.com/file",
+            "gopher://example.com/_GET / HTTP/1.0",
+            "dict://example.com:11211/",
+            "javascript:alert(1)",
+            "data:text/plain,foo",
+        ],
+    )
+    def test_disallowed_scheme(self, url: str) -> None:
+        with pytest.raises(UnsafeURLError, match="scheme not allowed"):
+            validate_url(url)
+
+    def test_missing_hostname_is_value_error_not_ssrf(self) -> None:
+        # malformed input → plain ValueError, NOT UnsafeURLError
+        with pytest.raises(ValueError, match="no hostname") as exc:
+            validate_url("https://")
+        assert not isinstance(exc.value, UnsafeURLError)
+
+    @pytest.mark.parametrize(
+        ("ip", "label"),
+        [
+            ("127.0.0.1", "loopback IPv4"),
+            ("127.5.5.5", "loopback range IPv4"),
+            ("169.254.169.254", "AWS/GCP/Azure metadata"),
+            ("169.254.1.1", "link-local IPv4"),
+            ("10.0.0.1", "RFC1918 10/8"),
+            ("172.16.0.1", "RFC1918 172.16/12"),
+            ("192.168.1.1", "RFC1918 192.168/16"),
+            ("0.0.0.0", "unspecified IPv4"),
+            ("224.0.0.1", "multicast IPv4"),
+            ("240.0.0.1", "reserved IPv4"),
+            ("::1", "loopback IPv6"),
+            ("fe80::1", "link-local IPv6"),
+            ("fc00::1", "ULA IPv6"),
+        ],
+    )
+    def test_rejects_non_public_ip(self, monkeypatch: pytest.MonkeyPatch, ip: str, label: str) -> None:
+        monkeypatch.setattr(
+            "autogen.agents.experimental.document_agent.url_utils.socket.getaddrinfo",
+            lambda *a, **kw: [(0, 0, 0, "", (ip, 0))],
+        )
+        with pytest.raises(UnsafeURLError, match="non-public IP"):
+            validate_url(f"https://attacker.example.com/?ip={label}")
+
+    def test_rejects_when_any_resolved_ip_is_private(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Hostname resolving to mixed public + private IPs must be rejected."""
+        monkeypatch.setattr(
+            "autogen.agents.experimental.document_agent.url_utils.socket.getaddrinfo",
+            lambda *a, **kw: [
+                (0, 0, 0, "", ("93.184.216.34", 0)),
+                (0, 0, 0, "", ("10.0.0.1", 0)),
+            ],
+        )
+        with pytest.raises(UnsafeURLError, match="non-public IP"):
+            validate_url("https://mixed.example.com/")
+
+    def test_dns_failure_is_value_error_not_ssrf(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # DNS lookup failure is a network/input problem, not an SSRF attempt
+        import socket as _socket
+
+        def boom(*a: object, **kw: object) -> object:
+            raise _socket.gaierror("nodename nor servname provided")
+
+        monkeypatch.setattr("autogen.agents.experimental.document_agent.url_utils.socket.getaddrinfo", boom)
+        with pytest.raises(ValueError, match="Cannot resolve host") as exc:
+            validate_url("https://does-not-exist.invalid/")
+        assert not isinstance(exc.value, UnsafeURLError)
+
+
+class TestAnalyzerSSRFGuard:
+    """End-to-end: URLAnalyzer must refuse to fetch private/loopback URLs."""
+
+    @pytest.fixture
+    def _resolve_loopback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "autogen.agents.experimental.document_agent.url_utils.socket.getaddrinfo",
+            lambda *a, **kw: [(0, 0, 0, "", ("127.0.0.1", 0))],
+        )
+
+    def test_analyze_by_request_blocks_initial_loopback(self, _resolve_loopback: None) -> None:
+        analyzer = URLAnalyzer("http://localhost.evil.example/")
+        with pytest.raises(UnsafeURLError):
+            analyzer._analyze_by_request()
+
+    def test_follow_redirects_blocks_initial_loopback(self, _resolve_loopback: None) -> None:
+        analyzer = URLAnalyzer("http://localhost.evil.example/")
+        with pytest.raises(UnsafeURLError):
+            analyzer.follow_redirects()
+
+    @patch("requests.head")
+    def test_analyze_by_request_blocks_redirect_to_metadata(
+        self, mock_head: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Public URL that redirects to AWS metadata IP must be rejected after the response."""
+        # First call (validate initial URL) → public; subsequent calls (validate hops) → metadata
+        ip_responses = iter([
+            [(0, 0, 0, "", ("93.184.216.34", 0))],  # initial validate_url(self.url)
+            [(0, 0, 0, "", ("169.254.169.254", 0))],  # validate_url(hop.url)
+        ])
+        monkeypatch.setattr(
+            "autogen.agents.experimental.document_agent.url_utils.socket.getaddrinfo",
+            lambda *a, **kw: next(ip_responses),
+        )
+
+        hop = MagicMock()
+        hop.url = "http://169.254.169.254/latest/meta-data/"
+        response = MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/plain"}
+        response.history = [hop]
+        response.url = "http://169.254.169.254/latest/meta-data/"
+        mock_head.return_value = response
+
+        analyzer = URLAnalyzer("http://attacker.example.com/redir")
+        with pytest.raises(UnsafeURLError, match="non-public IP"):
+            analyzer._analyze_by_request()
 
 
 # Tests for InputFormat enum and ExtensionToFormat mapping
@@ -52,6 +196,13 @@ class TestFormatMapping:
 
 # Tests for URLAnalyzer class
 class TestURLAnalyzer:
+    @pytest.fixture(autouse=True)
+    def _disable_ssrf_guard(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "autogen.agents.experimental.document_agent.url_utils.validate_url",
+            lambda url: None,
+        )
+
     @pytest.fixture
     def pdf_url(self) -> str:
         return "https://example.com/document.pdf"

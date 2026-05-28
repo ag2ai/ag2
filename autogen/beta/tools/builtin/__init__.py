@@ -10,6 +10,7 @@ from .shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, Netw
 from .skills import Skill, SkillsTool
 from .web_fetch import WebFetchTool
 from .web_search import UserLocation, WebSearchTool
+from .x_search import XSearchTool
 
 __all__ = (
     "CodeExecutionTool",
@@ -25,4 +26,5 @@ __all__ = (
     "UserLocation",
     "WebFetchTool",
     "WebSearchTool",
+    "XSearchTool",
 )

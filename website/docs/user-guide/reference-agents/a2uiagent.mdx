@@ -51,7 +51,7 @@ Then create an agent:
 from autogen import LLMConfig
 from autogen.agents.experimental import A2UIAgent
 
-llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"})
+llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite"})
 
 agent = A2UIAgent(
     name="ui_agent",
@@ -224,7 +224,7 @@ from autogen import LLMConfig
 from autogen.a2a import A2aAgentServer, CardSettings
 from autogen.agents.experimental import A2UIAgent
 
-llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"})
+llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite"})
 
 agent = A2UIAgent(
     name="ui_agent",

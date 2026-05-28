@@ -17,7 +17,6 @@ from google.genai import types
 
 from autogen.beta import Context, MemoryStream
 from autogen.beta.config.gemini.gemini_client import GeminiClient
-from autogen.beta.context import ConversationContext
 from autogen.beta.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelReasoning
 
 
@@ -51,7 +50,7 @@ def memory_context() -> tuple[Context, MemoryStream, list[BaseEvent]]:
         captured.append(event)
 
     stream.subscribe(capture)
-    return ConversationContext(stream=stream), stream, captured
+    return Context(stream=stream), stream, captured
 
 
 @pytest.mark.asyncio

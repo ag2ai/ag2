@@ -18,6 +18,7 @@ from .handlers import (
     stamp_dependencies,
 )
 from .hub_client import HubClient
+from .human_client import HumanClient
 from .inject import AgentClientInject, ChannelInject, ChannelStateInject, HubInject, TaskInject
 from .network_client import NetworkClient
 from .plugin import NetworkContextPolicy, NetworkPlugin
@@ -33,6 +34,7 @@ __all__ = (
     "ClientTask",
     "HubClient",
     "HubInject",
+    "HumanClient",
     "NetworkClient",
     "NetworkContextPolicy",
     "NetworkPlugin",

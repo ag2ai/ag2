@@ -12,11 +12,10 @@ wins across both static (``ToolCalled`` graph rule) and dynamic
 
 import json
 
-from autogen.beta.events import ToolCallEvent, ToolResultEvent
-from autogen.beta.events.input_events import DataInput
-from autogen.beta.events.tool_events import ToolResult
+from autogen.beta.events import DataInput, ToolCallEvent, ToolResult, ToolResultEvent
 from autogen.beta.network import (
     AgentTarget,
+    Finish,
     Handoff,
     TerminateTarget,
     ToolCalled,
@@ -200,3 +199,63 @@ class TestResolveRouting:
         routing = _resolve_routing(events, graph, name_to_id={"alice": "agent-id-alice"})
         # No calls at all → text routing.
         assert routing == {"kind": "text"}
+
+    def test_dynamic_finish_terminates(self) -> None:
+        """A ToolResultEvent carrying a Finish dataclass produces
+        routing with ``kind: "finish"`` so fold can close the channel."""
+        graph = _graph("delegate_a")
+        events = [
+            _call("finish", call_id="c1"),
+            _result("c1", name="finish", value=Finish(summary="all done", reason="done")),
+        ]
+        routing = _resolve_routing(events, graph, name_to_id={})
+        assert routing == {
+            "kind": "finish",
+            "tool": "finish",
+            "reason": "done",
+            "summary": "all done",
+        }
+
+    def test_finish_default_reason_propagates(self) -> None:
+        """Finish() with no args still produces a valid termination routing."""
+        graph = _graph("delegate_a")
+        events = [
+            _call("finish", call_id="c1"),
+            _result("c1", name="finish", value=Finish()),
+        ]
+        routing = _resolve_routing(events, graph, name_to_id={})
+        assert routing == {
+            "kind": "finish",
+            "tool": "finish",
+            "reason": "finished",
+            "summary": "",
+        }
+
+    def test_finish_beats_handoff_in_same_emission(self) -> None:
+        """If a single tool somehow returns Finish, it beats a later
+        Handoff from another call — first-emitted-wins extends to
+        Finish."""
+        graph = _graph("delegate_a")
+        events = [
+            _call("finish", call_id="c1"),
+            _result("c1", name="finish", value=Finish(reason="early")),
+            _call("delegate_a", call_id="c2"),
+            _result("c2", name="delegate_a", value=Handoff(target="alice")),
+        ]
+        routing = _resolve_routing(events, graph, name_to_id={"alice": "agent-id-alice"})
+        assert routing["kind"] == "finish"
+        assert routing["tool"] == "finish"
+
+    def test_handoff_before_finish_still_first_wins(self) -> None:
+        """First emission still wins — a Handoff that fires before a
+        later Finish takes precedence."""
+        graph = _graph("delegate_a")
+        events = [
+            _call("delegate_a", call_id="c1"),
+            _result("c1", name="delegate_a", value=Handoff(target="alice")),
+            _call("finish", call_id="c2"),
+            _result("c2", name="finish", value=Finish(reason="late")),
+        ]
+        routing = _resolve_routing(events, graph, name_to_id={"alice": "agent-id-alice"})
+        assert routing["kind"] == "handoff"
+        assert routing["target"] == "agent-id-alice"

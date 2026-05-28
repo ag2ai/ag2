@@ -4,14 +4,14 @@
 
 import pytest
 
+from autogen.beta import Context
 from autogen.beta.config.anthropic.mappers import extract_skills_for_container, tool_to_api
-from autogen.beta.context import ConversationContext
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.tools import Skill, SkillsTool, WebSearchTool
 
 
 @pytest.mark.asyncio
-async def test_extract_skills_strings(context: ConversationContext) -> None:
+async def test_extract_skills_strings(context: Context) -> None:
     t = SkillsTool("pptx", "xlsx")
     [schema] = await t.schemas(context)
 
@@ -24,7 +24,7 @@ async def test_extract_skills_strings(context: ConversationContext) -> None:
 
 
 @pytest.mark.asyncio
-async def test_extract_skills_with_version(context: ConversationContext) -> None:
+async def test_extract_skills_with_version(context: Context) -> None:
     t = SkillsTool(Skill("pptx", version="20251013"), Skill("xlsx", version="latest"))
     [schema] = await t.schemas(context)
 
@@ -37,7 +37,7 @@ async def test_extract_skills_with_version(context: ConversationContext) -> None
 
 
 @pytest.mark.asyncio
-async def test_extract_skills_no_skills_schema(context: ConversationContext) -> None:
+async def test_extract_skills_no_skills_schema(context: Context) -> None:
     """Filter must return an empty list for non-Skills schemas.
 
     Guards against the filter accidentally capturing unrelated tools
@@ -52,7 +52,7 @@ async def test_extract_skills_no_skills_schema(context: ConversationContext) -> 
 
 
 @pytest.mark.asyncio
-async def test_tool_to_api_raises_for_skills_schema(context: ConversationContext) -> None:
+async def test_tool_to_api_raises_for_skills_schema(context: Context) -> None:
     """SkillsToolSchema must NOT reach tool_to_api.
 
     Skills are sent via the `container.skills` request field, not the

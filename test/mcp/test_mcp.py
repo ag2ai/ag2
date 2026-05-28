@@ -327,12 +327,33 @@ class TestMCPStdioConfig:
                     command=stdio_config.command,
                     args=stdio_config.args,
                     env=stdio_config.environment,
+                    cwd=str(stdio_config.working_dir),
                     encoding=stdio_config.encoding,
                     encoding_error_handler=stdio_config.encoding_error_handler,
                 ),
             )
 
             session.initialize.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_session_without_working_dir(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        mock_client: "MagicMock",
+        session_manager: "MCPClientSessionManager",
+    ) -> None:  # type: ignore[no-any-unimported]
+        # When working_dir is not set, cwd must be passed as None (not omitted/defaulted incorrectly).
+        stdio_config = StdioConfig(
+            command="python3",
+            args=["/path/to/server.py"],
+            server_name="test_stdio_server",
+        )
+        monkeypatch.setattr("autogen.mcp.mcp_client.stdio_client", mock_client)
+        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", MockClientSession)
+
+        async with session_manager.open_session(stdio_config):
+            params = mock_client.call_args.args[0]
+            assert params.cwd is None
 
 
 @pytest.mark.asyncio

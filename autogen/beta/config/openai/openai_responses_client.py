@@ -9,7 +9,7 @@ from typing import Any, TypedDict
 
 import httpx
 from fast_depends.library.serializer import SerializerProto
-from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given, omit
+from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
 from openai.types.responses import (
     Response,
@@ -52,18 +52,18 @@ from .mappers import (
 class CreateOptions(TypedDict, total=False):
     model: Required[ChatModel | str]
 
-    temperature: float | None
-    top_p: float | None
-    max_output_tokens: int | None
-    max_tool_calls: int | None
+    temperature: float | None | Omit
+    top_p: float | None | Omit
+    max_output_tokens: int | None | Omit
+    max_tool_calls: int | None | Omit
     parallel_tool_calls: bool
-    top_logprobs: int | None
+    top_logprobs: int | None | Omit
     store: bool | None
-    metadata: dict[str, str] | None
-    service_tier: str | None
+    metadata: dict[str, str] | None | Omit
+    service_tier: str | None | Omit
     user: str
     stream: bool
-    truncation: str | None
+    truncation: str | None | Omit
 
 
 class OpenAIResponsesClient(LLMClient):

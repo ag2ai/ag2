@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import ipaddress
+import socket
 from enum import Enum
 from typing import Any
 from urllib.parse import urlparse
@@ -10,6 +12,62 @@ from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import requests
+
+
+_ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
+
+
+class UnsafeURLError(ValueError):
+    """Raised when a URL is rejected by SSRF protection."""
+
+
+def validate_url(url: str) -> None:
+    """Reject URLs that could be abused for Server-Side Request Forgery.
+
+    Two distinct failure modes:
+      - ``ValueError`` — the URL is malformed or unresolvable (no hostname,
+        DNS lookup fails). Treat it like any other invalid-input error;
+        callers may swallow it the same way they swallow other request
+        failures.
+      - ``UnsafeURLError`` — the URL is well-formed but **unsafe**: a
+        disallowed scheme (``file://``, ``gopher://``, ...), or its hostname
+        resolves to a non-public address (loopback, link-local — including
+        cloud metadata ``169.254.169.254`` — RFC1918 private, ULA,
+        multicast, reserved, ``0.0.0.0``). Callers MUST stop processing.
+
+    DNS rebinding is *not* mitigated: a hostname may resolve to a public IP
+    here and to a private IP at request time. Treat this validator as a
+    best-effort guard, not a sandbox.
+    """
+    parsed = urlparse(url.strip())
+
+    scheme = parsed.scheme.lower()
+    if scheme not in _ALLOWED_URL_SCHEMES:
+        raise UnsafeURLError(f"URL scheme not allowed: {scheme!r} (allowed: http, https)")
+
+    host = parsed.hostname
+    if not host:
+        raise ValueError(f"URL has no hostname: {url!r}")
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as e:
+        raise ValueError(f"Cannot resolve host {host!r}: {e}") from e
+
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if (
+            ip.is_loopback
+            or ip.is_link_local
+            or ip.is_private
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            raise UnsafeURLError(f"URL resolves to non-public IP {ip} (host={host!r}): {url!r}")
 
 
 class InputFormat(Enum):
@@ -255,6 +313,9 @@ class URLAnalyzer:
             # Store redirect history
             self.redirect_chain = []
 
+            # SSRF guard: validate the initial URL before any network call
+            validate_url(self.url)
+
             # First try a HEAD request (faster but some servers don't handle it well)
             response = requests.head(self.url, allow_redirects=follow_redirects, timeout=5)
 
@@ -263,6 +324,12 @@ class URLAnalyzer:
                 response = requests.get(self.url, allow_redirects=follow_redirects, timeout=5, stream=True)
                 # Close the connection without downloading the content
                 response.close()
+
+            # SSRF guard: every redirect hop and the final URL must also be public
+            if hasattr(response, "history") and response.history:
+                for hop in response.history:
+                    validate_url(hop.url)
+            validate_url(response.url)
 
             # Check for non-success status codes
             if response.status_code >= 400:
@@ -308,6 +375,9 @@ class URLAnalyzer:
                     "mime_type": content_type,
                 }
 
+        except UnsafeURLError:
+            # SSRF guard rejection — propagate so the caller stops processing this URL
+            raise
         except requests.exceptions.TooManyRedirects:
             # Handle redirect loops or too many redirects
             return {
@@ -377,7 +447,13 @@ class URLAnalyzer:
 
         Returns:
             Tuple[str, list[str]]: The final URL and the redirect chain
+
+        Raises:
+            UnsafeURLError: if the URL or any redirect hop targets a non-public host.
         """
+        # SSRF guard: validate the initial URL before any network call
+        validate_url(self.url)
+
         try:
             response = requests.head(self.url, allow_redirects=True, timeout=5)
 
@@ -386,6 +462,12 @@ class URLAnalyzer:
                 response = requests.get(self.url, allow_redirects=True, timeout=5, stream=True)
                 # Close the connection without downloading the content
                 response.close()
+
+            # SSRF guard: every redirect hop and the final URL must also be public
+            if hasattr(response, "history") and response.history:
+                for hop in response.history:
+                    validate_url(hop.url)
+            validate_url(response.url)
 
             # Update redirect information
             if hasattr(response, "history") and response.history:
@@ -397,6 +479,9 @@ class URLAnalyzer:
 
             return self.final_url, self.redirect_chain
 
+        except UnsafeURLError:
+            # SSRF guard rejection — propagate, do not silently fall back
+            raise
         except Exception:
             # If the request fails, return the original URL
             return self.url, []

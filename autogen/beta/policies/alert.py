@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -15,8 +15,7 @@ Key behaviors preserved from the old system:
 """
 
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import BaseEvent
-from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
+from autogen.beta.events import BaseEvent, HaltEvent, ObserverAlert, Severity
 
 
 class AlertPolicy:

@@ -4,8 +4,7 @@
 
 import pytest
 
-from autogen.beta import ToolResult
-from autogen.beta.context import ConversationContext as Context
+from autogen.beta import Context, ToolResult
 from autogen.beta.events import (
     ModelRequest,
     ModelResponse,

@@ -125,13 +125,15 @@ async def test_peers_then_delegate_consults_a_specialist(
 
 @pytest.mark.openai
 @pytest.mark.asyncio()
-async def test_3way_discussion_round_robin_via_say_tool(
+async def test_3way_discussion_round_robin(
     openai_config: OpenAIConfig,
 ) -> None:
-    """Three OpenAI agents take round-robin turns via the ``say`` tool.
+    """Three OpenAI agents take round-robin turns by replying with text.
 
     Three (vs five for Anthropic) keeps cost low while still exercising
-    multi-party N>2 dispatch + ``expected_next_speaker`` rotation.
+    multi-party N>2 dispatch + ``expected_next_speaker`` rotation. Since
+    #2886 the discussion adapter offers no ``say`` tool — each
+    participant's plain-text reply is posted as the round-end ``EV_TEXT``.
     """
     hub = await Hub.open(
         MemoryKnowledgeStore(),
@@ -147,9 +149,9 @@ async def test_3way_discussion_round_robin_via_say_tool(
             name=name,
             prompt=(
                 f"You are {name}, a participant in a 3-way discussion on a "
-                "topic. When it is your turn, contribute exactly one short "
-                "opinion (one sentence) by calling say(content=<your "
-                "sentence>). Do not ask questions. Do not call any other tool."
+                "topic. When it is your turn, reply with exactly one short "
+                "opinion (one sentence) as plain text. Do not ask questions "
+                "and do not call any tools — just state your opinion."
             ),
             config=openai_config,
         )

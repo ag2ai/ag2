@@ -71,13 +71,16 @@ async def on_response(events, ctx):
 watch.arm(stream, on_response)
 ```
 
-`EventWatch` also supports field conditions:
+`EventWatch` also supports field conditions and negation:
 
 ```python linenums="1"
 from autogen.beta.watch import EventWatch
 from autogen.beta.events import ToolCallEvent
 
 watch = EventWatch(ToolCallEvent.name == "search")
+
+# Fire on every event that is NOT a ToolCallEvent
+watch = EventWatch(~ToolCallEvent)
 ```
 
 ### CadenceWatch
@@ -174,7 +177,7 @@ Fires on **any** sub-watch, every time.
 
 ```python linenums="1"
 from autogen.beta.watch import AnyOf, EventWatch
-from autogen.beta.events.alert import ObserverAlert
+from autogen.beta.events import ObserverAlert
 
 watch = AnyOf(
     EventWatch(ObserverAlert.severity == "critical"),
@@ -209,7 +212,7 @@ A Watch callback can send events back onto the stream — this is how [trigger-d
 ```python linenums="1"
 from autogen.beta import MemoryStream
 from autogen.beta.watch import DelayWatch
-from autogen.beta.events.alert import ObserverAlert, Severity
+from autogen.beta.events import ObserverAlert, Severity
 
 watch = DelayWatch(30.0)
 
