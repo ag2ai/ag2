@@ -15,7 +15,9 @@ Run with:
     pytest test/llm_clients/test_anthropic_v2_integration.py -m "anthropic and integration"
 """
 
+import base64
 import json
+import urllib.request
 
 import pytest
 from pydantic import BaseModel
@@ -23,6 +25,20 @@ from pydantic import BaseModel
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
 from test.credentials import Credentials
+
+_VISION_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+
+
+def _image_data_uri(url: str = _VISION_IMAGE_URL) -> str:
+    """Fetch an image and return it as a base64 data URI.
+
+    Anthropic cannot fetch image URLs server-side in this path, so the image is
+    downloaded here and passed inline as base64.
+    """
+    request = urllib.request.Request(url, headers={"User-Agent": "ag2-tests"})
+    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
+        data = response.read()
+    return f"data:image/jpeg;base64,{base64.standard_b64encode(data).decode('ascii')}"
 
 
 @pytest.fixture
@@ -62,7 +78,7 @@ def anthropic_v2_llm_config_vision(credentials_anthropic_claude_sonnet: Credenti
         "config_list": [
             {
                 "api_type": "anthropic_v2",
-                "model": "claude-3-5-haiku-20241022",  # Vision-capable model
+                "model": "claude-sonnet-4-5",  # Vision-capable model
                 "api_key": credentials_anthropic_claude_sonnet.api_key,
             }
         ],
@@ -378,15 +394,15 @@ class TestAnthropicV2Vision:
             code_execution_config=False,
         )
 
-        # Test image URL
-        IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+        # Image passed inline as base64
+        image_data_uri = _image_data_uri()
 
         # Formal image input format
         message_with_image = {
             "role": "user",
             "content": [
                 {"type": "text", "text": "Describe this image in one sentence."},
-                {"type": "image_url", "image_url": {"url": IMAGE_URL}},
+                {"type": "image_url", "image_url": {"url": image_data_uri}},
             ],
         }
 
@@ -437,8 +453,8 @@ class TestAnthropicV2Vision:
             code_execution_config=False,
         )
 
-        # Test image URL
-        IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+        # Image passed inline as base64
+        image_data_uri = _image_data_uri()
 
         # Detailed analysis request
         detailed_message = {
@@ -448,7 +464,7 @@ class TestAnthropicV2Vision:
                     "type": "text",
                     "text": "Analyze this image in detail. What breed is this dog? What are its characteristics?",
                 },
-                {"type": "image_url", "image_url": {"url": IMAGE_URL}},
+                {"type": "image_url", "image_url": {"url": image_data_uri}},
             ],
         }
 
