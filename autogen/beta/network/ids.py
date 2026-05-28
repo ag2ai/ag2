@@ -4,10 +4,9 @@
 
 """Identifier helpers for the network layer.
 
-Uses ``uuid.uuid7`` if the Python stdlib provides it (3.14+) for
-chronologically sortable identifiers; falls back to ``uuid.uuid4`` on
-older runtimes. Both produce 32-char hex strings, so the wire format is
-stable across versions.
+:func:`make_id` returns time-ordered 32-char hex ids so the delivery
+cursor and reconnect replay can compare them by sort order identically
+on every supported runtime.
 
 Also exposes :func:`parse_hub_urn` — the canonical helper for splitting
 ``hub://<hub_id>/<agent_id>`` URNs into their parts. Non-URN inputs
@@ -15,7 +14,8 @@ pass through unchanged so callers can use it on any audience id
 without branching on shape.
 """
 
-import uuid
+import os
+import time
 
 __all__ = ("make_id", "parse_hub_urn")
 
@@ -24,17 +24,16 @@ _HUB_URN_PREFIX = "hub://"
 
 
 def make_id() -> str:
-    """Return a fresh UUID-based identifier as a 32-char hex string.
+    """Return a fresh time-ordered identifier as a 32-char hex string.
 
-    Prefers UUID7 (time-ordered, cross-process sortable) when available;
-    falls back to UUID4 on older Pythons. The in-process hub stamps every
-    envelope under a per-channel lock so process-local ordering is
-    already serialised; the time-ordered prefix matters once the
-    transport spans processes.
+    The leading 8 bytes are the big-endian nanosecond wall clock, so the
+    hex sorts lexicographically in creation order; the trailing 8 bytes
+    are random for uniqueness. The delivery cursor and reconnect replay
+    compare ids by sort order, so this ordering has to hold on every
+    supported runtime — ``uuid.uuid7`` exists only on 3.14+ and
+    ``uuid.uuid4`` is unordered, so neither is a portable basis.
     """
-    if hasattr(uuid, "uuid7"):
-        return uuid.uuid7().hex  # type: ignore[attr-defined]
-    return uuid.uuid4().hex
+    return time.time_ns().to_bytes(8, "big").hex() + os.urandom(8).hex()
 
 
 def parse_hub_urn(s: str) -> tuple[str | None, str]:
@@ -51,7 +50,7 @@ def parse_hub_urn(s: str) -> tuple[str | None, str]:
     """
     if not isinstance(s, str) or not s.startswith(_HUB_URN_PREFIX):
         return None, s
-    rest = s[len(_HUB_URN_PREFIX):]
+    rest = s[len(_HUB_URN_PREFIX) :]
     hub_id, sep, agent_id = rest.partition("/")
     if not sep or not hub_id or not agent_id:
         return None, s
