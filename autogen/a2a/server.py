@@ -4,26 +4,30 @@
 
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from a2a.compat.v0_3 import conversions as _v03_conversions
+from a2a.compat.v0_3.types import AgentCapabilities, AgentCard, AgentExtension, AgentSkill
 from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill
 from pydantic import Field
+from starlette.applications import Starlette
 
 from autogen import ConversableAgent
 from autogen.doc_utils import export_module
 
 from .agent_executor import AutogenAgentExecutor
+from .utils import make_async_card_modifier, make_async_extended_card_modifier
 
 if TYPE_CHECKING:
     from a2a.server.agent_execution import RequestContextBuilder
-    from a2a.server.apps import CallContextBuilder
     from a2a.server.context import ServerCallContext
     from a2a.server.events import QueueManager
     from a2a.server.request_handlers import RequestHandler
+    from a2a.server.routes.common import ServerCallContextBuilder
     from a2a.server.tasks import PushNotificationConfigStore, PushNotificationSender, TaskStore
-    from starlette.applications import Starlette
+    from starlette.middleware.base import BaseHTTPMiddleware
 
     from autogen import ConversableAgent
 
@@ -150,12 +154,58 @@ class A2aAgentServer:
                 **extended_agent_card.model_dump(exclude_none=True),
             })
 
+        # Auto-add A2UI extension to card if wrapping an A2UIAgent.
+        # Declares the extension URI and supportedCatalogIds in the agent card
+        # so clients know what A2UI version and catalogs this agent supports.
+        try:
+            from autogen.agents.experimental.a2ui import A2UIAgent
+            from autogen.agents.experimental.a2ui.a2a_helpers import A2UI_EXTENSION_URI
+
+            if isinstance(agent, A2UIAgent):
+                existing_extensions = list(self.card.capabilities.extensions or [])
+                if not any(e.uri == A2UI_EXTENSION_URI for e in existing_extensions):
+                    # Build params with supportedCatalogIds per A2UI extension spec
+                    params: dict[str, Any] = {
+                        "supportedCatalogIds": [agent.catalog_id],
+                    }
+                    existing_extensions.append(
+                        AgentExtension(
+                            uri=A2UI_EXTENSION_URI,
+                            description="Provides agent-driven UI using the A2UI v0.9 JSON format.",
+                            params=params,
+                        )
+                    )
+                    self.card.capabilities.extensions = existing_extensions
+        except (ImportError, NameError):
+            pass
+
         self.card_modifier = card_modifier
         self.extended_card_modifier = extended_card_modifier
+        self.middlewares: list[tuple[BaseHTTPMiddleware, dict[str, Any]]] = []
+
+    def add_middleware(self, middleware: "BaseHTTPMiddleware", **kwargs: Any) -> None:
+        """Add a middleware to the A2A server."""
+        self.middlewares.append((middleware, kwargs))
 
     @property
     def executor(self) -> AutogenAgentExecutor:
-        """Get the A2A agent executor."""
+        """Get the A2A agent executor.
+
+        Auto-detects ``A2UIAgent`` and returns an ``A2UIAgentExecutor`` that
+        preserves A2UI DataParts in responses and handles extension negotiation.
+        """
+        try:
+            from autogen.agents.experimental.a2ui import A2UIAgent
+            from autogen.agents.experimental.a2ui.a2a_executor import A2UIAgentExecutor
+
+            if isinstance(self.agent, A2UIAgent):
+                return A2UIAgentExecutor(  # type: ignore[return-value]
+                    self.agent,
+                    delimiter=self.agent._response_delimiter,
+                    version_string=self.agent.protocol_version,
+                )
+        except (ImportError, NameError):
+            pass
         return AutogenAgentExecutor(self.agent)
 
     def build_request_handler(
@@ -179,21 +229,37 @@ class A2aAgentServer:
         Returns:
             A configured RequestHandler instance.
         """
+        # Bridge our public sync v0.3-pydantic extended_card_modifier to the
+        # async proto-pydantic-proto signature SDK 1.0 expects, so the user
+        # callback runs per request with a real ServerCallContext.
+        extended_card_modifier_bridge = (
+            make_async_extended_card_modifier(self.extended_card_modifier)
+            if self.extended_card_modifier is not None
+            else None
+        )
+
         return DefaultRequestHandler(
             agent_executor=self.executor,
             task_store=task_store or InMemoryTaskStore(),
+            agent_card=_v03_conversions.to_core_agent_card(self.card),
             queue_manager=queue_manager,
             push_config_store=push_config_store,
             push_sender=push_sender,
             request_context_builder=request_context_builder,
+            extended_agent_card=(
+                _v03_conversions.to_core_agent_card(self.extended_agent_card)
+                if self.extended_agent_card is not None
+                else None
+            ),
+            extended_card_modifier=extended_card_modifier_bridge,
         )
 
     def build_starlette_app(
         self,
         *,
         request_handler: "RequestHandler | None" = None,
-        context_builder: "CallContextBuilder | None" = None,
-    ) -> "Starlette":
+        context_builder: "ServerCallContextBuilder | None" = None,
+    ) -> Starlette:
         """Build a Starlette A2A application for ASGI server.
 
         Args:
@@ -203,19 +269,32 @@ class A2aAgentServer:
         Returns:
             A configured Starlette application instance.
         """
-        from a2a.server.apps import A2AStarletteApplication
+        handler = request_handler or self.build_request_handler()
 
-        return A2AStarletteApplication(
-            agent_card=self.card,
-            extended_agent_card=self.extended_agent_card,
-            http_handler=request_handler
-            or DefaultRequestHandler(
-                agent_executor=self.executor,
-                task_store=InMemoryTaskStore(),
-            ),
-            context_builder=context_builder,
-            card_modifier=self.card_modifier,
-            extended_card_modifier=self.extended_card_modifier,
-        ).build()
+        # Bridge sync v0.3-pydantic card_modifier to async proto-pydantic-proto
+        # so SDK 1.0 invokes it per request when the well-known card is fetched.
+        card_modifier_bridge = make_async_card_modifier(self.card_modifier) if self.card_modifier is not None else None
+
+        routes = list(
+            create_agent_card_routes(
+                _v03_conversions.to_core_agent_card(self.card),
+                card_modifier=card_modifier_bridge,
+            )
+        )
+        routes.extend(
+            create_jsonrpc_routes(
+                handler,
+                rpc_url="/",
+                context_builder=context_builder,
+                enable_v0_3_compat=True,
+            )
+        )
+
+        app = Starlette(routes=routes)
+
+        for middleware, kwargs in self.middlewares:
+            app.add_middleware(middleware, **kwargs)  # type: ignore[arg-type]
+
+        return app
 
     build = build_starlette_app  # default alias for build_starlette_app

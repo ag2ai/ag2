@@ -3,6 +3,9 @@ Title: "Orchestration Patterns"
 sidebarTitle: "Orchestration Patterns"
 ---
 
+!!! example "Try it on the AG2 Playground"
+    See group chat patterns running live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
 Patterns are the foundation of group chat orchestration - they define how agents take turns speaking and collaborating. Each pattern offers a different approach to determining which agent speaks next, giving you control over the conversation flow.
 
 ## Pattern Types
@@ -68,15 +71,17 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import DefaultPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -125,11 +130,30 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
     tech_agent.handoffs.set_after_work(RevertToUserTarget())
     general_agent.handoffs.set_after_work(RevertToUserTarget())
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 
@@ -175,14 +199,16 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
 ???+ info "Complete Code Example"
 
     ```python
-    from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
-    from autogen.agentchat.group.patterns import AutoPattern
-    from dotenv import load_dotenv
     import os
+    import pprint
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import run_group_chat_iter
+    from autogen.agentchat.group.patterns import AutoPattern
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from dotenv import load_dotenv
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -215,11 +241,30 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 ### When to Use AutoPattern
@@ -287,15 +332,17 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import RoundRobinPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -328,11 +375,30 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 ## RandomPattern: Non-deterministic Speaker Selection
@@ -364,15 +430,17 @@ pattern = RandomPattern(
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import RandomPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -405,11 +473,30 @@ pattern = RandomPattern(
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 ## ManualPattern: Human-Directed Speaker Selection
@@ -442,15 +529,17 @@ pattern = ManualPattern(
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import ManualPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -483,11 +572,30 @@ pattern = ManualPattern(
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 ### When to Use ManualPattern
 

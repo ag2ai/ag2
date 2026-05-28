@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -26,7 +26,7 @@ def lmm_config():
     }
 
 
-img_name = os.path.abspath("test/test_files/test_image.png")
+img_name = Path("test/test_files/test_image.png").resolve()
 
 
 @pytest.fixture

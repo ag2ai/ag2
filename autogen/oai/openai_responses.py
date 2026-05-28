@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-import copy
 import logging
 import os
 import warnings
@@ -164,7 +163,7 @@ def _get_base_class():
 # -----------------------------------------------------------------------------
 # OpenAI Client that calls the /responses endpoint
 # -----------------------------------------------------------------------------
-@require_optional_import("openai", "openai")
+@require_optional_import("openai>=2.30.0", "openai")
 class OpenAIResponsesClient:
     """Minimal implementation targeting the experimental /responses endpoint.
 
@@ -226,12 +225,8 @@ class OpenAIResponsesClient:
     def _add_image_cost(self, response: "Response") -> None:
         """Add image cost to self._image_costs when an image is generated"""
         for output in response.output:
-            if (
-                isinstance(output, ImageGenerationCall)
-                and hasattr(response.output[0], "model_extra")
-                and response.output[0].model_extra
-            ):
-                extra_fields = output.model_extra
+            if isinstance(output, ImageGenerationCall) and hasattr(output, "model_extra"):
+                extra_fields = output.model_extra or {}
 
                 image_cost, image_error = calculate_openai_image_cost(
                     model="gpt-image-1",
@@ -580,7 +575,7 @@ class OpenAIResponsesClient:
                         else:
                             raise ValueError(f"Invalid content type: {c.get('type')}")
                 else:
-                    blocks.append({"type": content_type, "text": content})
+                    blocks.append({"type": content_type, "text": content or ""})
 
                 # Only append if we have valid content blocks
                 if blocks:
@@ -835,7 +830,7 @@ class OpenAIResponsesClient:
         from autogen.tools.experimental.shell import ShellExecutor
 
         image_generation_tool_params = {"type": "image_generation"}
-        web_search_tool_params = {"type": "web_search_preview"}
+        web_search_tool_params = {"type": "web_search"}
         apply_patch_tool_params = {"type": "apply_patch"}
         workspace_dir = params.pop("workspace_dir", os.getcwd())
         allowed_paths = params.pop("allowed_paths", ["**"])
@@ -1010,24 +1005,16 @@ class OpenAIResponsesClient:
                 continue
 
             if item_type == "message":
-                new_item = copy.deepcopy(item)
-                new_item["type"] = "text"
-                new_item["role"] = "assistant"
-
                 blocks = item.get("content", [])
-                if len(blocks) == 1 and blocks[0].get("type") == "output_text":
-                    new_item["text"] = blocks[0]["text"]
-                elif len(blocks) > 0:
-                    # Handle multiple content blocks
-                    text_parts = []
-                    for block in blocks:
-                        if block.get("type") == "output_text":
-                            text_parts.append(block.get("text", ""))
-                    new_item["text"] = " ".join(text_parts)
-
-                if "content" in new_item:
-                    del new_item["content"]
-                content.append(new_item)
+                text_parts = []
+                for block in blocks:
+                    if block.get("type") == "output_text":
+                        text_parts.append(block.get("text", ""))
+                content.append({
+                    "type": "text",
+                    "role": "assistant",
+                    "text": " ".join(text_parts) if text_parts else "",
+                })
                 continue
 
             # ------------------------------------------------------------------

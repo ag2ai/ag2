@@ -14,6 +14,57 @@ from typing import Any
 
 __all__ = ("EventStreamHandler", "event_print", "get_current_ts", "get_event_logger", "to_dict")
 
+# ---------------------------------------------------------------------------
+# Shared sensitive-key definitions (single source of truth for all loggers)
+# ---------------------------------------------------------------------------
+
+# Exact key names treated as sensitive. Uses exact matching only — no substring
+# matching — so adding a key here won't accidentally catch unrelated keys.
+SENSITIVE_KEYS = frozenset({
+    "api_key",
+    "api-key",
+    "apikey",
+    "password",
+    "secret",
+    "credential",
+    "authorization",
+    "bearer",
+    "access_token",
+    "refresh_token",
+    "auth_token",
+    "api_token",
+    "azure_ad_token",
+    "azure_ad_token_provider",
+    "azure_endpoint",
+})
+
+
+def get_sensitive_exclude_keys() -> tuple[str, ...]:
+    """Return a tuple of sensitive key names for use with to_dict(exclude=...).
+
+    Includes 'self' and '__class__' which SqliteLogger always excludes.
+    """
+    return ("self", "__class__", *SENSITIVE_KEYS)
+
+
+def redact(data: Any, depth: int = 10) -> Any:
+    """Recursively mask sensitive keys with '***REDACTED***'. Depth-limited to avoid cycles."""
+    if depth <= 0:
+        return data
+    if isinstance(data, dict):
+        out = {}
+        for k, v in data.items():
+            if isinstance(k, str) and k.lower() in SENSITIVE_KEYS:
+                out[k] = "***REDACTED***"
+            else:
+                out[k] = redact(v, depth - 1)
+        return out
+    if isinstance(data, (list, tuple, set)):
+        result = [redact(item, depth - 1) for item in data]
+        return type(data)(result)
+    return data
+
+
 _EVENT_LOGGER_NAME = "ag2.event.processor"
 _END_KEY = "ag2_event_end"
 _FLUSH_KEY = "ag2_event_flush"

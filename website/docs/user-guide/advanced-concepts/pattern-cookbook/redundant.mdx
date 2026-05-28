@@ -123,7 +123,7 @@ from autogen.agentchat.group import ContextVariables, ReplyResult, RevertToUserT
 # Agents respond in isolation through a nested chat
 
 # Setup LLM configuration
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-4.1-mini", "cache_seed": None})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4.1-mini", "cache_seed": None})
 
 # Shared context for tracking the conversation and redundant agent results
 shared_context = ContextVariables(data={

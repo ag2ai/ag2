@@ -1,6 +1,7 @@
 ---
-title: LiteLLM with Azure
+title: LiteLLM with Azure OpenAI Guide | Multi-Agent Framework
 sidebarTitle: LiteLLM with Azure
+description: "How to use Azure OpenAI models with AG2 via LiteLLM proxy. Configuration and code examples for multi-agent systems on Azure."
 ---
 
 Before starting this guide, ensure you have completed the [Installation Guide](/docs/user-guide/models/litellm-proxy-server/installation) and installed all required dependencies.
@@ -61,7 +62,7 @@ To communicate with LiteLLM, configure the model in `config_list` and initiate a
 ```python
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig(config_list={"model": "azure-gpt-5-nano", "base_url": "http://0.0.0.0:4000"})
+llm_config = LLMConfig({"model": "azure-gpt-5-nano", "base_url": "http://0.0.0.0:4000"})
 
 user_proxy = UserProxyAgent(
     name="user_proxy",

@@ -330,12 +330,12 @@ class TestFirecrawlTool:
         assert len(results) >= 0
 
     @pytest.mark.skip("Integration test - requires live Firecrawl instance and credentials")
-    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_agent_integration(self, credentials_openai_mini: Credentials) -> None:
         firecrawl_tool = FirecrawlTool(firecrawl_api_key="test-key")
         assistant = AssistantAgent(
             name="assistant",
             system_message="You are a helpful assistant. Use the firecrawl tool when needed.",
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
         )
         firecrawl_tool.register_for_llm(assistant)
         response = assistant.run(

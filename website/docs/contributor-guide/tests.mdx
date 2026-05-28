@@ -34,7 +34,7 @@ See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#testi
 ## Skip flags for tests
 
 - `-m`: Used to select or deselect specific groups of tests marked with pytest markers, such as tests for LLM services like OpenAI, Gemini etc. For example, you can mark tests with `@pytest.mark.openai` and then use `-m openai` to run only those tests.
-- `-m "not docker"`: Skips tests that explicitly require Docker.
+- `-m "not docker"`: Skips tests that explicitly require Docker. The `docker` Python package is an optional dependency — install with `pip install ag2[docker]` (or `pip install ag2[test]`, which already includes it) to run these tests.
 - `-m "not redis"`: Skips tests that require a Redis server.
 
 

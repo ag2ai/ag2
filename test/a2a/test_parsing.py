@@ -2,10 +2,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, TaskStatus, TextPart
+from a2a.compat.v0_3.types import (
+    Artifact,
+    DataPart,
+    Message,
+    Part,
+    Role,
+    Task,
+    TaskState,
+    TaskStatus,
+    TextPart,
+)
+from dirty_equals import IsUUID
 
 from autogen.a2a.utils import (
     CLIENT_TOOLS_KEY,
@@ -18,6 +30,7 @@ from autogen.a2a.utils import (
     response_message_from_a2a_artifacts,
     response_message_from_a2a_message,
     response_message_from_a2a_task,
+    update_artifact_to_streaming,
 )
 from autogen.agentchat.remote.protocol import RequestMessage, ResponseMessage
 
@@ -212,8 +225,9 @@ class TestResponseMessageFromA2AArtifacts:
             ],
         )
 
-        with pytest.raises(NotImplementedError, match="Multiple parts are not supported"):
-            response_message_from_a2a_artifacts([artifact])
+        assert response_message_from_a2a_artifacts([artifact]) == ResponseMessage(
+            messages=[{"content": "Part 1"}, {"content": "Part 2"}],
+        )
 
 
 class TestResponseMessageFromA2ATask:
@@ -315,7 +329,7 @@ class TestResponseMessageFromA2AMessage:
         )
         result = response_message_from_a2a_message(message)
 
-        assert result == ResponseMessage(messages=[{"content": ""}])
+        assert result == ResponseMessage(messages=[])
 
     def test_single_text_part(self) -> None:
         message = Message(
@@ -362,11 +376,13 @@ class TestResponseMessageFromA2AMessage:
             ],
             message_id=str(uuid4()),
         )
+        result = response_message_from_a2a_message(message)
 
-        with pytest.raises(NotImplementedError, match="Data parts and text parts are not supported together"):
-            response_message_from_a2a_message(message)
+        assert result == ResponseMessage(
+            messages=[{"content": "Text 1"}, {"result": "42"}],
+        )
 
-    def test_multiple_data_parts_raises_error(self) -> None:
+    def test_multiple_data_parts(self) -> None:
         message = Message(
             role=Role.agent,
             parts=[
@@ -375,9 +391,11 @@ class TestResponseMessageFromA2AMessage:
             ],
             message_id=str(uuid4()),
         )
+        result = response_message_from_a2a_message(message)
 
-        with pytest.raises(NotImplementedError, match="Multiple data parts are not supported"):
-            response_message_from_a2a_message(message)
+        assert result == ResponseMessage(
+            messages=[{"key1": "value1"}, {"key2": "value2"}],
+        )
 
     def test_message_with_context(self) -> None:
         message = Message(
@@ -389,7 +407,7 @@ class TestResponseMessageFromA2AMessage:
         response = response_message_from_a2a_message(message)
 
         assert response == ResponseMessage(
-            messages=[{"content": ""}],
+            messages=[],
             context={"session_id": "abc123"},
         )
 
@@ -415,6 +433,93 @@ class TestResponseMessageToA2A:
             # randomly generated artifact_id
             artifact_id=artifact.artifact_id,
         )
+
+
+def _artifact_event(artifact: Artifact, last_chunk: bool | None) -> SimpleNamespace:
+    return SimpleNamespace(artifact=artifact, last_chunk=last_chunk)
+
+
+class TestUpdateArtifactToStreaming:
+    def test_text_part_yields_stream_event(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-1",
+            name="result",
+            parts=[Part(root=TextPart(text="Hello"))],
+        )
+        event = _artifact_event(artifact, last_chunk=False)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert [r.content.model_dump() for r in result] == [{"uuid": IsUUID(), "content": "Hello"}]
+
+    def test_data_part_yields_content_from_data(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-2",
+            name="result",
+            parts=[Part(root=DataPart(data={"content": "streamed text", "role": "assistant"}))],
+        )
+        event = _artifact_event(artifact, last_chunk=False)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert [r.content.model_dump() for r in result] == [{"uuid": IsUUID(), "content": "streamed text"}]
+
+    def test_data_part_missing_content_yields_empty_string(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-3",
+            name="result",
+            parts=[Part(root=DataPart(data={"role": "assistant"}))],
+        )
+        event = _artifact_event(artifact, last_chunk=False)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert [r.content.model_dump() for r in result] == [{"uuid": IsUUID(), "content": ""}]
+
+    def test_last_chunk_true_yields_nothing(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-4",
+            name="result",
+            parts=[Part(root=TextPart(text="final"))],
+        )
+        event = _artifact_event(artifact, last_chunk=True)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert result == []
+
+    def test_last_chunk_none_yields_nothing(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-5",
+            name="result",
+            parts=[Part(root=TextPart(text="chunk"))],
+        )
+        event = _artifact_event(artifact, last_chunk=None)
+
+        result = list(update_artifact_to_streaming(event))
+
+        # last_chunk is None; `if event.last_chunk is False` is False for None
+        assert result == []
+
+    def test_multiple_parts_yields_multiple_events(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-6",
+            name="result",
+            parts=[
+                Part(root=TextPart(text="A")),
+                Part(root=TextPart(text="B")),
+                Part(root=DataPart(data={"content": "C"})),
+            ],
+        )
+        event = _artifact_event(artifact, last_chunk=False)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert [r.content.model_dump() for r in result] == [
+            {"uuid": IsUUID(), "content": "A"},
+            {"uuid": IsUUID(), "content": "B"},
+            {"uuid": IsUUID(), "content": "C"},
+        ]
 
 
 class TestRoundTripConversions:

@@ -3,6 +3,9 @@ Title: "Context Variables"
 sidebarTitle: "Context Variables"
 ---
 
+!!! example "Try it on the AG2 Playground"
+    See context-driven routing live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
 Context Variables provide shared memory for your agents, allowing them to maintain state across a conversation and make decisions based on that shared information. If tools are the specialized capabilities agents can use, context variables are their collective knowledge base.
 
 ## Introduction to Context Variables
@@ -296,14 +299,16 @@ This design allows you to build sophisticated routing logic that adapts to your 
 Let's enhance our triage system with context variables to maintain session state and provide personalized support:
 
 ```python
+import os
+import pprint
 from typing import Annotated
 from datetime import datetime
 from autogen import ConversableAgent, LLMConfig, UpdateSystemMessage
-from autogen.agentchat import initiate_group_chat
+from autogen.agentchat import run_group_chat_iter
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group import ReplyResult, AgentNameTarget, ContextVariables
+from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
 from dotenv import load_dotenv
-import os
 load_dotenv()
 
 # Initialize context variables
@@ -405,7 +410,7 @@ def get_user_context(context_variables: ContextVariables) -> str:
     - Query type: {context_variables.get("query_type", "Unknown")}"""
 
 # Create the agents
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 triage_agent = ConversableAgent(
     name="triage_agent",
@@ -453,12 +458,31 @@ pattern = AutoPattern(
     group_manager_args={"llm_config": llm_config}
 )
 
-# Run the chat
-result, final_context, last_agent = initiate_group_chat(
+# Run the chat events
+for event in run_group_chat_iter(
     pattern=pattern,
     messages="My laptop keeps shutting down randomly. Can you help?",
-    max_rounds=10
-)
+    max_rounds=20,
+):
+    if isinstance(event, InputRequestEvent):
+        user_input = input("  Input requested: ")
+        event.content.respond(user_input)
+        continue
+
+    if isinstance(event, GroupChatRunChatEvent):
+        print(f"\n=== {event.content.speaker}'s turn ===")
+        pprint.pprint(event.content)
+        print("-" * 80)
+
+    if isinstance(event, ToolResponseEvent):
+        print(f"\n=== {event.content} tool response ===")
+        print("-" * 80)
+
+    if hasattr(event, "content") and hasattr(event.content, "content"):
+        content = str(event.content.content)
+        pprint.pprint(content)
+        print("-" * 80)
+    pass
 ```
 
 ## Example Output

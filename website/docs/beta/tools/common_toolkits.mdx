@@ -1,0 +1,617 @@
+---
+title: Common Tools
+sidebarTitle: Common Tools
+---
+
+# Common Tools
+
+AG2 ships with ready-made tools and toolkits that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/beta/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
+
+## FilesystemToolkit
+
+`FilesystemToolkit` gives an agent the ability to read, write, update, delete, and search files within a sandboxed directory. All paths are resolved relative to a configurable `base_path`, and a path-traversal guard prevents access outside it.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import FilesystemToolkit
+
+fs = FilesystemToolkit(base_path="/tmp/workspace")
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[fs],
+)
+```
+
+### Available tools
+
+| Tool | Description |
+| :--- | :--- |
+| `read_file` | Read the contents of a file |
+| `write_file` | Create or overwrite a file (creates parent directories automatically) |
+| `update_file` | Replace the first occurrence of a string in a file |
+| `delete_file` | Delete a file |
+| `find_files` | Search for files matching a glob pattern (supports recursive `**` patterns) |
+
+### Read-only mode
+
+Pass `#!python read_only=True` to expose only `read_file` and `find_files`:
+
+```python linenums="1"
+fs = FilesystemToolkit(base_path="./docs", read_only=True)
+```
+
+### Using individual tools
+
+Every tool is available as an attribute on the toolkit instance. You can pass individual tools to an agent instead of the whole set:
+
+```python linenums="1"
+fs = FilesystemToolkit(base_path="/tmp/workspace")
+
+agent = Agent(
+    "reader",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[fs.read_file(), fs.find_files()],
+)
+```
+
+### Using a temporary directory
+
+For throwaway workspaces, use `#!python tempfile.TemporaryDirectory` so the directory and all its contents are automatically cleaned up when the context manager exits:
+
+```python linenums="1"
+import tempfile
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import FilesystemToolkit
+
+async def main() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fs = FilesystemToolkit(base_path=tmpdir)
+
+        agent = Agent(
+            "assistant",
+            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            tools=[fs],
+        )
+        await agent.ask("Create a hello.py file that prints 'Hello, World!'")
+```
+
+!!! tip
+    Prefer `#!python tempfile.TemporaryDirectory` over hardcoded `/tmp` paths. It guarantees a unique directory per run and cleans up after itself, avoiding leftover files and collisions between concurrent executions.
+
+### Path safety
+
+All paths are resolved relative to `base_path`. Any attempt to escape the base directory (e.g. `../../etc/passwd`) raises a `#!python PermissionError`:
+
+```python linenums="1"
+fs = FilesystemToolkit(base_path="/tmp/sandbox")
+
+# The agent can access /tmp/sandbox/data.txt
+# but NOT /tmp/sandbox/../../etc/passwd
+```
+
+---
+
+## SkillsToolkit
+
+`SkillsToolkit` gives an agent access to locally installed skills following the [agentskills.io](https://agentskills.io){.external-link target="_blank"} convention. Each skill is a directory containing a `SKILL.md` instructions file and an optional `scripts/` subdirectory of runnable `.py` / `.sh` files.
+
+The toolkit uses a three-step progressive-disclosure pattern so the agent fetches only the detail it actually needs:
+
+1. **`list_skills`** — returns a lightweight catalog (name + description).
+2. **`load_skill`** — returns the full `SKILL.md` instructions for a specific skill on demand.
+3. **`run_skill_script`** — executes a script from the skill's `scripts/` directory.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import SkillsToolkit
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SkillsToolkit()],
+)
+```
+
+By default `SkillsToolkit` looks for skills in `.agents/skills` relative to the current working directory.
+
+### Custom install directory
+
+Pass a `LocalRuntime` to point to a different directory:
+
+```python linenums="1"
+from autogen.beta.tools import SkillsToolkit
+from autogen.beta.tools.skills import LocalRuntime
+
+skills = SkillsToolkit(runtime=LocalRuntime("./my-skills"))
+# or just a path string
+skills = SkillsToolkit(runtime="./my-skills")
+```
+
+### Extra read-only search paths
+
+`extra_paths` adds additional directories that are scanned for skills but never written to — installed skills always go to the primary `dir`:
+
+```python linenums="1"
+from autogen.beta.tools import SkillsToolkit
+from autogen.beta.tools.skills import LocalRuntime
+
+skills = SkillsToolkit(
+    runtime=LocalRuntime("./my-skills", extra_paths=["./shared-skills"])
+)
+```
+
+### Using individual tools
+
+Every tool is available as an attribute on the toolkit instance:
+
+```python linenums="1"
+from autogen.beta.tools import SkillsToolkit
+
+skills = SkillsToolkit()
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[skills.list_skills(), skills.load_skill()],
+)
+```
+
+Available tools:
+
+| Tool | Description |
+| :--- | :--- |
+| `list_skills` | Return a catalog of installed skills with name and short description |
+| `load_skill` | Fetch the full `SKILL.md` content for a specific skill |
+| `run_skill_script` | Execute a `.py` or `.sh` script from a skill's `scripts/` directory |
+
+---
+
+## SkillSearchToolkit
+
+`SkillSearchToolkit` extends `SkillsToolkit` with three additional tools for discovering and installing skills from the [skills.sh](https://skills.sh){.external-link target="_blank"} registry. It uses the GitHub Tarball API directly — no Node.js required.
+
+```python linenums="1"
+import asyncio
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import SkillSearchToolkit
+
+agent = Agent(
+    "coder",
+    "You are a helpful coding assistant. Use skills to extend your capabilities.",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SkillSearchToolkit()],
+)
+
+async def main() -> None:
+    reply = await agent.ask(
+        "Find and install a skill for React best practices, then tell me the top 3 rules."
+    )
+    print(await reply.content())
+
+asyncio.run(main())
+```
+
+### GitHub rate limits
+
+By default the GitHub API allows 60 unauthenticated requests per hour. Setting a `GITHUB_TOKEN` environment variable raises this to 5,000 per hour:
+
+```bash
+export GITHUB_TOKEN=ghp_...
+```
+
+You can also pass the token directly via `SkillsClientConfig`:
+
+```python linenums="1"
+from autogen.beta.tools import SkillSearchToolkit
+from autogen.beta.tools.skills import SkillsClientConfig
+
+skills = SkillSearchToolkit(
+    client=SkillsClientConfig(github_token="ghp_..."),
+)
+```
+
+### Custom configuration
+
+```python linenums="1"
+from autogen.beta.tools import SkillSearchToolkit
+from autogen.beta.tools.skills import LocalRuntime, SkillsClientConfig
+
+skills = SkillSearchToolkit(
+    LocalRuntime(
+        dir="./my-skills",
+        extra_paths=["./extra-skills"],
+        cleanup=True,
+        timeout=30,
+        blocked=["rm -rf"],
+    ),
+    client=SkillsClientConfig(
+        github_token="ghp_...",
+        proxy="http://proxy.company.com:8080",
+    ),
+)
+```
+
+### Using individual tools
+
+```python linenums="1"
+skills = SkillSearchToolkit()
+
+agent = Agent(
+    "coder",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[
+        skills.search_skills(),
+        skills.install_skill(),
+        skills.list_skills(),
+    ],
+)
+```
+
+Available tools:
+
+`SkillSearchToolkit` inherits all tools from `SkillsToolkit` and adds:
+
+| Tool | Description |
+| :--- | :--- |
+| `search_skills` | Search the skills.sh registry by keyword |
+| `install_skill` | Download and install a skill by its registry identifier |
+| `remove_skill` | Remove an installed skill by name |
+
+---
+
+## DuckDuckSearchTool
+
+`DuckDuckSearchTool` gives an agent the ability to search the web using DuckDuckGo. No API key is required.
+
+!!! note
+    Requires the `ddgs` extra: `pip install ag2[ddgs]`
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import DuckDuckSearchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[DuckDuckSearchTool()],
+)
+```
+
+### Configuration
+
+```python linenums="1"
+tool = DuckDuckSearchTool(
+    max_results=10,       # default: 5
+    region="uk-en",       # default: "us-en"
+    safesearch="strict",  # default: "moderate" — options: "on", "moderate", "off"
+)
+```
+
+All parameters accept a `Variable` for dynamic values resolved at execution time.
+
+---
+
+## ExaToolkit
+
+`ExaToolkit` gives an agent four related tools powered by the [Exa](https://exa.ai){.external-link target="_blank"} neural search engine: web search, find-similar, content retrieval, and AI-powered answers — all sharing a single client.
+
+!!! note
+    Requires the `exa` extra and an API key: `pip install ag2[exa]`
+
+```python linenums="1"
+import os
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import ExaToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[ExaToolkit(api_key=os.environ["EXA_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the Exa SDK reads `EXA_API_KEY` from the environment automatically.
+
+### Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `exa_search` | Neural web search with filters (domains, dates, type, category) |
+| `exa_find_similar` | Find pages similar to a given URL |
+| `exa_get_contents` | Fetch full text content for specific URLs |
+| `exa_answer` | Get an AI-generated answer with citations |
+
+### Shared defaults
+
+`num_results` and `max_characters` on the constructor are applied to the default `exa_search` and `exa_find_similar` tools:
+
+```python linenums="1"
+toolkit = ExaToolkit(
+    api_key=...,
+    num_results=10,         # applies to search & find_similar
+    max_characters=2000,    # per-result text cap for search; None = metadata-only
+)
+```
+
+### Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.find_similar()`, `toolkit.get_contents()`, `toolkit.answer()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = ExaToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search(), toolkit.answer()],
+)
+```
+
+### Per-tool configuration
+
+Per-call parameters (filters, domains, dates, `num_results`, `max_characters`, etc.) live on the factory methods, not on the toolkit itself:
+
+```python linenums="1"
+toolkit = ExaToolkit(api_key=...)
+
+search_tool = toolkit.search(
+    num_results=5,
+    max_characters=2000,           # triggers search_and_contents for full text
+    search_type="neural",          # "neural" | "keyword" | "hybrid" | "auto" | "fast" | "deep"
+    category="research paper",     # e.g. "news", "github", "pdf", ...
+    include_domains=["arxiv.org"],
+    exclude_domains=["medium.com"],
+    start_published_date="2024-01-01",
+    end_published_date="2024-12-31",
+    use_autoprompt=True,
+    livecrawl="always",            # "never" | "fallback" | "always" | "preferred"
+)
+
+agent = Agent("researcher", config=config, tools=[search_tool, toolkit.answer()])
+```
+
+When `max_characters` is set, `exa_search` calls Exa's `search_and_contents` endpoint so each result carries `text`. When `max_characters` is `None`, only metadata is returned (cheaper and faster).
+
+All runtime parameters accept `Variable` for deferred context resolution.
+
+---
+
+## PerplexitySearchToolkit
+
+`PerplexitySearchToolkit` gives an agent two related tools powered by [Perplexity](https://www.perplexity.ai){.external-link target="_blank"}: raw web search via the Search API and LLM-grounded answers with citations via Sonar — sharing a single client.
+
+!!! note
+    Requires the `perplexity` extra and an API key: `pip install ag2[perplexity]`
+
+```python linenums="1"
+import os
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import PerplexitySearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[PerplexitySearchToolkit(api_key=os.environ["PERPLEXITY_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the Perplexity SDK reads the `PERPLEXITY_API_KEY` environment variable automatically.
+
+### Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `perplexity_search` | Raw web search via the [Search API](https://docs.perplexity.ai/docs/search/quickstart){.external-link target="_blank"} — ranked title/url/snippet/date results, no LLM hop |
+| `perplexity_answer` | LLM-generated answer with citations via [Sonar Chat Completions](https://docs.perplexity.ai/docs/sonar/openai-compatibility){.external-link target="_blank"} — also returns search results, citations, and optional images |
+
+### Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.answer()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = PerplexitySearchToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search()],
+)
+```
+
+### Per-tool configuration
+
+Per-call parameters live on the factory methods, not on the toolkit itself:
+
+```python linenums="1"
+toolkit = PerplexitySearchToolkit(api_key=...)
+
+search_tool = toolkit.search(
+    max_results=10,
+    max_tokens_per_page=512,
+    search_domain_filter=["arxiv.org", "-medium.com"],  # prefix '-' to exclude
+    search_recency_filter="week",                       # "hour" | "day" | "week" | "month" | "year"
+    search_after_date_filter="1/1/2025",                # MM/DD/YYYY
+    search_before_date_filter="12/31/2025",
+)
+
+answer_tool = toolkit.answer(
+    model="sonar-pro",              # "sonar" | "sonar-pro" | "sonar-reasoning" | "sonar-reasoning-pro" | "sonar-deep-research" — default: "sonar"
+    max_tokens=2000,                # default: 1000
+    search_context_size="high",     # "low" | "medium" | "high" — default: "high"
+    search_mode="academic",         # "web" | "academic" | "sec"
+    search_recency_filter="month",  # "hour" | "day" | "week" | "month" | "year"
+    return_images=True,             # include image URLs in the response
+    return_related_questions=True,  # include suggested follow-up questions
+    search_domain_filter=["arxiv.org", "nature.com"],
+)
+
+agent = Agent("researcher", config=config, tools=[search_tool, answer_tool])
+```
+
+All runtime parameters accept a `Variable` for deferred context resolution.
+
+### HTTP and SDK options
+
+The toolkit constructor accepts options for the underlying `httpx.AsyncClient` and the Perplexity SDK client. Any extra keyword arguments are forwarded directly to `AsyncPerplexity(...)` (e.g. `base_url`, `max_retries`, `default_headers`):
+
+```python linenums="1"
+toolkit = PerplexitySearchToolkit(
+    api_key=...,
+    proxy="http://proxy.company.com:8080",  # passed to httpx.AsyncClient
+    verify=False,                            # disable TLS verification (httpx)
+    timeout=30.0,                            # httpx timeout in seconds
+    # extra kwargs below are forwarded to AsyncPerplexity
+    base_url="https://custom.perplexity.example",
+    max_retries=5,
+    default_headers={"X-Trace-Id": "abc-123"},
+)
+```
+
+### Result
+
+Both tools return a `PerplexitySearchResponse` with these fields:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The original search query |
+| `results` | List of `PerplexitySearchResult` (`title`, `url`, `snippet`, `date`) |
+| `content` | LLM-generated answer (filled by `perplexity_answer`; empty for `perplexity_search`) |
+| `citations` | URLs the model cited inline (filled by `perplexity_answer`) |
+| `images` | List of `PerplexityImageMeta` when `return_images=True` on `perplexity_answer` |
+
+When `return_images=True`, image URLs are also surfaced as `ImageInput` parts on the tool result so the next model turn receives them as proper image inputs.
+
+!!! tip
+    Use `perplexity_search` when the agent only needs raw ranked URLs (cheaper, no LLM hop). Use `perplexity_answer` when a grounded answer with citations is helpful.
+
+!!! tip
+    `search_domain_filter` on `perplexity_answer` is a Pro-tier feature on the Perplexity API; see [usage tiers](https://docs.perplexity.ai/guides/usage-tiers){.external-link target="_blank"}.
+
+---
+
+## TavilySearchTool
+
+`TavilySearchTool` gives an agent advanced web search capabilities via the [Tavily](https://tavily.com){.external-link target="_blank"} API. Results include relevance scores and optional LLM-generated answers, raw page content, and images.
+
+!!! note
+    Requires the `tavily` extra and an API key: `pip install ag2[tavily]`
+
+```python linenums="1"
+import os
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import TavilySearchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[TavilySearchTool(api_key=os.environ["TAVILY_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, Tavily reads the `TAVILY_API_KEY` environment variable automatically.
+
+### Configuration
+
+```python linenums="1"
+tool = TavilySearchTool(
+    max_results=5,
+    search_depth="advanced",   # "basic" | "advanced" | "fast" | "ultra-fast"
+    topic="news",              # "general" | "news" | "finance"
+    include_answer=True,       # add an LLM-generated summary to the response
+    include_raw_content=True,  # include full page text alongside the snippet
+    include_images=True,       # include image URLs in the response
+    time_range="week",         # "day" | "week" | "month" | "year"
+    start_date="2024-01-01",   # YYYY-MM-DD
+    end_date="2024-12-31",     # YYYY-MM-DD
+    days=7,
+    include_domains=["reuters.com", "bbc.com"],
+    exclude_domains=["example.com"],
+    country="US",              # ISO country code for localized results
+    auto_parameters=True,      # let Tavily auto-tune query parameters
+    include_favicon=True,      # include result favicons in the response
+)
+```
+
+All search parameters accept a `Variable` for dynamic values resolved at execution time.
+
+### HTTP and SDK options
+
+The constructor also accepts options for the underlying `httpx.AsyncClient` and the Tavily SDK client. Any extra keyword arguments are forwarded directly to `AsyncTavilyClient(...)` (e.g. `api_base_url`, `company_info_tags`, `project_id`):
+
+```python linenums="1"
+tool = TavilySearchTool(
+    api_key=...,
+    proxy="http://proxy.company.com:8080",  # passed to httpx.AsyncClient
+    verify=False,                            # disable TLS verification (httpx)
+    timeout=30.0,                            # httpx timeout in seconds
+    # extra kwargs below are forwarded to AsyncTavilyClient
+    api_base_url="https://custom.tavily.example",
+    company_info_tags=("news", "finance"),
+)
+```
+
+---
+
+## LocalShellTool
+
+`LocalShellTool` gives an agent the ability to run shell commands in a local subprocess. By default it creates a temporary working directory that is cleaned up on process exit.
+
+!!! warning
+    `LocalShellTool` executes arbitrary shell commands. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import LocalShellTool
+
+agent = Agent(
+    "engineer",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[LocalShellTool("/tmp/my_project")],
+)
+```
+
+Passing a path string creates a `LocalShellEnvironment` in that directory. Passing nothing creates a temporary directory.
+
+### Restricting commands
+
+Use `LocalShellEnvironment` directly to control what the agent can run:
+
+```python linenums="1"
+from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools.shell import LocalShellEnvironment
+
+# Allow only specific commands
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    allowed=["git", "python", "pip"],
+))
+
+# Block dangerous commands
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    blocked=["rm -rf", "curl", "wget"],
+))
+
+# Read-only mode — agent can inspect but not modify
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    readonly=True,
+))
+
+# Hide sensitive files from the agent
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    ignore=["**/.env", "*.key", "secrets/**"],
+))
+```

@@ -4,6 +4,7 @@
 
 import logging
 import os
+import warnings
 from typing import Annotated, Any
 
 from ....doc_utils import export_module
@@ -596,6 +597,11 @@ class FirecrawlTool(Tool):
         Raises:
             ValueError: If `firecrawl_api_key` is not provided either directly or via the environment variable.
         """
+        warnings.warn(
+            "FirecrawlTool is deprecated and will be removed in v0.14. Use Crawl4AITool or BrowserUseTool instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.firecrawl_api_key = firecrawl_api_key or os.getenv("FIRECRAWL_API_KEY")
         self.firecrawl_api_url = firecrawl_api_url or os.getenv("FIRECRAWL_API_URL")
 

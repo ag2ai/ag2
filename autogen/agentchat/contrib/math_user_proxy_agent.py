@@ -6,12 +6,14 @@
 # SPDX-License-Identifier: MIT
 import os
 import re
+import warnings
 from collections.abc import Callable
 from time import sleep
 from typing import Any, Literal
 
 from pydantic import BaseModel
 from pydantic.version import VERSION as PYDANTIC_VERSION
+from typing_extensions import deprecated
 
 if PYDANTIC_VERSION.startswith("2."):
     from pydantic import model_validator
@@ -140,8 +142,16 @@ def _remove_print(code):
     return "\n".join(lines)
 
 
+@deprecated(
+    "MathUserProxyAgent is deprecated and will be removed in v0.14. Use ConversableAgent with tool calling instead."
+)
 class MathUserProxyAgent(UserProxyAgent):
-    """(Experimental) A MathChat agent that can handle math problems."""
+    """(Deprecated) A MathChat agent that can handle math problems.
+
+    .. deprecated::
+        MathUserProxyAgent is deprecated and will be removed in v0.14.
+        Use ConversableAgent with tool calling instead.
+    """
 
     MAX_CONSECUTIVE_AUTO_REPLY = 15  # maximum number of consecutive auto replies (subject to future change)
     DEFAULT_REPLY = "Continue. Please keep solving the problem until you need to query. (If you get to the answer, put it in \\boxed{}.)"
@@ -173,6 +183,12 @@ class MathUserProxyAgent(UserProxyAgent):
         max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
         **kwargs (dict): other kwargs in [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent#userproxyagent).
         """
+        warnings.warn(
+            "MathUserProxyAgent is deprecated and will be removed in v0.14. "
+            "Use ConversableAgent with tool calling instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             is_termination_msg=is_termination_msg,
@@ -452,7 +468,7 @@ class WolframAlphaAPIWrapper(BaseModel):
                 )
         if res is None:
             return (
-                "Wolfram Alpha wasn't able to answer it (may due to web error), you can try again or use python.",
+                "Wolfram Alpha wasn't able to answer it (may be due to web error), you can try again or use python.",
                 is_success,
             )
 
