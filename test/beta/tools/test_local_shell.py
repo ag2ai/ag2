@@ -112,8 +112,6 @@ class TestLocalShellToolConstruction:
 
 
 class TestShellExecution:
-    """These tests call the tool function directly via the agent + TestConfig."""
-
     def _make_tool_call(self, command: str) -> ToolCallEvent:
         return ToolCallEvent(
             arguments=json.dumps({"command": command}),
@@ -125,6 +123,15 @@ class TestShellExecution:
             ModelResponse(tool_calls=ToolCallsEvent([self._make_tool_call(command)])),
             final_reply,
         )
+
+    def test_environment_run_works_without_active_event_loop(self, tmp_path: Path) -> None:
+        env = LocalShellEnvironment(path=tmp_path)
+        assert env.run("echo sync") == "sync"
+
+    @pytest.mark.asyncio
+    async def test_environment_run_works_inside_active_event_loop(self, tmp_path: Path) -> None:
+        env = LocalShellEnvironment(path=tmp_path)
+        assert env.run("echo async") == "async"
 
     @pytest.mark.asyncio
     async def test_allowed_permits_matching_command(self, tmp_path: Path) -> None:
@@ -145,8 +152,6 @@ class TestShellExecution:
         await agent.ask("run it")
         assert not output.exists(), "touch was blocked but file was created anyway"
 
-    # ── blocked ───────────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_blocked_rejects_command(self, tmp_path: Path) -> None:
         output = tmp_path / "out.txt"
@@ -155,12 +160,9 @@ class TestShellExecution:
         await agent.ask("run it")
         assert not output.exists(), "touch was blocked but file was created anyway"
 
-    # ── env merging ───────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_env_merged_not_replaced(self, tmp_path: Path) -> None:
-        """Extra env vars must be added on top of os.environ, not replace it."""
-        # Write a helper script — avoids shell variable syntax differences
+        # Use a helper script — avoids shell variable syntax differences
         # between bash ($VAR) and cmd.exe (%VAR%) across platforms.
         script = tmp_path / "check_env.py"
         script.write_text(
@@ -189,11 +191,8 @@ class TestShellExecution:
         path_part = result.split("|", 1)[1] if "|" in result else ""
         assert path_part.strip(), f"PATH was lost — env was replaced instead of merged: {result!r}"
 
-    # ── timeout ───────────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_timeout_returns_string_not_exception(self, tmp_path: Path) -> None:
-        """A timed-out command must return an error string, not raise."""
         output_file = tmp_path / "timeout_result.txt"
         shell = LocalShellTool(
             environment=LocalShellEnvironment(
@@ -209,8 +208,6 @@ class TestShellExecution:
         assert await reply.content() == "done"
         # The file should not exist — command was killed
         assert not output_file.exists()
-
-    # ── ignore ────────────────────────────────────────────────────────────────
 
     @pytest.mark.asyncio
     async def test_ignore_blocks_env_file(self, tmp_path: Path) -> None:
@@ -229,11 +226,8 @@ class TestShellExecution:
         assert "Access denied" in tool_results[0], f"Expected 'Access denied' but got: {tool_results[0]!r}"
         assert "SECRET" not in tool_results[0], "File content leaked despite ignore pattern"
 
-    # ── exit code ─────────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_exit_code_included_on_failure(self, tmp_path: Path) -> None:
-        """A failed command must include [exit code: N] in the tool result."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
@@ -247,7 +241,6 @@ class TestShellExecution:
 
     @pytest.mark.asyncio
     async def test_exit_code_absent_on_success(self, tmp_path: Path) -> None:
-        """A successful command must NOT include [exit code: ...] in the result."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
@@ -258,8 +251,6 @@ class TestShellExecution:
 
         assert tool_results, "No tool result received"
         assert "exit code" not in tool_results[0], f"Unexpected exit code in success: {tool_results[0]!r}"
-
-    # ── filesystem persistence ────────────────────────────────────────────────
 
     @pytest.mark.asyncio
     async def test_files_persist_between_ask_calls(self, tmp_path: Path) -> None:
@@ -300,11 +291,8 @@ class TestShellExecution:
         assert await reply2.content() == "read"
         assert (tmp_path / "counter.txt").read_text().strip() == "42"
 
-    # ── output truncation ─────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_output_truncated_when_exceeds_limit(self, tmp_path: Path) -> None:
-        """Output longer than max_output must be cut with a note appended."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
@@ -323,7 +311,6 @@ class TestShellExecution:
 
     @pytest.mark.asyncio
     async def test_output_not_truncated_within_limit(self, tmp_path: Path) -> None:
-        """Short output must be returned as-is without any truncation note."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
@@ -335,11 +322,8 @@ class TestShellExecution:
         assert tool_results, "No tool result received"
         assert "truncated" not in tool_results[0], "Unexpected truncation note for short output"
 
-    # ── timeout exit code 124 ─────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_timeout_returns_exit_code_124(self, tmp_path: Path) -> None:
-        """Timed-out commands must include [exit code: 124] (Unix convention)."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
@@ -351,11 +335,8 @@ class TestShellExecution:
         assert tool_results, "No tool result received"
         assert "exit code: 124" in tool_results[0], f"Expected exit code 124 but got: {tool_results[0]!r}"
 
-    # ── readonly ──────────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_readonly_blocks_write_commands(self, tmp_path: Path) -> None:
-        """readonly=True must block touch, rm, mkdir."""
         output = tmp_path / "should_not_exist.txt"
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, readonly=True))
         agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
@@ -364,7 +345,6 @@ class TestShellExecution:
 
     @pytest.mark.asyncio
     async def test_readonly_allows_read_commands(self, tmp_path: Path) -> None:
-        """readonly=True must allow cat, ls, grep."""
         (tmp_path / "hello.txt").write_text("world")
 
         tool_results: list[str] = []
@@ -380,7 +360,6 @@ class TestShellExecution:
 
     @pytest.mark.asyncio
     async def test_readonly_overridden_by_explicit_allowed(self, tmp_path: Path) -> None:
-        """explicit allowed= takes precedence over readonly=True."""
         output = tmp_path / "out.txt"
         shell = LocalShellTool(
             environment=LocalShellEnvironment(
@@ -393,11 +372,8 @@ class TestShellExecution:
         await agent.ask("run it")
         assert output.exists(), "touch should be allowed when explicit allowed= overrides readonly"
 
-    # ── workdir in tool description ───────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_workdir_in_tool_description(self, tmp_path: Path) -> None:
-        """The shell tool description must include the working directory path."""
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
 
         schemas = await shell.schemas(None)  # type: ignore[arg-type]

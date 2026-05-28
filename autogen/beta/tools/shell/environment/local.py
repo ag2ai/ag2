@@ -2,70 +2,27 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import atexit
 import os
-import shutil
-import tempfile
+import warnings
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from autogen.beta.tools.sandbox.local import _run_subprocess
+from autogen.beta.tools.sandbox import LocalSandbox, ShellAdapter
 
-from .base import READONLY_COMMANDS, ShellEnvironment, check_ignore, matches
+from .base import ShellEnvironment
+
+if TYPE_CHECKING:
+    from autogen.beta.context import ConversationContext
 
 
 class LocalShellEnvironment(ShellEnvironment):
-    """Executes shell commands locally via :mod:`subprocess`.
+    """Deprecated façade — use :class:`ShellAdapter` directly.
 
-    Satisfies the :class:`~autogen.beta.tools.shell.ShellEnvironment` protocol.
-    All security constraints (allowed/blocked commands, path filtering,
-    timeouts) are encapsulated here — callers interact only through
-    :meth:`run` and :attr:`workdir`.
-
-    Quick start::
-
-        # No restrictions — agent can run any command
-        env = LocalShellEnvironment(path="/tmp/my_project")
-
-        # Only allow git and python commands
-        env = LocalShellEnvironment(
-            path="/tmp/my_project",
-            allowed=["git", "python", "pip"],
-        )
-
-        # Block dangerous commands
-        env = LocalShellEnvironment(
-            path="/tmp/my_project",
-            blocked=["rm -rf", "curl", "wget"],
-        )
-
-        # Hide sensitive files from the agent
-        env = LocalShellEnvironment(
-            path="/tmp/my_project",
-            ignore=["**/.env", "*.key", "secrets/**"],
-        )
-
-        # Read-only mode — agent can inspect but not modify
-        env = LocalShellEnvironment(
-            path="/tmp/my_project",
-            readonly=True,
-        )
-
-    Args:
-        path: Working directory for all shell commands. If ``None``, a temporary
-              directory is created automatically with prefix ``"ag2_shell_"``.
-        cleanup: Delete the directory on process exit. Defaults to ``True`` when
-                 ``path=None`` (auto temp dir) and ``False`` when ``path`` is set.
-        allowed: Whitelist of command prefixes. Only commands *starting with* one
-                 of these strings are executed.
-        blocked: Blacklist of command prefixes. Commands *starting with* any of
-                 these strings are rejected.
-        ignore: Gitignore-style path patterns. Literal file paths parsed from the
-                command string are resolved and checked against these patterns.
-        readonly: If ``True`` and ``allowed`` is not set, restrict commands to a
-                  built-in read-only list (``cat``, ``ls``, ``grep``, etc.).
-        env: Extra environment variables merged into each command's environment.
-        timeout: Per-command timeout in seconds. Default: 60.
-        max_output: Maximum number of characters returned from a command. Default: 100 000.
+    Retained as a backwards-compatible alias that builds a
+    :class:`ShellAdapter` over a :class:`LocalSandbox`. All filtering
+    (``allowed`` / ``blocked`` / ``ignore`` / ``readonly``) and the
+    sync ``run`` API live on the adapter; this class only translates
+    the v1 keyword set.
     """
 
     def __init__(
@@ -81,67 +38,40 @@ class LocalShellEnvironment(ShellEnvironment):
         timeout: float = 60,
         max_output: int = 100_000,
     ) -> None:
-        cleanup_flag = cleanup if cleanup is not None else (path is None)
-
-        if path is None:
-            tmpdir = tempfile.mkdtemp(prefix="ag2_shell_")
-            self._workdir = Path(tmpdir)
-        else:
-            self._workdir = Path(path).resolve()
-            self._workdir.mkdir(parents=True, exist_ok=True)
-
-        if cleanup_flag:
-            workdir_str = str(self._workdir)
-            atexit.register(lambda: shutil.rmtree(workdir_str, ignore_errors=True))
-
-        # readonly=True with no explicit allowed → use built-in read-only list.
-        # explicit allowed always takes precedence over readonly.
-        self._allowed: list[str] | None = list(READONLY_COMMANDS) if readonly and allowed is None else allowed
-        self._blocked = blocked
-        self._ignore = ignore
-        self._env = env
-        self._timeout = timeout
-        self._max_output = max_output
+        self._sandbox = LocalSandbox(
+            path=path,
+            cleanup=cleanup,
+            timeout=timeout,
+            max_output=max_output,
+        )
+        self._adapter = ShellAdapter(
+            self._sandbox,
+            allowed=allowed,
+            blocked=blocked,
+            ignore=ignore,
+            readonly=readonly,
+            env=env,
+            timeout=timeout,
+        )
 
     @classmethod
-    def ensure_env(cls, env: ShellEnvironment | str | os.PathLike[str]) -> ShellEnvironment:
+    def ensure_env(cls, env: "ShellEnvironment | str | os.PathLike[str]") -> "ShellEnvironment":
         if isinstance(env, ShellEnvironment):
             return env
         return cls(env)
 
     @property
     def workdir(self) -> Path:
-        """The working directory used for command execution."""
-        return self._workdir
+        """Host-side working directory (kept as :class:`Path` for v1 callers)."""
+        return self._sandbox.host_workdir
 
-    def run(self, command: str) -> str:
-        """Execute *command* and return its output as a string.
+    def run(self, command: str, *, context: "ConversationContext | None" = None) -> str:
+        return self._adapter.run_sync(command, context=context)
 
-        Applies allowed/blocked filtering, ignore-pattern checks, then runs
-        the command via the shared :func:`_run_subprocess` helper used by
-        :class:`~autogen.beta.tools.sandbox.LocalSandbox`.
-        """
-        if self._allowed is not None and not any(matches(p, command) for p in self._allowed):
-            return f"Command not allowed: {command!r}"
-
-        if self._blocked is not None and any(matches(p, command) for p in self._blocked):
-            return f"Command not allowed: {command!r}"
-
-        if self._ignore is not None:
-            denied = check_ignore(command, self._workdir, self._ignore)
-            if denied is not None:
-                return denied
-
-        result = _run_subprocess(
-            [command],
-            cwd=self._workdir,
-            env=self._env,
-            timeout=self._timeout,
-            max_output=self._max_output,
-            shell=True,
+    def __init_subclass__(cls, **kwargs: object) -> None:  # noqa: D401
+        warnings.warn(
+            "LocalShellEnvironment is deprecated; use ShellAdapter(LocalSandbox(...)) directly.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-
-        if result.exit_code != 0:
-            suffix = f"[exit code: {result.exit_code}]"
-            return f"{result.output}\n{suffix}" if result.output else suffix
-        return result.output
+        super().__init_subclass__(**kwargs)

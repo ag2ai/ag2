@@ -5,12 +5,18 @@
 from autogen.beta.exceptions import missing_optional_dependency
 
 try:
-    from .environment import DaytonaCodeEnvironment, DaytonaResources
+    from .environment import DaytonaCodeEnvironment
+    from .factory import DaytonaResources, DaytonaSandboxFactory
+    from .sandbox import DaytonaSandbox
 except ImportError as e:
     DaytonaCodeEnvironment = missing_optional_dependency("DaytonaCodeEnvironment", "daytona", e)  # type: ignore[misc]
     DaytonaResources = missing_optional_dependency("DaytonaResources", "daytona", e)  # type: ignore[misc]
+    DaytonaSandbox = missing_optional_dependency("DaytonaSandbox", "daytona", e)  # type: ignore[misc]
+    DaytonaSandboxFactory = missing_optional_dependency("DaytonaSandboxFactory", "daytona", e)  # type: ignore[misc]
 
 __all__ = (
     "DaytonaCodeEnvironment",
     "DaytonaResources",
+    "DaytonaSandbox",
+    "DaytonaSandboxFactory",
 )

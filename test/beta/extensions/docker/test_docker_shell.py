@@ -1,0 +1,103 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from autogen.beta import Context, Variable
+from autogen.beta.extensions.docker import DockerSandbox, DockerShellEnvironment
+from autogen.beta.tools.shell.environment import SandboxShellEnvironment
+
+
+def _exec_result(output: bytes = b"ok\n", exit_code: int = 0) -> SimpleNamespace:
+    return SimpleNamespace(output=output, exit_code=exit_code)
+
+
+def _fake_container(exec_result: SimpleNamespace | None = None, container_id: str = "deadbeef") -> Any:
+    return SimpleNamespace(
+        short_id=container_id,
+        exec_run=MagicMock(return_value=exec_result or _exec_result()),
+        stop=MagicMock(return_value=None),
+        remove=MagicMock(return_value=None),
+    )
+
+
+def _patch_docker(container: Any) -> Any:
+    client = SimpleNamespace(
+        containers=SimpleNamespace(run=MagicMock(return_value=container)),
+        close=MagicMock(return_value=None),
+    )
+    return patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client)
+
+
+class TestDockerShellEnvironment:
+    def test_run_executes_shell_command(self) -> None:
+        container = _fake_container(_exec_result(b"hello\n"))
+        with _patch_docker(container):
+            env = DockerShellEnvironment()
+            result = env.run("echo hello")
+
+        assert result == "hello"
+        assert container.exec_run.call_args.args[0] == ["sh", "-c", "echo hello"]
+
+    def test_allowed_blocks_non_matching_command(self) -> None:
+        container = _fake_container()
+        with _patch_docker(container):
+            env = DockerShellEnvironment(allowed=["echo"])
+            result = env.run("touch file.txt")
+
+        assert result == "Command not allowed: 'touch file.txt'"
+        container.exec_run.assert_not_called()
+
+    def test_blocked_rejects_matching_command(self) -> None:
+        container = _fake_container()
+        with _patch_docker(container):
+            env = DockerShellEnvironment(blocked=["rm -rf"])
+            result = env.run("rm -rf /workspace")
+
+        assert result == "Command not allowed: 'rm -rf /workspace'"
+        container.exec_run.assert_not_called()
+
+    def test_nonzero_exit_code_is_included(self) -> None:
+        container = _fake_container(_exec_result(b"nope\n", exit_code=7))
+        with _patch_docker(container):
+            env = DockerShellEnvironment()
+            result = env.run("exit 7")
+
+        assert "nope" in result
+        assert "exit code: 7" in result
+
+
+class TestVariableResolution:
+    def test_image_resolved_from_context(self) -> None:
+        container = _fake_container(_exec_result(b"ok\n"))
+        client = SimpleNamespace(
+            containers=SimpleNamespace(run=MagicMock(return_value=container)),
+            close=MagicMock(return_value=None),
+        )
+        ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
+        with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
+            env = DockerShellEnvironment(image=Variable("tenant_image"))
+            env.run("echo hi", context=ctx)
+
+        assert client.containers.run.call_args.args[0] == "python:3.11-slim"
+
+    def test_missing_variable_raises_key_error(self) -> None:
+        ctx = Context(stream=MagicMock(), variables={})
+        env = DockerShellEnvironment(image=Variable("tenant_image"))
+
+        with pytest.raises(KeyError, match="tenant_image"):
+            env.run("echo hi", context=ctx)
+
+
+@pytest.mark.asyncio
+async def test_sandbox_shell_run_inside_event_loop_raises_clear_error() -> None:
+    sandbox = DockerSandbox()
+    env = SandboxShellEnvironment(sandbox)
+
+    with pytest.raises(RuntimeError, match="active event loop"):
+        env.run("echo hi")

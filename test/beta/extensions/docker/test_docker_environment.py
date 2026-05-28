@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from dirty_equals import IsPartialDict
 
 from autogen.beta import Context, Variable
 from autogen.beta.extensions.docker import DockerCodeEnvironment
@@ -34,7 +35,7 @@ def _fake_client(container: Any) -> Any:
 
 def _patch_docker(container: Any) -> Any:
     return patch(
-        "autogen.beta.extensions.docker.environment.docker.from_env",
+        "autogen.beta.extensions.docker.sandbox.docker.from_env",
         return_value=_fake_client(container),
     )
 
@@ -53,16 +54,24 @@ class TestConstruction:
         assert env.supported_languages == ("python", "javascript")
 
     def test_construction_creates_no_container(self) -> None:
-        # CLAUDE.md: no side effects in __init__ — container must be lazy.
-        with patch("autogen.beta.extensions.docker.environment.docker.from_env") as mock_from_env:
+        with patch("autogen.beta.extensions.docker.sandbox.docker.from_env") as mock_from_env:
             DockerCodeEnvironment()
             mock_from_env.assert_not_called()
 
-    def test_safety_defaults(self) -> None:
+
+@pytest.mark.asyncio
+async def test_safety_defaults_reach_docker() -> None:
+    container = _fake_container()
+    client = _fake_client(container)
+    with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
         env = DockerCodeEnvironment()
-        assert env._network_mode == "none"
-        assert env._mem_limit == "512m"
-        assert env._auto_remove is True
+        await env.run("print(1)", "python")
+
+    assert client.containers.run.call_args.kwargs == IsPartialDict({
+        "network_mode": "none",
+        "mem_limit": "512m",
+        "auto_remove": True,
+    })
 
 
 @pytest.mark.asyncio
@@ -108,11 +117,11 @@ class TestRun:
         assert result.exit_code != 0
         assert "not enabled" in result.output
 
-    async def test_container_created_only_once(self) -> None:
+    async def test_container_opened_per_run(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
         with patch(
-            "autogen.beta.extensions.docker.environment.docker.from_env",
+            "autogen.beta.extensions.docker.sandbox.docker.from_env",
             return_value=client,
         ):
             env = DockerCodeEnvironment()
@@ -120,14 +129,13 @@ class TestRun:
             await env.run("print(2)", "python")
             await env.run("print(3)", "python")
 
-        # Three runs, one container creation
-        assert client.containers.run.call_count == 1
+        assert client.containers.run.call_count == 3
 
     async def test_run_passes_safety_kwargs(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
         with patch(
-            "autogen.beta.extensions.docker.environment.docker.from_env",
+            "autogen.beta.extensions.docker.sandbox.docker.from_env",
             return_value=client,
         ):
             env = DockerCodeEnvironment(image="python:3.12-slim", mem_limit="256m", network_mode="none")
@@ -146,7 +154,7 @@ class TestLifecycle:
         container = _fake_container()
         client = _fake_client(container)
         with patch(
-            "autogen.beta.extensions.docker.environment.docker.from_env",
+            "autogen.beta.extensions.docker.sandbox.docker.from_env",
             return_value=client,
         ):
             env = DockerCodeEnvironment()
@@ -181,14 +189,12 @@ class TestLifecycle:
 
 @pytest.mark.asyncio
 class TestVariableResolution:
-    """Per CLAUDE.md: 2 tests for Variable params — resolve and missing-key."""
-
     async def test_image_resolved_from_context(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
         ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
         with patch(
-            "autogen.beta.extensions.docker.environment.docker.from_env",
+            "autogen.beta.extensions.docker.sandbox.docker.from_env",
             return_value=client,
         ):
             env = DockerCodeEnvironment(image=Variable("tenant_image"))

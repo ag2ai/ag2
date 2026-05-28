@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .environment import LocalShellEnvironment, ShellEnvironment
+from .environment import LocalShellEnvironment, SandboxShellEnvironment, ShellEnvironment
 from .tool import LocalShellTool
 
 __all__ = (
     "LocalShellEnvironment",
     "LocalShellTool",
+    "SandboxShellEnvironment",
     "ShellEnvironment",
 )

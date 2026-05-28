@@ -6,12 +6,13 @@ import asyncio
 import atexit
 import logging
 import uuid
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from autogen.beta.annotations import Variable
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.code import CodeEnvironment, CodeLanguage, CodeRunResult
+
+from .factory import DaytonaResources
 
 if TYPE_CHECKING:
     from daytona import Image
@@ -46,58 +47,32 @@ _LANG_RUN_CMD: dict[CodeLanguage, str] = {
 }
 
 
-@dataclass(slots=True)
-class DaytonaResources:
-    """Resource limits for a Daytona sandbox.
-
-    Only applied when ``image`` is set on the environment; ignored when a
-    ``snapshot`` is used (snapshots carry their own resource profile).
-    """
-
-    cpu: int | None = None
-    memory: int | None = None
-    disk: int | None = None
-
-
 class DaytonaCodeEnvironment(CodeEnvironment):
-    """:class:`~autogen.beta.tools.code.CodeEnvironment` backed by a Daytona sandbox.
+    """:class:`~autogen.beta.tools.code.CodeEnvironment` backed by a
+    Daytona managed cloud sandbox.
 
-    The sandbox is created lazily on the first :meth:`run` call and reused
-    for the lifetime of the environment. Cleanup is registered via
-    :func:`atexit` so the sandbox is released even if the user forgets to
-    call :meth:`aclose` — for tighter scoping use
-    ``async with DaytonaCodeEnvironment(...) as env``.
+    Retained as a backward-compatible façade — new code should use
+    ``CodeAdapter(DaytonaSandboxFactory(...))`` directly, optionally via
+    :meth:`SandboxCodeTool.daytona`. This façade keeps the v1 fast path
+    for Python (Daytona's native ``process.code_run``) and the
+    file-upload+exec path for all other languages.
 
     All sandbox-shaping parameters (``api_key``, ``api_url``, ``target``,
     ``snapshot``, ``image``, ``env_vars``) accept a
     :class:`~autogen.beta.annotations.Variable` for deferred resolution
-    from ``context.variables`` — useful for per-tenant credentials or
-    A/B-tested images. Variables are resolved on the first :meth:`run`
-    call, when the sandbox is created.
-
-    Args:
-        api_key: Daytona API key. Falls back to ``DAYTONA_API_KEY``.
-        api_url: Daytona API URL. Falls back to ``DAYTONA_API_URL``.
-        target: Daytona target region (e.g. ``"us"``, ``"eu"``). Falls back
-                to ``DAYTONA_TARGET``.
-        snapshot: Snapshot name. Mutually exclusive with ``image``.
-        image: Custom Docker image. Mutually exclusive with ``snapshot``.
-        env_vars: Environment variables passed into the sandbox.
-        resources: Resource limits. Only applied with ``image``.
-        timeout: Per-execution timeout in seconds. Default: 60.
-        languages: Languages this environment will accept. Defaults to all
-                   four supported by Daytona.
+    from ``context.variables``. Variables are resolved on the first
+    :meth:`run` call, when the sandbox is created.
     """
 
     def __init__(
         self,
         *,
-        api_key: str | Variable | None = None,
-        api_url: str | Variable | None = None,
-        target: str | Variable | None = None,
-        snapshot: str | Variable | None = None,
+        api_key: "str | Variable | None" = None,  # pragma: allowlist secret
+        api_url: "str | Variable | None" = None,
+        target: "str | Variable | None" = None,
+        snapshot: "str | Variable | None" = None,
         image: "str | Image | Variable | None" = None,
-        env_vars: dict[str, str] | Variable | None = None,
+        env_vars: "dict[str, str] | Variable | None" = None,
         resources: DaytonaResources | None = None,
         timeout: int = 60,
         languages: tuple[CodeLanguage, ...] = ("python", "bash", "javascript", "typescript"),
@@ -247,7 +222,7 @@ class DaytonaCodeEnvironment(CodeEnvironment):
             self._sandbox = None
         if self._client is not None:
             try:
-                await self._client.close()
+                await self._client.close()  # type: ignore[no-untyped-call]
             except Exception as e:
                 logger.debug("Suppressed exception during client close: %s", e)
             self._client = None

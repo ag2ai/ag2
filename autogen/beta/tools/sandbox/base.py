@@ -2,14 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
-
-from autogen.beta.tools.code.environment.base import CodeLanguage
-
-if TYPE_CHECKING:
-    from autogen.beta.context import ConversationContext
+from pathlib import Path, PurePosixPath
+from typing import Protocol, runtime_checkable
 
 
 @dataclass(slots=True)
@@ -30,42 +27,47 @@ class ExecResult:
 class Sandbox(Protocol):
     """Low-level execution backend.
 
-    A ``Sandbox`` runs arbitrary ``argv`` lists in a ``workdir`` and returns
-    combined output with an exit code. It is the shared primitive on top of
-    which the higher-level adapters are built:
+    A ``Sandbox`` runs an ``argv`` list inside a working directory and
+    returns combined output with an exit code. It is the shared primitive
+    on top of which the higher-level adapters are built:
 
-    - :class:`~autogen.beta.tools.shell.ShellEnvironment` - a sync
-      adapter for arbitrary shell commands. Each ``run(command)`` call
-      becomes ``sandbox.exec(["sh", "-c", command], shell=True)``.
-    - :class:`~autogen.beta.tools.code.CodeEnvironment` - an async
-      adapter for typed code snippets. Each ``run(code, language)`` call
-      becomes ``sandbox.exec([interpreter, "-c", code])``.
+    - :class:`~autogen.beta.tools.sandbox.adapter.ShellAdapter` —
+      one ``run(command)`` per shell command, applied filters, sync facade.
+    - :class:`~autogen.beta.tools.sandbox.adapter.CodeAdapter` —
+      one ``run(code, language)`` per code snippet, language matrix.
 
     Implementations target local subprocesses, Docker containers, Daytona
-    sandboxes, SSH, or anything else.  Adding a new backend is one
-    ``Sandbox`` class — both shell and code semantics come for free via
-    the adapters.
+    sandboxes, SSH, or anything else. Adding a new backend = one new
+    ``Sandbox`` class. Both shell and code semantics come for free via the
+    adapters.
+
+    Sandbox is async-only. Construction is cheap; backend resources are
+    acquired on ``__aenter__`` (or first call when ``__aenter__`` is a
+    no-op, as for :class:`LocalSandbox`) and released on ``__aexit__``.
     """
 
     @property
-    def workdir(self) -> Path:
-        """Working directory in which ``argv`` is executed.
+    def workdir(self) -> PurePosixPath:
+        """Working directory in which ``argv`` is executed, as seen *inside*
+        the sandbox.
 
-        Local backends return a host path.  Containerised backends return
-        the path *as visible inside the container* (e.g. ``/workspace``).
+        POSIX even on a Windows host so the same path is meaningful across
+        backends.
         """
         ...
 
     @property
-    def supported_languages(self) -> tuple[CodeLanguage, ...]:
-        """Code interpreters this sandbox declares as available.
+    def host_workdir(self) -> Path | None:
+        """Host-side view of :attr:`workdir`, when one exists.
 
-        Consumed by :class:`~autogen.beta.tools.code.CodeEnvironment` to
-        validate ``run(code, language)`` requests and surface the list in
-        the tool description shown to the model.  Backends with no code
-        support return ``()``.
+        Returns ``None`` for backends whose workdir is not visible on the
+        host filesystem (e.g. remote Daytona sandboxes).
         """
         ...
+
+    async def __aenter__(self) -> "Sandbox": ...
+
+    async def __aexit__(self, *exc: object) -> None: ...
 
     async def exec(
         self,
@@ -73,40 +75,127 @@ class Sandbox(Protocol):
         *,
         env: dict[str, str] | None = None,
         timeout: float | None = None,
-        shell: bool = False,
-        context: "ConversationContext | None" = None,
     ) -> ExecResult:
         """Execute ``argv`` and return its output.
 
         Args:
-            argv: Command and arguments.  When ``shell=False`` (default)
-                  this is a normal argv list (no shell parsing on our side).
-                  When ``shell=True``, the backend may treat ``argv`` as a
-                  shell command string and run it through the system shell.
-                  Pipelines, ``&&``, redirects and other shell features are
-                  then honoured by the backend shell.
+            argv: Command and arguments. Always a normal argv list — no
+                  shell parsing happens on this layer. Callers that need
+                  shell features pass ``["sh", "-c", cmd]`` explicitly
+                  (the :class:`ShellAdapter` does this for them).
             env: Extra environment variables merged into the process
-                 environment.  ``None`` inherits the parent environment as-is.
-            timeout: Per-call timeout in seconds.  ``None`` uses the
-                     backend's default.  On timeout, the implementation
+                 environment. ``None`` inherits the parent environment as-is.
+            timeout: Per-call timeout in seconds. ``None`` uses the
+                     backend's default. On timeout, the implementation
                      must terminate the process and return
                      ``exit_code=124``.
-            shell: If ``True``, run ``argv`` through the backend's system shell.
-            context: Active conversation context. Forwarded by the
-                     :class:`~autogen.beta.tools.shell.ShellEnvironment` /
-                     :class:`~autogen.beta.tools.code.CodeEnvironment`
-                     adapters so backends can resolve
-                     :class:`~autogen.beta.annotations.Variable` markers
-                     supplied to their constructors (e.g. per-tenant
-                     credentials).  Backends with no Variable-capable
-                     parameters can ignore it.
+        """
+        ...
+
+    def stream(
+        self,
+        argv: list[str],
+        *,
+        env: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> AsyncIterator[bytes]:
+        """Stream output of ``argv`` as it is produced.
+
+        Optional capability. Backends without native streaming may yield
+        the whole output once at the end (the :class:`SandboxBase` default
+        does exactly that).
+        """
+        ...
+
+    async def put_file(self, path: PurePosixPath, content: bytes) -> None:
+        """Write ``content`` to ``path`` inside the sandbox.
+
+        ``path`` is relative to :attr:`workdir` (absolute paths are
+        rejected to keep writes confined to the workdir).
+
+        Optional capability. Backends without filesystem write support
+        raise :class:`NotImplementedError`.
+        """
+        ...
+
+    async def get_file(self, path: PurePosixPath) -> bytes:
+        """Read ``path`` from inside the sandbox.
+
+        ``path`` is relative to :attr:`workdir`.
+
+        Optional capability. Backends without filesystem read support
+        raise :class:`NotImplementedError`.
         """
         ...
 
     async def aclose(self) -> None:
         """Release backend resources.
 
-        Local backends typically have nothing to release; containerised
-        backends stop and remove their container.  Safe to call multiple times.
+        Equivalent to ``__aexit__``. Safe to call multiple times.
         """
         ...
+
+
+class SandboxBase(ABC):
+    """ABC with default implementations for the optional :class:`Sandbox`
+    methods.
+
+    Concrete backends subclass :class:`SandboxBase` and override
+    :meth:`exec`, :attr:`workdir`, :attr:`host_workdir`. They opt into
+    streaming and file IO by overriding the relevant methods.
+    """
+
+    @property
+    @abstractmethod
+    def workdir(self) -> PurePosixPath: ...
+
+    @property
+    @abstractmethod
+    def host_workdir(self) -> Path | None: ...
+
+    @abstractmethod
+    async def exec(
+        self,
+        argv: list[str],
+        *,
+        env: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> ExecResult: ...
+
+    async def stream(
+        self,
+        argv: list[str],
+        *,
+        env: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> AsyncIterator[bytes]:
+        """Default streaming implementation: run :meth:`exec`, yield once.
+
+        Backends with native streaming should override this method.
+        """
+        result = await self.exec(argv, env=env, timeout=timeout)
+        if result.output:
+            yield result.output.encode()
+
+    async def put_file(self, path: PurePosixPath, content: bytes) -> None:
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support put_file. Override the method on the subclass."
+        )
+
+    async def get_file(self, path: PurePosixPath) -> bytes:
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support get_file. Override the method on the subclass."
+        )
+
+    async def aclose(self) -> None:
+        """Default cleanup: nothing.
+
+        Backends that hold resources (containers, remote sandboxes)
+        override this method.
+        """
+
+    async def __aenter__(self) -> "SandboxBase":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.aclose()

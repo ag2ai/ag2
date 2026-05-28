@@ -4,8 +4,10 @@
 
 from .base import ShellEnvironment
 from .local import LocalShellEnvironment
+from .sandbox import SandboxShellEnvironment
 
 __all__ = (
     "LocalShellEnvironment",
+    "SandboxShellEnvironment",
     "ShellEnvironment",
 )

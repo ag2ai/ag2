@@ -8,15 +8,28 @@ import os
 import shutil
 import subprocess
 import tempfile
-from pathlib import Path
-from typing import TYPE_CHECKING
+from collections.abc import AsyncIterator
+from contextlib import suppress
+from pathlib import Path, PurePosixPath
 
 from autogen.beta.tools.code.environment.base import CodeLanguage
 
-from .base import ExecResult, Sandbox
+from .base import ExecResult, SandboxBase
 
-if TYPE_CHECKING:
-    from autogen.beta.context import ConversationContext
+
+def _resolve_workdir_path(path: PurePosixPath, host_workdir: Path) -> Path:
+    """Resolve ``path`` (relative to the sandbox workdir) on the host.
+
+    Absolute paths are rejected so writes stay confined to ``host_workdir``.
+    Symlink escapes are guarded by resolving and checking containment.
+    """
+    if path.is_absolute():
+        raise ValueError(f"Absolute paths are not allowed in put_file/get_file: {path}")
+    resolved = (host_workdir / Path(*path.parts)).resolve()
+    host_resolved = host_workdir.resolve()
+    if not resolved.is_relative_to(host_resolved):
+        raise ValueError(f"Path escapes sandbox workdir: {path}")
+    return resolved
 
 
 def _run_subprocess(
@@ -26,25 +39,13 @@ def _run_subprocess(
     env: dict[str, str] | None,
     timeout: float,
     max_output: int,
-    shell: bool,
 ) -> ExecResult:
-    """Synchronous subprocess execution shared by :class:`LocalSandbox` and
-    :class:`~autogen.beta.tools.shell.LocalShellEnvironment`.
-
-    Centralises the timeout / truncation / exit-code conventions so both
-    callers stay in sync.
-    """
+    """Run *argv* under :func:`subprocess.run` with the project's conventions."""
     merged_env = {**os.environ, **env} if env is not None else None
-
-    if shell:
-        cmd: str | list[str] = argv[0] if len(argv) == 1 else " ".join(argv)
-    else:
-        cmd = argv
 
     try:
         result = subprocess.run(
-            cmd,
-            shell=shell,
+            argv,
             cwd=cwd,
             capture_output=True,
             text=True,
@@ -66,28 +67,27 @@ def _run_subprocess(
     return ExecResult(output=output, exit_code=result.returncode or 0)
 
 
-class LocalSandbox(Sandbox):
+class LocalSandbox(SandboxBase):
     """Sandbox backed by a local subprocess.
 
-    A thin async wrapper around :func:`subprocess.run` (executed in a
-    worker thread via :func:`asyncio.to_thread`).  Shares its execution
-    helper with :class:`~autogen.beta.tools.shell.LocalShellEnvironment`
-    so both paths apply the same timeout, truncation and exit-code
-    conventions.
+    A thin wrapper around :func:`subprocess.run` with a fixed working
+    directory. ``__aenter__`` / ``__aexit__`` are no-ops — local sandboxes
+    are usable immediately after construction.
 
     Args:
         path: Working directory. ``None`` (default) creates a temporary
               directory with prefix ``"ag2_sandbox_"``.
-        cleanup: Delete ``path`` on process exit. Defaults to ``True``
-                 when ``path=None`` (auto temp dir) and ``False`` otherwise.
-        timeout: Default per-call timeout in seconds. Overridable per
-                 :meth:`exec` call.
+        cleanup: Delete ``path`` on :meth:`aclose` (and as an atexit
+                 backstop). Defaults to ``True`` when ``path=None``
+                 (auto temp dir) and ``False`` otherwise.
+        timeout: Default per-call timeout in seconds. Must be ``> 0``.
+                 Overridable per :meth:`exec` call.
         max_output: Maximum number of characters in :attr:`ExecResult.output`.
                     Excess is truncated with a trailing notice.
-        languages: Code interpreters this sandbox declares as available.
-                   Defaults to ``("python", "bash")`` — the minimum that
-                   ships on most Unix hosts.  Set explicitly if you also
-                   have ``node`` / ``ts-node`` installed.
+        languages: Languages this sandbox advertises via
+                   :attr:`supported_languages` — informational only;
+                   the canonical language matrix lives on :class:`CodeAdapter`.
+                   Defaults to ``("python", "bash")``.
     """
 
     def __init__(
@@ -99,18 +99,24 @@ class LocalSandbox(Sandbox):
         max_output: int = 100_000,
         languages: tuple[CodeLanguage, ...] = ("python", "bash"),
     ) -> None:
+        if timeout <= 0:
+            raise ValueError("`timeout` must be > 0 seconds.")
+
         cleanup_flag = cleanup if cleanup is not None else (path is None)
 
         if path is None:
             tmpdir = tempfile.mkdtemp(prefix="ag2_sandbox_")
-            self._workdir = Path(tmpdir)
+            self._host_workdir = Path(tmpdir)
         else:
-            self._workdir = Path(path).resolve()
-            self._workdir.mkdir(parents=True, exist_ok=True)
+            self._host_workdir = Path(path).resolve()
+            self._host_workdir.mkdir(parents=True, exist_ok=True)
 
+        self._workdir = PurePosixPath(self._host_workdir.as_posix())
+        self._cleanup_workdir = cleanup_flag
+        self._atexit_registered = False
         if cleanup_flag:
-            workdir_str = str(self._workdir)
-            atexit.register(shutil.rmtree, workdir_str, ignore_errors=True)
+            atexit.register(self._atexit_cleanup)
+            self._atexit_registered = True
 
         self._default_timeout = timeout
         self._max_output = max_output
@@ -118,12 +124,41 @@ class LocalSandbox(Sandbox):
         self._closed = False
 
     @property
-    def workdir(self) -> Path:
+    def workdir(self) -> PurePosixPath:
         return self._workdir
+
+    @property
+    def host_workdir(self) -> Path:
+        return self._host_workdir
 
     @property
     def supported_languages(self) -> tuple[CodeLanguage, ...]:
         return self._languages
+
+    def exec_sync(
+        self,
+        argv: list[str],
+        *,
+        env: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> ExecResult:
+        """Synchronous counterpart of :meth:`exec`.
+
+        Lets :class:`ShellAdapter.run_sync` execute against a local sandbox
+        without paying for an event loop per command.
+        """
+        if self._closed:
+            raise RuntimeError("LocalSandbox has been closed.")
+        if not argv:
+            return ExecResult(output="", exit_code=2)
+
+        return _run_subprocess(
+            argv,
+            cwd=self._host_workdir,
+            env=env,
+            timeout=timeout if timeout is not None else self._default_timeout,
+            max_output=self._max_output,
+        )
 
     async def exec(
         self,
@@ -131,10 +166,7 @@ class LocalSandbox(Sandbox):
         *,
         env: dict[str, str] | None = None,
         timeout: float | None = None,
-        shell: bool = False,
-        context: "ConversationContext | None" = None,
     ) -> ExecResult:
-        del context  # LocalSandbox has no Variable-capable params.
         if self._closed:
             raise RuntimeError("LocalSandbox has been closed.")
         if not argv:
@@ -143,12 +175,102 @@ class LocalSandbox(Sandbox):
         return await asyncio.to_thread(
             _run_subprocess,
             argv,
-            cwd=self._workdir,
+            cwd=self._host_workdir,
             env=env,
             timeout=timeout if timeout is not None else self._default_timeout,
             max_output=self._max_output,
-            shell=shell,
         )
 
+    async def stream(
+        self,
+        argv: list[str],
+        *,
+        env: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> AsyncIterator[bytes]:
+        """Stream stdout+stderr chunks from a local subprocess.
+
+        Uses :func:`asyncio.create_subprocess_exec` and concurrently reads
+        both pipes, so large output volumes do not deadlock on a full
+        pipe buffer.
+        """
+        if self._closed:
+            raise RuntimeError("LocalSandbox has been closed.")
+        if not argv:
+            return
+
+        merged_env = {**os.environ, **env} if env is not None else None
+        deadline_timeout = timeout if timeout is not None else self._default_timeout
+
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=str(self._host_workdir),
+            env=merged_env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        assert proc.stdout is not None and proc.stderr is not None
+        queue: asyncio.Queue[bytes | None] = asyncio.Queue()
+
+        async def _pump(reader: asyncio.StreamReader) -> None:
+            while True:
+                chunk = await reader.read(4096)
+                if not chunk:
+                    break
+                await queue.put(chunk)
+            await queue.put(None)
+
+        readers = asyncio.gather(_pump(proc.stdout), _pump(proc.stderr))
+        try:
+            done_count = 0
+            while done_count < 2:
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=deadline_timeout)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    raise
+                if item is None:
+                    done_count += 1
+                    continue
+                yield item
+        finally:
+            with suppress(Exception):
+                await readers
+            with suppress(ProcessLookupError):
+                if proc.returncode is None:
+                    proc.kill()
+            with suppress(Exception):
+                await proc.wait()
+
+    async def put_file(self, path: PurePosixPath, content: bytes) -> None:
+        if self._closed:
+            raise RuntimeError("LocalSandbox has been closed.")
+        target = _resolve_workdir_path(path, self._host_workdir)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(target.write_bytes, content)
+
+    async def get_file(self, path: PurePosixPath) -> bytes:
+        if self._closed:
+            raise RuntimeError("LocalSandbox has been closed.")
+        target = _resolve_workdir_path(path, self._host_workdir)
+        return await asyncio.to_thread(target.read_bytes)
+
     async def aclose(self) -> None:
+        if self._closed:
+            return
         self._closed = True
+        self._cleanup_workdir_now()
+
+    def _cleanup_workdir_now(self) -> None:
+        if self._atexit_registered:
+            with suppress(ValueError):
+                atexit.unregister(self._atexit_cleanup)
+            self._atexit_registered = False
+        if self._cleanup_workdir:
+            shutil.rmtree(self._host_workdir, ignore_errors=True)
+            self._cleanup_workdir = False
+
+    def _atexit_cleanup(self) -> None:
+        if self._cleanup_workdir:
+            shutil.rmtree(self._host_workdir, ignore_errors=True)

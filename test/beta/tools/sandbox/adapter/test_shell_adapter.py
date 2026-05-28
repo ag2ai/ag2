@@ -1,0 +1,108 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+from autogen.beta import Context
+from autogen.beta.tools.sandbox import LocalSandbox, Sandbox, ShellAdapter, SingletonFactory
+
+
+class _RecordingFactory:
+    def __init__(self, sandbox: Sandbox) -> None:
+        self._sandbox = sandbox
+        self.contexts: list[object] = []
+
+    @asynccontextmanager
+    async def open(self, context: object = None) -> AsyncIterator[Sandbox]:
+        self.contexts.append(context)
+        yield self._sandbox
+
+
+class TestShellAdapterFiltering:
+    def test_allowed_blocks_non_matching_command(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox, allowed=["echo"])
+        result = adapter.run_sync("touch file.txt")
+        assert "Command not allowed" in result
+
+    def test_blocked_rejects_matching_command(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox, blocked=["rm -rf"])
+        result = adapter.run_sync("rm -rf /workspace")
+        assert "Command not allowed" in result
+
+    def test_ignore_denies_access_to_matching_path(self, tmp_path: Path) -> None:
+        (tmp_path / ".env").write_text("SECRET=1")
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox, ignore=["**/.env"])
+        result = adapter.run_sync("cat .env")
+        assert "Access denied" in result
+
+    def test_readonly_blocks_writes_by_default(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox, readonly=True)
+        result = adapter.run_sync("touch new.txt")
+        assert "Command not allowed" in result
+
+    def test_readonly_allows_read_commands(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox, readonly=True)
+        result = adapter.run_sync("echo hello")
+        assert "hello" in result
+
+
+@pytest.mark.asyncio
+class TestShellAdapterAsync:
+    async def test_run_executes_command(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox)
+        result = await adapter.run("echo hi")
+        assert "hi" in result
+
+    async def test_run_includes_exit_code_on_failure(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox)
+        result = await adapter.run("exit 7")
+        assert "exit code: 7" in result
+
+
+class TestShellAdapterRunSync:
+    def test_uses_local_fast_path_for_local_sandbox(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox)
+        result = adapter.run_sync("echo from-sync")
+        assert "from-sync" in result
+
+    @pytest.mark.asyncio
+    async def test_run_sync_in_event_loop_with_factory_raises(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(SingletonFactory(sandbox))
+        with pytest.raises(RuntimeError, match="active event loop"):
+            adapter.run_sync("echo hi")
+
+
+@pytest.mark.asyncio
+class TestShellAdapterWithFactory:
+    async def test_factory_opens_per_call(self, tmp_path: Path) -> None:
+        factory = _RecordingFactory(LocalSandbox(tmp_path))
+        adapter = ShellAdapter(factory)
+
+        await adapter.run("echo a")
+        await adapter.run("echo b")
+
+        assert len(factory.contexts) == 2
+
+    async def test_context_variables_forwarded_to_factory(self, tmp_path: Path) -> None:
+        factory = _RecordingFactory(LocalSandbox(tmp_path))
+        adapter = ShellAdapter(factory)
+        ctx = Context(stream=MagicMock(), variables={"x": "value"})
+
+        await adapter.run("echo a", context=ctx)
+
+        assert factory.contexts == [ctx]
