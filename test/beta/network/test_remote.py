@@ -23,7 +23,6 @@ from autogen.beta.network import (
     Envelope,
     Hub,
     HubClient,
-    HubListener,
     LocalLink,
     Passport,
     RemoteAgentProxy,
@@ -60,11 +59,7 @@ class _RecordingProxy:
         self.calls.append((envelope, recipient))
         if self._raise_on_dispatch is not None:
             raise self._raise_on_dispatch
-        if (
-            self._hub is not None
-            and envelope.event_type == EV_CHANNEL_INVITE
-            and recipient.agent_id is not None
-        ):
+        if self._hub is not None and envelope.event_type == EV_CHANNEL_INVITE and recipient.agent_id is not None:
             ack = Envelope(
                 channel_id=envelope.channel_id,
                 sender_id=recipient.agent_id,
@@ -240,8 +235,7 @@ class TestDispatchRouting:
             text_calls = [
                 (env, rcp)
                 for env, rcp in proxy.calls
-                if env.event_type == EV_TEXT
-                and env.event_data.get("text") == "hello bob"
+                if env.event_type == EV_TEXT and env.event_data.get("text") == "hello bob"
             ]
             assert len(text_calls) == 1
             env, rcp = text_calls[0]
@@ -302,9 +296,7 @@ class TestDispatchRouting:
             await asyncio.sleep(0.05)
 
             text_failures = [
-                (e, rid, reason)
-                for (e, rid, reason) in listener.dispatch_failures
-                if e.event_type == EV_TEXT
+                (e, rid, reason) for (e, rid, reason) in listener.dispatch_failures if e.event_type == EV_TEXT
             ]
             assert len(text_failures) == 1
             _, _, reason = text_failures[0]
@@ -363,9 +355,7 @@ class TestDispatchRouting:
             await asyncio.sleep(0.05)
 
             text_failures = [
-                (e, rid, reason)
-                for (e, rid, reason) in listener.dispatch_failures
-                if e.event_type == EV_TEXT
+                (e, rid, reason) for (e, rid, reason) in listener.dispatch_failures if e.event_type == EV_TEXT
             ]
             assert len(text_failures) == 1
             assert text_failures[0][2] is boom
@@ -451,14 +441,9 @@ class TestDispatchRouting:
             await asyncio.sleep(0.05)
 
             # Carol received the text in spite of the proxy failure.
-            assert any(
-                e.event_type == EV_TEXT and e.event_data.get("text") == "hello"
-                for e in received
-            )
+            assert any(e.event_type == EV_TEXT and e.event_data.get("text") == "hello" for e in received)
             # Proxy was still attempted for bob.
-            text_calls = [
-                env for env, _ in proxy.calls if env.event_type == EV_TEXT
-            ]
+            text_calls = [env for env, _ in proxy.calls if env.event_type == EV_TEXT]
             assert len(text_calls) == 1
         finally:
             await alice_hc.close()

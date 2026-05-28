@@ -31,13 +31,13 @@ from autogen.beta.network import (
     Passport,
     Resume,
 )
-from autogen.beta.task import TaskMetadata, TaskSpec, TaskState
 from autogen.beta.network.client.tools.channels import make_channels_tool
 from autogen.beta.network.client.tools.context import make_context_tool
 from autogen.beta.network.client.tools.peers import make_peers_tool
 from autogen.beta.network.client.tools.tasks import make_tasks_tool
 from autogen.beta.network.policies import AGENT_CLIENT_DEP, CHANNEL_DEP
 from autogen.beta.stream import MemoryStream
+from autogen.beta.task import TaskMetadata, TaskSpec, TaskState
 from autogen.beta.testing import TestConfig
 
 

@@ -247,9 +247,7 @@ class TestHubBackedCheckpointStore:
                 await first.checkpoint({"phase": "research", "found": 42})
                 prior_id = first.task_id
 
-            async with agent.task(
-                "work", checkpoint_store=store, resume_from=prior_id
-            ) as second:
+            async with agent.task("work", checkpoint_store=store, resume_from=prior_id) as second:
                 assert second.resumed_state == {"phase": "research", "found": 42}
                 await second.complete("resumed and finished")
                 assert second.state == TaskState.COMPLETED

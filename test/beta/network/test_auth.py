@@ -164,9 +164,7 @@ class TestHelloFrameAuthWiring:
         link = LocalLink(hub)
         client = link.client()
         try:
-            await client.send_frame(
-                HelloFrame(name="alice", auth_scheme="api_key", auth_claim={"token": "k-alice"})
-            )
+            await client.send_frame(HelloFrame(name="alice", auth_scheme="api_key", auth_claim={"token": "k-alice"}))
             frame = await _read_frame(client)
             assert isinstance(frame, WelcomeFrame)
             assert hub._agent_to_endpoint[passport.agent_id] == client.endpoint_id
@@ -190,9 +188,7 @@ class TestHelloFrameAuthWiring:
         link = LocalLink(hub)
         client = link.client()
         try:
-            await client.send_frame(
-                HelloFrame(name="alice", auth_scheme="api_key", auth_claim={"token": "k-wrong"})
-            )
+            await client.send_frame(HelloFrame(name="alice", auth_scheme="api_key", auth_claim={"token": "k-wrong"}))
             frame = await _read_frame(client)
             assert isinstance(frame, ErrorFrame)
             assert frame.code == "auth_failed"
@@ -241,9 +237,7 @@ class TestHelloFrameAuthWiring:
         link = LocalLink(hub)
         client = link.client()
         try:
-            await client.send_frame(
-                HelloFrame(name="alice", auth_scheme="totally_made_up", auth_claim={"token": "x"})
-            )
+            await client.send_frame(HelloFrame(name="alice", auth_scheme="totally_made_up", auth_claim={"token": "x"}))
             frame = await _read_frame(client)
             assert isinstance(frame, ErrorFrame)
             assert frame.code == "auth_failed"
@@ -267,9 +261,7 @@ class TestHelloFrameAuthWiring:
         link = LocalLink(hub)
         client = link.client()
         try:
-            await client.send_frame(
-                HelloFrame(name="ghost", auth_scheme="api_key", auth_claim={"token": "k-alice"})
-            )
+            await client.send_frame(HelloFrame(name="ghost", auth_scheme="api_key", auth_claim={"token": "k-alice"}))
             frame = await _read_frame(client)
             assert isinstance(frame, ErrorFrame)
             assert frame.code == "not_found"
@@ -280,6 +272,7 @@ class TestHelloFrameAuthWiring:
     @pytest.mark.asyncio
     async def test_resolver_path_through_helloframe(self) -> None:
         """End-to-end: ApiKeyAuth(resolver=...) over the HelloFrame path."""
+
         async def resolver(name: str) -> str | None:
             return {"alice": "k-alice"}.get(name)
 
@@ -297,9 +290,7 @@ class TestHelloFrameAuthWiring:
         link = LocalLink(hub)
         client = link.client()
         try:
-            await client.send_frame(
-                HelloFrame(name="alice", auth_scheme="api_key", auth_claim={"token": "k-alice"})
-            )
+            await client.send_frame(HelloFrame(name="alice", auth_scheme="api_key", auth_claim={"token": "k-alice"}))
             frame = await _read_frame(client)
             assert isinstance(frame, WelcomeFrame)
             assert hub._agent_to_endpoint[passport.agent_id] == client.endpoint_id

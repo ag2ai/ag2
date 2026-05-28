@@ -25,7 +25,6 @@ back the prior checkpoint and exposes it via :attr:`resumed_state` so
 the owner can pick up mid-flow after a restart.
 """
 
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum

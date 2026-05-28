@@ -152,8 +152,7 @@ class TestAttachRebind:
                 await asyncio.sleep(0.05)
 
                 assert any(
-                    e.event_type == EV_TEXT and e.event_data.get("text") == "after-reattach"
-                    for e in received_v2
+                    e.event_type == EV_TEXT and e.event_data.get("text") == "after-reattach" for e in received_v2
                 )
             finally:
                 await bob_hc_v2.close()

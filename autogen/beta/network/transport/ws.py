@@ -78,7 +78,7 @@ class WsLinkClient:
         self._ping_interval = ping_interval
         self._ping_timeout = ping_timeout
         self._open_timeout = open_timeout
-        self._ws: "ClientConnection | None" = None
+        self._ws: ClientConnection | None = None
         self._closed = False
         self._endpoint_id = ""
 
