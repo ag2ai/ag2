@@ -1024,11 +1024,18 @@ class OpenAIWrapper:
                     raise ImportError("Please install `ollama` and `fix-busted-json` to use the Ollama API.")
                 client = OllamaClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
-            elif api_type is not None and api_type.startswith("bedrock"):
+            elif api_type is not None and api_type.startswith("bedrock") and not api_type.startswith("bedrock_v2"):
                 self._configure_openai_config_for_bedrock(config, openai_config)
                 if bedrock_import_exception:
                     raise ImportError("Please install `boto3` to use the Amazon Bedrock API.")
                 client = BedrockClient(response_format=response_format, **openai_config)
+                self._clients.append(client)  # type: ignore[arg-type]
+            elif api_type is not None and api_type.startswith("bedrock_v2"):
+                # Bedrock V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
+                self._configure_openai_config_for_bedrock(config, openai_config)
+                from autogen.llm_clients import BedrockV2Client as V2Client
+
+                client = V2Client(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("openai_v2"):
                 from autogen.llm_clients import OpenAICompletionsClient as V2Client
