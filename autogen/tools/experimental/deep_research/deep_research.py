@@ -108,15 +108,19 @@ def _extract_subquestions_answer(sender: Any, recipient: Any, summary_args: Any)
 
 def _make_confirm_summary(prefix: str) -> Callable[..., str]:
     """Create a confirm_summary function for the outer critic/summarizer chat."""
+
     def confirm_summary(answer: str, reasoning: str) -> str:
         return f"{prefix}" + answer + "\nReasoning: " + reasoning
+
     return confirm_summary
 
 
 def _make_confirm_answer(prefix: str) -> Callable[..., str]:
     """Create a confirm_answer function for the websurfer critic chat."""
+
     def confirm_answer(answer: str) -> str:
         return f"{prefix} " + answer
+
     return confirm_answer
 
 
@@ -171,9 +175,7 @@ class DeepResearchTool(Tool):
         # Register confirm_summary once, not per-call
         confirm_summary = _make_confirm_summary(self.ANSWER_CONFIRMED_PREFIX)
         self.summarizer_agent.register_for_execution()(confirm_summary)
-        self.critic_agent.register_for_llm(
-            description="Call this method to confirm the final answer."
-        )(confirm_summary)
+        self.critic_agent.register_for_llm(description="Call this method to confirm the final answer.")(confirm_summary)
 
         def delegate_research_task(
             task: Annotated[str, "The task to perform a research on."],
