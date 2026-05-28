@@ -89,8 +89,8 @@ async def _raw_bob(hub: Hub, name: str = "bob"):
 
 async def _consume_invite_and_ack(raw_client, agent_id: str, *, timeout: float = 1.0) -> str:
     """Walk inbound frames until ``EV_CHANNEL_INVITE`` lands, post the
-    matching ``EV_CHANNEL_INVITE_ACK`` back as a ``SendFrame``, return
-    the channel id the invite was for. Helper for raw-bob test setups
+    matching ``EV_CHANNEL_INVITE_ACK`` back via a ``post_envelope`` request,
+    return the channel id the invite was for. Helper for raw-bob test setups
     that bypass the HubClient/AgentClient default handler."""
 
     async def _scan() -> str:
