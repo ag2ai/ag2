@@ -142,8 +142,9 @@ from .identity import (
     Resume,
     ResumeExample,
 )
-from .ids import make_id
+from .ids import make_id, parse_hub_urn
 from .policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, HUB_DEP, TASK_DEP
+from .remote import RemoteAgentProxy
 from .rule import (
     AccessBlock,
     ChannelTypeAccess,
@@ -342,6 +343,7 @@ __all__ = (
     "ProtocolError",
     "RateBlock",
     "ReceiptFrame",
+    "RemoteAgentProxy",
     "ReplyWithinEvaluator",
     "Resume",
     "ResumeExample",
@@ -388,6 +390,7 @@ __all__ = (
     "default_tools_for",
     "encode_frame",
     "make_id",
+    "parse_hub_urn",
     "parse_duration",
     "parse_skill_frontmatter",
     "read_wal_until",

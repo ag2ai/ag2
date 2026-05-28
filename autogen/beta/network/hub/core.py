@@ -70,6 +70,7 @@ from ..errors import (
 )
 from ..identity import ObservedStat, Passport, Resume
 from ..ids import make_id
+from ..remote import RemoteAgentProxy
 from ..rule import Rule, parse_duration
 from ..transport.frames import (
     AcceptFrame,
@@ -265,6 +266,14 @@ class Hub:
         # operation; out-of-order acks rely on the causation index for
         # idempotent re-processing.
         self._inbox_cursors: dict[str, str] = {}
+
+        # Federation dispatch registry keyed by ``proxy.scheme``. When
+        # a recipient passport has ``effective_kind == "remote_agent"``
+        # the hub looks up the proxy by ``recipient.auth.scheme`` and
+        # hands the envelope to ``proxy.dispatch(...)`` instead of
+        # sending a ``NotifyFrame`` to a local endpoint. No proxies
+        # ship in the framework; tenants register their own.
+        self._remote_proxies: dict[str, RemoteAgentProxy] = {}
 
         # ``(channel_id, sender_id, causation_id) -> envelope_id``.
         # Lets handlers short-circuit logically-duplicate work after an
@@ -628,6 +637,32 @@ class Hub:
         """The currently active arbiter (read-only access for testing)."""
         return self._arbiter
 
+    def register_remote_proxy(self, proxy: RemoteAgentProxy) -> None:
+        """Register a federation proxy keyed by ``proxy.scheme``.
+
+        When the hub dispatches an envelope to a recipient whose
+        passport has ``effective_kind == "remote_agent"``, it looks up
+        the proxy by the recipient's ``auth.scheme`` and calls
+        ``proxy.dispatch(envelope, recipient)`` instead of sending a
+        ``NotifyFrame`` to a local endpoint. Re-registering at the
+        same ``scheme`` replaces the prior proxy.
+        """
+        self._remote_proxies[proxy.scheme] = proxy
+
+    def unregister_remote_proxy(self, scheme: str) -> RemoteAgentProxy | None:
+        """Remove the proxy registered for ``scheme`` and return it.
+
+        Returns ``None`` if no proxy was registered for ``scheme``.
+        The caller is responsible for awaiting ``proxy.close()``
+        — the hub leaves lifecycle decisions to whoever owns the
+        proxy instance.
+        """
+        return self._remote_proxies.pop(scheme, None)
+
+    def remote_proxy_for(self, scheme: str) -> RemoteAgentProxy | None:
+        """Read-only lookup against the proxy registry."""
+        return self._remote_proxies.get(scheme)
+
     def health(self) -> dict:
         """Return an operational snapshot of hub state.
 
@@ -834,8 +869,14 @@ class Hub:
         skill_md: str | None = None,
         rule: Rule | None = None,
     ) -> Passport:
-        adapter = self._auth.get(passport.auth.scheme)
-        await adapter.validate(passport, passport.auth.claim)
+        # Remote-agent passports represent participants on another hub
+        # and ``auth.scheme`` is a routing label consumed by the
+        # registered ``RemoteAgentProxy`` — not a credential to be
+        # validated locally. Skip the local auth check for them;
+        # authentication on the wire belongs to the originating hub.
+        if passport.effective_kind != "remote_agent":
+            adapter = self._auth.get(passport.auth.scheme)
+            await adapter.validate(passport, passport.auth.claim)
 
         async with self._registration_lock:
             # Reject a re-register that collides on ``name``: the prior
@@ -1856,13 +1897,13 @@ class Hub:
                 recipients = [rid for rid in recipients if rid not in unknown] + list(replacement)
 
         for recipient_id in recipients:
+            recipient_passport = self._passports.get(recipient_id)
             if recipient_id == envelope.sender_id:
                 # Self-routing always delivers (protocol broadcasts
                 # include the sender so the sender's Channel handle
                 # sees the lifecycle event).
                 pass
             elif sender_passport is not None:
-                recipient_passport = self._passports.get(recipient_id)
                 recipient_rule = self._rules.get(recipient_id)
                 if recipient_passport is not None and recipient_rule is not None:
                     decision = await self._arbiter.authorize_dispatch(
@@ -1870,6 +1911,44 @@ class Hub:
                     )
                     if isinstance(decision, Deny):
                         continue
+
+            # Federation path: recipients living on another hub are
+            # dispatched through a registered ``RemoteAgentProxy``
+            # keyed by the recipient's auth scheme. Local endpoints are
+            # skipped entirely for these — the remote hub is what holds
+            # the binding.
+            if (
+                recipient_passport is not None
+                and recipient_passport.effective_kind == "remote_agent"
+            ):
+                scheme = recipient_passport.auth.scheme
+                proxy = self._remote_proxies.get(scheme)
+                if proxy is None:
+                    reason = NotFoundError(
+                        f"no remote proxy registered for scheme {scheme!r}"
+                    )
+                    await self._fan_out("on_dispatch_failed", envelope, recipient_id, reason)
+                    logger.warning(
+                        "dispatch failed: channel=%s recipient=%s event=%s reason=%s",
+                        envelope.channel_id,
+                        recipient_id,
+                        envelope.event_type,
+                        reason,
+                    )
+                    continue
+                try:
+                    await proxy.dispatch(envelope, recipient_passport)
+                except Exception as exc:
+                    await self._fan_out("on_dispatch_failed", envelope, recipient_id, exc)
+                    logger.warning(
+                        "remote dispatch failed: channel=%s recipient=%s scheme=%s reason=%s",
+                        envelope.channel_id,
+                        recipient_id,
+                        scheme,
+                        exc,
+                    )
+                continue
+
             endpoint = self._endpoint_for(recipient_id)
             if endpoint is None:
                 continue
