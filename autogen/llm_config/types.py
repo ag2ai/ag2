@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from autogen.llm_clients.anthropic_v2 import AnthropicV2LLMConfigEntry
+from autogen.llm_clients.bedrock_v2 import BedrockV2LLMConfigEntry
 from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2LLMConfigEntry
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
 from autogen.oai.bedrock import BedrockLLMConfigEntry
@@ -22,7 +24,9 @@ from autogen.oai.together import TogetherLLMConfigEntry
 
 ConfigEntries = (
     AnthropicLLMConfigEntry
+    | AnthropicV2LLMConfigEntry
     | CerebrasLLMConfigEntry
+    | BedrockV2LLMConfigEntry
     | BedrockLLMConfigEntry
     | AzureOpenAILLMConfigEntry
     | DeepSeekLLMConfigEntry

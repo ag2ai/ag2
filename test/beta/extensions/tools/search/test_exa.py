@@ -14,8 +14,7 @@ pytest.importorskip("exa_py")
 
 from autogen.beta import Agent, Context, DataInput, Variable
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.beta.testing import TestConfig, TrackingConfig
-from autogen.beta.tools.search.exa import (
+from autogen.beta.extensions.tools.search.exa import (
     ExaAnswerCitation,
     ExaAnswerResult,
     ExaContentResult,
@@ -23,6 +22,7 @@ from autogen.beta.tools.search.exa import (
     ExaSearchResult,
     ExaToolkit,
 )
+from autogen.beta.testing import TestConfig, TrackingConfig
 
 EXA_BASE_URL = "https://api.exa.ai"
 
