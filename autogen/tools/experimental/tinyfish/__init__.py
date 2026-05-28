@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .tinyfish_tool import TinyFishTool
+from .tinyfish_tool import TinyFishFetchTool, TinyFishSearchTool, TinyFishTool
 
-__all__ = ["TinyFishTool"]
+__all__ = ["TinyFishFetchTool", "TinyFishSearchTool", "TinyFishTool"]
