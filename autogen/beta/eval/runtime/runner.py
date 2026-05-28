@@ -33,14 +33,16 @@ from functools import partial
 from typing import Any
 from uuid import uuid4
 
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
 from autogen.beta.agent import Agent
 from autogen.beta.config import ModelConfig
-from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware
+from autogen.beta.middleware.builtin import TelemetryMiddleware
 from autogen.beta.stream import MemoryStream, Stream
+from autogen.import_utils import optional_import_block, require_optional_import
+
+with optional_import_block():
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from ..dataset import Suite, Task
 from ..pairwise import PairwiseComparator, PairwiseRunResult, evaluate_pairwise
@@ -323,6 +325,7 @@ async def _produce(
     return InMemoryTraceSource(produced)
 
 
+@require_optional_import("opentelemetry.sdk", "tracing")
 async def _produce_one(
     semaphore: asyncio.Semaphore,
     task: Task,

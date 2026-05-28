@@ -6,6 +6,8 @@
 
 import pytest
 
+pytest.importorskip("opentelemetry.sdk")
+
 from autogen.beta import Agent
 from autogen.beta.eval import Variants, run_variants, scorer
 from autogen.beta.eval.scorers import final_answer_matches
