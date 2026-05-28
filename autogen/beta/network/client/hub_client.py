@@ -265,7 +265,7 @@ class HubClient:
         if self._closed:
             raise RuntimeError("HubClient is closed")
 
-        existing_agent_id = self._hub._name_to_id.get(name)
+        existing_agent_id = self._hub.find_agent_id(name)
         if existing_agent_id is None:
             if passport is None or resume is None:
                 raise ValueError(
@@ -285,9 +285,9 @@ class HubClient:
         # endpoint to it and build a fresh AgentClient against the
         # persisted passport / resume / rule.
         client_link = self._ensure_connected()
-        existing_passport = self._hub._passports[existing_agent_id]
-        existing_resume = self._hub._resumes.get(existing_agent_id, Resume())
-        existing_rule = self._hub._rules.get(existing_agent_id, Rule())
+        existing_passport = await self._hub.get_agent(existing_agent_id)
+        existing_resume = await self._hub.get_resume(existing_agent_id)
+        existing_rule = await self._hub.get_rule(existing_agent_id)
 
         self._hub.bind_endpoint(client_link.endpoint_id, existing_agent_id)
 
@@ -377,6 +377,13 @@ class HubClient:
 
     async def get_skill(self, agent_id: str) -> str | None:
         return await self._hub.get_skill(agent_id)
+
+    def find_agent_id(self, name: str) -> str | None:
+        """Non-raising name → agent_id lookup."""
+        return self._hub.find_agent_id(name)
+
+    async def get_rule(self, agent_id: str) -> Rule:
+        return await self._hub.get_rule(agent_id)
 
     async def list_agents(
         self,

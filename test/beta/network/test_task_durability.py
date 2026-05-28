@@ -10,15 +10,20 @@ Protocol. The hub ships :class:`HubBackedCheckpointStore` as the
 canonical default; tenants may plug in any compatible store.
 """
 
+import asyncio
+
 import pytest
 
-from autogen.beta import Agent
+from autogen.beta import Agent, Context
 from autogen.beta.events import TaskCancelled
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     Hub,
     HubBackedCheckpointStore,
+    Passport,
+    Resume,
 )
+from autogen.beta.network.task_mirror import TaskMirror
 from autogen.beta.stream import MemoryStream
 from autogen.beta.task import (
     TERMINAL_TASK_STATES,
@@ -261,3 +266,139 @@ class TestHubBackedCheckpointStore:
 
     def test_in_memory_double_also_satisfies_protocol(self) -> None:
         assert isinstance(_InMemoryCheckpointStore(), CheckpointStore)
+
+
+@pytest.mark.asyncio
+class TestMirrorCancellation:
+    """``TaskMirror`` forwards owner-driven cancellation to the hub.
+
+    Without this bridge, an agent calling ``Task.cancel`` would emit a
+    ``TaskCancelled`` event on its stream but the hub's task cache
+    would stay at ``RUNNING`` and capability-tagged stats would never
+    record the cancellation.
+    """
+
+    async def test_mirror_forwards_cancellation_to_hub_metadata(self) -> None:
+        hub = await Hub.open(
+            MemoryKnowledgeStore(),
+            ttl_sweep_interval=0,
+            expectation_sweep_interval=0,
+        )
+        try:
+            bob_passport = await hub.register(Passport(name="bob"), Resume())
+            agent = Agent(name="bob", config=TestConfig())
+            stream = MemoryStream()
+            mirror = TaskMirror(hub=hub, owner_id=bob_passport.agent_id)
+            sub_ids = mirror.attach(stream)
+            try:
+                async with agent.task("indexing", context=Context(stream=stream)) as task:
+                    task_id = task.task_id
+                    await task.cancel("wrap-up")
+                # Stream callbacks run via subscribe(sync_to_thread=False) — yield
+                # the loop so the mirror's _on_cancelled completes before assert.
+                await asyncio.sleep(0)
+            finally:
+                mirror.detach(stream, sub_ids)
+
+            meta = await hub.get_task(task_id)
+            assert meta.state == TaskState.CANCELLED
+            assert meta.error == "wrap-up"
+            assert meta.completed_at  # terminal stamp
+        finally:
+            await hub.close()
+
+    async def test_mirror_records_observation_on_capability_tagged_cancellation(
+        self,
+    ) -> None:
+        hub = await Hub.open(
+            MemoryKnowledgeStore(),
+            ttl_sweep_interval=0,
+            expectation_sweep_interval=0,
+        )
+        try:
+            bob_passport = await hub.register(
+                Passport(name="bob"),
+                Resume(claimed_capabilities=["indexing"]),
+            )
+            agent = Agent(name="bob", config=TestConfig())
+            stream = MemoryStream()
+            mirror = TaskMirror(hub=hub, owner_id=bob_passport.agent_id)
+            sub_ids = mirror.attach(stream)
+            try:
+                async with agent.task(
+                    "indexing",
+                    description="search & summarise",
+                    capability="indexing",
+                    context=Context(stream=stream),
+                ) as task:
+                    await task.cancel("wrap-up")
+                await asyncio.sleep(0)
+            finally:
+                mirror.detach(stream, sub_ids)
+
+            resume = await hub.get_resume(bob_passport.agent_id)
+            stat = resume.observed.get("indexing")
+            assert stat is not None
+            assert stat.n == 1
+        finally:
+            await hub.close()
+
+
+@pytest.mark.asyncio
+class TestHubAccessors:
+    """``Hub.find_agent_id`` + ``Hub.get_rule`` are the public-surface
+    primitives ``HubClient.attach`` uses to look up persisted identity
+    without reaching into hub internals.
+    """
+
+    async def test_find_agent_id_returns_id_for_registered_name(self) -> None:
+        hub = await Hub.open(
+            MemoryKnowledgeStore(),
+            ttl_sweep_interval=0,
+            expectation_sweep_interval=0,
+        )
+        try:
+            passport = await hub.register(Passport(name="alice"), Resume())
+            assert hub.find_agent_id("alice") == passport.agent_id
+        finally:
+            await hub.close()
+
+    async def test_find_agent_id_returns_none_for_unknown_name(self) -> None:
+        hub = await Hub.open(
+            MemoryKnowledgeStore(),
+            ttl_sweep_interval=0,
+            expectation_sweep_interval=0,
+        )
+        try:
+            assert hub.find_agent_id("ghost") is None
+        finally:
+            await hub.close()
+
+    async def test_get_rule_returns_default_rule_for_registered_agent(self) -> None:
+        from autogen.beta.network import Rule
+
+        hub = await Hub.open(
+            MemoryKnowledgeStore(),
+            ttl_sweep_interval=0,
+            expectation_sweep_interval=0,
+        )
+        try:
+            passport = await hub.register(Passport(name="alice"), Resume())
+            rule = await hub.get_rule(passport.agent_id)
+            assert isinstance(rule, Rule)
+        finally:
+            await hub.close()
+
+    async def test_get_rule_raises_not_found_for_unknown_agent(self) -> None:
+        from autogen.beta.network import NotFoundError
+
+        hub = await Hub.open(
+            MemoryKnowledgeStore(),
+            ttl_sweep_interval=0,
+            expectation_sweep_interval=0,
+        )
+        try:
+            with pytest.raises(NotFoundError):
+                await hub.get_rule("never-registered")
+        finally:
+            await hub.close()

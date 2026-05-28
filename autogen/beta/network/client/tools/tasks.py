@@ -16,7 +16,9 @@ Discovery / observation:
 * ``list``     — tasks the agent owns or is waiting on.
 * ``status``   — refresh ``TaskMetadata`` for a task by id.
 * ``wait``     — block until a peer's task reaches a terminal state.
-* ``cancel``   — not implemented; returns an error placeholder.
+* ``cancel``   — post an ``ag2.task.cancel_request`` envelope to the
+  task owner. The owner is free to honour by calling ``Task.cancel``
+  or to ignore the request.
 
 ``start`` is intentionally **not** a tool — calling it from the LLM
 would bypass the ``async with`` lifecycle that scopes
@@ -30,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from autogen.beta.tools import tool
 
+from ...envelope import EV_TASK_CANCEL_REQUEST, Envelope
 from ..inject import AgentClientInject, TaskInject
 
 if TYPE_CHECKING:
@@ -66,6 +69,7 @@ def make_tasks_tool(agent_client: "AgentClient") -> object:
         payload: dict | None = None,
         result: Any | None = None,
         task_id: str | None = None,
+        reason: str = "",
         scope: Literal["own", "all"] = "own",
         state: Literal["active", "all"] = "active",
         timeout: float = 300.0,
@@ -84,7 +88,9 @@ def make_tasks_tool(agent_client: "AgentClient") -> object:
             ``list``    args scope="own"|"all", state="active"|"all", limit
             ``status``  args task_id
             ``wait``    args task_id, timeout=300, poll_interval=0.1
-            ``cancel``  not implemented — returns an error placeholder
+            ``cancel``  args task_id, reason?  — posts an
+                        ``ag2.task.cancel_request`` envelope to the
+                        owner; the owner decides whether to honour it.
         """
         actual = client if client is not None else agent_client
         hub = actual._hub_client
@@ -145,8 +151,33 @@ def make_tasks_tool(agent_client: "AgentClient") -> object:
             return f"Error: task {task_id!r} did not complete within {timeout}s"
 
         if action == "cancel":
-            return "Error: tasks(action='cancel') is not implemented"
+            if not task_id:
+                return "Error: cancel requires `task_id`"
+            try:
+                meta = await hub.get_task(task_id)
+            except Exception:
+                return f"Error: task {task_id!r} not found"
+            if meta.state.value in {"completed", "failed", "expired", "cancelled"}:
+                return f"task {task_id!r} is already {meta.state.value}"
+            if not meta.channel_id:
+                return (
+                    f"Error: task {task_id!r} has no associated channel; "
+                    "cancel_request envelopes need a channel to ride on"
+                )
+            envelope = Envelope(
+                channel_id=meta.channel_id,
+                sender_id=actual.agent_id,
+                audience=[meta.owner_id],
+                event_type=EV_TASK_CANCEL_REQUEST,
+                event_data={"task_id": task_id, "reason": reason},
+                task_id=task_id,
+            )
+            try:
+                await hub.post_envelope(envelope)
+            except Exception as exc:
+                return f"Error: cancel_request post failed: {exc}"
+            return f"cancel_request posted to {meta.owner_id} for task {task_id}"
 
-        return f"Error: unknown action {action!r}; choose from progress, complete, list, status, wait"
+        return f"Error: unknown action {action!r}; choose from progress, complete, list, status, wait, cancel"
 
     return tasks

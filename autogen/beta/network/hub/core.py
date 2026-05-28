@@ -1008,6 +1008,29 @@ class Hub:
             raise NotFoundError(f"resume not found: {agent_id}")
         return resume
 
+    def find_agent_id(self, name: str) -> str | None:
+        """Resolve ``name`` to its registered ``agent_id``, or ``None``.
+
+        Non-raising peer to :meth:`get_agent` — callers that need to
+        branch on "is this name registered?" without catching an
+        exception use this directly. Returns ``None`` when ``name``
+        has no current registration.
+        """
+        return self._name_to_id.get(name)
+
+    async def get_rule(self, agent_id: str) -> Rule:
+        """Return the rule attached to ``agent_id``.
+
+        Raises :class:`NotFoundError` if no rule is registered — the
+        registration path stamps a default :class:`Rule` for every
+        agent, so a missing entry indicates the agent itself is
+        unregistered.
+        """
+        rule = self._rules.get(agent_id)
+        if rule is None:
+            raise NotFoundError(f"rule not found: {agent_id}")
+        return rule
+
     async def get_skill(self, agent_id: str) -> str | None:
         if agent_id in self._skills:
             return self._skills[agent_id]
