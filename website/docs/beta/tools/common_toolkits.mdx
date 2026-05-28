@@ -457,8 +457,6 @@ answer_tool = toolkit.answer(
 agent = Agent("researcher", config=config, tools=[search_tool, answer_tool])
 ```
 
-All runtime parameters accept a `Variable` for deferred context resolution.
-
 ### HTTP and SDK options
 
 The toolkit constructor accepts options for the underlying `httpx.AsyncClient` and the Perplexity SDK client. Any extra keyword arguments are forwarded directly to `AsyncPerplexity(...)` (e.g. `base_url`, `max_retries`, `default_headers`):

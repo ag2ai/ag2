@@ -40,6 +40,7 @@ from .cost import token_budget
 from .human_pairwise import export_pairwise_cases, human_labels, human_pairwise
 from .judge import Verdict, agent_judge
 from .pairwise_judge import PairwiseVerdict, pairwise_judge
+from .threshold import threshold
 from .tools import no_tool_errors, tool_called
 
 __all__ = (
@@ -55,6 +56,7 @@ __all__ = (
     "human_pairwise",
     "no_tool_errors",
     "pairwise_judge",
+    "threshold",
     "token_budget",
     "tool_called",
 )

@@ -14,10 +14,13 @@ backends import it.
 
 from collections.abc import Sequence
 
-from opentelemetry.sdk.trace import ReadableSpan
+from autogen.import_utils import optional_import_block, require_optional_import
 
 from ..trace import Trace
 from ._spans import SpanConvention, SpanData, SpanEvent, spans_to_trace
+
+with optional_import_block():
+    from opentelemetry.sdk.trace import ReadableSpan
 
 __all__ = (
     "readable_span_to_data",
@@ -25,7 +28,8 @@ __all__ = (
 )
 
 
-def readable_span_to_data(span: ReadableSpan) -> SpanData:
+@require_optional_import("opentelemetry.sdk", "tracing")
+def readable_span_to_data(span: "ReadableSpan") -> SpanData:
     """Normalize one OpenTelemetry ``ReadableSpan`` into a :class:`SpanData`."""
     context = span.context
     parent = span.parent
@@ -42,8 +46,9 @@ def readable_span_to_data(span: ReadableSpan) -> SpanData:
     )
 
 
+@require_optional_import("opentelemetry.sdk", "tracing")
 def readable_spans_to_trace(
-    spans: Sequence[ReadableSpan],
+    spans: "Sequence[ReadableSpan]",
     *,
     conventions: Sequence[SpanConvention] | None = None,
     duration_ms: int | None = None,
