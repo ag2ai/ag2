@@ -129,13 +129,13 @@ async def test_peers_then_delegate_consults_a_specialist(
 
 @pytest.mark.anthropic
 @pytest.mark.asyncio()
-async def test_5way_discussion_round_robin_via_say_tool(
+async def test_5way_discussion_round_robin(
     anthropic_config: AnthropicConfig,
 ) -> None:
-    """Five LLM agents in a round-robin discussion. Each speaker takes
-    one turn via the ``say`` tool; the adapter rotates ``expected_next_speaker``
-    after every accepted envelope. Verifies that a multi-party
-    LLM-driven channel works end-to-end with bounded prompt size."""
+    """Five LLM agents in a round-robin discussion. Each speaker takes one
+    turn by replying with text; the adapter rotates ``expected_next_speaker``
+    after every accepted envelope. Verifies that a multi-party LLM-driven
+    channel works end-to-end with bounded prompt size."""
     hub = await Hub.open(
         MemoryKnowledgeStore(),
         ttl_sweep_interval=0,
@@ -151,9 +151,9 @@ async def test_5way_discussion_round_robin_via_say_tool(
             prompt=(
                 f"You are {name}, a participant in a 5-way discussion on the "
                 "topic of Python's adoption in scientific computing. When it "
-                "is your turn, contribute exactly one short opinion (one "
-                "sentence) by calling say(content=<your sentence>). Do not "
-                "ask questions. Do not call any other tool."
+                "is your turn, reply with exactly one short opinion (one "
+                "sentence) as plain text. Do not ask questions and do not "
+                "call any tools — just state your opinion."
             ),
             config=anthropic_config,
         )

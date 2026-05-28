@@ -462,7 +462,12 @@ async def test_delegate_fails_fast_when_channel_closes_before_reply() -> None:
     await closer
     assert isinstance(result, str)
     assert result.startswith("Error:")
-    assert "channel closed" in result.lower() or "test_close" in result.lower()
+    # Two valid fail-fast wordings, depending on whether the close lands while
+    # delegate is awaiting the reply ("... channel closed: test_close") or
+    # during the prompt send ("prompt send failed: channel '<id>' is closed").
+    # Windows scheduling tends to hit the send path; both are correct.
+    lowered = result.lower()
+    assert "channel closed" in lowered or "prompt send failed" in lowered, result
 
     await alice_hc.close()
     await bob_hc.close()
@@ -822,8 +827,13 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
 
     assert isinstance(result, str)
     assert result.startswith("Error:")
-    assert "channel closed" in result.lower()
-    assert "ttl_expired" in result.lower()
+    # As with the close test, expiry can surface via the wait path
+    # ("... channel closed: ttl_expired") or the send path
+    # ("prompt send failed: channel '<id>' is expired"). Windows scheduling
+    # tends to hit the send path; both are correct fail-fast outcomes.
+    lowered = result.lower()
+    assert "channel closed" in lowered or "prompt send failed" in lowered, result
+    assert "expired" in lowered, result
 
     await alice_hc.close()
     await bob_hc.close()
