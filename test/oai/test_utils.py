@@ -481,6 +481,37 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
         assert "API key not found or empty for a model" in caplog.text
 
 
+def test_config_list_from_dotenv_handles_non_ascii_model_label(mock_os_environ):
+    # Regression for the encoding pin on the os.fdopen(..., "w+") used to
+    # bridge config_list_from_dotenv to latest_config_list_from_json.
+    # The function serialises the env-derived config dict to JSON inside
+    # that temp file. On platforms whose default `locale.getencoding()` is
+    # not UTF-8 (notably Windows, which defaults to cp1252 / cp932), a
+    # non-ASCII byte in any field — here, a Chinese display name and a
+    # French model alias — raises UnicodeEncodeError on write or is
+    # silently mangled on the matching read. JSON is defined over UTF-8
+    # (RFC 8259 §8.1) so both ends of the round-trip pin encoding="utf-8".
+    fd, temp_name = tempfile.mkstemp()
+    try:
+        with os.fdopen(fd, "w+") as temp:
+            temp.write("\n".join([f"{k}={v}" for k, v in ENV_VARS.items()]))
+            temp.flush()
+            non_ascii_map = {
+                "le-modèle": "OPENAI_API_KEY",
+                "智能助手": "OPENAI_API_KEY",
+            }
+            config_list = autogen.config_list_from_dotenv(
+                dotenv_file_path=temp_name,
+                model_api_key_map=non_ascii_map,
+            )
+            assert config_list, "Non-ASCII model labels should still round-trip through the temp JSON"
+            models = {config["model"] for config in config_list}
+            assert "le-modèle" in models
+            assert "智能助手" in models
+    finally:
+        os.remove(temp_name)
+
+
 def test_get_config_list():
     # Define a list of API keys and corresponding base URLs
     api_keys = ["key1", "key2", "key3"]

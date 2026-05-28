@@ -612,7 +612,15 @@ def config_list_from_dotenv(
 
     fd, temp_name = tempfile.mkstemp()
     try:
-        with os.fdopen(fd, "w+") as temp:
+        # Pin UTF-8 so the temp JSON written here round-trips correctly on
+        # platforms whose default `locale.getencoding()` is not UTF-8 —
+        # notably Windows, which defaults to cp1252 / cp932. A non-ASCII
+        # byte in the env-derived configuration (model display name,
+        # vendor label, etc.) would otherwise raise UnicodeEncodeError on
+        # write or be silently mangled, and the matching
+        # `latest_config_list_from_json` read assumes the same UTF-8
+        # contract (RFC 8259 §8.1).
+        with os.fdopen(fd, "w+", encoding="utf-8") as temp:
             env_var_str = json.dumps(env_var)
             temp.write(env_var_str)
             temp.flush()
