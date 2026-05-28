@@ -1928,6 +1928,25 @@ class Hub:
             raise
         except Exception:
             pass
+        finally:
+            self._cleanup_endpoint(endpoint)
+
+    def _cleanup_endpoint(self, endpoint: LinkEndpoint) -> None:
+        """Release an endpoint's bindings when its frame loop ends.
+
+        Called from the ``finally`` of :meth:`_handle_endpoint` so a
+        connection drop (client close, transport error) does not leave
+        a stale endpoint entry behind. Any agent still mapped to this
+        endpoint loses its binding — fresh attaches re-bind on demand.
+        """
+        endpoint_id = endpoint.endpoint_id
+        self._endpoints_by_id.pop(endpoint_id, None)
+        bound = self._endpoint_to_agents.pop(endpoint_id, None)
+        if not bound:
+            return
+        for agent_id in bound:
+            if self._agent_to_endpoint.get(agent_id) == endpoint_id:
+                self._agent_to_endpoint.pop(agent_id, None)
 
     async def _dispatch_frame(self, endpoint: LinkEndpoint, frame: Frame) -> None:
         if isinstance(frame, SendFrame):

@@ -193,8 +193,12 @@ from .transport import (
     SubscribeFrame,
     UnsubscribeFrame,
     WelcomeFrame,
+    WsLink,
+    WsLinkClient,
+    WsLinkEndpoint,
     decode_frame,
     encode_frame,
+    serve_ws,
 )
 from .views import (
     EnvelopeRenderer,
@@ -367,6 +371,9 @@ __all__ = (
     "WorkflowAdapter",
     "WorkflowGraphError",
     "WorkflowState",
+    "WsLink",
+    "WsLinkClient",
+    "WsLinkEndpoint",
     "decode_frame",
     "default_build_packet_envelope",
     "default_build_round_envelope",
@@ -388,6 +395,7 @@ __all__ = (
     "register_target",
     "render_fallback_skill",
     "resolve_view_policy",
+    "serve_ws",
     "stamp_dependencies",
     "visible_to",
 )
