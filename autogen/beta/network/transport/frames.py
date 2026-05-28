@@ -45,12 +45,20 @@ class HelloFrame:
     ``name`` lets the hub bind the connection to an existing identity
     (re-connect) or onboard a new one. ``auth_scheme`` + ``auth_claim``
     feed the registered ``AuthAdapter`` (defaults to ``NoAuth``).
+
+    ``since_envelope_id`` is the client's high-water mark — the last
+    envelope_id it remembers acknowledging. When set, the hub replays
+    every envelope addressed to this name with ``envelope_id`` greater
+    than ``since_envelope_id`` as fresh ``NotifyFrame`` deliveries
+    before the connection sees any new traffic. ``None`` (the default)
+    skips replay.
     """
 
     kind: ClassVar[str] = "hello"
     name: str
     auth_scheme: str = "none"
     auth_claim: dict[str, Any] = field(default_factory=dict)
+    since_envelope_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -132,15 +140,22 @@ class NotifyFrame:
 class ReceiptFrame:
     """client → hub: ack or nack a ``notify``.
 
-    ``status`` is ``"ack"`` (advances the cross-process ``inbox.cursor``
-    when the transport supports replay) or ``"nack"`` (records to
-    ``inbox_nacks.jsonl``). ``reason`` is a free-form diagnostic for
-    the audit log.
+    ``recipient_id`` names the agent acknowledging delivery — required
+    because a single endpoint may host several registered identities,
+    and the hub must know whose cursor to advance. Mirrors
+    :attr:`NotifyFrame.recipient_id`.
+
+    ``status`` is ``"ack"`` (the agent has processed the envelope; the
+    hub advances that agent's inbox cursor so it is not replayed on
+    reconnect) or ``"nack"`` (the agent could not process it; the hub
+    leaves the cursor untouched and surfaces a dispatch-failure event
+    to listeners). ``reason`` is a free-form diagnostic.
     """
 
     kind: ClassVar[str] = "receipt"
     envelope_id: str
     status: str  # "ack" | "nack"
+    recipient_id: str = ""
     reason: str = ""
 
 

@@ -27,7 +27,7 @@ from ..channel import ChannelMetadata, ChannelState
 from ..envelope import Envelope
 from ..identity import Passport, Resume
 from ..rule import Rule
-from ..transport.frames import NotifyFrame
+from ..transport.frames import NotifyFrame, ReceiptFrame
 from ..transport.local import LocalLink, LocalLinkClient
 from ..views.base import ViewPolicy
 from .agent_client import AgentClient
@@ -111,18 +111,66 @@ class HubClient:
         (``audience=None``) reach the right ``AgentClient`` without
         the demuxer re-walking channel participants. Frames missing a
         ``recipient_id`` fall back to ``audience``-based routing.
+
+        After the receiving handler returns, a ``ReceiptFrame`` flows
+        back to the hub so the per-agent inbox cursor advances and a
+        future reconnect does not replay the envelope. Handler
+        exceptions produce a ``nack`` receipt so the cursor stays put
+        and the envelope is replayed on the next reconnect.
         """
         if frame.recipient_id:
             client = self._clients.get(frame.recipient_id)
             if client is not None:
-                await client.receive(frame.envelope)
+                await self._deliver_and_ack(client, frame.envelope, frame.recipient_id)
             return
         if frame.envelope.audience is None:
             return
         for recipient_id in frame.envelope.audience:
             client = self._clients.get(recipient_id)
             if client is not None:
-                await client.receive(frame.envelope)
+                await self._deliver_and_ack(client, frame.envelope, recipient_id)
+
+    async def _deliver_and_ack(
+        self,
+        client: AgentClient,
+        envelope: Envelope,
+        recipient_id: str,
+    ) -> None:
+        status = "ack"
+        reason = ""
+        try:
+            await client.receive(envelope)
+        except Exception as exc:
+            # Handler exceptions are already surfaced through
+            # ``HubListener.on_turn_failed`` by the default handler;
+            # the receipt mirrors the outcome so the cursor reflects
+            # what was actually processed.
+            status = "nack"
+            reason = str(exc)
+            logger.exception(
+                "notify handler raised: channel=%s event=%s recipient=%s",
+                envelope.channel_id,
+                envelope.event_type,
+                recipient_id,
+            )
+        if not envelope.envelope_id or self._client_link is None:
+            return
+        try:
+            await self._client_link.send_frame(
+                ReceiptFrame(
+                    envelope_id=envelope.envelope_id,
+                    status=status,
+                    recipient_id=recipient_id,
+                    reason=reason,
+                )
+            )
+        except Exception:
+            logger.exception(
+                "receipt send failed: channel=%s envelope=%s recipient=%s",
+                envelope.channel_id,
+                envelope.envelope_id,
+                recipient_id,
+            )
 
     # ── Registration ─────────────────────────────────────────────────────────
 
