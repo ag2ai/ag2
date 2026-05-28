@@ -478,21 +478,26 @@ class OllamaClient:
                     else:
                         ollama_messages.append({"role": "user", "content": content_to_append})
 
-        # Convert tool call and tool result messages to normal text messages for Ollama
+        # Convert tool call and tool result messages to normal text messages for Ollama.
+        # The model should only see tool results, so the assistant tool-call message is removed
+        # and each call's metadata is folded into its matching result (keyed by tool_call_id).
+        tool_call_meta_by_id: dict[str, str] = {}
         for i, message in enumerate(ollama_messages):
             if "tool_calls" in message:
-                # Recommended tool calls
-                content = "Run the following function(s):"
                 for tool_call in message["tool_calls"]:
-                    content = content + "\n" + str(tool_call)
-                ollama_messages[i] = {"role": "assistant", "content": content}
+                    tool_call_meta_by_id[tool_call.get("id")] = str(tool_call)
+                ollama_messages[i] = None
             if "tool_call_id" in message:
-                # Executed tool results
-                message["result"] = message["content"]
+                # Executed tool results — prepend the matching tool call's metadata (if known)
+                tool_call_meta = tool_call_meta_by_id.get(message["tool_call_id"], "")
+                message["result"] = tool_call_meta + message["content"]
                 del message["content"]
                 del message["role"]
                 content = "The following function was run: " + str(message)
                 ollama_messages[i] = {"role": "user", "content": content}
+
+        # Remove None entries (removed tool call messages in manual mode)
+        ollama_messages = [msg for msg in ollama_messages if msg is not None]
 
         # As we are changing messages, let's merge if they have two user messages on the end and the last one is tool call step instructions
         if (
