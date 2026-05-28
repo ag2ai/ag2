@@ -94,7 +94,6 @@ setuptools.setup(
         "duckduckgo": ["ag2[duckduckgo]==" + __version__],
         "ddgs": ["ag2[ddgs]==" + __version__],
         "tavily": ["ag2[tavily]==" + __version__],
-        "exa": ["ag2[exa]==" + __version__],
         "perplexity": ["ag2[perplexity]==" + __version__],
         "nlip": ["ag2[nlip]==" + __version__],
         "test-core": ["ag2[test-core]==" + __version__],
