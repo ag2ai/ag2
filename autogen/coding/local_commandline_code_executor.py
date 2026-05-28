@@ -212,13 +212,6 @@ $functions"""
     def _setup_functions(self) -> None:
         func_file_content = _build_python_functions_file(self._functions)
         func_file = self._work_dir / f"{self._functions_module}.py"
-        # Pin the encoding so the generated module is written as UTF-8 on
-        # every platform. Without it `Path.write_text` inherits
-        # `locale.getpreferredencoding()` (`cp1252` on most Windows
-        # installs) and raises `UnicodeEncodeError` mid-write whenever a
-        # user-supplied function has a non-cp1252 docstring, default
-        # argument, or Annotated description (e.g. emoji, smart quotes,
-        # non-Latin scripts).
         func_file.write_text(func_file_content, encoding="utf-8")
 
         # Collect requirements
