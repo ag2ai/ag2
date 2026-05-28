@@ -34,7 +34,7 @@ from .adapters import (
     default_render_envelope,
     default_tools_for,
 )
-from .auth import AuthAdapter, AuthRegistry, NoAuth
+from .auth import ApiKeyAuth, AuthAdapter, AuthRegistry, NoAuth
 from .channel import (
     ChannelManifest,
     ChannelMetadata,
@@ -251,6 +251,7 @@ __all__ = (
     "AgentTarget",
     "Allow",
     "Always",
+    "ApiKeyAuth",
     "AuditHandler",
     "AuditLog",
     "AuditSubscriber",

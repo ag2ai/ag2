@@ -62,6 +62,7 @@ from ..envelope import (
 )
 from ..errors import (
     AccessDeniedError,
+    AuthError,
     NetworkError,
     NotFoundError,
     ProtocolError,
@@ -121,6 +122,7 @@ _ERROR_CODE_MAP: dict[type, str] = {
     NotFoundError: "not_found",
     AccessDeniedError: "access_denied",
     ProtocolError: "protocol_error",
+    AuthError: "auth_failed",
 }
 
 
@@ -1832,6 +1834,17 @@ class Hub:
             agent_id = self._name_to_id.get(frame.name)
             if agent_id is None:
                 await endpoint.send_frame(ErrorFrame(code="not_found", message=f"unknown name: {frame.name}"))
+                return
+            passport = self._passports.get(agent_id)
+            if passport is None:
+                # Name index disagrees with passport cache — defensive, shouldn't happen.
+                await endpoint.send_frame(ErrorFrame(code="not_found", message=f"no passport for {frame.name}"))
+                return
+            try:
+                adapter = self._auth.get(frame.auth_scheme)
+                await adapter.validate(passport, frame.auth_claim)
+            except AuthError as exc:
+                await endpoint.send_frame(ErrorFrame(code="auth_failed", message=str(exc)))
                 return
             try:
                 self.bind_endpoint(endpoint.endpoint_id, agent_id)
