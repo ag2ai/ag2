@@ -34,6 +34,7 @@ Usage:
     ContentParser.register("custom_type", CustomContent)
 """
 
+from .anthropic_v2 import AnthropicV2Client, AnthropicV2LLMConfigEntry
 from .bedrock_v2 import BedrockV2Client, BedrockV2LLMConfigEntry
 from .client_v2 import ModelClientV2
 from .models import (
@@ -59,6 +60,7 @@ __all__ = [  # noqa: RUF022
     "ModelClientV2",
     # Clients
     "OpenAICompletionsClient",
+    "AnthropicV2Client",
     "BedrockV2Client",
     # Content blocks
     "AudioContent",
@@ -77,5 +79,6 @@ __all__ = [  # noqa: RUF022
     "UnifiedMessage",
     "UnifiedResponse",
     # LLM Config Entries
+    "AnthropicV2LLMConfigEntry",
     "BedrockV2LLMConfigEntry",
 ]
