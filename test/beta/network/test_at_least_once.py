@@ -20,6 +20,7 @@ Two test patterns coexist here:
 """
 
 import asyncio
+import json
 
 import pytest
 
@@ -128,9 +129,9 @@ class TestReceiptCursorAdvance:
             wal = await hub.read_wal(channel.channel_id)
             text_env = next(e for e in wal if e.event_type == EV_TEXT)
 
-            assert hub._inbox_cursors[bob.agent_id] == text_env.envelope_id
-            cursor_blob = await hub._store.read(f"/agents/{bob.agent_id}/inbox.cursor")
-            assert cursor_blob == text_env.envelope_id
+            assert hub.inbox_cursor(bob.agent_id, channel.channel_id) == text_env.envelope_id
+            cursor_blob = await hub._store.read(f"/agents/{bob.agent_id}/inbox.cursors.json")
+            assert json.loads(cursor_blob)[channel.channel_id] == text_env.envelope_id
         finally:
             await alice_hc.close()
             await bob_hc.close()
@@ -167,14 +168,24 @@ class TestReceiptCursorAdvance:
 
             # Ack the newer (text) first.
             await bob_raw.send_frame(
-                ReceiptFrame(envelope_id=text_env.envelope_id, status="ack", recipient_id=bob_passport.agent_id)
+                ReceiptFrame(
+                    envelope_id=text_env.envelope_id,
+                    status="ack",
+                    recipient_id=bob_passport.agent_id,
+                    channel_id=channel_id,
+                )
             )
             # Then ack an older envelope. Cursor must NOT rewind.
             await bob_raw.send_frame(
-                ReceiptFrame(envelope_id=opened_env.envelope_id, status="ack", recipient_id=bob_passport.agent_id)
+                ReceiptFrame(
+                    envelope_id=opened_env.envelope_id,
+                    status="ack",
+                    recipient_id=bob_passport.agent_id,
+                    channel_id=channel_id,
+                )
             )
             await asyncio.sleep(0.05)
-            assert hub._inbox_cursors[bob_passport.agent_id] == text_env.envelope_id
+            assert hub.inbox_cursor(bob_passport.agent_id, channel_id) == text_env.envelope_id
         finally:
             await bob_raw.close()
             await alice_hc.close()
@@ -202,17 +213,18 @@ class TestReceiptCursorAdvance:
                     text_env = frame.envelope
                     break
 
-            cursor_before = hub._inbox_cursors.get(bob_passport.agent_id, "")
+            cursor_before = hub.inbox_cursor(bob_passport.agent_id, channel.channel_id)
             await bob_raw.send_frame(
                 ReceiptFrame(
                     envelope_id=text_env.envelope_id,
                     status="nack",
                     recipient_id=bob_passport.agent_id,
+                    channel_id=channel.channel_id,
                     reason="processing failed",
                 )
             )
             await asyncio.sleep(0.05)
-            cursor_after = hub._inbox_cursors.get(bob_passport.agent_id, "")
+            cursor_after = hub.inbox_cursor(bob_passport.agent_id, channel.channel_id)
             assert cursor_after == cursor_before
         finally:
             await bob_raw.close()
@@ -242,13 +254,52 @@ class TestReceiptCursorAdvance:
                     text_env = frame.envelope
                     break
 
-            cursor_before = hub._inbox_cursors.get(bob_passport.agent_id, "")
+            cursor_before = hub.inbox_cursor(bob_passport.agent_id, channel.channel_id)
             await bob_raw.send_frame(
                 ReceiptFrame(envelope_id=text_env.envelope_id, status="ack")  # recipient_id="" default
             )
             await asyncio.sleep(0.05)
-            cursor_after = hub._inbox_cursors.get(bob_passport.agent_id, "")
+            cursor_after = hub.inbox_cursor(bob_passport.agent_id, channel.channel_id)
             assert cursor_after == cursor_before
+        finally:
+            await bob_raw.close()
+            await alice_hc.close()
+            await hub.close()
+
+    @pytest.mark.asyncio
+    async def test_receipt_without_channel_id_is_ignored(self) -> None:
+        """An ack the hub can't attribute to a channel cannot advance any
+        per-channel cursor — receipts must name their channel."""
+        hub = await _new_hub()
+        alice_link = LocalLink(hub)
+        alice_hc = HubClient(alice_link, hub=hub)
+        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+
+        bob_passport, bob_raw = await _raw_bob(hub)
+
+        try:
+            channel_open = asyncio.create_task(alice.open(type="discussion", target=["bob"]))
+            await _consume_invite_and_ack(bob_raw, bob_passport.agent_id)
+            channel = await channel_open
+
+            await channel.send("hello")
+            async for frame in bob_raw.frames():
+                if isinstance(frame, NotifyFrame) and frame.envelope.event_type == EV_TEXT:
+                    text_env = frame.envelope
+                    break
+
+            cursor_before = hub.inbox_cursor(bob_passport.agent_id, channel.channel_id)
+            await bob_raw.send_frame(
+                # recipient_id set, channel_id omitted (default "").
+                ReceiptFrame(
+                    envelope_id=text_env.envelope_id,
+                    status="ack",
+                    recipient_id=bob_passport.agent_id,
+                )
+            )
+            await asyncio.sleep(0.05)
+            cursor_after = hub.inbox_cursor(bob_passport.agent_id, channel.channel_id)
+            assert cursor_after == cursor_before == ""
         finally:
             await bob_raw.close()
             await alice_hc.close()
@@ -404,9 +455,7 @@ class TestCausationIndex:
             assert (chan_a_id, alice_id, "c-first") in hub2._causation_index
             assert (chan_b_id, alice_id, "c-second") in hub2._causation_index
 
-            found = await hub2.find_envelope_by_causation(
-                chan_b_id, sender_id=alice_id, causation_id="c-second"
-            )
+            found = await hub2.find_envelope_by_causation(chan_b_id, sender_id=alice_id, causation_id="c-second")
             assert found is not None
             assert found.event_data.get("text") == "second"
         finally:
@@ -462,9 +511,7 @@ class TestReplayOnReconnect:
             raw_link = LocalLink(hub)
             raw_client = raw_link.client()
             try:
-                await raw_client.send_frame(
-                    HelloFrame(name="bob", since_envelope_id=seen_env.envelope_id)
-                )
+                await raw_client.send_frame(HelloFrame(name="bob", since_envelope_id=seen_env.envelope_id))
                 welcome = await _drain_frame(raw_client)
                 assert isinstance(welcome, WelcomeFrame)
 
@@ -508,9 +555,7 @@ class TestReplayOnReconnect:
             raw_link = LocalLink(hub)
             raw_client = raw_link.client()
             try:
-                await raw_client.send_frame(
-                    HelloFrame(name="bob", since_envelope_id=seen_env.envelope_id)
-                )
+                await raw_client.send_frame(HelloFrame(name="bob", since_envelope_id=seen_env.envelope_id))
                 welcome = await _drain_frame(raw_client)
                 assert isinstance(welcome, WelcomeFrame)
 
@@ -539,7 +584,7 @@ class TestReplayOnReconnect:
             await wait_for_text_count(hub, channel.channel_id, 1)
             await asyncio.sleep(0.05)  # auto-ack lands
 
-            cursor = hub._inbox_cursors[bob.agent_id]
+            cursor = hub.inbox_cursor(bob.agent_id, channel.channel_id)
             assert cursor != ""
             await bob_hc.close()
 
@@ -573,7 +618,7 @@ class TestReplayOnReconnect:
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
-            await channel.send("missable")
+            await channel.send("miscible")
             await wait_for_text_count(hub, channel.channel_id, 1)
             await bob_hc.close()
 
@@ -588,6 +633,89 @@ class TestReplayOnReconnect:
                     await _drain_frame(raw_client, timeout=0.25)
             finally:
                 await raw_client.close()
+        finally:
+            await alice_hc.close()
+            await hub.close()
+
+    @pytest.mark.asyncio
+    async def test_ack_in_one_channel_does_not_suppress_replay_in_another(self) -> None:
+        """The delivery cursor is per (recipient, channel). Acking a
+        newer envelope in one channel must not skip an older unacked
+        envelope in a different channel on reconnect — the failure mode
+        a single global high-water cursor would cause."""
+        hub = await _new_hub()
+        link = LocalLink(hub)
+        alice_hc = HubClient(link, hub=hub)
+        bob_hc = HubClient(link, hub=hub)
+        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+
+        try:
+            chan_a = await alice.open(type="discussion", target=["bob"])
+            chan_b = await alice.open(type="discussion", target=["bob"])
+            await asyncio.sleep(0.05)  # bob auto-acks both opened envelopes
+            await bob_hc.close()
+            await asyncio.sleep(0.05)
+
+            # Channel B's envelope is stamped first (lower id) and stays
+            # unacked; channel A's is stamped later (higher id) and gets
+            # acked. A single global cursor at channel A's id would
+            # wrongly suppress channel B's replay.
+            missed_b = Envelope(
+                channel_id=chan_b.channel_id,
+                sender_id=alice.agent_id,
+                audience=[bob.agent_id],
+                event_type="ag2.task.progress",
+                event_data={"step": "missed-b"},
+            )
+            await hub.post_envelope(missed_b)
+            missed_a = Envelope(
+                channel_id=chan_a.channel_id,
+                sender_id=alice.agent_id,
+                audience=[bob.agent_id],
+                event_type="ag2.task.progress",
+                event_data={"step": "missed-a"},
+            )
+            missed_a_id = await hub.post_envelope(missed_a)
+
+            # Reconnect once; ack ONLY channel A's envelope.
+            raw_link = LocalLink(hub)
+            raw1 = raw_link.client()
+            try:
+                await raw1.send_frame(HelloFrame(name="bob", since_envelope_id=""))
+                welcome = await _drain_frame(raw1)
+                assert isinstance(welcome, WelcomeFrame)
+                await raw1.send_frame(
+                    ReceiptFrame(
+                        envelope_id=missed_a_id,
+                        status="ack",
+                        recipient_id=bob.agent_id,
+                        channel_id=chan_a.channel_id,
+                    )
+                )
+                await asyncio.sleep(0.05)
+            finally:
+                await raw1.close()
+
+            # Reconnect again: channel B's envelope must still replay
+            # (its cursor never advanced); channel A's must not.
+            raw2 = raw_link.client()
+            try:
+                await raw2.send_frame(HelloFrame(name="bob", since_envelope_id=""))
+                welcome = await _drain_frame(raw2)
+                assert isinstance(welcome, WelcomeFrame)
+                steps: list[str | None] = []
+                while True:
+                    try:
+                        frame = await _drain_frame(raw2, timeout=0.5)
+                    except asyncio.TimeoutError:
+                        break
+                    if isinstance(frame, NotifyFrame) and frame.envelope.event_type == "ag2.task.progress":
+                        steps.append(frame.envelope.event_data.get("step"))
+                assert "missed-b" in steps, f"channel B replay was suppressed; saw {steps}"
+                assert "missed-a" not in steps, f"channel A re-replayed after ack; saw {steps}"
+            finally:
+                await raw2.close()
         finally:
             await alice_hc.close()
             await hub.close()
@@ -609,7 +737,8 @@ class TestCursorPersistence:
         await asyncio.sleep(0.05)
 
         bob_id = bob.agent_id
-        expected_cursor = hub._inbox_cursors[bob_id]
+        channel_id = channel.channel_id
+        expected_cursor = hub.inbox_cursor(bob_id, channel_id)
         assert expected_cursor != ""
 
         await alice_hc.close()
@@ -618,7 +747,7 @@ class TestCursorPersistence:
 
         hub2 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
         try:
-            assert hub2._inbox_cursors.get(bob_id) == expected_cursor
+            assert hub2.inbox_cursor(bob_id, channel_id) == expected_cursor
         finally:
             await hub2.close()
 
@@ -642,7 +771,47 @@ class TestCursorPersistence:
 
             await bob.unregister()
             assert bob_id not in hub._inbox_cursors
-            assert await hub._store.read(f"/agents/{bob_id}/inbox.cursor") is None
+            assert await hub._store.read(f"/agents/{bob_id}/inbox.cursors.json") is None
+        finally:
+            await alice_hc.close()
+            await bob_hc.close()
+            await hub.close()
+
+
+class TestRedeliveryIdempotency:
+    @pytest.mark.asyncio
+    async def test_redelivered_trigger_does_not_double_post(self) -> None:
+        """At-least-once redelivery of a trigger the agent already
+        answered must not re-run the LLM or post a second reply. The
+        default handler short-circuits on the causation index. Uses a
+        conversation channel (free-form turns) so only the dedup guard —
+        not turn ordering — can prevent the second reply."""
+        hub = await _new_hub()
+        link = LocalLink(hub)
+        alice_hc = HubClient(link, hub=hub)
+        bob_hc = HubClient(link, hub=hub)
+        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+        bob = await bob_hc.register(_agent("bob", "reply-A", "reply-B"), Passport(name="bob"), Resume())
+
+        try:
+            channel = await alice.open(type="conversation", target=["bob"])
+            await channel.send("question", audience=[bob.agent_id])
+
+            # alice's question + bob's first reply.
+            wal = await wait_for_text_count(hub, channel.channel_id, 2)
+            trigger = next(e for e in wal if e.event_type == EV_TEXT and e.sender_id == alice.agent_id)
+            bob_first = [e for e in wal if e.event_type == EV_TEXT and e.sender_id == bob.agent_id]
+            assert len(bob_first) == 1
+            assert bob_first[0].event_data.get("text") == "reply-A"
+
+            # Redeliver the exact same trigger envelope.
+            await bob.receive(trigger)
+            await asyncio.sleep(0.1)
+
+            wal_after = await hub.read_wal(channel.channel_id)
+            bob_after = [e for e in wal_after if e.event_type == EV_TEXT and e.sender_id == bob.agent_id]
+            assert len(bob_after) == 1, f"redelivery double-posted: {[e.event_data for e in bob_after]}"
+            assert bob_after[0].event_data.get("text") == "reply-A"
         finally:
             await alice_hc.close()
             await bob_hc.close()

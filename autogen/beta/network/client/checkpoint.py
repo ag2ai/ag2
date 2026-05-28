@@ -28,10 +28,9 @@ class HubBackedCheckpointStore:
 
     Satisfies the framework-core :class:`CheckpointStore` Protocol by
     delegating to :meth:`Hub.checkpoint_task` and
-    :meth:`Hub.read_task_checkpoint`. Constructing with a hub gives an
-    in-process flow direct access; a wire-mode transport would supply
-    an equivalent RPC-backed store (out of scope here — tenants build
-    that on top of the existing Protocol).
+    :meth:`Hub.read_task_checkpoint` through an in-process hub
+    reference. Deployments that need different durability supply
+    another :class:`CheckpointStore` — the Protocol is the seam.
     """
 
     def __init__(self, hub: "Hub") -> None:

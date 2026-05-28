@@ -15,7 +15,6 @@ from autogen.beta.exceptions import missing_optional_dependency
 from .frames import (
     AcceptFrame,
     ErrorFrame,
-    EventFrame,
     Frame,
     HelloFrame,
     NotifyFrame,
@@ -23,8 +22,6 @@ from .frames import (
     PongFrame,
     ReceiptFrame,
     SendFrame,
-    SubscribeFrame,
-    UnsubscribeFrame,
     WelcomeFrame,
     decode_frame,
     encode_frame,
@@ -43,7 +40,6 @@ except ImportError as e:
 __all__ = (
     "AcceptFrame",
     "ErrorFrame",
-    "EventFrame",
     "Frame",
     "HelloFrame",
     "LinkClient",
@@ -56,8 +52,6 @@ __all__ = (
     "PongFrame",
     "ReceiptFrame",
     "SendFrame",
-    "SubscribeFrame",
-    "UnsubscribeFrame",
     "WelcomeFrame",
     "WsLink",
     "WsLinkClient",

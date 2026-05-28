@@ -8,10 +8,11 @@ Lazy-connects the underlying ``LinkClient`` on first ``register``;
 demultiplexes inbound ``NotifyFrame``s to the appropriate
 ``AgentClient``; provides discovery passthroughs.
 
-With ``LocalLink``, the ``HubClient`` holds an explicit in-process
-``hub`` reference so register / discovery / mutation cut through wire
-serialisation. A cross-process transport keeps ``hub=None`` and runs
-every operation through frames.
+The ``HubClient`` holds an in-process ``hub`` reference: register,
+discovery, and identity/channel mutation are direct method calls on
+it. The link carries dispatched envelopes — they arrive as
+``NotifyFrame``s and the receiving side acks them with
+``ReceiptFrame``s.
 """
 
 import asyncio
@@ -46,11 +47,10 @@ logger = logging.getLogger(__name__)
 class HubClient:
     """One connection to a hub. Multiple ``AgentClient``s register through it.
 
-    Takes a ``link`` (currently ``LocalLink``) and an explicit ``hub``
+    Takes a ``link`` (``LocalLink``) and an in-process ``hub``
     reference. The link carries dispatched envelopes via
-    ``NotifyFrame``; the direct hub reference is used for register /
-    discovery / mutation calls (cuts through wire serialisation when
-    we're in-process).
+    ``NotifyFrame`` and their acks via ``ReceiptFrame``; the hub
+    reference serves register / discovery / mutation as direct calls.
 
     A single tenant process should hold one ``HubClient`` per hub it
     connects to.
@@ -161,6 +161,7 @@ class HubClient:
                     envelope_id=envelope.envelope_id,
                     status=status,
                     recipient_id=recipient_id,
+                    channel_id=envelope.channel_id,
                     reason=reason,
                 )
             )
@@ -186,10 +187,11 @@ class HubClient:
     ) -> AgentClient:
         """Register an agent and return its ``AgentClient`` handle.
 
-        Direct hub call for register (in-process); the resulting
-        ``agent_id`` is bound to this connection's endpoint so
-        dispatched ``NotifyFrame``s reach the right ``AgentClient``. A
-        cross-process transport binds via ``HelloFrame`` instead.
+        Direct hub call for register; the resulting ``agent_id`` is
+        bound to this connection's endpoint so dispatched
+        ``NotifyFrame``s reach the right ``AgentClient``. (Over a wire
+        transport, an endpoint binds to an already-registered identity
+        through the ``HelloFrame`` handshake rather than this call.)
 
         ``attach_plugin=True`` (default) attaches the ``NetworkPlugin``
         which adds ``say`` and ``delegate`` to ``agent.tools`` and
@@ -361,11 +363,11 @@ class HubClient:
         self._clients[passport.agent_id] = human  # type: ignore[assignment]
         return human
 
-    # ── Hub control-plane passthrough ────────────────────────────────────────
+    # ── Hub passthrough ──────────────────────────────────────────────────────
     #
-    # Forwards directly to the in-process hub. A cross-process transport
-    # would replace these bodies with frame-based RPC; the call sites on
-    # ``AgentClient`` / handlers stay the same.
+    # Forwards directly to the in-process hub: discovery, identity
+    # mutation, channel lifecycle, and task observation. ``AgentClient``
+    # and the default handlers reach the hub only through these methods.
 
     # — Discovery —
 
@@ -498,6 +500,23 @@ class HubClient:
 
     async def read_wal(self, channel_id: str, *, since: int = 0, until: int | None = None) -> list[Envelope]:
         return await self._hub.read_wal(channel_id, since=since, until=until)
+
+    async def find_envelope_by_causation(
+        self,
+        channel_id: str,
+        *,
+        sender_id: str,
+        causation_id: str,
+    ) -> Envelope | None:
+        """Return the envelope a sender previously posted under this
+        causation key, or ``None``. The default notify handler uses this
+        to skip work when an at-least-once redelivery re-triggers a turn
+        it has already answered."""
+        return await self._hub.find_envelope_by_causation(
+            channel_id,
+            sender_id=sender_id,
+            causation_id=causation_id,
+        )
 
     def can_send(
         self,

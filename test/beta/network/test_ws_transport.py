@@ -219,10 +219,11 @@ class TestEnvelopePostAndDispatch:
                         envelope_id=notify.envelope.envelope_id,
                         status="ack",
                         recipient_id=bob_id,
+                        channel_id=channel.channel_id,
                     )
                 )
                 await asyncio.sleep(0.1)
-                assert hub._inbox_cursors.get(bob_id) == notify.envelope.envelope_id
+                assert hub.inbox_cursor(bob_id, channel.channel_id) == notify.envelope.envelope_id
             finally:
                 await bob_ws.close()
         await hub.close()

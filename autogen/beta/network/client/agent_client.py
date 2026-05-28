@@ -207,8 +207,7 @@ class AgentClient:
         """Open a channel via the hub and return its :class:`Channel` handle.
 
         ``target`` accepts peer **names** or agent_ids; resolution goes
-        through the bound :class:`HubClient` so in-process and any
-        future cross-process transport take the same code path.
+        through the bound :class:`HubClient`.
         """
         if self._disconnected:
             raise RuntimeError("AgentClient is disconnected")

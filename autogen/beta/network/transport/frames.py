@@ -22,7 +22,6 @@ from ..envelope import Envelope
 __all__ = (
     "AcceptFrame",
     "ErrorFrame",
-    "EventFrame",
     "Frame",
     "HelloFrame",
     "NotifyFrame",
@@ -30,8 +29,6 @@ __all__ = (
     "PongFrame",
     "ReceiptFrame",
     "SendFrame",
-    "SubscribeFrame",
-    "UnsubscribeFrame",
     "WelcomeFrame",
     "decode_frame",
     "encode_frame",
@@ -143,55 +140,25 @@ class ReceiptFrame:
     ``recipient_id`` names the agent acknowledging delivery — required
     because a single endpoint may host several registered identities,
     and the hub must know whose cursor to advance. Mirrors
-    :attr:`NotifyFrame.recipient_id`.
+    :attr:`NotifyFrame.recipient_id`. ``channel_id`` names the channel
+    the acked envelope belongs to; the hub keeps one cursor per
+    (recipient, channel), so an ack that omits it cannot be attributed
+    and is dropped.
 
     ``status`` is ``"ack"`` (the agent has processed the envelope; the
-    hub advances that agent's inbox cursor so it is not replayed on
-    reconnect) or ``"nack"`` (the agent could not process it; the hub
-    leaves the cursor untouched and surfaces a dispatch-failure event
-    to listeners). ``reason`` is a free-form diagnostic.
+    hub advances that recipient's cursor for the channel so it is not
+    replayed on reconnect) or ``"nack"`` (the agent could not process
+    it; the hub leaves the cursor untouched and surfaces a
+    dispatch-failure event to listeners). ``reason`` is a free-form
+    diagnostic.
     """
 
     kind: ClassVar[str] = "receipt"
     envelope_id: str
     status: str  # "ack" | "nack"
     recipient_id: str = ""
+    channel_id: str = ""
     reason: str = ""
-
-
-@dataclass(slots=True)
-class SubscribeFrame:
-    """client → hub: open a push subscription on a channel or task.
-
-    At least one of ``channel_id`` / ``task_id`` must be set.
-    ``since_envelope_id`` is the cursor for at-least-once replay over
-    a reconnecting transport; in-process delivery is exactly-once by
-    per-channel lock.
-    """
-
-    kind: ClassVar[str] = "subscribe"
-    subscription_id: str
-    channel_id: str | None = None
-    task_id: str | None = None
-    event_types: list[str] | None = None
-    since_envelope_id: str | None = None
-
-
-@dataclass(slots=True)
-class UnsubscribeFrame:
-    """client → hub: close a subscription."""
-
-    kind: ClassVar[str] = "unsubscribe"
-    subscription_id: str
-
-
-@dataclass(slots=True)
-class EventFrame:
-    """hub → client: subscription delivery."""
-
-    kind: ClassVar[str] = "event"
-    subscription_id: str
-    envelope: Envelope
 
 
 Frame: TypeAlias = (
@@ -204,9 +171,6 @@ Frame: TypeAlias = (
     | ErrorFrame
     | NotifyFrame
     | ReceiptFrame
-    | SubscribeFrame
-    | UnsubscribeFrame
-    | EventFrame
 )
 
 
@@ -220,9 +184,6 @@ _FRAME_CLASSES: dict[str, type] = {
     "error": ErrorFrame,
     "notify": NotifyFrame,
     "receipt": ReceiptFrame,
-    "subscribe": SubscribeFrame,
-    "unsubscribe": UnsubscribeFrame,
-    "event": EventFrame,
 }
 
 

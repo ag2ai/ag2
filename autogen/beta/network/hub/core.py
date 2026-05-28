@@ -258,15 +258,18 @@ class Hub:
         # a transport with ack frames.
         self._inbox_pending: dict[str, int] = {}
 
-        # Per-recipient delivery cursor: last envelope_id this agent has
-        # acknowledged via ``ReceiptFrame(status="ack")``. On reconnect
-        # with ``HelloFrame.since_envelope_id`` set, the hub replays
-        # every dispatched envelope whose id sorts strictly above
-        # ``max(cursor, since_envelope_id)``. Envelope ids are UUID7,
-        # so lexicographic compare matches dispatch ordering in normal
-        # operation; out-of-order acks rely on the causation index for
-        # idempotent re-processing.
-        self._inbox_cursors: dict[str, str] = {}
+        # Per-recipient, per-channel delivery cursor:
+        # ``agent_id -> {channel_id -> last-acked envelope_id}``. Each
+        # channel is an independently-ordered stream (its own WAL +
+        # lock), so the cursor is scoped per channel: an ack in one
+        # channel must not advance the high-water mark of another, or an
+        # older unacked envelope elsewhere would never replay. On
+        # reconnect with ``HelloFrame.since_envelope_id`` set, the hub
+        # replays, per channel, every dispatched envelope whose id sorts
+        # strictly above ``max(channel_cursor, since_envelope_id)``.
+        # Envelope ids are UUID7, so lexicographic compare matches
+        # dispatch ordering within a channel.
+        self._inbox_cursors: dict[str, dict[str, str]] = {}
 
         # Federation dispatch registry keyed by ``proxy.scheme``. When
         # a recipient passport has ``effective_kind == "remote_agent"``
@@ -1965,16 +1968,11 @@ class Hub:
             # keyed by the recipient's auth scheme. Local endpoints are
             # skipped entirely for these — the remote hub is what holds
             # the binding.
-            if (
-                recipient_passport is not None
-                and recipient_passport.effective_kind == "remote_agent"
-            ):
+            if recipient_passport is not None and recipient_passport.effective_kind == "remote_agent":
                 scheme = recipient_passport.auth.scheme
                 proxy = self._remote_proxies.get(scheme)
                 if proxy is None:
-                    reason = NotFoundError(
-                        f"no remote proxy registered for scheme {scheme!r}"
-                    )
+                    reason = NotFoundError(f"no remote proxy registered for scheme {scheme!r}")
                     await self._fan_out("on_dispatch_failed", envelope, recipient_id, reason)
                     logger.warning(
                         "dispatch failed: channel=%s recipient=%s event=%s reason=%s",
@@ -2114,42 +2112,63 @@ class Hub:
     async def _handle_receipt(self, frame: ReceiptFrame) -> None:
         """Process a delivery receipt from a client.
 
-        ``status="ack"`` advances the recipient's inbox cursor (only
-        if the acked envelope_id sorts strictly above the current
-        cursor) and persists it. ``status="nack"`` leaves the cursor
-        in place — the envelope will be replayed when the recipient
-        reconnects with its current high-water mark — and is logged
-        for operational visibility.
+        ``status="ack"`` advances the recipient's cursor for the acked
+        envelope's channel (only if the acked envelope_id sorts strictly
+        above that channel's current cursor) and persists it.
+        ``status="nack"`` leaves the cursor in place — the envelope will
+        be replayed when the recipient reconnects — and is logged for
+        operational visibility.
 
-        Receipts whose ``recipient_id`` is empty or unknown are
-        dropped silently: an in-process client that round-trips
-        envelopes without explicit acks should not be penalised, and
-        a stale receipt for an unregistered agent has nothing to act
-        on.
+        Receipts whose ``recipient_id`` or ``channel_id`` is empty, or
+        whose ``recipient_id`` is unknown, are dropped silently: an
+        ack the hub cannot attribute to a (recipient, channel) cursor
+        has nothing to advance, and a stale receipt for an unregistered
+        agent has nothing to act on.
         """
         recipient_id = frame.recipient_id
         if not recipient_id or recipient_id not in self._passports:
             return
         if frame.status == "ack":
-            prev = self._inbox_cursors.get(recipient_id, "")
-            if frame.envelope_id and frame.envelope_id > prev:
-                self._inbox_cursors[recipient_id] = frame.envelope_id
-                await self._store.write(inbox_cursor_path(recipient_id), frame.envelope_id)
+            if frame.envelope_id and frame.channel_id:
+                await self._advance_cursor(recipient_id, frame.channel_id, frame.envelope_id)
         elif frame.status == "nack":
             logger.warning(
-                "envelope nacked: recipient=%s envelope=%s reason=%s",
+                "envelope nacked: recipient=%s channel=%s envelope=%s reason=%s",
                 recipient_id,
+                frame.channel_id,
                 frame.envelope_id,
                 frame.reason or "",
             )
 
+    async def _advance_cursor(self, agent_id: str, channel_id: str, envelope_id: str) -> None:
+        """Move ``agent_id``'s cursor for ``channel_id`` forward to
+        ``envelope_id`` if it sorts strictly above the current value,
+        then persist the agent's full cursor map. Monotonic per channel
+        — an ack for an older id is a no-op."""
+        channels = self._inbox_cursors.setdefault(agent_id, {})
+        if envelope_id > channels.get(channel_id, ""):
+            channels[channel_id] = envelope_id
+            await self._store.write(
+                inbox_cursor_path(agent_id),
+                json.dumps(channels, sort_keys=True),
+            )
+
+    def inbox_cursor(self, agent_id: str, channel_id: str) -> str:
+        """Last envelope_id ``agent_id`` has acked in ``channel_id``.
+
+        Empty string when the agent has acked nothing in that channel
+        (or is unknown). Read-only view of the delivery high-water mark
+        a reconnect would replay past."""
+        return self._inbox_cursors.get(agent_id, {}).get(channel_id, "")
+
     async def _replay_for_recipient(self, agent_id: str, since_envelope_id: str) -> None:
         """Re-emit unacked envelopes past the recipient's high-water mark.
 
-        ``high_water`` is the larger of the agent's persisted inbox
-        cursor and the client-supplied ``since_envelope_id`` — replay
-        starts strictly above it so the client never re-sees an
-        envelope it already acked locally. Envelopes are replayed in
+        Per channel, ``high_water`` is the larger of that channel's
+        persisted cursor and the client-supplied ``since_envelope_id``
+        — replay starts strictly above it so the client never re-sees
+        an envelope it already acked locally, and an ack in one channel
+        never suppresses replay in another. Envelopes are replayed in
         per-channel WAL order across every active channel the agent
         participates in. Failures during replay fire
         ``on_dispatch_failed`` and stop the channel's replay so an
@@ -2158,12 +2177,13 @@ class Hub:
         endpoint = self._endpoint_for(agent_id)
         if endpoint is None:
             return
-        cursor = self._inbox_cursors.get(agent_id, "")
-        high_water = cursor if cursor > since_envelope_id else since_envelope_id
+        cursors = self._inbox_cursors.get(agent_id, {})
 
         for channel_id, metadata in list(self._active_channels.items()):
             if not any(p.agent_id == agent_id for p in metadata.participants):
                 continue
+            channel_cursor = cursors.get(channel_id, "")
+            high_water = channel_cursor if channel_cursor > since_envelope_id else since_envelope_id
             wal = await self.read_wal(channel_id)
             for envelope in wal:
                 if not envelope.envelope_id or envelope.envelope_id <= high_water:
@@ -2173,9 +2193,7 @@ class Hub:
                 if envelope.audience is not None and agent_id not in envelope.audience:
                     continue
                 try:
-                    await endpoint.send_frame(
-                        NotifyFrame(envelope=envelope, recipient_id=agent_id)
-                    )
+                    await endpoint.send_frame(NotifyFrame(envelope=envelope, recipient_id=agent_id))
                 except Exception as exc:
                     await self._fan_out("on_dispatch_failed", envelope, agent_id, exc)
                     logger.warning(
@@ -2424,11 +2442,16 @@ class Hub:
         else:
             self._rules[agent_id] = Rule()
 
-        cursor = await self._store.read(inbox_cursor_path(agent_id))
-        if cursor is not None:
-            stripped = cursor.strip()
-            if stripped:
-                self._inbox_cursors[agent_id] = stripped
+        cursor_blob = await self._store.read(inbox_cursor_path(agent_id))
+        if cursor_blob:
+            try:
+                parsed = json.loads(cursor_blob)
+            except (ValueError, TypeError):
+                parsed = None
+            if isinstance(parsed, dict):
+                cursors = {str(c): str(e) for c, e in parsed.items() if c and e}
+                if cursors:
+                    self._inbox_cursors[agent_id] = cursors
 
     async def _load_channel(self, channel_id: str) -> None:
         metadata_data = await self._store.read(channel_metadata_path(channel_id))
@@ -2457,11 +2480,7 @@ class Hub:
             # Repopulate the causation index for active channels; terminal
             # channels have already had their entries pruned when they
             # closed and shouldn't reappear here.
-            if (
-                not metadata.is_terminal()
-                and envelope.causation_id
-                and envelope.envelope_id
-            ):
+            if not metadata.is_terminal() and envelope.causation_id and envelope.envelope_id:
                 key = (channel_id, envelope.sender_id, envelope.causation_id)
                 self._causation_index[key] = envelope.envelope_id
         self._adapter_states[channel_id] = state

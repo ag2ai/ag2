@@ -63,7 +63,11 @@ def rule_path(agent_id: str) -> str:
 
 
 def inbox_cursor_path(agent_id: str) -> str:
-    return f"/agents/{agent_id}/inbox.cursor"
+    """Per-agent JSON map ``{channel_id: last-acked envelope_id}``.
+
+    One cursor per (agent, channel) so an ack in one channel never
+    advances the high-water mark of another."""
+    return f"/agents/{agent_id}/inbox.cursors.json"
 
 
 def inbox_nacks_path(agent_id: str) -> str:

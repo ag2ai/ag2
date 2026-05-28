@@ -51,10 +51,10 @@ class TaskMirror:
     ``agent_id``). Attach to a stream for the duration of a notify
     handler / Agent.ask call, then detach.
 
-    The mirror routes through a :class:`HubClient` so the same call
-    sites work for both in-process and any future cross-process
-    transport. Tests that hold a bare ``Hub`` can still pass it
-    directly via the legacy ``hub=`` keyword for convenience.
+    The mirror routes through a :class:`HubClient` so task-event
+    forwarding goes through the same surface as the rest of the client.
+    Tests that hold a bare ``Hub`` can still pass it directly via the
+    ``hub=`` keyword for convenience.
 
     Failures forwarding to the hub are swallowed — the mirror must
     never crash the agent's turn.
