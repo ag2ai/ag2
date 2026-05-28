@@ -52,7 +52,7 @@ async def test_turn_span_emitted(otel_setup):
 
     agent = Agent(
         "assistant",
-        config=TestConfig(ModelResponse(message=ModelMessage(content="Hello!"))),
+        config=TestConfig(ModelResponse(ModelMessage("Hello!"))),
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
     )
 
@@ -75,7 +75,7 @@ async def test_llm_span_with_usage(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                message=ModelMessage(content="Hi!"),
+                message=ModelMessage("Hi!"),
                 usage=Usage(prompt_tokens=10, completion_tokens=5),
             ),
         ),
@@ -120,7 +120,7 @@ async def test_tool_span(otel_setup):
                     calls=[ToolCallEvent(id="call_1", name="get_weather", arguments='{"city": "NYC"}')]
                 ),
             ),
-            ModelResponse(message=ModelMessage(content="It's sunny in NYC")),
+            ModelResponse(ModelMessage("It's sunny in NYC")),
         ),
         tools=[get_weather],
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", capture_content=False)],
@@ -156,7 +156,7 @@ async def test_tool_span_with_content_capture(otel_setup):
                     calls=[ToolCallEvent(id="call_1", name="greet", arguments='{"name": "World"}')]
                 ),
             ),
-            ModelResponse(message=ModelMessage(content="Done")),
+            ModelResponse(ModelMessage("Done")),
         ),
         tools=[greet],
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", capture_content=True)],
@@ -185,9 +185,9 @@ async def test_tool_error_marks_span_error(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="call_1", name="fail_tool", arguments="{}")]),
+                tool_calls=ToolCallsEvent([ToolCallEvent(id="call_1", name="fail_tool", arguments="{}")]),
             ),
-            ModelResponse(message=ModelMessage(content="Error handled")),
+            ModelResponse(ModelMessage("Error handled")),
         ),
         tools=[fail_tool],
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
@@ -211,7 +211,7 @@ async def test_span_parent_child_hierarchy(otel_setup):
     agent = Agent(
         "assistant",
         config=TestConfig(
-            ModelResponse(message=ModelMessage(content="Hi!"), usage=Usage(prompt_tokens=5, completion_tokens=3)),
+            ModelResponse(ModelMessage("Hi!"), usage=Usage(prompt_tokens=5, completion_tokens=3)),
         ),
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
     )
@@ -234,7 +234,7 @@ async def test_capture_content_false_omits_messages(otel_setup):
     agent = Agent(
         "assistant",
         config=TestConfig(
-            ModelResponse(message=ModelMessage(content="Secret response")),
+            ModelResponse(ModelMessage("Secret response")),
         ),
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", capture_content=False)],
     )
@@ -254,7 +254,7 @@ async def test_capture_content_true_includes_messages(otel_setup):
     agent = Agent(
         "assistant",
         config=TestConfig(
-            ModelResponse(message=ModelMessage(content="Hello!")),
+            ModelResponse(ModelMessage("Hello!")),
         ),
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", capture_content=True)],
     )
@@ -278,7 +278,7 @@ async def test_auto_detect_model_provider_from_response(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                message=ModelMessage(content="Hi!"),
+                message=ModelMessage("Hi!"),
                 model="gpt-4o-mini-2024-07-18",
                 provider="openai",
                 finish_reason="stop",
@@ -326,7 +326,7 @@ async def test_tool_span_has_tool_type(otel_setup):
                     calls=[ToolCallEvent(id="call_1", name="greet", arguments='{"name": "World"}')]
                 ),
             ),
-            ModelResponse(message=ModelMessage(content="Done")),
+            ModelResponse(ModelMessage("Done")),
         ),
         tools=[greet],
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
@@ -349,7 +349,7 @@ async def test_constructor_params_override_response(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                message=ModelMessage(content="Hi!"),
+                message=ModelMessage("Hi!"),
                 model="gpt-4o-mini-resolved",
                 provider="openai",
                 finish_reason="stop",
@@ -386,7 +386,7 @@ async def test_cache_token_usage_attributes(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                message=ModelMessage(content="Hi!"),
+                message=ModelMessage("Hi!"),
                 usage=Usage(
                     prompt_tokens=100,
                     completion_tokens=20,
@@ -420,7 +420,7 @@ async def test_cache_read_tokens_when_nonzero(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                message=ModelMessage(content="Hi!"),
+                message=ModelMessage("Hi!"),
                 usage=Usage(
                     prompt_tokens=100,
                     completion_tokens=20,
@@ -440,3 +440,149 @@ async def test_cache_read_tokens_when_nonzero(otel_setup):
     llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
     assert llm_span.attributes["gen_ai.usage.cache_read_input_tokens"] == 75
     assert "gen_ai.usage.cache_creation_input_tokens" not in llm_span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_thinking_tokens_when_nonzero(otel_setup):
+    """thinking_tokens appears as gen_ai.usage.thinking_tokens when non-zero."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                message=ModelMessage("Hi!"),
+                usage=Usage(
+                    prompt_tokens=100,
+                    completion_tokens=20,
+                    thinking_tokens=296,
+                ),
+                model="gemini-3.1-pro-preview",
+                provider="google",
+            ),
+        ),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert llm_span.attributes["gen_ai.usage.thinking_tokens"] == 296
+
+
+@pytest.mark.asyncio()
+async def test_span_attributes_stamped_on_all_spans(otel_setup):
+    """Extra span_attributes are applied to every span type the middleware emits."""
+    exporter, provider = otel_setup
+
+    @tool
+    def echo(msg: str) -> str:
+        """Echo."""
+        return msg
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="call_1", name="echo", arguments='{"msg": "hi"}')]),
+            ),
+            ModelResponse(ModelMessage("Done")),
+        ),
+        tools=[echo],
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider,
+                agent_name="assistant",
+                span_attributes={"ag2.org.id": "org-123", "deployment": "prod"},
+            )
+        ],
+    )
+
+    await agent.ask("Go")
+
+    spans = exporter.get_finished_spans()
+    for span in spans:
+        assert span.attributes.get("ag2.org.id") == "org-123", f"missing on span {span.name!r}"
+        assert span.attributes.get("deployment") == "prod", f"missing on span {span.name!r}"
+
+
+@pytest.mark.asyncio()
+async def test_intrinsic_attributes_win_on_collision(otel_setup):
+    """Middleware-owned attributes overwrite span_attributes when keys collide."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hi!"))),
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider,
+                agent_name="assistant",
+                span_attributes={
+                    "ag2.span.type": "SHOULD_BE_OVERWRITTEN",
+                    "gen_ai.operation.name": "SHOULD_BE_OVERWRITTEN",
+                    "gen_ai.agent.name": "SHOULD_BE_OVERWRITTEN",
+                },
+            )
+        ],
+    )
+
+    await agent.ask("Hi")
+
+    spans = exporter.get_finished_spans()
+    agent_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "agent")
+    assert agent_span.attributes["ag2.span.type"] == "agent"
+    assert agent_span.attributes["gen_ai.operation.name"] == "invoke_agent"
+    assert agent_span.attributes["gen_ai.agent.name"] == "assistant"
+
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert llm_span.attributes["ag2.span.type"] == "llm"
+    assert llm_span.attributes["gen_ai.operation.name"] == "chat"
+
+
+@pytest.mark.asyncio()
+async def test_span_attributes_omitted_when_not_provided(otel_setup):
+    """No extra attributes appear when span_attributes is not passed."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hi!"))),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    for span in spans:
+        assert "ag2.org.id" not in span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_thinking_tokens_omitted_when_zero(otel_setup):
+    """thinking_tokens=0 is treated as absent and not exported."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                message=ModelMessage("Hi!"),
+                usage=Usage(
+                    prompt_tokens=100,
+                    completion_tokens=20,
+                    thinking_tokens=0,
+                ),
+                model="gemini-3.1-pro-preview",
+                provider="google",
+            ),
+        ),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert "gen_ai.usage.thinking_tokens" not in llm_span.attributes

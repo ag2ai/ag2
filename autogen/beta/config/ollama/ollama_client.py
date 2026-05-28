@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -7,10 +7,11 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
+from fast_depends.library.serializer import SerializerProto
 from ollama import AsyncClient
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -56,17 +57,18 @@ class OllamaClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
         else:
             prompt = context.prompt
 
-        ollama_messages = convert_messages(prompt, messages)
+        ollama_messages = convert_messages(prompt, messages, serializer)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {}
@@ -87,7 +89,7 @@ class OllamaClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         response = await self._client.chat(
             model=self._model,
@@ -98,11 +100,11 @@ class OllamaClient(LLMClient):
         msg = response.message
 
         if msg.thinking:
-            await context.send(ModelReasoning(content=msg.thinking))
+            await context.send(ModelReasoning(msg.thinking))
 
         model_msg: ModelMessage | None = None
         if msg.content:
-            model_msg = ModelMessage(content=msg.content)
+            model_msg = ModelMessage(msg.content)
             await context.send(model_msg)
 
         calls = [
@@ -124,7 +126,7 @@ class OllamaClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=response.model,
             provider="ollama",
@@ -135,7 +137,7 @@ class OllamaClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         response_stream = await self._client.chat(
             model=self._model,
@@ -154,11 +156,11 @@ class OllamaClient(LLMClient):
             msg = chunk.message
 
             if msg.thinking:
-                await context.send(ModelReasoning(content=msg.thinking))
+                await context.send(ModelReasoning(msg.thinking))
 
             if msg.content:
                 full_content += msg.content
-                await context.send(ModelMessageChunk(content=msg.content))
+                await context.send(ModelMessageChunk(msg.content))
 
             for i, tc in enumerate(msg.tool_calls or []):
                 calls.append(
@@ -178,12 +180,12 @@ class OllamaClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=resolved_model,
             provider="ollama",

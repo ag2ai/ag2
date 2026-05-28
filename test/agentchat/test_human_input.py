@@ -14,7 +14,7 @@ from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
-def test_get_human_input(credentials_gpt_4o_mini: Credentials):
+def test_get_human_input(credentials_openai_mini: Credentials):
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
@@ -22,7 +22,7 @@ def test_get_human_input(credentials_gpt_4o_mini: Credentials):
         llm_config={
             "timeout": 600,
             "cache_seed": 41,
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
             "temperature": 0,
         },
     )

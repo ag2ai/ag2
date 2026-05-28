@@ -23,7 +23,7 @@ def youtube_download(url: str):
         "X-RapidAPI-Host": "youtube-mp3-downloader2.p.rapidapi.com",
     }
 
-    response = requests.get(endpoint, headers=headers, params=querystring)
+    response = requests.get(endpoint, headers=headers, params=querystring, timeout=30)
     response = response.json()
 
     if "link" in response:

@@ -5,7 +5,7 @@ sidebarTitle: A2UIAgent
 
 [`A2UIAgent`](/docs/api-reference/autogen/agents/experimental/A2UIAgent) is a specialized AG2 agent that produces rich user interfaces using the [A2UI protocol](https://a2ui.org/){.external-link target="_blank"}. Instead of returning plain text, the agent generates structured JSON that client-side renderers transform into interactive UI components — cards, forms, buttons, images, and more.
 
-A2UIAgent handles the full lifecycle: prompt engineering with schema instructions, response parsing to extract A2UI JSON, optional schema validation with automatic retry, and integration with [A2A (Agent-to-Agent)](https://google.github.io/A2A/){.external-link target="_blank"} for serving UI.
+A2UIAgent handles the full lifecycle: prompt engineering with schema instructions, response parsing to extract A2UI JSON, optional schema validation with automatic retry, and integration with [A2A (Agent-to-Agent)](https://a2a-protocol.org/){.external-link target="_blank"} for serving UI.
 
 ## Architecture
 
@@ -51,7 +51,7 @@ Then create an agent:
 from autogen import LLMConfig
 from autogen.agents.experimental import A2UIAgent
 
-llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"})
+llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite"})
 
 agent = A2UIAgent(
     name="ui_agent",
@@ -224,7 +224,7 @@ from autogen import LLMConfig
 from autogen.a2a import A2aAgentServer, CardSettings
 from autogen.agents.experimental import A2UIAgent
 
-llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"})
+llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite"})
 
 agent = A2UIAgent(
     name="ui_agent",

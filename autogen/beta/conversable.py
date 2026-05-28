@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -67,6 +67,9 @@ class ConversableAdapter(ConversableAgent):
                 sender.context_variables.update(vars)
 
         result = r.response.to_api() | {"name": self.name}
+
+        if (target := r.response.metadata.get("target")) and (manager := getattr(self, "_group_manager", None)):
+            setattr(manager, "_next_target_force", target)
 
         return True, result
 

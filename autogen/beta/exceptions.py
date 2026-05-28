@@ -1,10 +1,26 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+
+from unittest.mock import Mock
 
 
 class AG2Error(Exception):
     """Base exception for all AG2 beta errors."""
+
+
+class ToolConflictError(AG2Error):
+    def __init__(self, tool_name: str) -> None:
+        super().__init__(f"Could not add tool: `{tool_name}`. Tool with such name already registered.")
+
+
+class ToolResolutionError(AG2Error):
+    """Raised when one or more tools in an AgentSpec cannot be resolved from the available tools pool."""
+
+    def __init__(self, missing: list[str], available: list[str]) -> None:
+        self.missing = missing
+        self.available = available
+        super().__init__(f"Could not resolve tool(s): {missing}. Available: {sorted(available)}")
 
 
 class ToolExecutionError(AG2Error):
@@ -25,11 +41,24 @@ class UnsupportedToolError(ToolExecutionError):
         super().__init__(f"Unsupported tool type `{tool_type}` for provider `{provider}`")
 
 
+class UnsupportedInputError(AG2Error):
+    """Raised when an input type is not supported by a provider."""
+
+    def __init__(self, input_type: str, provider: str):
+        super().__init__(f"Unsupported input type `{input_type}` for provider `{provider}`")
+
+
 class HumanInputNotProvidedError(AG2Error):
     """Raised when human-in-the-loop input was requested but not provided."""
 
     def __init__(self, message: str | None = None) -> None:
-        super().__init__(message or "Human input was requested but not provided.")
+        super().__init__(
+            message
+            or (
+                "Human input was requested but not provided. "
+                "Please set it for agent using `Agent(..., hitl_hook=func)` or `@agent.hitl_hook`."
+            )
+        )
 
 
 class ConfigNotProvidedError(AG2Error):
@@ -40,3 +69,40 @@ class ConfigNotProvidedError(AG2Error):
             message
             or "No model config provided. Set config on the `Agent(config=...)` creation or pass it to call `ask(config=...)`."
         )
+
+
+class SkillError(AG2Error):
+    """Base exception for local skills loading (agentskills.io convention)."""
+
+
+class SkillNotFoundError(SkillError, KeyError):
+    """Raised when a skill cannot be found in configured paths."""
+
+
+class InvalidSkillNameError(SkillError, ValueError):
+    """Raised when a skill name is empty or malformed."""
+
+
+class InvalidSkillError(SkillError, ValueError):
+    """Raised when skill metadata violates the specification."""
+
+
+class SkillDownloadError(SkillError):
+    """Raised when a skill cannot be downloaded from the remote registry."""
+
+
+class SkillInstallError(SkillError):
+    """Raised when a downloaded skill archive cannot be extracted or validated."""
+
+
+def missing_additional_dependency(name: str, dependency: str, error: ImportError) -> Mock:
+    def _raise(*args: object, **kwargs: object) -> None:
+        raise ImportError(
+            f'{name} requires optional dependencies. Install with `pip install "{dependency}"`'
+        ) from error
+
+    return Mock(side_effect=_raise)
+
+
+def missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
+    return missing_additional_dependency(name, f"ag2[{extra}]", error)

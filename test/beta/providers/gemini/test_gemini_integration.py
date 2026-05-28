@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -9,6 +9,8 @@ import pytest
 
 from autogen.beta import Agent
 from autogen.beta.config import GeminiConfig
+from autogen.beta.config.gemini.events import GeminiToolCallEvent
+from autogen.beta.streams.redis.serializer import Serializer, deserialize, serialize
 
 
 @pytest.fixture()
@@ -16,7 +18,7 @@ def gemini_config() -> GeminiConfig:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         pytest.skip("GEMINI_API_KEY not set")
-    return GeminiConfig(model="gemini-3.1-flash-lite-preview", api_key=api_key, temperature=0)
+    return GeminiConfig(model="gemini-3.1-flash-lite", api_key=api_key, temperature=0)
 
 
 @pytest.mark.gemini
@@ -132,4 +134,75 @@ async def test_multi_turn_after_empty_args_tool_call(gemini_config: GeminiConfig
     assert reply.body is not None
 
     reply2 = await reply.ask("Tell me more about the researcher agent.")
+    assert reply2.body is not None
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio()
+async def test_thinking_level_low_reports_thinking_tokens(gemini_config: GeminiConfig) -> None:
+    """thinking_level='low' is accepted by the SDK on Gemini 3 thinking models
+    and ``thoughts_token_count`` is surfaced in ``Usage.thinking_tokens``."""
+    config = gemini_config.copy(thinking_level="low")
+
+    agent = Agent(
+        name="thinker",
+        prompt="You are a careful reasoner. Be concise.",
+        config=config,
+    )
+
+    reply = await agent.ask("What is 17 * 23? Think briefly, then answer with just the number.")
+
+    assert reply.body is not None
+    usage = reply.response.usage
+    assert usage.thinking_tokens is not None and usage.thinking_tokens > 0
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio()
+async def test_thinking_budget_reports_thinking_tokens(gemini_config: GeminiConfig) -> None:
+    """thinking_budget shorthand is accepted on Gemini 2.5 thinking models."""
+    config = gemini_config.copy(model="gemini-2.5-flash", thinking_budget=512)
+
+    agent = Agent(
+        name="budgeted-thinker",
+        prompt="You are a careful reasoner. Be concise.",
+        config=config,
+    )
+
+    reply = await agent.ask("What is 17 * 23? Think briefly, then answer with just the number.")
+
+    assert reply.body is not None
+    usage = reply.response.usage
+    assert usage.thinking_tokens is not None and usage.thinking_tokens > 0
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio()
+async def test_history_round_trip_preserves_thought_signature(gemini_config: GeminiConfig) -> None:
+    def get_weather(city: str) -> str:
+        """Get the current weather for a city."""
+        return f"The weather in {city} is sunny and 22°C."
+
+    agent = Agent(
+        name="weather_agent",
+        prompt="You are a weather assistant. Use the get_weather tool to answer weather questions. Be concise.",
+        config=gemini_config,
+        tools=[get_weather],
+    )
+
+    reply1 = await agent.ask("What's the weather in Paris?")
+    assert reply1.body is not None
+
+    events = list(await reply1.history.get_events())
+    round_tripped = [deserialize(serialize(e, Serializer.JSON), Serializer.JSON) for e in events]
+
+    for ev in round_tripped:
+        if isinstance(ev, GeminiToolCallEvent) and ev.thought_signature is not None:
+            assert isinstance(ev.thought_signature, bytes), (
+                f"thought_signature corrupted to {type(ev.thought_signature).__name__}: {ev.thought_signature!r}"
+            )
+
+    await reply1.history.replace(round_tripped)
+
+    reply2 = await reply1.ask("What about London?")
     assert reply2.body is not None

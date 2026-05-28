@@ -1,9 +1,9 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import httpx
 from anthropic.types import ModelParam
@@ -12,6 +12,7 @@ from typing_extensions import Unpack
 from autogen.beta.config.config import ModelConfig
 
 from .anthropic_client import AnthropicClient, CreateOptions
+from .files import AnthropicFilesClient
 
 
 class AnthropicConfigOverrides(TypedDict, total=False):
@@ -31,6 +32,7 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     metadata: dict[str, str] | None
     service_tier: str | None
     prompt_caching: bool
+    extra_body: dict[str, Any] | None
 
 
 @dataclass(slots=True)
@@ -51,6 +53,7 @@ class AnthropicConfig(ModelConfig):
     metadata: dict[str, str] | None = None
     service_tier: str | None = None
     prompt_caching: bool = True
+    extra_body: dict[str, Any] | None = None
 
     def copy(self, /, **overrides: Unpack[AnthropicConfigOverrides]) -> "AnthropicConfig":
         return replace(self, **overrides)
@@ -84,4 +87,8 @@ class AnthropicConfig(ModelConfig):
             http_client=self.http_client,
             create_options=options,
             prompt_caching=self.prompt_caching,
+            extra_body=self.extra_body,
         )
+
+    def create_files_client(self) -> AnthropicFilesClient:
+        return AnthropicFilesClient(self)

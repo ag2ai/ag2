@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -9,6 +9,7 @@ from autogen.beta.annotations import Context
 from autogen.beta.events import (
     BaseEvent,
     ClientToolCallEvent,
+    Condition,
     HumanInputRequest,
     HumanMessage,
     ModelResponse,
@@ -16,6 +17,7 @@ from autogen.beta.events import (
     ToolErrorEvent,
     ToolResultEvent,
 )
+from autogen.beta.events.conditions import TypeCondition
 
 
 class MiddlewareFactory(Protocol):
@@ -43,9 +45,12 @@ class Middleware(MiddlewareFactory):
 
 ToolResultType: TypeAlias = "ToolResultEvent | ToolErrorEvent | ClientToolCallEvent"
 AgentTurn: TypeAlias = Callable[["BaseEvent", "Context"], Awaitable["ModelResponse"]]
-ToolExecution: TypeAlias = Callable[["ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 LLMCall: TypeAlias = Callable[["Sequence[BaseEvent]", "Context"], Awaitable["ModelResponse"]]
 HumanInputHook: TypeAlias = Callable[["HumanInputRequest", "Context"], Awaitable["HumanMessage"]]
+
+ToolExecution: TypeAlias = Callable[["ToolCallEvent", "Context"], Awaitable[ToolResultType]]
+# call_next + ToolExecution type. BaseMiddleware.on_tool_execution() hook signature.
+ToolMiddleware: TypeAlias = Callable[[ToolExecution, "ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 
 
 class BaseMiddleware:
@@ -88,3 +93,76 @@ class BaseMiddleware:
         context: "Context",
     ) -> "HumanMessage":
         return await call_next(event, context)
+
+
+class _ConditionalWrapper(BaseMiddleware):
+    def __init__(
+        self,
+        event: "BaseEvent",
+        context: "Context",
+        inner: BaseMiddleware,
+        condition: Condition,
+    ) -> None:
+        super().__init__(event, context)
+        self._inner = inner
+        self._condition = condition
+
+    async def on_turn(
+        self,
+        call_next: AgentTurn,
+        event: "BaseEvent",
+        context: "Context",
+    ) -> "ModelResponse":
+        if self._condition(event):
+            return await self._inner.on_turn(call_next, event, context)
+        return await call_next(event, context)
+
+    async def on_tool_execution(
+        self,
+        call_next: ToolExecution,
+        event: "ToolCallEvent",
+        context: "Context",
+    ) -> ToolResultType:
+        if self._condition(event):
+            return await self._inner.on_tool_execution(call_next, event, context)
+        return await call_next(event, context)
+
+    async def on_llm_call(
+        self,
+        call_next: LLMCall,
+        events: "Sequence[BaseEvent]",
+        context: "Context",
+    ) -> "ModelResponse":
+        if self._condition(self.initial_event):
+            return await self._inner.on_llm_call(call_next, events, context)
+        return await call_next(events, context)
+
+    async def on_human_input(
+        self,
+        call_next: HumanInputHook,
+        event: "HumanInputRequest",
+        context: "Context",
+    ) -> "HumanMessage":
+        if self._condition(event):
+            return await self._inner.on_human_input(call_next, event, context)
+        return await call_next(event, context)
+
+
+class ConditionalMiddleware:
+    """Middleware wrapper that evaluates a condition per-hook."""
+
+    def __init__(
+        self,
+        middleware: "MiddlewareFactory",
+        condition: "Condition | type",
+    ) -> None:
+        self._middleware = middleware
+        self._condition = condition if isinstance(condition, Condition) else TypeCondition(condition)
+
+    def __call__(
+        self,
+        event: "BaseEvent",
+        context: "Context",
+    ) -> "BaseMiddleware":
+        inner = self._middleware(event, context)
+        return _ConditionalWrapper(event, context, inner=inner, condition=self._condition)

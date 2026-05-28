@@ -5,7 +5,7 @@ from autogen import AssistantAgent, LLMConfig
 
 async def main(message="Hello!"):
     config = LLMConfig(
-        {"model": "gemini-3.1-flash-lite-preview", "api_type": "google"},
+        {"model": "gemini-3.1-flash-lite", "api_type": "google"},
     )
 
     assistant = AssistantAgent(

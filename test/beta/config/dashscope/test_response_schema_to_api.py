@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -29,41 +29,38 @@ def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
     }
 
 
-class TestResponseProtoToFormatNone:
-    def test_none_returns_none(self) -> None:
-        assert response_proto_to_format(None) is None
+def test_response_proto_to_format_none_returns_none() -> None:
+    assert response_proto_to_format(None) is None
 
 
-class TestPrimitiveSchemas:
-    @pytest.mark.parametrize(
-        ("type_", "name", "expected_inner_schema"),
-        [
-            pytest.param(int, "IntSchema", {"type": "integer"}, id="int"),
-            pytest.param(float, "FloatSchema", {"type": "number"}, id="float"),
-            pytest.param(bool, "BoolSchema", {"type": "boolean"}, id="bool"),
-        ],
-    )
-    def test_primitive_type(
-        self,
-        type_: type,
-        name: str,
-        expected_inner_schema: dict,  # type: ignore[type-arg]
-    ) -> None:
-        schema = ResponseSchema(type_, name=name)
+@pytest.mark.parametrize(
+    ("type_", "name", "expected_inner_schema"),
+    [
+        pytest.param(int, "IntSchema", {"type": "integer"}, id="int"),
+        pytest.param(float, "FloatSchema", {"type": "number"}, id="float"),
+        pytest.param(bool, "BoolSchema", {"type": "boolean"}, id="bool"),
+    ],
+)
+def test_primitive_schemas_primitive_type(
+    type_: type,
+    name: str,
+    expected_inner_schema: dict,  # type: ignore[type-arg]
+) -> None:
+    schema = ResponseSchema(type_, name=name)
 
-        result = response_proto_to_format(schema)
+    result = response_proto_to_format(schema)
 
-        assert result == {
-            "type": "json_schema",
-            "json_schema": IsPartialDict(
-                schema=IsPartialDict(
-                    **_embedded_data_schema(expected_inner_schema),
-                    title="ResponseSchema",
-                ),
-                name=name,
-                description=type_.__doc__,
-            ),
-        }
+    assert result == {
+        "type": "json_schema",
+        "json_schema": IsPartialDict({
+            "schema": IsPartialDict({
+                **_embedded_data_schema(expected_inner_schema),
+                "title": "ResponseSchema",
+            }),
+            "name": name,
+            "description": type_.__doc__,
+        }),
+    }
 
 
 class TestDataclassSchemas:
@@ -79,16 +76,16 @@ class TestDataclassSchemas:
 
         assert result == {
             "type": "json_schema",
-            "json_schema": IsPartialDict(
-                name="User",
-                schema=IsPartialDict(
-                    type="object",
-                    properties=IsPartialDict(
-                        name=IsPartialDict(type="string"),
-                        age=IsPartialDict(type="integer"),
-                    ),
-                ),
-            ),
+            "json_schema": IsPartialDict({
+                "name": "User",
+                "schema": IsPartialDict({
+                    "type": "object",
+                    "properties": IsPartialDict({
+                        "name": IsPartialDict({"type": "string"}),
+                        "age": IsPartialDict({"type": "integer"}),
+                    }),
+                }),
+            }),
         }
 
     def test_dataclass_with_description(self) -> None:
@@ -104,7 +101,7 @@ class TestDataclassSchemas:
 
         assert result == {
             "type": "json_schema",
-            "json_schema": IsPartialDict(description="Custom desc"),
+            "json_schema": IsPartialDict({"description": "Custom desc"}),
         }
 
 
@@ -120,16 +117,16 @@ class TestPydanticModelSchemas:
 
         assert result == {
             "type": "json_schema",
-            "json_schema": IsPartialDict(
-                name="Item",
-                schema=IsPartialDict(
-                    type="object",
-                    properties=IsPartialDict(
-                        name=IsPartialDict(type="string"),
-                        price=IsPartialDict(type="number"),
-                    ),
-                ),
-            ),
+            "json_schema": IsPartialDict({
+                "name": "Item",
+                "schema": IsPartialDict({
+                    "type": "object",
+                    "properties": IsPartialDict({
+                        "name": IsPartialDict({"type": "string"}),
+                        "price": IsPartialDict({"type": "number"}),
+                    }),
+                }),
+            }),
         }
 
     def test_model_with_field_constraints(self) -> None:
@@ -142,39 +139,38 @@ class TestPydanticModelSchemas:
 
         assert result == {
             "type": "json_schema",
-            "json_schema": IsPartialDict(
-                schema=IsPartialDict(
-                    properties=IsPartialDict(
-                        value=IsPartialDict(minimum=0, maximum=100),
-                    ),
-                ),
-            ),
+            "json_schema": IsPartialDict({
+                "schema": IsPartialDict({
+                    "properties": IsPartialDict({
+                        "value": IsPartialDict({"minimum": 0, "maximum": 100}),
+                    }),
+                }),
+            }),
         }
 
 
-class TestUnionSchemas:
-    def test_union_type(self) -> None:
-        schema = ResponseSchema(int | str, name="IntOrStr")
+def test_union_schemas_union_type() -> None:
+    schema = ResponseSchema(int | str, name="IntOrStr")
 
-        result = response_proto_to_format(schema)
+    result = response_proto_to_format(schema)
 
-        assert result == {
-            "type": "json_schema",
-            "json_schema": IsPartialDict(
-                name="IntOrStr",
-                schema=IsPartialDict(
-                    **_embedded_data_schema(
-                        {
-                            "anyOf": [
-                                {"type": "integer"},
-                                {"type": "string"},
-                            ],
-                        },
-                    ),
-                    title="ResponseSchema",
+    assert result == {
+        "type": "json_schema",
+        "json_schema": IsPartialDict({
+            "name": "IntOrStr",
+            "schema": IsPartialDict({
+                **_embedded_data_schema(
+                    {
+                        "anyOf": [
+                            {"type": "integer"},
+                            {"type": "string"},
+                        ],
+                    },
                 ),
-            ),
-        }
+                "title": "ResponseSchema",
+            }),
+        }),
+    }
 
 
 class TestDescriptionHandling:
@@ -196,28 +192,27 @@ class TestDescriptionHandling:
 
         assert result == {
             "type": "json_schema",
-            "json_schema": IsPartialDict(
-                name="WithDesc",
-                description="An integer value",
-            ),
+            "json_schema": IsPartialDict({
+                "name": "WithDesc",
+                "description": "An integer value",
+            }),
         }
 
 
-class TestRawSchema:
-    def test_from_schema_maps_correctly(self) -> None:
-        raw = RawSchema(
-            {"type": "object", "properties": {"x": {"type": "integer"}}},
-            name="Custom",
-            description="A custom schema",
-        )
+def test_raw_schema_from_schema_maps_correctly() -> None:
+    raw = RawSchema(
+        {"type": "object", "properties": {"x": {"type": "integer"}}},
+        name="Custom",
+        description="A custom schema",
+    )
 
-        result = response_proto_to_format(raw)
+    result = response_proto_to_format(raw)
 
-        assert result == {
-            "type": "json_schema",
-            "json_schema": {
-                "schema": {"type": "object", "properties": {"x": {"type": "integer"}}},
-                "name": "Custom",
-                "description": "A custom schema",
-            },
-        }
+    assert result == {
+        "type": "json_schema",
+        "json_schema": {
+            "schema": {"type": "object", "properties": {"x": {"type": "integer"}}},
+            "name": "Custom",
+            "description": "A custom schema",
+        },
+    }

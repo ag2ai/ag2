@@ -1,14 +1,18 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.events import BaseEvent
+from autogen.beta.events import BaseEvent, Field
 
 
 class TestEvent(BaseEvent):
     __test__ = False
 
-    field: int | str | None
+    field: int | str | None = Field()
+
+
+class ChildEvent(TestEvent):
+    pass
 
 
 class AnotherEvent(BaseEvent):
@@ -16,12 +20,6 @@ class AnotherEvent(BaseEvent):
 
 
 class TestEventConditions:
-    def test_different_event_with_condition(self):
-        condition = TestEvent.field == "1"
-
-        assert condition(TestEvent(field="1"))
-        assert not condition(AnotherEvent(field="1"))
-
     def test_equality_condition_string(self):
         condition = TestEvent.field == "1"
 
@@ -201,3 +199,41 @@ class TestEventConditions:
         assert not condition(TestEvent(field=0))
         assert not condition(TestEvent(field=100))
         assert not condition(TestEvent(field=50))
+
+    def test_condition_matches_subclass(self):
+        condition = TestEvent.field == "1"
+
+        assert condition(TestEvent(field="1"))
+        assert condition(ChildEvent(field="1"))
+
+    def test_child_condition_does_not_match_parent(self):
+        condition = ChildEvent.field == "1"
+
+        assert condition(ChildEvent(field="1"))
+        assert not condition(TestEvent(field="1"))
+
+    def test_invert_event_class(self):
+        condition = ~TestEvent
+
+        assert not condition(TestEvent(field="1"))
+        assert not condition(ChildEvent(field="1"))
+        assert condition(AnotherEvent(field="test"))
+
+    def test_invert_event_class_composition(self):
+        condition = ~TestEvent & (AnotherEvent.field == "ok")
+
+        assert not condition(TestEvent(field="1"))
+        assert condition(AnotherEvent(field="ok"))
+        assert not condition(AnotherEvent(field="nope"))
+
+    def test_not_method_on_event_class(self):
+        condition = TestEvent.not_()
+
+        assert not condition(TestEvent(field="1"))
+        assert condition(AnotherEvent(field="test"))
+
+    def test_different_event_with_condition(self):
+        condition = TestEvent.field == "1"
+
+        assert condition(TestEvent(field="1"))
+        assert not condition(AnotherEvent(field="1"))

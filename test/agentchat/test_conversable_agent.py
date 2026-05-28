@@ -1118,8 +1118,8 @@ def test_register_functions(mock_credentials: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_function_registration_e2e_sync(credentials_openai_mini: Credentials) -> None:
+    llm_config = credentials_openai_mini.llm_config
 
     coder = autogen.AssistantAgent(
         name="chatbot",
@@ -1253,12 +1253,12 @@ async def test_function_registration_e2e_async(
 
 
 @run_for_optional_imports("openai", "openai")
-def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
+def test_max_turn(credentials_openai_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
         max_consecutive_auto_reply=10,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
 
     user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)
@@ -1273,7 +1273,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 @run_for_optional_imports("openai", "openai")
-def test_message_func(credentials_gpt_4o_mini: Credentials):
+def test_message_func(credentials_openai_mini: Credentials):
     import random
 
     class Function:
@@ -1304,7 +1304,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
         name="Player",
         system_message="You will use function `get_random_number` to get a random number. Stop only when you get at least 1 even number and 1 odd number. Reply TERMINATE to stop.",
         description="A player that makes function_calls.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
 
@@ -1324,7 +1324,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_summary(credentials_gpt_4o_mini: Credentials):
+def test_summary(credentials_openai_mini: Credentials):
     import random
 
     class Function:
@@ -1359,7 +1359,7 @@ def test_summary(credentials_gpt_4o_mini: Credentials):
         name="Player",
         system_message="You will use function `get_random_number` to get a random number. Stop only when you get at least 1 even number and 1 odd number. Reply TERMINATE to stop.",
         description="A player that makes function_calls.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
 
@@ -1412,6 +1412,80 @@ def test_summarize_chat_with_dict_summary():
         summary_args={"summary_prompt": "Summarize the conversation."},
     )
     assert chat_res.summary == "This is a summary of the conversation."
+
+
+@pytest.mark.parametrize(
+    "summary_return, expected",
+    [
+        # Single-level message dict (existing behaviour).
+        ({"content": "plain string", "tool_calls": None}, "plain string"),
+        # Nested dict where "content" is itself a message dict — this is the
+        # shape some Ollama / Cohere responses produce and was the trigger
+        # for the RunCompletionEvent validation failure in #1811.
+        ({"content": {"content": "nested string", "tool_calls": None}}, "nested string"),
+        # Provider returns the message envelope without ever populating content.
+        ({"role": "assistant", "content": None}, ""),
+        # Callable returns None (e.g. summary computation failed silently).
+        (None, ""),
+        # Callable returns a non-string scalar.
+        (42, "42"),
+    ],
+    ids=["dict_with_str_content", "dict_with_nested_dict_content", "dict_with_none_content", "none", "scalar"],
+)
+def test_summarize_chat_coerces_arbitrary_returns_to_str(summary_return, expected):
+    """``RunCompletionEvent.summary`` is typed ``str``; whatever a callable
+    summary_method (or a provider-returned reflection response) yields must
+    therefore be reduced to a string before it reaches the event. Regression
+    coverage for #1811."""
+    user = UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        default_auto_reply="Hello.",
+        llm_config=False,
+        code_execution_config=False,
+    )
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply="This is a test assistant.",
+    )
+
+    def my_summary(sender, recipient, summary_args):
+        return summary_return
+
+    chat_res = user.initiate_chat(
+        assistant,
+        message="Hello",
+        max_turns=1,
+        summary_method=my_summary,
+    )
+    assert isinstance(chat_res.summary, str)
+    assert chat_res.summary == expected
+
+
+def test_last_msg_summary_unwraps_dict_content():
+    """``_last_msg_as_summary`` previously dropped to "" when the recipient's
+    last message had a dict-shaped ``content`` field (some providers wrap the
+    assistant content as a nested message dict). The summary should follow
+    the inner ``content`` instead. Regression coverage for #1811."""
+    user = UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        default_auto_reply="Hello.",
+        llm_config=False,
+        code_execution_config=False,
+    )
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply={"content": "This is a test assistant. TERMINATE", "tool_calls": None},
+    )
+
+    chat_res = user.initiate_chat(assistant, message="Hello", max_turns=1)
+    assert isinstance(chat_res.summary, str)
+    assert "This is a test assistant." in chat_res.summary
+    # TERMINATE should still be stripped on the dict-content path.
+    assert "TERMINATE" not in chat_res.summary
 
 
 def test_process_before_send():
@@ -1721,7 +1795,7 @@ def test_conversable_agent_with_whitespaces_in_name_end2end(
 
     # Get the parameter name request node
     current_llm = request.node.callspec.id
-    if "gpt_4" in current_llm:
+    if "gpt_4" in current_llm or "openai" in current_llm:
         with pytest.raises(
             ValueError,
             match="This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.",
@@ -2111,13 +2185,13 @@ def test_validate_llm_config(
 
 
 @run_for_optional_imports("openai", "openai")
-def test_cache_context(credentials_gpt_4o_mini: Credentials) -> None:
+def test_cache_context(credentials_openai_mini: Credentials) -> None:
     message = "Hello, make a joke about AI."
 
     assistant = autogen.AssistantAgent(
         name="assistant",
         max_consecutive_auto_reply=10,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
 
     user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)

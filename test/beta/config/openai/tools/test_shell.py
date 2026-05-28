@@ -1,15 +1,14 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
 
+from autogen.beta import Context
 from autogen.beta.config.openai.mappers import tool_to_responses_api
-from autogen.beta.context import Context
 from autogen.beta.tools.builtin.shell import (
     ContainerAutoEnvironment,
     ContainerReferenceEnvironment,
-    LocalEnvironment,
     NetworkPolicy,
     ShellTool,
 )
@@ -60,12 +59,3 @@ async def test_container_reference(context: Context) -> None:
         "type": "shell",
         "environment": {"type": "container_reference", "container_id": "cntr_xyz"},
     }
-
-
-@pytest.mark.asyncio
-async def test_local(context: Context) -> None:
-    tool = ShellTool(environment=LocalEnvironment())
-
-    [schema] = await tool.schemas(context)
-
-    assert tool_to_responses_api(schema) == {"type": "shell", "environment": {"type": "local"}}

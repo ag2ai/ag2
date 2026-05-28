@@ -1,22 +1,25 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass, field
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import BuiltinToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
 from ._resolve import resolve_variable
 
+MCP_SERVER_TOOL_NAME = "mcp_server"
+
 
 @dataclass(slots=True)
 class MCPServerToolSchema(ToolSchema):
-    type: str = field(default="mcp_server", init=False)
+    type: str = field(default=MCP_SERVER_TOOL_NAME, init=False)
     server_url: str = ""
     server_label: str = ""
     authorization_token: str | None = None
@@ -27,7 +30,10 @@ class MCPServerToolSchema(ToolSchema):
 
 
 class MCPServerTool(Tool):
-    __slots__ = ("_params",)
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -55,15 +61,22 @@ class MCPServerTool(Tool):
         if headers is not None:
             self._params["headers"] = headers
 
+        self.name = MCP_SERVER_TOOL_NAME
+
     async def schemas(self, context: "Context") -> list[MCPServerToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
         return [MCPServerToolSchema(**resolved)]
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        pass
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            pass
+
+        stack.enter_context(
+            context.stream.where(BuiltinToolCallEvent.name == MCP_SERVER_TOOL_NAME).sub_scope(execute),
+        )

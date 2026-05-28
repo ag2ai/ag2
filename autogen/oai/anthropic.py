@@ -116,10 +116,6 @@ with optional_import_block():
         BetaToolUseBlock = None  # type: ignore[misc, assignment]
         BETA_BLOCKS_AVAILABLE = False
 
-    TOOL_ENABLED = anthropic_version >= "0.23.1"
-    if TOOL_ENABLED:
-        pass
-
 
 ANTHROPIC_PRICING_1k = {
     "claude-3-haiku-20240307": (0.00025, 0.00125),
@@ -1098,13 +1094,10 @@ class AnthropicClient:
                 return normalized_content
 
         # Handle tool/function calls - return full message object
-        if TOOL_ENABLED:
-            return [  # type: ignore [return-value]
-                (choice.message if choice.message.tool_calls is not None else _format_content(choice.message.content))
-                for choice in choices
-            ]
-        else:
-            return [_format_content(choice.message.content) for choice in choices]  # type: ignore [return-value]
+        return [  # type: ignore [return-value]
+            (choice.message if choice.message.tool_calls is not None else _format_content(choice.message.content))
+            for choice in choices
+        ]
 
     @staticmethod
     def openai_func_to_anthropic(openai_func: dict) -> dict:
@@ -1336,7 +1329,7 @@ def process_image_content(content_item: dict[str, Any]) -> dict[str, Any]:
 
     url = content_item["image_url"]["url"]
     try:
-        # Handle data URLs
+        # Handle data URLs (base64 encoded)
         if url.startswith("data:"):
             data_url_pattern = r"data:image/([a-zA-Z]+);base64,(.+)"
             match = re.match(data_url_pattern, url)
@@ -1347,13 +1340,18 @@ def process_image_content(content_item: dict[str, Any]) -> dict[str, Any]:
                     "source": {"type": "base64", "media_type": f"image/{media_type}", "data": base64_data},
                 }
 
-        else:
-            print("Error processing image.")
-            # Return original content if image processing fails
-            return content_item
+        # Handle regular HTTP/HTTPS URLs
+        elif url.startswith("http://") or url.startswith("https://"):
+            return {
+                "type": "image",
+                "source": {"type": "url", "url": url},
+            }
+
+        # If URL format is not recognized, return original content
+        return content_item
 
     except Exception as e:
-        print(f"Error processing image image: {e}")
+        print(f"Error processing image: {e}")
         # Return original content if image processing fails
         return content_item
 

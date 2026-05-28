@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,7 +6,16 @@ import json
 from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ModelResponse, ToolCallEvent
+from autogen.beta.events import (
+    BaseEvent,
+    HumanInputRequest,
+    HumanMessage,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from autogen.beta.middleware.base import (
     AgentTurn,
     BaseMiddleware,
@@ -48,6 +57,7 @@ class TelemetryMiddleware(MiddlewareFactory):
         agent_name: Agent name for span attributes. If not set, defaults to "unknown".
         provider_name: LLM provider name (e.g. "openai", "anthropic").
         model_name: Model name (e.g. "gpt-4o-mini").
+        span_attributes: Optional dict of extra key-value pairs stamped onto every span this middleware emits.
     """
 
     def __init__(
@@ -58,12 +68,14 @@ class TelemetryMiddleware(MiddlewareFactory):
         agent_name: str | None = None,
         provider_name: str | None = None,
         model_name: str | None = None,
+        span_attributes: dict[str, str] | None = None,
     ) -> None:
         self._tracer = _get_tracer(tracer_provider)
         self._capture_content = capture_content
         self._agent_name = agent_name or "unknown"
         self._provider_name = provider_name
         self._model_name = model_name
+        self._span_attributes: dict[str, str] = span_attributes or {}
 
     def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
         return _TelemetryMiddlewareInstance(
@@ -74,6 +86,7 @@ class TelemetryMiddleware(MiddlewareFactory):
             agent_name=self._agent_name,
             provider_name=self._provider_name,
             model_name=self._model_name,
+            span_attributes=self._span_attributes,
         )
 
 
@@ -88,6 +101,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         agent_name: str,
         provider_name: str | None,
         model_name: str | None,
+        span_attributes: dict[str, str],
     ) -> None:
         super().__init__(event, context)
         self._tracer = tracer
@@ -95,6 +109,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         self._agent_name = agent_name
         self._provider_name = provider_name
         self._model_name = model_name
+        self._span_attributes = span_attributes
 
     async def on_turn(
         self,
@@ -106,6 +121,8 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             f"invoke_agent {self._agent_name}",
             kind=SpanKind.INTERNAL,
         ) as span:
+            for k, v in self._span_attributes.items():
+                span.set_attribute(k, v)
             span.set_attribute("ag2.span.type", "agent")
             span.set_attribute("gen_ai.operation.name", "invoke_agent")
             span.set_attribute("gen_ai.agent.name", self._agent_name)
@@ -135,6 +152,8 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             span_name,
             kind=SpanKind.CLIENT,
         ) as span:
+            for k, v in self._span_attributes.items():
+                span.set_attribute(k, v)
             span.set_attribute("ag2.span.type", "llm")
             span.set_attribute("gen_ai.operation.name", "chat")
             if self._provider_name:
@@ -143,7 +162,13 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
             if self._capture_content:
-                input_messages = json.dumps([e.to_api() for e in events if hasattr(e, "to_api")])
+                input_messages = json.dumps([
+                    inp.to_api()
+                    for event in events
+                    if isinstance(event, ModelRequest)
+                    for inp in event.parts
+                    if isinstance(inp, TextInput)
+                ])
                 span.set_attribute("gen_ai.input.messages", input_messages)
 
             try:
@@ -176,6 +201,8 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.usage.cache_creation_input_tokens", int(usage.cache_creation_input_tokens))
             if usage.cache_read_input_tokens:
                 span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage.cache_read_input_tokens))
+            if usage.thinking_tokens:
+                span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
 
             if self._capture_content and response.message:
                 span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
@@ -192,6 +219,8 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             f"execute_tool {event.name}",
             kind=SpanKind.INTERNAL,
         ) as span:
+            for k, v in self._span_attributes.items():
+                span.set_attribute(k, v)
             span.set_attribute("ag2.span.type", "tool")
             span.set_attribute("gen_ai.operation.name", "execute_tool")
             span.set_attribute("gen_ai.tool.name", event.name)
@@ -211,8 +240,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if isinstance(result, ToolErrorEvent):
                 span.record_exception(result.error)
                 span.set_status(StatusCode.ERROR, str(result.error))
-            elif self._capture_content and hasattr(result, "content"):
-                span.set_attribute("gen_ai.tool.call.result", result.content)
+            elif self._capture_content and isinstance(result, ToolResultEvent) and result.result.parts:
+                part = result.result.parts[0]
+                if isinstance(part, TextInput):
+                    span.set_attribute("gen_ai.tool.call.result", part.content)
 
             return result
 
@@ -226,6 +257,8 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             f"await_human_input {self._agent_name}",
             kind=SpanKind.INTERNAL,
         ) as span:
+            for k, v in self._span_attributes.items():
+                span.set_attribute(k, v)
             span.set_attribute("ag2.span.type", "human_input")
             span.set_attribute("gen_ai.operation.name", "await_human_input")
             span.set_attribute("gen_ai.agent.name", self._agent_name)

@@ -2330,11 +2330,15 @@ def test_manager_resume_message_assignment():
     assert list(agent_a.chat_messages.values())[0] == prev_messages[:-1]
 
 
+@pytest.mark.skip(
+    reason="deepseek-reasoner's chain-of-thought makes this test run >7 minutes locally; "
+    "too slow for CI. Revisit with a tighter prompt / lower max_round."
+)
 @pytest.mark.deepseek
 @suppress_json_decoder_error
 @run_for_optional_imports(["openai"], "deepseek")
 def test_groupchat_with_deepseek_reasoner(
-    credentials_gpt_4o_mini: Credentials,
+    credentials_openai_mini: Credentials,
     credentials_deepseek_reasoner: Credentials,
 ) -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -2367,7 +2371,7 @@ def test_groupchat_with_deepseek_reasoner(
         manager = autogen.GroupChatManager(
             groupchat=groupchat,
             llm_config={
-                "config_list": credentials_gpt_4o_mini.config_list,
+                "config_list": credentials_openai_mini.config_list,
             },
         )
 

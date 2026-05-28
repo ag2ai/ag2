@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,10 +8,11 @@ from itertools import chain
 from typing import Any, TypedDict
 
 import dashscope
-from dashscope.aigc.generation import AioGeneration
+from dashscope import AioMultiModalConversation
+from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -58,17 +59,18 @@ class DashScopeClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
         else:
             prompt = context.prompt
 
-        ds_messages = convert_messages(prompt, messages)
+        ds_messages = convert_messages(prompt, messages, serializer)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {
@@ -93,9 +95,9 @@ class DashScopeClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
-        response = await AioGeneration.call(
+        response = await AioMultiModalConversation.call(
             model=self._model,
             messages=messages,
             api_key=self._api_key,
@@ -108,15 +110,19 @@ class DashScopeClient(LLMClient):
         choice = response.output.choices[0]
         msg = choice.message
 
-        # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
-        # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
         if reasoning := msg.get("reasoning_content"):
-            await context.send(ModelReasoning(content=reasoning))
+            await context.send(ModelReasoning(reasoning))
 
         model_msg: ModelMessage | None = None
-        if content := msg.get("content"):
-            model_msg = ModelMessage(content=content)
+        content = msg.get("content")
+        if isinstance(content, str) and content:
+            model_msg = ModelMessage(content)
             await context.send(model_msg)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and (text := block.get("text")):
+                    model_msg = ModelMessage(text)
+                    await context.send(model_msg)
 
         calls = []
         for tc in msg.get("tool_calls") or []:
@@ -138,7 +144,7 @@ class DashScopeClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=self._model,
             provider="dashscope",
@@ -151,9 +157,9 @@ class DashScopeClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
-        responses = await AioGeneration.call(
+        responses = await AioMultiModalConversation.call(
             model=self._model,
             messages=messages,
             api_key=self._api_key,
@@ -189,11 +195,17 @@ class DashScopeClient(LLMClient):
                 # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
                 # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
                 if rc := msg.get("reasoning_content"):
-                    await context.send(ModelReasoning(content=rc))
+                    await context.send(ModelReasoning(rc))
 
-                if c := msg.get("content"):
-                    full_content += c
-                    await context.send(ModelMessageChunk(content=c))
+                content = msg.get("content")
+                if isinstance(content, str) and content:
+                    full_content += content
+                    await context.send(ModelMessageChunk(content))
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and (text := block.get("text")):
+                            full_content += text
+                            await context.send(ModelMessageChunk(text))
 
                 for tc in msg.get("tool_calls") or []:
                     args = tc["function"]["arguments"]
@@ -207,12 +219,12 @@ class DashScopeClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=self._model,
             provider="dashscope",

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -72,10 +72,9 @@ class TestOrConditionRepr:
         assert repr(condition) == expected
 
 
-class TestNotConditionRepr:
-    def test_not_condition_repr(self):
-        condition = ~(TestEvent.field == 5)
-        assert repr(condition) == "~Is(TestEvent.field == 5)"
+def test_not_condition_repr():
+    condition = ~(TestEvent.field == 5)
+    assert repr(condition) == "~Is(TestEvent.field == 5)"
 
 
 class TextTypeConditionRepr:
@@ -115,4 +114,13 @@ class TestMixed:
     def test_condition_or_class_repr(self):
         condition = (TestEvent.field > 10) | AnotherEvent
         expected = "Or(Is(TestEvent.field > 10) | IsType(AnotherEvent))"
+        assert repr(condition) == expected
+
+    def test_invert_class_repr(self):
+        condition = ~TestEvent
+        assert repr(condition) == "~IsType(TestEvent)"
+
+    def test_invert_class_or_repr(self):
+        condition = ~TestEvent | AnotherEvent
+        expected = "Or(~IsType(TestEvent) | IsType(AnotherEvent))"
         assert repr(condition) == expected

@@ -1,11 +1,12 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from dirty_equals import IsPartialDict
 
+from autogen.beta import Context
 from autogen.beta.config.anthropic.mappers import extract_mcp_servers, tool_to_api
-from autogen.beta.context import Context
 from autogen.beta.tools.builtin.mcp_server import MCPServerTool
 
 
@@ -107,5 +108,4 @@ async def test_extract_mcp_servers_skips_non_mcp(context: Context) -> None:
     [ws_schema] = await ws_tool.schemas(context)
 
     servers = extract_mcp_servers([mcp_schema, ws_schema])
-    assert len(servers) == 1
-    assert servers[0]["name"] == "example-mcp"
+    assert servers == [IsPartialDict({"name": "example-mcp"})]

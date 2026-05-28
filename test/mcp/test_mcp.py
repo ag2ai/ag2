@@ -141,7 +141,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     @pytest.mark.skipif("OPENAI_API_KEY" not in os.environ, reason="OPENAI_API_KEY not set, skipping integration test.")
     async def test_register_for_llm_tool(
-        self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials
+        self, server_params: "StdioServerParameters", credentials_openai_mini: Credentials
     ) -> None:  # type: ignore[no-any-unimported]
         async with (
             stdio_client(server_params) as (read, write),
@@ -152,7 +152,7 @@ class TestMCPClient:
             toolkit = await create_toolkit(session=session)
             agent = AssistantAgent(
                 name="agent",
-                llm_config=credentials_gpt_4o_mini.llm_config,
+                llm_config=credentials_openai_mini.llm_config,
             )
             toolkit.register_for_llm(agent)
             assert len(agent.tools) == len(toolkit.tools)
@@ -190,7 +190,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     @pytest.mark.skipif("OPENAI_API_KEY" not in os.environ, reason="OPENAI_API_KEY not set, skipping integration test.")
     @run_for_optional_imports("openai", "openai")
-    async def test_with_llm(self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials) -> None:  # type: ignore[no-any-unimported]
+    async def test_with_llm(self, server_params: "StdioServerParameters", credentials_openai_mini: Credentials) -> None:  # type: ignore[no-any-unimported]
         async with (
             stdio_client(server_params) as (read, write),
             ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
@@ -201,7 +201,7 @@ class TestMCPClient:
 
             agent = AssistantAgent(
                 name="agent",
-                llm_config=credentials_gpt_4o_mini.llm_config,
+                llm_config=credentials_openai_mini.llm_config,
             )
             toolkit.register_for_llm(agent)
 
@@ -327,12 +327,33 @@ class TestMCPStdioConfig:
                     command=stdio_config.command,
                     args=stdio_config.args,
                     env=stdio_config.environment,
+                    cwd=str(stdio_config.working_dir),
                     encoding=stdio_config.encoding,
                     encoding_error_handler=stdio_config.encoding_error_handler,
                 ),
             )
 
             session.initialize.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_session_without_working_dir(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        mock_client: "MagicMock",
+        session_manager: "MCPClientSessionManager",
+    ) -> None:  # type: ignore[no-any-unimported]
+        # When working_dir is not set, cwd must be passed as None (not omitted/defaulted incorrectly).
+        stdio_config = StdioConfig(
+            command="python3",
+            args=["/path/to/server.py"],
+            server_name="test_stdio_server",
+        )
+        monkeypatch.setattr("autogen.mcp.mcp_client.stdio_client", mock_client)
+        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", MockClientSession)
+
+        async with session_manager.open_session(stdio_config):
+            params = mock_client.call_args.args[0]
+            assert params.cwd is None
 
 
 @pytest.mark.asyncio

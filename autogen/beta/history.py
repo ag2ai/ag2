@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -26,9 +26,7 @@ class MemoryStorage(Storage):
         self.__data: defaultdict[StreamId, list[BaseEvent]] = defaultdict(list)
 
     async def save_event(self, event: "BaseEvent", context: "Context") -> None:
-        stream_id = context.stream.id
-        if event not in self.__data[stream_id]:
-            self.__data[stream_id].append(event)
+        self.__data[context.stream.id].append(event)
 
     async def get_history(self, stream_id: "StreamId") -> Iterable["BaseEvent"]:
         return self.__data[stream_id]

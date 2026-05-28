@@ -74,7 +74,7 @@ asyncio.run(review_code())
 If you already have an `AgentCard` (e.g., fetched from a discovery service or another source), you can create an `A2aRemoteAgent` instance directly from it using the `from_card` classmethod. This avoids redundant fetching of the agent card and allows you to use pre-validated card information.
 
 ```python linenums="1"
-from a2a.types import AgentCard, AgentCapabilities
+from a2a.compat.v0_3.types import AgentCard, AgentCapabilities
 
 # Create or fetch an AgentCard
 card = AgentCard(

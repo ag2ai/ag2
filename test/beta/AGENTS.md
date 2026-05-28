@@ -1,5 +1,122 @@
 # test/beta/ Guidelines
 
+Use `just test-beta` as alias for `pytest` execution to run beta tests.
+
+## Testing Conventions
+
+Always write public API-based tests. Do not assert implementation details.
+
+```python
+# === BAD - digging into implementation details ===
+async def test_collects_events_in_window(self) -> None:
+    stream = MemoryStream()
+    ctx = Context(stream=stream)
+    batches: list = []
+
+    async def callback(events, _ctx):
+        batches.append(events)
+
+    watch = CadenceWatch(max_wait=0.1, condition=ToolCallEvent)
+    watch.arm(stream, callback)
+
+    await stream.send(ToolCallEvent(name="t1", arguments="{}"), ctx)
+    await stream.send(ToolCallEvent(name="t2", arguments="{}"), ctx)
+
+    await asyncio.sleep(0.2)
+
+    assert len(batches) == 1
+    assert len(batches[0]) == 2
+
+# === GOOD - public-api based test ===
+async def test_collects_events_in_window(self) -> None:
+    # arrange stream
+    stream = MemoryStream()
+    batches: list[BaseEvent] = []
+
+    async def callback(events: BaseEvent, ctx: Context) -> None:
+        batches.append(events)
+
+    watch = CadenceWatch(max_wait=0.01, condition=ToolCallEvent)
+    watch.arm(stream, callback)
+
+    # arrange agent
+    tool_calls = [
+        ToolCallEvent(name="t1", arguments="{}"),
+        ToolCallEvent(name="t2", arguments="{}"),
+    ]
+
+    agent = Agent(
+        "test-agent",
+        config=testing.TestConfig(tool_calls, "Done"),
+    )
+
+    @agent.tool
+    def t1(): ...
+    @agent.tool
+    def t2(): ...
+
+    # act
+    await agent.ask("Hello, world!", stream=stream)
+    await asyncio.sleep(0.02)
+
+    # assert
+    assert batches == [
+        IsList(*tool_calls, check_order=False),
+    ]
+```
+
+- Always use `autogen.beta.testing.TestConfig` to mock LLM responses in agent-based tests.
+- Always use `autogen.beta.testing.TrackingConfig` to validate messages the framework sends to the LLM (for example: tool results and user input).
+
+### Assertion style
+
+Avoid chained field-access assertions like `result[0]["tool_calls"][0]["function"]["arguments"] == {...}`. Instead, compare the whole object directly (`assert msg == {...}`) or use **dirty-equals** `IsPartialDict` when only some fields matter:
+
+```python
+# Bad
+assert result[0]["role"] == "assistant"
+assert result[0]["tool_calls"][0]["function"]["arguments"] == {}
+
+# Good — full comparison
+assert result[0] == {"role": "assistant", "tool_calls": [...]}
+
+# Good — partial match with dirty-equals (always use dict syntax, not kwargs)
+from dirty_equals import IsPartialDict
+assert result[0] == IsPartialDict({"role": "assistant"})  # Good
+assert result[0] == IsPartialDict(role="assistant")        # Bad — use dict syntax
+```
+
+### Imports
+
+All imports must be at the top of the test file. Never place imports inside individual test functions until user asks for it.
+
+### Function vs class-based tests
+
+Use **plain functions** for standalone tests. Use **classes** to group multiple related tests that share a logical subject (e.g., `TestImageUrlInput`, `TestBinaryInput`). Do not wrap a single test method in a class — keep it a plain function instead.
+
+If you need to apply markers to each test in class, apply them to the class itself.
+
+```python
+# Bad - markers are applied to each test individually
+class TestAgent:
+    @pytest.mark.asyncio
+    async def test_defaults(self, context: Context) -> None: ...
+
+    @pytest.mark.asyncio
+    async def test_defaults(self, context: Context) -> None: ...
+
+# Good - markers are applied to the class itself
+@pytest.mark.asyncio
+class TestAgent:
+    async def test_defaults(self, context: Context) -> None: ...
+
+    async def test_defaults(self, context: Context) -> None: ...
+```
+
+### Section comments
+
+Do not use banner-style section dividers (e.g. `# ---\n# Section\n# ---`). Class names and test names are sufficient structure.
+
 ## Builtin Tools Testing
 
 ### Structure

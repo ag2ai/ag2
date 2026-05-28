@@ -1,18 +1,21 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass, field
 from typing import Literal
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import BuiltinToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
 from ._resolve import resolve_variable
+
+WEB_SEARCH_TOOL_NAME = "web_search"
 
 
 @dataclass(slots=True)
@@ -25,7 +28,7 @@ class UserLocation:
 
 @dataclass(slots=True)
 class WebSearchToolSchema(ToolSchema):
-    type: str = field(default="web_search", init=False)
+    type: str = field(default=WEB_SEARCH_TOOL_NAME, init=False)
     search_context_size: Literal["low", "medium", "high"] | None = None
     max_uses: int | None = None
     user_location: UserLocation | None = None
@@ -35,7 +38,10 @@ class WebSearchToolSchema(ToolSchema):
 
 
 class WebSearchTool(Tool):
-    __slots__ = ("_params",)
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -61,15 +67,22 @@ class WebSearchTool(Tool):
         if version is not None:
             self._params["web_search_version"] = version
 
+        self.name = WEB_SEARCH_TOOL_NAME
+
     async def schemas(self, context: "Context") -> list[WebSearchToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
         return [WebSearchToolSchema(**resolved)]
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        pass
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            pass
+
+        stack.enter_context(
+            context.stream.where(BuiltinToolCallEvent.name == WEB_SEARCH_TOOL_NAME).sub_scope(execute),
+        )

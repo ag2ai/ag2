@@ -1,15 +1,14 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for Anthropic client usage normalization (input_tokens → prompt_tokens, cache keys)."""
 
-from __future__ import annotations
-
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fast_depends.pydantic import PydanticSerializer
 
 from autogen.beta.config.anthropic import AnthropicClient
 from autogen.beta.events import ModelResponse, Usage
@@ -65,7 +64,7 @@ async def test_process_response_normalizes_usage():
     result = await client._process_response(response, _make_context())
 
     assert isinstance(result, ModelResponse)
-    assert result.usage == Usage(prompt_tokens=100, completion_tokens=25)
+    assert result.usage == Usage(prompt_tokens=100, completion_tokens=25, total_tokens=125)
 
 
 @pytest.mark.asyncio()
@@ -79,6 +78,7 @@ async def test_process_response_includes_cache_creation_tokens():
     assert result.usage == Usage(
         prompt_tokens=3,
         completion_tokens=10,
+        total_tokens=13,
         cache_creation_input_tokens=5058,
     )
     assert result.usage.cache_read_input_tokens is None
@@ -95,6 +95,7 @@ async def test_process_response_includes_cache_read_tokens():
     assert result.usage == Usage(
         prompt_tokens=3,
         completion_tokens=14,
+        total_tokens=17,
         cache_read_input_tokens=5043,
     )
     assert result.usage.cache_creation_input_tokens is None
@@ -108,7 +109,7 @@ async def test_process_response_no_usage():
 
     result = await client._process_response(response, _make_context())
 
-    assert result.usage == Usage(prompt_tokens=0, completion_tokens=0)
+    assert result.usage == Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
 
 
 @pytest.mark.asyncio()
@@ -138,6 +139,7 @@ async def test_process_stream_normalizes_usage():
     assert result.usage == Usage(
         prompt_tokens=50,
         completion_tokens=12,
+        total_tokens=62,
         cache_read_input_tokens=4000,
     )
     assert result.usage.cache_creation_input_tokens is None
@@ -146,3 +148,64 @@ async def test_process_stream_normalizes_usage():
 async def _async_iter(items):
     for item in items:
         yield item
+
+
+def _call_context() -> AsyncMock:
+    ctx = AsyncMock()
+    ctx.send = AsyncMock()
+    ctx.prompt = []
+    return ctx
+
+
+def _serializer() -> PydanticSerializer:
+    return PydanticSerializer(
+        pydantic_config={"arbitrary_types_allowed": True},
+        use_fastdepends_errors=False,
+    )
+
+
+@pytest.mark.asyncio()
+async def test_extra_body_lands_in_messages_create_kwargs() -> None:
+    extra = {"tool_choice": {"type": "auto", "disable_parallel_tool_use": True}}
+    client = AnthropicClient(api_key="test", prompt_caching=False, extra_body=extra)
+
+    captured: dict[str, Any] = {}
+
+    async def fake_create(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _make_response(_make_usage(input_tokens=1, output_tokens=1))
+
+    client._client.messages.create = fake_create  # type: ignore[method-assign]
+
+    await client(
+        messages=[],
+        context=_call_context(),
+        tools=[],
+        response_schema=None,
+        serializer=_serializer(),
+    )
+
+    assert captured.get("extra_body") == extra
+
+
+@pytest.mark.asyncio()
+async def test_no_extra_body_means_no_extra_body_kwarg() -> None:
+    client = AnthropicClient(api_key="test", prompt_caching=False)
+
+    captured: dict[str, Any] = {}
+
+    async def fake_create(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _make_response(_make_usage(input_tokens=1, output_tokens=1))
+
+    client._client.messages.create = fake_create  # type: ignore[method-assign]
+
+    await client(
+        messages=[],
+        context=_call_context(),
+        tools=[],
+        response_schema=None,
+        serializer=_serializer(),
+    )
+
+    assert "extra_body" not in captured

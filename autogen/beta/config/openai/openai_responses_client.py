@@ -1,21 +1,21 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 
-import base64
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
 import httpx
-from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, not_given, omit
+from fast_depends.library.serializer import SerializerProto
+from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
 from openai.types.responses import (
     Response,
     ResponseCompletedEvent,
-    ResponseFunctionCallArgumentsDoneEvent,
     ResponseFunctionToolCall,
+    ResponseOutputItemDoneEvent,
     ResponseOutputMessage,
     ResponseReasoningItem,
     ResponseStreamEvent,
@@ -25,23 +25,26 @@ from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
+    BinaryResult,
     ModelMessage,
     ModelMessageChunk,
-    ModelReasoning,
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
+from .events import OpenAIReasoningEvent, OpenAIServerToolCallEvent, OpenAIServerToolResultEvent
 from .mappers import (
     events_to_responses_input,
     normalize_responses_usage,
     response_proto_to_text_config,
+    responses_api_includes,
     tool_to_responses_api,
 )
 
@@ -49,18 +52,18 @@ from .mappers import (
 class CreateOptions(TypedDict, total=False):
     model: Required[ChatModel | str]
 
-    temperature: float | None
-    top_p: float | None
-    max_output_tokens: int | None
-    max_tool_calls: int | None
+    temperature: float | None | Omit
+    top_p: float | None | Omit
+    max_output_tokens: int | None | Omit
+    max_tool_calls: int | None | Omit
     parallel_tool_calls: bool
-    top_logprobs: int | None
+    top_logprobs: int | None | Omit
     store: bool | None
-    metadata: dict[str, str] | None
-    service_tier: str | None
+    metadata: dict[str, str] | None | Omit
+    service_tier: str | None | Omit
     user: str
     stream: bool
-    truncation: str | None
+    truncation: str | None | Omit
 
 
 class OpenAIResponsesClient(LLMClient):
@@ -97,12 +100,13 @@ class OpenAIResponsesClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: "SerializerProto",
     ) -> ModelResponse:
-        input_items = events_to_responses_input(messages)
+        input_items = events_to_responses_input(messages, serializer)
 
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
@@ -111,11 +115,15 @@ class OpenAIResponsesClient(LLMClient):
 
         instructions = "\n".join(prompt) or None
 
-        openai_tools = [tool_to_responses_api(t) for t in tools]
+        tools_list = list(tools)
+        openai_tools = [tool_to_responses_api(t) for t in tools_list]
 
         kwargs: dict[str, Any] = {}
         if r := response_proto_to_text_config(response_schema):
             kwargs["text"] = r
+
+        if includes := responses_api_includes(tools_list):
+            kwargs["include"] = includes
 
         response = await self._client.responses.create(
             **self._create_options,
@@ -132,22 +140,25 @@ class OpenAIResponsesClient(LLMClient):
     async def _process_response(
         self,
         response: Response,
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
-        images: list[bytes] = []
+        files: list[BinaryResult] = []
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
-                for summary in item.summary or []:
-                    if hasattr(summary, "text") and summary.text:
-                        await context.send(ModelReasoning(content=summary.text))
+                summaries = [s.text for s in item.summary if s.text]
+                if not summaries:
+                    await context.send(OpenAIReasoningEvent("", item=item))
+                else:
+                    for text in summaries:
+                        await context.send(OpenAIReasoningEvent(text, item=item))
 
             elif isinstance(item, ResponseOutputMessage):
                 for part in item.content:
                     if hasattr(part, "text") and part.text:
-                        model_msg = ModelMessage(content=part.text)
+                        model_msg = ModelMessage(part.text)
                         await context.send(model_msg)
 
             elif isinstance(item, ResponseFunctionToolCall):
@@ -159,69 +170,94 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
-            elif isinstance(item, ImageGenerationCall) and item.result:
-                images.append(base64.b64decode(item.result))
+            elif call_event := OpenAIServerToolCallEvent.from_item(item):
+                await context.send(call_event)
+                result_event = OpenAIServerToolResultEvent.from_item(item, parent_id=call_event.id)
+                if result_event:
+                    await context.send(result_event)
+                    if isinstance(item, ImageGenerationCall) and item.result:
+                        binary = result_event.result.parts[0]
+                        files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
 
-        usage = normalize_responses_usage(response.usage.model_dump() if response.usage else {})
+        usage = normalize_responses_usage(response.usage) if response.usage else Usage()
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=response.model,
             provider="openai",
             finish_reason=response.status,
-            images=images,
+            files=files,
         )
 
     async def _process_stream(
         self,
-        response_stream: Any,
-        context: Context,
+        response_stream: AsyncStream[ResponseStreamEvent],
+        context: "ConversationContext",
     ) -> ModelResponse:
         full_content: str = ""
-        usage: dict[str, Any] = {}
         calls: list[ToolCallEvent] = []
-        images: list[bytes] = []
+        files: list[BinaryResult] = []
         finish_reason: str | None = None
         resolved_model: str | None = None
+        usage = Usage()
 
         async for event in response_stream:
-            event: ResponseStreamEvent
-
             if isinstance(event, ResponseTextDeltaEvent):
                 full_content += event.delta
-                await context.send(ModelMessageChunk(content=event.delta))
+                await context.send(ModelMessageChunk(event.delta))
 
-            elif isinstance(event, ResponseFunctionCallArgumentsDoneEvent):
-                calls.append(
-                    ToolCallEvent(
-                        id=event.item_id,
-                        name=event.name,
-                        arguments=event.arguments,
+            elif isinstance(event, ResponseOutputItemDoneEvent):
+                # Builtin and reasoning events are emitted on Done so the typed
+                # SDK object carried by the event is fully populated (Added fires
+                # before the server-side tool has executed — code/outputs missing).
+
+                if isinstance(event.item, ResponseReasoningItem):
+                    summaries = [s.text for s in event.item.summary if s.text]
+                    if not summaries:
+                        await context.send(OpenAIReasoningEvent("", item=event.item))
+                    else:
+                        for text in summaries:
+                            await context.send(OpenAIReasoningEvent(text, item=event.item))
+
+                elif isinstance(event.item, ResponseFunctionToolCall):
+                    calls.append(
+                        ToolCallEvent(
+                            id=event.item.call_id,
+                            name=event.item.name,
+                            arguments=event.item.arguments,
+                        )
                     )
-                )
+
+                elif call_event := OpenAIServerToolCallEvent.from_item(event.item):
+                    await context.send(call_event)
+                    result_event = OpenAIServerToolResultEvent.from_item(event.item, parent_id=call_event.id)
+                    if result_event:
+                        await context.send(result_event)
+                        if isinstance(event.item, ImageGenerationCall) and event.item.result:
+                            binary = result_event.result.parts[0]
+                            files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
 
             elif isinstance(event, ResponseCompletedEvent):
+                # Stream finished
                 if event.response.usage:
-                    usage = event.response.usage.model_dump()
+                    usage = normalize_responses_usage(event.response.usage)
+
                 finish_reason = event.response.status
                 resolved_model = event.response.model
-                for item in event.response.output:
-                    if isinstance(item, ImageGenerationCall) and item.result:
-                        images.append(base64.b64decode(item.result))
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
-            usage=normalize_responses_usage(usage),
+            tool_calls=ToolCallsEvent(calls),
+            usage=usage,
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
-            images=images,
+            files=files,
         )

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -61,3 +61,6 @@ class DashScopeConfig(ModelConfig):
             streaming=self.streaming,
             create_options=options,
         )
+
+    def create_files_client(self) -> None:
+        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import contextlib
 from collections import defaultdict
 from unittest.mock import patch
 from uuid import uuid4
@@ -10,8 +11,8 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
-from autogen.beta.context import Context
-from autogen.beta.events import ModelMessage, ModelRequest, ToolCallEvent
+from autogen.beta import Context
+from autogen.beta.events import ImageInput, ModelMessage, TextInput, ToolCallEvent
 from autogen.beta.streams.redis.serializer import Serializer
 
 pytestmark = [
@@ -244,7 +245,7 @@ class TestRedisStream:
         ctx = Context(stream)
 
         event1 = ToolCallEvent(name="func1", arguments="a")
-        event2 = ModelMessage(content="hello")
+        event2 = ModelMessage("hello")
 
         await stream.send(event1, context=ctx)
         await stream.send(event2, context=ctx)
@@ -318,10 +319,10 @@ class TestRedisStream:
         stream2._ensure_listener()
         await asyncio.sleep(0.1)
 
-        await stream1.send(ModelRequest(content="from stream1"), context=Context(stream1))
+        await stream1.send(TextInput("from stream1"), context=Context(stream1))
         await asyncio.sleep(0.1)
 
-        await stream2.send(ModelMessage(content="from stream2"), context=Context(stream2))
+        await stream2.send(ModelMessage("from stream2"), context=Context(stream2))
         await asyncio.sleep(0.1)
 
         # stream1 receives both (own + stream2's)
@@ -341,7 +342,7 @@ class TestRedisStream:
         stream._ensure_listener()
 
         await stream.send(ToolCallEvent(name="func1", arguments="a"), context=Context(stream))
-        await stream.send(ModelMessage(content="hello"), context=Context(stream))
+        await stream.send(ModelMessage("hello"), context=Context(stream))
         await asyncio.sleep(0.1)
 
         assert len(tool_events) == 1
@@ -365,3 +366,101 @@ class TestRedisStream:
         assert len(received_a) == 1
         assert len(received_b) == 1
         assert len(received_c) == 1
+
+    async def test_local_dispatch_survives_listener_failure(self, redis_stream):
+        """Local subscribers keep receiving events after the pub/sub listener dies."""
+        stream = redis_stream()
+        received = []
+        stream.subscribe(lambda ev: received.append(ev))
+        stream._ensure_listener()
+        await stream._listener_ready.wait()
+
+        stream._listener_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await stream._listener_task
+        dead_task = stream._listener_task
+        # Block auto-restart so the next send() must rely on local dispatch.
+        stream._ensure_listener = lambda: None
+
+        await stream.send(ToolCallEvent(name="post_crash", arguments=""), context=Context(stream))
+        await asyncio.sleep(0.05)
+
+        assert len(received) == 1
+        assert received[0].name == "post_crash"
+        assert stream._listener_task is dead_task and dead_task.done()
+
+
+class TestBinaryRoundTrip:
+    """Events carrying binary or provider-SDK fields must round-trip intact."""
+
+    async def test_image_input_round_trip(self, redis_storage, stream_id):
+        """BinaryInput.data (used by ImageInput/AudioInput/...) carries raw bytes."""
+        storage = redis_storage()
+        png_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+        original = ImageInput(data=png_bytes, media_type="image/png")
+        await storage.set_history(stream_id, [original])
+
+        [restored] = list(await storage.get_history(stream_id))
+        assert restored.data == png_bytes
+        assert isinstance(restored.data, bytes)
+
+    async def test_gemini_server_tool_call_event(self, redis_storage, stream_id):
+        """Gemini grounding/code-exec events embed a google.genai.types.Part."""
+        google_genai = pytest.importorskip("google.genai")
+        from autogen.beta.config.gemini.events import GeminiServerToolCallEvent
+
+        storage = redis_storage()
+        part = google_genai.types.Part(text="search results for ag2")
+        original = GeminiServerToolCallEvent(
+            id="grounding-1",
+            name="grounding",
+            arguments='{"queries": ["ag2"]}',
+            part=part,
+        )
+        await storage.set_history(stream_id, [original])
+
+        [restored] = list(await storage.get_history(stream_id))
+        assert isinstance(restored, GeminiServerToolCallEvent)
+        assert restored.part is not None
+        assert restored.part.text == "search results for ag2"
+
+    async def test_anthropic_server_tool_call_event(self, redis_storage, stream_id):
+        """Anthropic server-tool events embed an anthropic.types.ServerToolUseBlock."""
+        anthropic_types = pytest.importorskip("anthropic.types")
+        from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent
+
+        storage = redis_storage()
+        block = anthropic_types.ServerToolUseBlock(
+            id="srvtoolu_1",
+            name="web_search",
+            input={"query": "ag2"},
+            type="server_tool_use",
+        )
+        original = AnthropicServerToolCallEvent.from_block(block)
+        assert original is not None
+        await storage.set_history(stream_id, [original])
+
+        [restored] = list(await storage.get_history(stream_id))
+        assert isinstance(restored, AnthropicServerToolCallEvent)
+        assert restored.block.id == "srvtoolu_1"
+        assert restored.block.input == {"query": "ag2"}
+
+    async def test_openai_reasoning_event(self, redis_storage, stream_id):
+        """OpenAI reasoning events must round-trip — they explicitly opt into persistence."""
+        openai_responses = pytest.importorskip("openai.types.responses")
+        from autogen.beta.config.openai.events import OpenAIReasoningEvent
+
+        storage = redis_storage()
+        item = openai_responses.ResponseReasoningItem(
+            id="rs_1",
+            type="reasoning",
+            summary=[],
+        )
+        original = OpenAIReasoningEvent("thinking...", item=item)
+        await storage.set_history(stream_id, [original])
+
+        [restored] = list(await storage.get_history(stream_id))
+        assert isinstance(restored, OpenAIReasoningEvent)
+        assert restored.item.id == "rs_1"
+        assert restored.item.type == "reasoning"

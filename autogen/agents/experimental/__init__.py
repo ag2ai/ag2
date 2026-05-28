@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .a2ui import A2UIAgent
+from ...import_utils import optional_import_block
+
+with optional_import_block():
+    from .a2ui import A2UIAgent
+
 from .deep_research import DeepResearchAgent
 from .discord import DiscordAgent
 from .document_agent import DocAgent, DoclingDocIngestAgent, InMemoryQueryEngine, VectorChromaQueryEngine

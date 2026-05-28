@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -7,14 +7,14 @@ from itertools import chain
 from typing import Any, Literal, TypedDict
 
 import httpx
-from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given
-from openai._types import Omit
+from fast_depends.library.serializer import SerializerProto
+from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from typing_extensions import Required
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -23,6 +23,7 @@ from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
@@ -62,6 +63,7 @@ class CreateOptions(TypedDict, total=False):
     stream: bool
     stream_options: dict[str, Any] | Omit
     reasoning_effort: ReasoningEffort | None | Omit
+    extra_body: dict[str, Any] | None
 
 
 class OpenAIClient(LLMClient):
@@ -98,17 +100,18 @@ class OpenAIClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
         else:
             prompt = context.prompt
 
-        openai_messages = convert_messages(prompt, messages)
+        openai_messages = convert_messages(prompt, messages, serializer)
 
         openai_tools = [tool_to_api(t) for t in tools]
 
@@ -120,7 +123,7 @@ class OpenAIClient(LLMClient):
             **self._create_options,
             **kwargs,
             messages=openai_messages,
-            tools=openai_tools,
+            tools=openai_tools or omit,
         )
 
         if self._streaming:
@@ -133,17 +136,17 @@ class OpenAIClient(LLMClient):
     async def _process_completion(
         self,
         completion: ChatCompletion,
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         for choice in completion.choices or ():
             msg = choice.message
 
             if r := getattr(msg, "reasoning", None):
-                await context.send(ModelReasoning(content=r))
+                await context.send(ModelReasoning(r))
 
             model_msg: ModelMessage | None = None
             if c := msg.content:
-                model_msg = ModelMessage(content=c)
+                model_msg = ModelMessage(c)
                 await context.send(model_msg)
 
             calls = [
@@ -157,8 +160,8 @@ class OpenAIClient(LLMClient):
 
             return ModelResponse(
                 message=model_msg,
-                tool_calls=ToolCallsEvent(calls=calls),
-                usage=normalize_usage(completion.usage.model_dump() if completion.usage else {}),
+                tool_calls=ToolCallsEvent(calls),
+                usage=normalize_usage(completion.usage) if completion.usage else Usage(),
                 model=completion.model,
                 provider="openai",
                 finish_reason=choice.finish_reason,
@@ -167,10 +170,10 @@ class OpenAIClient(LLMClient):
     async def _process_stream(
         self,
         response_stream: AsyncStream[ChatCompletionChunk],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         full_content: str = ""
-        usage: dict[str, Any] = {}
+        usage = Usage()
         finish_reason: str | None = None
         resolved_model: str | None = None
 
@@ -180,7 +183,7 @@ class OpenAIClient(LLMClient):
         async for chunk in response_stream:
             # Usage is available only in the last chunk
             if chunk.usage:
-                usage = chunk.usage.model_dump()
+                usage = normalize_usage(chunk.usage)
 
             if chunk.model:
                 resolved_model = chunk.model
@@ -191,11 +194,11 @@ class OpenAIClient(LLMClient):
                 delta = choice.delta
 
                 if r := getattr(delta, "reasoning_content", None):
-                    await context.send(ModelReasoning(content=r))
+                    await context.send(ModelReasoning(r))
 
                 if c := delta.content:
                     full_content += c
-                    await context.send(ModelMessageChunk(content=c))
+                    await context.send(ModelMessageChunk(c))
 
                 for tc in delta.tool_calls or []:
                     ix = tc.index
@@ -218,7 +221,7 @@ class OpenAIClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         calls = [
@@ -232,8 +235,8 @@ class OpenAIClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
-            usage=normalize_usage(usage),
+            tool_calls=ToolCallsEvent(calls),
+            usage=usage,
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,

@@ -104,7 +104,7 @@ class TestConsoleIOWithWebsockets:
         print("Test passed.", flush=True)
 
     @run_for_optional_imports("openai", "openai")
-    def test_chat(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_chat(self, credentials_openai_mini: Credentials) -> None:
         print("Testing setup", flush=True)
 
         mock = MagicMock()
@@ -117,7 +117,7 @@ class TestConsoleIOWithWebsockets:
             initial_msg = iostream.input()
 
             llm_config = {
-                "config_list": credentials_gpt_4o_mini.config_list,
+                "config_list": credentials_openai_mini.config_list,
                 "stream": True,
             }
 

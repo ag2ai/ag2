@@ -10,6 +10,8 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "00:00"
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:
@@ -21,6 +23,8 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "00:00"
+    cooldown:
+      default-days: 7
     groups:
       pip:
         patterns:

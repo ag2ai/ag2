@@ -99,6 +99,32 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+def _coerce_summary_to_str(value: Any) -> str:
+    """Reduce arbitrary chat-summary return values to a plain string.
+
+    Some providers (Ollama, Cohere, structured-output models) return the chat
+    completion as a nested message dict like
+    ``{"content": "...", "tool_calls": None}`` instead of a bare string. The
+    summary path used to forward such a dict straight to ``RunCompletionEvent``,
+    which then failed pydantic validation with::
+
+        ValidationError: 1 validation error for RunCompletionEvent
+        summary
+          Input should be a valid string ...
+
+    This helper unwraps a single ``content`` key from each nested dict, falls
+    back to ``""`` for ``None``, and stringifies everything else, so the
+    returned value is always safe to assign to a ``str`` field.
+    """
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        return _coerce_summary_to_str(value.get("content", ""))
+    return str(value)
+
+
 @dataclass
 @export_module("autogen")
 class UpdateSystemMessage:
@@ -1376,7 +1402,7 @@ class ConversableAgent(LLMAgent):
                     return recipient.last_message(sender)["content"]
                 ```
             summary_args (dict): a dictionary of arguments to be passed to the summary_method.
-                One example key is "summary_prompt", and value is a string of text used to prompt a LLM-based agent (the sender or recipient agent) to reflect
+                One example key is "summary_prompt", and value is a string of text used to prompt an LLM-based agent (the sender or recipient agent) to reflect
                 on the conversation and extract a summary when summary_method is "reflection_with_llm".
                 The default summary_prompt is DEFAULT_SUMMARY_PROMPT, i.e., "Summarize takeaway from the conversation. Do not add any introductory phrases. If the intended request is NOT properly addressed, please point it out."
                 Another available key is "summary_role", which is the role of the message sent to the agent in charge of summarizing. Default is "system".
@@ -2151,9 +2177,7 @@ class ConversableAgent(LLMAgent):
             raise ValueError(
                 "If not None, the summary_method must be a string from [`reflection_with_llm`, `last_msg`] or a callable."
             )
-        if isinstance(summary, dict):
-            summary = str(summary.get("content", ""))
-        return summary
+        return _coerce_summary_to_str(summary)
 
     @staticmethod
     def _last_msg_as_summary(sender, recipient, summary_args) -> str:
@@ -2168,6 +2192,10 @@ class ConversableAgent(LLMAgent):
                 summary = "\n".join(
                     x["text"].replace("TERMINATE", "") for x in content if isinstance(x, dict) and "text" in x
                 )
+            elif isinstance(content, dict):
+                # Some providers wrap the assistant content as a nested message
+                # dict (e.g. {"content": "...", "tool_calls": None}). Unwrap it.
+                summary = _coerce_summary_to_str(content).replace("TERMINATE", "")
         except (IndexError, AttributeError) as e:
             warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
         return summary

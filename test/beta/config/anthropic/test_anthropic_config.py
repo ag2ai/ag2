@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -46,3 +46,34 @@ def test_max_tokens_defaults_to_4096() -> None:
 def test_max_tokens_can_be_overridden() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6", max_tokens=8192)
     assert config.max_tokens == 8192
+
+
+def test_extra_body_defaults_to_none() -> None:
+    config = AnthropicConfig(model="claude-sonnet-4-6")
+    assert config.extra_body is None
+
+
+def test_extra_body_can_be_set() -> None:
+    extra = {"tool_choice": {"type": "auto", "disable_parallel_tool_use": True}}
+    config = AnthropicConfig(model="claude-sonnet-4-6", extra_body=extra)
+
+    assert config.extra_body == extra
+
+
+def test_extra_body_passed_to_client() -> None:
+    extra = {"tool_choice": {"type": "auto", "disable_parallel_tool_use": True}}
+    config = AnthropicConfig(model="claude-sonnet-4-6", api_key="test-key", extra_body=extra)
+
+    client = config.create()
+
+    assert client._extra_body == extra
+
+
+def test_copy_with_extra_body() -> None:
+    base = AnthropicConfig(model="claude-sonnet-4-6")
+    extra = {"thinking": {"type": "enabled", "budget_tokens": 5000}}
+
+    copied = base.copy(extra_body=extra)
+
+    assert copied.extra_body == extra
+    assert base.extra_body is None
