@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeAlias, overload, runtime_checkable
@@ -95,13 +95,7 @@ class ConversationContext:
 
     _background_tasks: set[asyncio.Task[None]] | None = field(default=None, repr=False)
 
-    # Recursion guard: when _call_client (the auto LLM trigger) re-sends a
-    # drained pending message as a ModelRequest, that send retriggers
-    # _call_client. This flag tells the nested invocation to skip the LLM
-    # call. Internal to the agent loop — do not touch from user code.
-    _skip_next_llm_call: bool = field(default=False, repr=False)
-
-    def spawn_background(self, coro: Awaitable[None]) -> asyncio.Task[None]:
+    def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         """Spawn a fire-and-forget task tied to the current ``Agent.ask`` run.
 
         The agent loop will not return until every task spawned this way has

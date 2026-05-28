@@ -43,6 +43,7 @@ from .compact import CompactStrategy, CompactTrigger
 from .config import LLMClient, ModelConfig
 from .events import (
     BaseEvent,
+    DrainedModelRequest,
     HumanInputRequest,
     Input,
     ModelRequest,
@@ -999,14 +1000,22 @@ class Agent(Generic[TResult]):
             finally:
                 if owns_lifecycle:
                     # Cancel leftover background tasks (exception path only —
-                    # normal exit drains them in _continue_turn).
+                    # normal exit drains them in _continue_turn). Then await
+                    # all of them so cancelled coroutines actually unwind
+                    # before we null out pending_messages — otherwise a
+                    # cancelled task that wakes up at its `enqueue(...)`
+                    # would hit a None queue and raise RuntimeError into
+                    # an unawaited exception ("Task exception was never
+                    # retrieved"). Normal exit reaches here with all tasks
+                    # already done, so gather returns immediately.
                     if context._background_tasks:
-                        for bg_task in list(context._background_tasks):
+                        tasks_snapshot = list(context._background_tasks)
+                        for bg_task in tasks_snapshot:
                             if not bg_task.done():
                                 bg_task.cancel()
+                        await asyncio.gather(*tasks_snapshot, return_exceptions=True)
                     context._background_tasks = None
                     context.pending_messages = None
-                    context._skip_next_llm_call = False
 
     async def _execute_locked(
         self,
@@ -1128,21 +1137,22 @@ class Agent(Generic[TResult]):
                 llm_call = partial(mw.on_llm_call, llm_call)
 
             async def _call_client(event: BaseEvent, context: Context) -> None:
-                # Recursion guard: triggered when we re-send a drained pending
-                # ModelRequest inside this same handler (see below).
-                if context._skip_next_llm_call:
-                    context._skip_next_llm_call = False
+                # Skip the LLM trigger when re-entered with a request we
+                # injected ourselves a few lines below. Identity is carried by
+                # the DrainedModelRequest subtype rather than a mutable flag
+                # on Context, so the contract is checkable by isinstance and
+                # independent of subscriber ordering.
+                if isinstance(event, DrainedModelRequest):
                     return
 
                 # Drain any pending enqueued input into the conversation before
-                # the LLM sees the next call. Re-send as a single ModelRequest
-                # so other subscribers (observers, logging middleware, history
-                # storage) see it too — the recursion guard above prevents
-                # this from spawning extra LLM calls.
+                # the LLM sees the next call. Re-emit as DrainedModelRequest
+                # so observers/logging/history storage still see it, while the
+                # isinstance check above short-circuits the recursive entry
+                # instead of issuing a second LLM call.
                 merged = _drain_pending(context)
                 if merged is not None:
-                    context._skip_next_llm_call = True
-                    await context.send(merged)
+                    await context.send(DrainedModelRequest(merged.parts))
 
                 messages = await context.stream.history.get_events()
                 result = await llm_call(messages, context)
