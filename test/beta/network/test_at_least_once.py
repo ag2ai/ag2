@@ -38,12 +38,19 @@ from autogen.beta.network import (
     NotifyFrame,
     Passport,
     ReceiptFrame,
+    RequestFrame,
     Resume,
-    SendFrame,
     WelcomeFrame,
 )
+from autogen.beta.network.ids import make_id
 
 from ._helpers import ScriptedConfig, wait_for_text_count
+
+
+def _post_frame(envelope: Envelope) -> RequestFrame:
+    """Build a control-plane ``post_envelope`` request — the wire path a
+    raw client uses to post an envelope now that ``SendFrame`` is retired."""
+    return RequestFrame(request_id=make_id(), op="post_envelope", params={"envelope": envelope.to_dict()})
 
 
 def _agent(name: str, *replies: str) -> Agent:
@@ -101,7 +108,7 @@ async def _consume_invite_and_ack(raw_client, agent_id: str, *, timeout: float =
                 event_data={"channel_id": env.channel_id},
                 causation_id=env.envelope_id,
             )
-            await raw_client.send_frame(SendFrame(envelope=ack))
+            await raw_client.send_frame(_post_frame(ack))
             return env.channel_id
         raise AssertionError("link closed before any invite arrived")
 

@@ -25,7 +25,7 @@ back the prior checkpoint and exposes it via :attr:`resumed_state` so
 the owner can pick up mid-flow after a restart.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Annotated, Any, Protocol, runtime_checkable
@@ -133,6 +133,53 @@ class TaskMetadata:
     error: str = ""
     # Optional network association — set when an AgentClient mirrors this task.
     channel_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to a JSON-compatible dict.
+
+        ``state`` collapses to its enum value; ``spec`` flattens via
+        ``dataclasses.asdict``. ``result`` must itself be
+        JSON-serialisable (the owner's responsibility — the same
+        contract a checkpoint payload carries)."""
+        data = asdict(self)
+        data["state"] = self.state.value
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TaskMetadata":
+        """Rebuild from :meth:`to_dict` output.
+
+        Defensive against partial or legacy payloads (missing optional
+        keys, a malformed ``spec``) so reloading a persisted task that
+        predates a field addition does not raise."""
+        spec_data = data.get("spec")
+        if isinstance(spec_data, dict):
+            capability_raw = spec_data.get("capability")
+            spec = TaskSpec(
+                title=str(spec_data.get("title", "")),
+                description=str(spec_data.get("description", "")),
+                payload=dict(spec_data.get("payload") or {}),
+                capability=capability_raw if isinstance(capability_raw, str) else None,
+            )
+        else:
+            spec = TaskSpec(title="")
+        state_raw = data.get("state", TaskState.CREATED.value)
+        state = TaskState(state_raw) if isinstance(state_raw, str) else state_raw
+        return cls(
+            task_id=str(data["task_id"]),
+            owner_id=str(data["owner_id"]),
+            spec=spec,
+            state=state,
+            created_at=str(data.get("created_at", "")),
+            started_at=data.get("started_at"),
+            completed_at=data.get("completed_at"),
+            expires_at=data.get("expires_at"),
+            last_progress_at=data.get("last_progress_at"),
+            progress=dict(data.get("progress") or {}),
+            result=data.get("result"),
+            error=str(data.get("error", "")),
+            channel_id=data.get("channel_id"),
+        )
 
 
 def _now_iso() -> str:

@@ -38,7 +38,6 @@ from .channel import Channel
 from .handlers import default_handler
 
 if TYPE_CHECKING:
-    from ..hub import Hub
     from .hub_client import HubClient
 
 __all__ = ("AgentClient",)
@@ -58,16 +57,16 @@ class AgentClient:
         passport: Passport,
         resume: Resume,
         rule: Rule,
-        hub: "Hub",
         hub_client: "HubClient",
         attach_default_handler: bool = True,
     ) -> None:
-        # __init__ stores params; no side effects.
+        # __init__ stores params; no side effects. The hub is reached
+        # only through ``hub_client`` — the single seam that is direct
+        # in-process and RPC-backed cross-process.
         self._agent = agent
         self._passport = passport
         self._resume = resume
         self._rule = rule
-        self._hub = hub
         self._hub_client = hub_client
         self._on_envelope: EnvelopeHandler | None = self._run_default_handler if attach_default_handler else None
         self._disconnected = False
@@ -150,12 +149,12 @@ class AgentClient:
         :meth:`Hub.find_envelope_by_causation` so the same logical
         turn is not posted twice.
         """
-        pending = await self._hub.pending_turns_for(self.agent_id)
+        pending = await self._hub_client.pending_turns_for(self.agent_id)
         triggered = 0
         for turn in pending:
             if turn.triggering_envelope_id is None:
                 continue
-            wal = await self._hub.read_wal(turn.channel_id)
+            wal = await self._hub_client.read_wal(turn.channel_id)
             envelope = next(
                 (e for e in wal if e.envelope_id == turn.triggering_envelope_id),
                 None,

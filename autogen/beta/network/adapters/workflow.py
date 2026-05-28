@@ -398,7 +398,7 @@ class WorkflowAdapter:
             except WorkflowGraphError:
                 graph = None
 
-        routing = _resolve_routing(events, graph, hub._name_to_id)
+        routing = _resolve_routing(events, graph, hub.name_to_id_map())
         body = reply.body or ""
 
         if routing["kind"] == "text" and not body:
