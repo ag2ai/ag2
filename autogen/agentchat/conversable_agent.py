@@ -4386,10 +4386,7 @@ class ConversableAgent(LLMAgent):
             for tool in all_tools:
                 tool.register_for_execution(self.run_executor)
 
-            # Register only newly passed tools for LLM (agent's pre-existing tools are already registered).
-            # Dedup against the current llm_config["tools"] (not self._tools) so we skip re-registration
-            # for tools the caller already registered on the agent — this avoids spurious "Function ... is
-            # being overridden" warnings when callers pass agent.tools back in (see issue #1770).
+            # Register only tools not already in llm_config["tools"], to avoid re-registration warnings
             existing_tool_names: set[str] = {
                 t["function"]["name"]
                 for t in (self.llm_config or {}).get("tools", [])
