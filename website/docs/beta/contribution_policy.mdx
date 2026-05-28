@@ -64,6 +64,7 @@ Extensions are held to the same quality bar as Core; the difference is that the 
 
 - Include **documentation** that lets a new user understand and use it — at minimum a module-level docstring summarising the Extension, docstrings on public classes and functions, and a page under the **Extensions** section of the docs. Following standards as noted in [Code Documentation example](#code-documentation-example).
 - Include **tests** covering the Extension's behaviour.
+- Declare third-party packages as **additional dependencies**, not as `pip install ag2[...]` extras — Extensions are not shipped as pyproject extras. Guard the optional imports with a `try/except ImportError` block in the Extension's `__init__.py` and fall back via `missing_additional_dependency`, so the install hint points at the upstream package directly (for example `pip install "daytona>=0.171.0,<1"`). Use `missing_optional_dependency` (the `ag2[...]` extra form) only for Core modules.
 - Pass **code review by AG2** so we can confirm it is safe to ship alongside Core.
 - Have a **named maintainer** (you, your team, or a designated successor) who agrees to:
     - respond to issues and PRs,

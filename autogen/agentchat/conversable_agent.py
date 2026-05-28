@@ -99,6 +99,32 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+def _coerce_summary_to_str(value: Any) -> str:
+    """Reduce arbitrary chat-summary return values to a plain string.
+
+    Some providers (Ollama, Cohere, structured-output models) return the chat
+    completion as a nested message dict like
+    ``{"content": "...", "tool_calls": None}`` instead of a bare string. The
+    summary path used to forward such a dict straight to ``RunCompletionEvent``,
+    which then failed pydantic validation with::
+
+        ValidationError: 1 validation error for RunCompletionEvent
+        summary
+          Input should be a valid string ...
+
+    This helper unwraps a single ``content`` key from each nested dict, falls
+    back to ``""`` for ``None``, and stringifies everything else, so the
+    returned value is always safe to assign to a ``str`` field.
+    """
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        return _coerce_summary_to_str(value.get("content", ""))
+    return str(value)
+
+
 @dataclass
 @export_module("autogen")
 class UpdateSystemMessage:
@@ -2151,9 +2177,7 @@ class ConversableAgent(LLMAgent):
             raise ValueError(
                 "If not None, the summary_method must be a string from [`reflection_with_llm`, `last_msg`] or a callable."
             )
-        if isinstance(summary, dict):
-            summary = str(summary.get("content", ""))
-        return summary
+        return _coerce_summary_to_str(summary)
 
     @staticmethod
     def _last_msg_as_summary(sender, recipient, summary_args) -> str:
@@ -2168,6 +2192,10 @@ class ConversableAgent(LLMAgent):
                 summary = "\n".join(
                     x["text"].replace("TERMINATE", "") for x in content if isinstance(x, dict) and "text" in x
                 )
+            elif isinstance(content, dict):
+                # Some providers wrap the assistant content as a nested message
+                # dict (e.g. {"content": "...", "tool_calls": None}). Unwrap it.
+                summary = _coerce_summary_to_str(content).replace("TERMINATE", "")
         except (IndexError, AttributeError) as e:
             warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
         return summary
@@ -4386,14 +4414,22 @@ class ConversableAgent(LLMAgent):
             for tool in all_tools:
                 tool.register_for_execution(self.run_executor)
 
-            # Register only newly passed tools for LLM (agent's pre-existing tools are already registered)
+            # Register only tools not already in llm_config["tools"], to avoid re-registration warnings
+            existing_tool_names: set[str] = {
+                t["function"]["name"]
+                for t in (self.llm_config or {}).get("tools", [])
+                if isinstance(t, dict) and isinstance(t.get("function"), dict)
+            }
+            newly_registered_tools: list[Tool] = []
             for tool in passed_tools:
-                tool.register_for_llm(self)
+                if tool.tool_schema["function"]["name"] not in existing_tool_names:
+                    tool.register_for_llm(self)
+                    newly_registered_tools.append(tool)
             yield self.run_executor
         finally:
-            # Clean up only newly passed tools (not agent's pre-existing tools)
-            if "passed_tools" in locals():
-                for tool in passed_tools:
+            # Clean up only the tools newly registered above (leave pre-existing tools in place).
+            if "newly_registered_tools" in locals():
+                for tool in newly_registered_tools:
                     self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
 
     def _deprecated_run(

@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .base import READONLY_COMMANDS, ShellEnvironment, check_ignore, matches
+from .base import READONLY_COMMANDS, ShellEnvironment, check_ignore, contains_shell_operator, matches
 
 
 class LocalShellEnvironment(ShellEnvironment):
@@ -119,8 +119,11 @@ class LocalShellEnvironment(ShellEnvironment):
         Applies allowed/blocked filtering, ignore-pattern checks, then runs
         the command via :func:`subprocess.run`.
         """
-        if self._allowed is not None and not any(matches(p, command) for p in self._allowed):
-            return f"Command not allowed: {command!r}"
+        if self._allowed is not None:
+            if not any(matches(p, command) for p in self._allowed):
+                return f"Command not allowed: {command!r}"
+            if contains_shell_operator(command):
+                return f"Command not allowed (shell operators are not permitted in restricted mode): {command!r}"
 
         if self._blocked is not None and any(matches(p, command) for p in self._blocked):
             return f"Command not allowed: {command!r}"
