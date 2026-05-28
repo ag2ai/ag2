@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
+
 import pytest
 
 from autogen.agents.experimental.a2ui.schema_manager import A2UISchemaManager
@@ -98,3 +100,31 @@ class TestA2UISchemaManager:
         prompt = manager.generate_prompt_section(response_delimiter="<<<A2UI>>>")
         assert "<<<A2UI>>>" in prompt
         assert "---a2ui_JSON---" not in prompt
+
+    def test_custom_catalog_file_load_handles_non_ascii(self, tmp_path) -> None:
+        # Regression for the UTF-8 encoding pins on the open() calls inside
+        # A2UISchemaManager. A2UI catalogs commonly carry non-ASCII bytes
+        # (localized component descriptions, vendor labels), and the JSON
+        # format itself is UTF-8 per RFC 8259 §8.1. On platforms whose
+        # default locale.getencoding() is not UTF-8 — notably Windows,
+        # which defaults to cp1252 / cp932 — the load fails mid-parse
+        # without an explicit encoding="utf-8".
+        custom_catalog = {
+            "$id": "https://例.com/catalogue.json",
+            "components": {
+                "Bouton": {
+                    "type": "object",
+                    "description": "Composant interactif — étiquette: 智能按钮",
+                }
+            },
+        }
+        catalog_path = tmp_path / "catalogue.json"
+        catalog_path.write_text(json.dumps(custom_catalog, ensure_ascii=False), encoding="utf-8")
+
+        manager = A2UISchemaManager(custom_catalog=str(catalog_path))
+        loaded = manager.custom_catalog_schema
+        assert loaded is not None
+        assert loaded["$id"] == "https://例.com/catalogue.json"
+        bouton = loaded["components"]["Bouton"]
+        assert bouton["description"] == "Composant interactif — étiquette: 智能按钮"
+        assert manager.catalog_id == "https://例.com/catalogue.json"

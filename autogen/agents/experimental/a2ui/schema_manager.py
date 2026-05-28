@@ -102,7 +102,14 @@ class A2UISchemaManager:
                 self._custom_catalog = custom_catalog
             else:
                 path = Path(custom_catalog)
-                with open(path) as f:
+                # Pin UTF-8 so the catalog file loads consistently across
+                # platforms whose default `locale.getencoding()` is not UTF-8
+                # (notably Windows, which defaults to cp1252 / cp932). A2UI
+                # catalogs routinely carry non-ASCII display labels and
+                # localized component descriptions; JSON is defined over
+                # UTF-8 (RFC 8259 §8.1), so this matches the file's
+                # documented contract.
+                with open(path, encoding="utf-8") as f:
                     self._custom_catalog = json.load(f)
 
         # Set catalog ID from custom catalog's $id or default
@@ -225,7 +232,12 @@ class A2UISchemaManager:
     def _load_spec_json(self, filename: str) -> dict[str, Any]:
         """Load a JSON file from the spec/ subdirectory (upstream A2UI files)."""
         path = self._spec_dir / filename
-        with open(path) as f:
+        # Pin UTF-8 — A2UI spec JSON files (catalogs, common types) carry
+        # non-ASCII bytes (localized descriptions, vendor labels) and the
+        # JSON format itself is UTF-8 per RFC 8259 §8.1. Without this the
+        # load fails on platforms whose default `locale.getencoding()` is
+        # not UTF-8 (notably Windows: cp1252 / cp932).
+        with open(path, encoding="utf-8") as f:
             data: dict[str, Any] = json.load(f)
             return data
 
@@ -233,14 +245,16 @@ class A2UISchemaManager:
         """Load a text file from the spec/ subdirectory (upstream A2UI files)."""
         path = self._spec_dir / filename
         if path.exists():
-            with open(path) as f:
+            # Same UTF-8 pin as the JSON loaders above — the .md rule files
+            # under spec/ carry non-ASCII characters in tables and examples.
+            with open(path, encoding="utf-8") as f:
                 return f.read().strip()
         return ""
 
     def _load_version_json(self, filename: str) -> list[Any] | dict[str, Any]:
         """Load a JSON file from the version directory (our files)."""
         path = self._version_dir / filename
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             result: list[Any] | dict[str, Any] = json.load(f)
             return result
 
@@ -248,7 +262,7 @@ class A2UISchemaManager:
         """Load a text file from the version directory (our files)."""
         path = self._version_dir / filename
         if path.exists():
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 return f.read().strip()
         return ""
 
