@@ -299,6 +299,35 @@ def test_config_list_from_json():
         config_list_from_json("OAI_CONFIG_LIST.missing")
 
 
+def test_config_list_from_json_handles_non_ascii_payload(tmp_path):
+    # Regression for the encoding pin in config_list_from_json: on platforms
+    # whose default `locale.getencoding()` is not UTF-8 (notably Windows,
+    # which defaults to cp1252 / cp932), reading a JSON config that carries
+    # non-ASCII bytes (here: a Chinese display name and a French model
+    # alias) without an explicit encoding raises UnicodeDecodeError mid-load.
+    # JSON is defined over UTF-8 (RFC 8259 §8.1), so the loader must pass
+    # encoding="utf-8" to both the `read_text()` and the `open()` paths.
+    payload = [
+        {"model": "gpt-4", "api_key": "k1", "display_name": "智能助手"},
+        {"model": "le-modèle", "api_key": "k2"},
+    ]
+    config_file = tmp_path / "config_list.json"
+    config_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    # 1) Direct file-path argument exercises the `open()` branch.
+    by_path = config_list_from_json(str(config_file))
+    assert by_path == payload
+
+    # 2) Same file referenced via an env var exercises the `read_text()` branch.
+    env_var = "CONFIG_LIST_TEST_NON_ASCII"
+    os.environ[env_var] = str(config_file)
+    try:
+        by_env = config_list_from_json(env_var)
+        assert by_env == payload
+    finally:
+        del os.environ[env_var]
+
+
 def test_config_list_openai_aoai():
     # Testing the functionality for loading configurations for different API types
     # and ensuring the API types in the loaded configurations are as expected.
