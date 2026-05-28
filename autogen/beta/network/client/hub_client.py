@@ -1053,9 +1053,7 @@ class HubClient:
         limit: int = 50,
     ) -> list[TaskMetadata]:
         if self._hub is not None:
-            return await self._hub.list_tasks(
-                agent_id=agent_id, channel_id=channel_id, state=state, limit=limit
-            )
+            return await self._hub.list_tasks(agent_id=agent_id, channel_id=channel_id, state=state, limit=limit)
         raw = await self._rpc(
             "list_tasks",
             {

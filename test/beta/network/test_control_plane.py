@@ -137,9 +137,7 @@ class TestChannelAndDeliveryOverWire:
                 alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
                 await bob_hc.register(_agent("bob", "Hi Alice, good to meet you."), Passport(name="bob"), Resume())
 
-                channel = await alice.open(
-                    type="discussion", target=["bob"], knobs={"ordering": "round_robin"}
-                )
+                channel = await alice.open(type="discussion", target=["bob"], knobs={"ordering": "round_robin"})
                 await channel.send("Hello Bob, introduce yourself.")
 
                 # alice's opening line + bob's scripted reply land in the WAL.
@@ -173,9 +171,7 @@ class TestChannelAndDeliveryOverWire:
                 bob1 = await bob_hc1.register(_agent("bob"), Passport(name="bob"), Resume())
                 bob_id = bob1.agent_id
 
-                channel = await alice.open(
-                    type="discussion", target=["bob"], knobs={"ordering": "round_robin"}
-                )
+                channel = await alice.open(type="discussion", target=["bob"], knobs={"ordering": "round_robin"})
                 await channel.send("Bob, please weigh in.")
                 await wait_for_text_count(hub, channel.channel_id, 1, timeout=5.0)
                 await asyncio.sleep(0.1)  # let bob1's empty turn + ack settle

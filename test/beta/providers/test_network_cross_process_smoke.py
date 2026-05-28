@@ -187,9 +187,7 @@ async def test_consulting_anthropic_to_openai_over_wire() -> None:
             resume=Resume(claimed_capabilities=["math"], summary="math specialist"),
         )
 
-        channel = await alice.open(
-            type=CONSULTING_TYPE, target=["bob"], intent="ask bob to compute a small product"
-        )
+        channel = await alice.open(type=CONSULTING_TYPE, target=["bob"], intent="ask bob to compute a small product")
         await channel.send("What is 12 times 11? Reply with just the integer.")
 
         count = await _wait_for_text_count(hub, channel.channel_id, 2, timeout=90.0)
@@ -262,12 +260,8 @@ async def test_discussion_three_providers_round_robin_over_wire() -> None:
         alice = await _join(
             url, clients, Agent(name="alice", prompt=prompt.format(name="alice"), config=_anthropic(keys))
         )
-        bob = await _join(
-            url, clients, Agent(name="bob", prompt=prompt.format(name="bob"), config=_openai(keys))
-        )
-        carol = await _join(
-            url, clients, Agent(name="carol", prompt=prompt.format(name="carol"), config=_gemini(keys))
-        )
+        bob = await _join(url, clients, Agent(name="bob", prompt=prompt.format(name="bob"), config=_openai(keys)))
+        carol = await _join(url, clients, Agent(name="carol", prompt=prompt.format(name="carol"), config=_gemini(keys)))
 
         channel = await alice.open(
             type=DISCUSSION_TYPE,
@@ -400,9 +394,7 @@ async def test_reconnect_by_name_replays_unacked_turn_over_wire() -> None:
     answers."""
     keys = _require("ANTHROPIC_API_KEY", "OPENAI_API_KEY")
     async with _network() as (hub, url, clients):
-        alice = await _join(
-            url, clients, Agent(name="alice", prompt="You are alice.", config=_anthropic(keys))
-        )
+        alice = await _join(url, clients, Agent(name="alice", prompt="You are alice.", config=_anthropic(keys)))
 
         # First bob node: connects + auto-acks the invite, but we drop its
         # connection right after the seed is dispatched, before the
@@ -420,9 +412,7 @@ async def test_reconnect_by_name_replays_unacked_turn_over_wire() -> None:
         )
         bob_id = bob1.agent_id
 
-        channel = await alice.open(
-            type=DISCUSSION_TYPE, target=["bob"], knobs={"ordering": ORDERING_ROUND_ROBIN}
-        )
+        channel = await alice.open(type=DISCUSSION_TYPE, target=["bob"], knobs={"ordering": ORDERING_ROUND_ROBIN})
         await channel.send("Bob, what is 7 plus 8? Reply with just the integer.")
         # Let the seed reach bob1 and start his (multi-second) turn, then
         # crash the connection before it can ack.
@@ -539,9 +529,7 @@ async def test_remote_agent_proxy_federation_over_wire() -> None:
         )
         hub.register_remote_proxy(proxy)
 
-        alice = await _join(
-            url, clients, Agent(name="alice", prompt="You are alice.", config=_anthropic(keys))
-        )
+        alice = await _join(url, clients, Agent(name="alice", prompt="You are alice.", config=_anthropic(keys)))
 
         channel = await alice.open(
             type=CONSULTING_TYPE, target=["echo"], intent="delegate a computation to a remote peer"
