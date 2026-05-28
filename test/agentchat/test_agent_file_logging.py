@@ -160,3 +160,32 @@ def test_log_new_client(logger: FileLogger):
         assert log_data["wrapper_id"] == id(wrapper)
         assert log_data["json_state"] == json.dumps(init_args)
         assert isinstance(log_data["thread_id"], int)
+
+
+@pytest.mark.skipif(is_windows, reason="Skipping file logging tests on Windows")
+def test_file_logger_writes_non_ascii_event_as_utf8(logger: FileLogger):
+    # Regression for the UTF-8 encoding pin on `FileHandler`. `FileLogger`
+    # serialises agent-loop events through `json.dumps` (no `ensure_ascii`
+    # override, so non-ASCII values pass through verbatim) and emits each
+    # record as a single logging line. Before the pin, the underlying
+    # `FileHandler` defaulted to `encoding=None`, which resolves to
+    # `locale.getencoding()` at emit time — cp1252 / cp932 on Windows —
+    # and any record carrying non-ASCII content (chat messages in CJK,
+    # agent names with diacritics, JSON-serialised payloads with
+    # non-Latin string fields) raised `UnicodeEncodeError` mid-emit.
+    source = autogen.AssistantAgent(name="代理_测试_éphémère", code_execution_config=False)
+    payload: dict[str, Any] = {
+        "user_query": "Comment résumer ce document ? — 怎样总结这份文档？",
+        "tags": ["échantillon", "测试", "naïveté"],
+    }
+
+    logger.log_event(source, "non_ascii_event", **payload)
+
+    with open(logger.log_file, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    assert lines, "expected at least one log record on disk"
+    log_data = json.loads(lines[0])
+    assert log_data["source_name"] == "代理_测试_éphémère"
+    assert log_data["event_name"] == "non_ascii_event"
+    assert json.loads(log_data["json_state"]) == payload

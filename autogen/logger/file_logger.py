@@ -63,14 +63,28 @@ class FileLogger(BaseLogger):
 
         self.log_file = os.path.join(self.log_dir, self.config.get("filename", "runtime.log"))
         try:
-            with open(self.log_file, "a"):
+            # Pin UTF-8 so the touch / append-create succeeds on platforms
+            # whose default `locale.getencoding()` is not UTF-8 (notably
+            # Windows, which defaults to cp1252 / cp932). The sentinel
+            # `open(..., "a")` here only creates the file, but keeping
+            # the encoding consistent with the `FileHandler` below avoids
+            # codec drift between the two openers.
+            with open(self.log_file, "a", encoding="utf-8"):
                 pass
         except Exception as e:
             logger.error(f"[file_logger] Failed to create logging file: {e}")
 
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
-        file_handler = logging.FileHandler(self.log_file)
+        # Pin UTF-8 on the actual log writer. `logging.FileHandler` defaults
+        # to `encoding=None`, which resolves to `locale.getencoding()` at
+        # emit time. On Windows that is cp1252 / cp932, so any log record
+        # carrying non-ASCII content (chat messages in CJK, agent names
+        # with diacritics, JSON-serialised payloads with non-Latin string
+        # fields) raises `UnicodeEncodeError` mid-emit. Pinning utf-8
+        # makes the runtime log byte-for-byte identical across Linux,
+        # macOS, and Windows.
+        file_handler = logging.FileHandler(self.log_file, encoding="utf-8")
         self.logger.addHandler(file_handler)
 
     def start(self) -> str:
