@@ -88,6 +88,7 @@ Before opening a PR, read and follow `.github/AI_POLICY.md`.
 | `config/` | LLM provider clients (see [below](#llm-provider-clients)) | `ModelConfig`, `LLMClient`, `AnthropicConfig`, `OpenAIConfig`, `GeminiConfig`, … |
 | `tools/` | Tool system — builtin + user-defined | `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
 | `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `persistent_stream`, `StreamFactory` |
+| `eval/` | Offline evaluation framework | `run`, `scorer`, `EvalTarget`, `Suite`, `Task`, `Trace`, `RunResult`, `Feedback`, `BudgetThresholds`, plus prebuilts under `eval.scorers` |
 | `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, … |
 | `response/` | Structured output validation | `ResponseSchema`, `PromptedSchema`, `ResponseProto`, `response_schema` |
 | `history.py` | Conversation history storage | `History`, `Storage`, `MemoryStorage` |
@@ -105,6 +106,7 @@ Top-level modules:
 - `autogen.beta.testing` - Testing utilities
 - `autogen.beta.middleware` - Request/response interception (see [below](#middleware))
 - `autogen.beta.observer` - Reusable observer implementations
+- `autogen.beta.eval` - Offline evaluation framework (datasets, scorers, runner, persistence)
 
 Advanced modules:
 - `autogen.beta.events` - Event types for the agent loop

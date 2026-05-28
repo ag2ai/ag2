@@ -1414,6 +1414,80 @@ def test_summarize_chat_with_dict_summary():
     assert chat_res.summary == "This is a summary of the conversation."
 
 
+@pytest.mark.parametrize(
+    "summary_return, expected",
+    [
+        # Single-level message dict (existing behaviour).
+        ({"content": "plain string", "tool_calls": None}, "plain string"),
+        # Nested dict where "content" is itself a message dict — this is the
+        # shape some Ollama / Cohere responses produce and was the trigger
+        # for the RunCompletionEvent validation failure in #1811.
+        ({"content": {"content": "nested string", "tool_calls": None}}, "nested string"),
+        # Provider returns the message envelope without ever populating content.
+        ({"role": "assistant", "content": None}, ""),
+        # Callable returns None (e.g. summary computation failed silently).
+        (None, ""),
+        # Callable returns a non-string scalar.
+        (42, "42"),
+    ],
+    ids=["dict_with_str_content", "dict_with_nested_dict_content", "dict_with_none_content", "none", "scalar"],
+)
+def test_summarize_chat_coerces_arbitrary_returns_to_str(summary_return, expected):
+    """``RunCompletionEvent.summary`` is typed ``str``; whatever a callable
+    summary_method (or a provider-returned reflection response) yields must
+    therefore be reduced to a string before it reaches the event. Regression
+    coverage for #1811."""
+    user = UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        default_auto_reply="Hello.",
+        llm_config=False,
+        code_execution_config=False,
+    )
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply="This is a test assistant.",
+    )
+
+    def my_summary(sender, recipient, summary_args):
+        return summary_return
+
+    chat_res = user.initiate_chat(
+        assistant,
+        message="Hello",
+        max_turns=1,
+        summary_method=my_summary,
+    )
+    assert isinstance(chat_res.summary, str)
+    assert chat_res.summary == expected
+
+
+def test_last_msg_summary_unwraps_dict_content():
+    """``_last_msg_as_summary`` previously dropped to "" when the recipient's
+    last message had a dict-shaped ``content`` field (some providers wrap the
+    assistant content as a nested message dict). The summary should follow
+    the inner ``content`` instead. Regression coverage for #1811."""
+    user = UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        default_auto_reply="Hello.",
+        llm_config=False,
+        code_execution_config=False,
+    )
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply={"content": "This is a test assistant. TERMINATE", "tool_calls": None},
+    )
+
+    chat_res = user.initiate_chat(assistant, message="Hello", max_turns=1)
+    assert isinstance(chat_res.summary, str)
+    assert "This is a test assistant." in chat_res.summary
+    # TERMINATE should still be stripped on the dict-content path.
+    assert "TERMINATE" not in chat_res.summary
+
+
 def test_process_before_send():
     print_mock = unittest.mock.MagicMock()
 
