@@ -3,18 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from functools import partial
 from typing import Any, overload
 from uuid import uuid4
 
 from fast_depends.core import CallModel
 
-from autogen.beta.types import ClassInfo
+from autogen.beta.types import ClassInfo, SendableMessage
 
 from .annotations import Context as AnnotatedContext
-from .context import ConversationContext, Stream, StreamId, SubId
-from .events import BaseEvent
+from .context import ConversationContext, Stream, StreamId, SubId, drop_background_task
+from .events import BaseEvent, Input, ModelRequest
 from .events.conditions import Condition, TypeCondition
 from .history import History, MemoryStorage, Storage
 from .utils import CONTEXT_OPTION_NAME, build_model
@@ -105,6 +106,8 @@ class MemoryStream(ABCStream):
         "_subscribers",
         "_interrupters",
         "history",
+        "pending_messages",
+        "_background_tasks",
         # Lazy per-stream asyncio.Lock used by Agent._execute to serialize
         # concurrent turns on a shared stream. See agent.py's
         # `_get_stream_turn_lock`. Declared here (not initialized in
@@ -127,6 +130,14 @@ class MemoryStream(ABCStream):
 
         storage = storage or MemoryStorage()
         self.history = History(self.id, storage)
+
+        # Stream-scoped inbox + background task set. The inbox outlives any
+        # single ``ask`` so a background task that finishes after ``ask``
+        # returns still delivers — the next ``ask`` on this stream merges
+        # the leftover into its initial request.
+        self.pending_messages: list[ModelRequest] = []
+        self._background_tasks: set[asyncio.Task[None]] = set()
+
         # Agent._execute populates this lazily on first turn — setting it
         # to None here so `getattr(..., None)` returns None instead of
         # hitting a slot-uninitialized AttributeError.
@@ -139,6 +150,18 @@ class MemoryStream(ABCStream):
             # Default: skip events marked __transient__ (ModelMessageChunk, TaskProgress, etc.)
             # These are real-time streaming artifacts superseded by their final counterparts.
             self.subscribe(_FilteredStorage(storage).save_event)
+
+    def enqueue(self, *content: "SendableMessage | Input") -> None:
+        if not content:
+            return
+        parts = [Input.ensure_input(item) for item in content]
+        self.pending_messages.append(ModelRequest(parts))
+
+    def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(partial(drop_background_task, self._background_tasks))
+        return task
 
     @overload
     def subscribe(
@@ -287,3 +310,13 @@ class SubStream(ABCStream):
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
         await self._parent.send(event, context)
+
+    @property
+    def pending_messages(self) -> list[ModelRequest]:
+        return self._parent.pending_messages
+
+    def enqueue(self, *content: "SendableMessage | Input") -> None:
+        self._parent.enqueue(*content)
+
+    def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+        return self._parent.spawn_background(coro)

@@ -980,42 +980,16 @@ class Agent(Generic[TResult]):
         # with the parent turn's lock.
         stream_lock = _get_stream_turn_lock(context.stream)
         async with stream_lock:
-            # Per-run state. Initialize only if not already owned by an outer
-            # _execute — nested calls share the parent's queue and tg.
-            owns_lifecycle = context.pending_messages is None
-            if owns_lifecycle:
-                context.pending_messages = []
-                context._background_tasks = set()
-            try:
-                return await self._execute_locked(
-                    event,
-                    context=context,
-                    client=client,
-                    hitl_hook=hitl_hook,
-                    additional_tools=additional_tools,
-                    additional_middleware=additional_middleware,
-                    additional_observers=additional_observers,
-                    response_schema=response_schema,
-                )
-            finally:
-                if owns_lifecycle:
-                    # Cancel leftover background tasks (exception path only —
-                    # normal exit drains them in _continue_turn). Then await
-                    # all of them so cancelled coroutines actually unwind
-                    # before we null out pending_messages — otherwise a
-                    # cancelled task that wakes up at its `enqueue(...)`
-                    # would hit a None queue and raise RuntimeError into
-                    # an unawaited exception ("Task exception was never
-                    # retrieved"). Normal exit reaches here with all tasks
-                    # already done, so gather returns immediately.
-                    if context._background_tasks:
-                        tasks_snapshot = list(context._background_tasks)
-                        for bg_task in tasks_snapshot:
-                            if not bg_task.done():
-                                bg_task.cancel()
-                        await asyncio.gather(*tasks_snapshot, return_exceptions=True)
-                    context._background_tasks = None
-                    context.pending_messages = None
+            return await self._execute_locked(
+                event,
+                context=context,
+                client=client,
+                hitl_hook=hitl_hook,
+                additional_tools=additional_tools,
+                additional_middleware=additional_middleware,
+                additional_observers=additional_observers,
+                response_schema=response_schema,
+            )
 
     async def _execute_locked(
         self,
@@ -1256,6 +1230,15 @@ class Agent(Generic[TResult]):
 
 
 async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
+    # Drain stream-level inbox before the first model call: any messages
+    # enqueued by background tasks from a previous ``ask`` (or any other
+    # producer) get merged into this turn's initial ModelRequest so the LLM
+    # sees them as one user turn, ordered before the new request.
+    if isinstance(event, ModelRequest):
+        leftover = _drain_pending(context)
+        if leftover is not None:
+            event = ModelRequest([*leftover.parts, *event.parts])
+
     # Sending the event triggers _call_client via the stream subscriber,
     # which drains any pending enqueued input before the LLM call.
     async with context.stream.get(ModelResponse) as result:
@@ -1279,23 +1262,12 @@ async def _continue_turn(message: ModelResponse, context: Context) -> ModelRespo
             continue
 
         # Model has nothing more to do this turn. Drain any leftover enqueued
-        # input into one more request to give it a chance to react.
+        # input into one more request to give it a chance to react. Background
+        # tasks are not awaited — if they finish in time their enqueue lands
+        # here, otherwise their result is lost (see ``spawn_background``).
         merged = _drain_pending(context)
         if merged is not None:
             message = await _send_model_request(merged, context)
-            continue
-
-        # No tool calls, no pending. If background tasks are still in flight,
-        # wait for one to finish — it must enqueue its result via
-        # `context.enqueue`, which the next iteration picks up.
-        if context._background_tasks:
-            done, _ = await asyncio.wait(
-                context._background_tasks,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for bg_task in done:
-                if not bg_task.cancelled() and (exc := bg_task.exception()):
-                    raise exc
             continue
 
         return message
