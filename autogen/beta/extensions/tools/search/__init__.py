@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.exceptions import missing_optional_dependency
+from autogen.beta.exceptions import missing_additional_dependency
 
 try:
     from .tinyfish import TinyFishSearchToolkit
 except ImportError as e:
-    TinyFishSearchToolkit = missing_optional_dependency("TinyFishSearchToolkit", "tinyfish", e)  # type: ignore[misc]
+    TinyFishSearchToolkit = missing_additional_dependency("TinyFishSearchToolkit", "tinyfish>=0.2.3", e)  # type: ignore[misc]
 
 __all__ = ("TinyFishSearchToolkit",)
