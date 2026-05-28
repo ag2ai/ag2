@@ -4414,14 +4414,22 @@ class ConversableAgent(LLMAgent):
             for tool in all_tools:
                 tool.register_for_execution(self.run_executor)
 
-            # Register only newly passed tools for LLM (agent's pre-existing tools are already registered)
+            # Register only tools not already in llm_config["tools"], to avoid re-registration warnings
+            existing_tool_names: set[str] = {
+                t["function"]["name"]
+                for t in (self.llm_config or {}).get("tools", [])
+                if isinstance(t, dict) and isinstance(t.get("function"), dict)
+            }
+            newly_registered_tools: list[Tool] = []
             for tool in passed_tools:
-                tool.register_for_llm(self)
+                if tool.tool_schema["function"]["name"] not in existing_tool_names:
+                    tool.register_for_llm(self)
+                    newly_registered_tools.append(tool)
             yield self.run_executor
         finally:
-            # Clean up only newly passed tools (not agent's pre-existing tools)
-            if "passed_tools" in locals():
-                for tool in passed_tools:
+            # Clean up only the tools newly registered above (leave pre-existing tools in place).
+            if "newly_registered_tools" in locals():
+                for tool in newly_registered_tools:
                     self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
 
     def _deprecated_run(
