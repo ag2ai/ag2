@@ -30,7 +30,7 @@ from .audit import (
     AuditLog,
     AuditSubscriber,
 )
-from .core import Hub
+from .core import Hub, PendingTurn
 from .expectations import (
     AcksWithinEvaluator,
     AuditHandler,
@@ -100,6 +100,7 @@ __all__ = (
     "HubListener",
     "MaxSilenceEvaluator",
     "NotifyChannelHandler",
+    "PendingTurn",
     "ReplyWithinEvaluator",
     "RuleBasedArbiter",
     "Violation",

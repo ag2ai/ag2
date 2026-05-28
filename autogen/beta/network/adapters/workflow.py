@@ -64,6 +64,7 @@ from ..views.base import ViewPolicy
 from ..views.builtin import NamedWindowedSummary
 from .base import (
     AdapterResult,
+    ExpectedTurn,
     default_build_packet_envelope,
     default_build_text_envelope,
     default_render_envelope,
@@ -337,6 +338,18 @@ class WorkflowAdapter:
                 auto_close_reason="max_turns",
             )
         return AdapterResult()
+
+    def expected_next(
+        self,
+        metadata: ChannelMetadata,
+        state: WorkflowState,
+    ) -> ExpectedTurn | None:
+        if state.expected_next_speaker is None:
+            return None
+        return ExpectedTurn(
+            agent_id=state.expected_next_speaker,
+            triggering_envelope_id=state.last_envelope_id,
+        )
 
     def default_view_policy(
         self,

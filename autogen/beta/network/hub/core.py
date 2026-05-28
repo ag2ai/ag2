@@ -28,6 +28,7 @@ imports tenant modules — the trust boundary runs through ``HubClient``
 
 import asyncio
 import contextlib
+import dataclasses
 import fnmatch
 import json
 import logging
@@ -110,10 +111,28 @@ from .layout import (
 from .listener import HubListener
 from .sweepers import _IntervalSweeper
 
-__all__ = ("Hub",)
+__all__ = ("Hub", "PendingTurn")
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class PendingTurn:
+    """A turn the protocol expects this agent to take.
+
+    ``triggering_envelope_id`` names the envelope that put the turn on
+    the agent — typically the previous speaker's send. ``None`` if no
+    envelope drove the expectation (e.g. fresh channel where the
+    expected speaker is the creator with nothing yet posted).
+    ``expected_at`` is when the turn became theirs (the triggering
+    envelope's ``created_at``, or the current hub clock if no trigger
+    envelope is available).
+    """
+
+    channel_id: str
+    triggering_envelope_id: str | None
+    expected_at: str
 
 
 def _utc_now_iso() -> str:
@@ -1731,9 +1750,65 @@ class Hub:
             raise NotFoundError(f"endpoint not attached: {endpoint_id}")
         if agent_id not in self._passports:
             raise NotFoundError(f"agent not registered: {agent_id}")
+        # If the agent already has an endpoint binding (reconnect from a
+        # different connection), evict the prior mapping before stamping
+        # the new one. The prior endpoint stays alive — other agents
+        # bound to it keep working — but envelopes addressed to this
+        # agent now route through the new endpoint.
+        prior_endpoint_id = self._agent_to_endpoint.get(agent_id)
+        if prior_endpoint_id is not None and prior_endpoint_id != endpoint_id:
+            prior_bound = self._endpoint_to_agents.get(prior_endpoint_id)
+            if prior_bound is not None:
+                prior_bound.discard(agent_id)
+                if not prior_bound:
+                    self._endpoint_to_agents.pop(prior_endpoint_id, None)
+            prior_endpoint = self._endpoints_by_id.get(prior_endpoint_id)
+            if prior_endpoint is not None and prior_endpoint.agent_id == agent_id:
+                prior_endpoint.agent_id = None
         self._endpoints_by_id[endpoint_id].agent_id = agent_id
         self._agent_to_endpoint[agent_id] = endpoint_id
         self._endpoint_to_agents.setdefault(endpoint_id, set()).add(agent_id)
+
+    async def pending_turns_for(self, agent_id: str) -> "list[PendingTurn]":
+        """Return turns in active channels where the protocol expects this agent.
+
+        Walks every active channel the agent participates in, asks the
+        registered adapter via :meth:`ChannelAdapter.expected_next`,
+        and returns a :class:`PendingTurn` per channel where the agent
+        is named. Channels with no specific expected speaker (free-form
+        conversations) or where another participant is expected are
+        skipped. The triggering envelope's ``created_at`` is read from
+        the WAL; if the trigger envelope cannot be located the current
+        hub clock is used as a fallback.
+        """
+        if agent_id not in self._passports:
+            return []
+        results: list[PendingTurn] = []
+        for channel_id, metadata in self._active_channels.items():
+            if not any(p.agent_id == agent_id for p in metadata.participants):
+                continue
+            adapter = self._adapters.get((metadata.manifest.type, metadata.manifest.version))
+            state = self._adapter_states.get(channel_id)
+            if adapter is None or state is None:
+                continue
+            expected = adapter.expected_next(metadata, state)
+            if expected is None or expected.agent_id != agent_id:
+                continue
+            expected_at = ""
+            if expected.triggering_envelope_id:
+                wal = await self.read_wal(channel_id)
+                for env in wal:
+                    if env.envelope_id == expected.triggering_envelope_id:
+                        expected_at = env.created_at or ""
+                        break
+            results.append(
+                PendingTurn(
+                    channel_id=channel_id,
+                    triggering_envelope_id=expected.triggering_envelope_id,
+                    expected_at=expected_at or self._clock(),
+                )
+            )
+        return results
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 

@@ -232,6 +232,81 @@ class HubClient:
 
         return client
 
+    async def attach(
+        self,
+        agent: Agent,
+        name: str,
+        *,
+        passport: Passport | None = None,
+        resume: Resume | None = None,
+        rule: Rule | None = None,
+        skill_md: str | None = None,
+        attach_plugin: bool = True,
+    ) -> AgentClient:
+        """Bind ``agent`` to the hub identity named ``name``.
+
+        Reconnect-aware companion to :meth:`register`. If ``name`` is
+        already registered with the hub the existing ``agent_id`` is
+        re-bound to this connection's endpoint — any prior endpoint
+        mapping for that identity is evicted (the prior endpoint stays
+        alive for any other agents bound to it). A fresh
+        :class:`AgentClient` is constructed against the existing
+        passport / resume / rule loaded from the hub.
+
+        If ``name`` is not registered, falls back to
+        :meth:`register`. ``passport`` and ``resume`` become required
+        in that path; ``rule`` / ``skill_md`` / ``attach_plugin``
+        are passed through identically.
+
+        Idempotent for the same ``HubClient`` connection: calling
+        ``attach`` twice with the same ``name`` and the same agent
+        re-binds harmlessly.
+        """
+        if self._closed:
+            raise RuntimeError("HubClient is closed")
+
+        existing_agent_id = self._hub._name_to_id.get(name)
+        if existing_agent_id is None:
+            if passport is None or resume is None:
+                raise ValueError(
+                    f"attach({name!r}): name is not registered; "
+                    "passport and resume are required to fall back to register()"
+                )
+            return await self.register(
+                agent,
+                passport,
+                resume,
+                skill_md=skill_md,
+                rule=rule,
+                attach_plugin=attach_plugin,
+            )
+
+        # Re-bind path: identity exists, hook this connection's
+        # endpoint to it and build a fresh AgentClient against the
+        # persisted passport / resume / rule.
+        client_link = self._ensure_connected()
+        existing_passport = self._hub._passports[existing_agent_id]
+        existing_resume = self._hub._resumes.get(existing_agent_id, Resume())
+        existing_rule = self._hub._rules.get(existing_agent_id, Rule())
+
+        self._hub.bind_endpoint(client_link.endpoint_id, existing_agent_id)
+
+        client = AgentClient(
+            agent=agent,
+            passport=existing_passport,
+            resume=existing_resume,
+            rule=existing_rule,
+            hub=self._hub,
+            hub_client=self,
+        )
+        self._clients[existing_agent_id] = client
+
+        if attach_plugin:
+            plugin = NetworkPlugin(client)
+            plugin.register(agent)
+
+        return client
+
     async def register_human(
         self,
         passport: Passport,
