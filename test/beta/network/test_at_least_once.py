@@ -108,6 +108,20 @@ async def _consume_invite_and_ack(raw_client, agent_id: str, *, timeout: float =
     return await asyncio.wait_for(_scan(), timeout)
 
 
+async def _await_cursor(hub, agent_id, channel_id, predicate, *, timeout=5.0):
+    """Poll the per-channel inbox cursor until ``predicate(cursor)`` holds.
+
+    Acks travel an async path (notify handler -> ReceiptFrame -> hub), so a
+    fixed sleep races with delivery on a slow runner; poll the cursor instead
+    of guessing a delay.
+    """
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if predicate(hub.inbox_cursor(agent_id, channel_id)):
+            return
+        await asyncio.sleep(0.01)
+
+
 class TestReceiptCursorAdvance:
     @pytest.mark.asyncio
     async def test_auto_ack_advances_cursor_to_wal_head(self) -> None:
@@ -124,11 +138,11 @@ class TestReceiptCursorAdvance:
             channel = await alice.open(type="discussion", target=["bob"])
             await channel.send("hello bob")
             await wait_for_text_count(hub, channel.channel_id, 1)
-            await asyncio.sleep(0.05)  # let bob's auto-ack reach the hub
 
             wal = await hub.read_wal(channel.channel_id)
             text_env = next(e for e in wal if e.event_type == EV_TEXT)
 
+            await _await_cursor(hub, bob.agent_id, channel.channel_id, lambda c: c == text_env.envelope_id)
             assert hub.inbox_cursor(bob.agent_id, channel.channel_id) == text_env.envelope_id
             cursor_blob = await hub._store.read(f"/agents/{bob.agent_id}/inbox.cursors.json")
             assert json.loads(cursor_blob)[channel.channel_id] == text_env.envelope_id
@@ -184,7 +198,7 @@ class TestReceiptCursorAdvance:
                     channel_id=channel_id,
                 )
             )
-            await asyncio.sleep(0.05)
+            await _await_cursor(hub, bob_passport.agent_id, channel_id, lambda c: c == text_env.envelope_id)
             assert hub.inbox_cursor(bob_passport.agent_id, channel_id) == text_env.envelope_id
         finally:
             await bob_raw.close()
@@ -582,10 +596,14 @@ class TestReplayOnReconnect:
             channel = await alice.open(type="discussion", target=["bob"])
             await channel.send("first")
             await wait_for_text_count(hub, channel.channel_id, 1)
-            await asyncio.sleep(0.05)  # auto-ack lands
+            wal = await hub.read_wal(channel.channel_id)
+            text_env = next(e for e in wal if e.event_type == EV_TEXT)
+            # Wait until bob has acked through the WAL head (not merely acked
+            # *something*), so the reconnect below has nothing left to replay.
+            await _await_cursor(hub, bob.agent_id, channel.channel_id, lambda c: c == text_env.envelope_id)
 
             cursor = hub.inbox_cursor(bob.agent_id, channel.channel_id)
-            assert cursor != ""
+            assert cursor == text_env.envelope_id
             await bob_hc.close()
 
             raw_link = LocalLink(hub)
@@ -734,12 +752,13 @@ class TestCursorPersistence:
         channel = await alice.open(type="discussion", target=["bob"])
         await channel.send("hello")
         await wait_for_text_count(hub, channel.channel_id, 1)
-        await asyncio.sleep(0.05)
-
         bob_id = bob.agent_id
         channel_id = channel.channel_id
+        wal = await hub.read_wal(channel_id)
+        text_env = next(e for e in wal if e.event_type == EV_TEXT)
+        await _await_cursor(hub, bob_id, channel_id, lambda c: c == text_env.envelope_id)
         expected_cursor = hub.inbox_cursor(bob_id, channel_id)
-        assert expected_cursor != ""
+        assert expected_cursor == text_env.envelope_id
 
         await alice_hc.close()
         await bob_hc.close()
@@ -764,9 +783,8 @@ class TestCursorPersistence:
             channel = await alice.open(type="discussion", target=["bob"])
             await channel.send("hello")
             await wait_for_text_count(hub, channel.channel_id, 1)
-            await asyncio.sleep(0.05)
-
             bob_id = bob.agent_id
+            await _await_cursor(hub, bob_id, channel.channel_id, lambda c: c != "")
             assert bob_id in hub._inbox_cursors
 
             await bob.unregister()
