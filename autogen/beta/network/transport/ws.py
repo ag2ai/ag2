@@ -22,6 +22,7 @@ that need backoff wrap it.
 
 import asyncio
 import contextlib
+import functools
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -239,6 +240,24 @@ class WsLink:
         )
 
 
+async def _serve_connection(hub: "Hub", ws: "ServerConnection") -> None:
+    """Handle one inbound WebSocket connection for :func:`serve_ws`.
+
+    Wraps the socket in a :class:`WsLinkEndpoint`, attaches it to the
+    hub, and holds the connection open until either side closes.
+    """
+    endpoint = WsLinkEndpoint(endpoint_id=make_id(), ws=ws)
+    hub.attach_endpoint(endpoint)
+    try:
+        # ``websockets`` returns from the handler when the client closes;
+        # we additionally await ``wait_closed`` to handle a
+        # server-initiated close cleanly.
+        await ws.wait_closed()
+    finally:
+        with contextlib.suppress(Exception):
+            await endpoint.close()
+
+
 @contextlib.asynccontextmanager
 async def serve_ws(
     hub: "Hub",
@@ -261,22 +280,8 @@ async def serve_ws(
     The context manager closes the server on exit and waits for all
     handler tasks to finish so the hub's endpoint registry is clean.
     """
-
-    async def handler(ws: "ServerConnection") -> None:
-        endpoint_id = make_id()
-        endpoint = WsLinkEndpoint(endpoint_id=endpoint_id, ws=ws)
-        hub.attach_endpoint(endpoint)
-        try:
-            # ``websockets`` returns from the handler when the client
-            # closes; we additionally await ``wait_closed`` to handle
-            # server-initiated close cleanly.
-            await ws.wait_closed()
-        finally:
-            with contextlib.suppress(Exception):
-                await endpoint.close()
-
     server = await _ws_serve(
-        handler,
+        functools.partial(_serve_connection, hub),
         host,
         port,
         ssl=ssl_context,
