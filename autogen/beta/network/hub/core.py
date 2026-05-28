@@ -105,6 +105,7 @@ from .layout import (
     resume_path,
     rule_path,
     skill_path,
+    task_checkpoint_path,
     task_metadata_path,
     tasks_root,
     wal_path,
@@ -1587,6 +1588,30 @@ class Hub:
                 continue
             results.append(metadata)
         return results[:limit]
+
+    async def checkpoint_task(self, task_id: str, state: dict[str, object]) -> None:
+        """Persist an owner-supplied resume snapshot for ``task_id``.
+
+        Writes a single JSON blob at ``tasks/{task_id}/checkpoint.json``;
+        last-write-wins, no history. The framework treats the payload as
+        opaque — owners pick what to store and how to interpret it on
+        resume. Pairs with :meth:`read_task_checkpoint` for the read
+        side; the canonical entry point is the ``HubBackedCheckpointStore``
+        on the client.
+        """
+        await self._store.write(task_checkpoint_path(task_id), json.dumps(state))
+
+    async def read_task_checkpoint(self, task_id: str) -> dict[str, object] | None:
+        """Read the resume snapshot for ``task_id``, or ``None`` if absent.
+
+        Returned dict is the value the owner most recently passed to
+        :meth:`checkpoint_task`. Malformed JSON on disk surfaces as an
+        exception — the framework does not silently swallow corruption.
+        """
+        raw = await self._store.read(task_checkpoint_path(task_id))
+        if raw is None:
+            return None
+        return json.loads(raw)
 
     # ── Sweeper hook ────────────────────────────────────────────────────────
 
