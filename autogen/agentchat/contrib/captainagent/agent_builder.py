@@ -562,7 +562,7 @@ Match roles in the role set to each expert in expert set.
         try:
             agent_library = json.loads(library_path_or_json)
         except json.decoder.JSONDecodeError:
-            with open(library_path_or_json) as f:
+            with open(library_path_or_json, encoding="utf-8") as f:
                 agent_library = json.load(f)
         except Exception as e:
             raise e
@@ -761,7 +761,7 @@ Match roles in the role set to each expert in expert set.
         # load from path.
         if filepath is not None:
             print(colored(f"Loading config from {filepath}", "green"), flush=True)
-            with open(filepath) as f:
+            with open(filepath, encoding="utf-8") as f:
                 cached_configs = json.load(f)
 
         _config_check(cached_configs)
