@@ -199,7 +199,7 @@ class Neo4jNativeGraphQueryEngine:
         for doc in input_doc:
             if doc.doctype == DocumentType.TEXT:
                 # todo: we assume this is a path, and not URL
-                with open(doc.path_or_url) as file:  # type: ignore[arg-type]
+                with open(doc.path_or_url, encoding="utf-8") as file:  # type: ignore[arg-type]
                     text = file.read()
                 asyncio.run(self.text_kg_builder.run_async(text=text))
             elif doc.doctype == DocumentType.PDF:
