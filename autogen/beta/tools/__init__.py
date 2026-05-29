@@ -22,7 +22,7 @@ from .builtin import (
 )
 from .code import SandboxCodeTool
 from .final import Toolkit, tool
-from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchToolkit, TavilySearchTool
+from .search import DuckDuckSearchTool, PerplexitySearchToolkit, TavilySearchTool
 from .shell import LocalShellTool
 from .skills import SkillSearchToolkit, SkillsToolkit
 from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
@@ -32,7 +32,6 @@ __all__ = (
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
     "DuckDuckSearchTool",
-    "ExaToolkit",
     "FilesystemToolkit",
     "ImageGenerationTool",
     "LocalShellTool",

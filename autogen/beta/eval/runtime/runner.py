@@ -33,14 +33,16 @@ from functools import partial
 from typing import Any
 from uuid import uuid4
 
-from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
 from autogen.beta.agent import Agent
 from autogen.beta.config import ModelConfig
-from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware
+from autogen.beta.middleware.builtin import TelemetryMiddleware
 from autogen.beta.stream import MemoryStream, Stream
+from autogen.import_utils import optional_import_block, require_optional_import
+
+with optional_import_block():
+    from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from ..dataset import Suite, Task
 from ..pairwise import PairwiseComparator, PairwiseRunResult, evaluate_pairwise
@@ -69,7 +71,7 @@ async def run_agent(
     stream: Stream | None = None,
     variant: str | None = None,
     span_attributes: dict[str, str] | None = None,
-    span_processors: Sequence[SpanProcessor] | None = None,
+    span_processors: "Sequence[SpanProcessor] | None" = None,
 ) -> RunResult:
     """Run an evaluation suite end-to-end.
 
@@ -339,7 +341,7 @@ async def _produce(
     model_config: ModelConfig | dict[str, ModelConfig] | None,
     concurrency: int,
     span_attributes: dict[str, str] | None = None,
-    span_processors: Sequence[SpanProcessor] | None = None,
+    span_processors: "Sequence[SpanProcessor] | None" = None,
 ) -> InMemoryTraceSource:
     """Run ``factory``'s agent across ``tasks``, returning one Trace per task (in order)."""
     tasks = list(tasks)
@@ -367,6 +369,7 @@ async def _produce(
     return InMemoryTraceSource(produced)
 
 
+@require_optional_import("opentelemetry.sdk", "tracing")
 async def _produce_one(
     semaphore: asyncio.Semaphore,
     task: Task,
@@ -375,7 +378,7 @@ async def _produce_one(
     model_config: ModelConfig | dict[str, ModelConfig] | None,
     *,
     span_attributes: dict[str, str] | None = None,
-    span_processors: Sequence[SpanProcessor] | None = None,
+    span_processors: "Sequence[SpanProcessor] | None" = None,
 ) -> tuple[TraceRef, Trace]:
     async with semaphore:
         config = _resolve_task_config(task, model_config)

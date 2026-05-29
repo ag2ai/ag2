@@ -18,6 +18,8 @@ import pytest
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+pytest.importorskip("opentelemetry.sdk")
+
 from autogen.beta import Agent, tool
 from autogen.beta.eval import (
     BudgetThresholds,

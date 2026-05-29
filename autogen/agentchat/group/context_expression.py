@@ -210,11 +210,17 @@ class ContextExpression:
             if isinstance(var_value, (bool, int, float)):
                 formatted_value = str(var_value)
             elif isinstance(var_value, str):
-                formatted_value = f"'{var_value}'"  # Quote strings
+                formatted_value = (
+                    "'" + var_value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+                )  # Escape backslashes and single quotes to prevent eval injection (GHSA-9fvw-gr53-m7fw)
             elif isinstance(var_value, (list, dict, tuple)):
                 # For collections, convert to their boolean evaluation
                 formatted_value = str(bool(var_value))
             else:
+                # NOTE: non-str __str__() output is NOT escaped. This is
+                # acceptable under the assumption that attacker-controlled
+                # values are strings; custom __str__ injection is out of scope
+                # for this patch (GHSA-9fvw-gr53-m7fw).
                 formatted_value = str(var_value)
 
             # Replace the variable reference with the formatted value

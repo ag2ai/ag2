@@ -8,6 +8,8 @@ import json
 
 import pytest
 
+pytest.importorskip("opentelemetry.sdk")
+
 from autogen.beta import Agent
 from autogen.beta.eval import Suite, run_pairwise
 from autogen.beta.eval.pairwise import PairwiseOutcome

@@ -45,6 +45,9 @@ READONLY_COMMANDS: tuple[str, ...] = (
 )
 
 
+_SHELL_OPERATORS = (">", ">>", "|", ";", "&&", "||", "`", "$(")
+
+
 def matches(pattern: str, command: str) -> bool:
     """Return True if *command* starts with *pattern* as a whole word or prefix.
 
@@ -56,6 +59,14 @@ def matches(pattern: str, command: str) -> bool:
         return False
     rest = stripped[len(pattern) :]
     return rest == "" or rest[0] == " "
+
+
+def contains_shell_operator(command: str) -> bool:
+    """Return True if *command* contains shell operators that could bypass
+    the allowed-command whitelist (redirection, pipes, chaining, or
+    backtick substitution).
+    """
+    return any(op in command for op in _SHELL_OPERATORS)
 
 
 def check_ignore(command: str, workdir: Path, patterns: list[str]) -> str | None:
