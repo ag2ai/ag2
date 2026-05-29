@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -101,7 +102,7 @@ class TestA2UISchemaManager:
         assert "<<<A2UI>>>" in prompt
         assert "---a2ui_JSON---" not in prompt
 
-    def test_custom_catalog_file_load_handles_non_ascii(self, tmp_path) -> None:
+    def test_custom_catalog_file_load_handles_non_ascii(self, tmp_path: Path) -> None:
         # Regression for the UTF-8 encoding pins on the open() calls inside
         # A2UISchemaManager. A2UI catalogs commonly carry non-ASCII bytes
         # (localized component descriptions, vendor labels), and the JSON
