@@ -277,7 +277,7 @@ def _wrap_function(func):
 @export_module("autogen.agentchat.contrib.captainagent")
 def get_full_tool_description(py_file):
     """Retrieves the function signature for a given Python file."""
-    with open(py_file) as f:
+    with open(py_file, encoding="utf-8") as f:
         code = f.read()
         exec(code)
         function_name = os.path.splitext(os.path.basename(py_file))[0]
