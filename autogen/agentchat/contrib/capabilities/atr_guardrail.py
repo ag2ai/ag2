@@ -99,6 +99,14 @@ def _default_rule_loader() -> list[dict[str, Any]]:
         if hasattr(pyatr, "Ruleset"):
             ruleset = pyatr.Ruleset()  # type: ignore[attr-defined]
             return list(getattr(ruleset, "rules", []))
+        # pyatr was importable but exposes no recognised accessor (covers the
+        # renamed-package / v2-breaking-change case raised in review on #2828).
+        # Surface this explicitly so a silent zero-rule load doesn't mask a
+        # genuine integration bug.
+        logger.warning(
+            "pyatr is importable but exposes no recognised rule accessor "
+            "(load_rules / rules / Ruleset); ATRGuardrail will be a no-op."
+        )
     except NameError:
         # pyatr was not importable; optional dependency missing.
         logger.debug("pyatr not installed; ATRGuardrail will load zero rules.")

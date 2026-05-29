@@ -170,3 +170,75 @@ class TestATRGuardrailRegistration:
         ATRGuardrail(rule_loader=_rules).add_to_agent(agent)  # type: ignore[arg-type]
         assert len(agent.hooks["safeguard_tool_outputs"]) == 1
         assert len(agent.hooks["safeguard_llm_inputs"]) == 1
+
+
+# --------------------------------------------------- _default_rule_loader
+
+
+class TestDefaultRuleLoader:
+    """Behavioural tests for ``_default_rule_loader`` per review on #2828.
+
+    The review asked for an explicit warning when ``pyatr`` is importable
+    but exposes no recognised accessor (the renamed-package / v2-breaking-
+    change case). These tests pin the three branches:
+      1. pyatr undefined → debug log, returns []
+      2. pyatr importable but no recognised accessor → WARNING, returns []
+      3. pyatr.load_rules() present → returns its result
+    """
+
+    def test_no_pyatr_logs_debug_and_returns_empty(self, caplog: pytest.LogCaptureFixture) -> None:
+        from autogen.agentchat.contrib.capabilities import atr_guardrail as mod
+        # simulate "pyatr not installed" by removing the module attribute
+        original = getattr(mod, "pyatr", None)
+        if hasattr(mod, "pyatr"):
+            delattr(mod, "pyatr")
+        try:
+            with caplog.at_level("DEBUG", logger=mod.logger.name):
+                result = mod._default_rule_loader()
+            assert result == []
+            assert any("pyatr not installed" in r.message for r in caplog.records)
+        finally:
+            if original is not None:
+                mod.pyatr = original  # type: ignore[attr-defined]
+
+    def test_importable_but_no_accessor_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        from autogen.agentchat.contrib.capabilities import atr_guardrail as mod
+
+        class _FakePyatr:  # no load_rules / rules / Ruleset
+            __name__ = "pyatr_stub"
+
+        original = getattr(mod, "pyatr", None)
+        mod.pyatr = _FakePyatr()  # type: ignore[attr-defined]
+        try:
+            with caplog.at_level("WARNING", logger=mod.logger.name):
+                result = mod._default_rule_loader()
+            assert result == []
+            assert any(
+                "no recognised rule accessor" in r.message and r.levelname == "WARNING"
+                for r in caplog.records
+            )
+        finally:
+            if original is not None:
+                mod.pyatr = original  # type: ignore[attr-defined]
+            elif hasattr(mod, "pyatr"):
+                delattr(mod, "pyatr")
+
+    def test_load_rules_accessor_is_returned(self) -> None:
+        from autogen.agentchat.contrib.capabilities import atr_guardrail as mod
+
+        class _FakePyatr:
+            @staticmethod
+            def load_rules() -> list[dict[str, Any]]:
+                return [{"id": "ATR-2026-00001", "severity": "high", "pattern": "x"}]
+
+        original = getattr(mod, "pyatr", None)
+        mod.pyatr = _FakePyatr()  # type: ignore[attr-defined]
+        try:
+            result = mod._default_rule_loader()
+            assert len(result) == 1
+            assert result[0]["id"] == "ATR-2026-00001"
+        finally:
+            if original is not None:
+                mod.pyatr = original  # type: ignore[attr-defined]
+            elif hasattr(mod, "pyatr"):
+                delattr(mod, "pyatr")
