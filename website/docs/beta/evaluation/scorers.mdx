@@ -161,6 +161,28 @@ scorers = [
 
 One judge = one criterion = one column. The score lands in `result.score_stats(key)`, so a *list* of judges is a multi-dimension **scorecard** — each criterion scored and aggregated independently. The numeric range defaults to `(0.0, 1.0)` and is **enforced** (out-of-range scores are clamped); pass `scale=(1, 5)` for a Likert range. The judge is an ordinary `Agent`, so it can be made deterministic using a `TestConfig` in CI.
 
+## Pass / fail thresholds — `threshold`
+
+A judge returns a *number*, but for automation you often want a hard verdict — *reject anything below 0.7*. Pass `threshold=` to gate the judge: its column then lands in `result.pass_rate(key)` (pass iff `score >= threshold`) instead of `score_stats`, and the raw number is recorded in the feedback's `detail`.
+
+```python linenums="1"
+agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer is helpful.", key="helpfulness", threshold=0.7)
+```
+
+`threshold=0.7` is shorthand for wrapping the judge in the generic `threshold(...)` combinator, which gates **any** numeric scorer (a judge, or your own `@scorer`) into a Pass/Fail — `scorer → scorer`:
+
+```python linenums="1"
+from autogen.beta.eval.scorers import agent_judge, threshold
+
+quality = agent_judge(config, criterion="...", key="quality")   # numeric scorer
+gate = threshold(quality, at_least=0.7)                          # → Pass/Fail scorer
+```
+
+A gated criterion emits one `Feedback`: `score` is the boolean (so it feeds `pass_rate` and shows up in `result.diff(baseline).regressions` when it flips), and the number + bounds are kept in `detail`. A scorer that produces no numeric grade — a judge with no verdict, or one that raised — counts as a **fail**. Bounds are inclusive; use `at_most` (or both) for "lower is better" metrics. In CI: `assert result.pass_rate("helpfulness") == 1.0`.
+
+!!! note
+    Gating is opt-in: without `threshold=`, `agent_judge` keeps its numeric `score_stats` behavior. For a per-task token/time *resource* gate (a different axis), see [`BudgetThresholds`](/docs/beta/evaluation/runs/).
+
 ## Failure attribution — `failure_attribution`
 
 When a task fails, *why?* `failure_attribution` labels each run with a failure mode (a `str`, so it rolls up in `result.value_counts(key)`):
