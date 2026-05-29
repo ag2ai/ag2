@@ -92,6 +92,8 @@ The `config=` keyword is what the runner uses to inject either a live `ModelConf
 
 ## Running
 
+`run_agent` produces traces via OpenTelemetry, so it requires the tracing extra — `pip install "ag2[tracing]"`. Grading pre-existing traces with `evaluate_traces` does not need it.
+
 ```python linenums="1"
 from autogen.beta.eval import BudgetThresholds, run_agent
 
