@@ -238,7 +238,7 @@ def has_file_id_references(messages: Iterable[BaseEvent]) -> bool:
                 return True
         elif isinstance(msg, ToolResultsEvent):
             for r in msg.results:
-                if any(isinstance(p, FileIdInput) for p in r.result.parts):
+                if any(isinstance(p, FileIdInput) for p in r.result_parts):
                     return True
     return False
 
@@ -347,7 +347,7 @@ def convert_messages(
                 if valid_tool_ids and r.parent_id not in valid_tool_ids:
                     continue
                 parts: list[dict[str, Any]] = []
-                for part in r.result.parts:
+                for part in r.result_parts:
                     if isinstance(part, TextInput):
                         parts.append({"type": "text", "text": part.content})
                     elif isinstance(part, DataInput):

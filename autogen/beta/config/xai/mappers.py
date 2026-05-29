@@ -296,7 +296,7 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                payload = _tool_result_to_string(r.result.parts, serializer)
+                payload = _tool_result_to_string(r.result_parts, serializer)
                 result.append(tool_result(payload, tool_call_id=r.parent_id))
 
         elif isinstance(message, ModelRequest):

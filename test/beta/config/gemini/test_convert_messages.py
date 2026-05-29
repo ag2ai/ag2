@@ -486,3 +486,13 @@ class TestBuiltinToolEventReplay:
         )
 
         assert result == []
+
+
+def test_tool_result_missing_result_does_not_crash() -> None:
+    event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t")])
+    [content] = convert_messages([event], SerializerCls)
+
+    assert content.model_dump(exclude_none=True) == {
+        "role": "user",
+        "parts": [{"function_response": {"name": "t", "response": {}}}],
+    }

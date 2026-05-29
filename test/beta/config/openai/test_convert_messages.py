@@ -586,3 +586,20 @@ class TestResponsesToolResult:
         )
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*openai-responses"):
             events_to_responses_input([event], SerializerCls)
+
+
+def test_responses_tool_result_missing_result_does_not_crash() -> None:
+    event = ToolResultsEvent(results=[ToolResultEvent(parent_id="c1", name="t")])
+    result = events_to_responses_input([event], SerializerCls)
+
+    assert result == [{"type": "function_call_output", "call_id": "c1", "output": []}]
+
+
+def test_completions_tool_result_missing_result_does_not_crash() -> None:
+    event = ToolResultsEvent(results=[ToolResultEvent(parent_id="c1", name="t")])
+    result = convert_messages([], [event], SerializerCls)
+
+    assert result == [
+        {"content": "", "role": "system"},
+        {"role": "tool", "tool_call_id": "c1", "content": []},
+    ]

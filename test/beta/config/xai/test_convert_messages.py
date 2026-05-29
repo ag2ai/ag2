@@ -191,6 +191,14 @@ class TestToolResult:
         with pytest.raises(UnsupportedInputError, match="tool_result"):
             convert_messages([], [event], SerializerCls)
 
+    def test_missing_result_does_not_crash(self) -> None:
+        event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t")])
+
+        [msg], _ = convert_messages([], [event], SerializerCls)
+
+        assert msg.role == chat_pb2.ROLE_TOOL
+        assert msg.tool_call_id == "tc_1"
+
 
 class TestAssistantRoundTrip:
     def test_xai_assistant_event_round_trips_via_replay_list(self) -> None:

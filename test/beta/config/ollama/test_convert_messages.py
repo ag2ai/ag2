@@ -20,6 +20,8 @@ from autogen.beta.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
 )
 from autogen.beta.exceptions import UnsupportedInputError
 
@@ -158,3 +160,10 @@ def test_multiple_text_inputs_with_images_attach_to_last() -> None:
         {"role": "user", "content": "intro"},
         {"role": "user", "content": "look at this", "images": [b64]},
     ]
+
+
+def test_tool_result_missing_result_does_not_crash() -> None:
+    event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t")])
+    result = convert_messages([], [event], SerializerCls)
+
+    assert result == [{"role": "tool", "content": []}]

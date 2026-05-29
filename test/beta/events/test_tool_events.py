@@ -9,6 +9,8 @@ from autogen.beta.events import (
     ClientToolCallEvent,
     ToolCallEvent,
     ToolErrorEvent,
+    ToolResult,
+    ToolResultEvent,
 )
 
 
@@ -49,6 +51,17 @@ class TestToolErrorEventContent:
             event = ToolErrorEvent.from_call(call, e)
 
         assert "NoneType" not in event.result.parts[0].content  # type: ignore[union-attr]
+
+
+class TestResultParts:
+    def test_returns_parts_when_result_set(self) -> None:
+        event = ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("hi"))
+        assert event.result_parts == event.result.parts
+
+    def test_returns_empty_list_when_result_missing(self) -> None:
+        event = ToolResultEvent(parent_id="tc_1", name="t")
+        assert event.result is None
+        assert event.result_parts == []
 
 
 class TestSerializedArgumentsCache:

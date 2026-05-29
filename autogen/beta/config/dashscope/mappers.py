@@ -98,7 +98,7 @@ def convert_messages(
             for r in message.results:
                 blocks: list[dict[str, str]] = []
                 has_non_text = False
-                for part in r.result.parts:
+                for part in r.result_parts:
                     if isinstance(part, TextInput):
                         blocks.append({"text": part.content})
                     elif isinstance(part, DataInput):

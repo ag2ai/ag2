@@ -10,7 +10,19 @@ import pytest
 from fast_depends import Depends
 from pydantic import BaseModel
 
-from autogen.beta import Agent, Context, DataInput, ImageInput, TextInput, ToolResult, events, testing, tool
+from autogen.beta import (
+    Agent,
+    Context,
+    DataInput,
+    ImageInput,
+    MemoryStream,
+    TextInput,
+    ToolResult,
+    events,
+    testing,
+    tool,
+)
+from autogen.beta.exceptions import ToolNotFoundError
 
 
 @pytest.mark.asyncio
@@ -264,3 +276,16 @@ class TestReturnInput:
         await agent.ask("Call my func")
 
         assert config.mock.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_unknown_tool_result_is_populated() -> None:
+    stream = MemoryStream()
+    agent = Agent("", config=testing.TestConfig(events.ToolCallEvent(name="missing_tool"), "done"))
+
+    with pytest.raises(ToolNotFoundError):
+        await agent.ask("Call a tool that does not exist", stream=stream)
+
+    [not_found] = [e for e in await stream.history.get_events() if isinstance(e, events.ToolNotFoundEvent)]
+    assert not_found.result is not None
+    assert "missing_tool" in not_found.result_parts[0].content

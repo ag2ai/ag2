@@ -150,3 +150,10 @@ class TestToolResult:
         )
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*dashscope"):
             convert_messages([], [event], SerializerCls)
+
+
+def test_tool_result_missing_result_does_not_crash() -> None:
+    event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t")])
+    result = convert_messages([], [event], SerializerCls)
+
+    assert result == [{"role": "tool", "tool_call_id": "tc_1", "content": []}]

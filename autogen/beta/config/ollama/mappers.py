@@ -112,7 +112,7 @@ def convert_messages(
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 parts: list[dict[str, Any]] = []
-                for part in r.result.parts:
+                for part in r.result_parts:
                     if isinstance(part, TextInput):
                         parts.append({"type": "text", "text": part.content})
                     elif isinstance(part, DataInput):

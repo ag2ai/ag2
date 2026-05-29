@@ -124,6 +124,11 @@ class ToolResultEvent(ToolEvent):
 
     result: "ToolResult"
 
+    @property
+    def result_parts(self) -> list[Input]:
+        """Result parts, or ``[]`` when ``result`` is ``None`` (never set / lost in transit)."""
+        return self.result.parts if self.result is not None else []
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(parent_id={self.parent_id}, name='{self.name}', result={self.result})"
 

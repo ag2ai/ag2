@@ -140,7 +140,7 @@ def events_to_responses_input(
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 blocks: list[dict[str, Any]] = []
-                for part in r.result.parts:
+                for part in r.result_parts:
                     if isinstance(part, TextInput):
                         blocks.append({"type": "input_text", "text": part.content})
                     elif isinstance(part, DataInput):
@@ -290,7 +290,7 @@ def convert_messages(
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 parts: list[dict[str, Any]] = []
-                for part in r.result.parts:
+                for part in r.result_parts:
                     if isinstance(part, TextInput):
                         parts.append({"type": "text", "text": part.content})
                     elif isinstance(part, DataInput):

@@ -20,6 +20,7 @@ from autogen.beta.events import (
     ToolCallsEvent,
     ToolErrorEvent,
     ToolNotFoundEvent,
+    ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
 )
@@ -126,6 +127,7 @@ def _tool_not_found(known_tools: Iterable[str]) -> Callable[..., Any]:
                 name=event.name,
                 content=repr(err),
                 error=err,
+                result=ToolResult(repr(err)),
             )
             await context.send(event)
 

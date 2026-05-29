@@ -849,3 +849,10 @@ class TestUnsupportedInputs:
                 ],
                 SerializerCls,
             )
+
+
+def test_tool_result_missing_result_does_not_crash() -> None:
+    event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t")])
+    result = convert_messages([event], SerializerCls)
+
+    assert result == [{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": []}]}]
