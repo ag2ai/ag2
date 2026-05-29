@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from .._types import Feedback
 from ..dataset import Suite, Task
+from ..sources.trace_source import TraceRef
 from ..trace import TokenUsage, Trace
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ class TaskResult:
     trace: Trace
     feedback: tuple[Feedback, ...]
     budget_violation: bool = False
+    trace_ref: TraceRef | None = None
 
 
 @dataclass(frozen=True, slots=True)

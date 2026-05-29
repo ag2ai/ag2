@@ -199,7 +199,9 @@ async def _evaluate_ref(
             )
 
         budget_violation = budgets.exceeded_by(trace) if budgets is not None else False
-        result = TaskResult(task=task, trace=trace, feedback=tuple(feedback), budget_violation=budget_violation)
+        result = TaskResult(
+            task=task, trace=trace, feedback=tuple(feedback), budget_violation=budget_violation, trace_ref=ref
+        )
         if on_result is not None:
             await on_result(task, result)
         return result

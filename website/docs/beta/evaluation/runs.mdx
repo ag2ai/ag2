@@ -110,6 +110,8 @@ result = await run_agent(
     run_id="2026-05-11-weather-suite",     # optional — overrides the UUID4 default
     label="weather-eval",                  # optional — groups runs of the same eval over time
     stream=my_stream,                      # optional — observe lifecycle events (see "Observing a run")
+    span_attributes={"ag2.org.id": "..."}, # optional — stamp extra attrs on every span (see "External telemetry")
+    span_processors=[...],                 # optional — also export spans to your own backend (see "External telemetry")
 )
 ```
 
@@ -148,6 +150,33 @@ Tasks run in parallel up to `concurrency`, bounded by an `asyncio.Semaphore`. De
 !!! warning
     Budgets are **observational** in v0. If you need a hard kill switch, use [observers](/docs/beta/advanced/observers/) (`TokenMonitor` with `AlertPolicy(severity=FATAL)`) — the agent halts via a `HaltEvent` at runtime.
 
+### External telemetry — exporting spans to your own backend
+
+`run_agent` produces each task's `Trace` from OpenTelemetry spans (the same substrate `evaluate_traces` grades). Two parameters let a host platform fold those spans into its own observability stack — both default to off, so a plain run behaves exactly as before.
+
+- **`span_attributes`** — a dict stamped on **every** span the agent emits. The run is auto-seeded with `ag2.eval.run_id`, and — when set — `ag2.eval.variant` / `ag2.eval.label`; each task additionally gets `ag2.eval.task_id`. Your own keys (e.g. `{"ag2.org.id": org_id}`) are added on top, so spans can be scoped per-org / per-run / per-task in the backend. Caller keys win on conflict.
+- **`span_processors`** — extra OpenTelemetry `SpanProcessor`s attached to each task's tracer provider, **alongside** the in-memory exporter grading reads. Export is additive: the in-memory processor is never replaced, so grading output is identical whether or not you pass this. Typically a `BatchSpanProcessor(OTLPSpanExporter(...))`.
+
+```python linenums="1"
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+result = await run_agent(
+    suite, agent=build_weather_agent, scorers=[...], store_dir="runs",
+    run_id="evalrun_abc", variant="v3", label="checkout-suite",
+    span_attributes={"ag2.org.id": org_id},                   # stamped on every span
+    span_processors=[BatchSpanProcessor(OTLPSpanExporter())],  # also export to your backend
+)
+
+for tr in result.tasks:
+    save_row(task_id=tr.task.task_id, trace_id=tr.trace_ref.trace_id)  # real OTEL id → deep-link
+```
+
+Each task's `TaskResult.trace_ref.trace_id` is the **real OpenTelemetry trace id** of that task's spans — so a stored result row deep-links straight to the trace in your backend (Grafana Tempo, Cloud Trace, …). Multiple traces per task are possible (sub-agents); the root span's trace id is captured.
+
+!!! warning "Flush before the process exits"
+    `BatchSpanProcessor` batches spans and flushes on a timer. A short-lived eval script can exit before the last batch ships — call `processor.force_flush()` (or `shutdown()`) after `run_agent` returns when you need the spans guaranteed in the backend.
+
 ## What you get back — `RunResult`
 
 ```python linenums="1"
@@ -167,6 +196,7 @@ result.tasks[0].task       # Task
 result.tasks[0].trace      # Trace
 result.tasks[0].feedback   # tuple[Feedback, ...]
 result.tasks[0].budget_violation  # bool
+result.tasks[0].trace_ref  # TraceRef | None — .trace_id is the real OTEL trace id (deep-link)
 
 # Aggregates
 result.pass_rate("scorer_name")    # float — boolean scorers
