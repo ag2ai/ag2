@@ -39,6 +39,7 @@ from autogen.beta.middleware.base import MiddlewareFactory
 from .._types import Feedback
 from ..scorer import Scorer
 from ..trace import Trace
+from .threshold import threshold as _threshold
 
 __all__ = (
     "Verdict",
@@ -69,6 +70,7 @@ def agent_judge(
     include_trace: bool = False,
     retries: int = 1,
     middleware: Iterable[MiddlewareFactory] = (),
+    threshold: float | None = None,
 ) -> Scorer:
     """Build a single-purpose Agent-as-judge :class:`Scorer`.
 
@@ -91,6 +93,12 @@ def agent_judge(
         middleware: Middleware factories attached to the judge agent. Pass
             ``TelemetryMiddleware`` here to capture the judge's own LLM spans /
             token usage (judge cost), tracked separately from the agent graded.
+        threshold: When set, gate the numeric score into a Pass/Fail — the judge's
+            column then lands in ``result.pass_rate(key)`` (pass iff
+            ``score >= threshold``) and the raw number is recorded in the feedback's
+            ``detail``. A judge that returns no verdict counts as a fail. Default
+            ``None`` keeps the numeric score (``score_stats``). Shorthand for wrapping
+            the judge in :func:`~autogen.beta.eval.scorers.threshold`.
     """
     low, high = scale
     judge = Agent(
@@ -118,7 +126,10 @@ def agent_judge(
             comment = f"{comment} [score clamped from {verdict.score} to scale {low}-{high}]"
         return Feedback(key=key, score=score, comment=comment)
 
-    return Scorer(_judge, key=key)
+    judge_scorer = Scorer(_judge, key=key)
+    if threshold is not None:
+        return _threshold(judge_scorer, at_least=threshold)
+    return judge_scorer
 
 
 def _system_prompt(criterion: str, low: float, high: float) -> str:

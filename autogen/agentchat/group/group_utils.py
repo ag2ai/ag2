@@ -32,6 +32,12 @@ if TYPE_CHECKING:
 # Utility functions for group chat preparation and management
 # These are extracted from multi_agent_chat.py to avoid circular imports
 
+# Sentinel object to distinguish "no after_work matched" from a TerminateTarget
+# returning None (which signals termination). Without this, TerminateTarget's None
+# result is indistinguishable from "no condition matched", causing it to be silently
+# ignored and falling through to the group-level after_work.
+_NO_AFTER_WORK_MATCHED = object()
+
 
 def update_conditional_functions(agent: "ConversableAgent", messages: list[dict[str, Any]]) -> None:
     """Updates the agent's functions based on the OnCondition's available condition.
@@ -94,7 +100,7 @@ def _evaluate_after_works_conditions(
     agent: "ConversableAgent",
     groupchat: GroupChat,
     user_agent: Optional["ConversableAgent"],
-) -> Agent | str | None:
+) -> Agent | str | None | object:
     """Evaluate after_works context conditions for an agent.
 
     Args:
@@ -103,10 +109,11 @@ def _evaluate_after_works_conditions(
         user_agent: Optional user proxy agent
 
     Returns:
-        The resolved speaker selection result if a condition matches, None otherwise
+        The resolved speaker selection result if a condition matches (Agent, str, or
+        None for termination), or _NO_AFTER_WORK_MATCHED sentinel if no condition matched.
     """
     if not hasattr(agent, "handoffs") or not agent.handoffs.after_works:  # type: ignore[attr-defined]
-        return None
+        return _NO_AFTER_WORK_MATCHED
 
     for after_work_condition in agent.handoffs.after_works:  # type: ignore[attr-defined]
         # Check if condition is available
@@ -132,7 +139,7 @@ def _evaluate_after_works_conditions(
 
             return after_works_speaker
 
-    return None
+    return _NO_AFTER_WORK_MATCHED
 
 
 def _run_oncontextconditions(
@@ -521,8 +528,8 @@ def determine_next_agent(
         groupchat,
         user_agent,
     )
-    if after_works_result is not None:
-        return after_works_result
+    if after_works_result is not _NO_AFTER_WORK_MATCHED:
+        return after_works_result  # type: ignore[return-value]
 
     # If no after_works conditions matched, use the group-level after_work
     # Resolve the next agent, termination, or speaker selection method

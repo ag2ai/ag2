@@ -117,7 +117,10 @@ Advanced modules:
 
 ### Re-export rules
 
-All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires optional dependencies, wrap the import in a `try/except ImportError` block and register a `missing_optional_dependency_config` fallback (see `autogen/beta/config/__init__.py`, `autogen/beta/middleware/builtin/__init__.py` as the reference pattern). This ensures users get a clear install hint instead of an unexplained `ImportError`.
+All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires third-party dependencies, wrap the import in a `try/except ImportError` block and register a missing-dependency fallback so users get a clear install hint instead of an unexplained `ImportError` (see `autogen/beta/config/__init__.py`, `autogen/beta/middleware/builtin/__init__.py` as the reference pattern). Two fallbacks exist:
+
+- **Core modules** use **optional dependencies** shipped as pyproject extras — fall back via `missing_optional_dependency`, which hints `pip install "ag2[<extra>]"`.
+- **Extensions** (`autogen/beta/extensions/`) are **not** shipped as extras — declare their third-party packages as **additional dependencies** and fall back via `missing_additional_dependency`, which hints the upstream package directly (e.g. `pip install "daytona>=0.171.0,<1"`).
 
 ### Design principles
 
