@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from autogen.beta.tools.sandbox.base import ExecResult, Sandbox
 from autogen.beta.tools.sandbox.factory import SandboxFactory, SingletonFactory
-from autogen.beta.tools.sandbox.filter import READONLY_COMMANDS, check_ignore, matches
+from autogen.beta.tools.sandbox.filter import READONLY_COMMANDS, check_ignore, contains_shell_operator, matches
 from autogen.beta.tools.sandbox.local import LocalSandbox
 
 if TYPE_CHECKING:
@@ -62,8 +62,14 @@ class ShellAdapter:
         return self._sandbox.workdir  # type: ignore[union-attr]
 
     def _filter(self, command: str) -> str | None:
-        if self._allowed is not None and not any(matches(p, command) for p in self._allowed):
-            return f"Command not allowed: {command!r}"
+        if self._allowed is not None:
+            if not any(matches(p, command) for p in self._allowed):
+                return f"Command not allowed: {command!r}"
+            # In restricted mode, shell operators (redirection, pipes,
+            # chaining, command substitution) would let an allowed head
+            # command spawn or redirect to disallowed ones — block them.
+            if contains_shell_operator(command):
+                return f"Command not allowed (shell operators are not permitted in restricted mode): {command!r}"
         if self._blocked is not None and any(matches(p, command) for p in self._blocked):
             return f"Command not allowed: {command!r}"
         if self._ignore is not None:

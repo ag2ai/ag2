@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("opentelemetry.sdk")
+
 from autogen.beta import Agent, tool
 from autogen.beta.eval import (
     BudgetThresholds,

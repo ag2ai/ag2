@@ -2,17 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.exceptions import missing_optional_dependency
+from autogen.beta.exceptions import missing_additional_dependency
 
 try:
     from .environment import DaytonaCodeEnvironment
     from .factory import DaytonaResources, DaytonaSandboxFactory
     from .sandbox import DaytonaSandbox
 except ImportError as e:
-    DaytonaCodeEnvironment = missing_optional_dependency("DaytonaCodeEnvironment", "daytona", e)  # type: ignore[misc]
-    DaytonaResources = missing_optional_dependency("DaytonaResources", "daytona", e)  # type: ignore[misc]
-    DaytonaSandbox = missing_optional_dependency("DaytonaSandbox", "daytona", e)  # type: ignore[misc]
-    DaytonaSandboxFactory = missing_optional_dependency("DaytonaSandboxFactory", "daytona", e)  # type: ignore[misc]
+    DaytonaCodeEnvironment = missing_additional_dependency("DaytonaCodeEnvironment", "daytona>=0.171.0,<1", e)  # type: ignore[misc]
+    DaytonaResources = missing_additional_dependency("DaytonaResources", "daytona>=0.171.0,<1", e)  # type: ignore[misc]
+    DaytonaSandbox = missing_additional_dependency("DaytonaSandbox", "daytona>=0.171.0,<1", e)  # type: ignore[misc]
+    DaytonaSandboxFactory = missing_additional_dependency("DaytonaSandboxFactory", "daytona>=0.171.0,<1", e)  # type: ignore[misc]
 
 __all__ = (
     "DaytonaCodeEnvironment",
