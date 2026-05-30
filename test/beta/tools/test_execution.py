@@ -288,4 +288,4 @@ async def test_unknown_tool_result_is_populated() -> None:
 
     [not_found] = [e for e in await stream.history.get_events() if isinstance(e, events.ToolNotFoundEvent)]
     assert not_found.result is not None
-    assert "missing_tool" in not_found.result_parts[0].content
+    assert "missing_tool" in not_found.result.parts[0].content

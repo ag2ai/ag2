@@ -230,7 +230,7 @@ def convert_messages(
             for r in message.results:
                 text_chunks: list[str] = []
                 media_parts: list[types.FunctionResponsePart] = []
-                for part in r.result_parts:
+                for part in r.result.parts:
                     if isinstance(part, TextInput):
                         text_chunks.append(part.content)
                     elif isinstance(part, DataInput):
