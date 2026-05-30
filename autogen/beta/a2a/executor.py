@@ -117,12 +117,15 @@ class AgentExecutor(A2AAgentExecutorBase):
         @stream.subscribe
         async def map_ag2_to_a2a(event: BaseEvent) -> None:
             if isinstance(event, ModelMessageChunk):
+                # a2a-sdk rejects append=True before the artifact exists, so the first chunk creates it.
+                is_first_chunk = not text_pieces
                 text_pieces.append(event.content)
                 a2a_event = chunk_to_text_artifact(
                     event,
                     artifact_id=text_artifact_id,
                     task_id=task_id,
                     context_id=context_id,
+                    append=not is_first_chunk,
                 )
                 await event_queue.enqueue_event(a2a_event_to_sdk(a2a_event))
                 return
