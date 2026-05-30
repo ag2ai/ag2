@@ -1245,10 +1245,6 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
         await context.send(event)
         message: ModelResponse = await result
 
-    return await _continue_turn(message, context)
-
-
-async def _continue_turn(message: ModelResponse, context: Context) -> ModelResponse:
     while True:
         if message.tool_calls and not message.response_force:
             # Sending tool_calls triggers the tool executor, which produces a
@@ -1267,17 +1263,12 @@ async def _continue_turn(message: ModelResponse, context: Context) -> ModelRespo
         # here, otherwise their result is lost (see ``spawn_background``).
         merged = _drain_pending(context)
         if merged is not None:
-            message = await _send_model_request(merged, context)
+            async with context.stream.get(ModelResponse) as result:
+                await context.send(merged)
+                message = await result
             continue
 
         return message
-
-
-async def _send_model_request(request: ModelRequest, context: Context) -> ModelResponse:
-    async with context.stream.get(ModelResponse) as result:
-        await context.send(request)
-        message: ModelResponse = await result
-    return message
 
 
 def _drain_pending(context: Context) -> ModelRequest | None:
