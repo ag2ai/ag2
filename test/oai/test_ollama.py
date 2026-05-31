@@ -489,3 +489,128 @@ def test_extract_json_response_params(ollama_client):
 
     assert isinstance(ollama_params["format"], dict)
     assert ollama_params["format"] == converted_dict
+
+
+# Test message conversion from OpenAI to Ollama format
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_oai_messages_to_ollama_messages_tool_conversion(ollama_client):
+    # Test conversion of tool calls and tool results to normal text messages
+    test_messages = [
+        {"role": "system", "content": "You are a helpful AI bot."},
+        {"role": "user", "content": "What's the weather in New York?"},
+        {
+            "role": "assistant",
+            "content": "I'll check the weather for you.",
+            "tool_calls": [
+                {
+                    "id": "call_abc123",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"location": "New York"}'},
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call_abc123",
+            "content": '{"temperature": 72, "condition": "sunny"}',
+        },
+    ]
+
+    messages = ollama_client.oai_messages_to_ollama_messages(test_messages, None)
+
+    # The tool_calls message should be removed (set to None and filtered out);
+    # the tool result message should be converted to a user message with tool meta.
+
+    # Verify that tool_calls message was removed
+    assert len(messages) == 3, "Tool calls message should be removed"
+    assert messages[0]["role"] == "system"
+    assert messages[1]["role"] == "user"
+    assert messages[1]["content"] == "What's the weather in New York?"
+
+    # Verify that tool result was converted to user message
+    assert messages[2]["role"] == "user", "Tool result message should be converted to user role"
+    assert "The following function was run:" in messages[2]["content"], (
+        "Tool result message should contain 'The following function was run:'"
+    )
+    assert (
+        "call_abc123" in messages[2]["content"] or '{"temperature": 72, "condition": "sunny"}' in messages[2]["content"]
+    ), "Tool result message should contain tool call ID or result content"
+
+
+# Test message conversion from OpenAI to Ollama format - multiple tool calls
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_oai_messages_to_ollama_messages_multiple_tool_calls(ollama_client):
+    # Test conversion with multiple tool calls
+    test_messages = [
+        {"role": "system", "content": "You are a helpful AI bot."},
+        {"role": "user", "content": "Get weather and convert currency."},
+        {
+            "role": "assistant",
+            "content": "I'll call the functions.",
+            "tool_calls": [
+                {
+                    "id": "call_weather",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"location": "NYC"}'},
+                },
+                {
+                    "id": "call_currency",
+                    "type": "function",
+                    "function": {"name": "convert_currency", "arguments": '{"amount": 100}'},
+                },
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call_weather",
+            "content": '{"temperature": 70}',
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call_currency",
+            "content": '{"converted": 110}',
+        },
+    ]
+
+    messages = ollama_client.oai_messages_to_ollama_messages(test_messages, None)
+
+    # Verify structure
+    assert len(messages) >= 3, "Should have at least system, user, and converted tool messages"
+    assert messages[0]["role"] == "system"
+    assert messages[1]["role"] == "user"
+
+    # Find converted tool result messages
+    tool_result_messages = [
+        msg for msg in messages if msg["role"] == "user" and "The following function was run:" in msg.get("content", "")
+    ]
+    assert len(tool_result_messages) == 2, "Should have 2 converted tool result messages"
+
+    # Each result must carry its OWN tool call's metadata, not the last call's.
+    weather_result = next(m for m in tool_result_messages if '"temperature": 70' in m["content"])
+    currency_result = next(m for m in tool_result_messages if '"converted": 110' in m["content"])
+    assert "get_weather" in weather_result["content"], "Weather result should carry get_weather metadata"
+    assert "convert_currency" not in weather_result["content"], (
+        "Weather result must not carry convert_currency metadata"
+    )
+    assert "convert_currency" in currency_result["content"], "Currency result should carry convert_currency metadata"
+    assert "get_weather" not in currency_result["content"], "Currency result must not carry get_weather metadata"
+
+
+# Test conversion when a tool result has no preceding tool-call message (e.g. truncated history)
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_oai_messages_to_ollama_messages_tool_result_without_tool_call(ollama_client):
+    # A tool result whose originating tool_calls message is not present must not crash the
+    # conversion (regression for an UnboundLocalError on the tool-call metadata).
+    test_messages = [
+        {"role": "system", "content": "You are a helpful AI bot."},
+        {"role": "tool", "tool_call_id": "orphan_call", "content": '{"ok": true}'},
+        {"role": "user", "content": "continue"},
+    ]
+
+    messages = ollama_client.oai_messages_to_ollama_messages(test_messages, None)
+
+    tool_result_messages = [
+        msg for msg in messages if msg["role"] == "user" and "The following function was run:" in msg.get("content", "")
+    ]
+    assert len(tool_result_messages) == 1, "Orphan tool result should still be converted"
+    assert '{"ok": true}' in tool_result_messages[0]["content"]

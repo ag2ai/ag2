@@ -572,7 +572,8 @@ class A2AClient(LLMClient):
             state.accumulated_text += text_chunk
             state.pending_calls.extend(calls)
 
-        if a2a_event.last_chunk or not a2a_event.append:
+        # Dedup on last_chunk only; the append=False opening chunk of a stream is not yet complete.
+        if a2a_event.last_chunk:
             state.seen_artifact_ids.add(artifact.artifact_id)
 
     async def _handle_artifact_parts(

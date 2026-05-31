@@ -893,6 +893,20 @@ class Hub:
 
     # ── Discovery (read-side) ────────────────────────────────────────────────
 
+    def name_for(self, agent_id: str, *, default: str | None = None) -> str:
+        """Resolve ``agent_id`` to its registered ``Passport.name``.
+
+        Reads the in-memory passport directory.
+        Returns ``default`` when the id is unknown (or ``agent_id`` itself
+        if ``default`` is ``None``), so callers can use this as a safe
+        ``NameResolver`` for view projection without needing to handle
+        the unregistered / unregistered-mid-turn case.
+        """
+        passport = self._passports.get(agent_id)
+        if passport is not None:
+            return passport.name
+        return default if default is not None else agent_id
+
     async def get_agent(self, name_or_id: str) -> Passport:
         agent_id = self._name_to_id.get(name_or_id, name_or_id)
         passport = self._passports.get(agent_id)

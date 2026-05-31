@@ -20,10 +20,12 @@ from autogen.beta.events import (
     ImageInput,
     ModelRequest,
     TextInput,
+    ToolCallEvent,
+    ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.beta.exceptions import UnsupportedInputError
+from autogen.beta.exceptions import ToolNotFoundError, UnsupportedInputError
 from autogen.beta.files.types import FileProvider, UploadedFile
 
 
@@ -586,3 +588,34 @@ class TestResponsesToolResult:
         )
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*openai-responses"):
             events_to_responses_input([event], SerializerCls)
+
+
+def _hallucinated_tool_call() -> ToolResultsEvent:
+    # Regression fixture: a not-found tool call used to leave result=None and crash on r.result.parts.
+    call = ToolCallEvent(id="c1", name="ghost_tool")
+    return ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
+
+
+def test_responses_hallucinated_tool_call_maps_with_error_text() -> None:
+    result = events_to_responses_input([_hallucinated_tool_call()], SerializerCls)
+
+    assert result == [
+        {
+            "type": "function_call_output",
+            "call_id": "c1",
+            "output": "autogen.beta.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
+        }
+    ]
+
+
+def test_completions_hallucinated_tool_call_maps_with_error_text() -> None:
+    result = convert_messages([], [_hallucinated_tool_call()], SerializerCls)
+
+    assert result == [
+        {"content": "", "role": "system"},
+        {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "content": "autogen.beta.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
+        },
+    ]

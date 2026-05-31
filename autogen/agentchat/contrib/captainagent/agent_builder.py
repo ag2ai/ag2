@@ -726,7 +726,7 @@ Match roles in the role set to each expert in expert set.
         """
         if filepath is None:
             filepath = f"./save_config_{hashlib.md5(self.building_task.encode('utf-8')).hexdigest()}.json"
-        with open(filepath, "w") as save_file:
+        with open(filepath, "w", encoding="utf-8") as save_file:
             json.dump(self.cached_configs, save_file, indent=4)
         print(colored(f"Building config saved to {filepath}", "green"), flush=True)
 

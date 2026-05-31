@@ -18,7 +18,7 @@ def gemini_config() -> GeminiConfig:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         pytest.skip("GEMINI_API_KEY not set")
-    return GeminiConfig(model="gemini-3.1-flash-lite-preview", api_key=api_key, temperature=0)
+    return GeminiConfig(model="gemini-3.1-flash-lite", api_key=api_key, temperature=0)
 
 
 @pytest.mark.gemini
