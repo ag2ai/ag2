@@ -23,11 +23,13 @@ from autogen.beta.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
+    ToolCallEvent,
+    ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
     VideoInput,
 )
-from autogen.beta.exceptions import UnsupportedInputError
+from autogen.beta.exceptions import ToolNotFoundError, UnsupportedInputError
 
 
 def _content_texts(msg: chat_pb2.Message) -> list[str]:
@@ -190,6 +192,17 @@ class TestToolResult:
 
         with pytest.raises(UnsupportedInputError, match="tool_result"):
             convert_messages([], [event], SerializerCls)
+
+    def test_hallucinated_tool_call_maps_with_error_text(self) -> None:
+        # Regression: a not-found tool call used to leave result=None and crash on r.result.parts.
+        call = ToolCallEvent(id="tc_1", name="ghost_tool")
+        event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
+
+        [msg], _ = convert_messages([], [event], SerializerCls)
+
+        assert msg.role == chat_pb2.ROLE_TOOL
+        assert msg.tool_call_id == "tc_1"
+        assert _content_texts(msg) == ["autogen.beta.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"]
 
 
 class TestAssistantRoundTrip:
