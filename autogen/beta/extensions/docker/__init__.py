@@ -5,7 +5,7 @@
 from autogen.beta.exceptions import missing_additional_dependency
 
 try:
-    from .factory import DockerEnvironment
+    from .environment import DockerEnvironment
     from .sandbox import DockerSandbox
 except ImportError as e:
     DockerEnvironment = missing_additional_dependency("DockerEnvironment", "docker>=6.0.0,<8", e)  # type: ignore[misc]

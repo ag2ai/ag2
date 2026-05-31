@@ -36,7 +36,7 @@ def _fake_client(sandbox: Any) -> Any:
 
 def _patch_async_daytona(sandbox: Any) -> Any:
     return patch(
-        "autogen.beta.extensions.daytona.factory.AsyncDaytona",
+        "autogen.beta.extensions.daytona.environment.AsyncDaytona",
         return_value=_fake_client(sandbox),
     )
 

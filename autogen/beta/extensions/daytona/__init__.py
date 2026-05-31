@@ -5,7 +5,7 @@
 from autogen.beta.exceptions import missing_additional_dependency
 
 try:
-    from .factory import DaytonaEnvironment, DaytonaResources
+    from .environment import DaytonaEnvironment, DaytonaResources
     from .sandbox import DaytonaSandbox
 except ImportError as e:
     DaytonaEnvironment = missing_additional_dependency("DaytonaEnvironment", "daytona>=0.171.0,<1", e)  # type: ignore[misc]
