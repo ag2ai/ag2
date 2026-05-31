@@ -5,7 +5,7 @@
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from autogen.beta.tools.shell.environment.base import ShellEnvironment
+from autogen.beta.tools.sandbox import ShellAdapter
 from autogen.beta.tools.skills.skill_types import SkillMetadata
 
 
@@ -83,8 +83,8 @@ class SkillRuntime(Protocol):
         """
         ...
 
-    def shell(self, scripts_dir: Path) -> ShellEnvironment:
-        """Return a :class:`~autogen.beta.tools.shell.ShellEnvironment` for *scripts_dir*.
+    def shell(self, scripts_dir: Path) -> ShellAdapter:
+        """Return a :class:`~autogen.beta.tools.sandbox.ShellAdapter` for *scripts_dir*.
 
         Args:
             scripts_dir: Absolute path to the skill's ``scripts/`` directory.

@@ -160,6 +160,6 @@ class SkillsToolkit(Toolkit):
                 command.extend(args)
 
             env = runtime.shell(scripts_dir)
-            return env.run(shlex.join(command))
+            return env.run_sync(shlex.join(command))
 
         return _run_skill_script

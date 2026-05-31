@@ -54,7 +54,7 @@ class ShellToolSchema(ToolSchema):
     Currently only OpenAI Responses API executes shell server-side.
     Anthropic's bash tool is client-side and is rejected with
     :class:`~autogen.beta.exceptions.UnsupportedToolError` — use
-    :class:`~autogen.beta.tools.LocalShellTool` instead.
+    :class:`~autogen.beta.tools.SandboxShellTool` instead.
     """
 
     type: str = field(default=SHELL_TOOL_NAME, init=False)
@@ -75,7 +75,7 @@ class ShellTool(Tool):
       tool (the application must execute the command and return the result).
       Using ``ShellTool`` with ``AnthropicConfig`` raises
       :class:`~autogen.beta.exceptions.UnsupportedToolError`. Use
-      :class:`~autogen.beta.tools.LocalShellTool` instead, which runs
+      :class:`~autogen.beta.tools.SandboxShellTool` instead, which runs
       commands via subprocess and works with any provider.
 
     See:

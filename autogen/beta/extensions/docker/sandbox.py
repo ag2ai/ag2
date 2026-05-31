@@ -8,6 +8,7 @@ import io
 import logging
 import os
 import tarfile
+import threading
 from collections.abc import AsyncIterator
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
@@ -28,7 +29,7 @@ class DockerSandbox(SandboxBase):
     All shaping parameters (``image``, ``env_vars``, ``network_mode``, …)
     are concrete values — no :class:`~autogen.beta.annotations.Variable`
     is accepted here. Variable resolution lives on
-    :class:`DockerSandboxFactory`, which constructs a :class:`DockerSandbox`
+    :class:`DockerEnvironment`, which constructs a :class:`DockerSandbox`
     after binding Variables to a :class:`ConversationContext`.
 
     Lifecycle is explicit: the container is created on ``__aenter__``
@@ -57,7 +58,7 @@ class DockerSandbox(SandboxBase):
             if isinstance(value, Variable):
                 raise TypeError(
                     f"DockerSandbox.{name} must be a concrete value; got Variable. "
-                    "Wrap with DockerSandboxFactory to resolve Variables from a Context."
+                    "Wrap with DockerEnvironment to resolve Variables from a Context."
                 )
 
         self._image = image
@@ -73,7 +74,11 @@ class DockerSandbox(SandboxBase):
 
         self._client: Any = None
         self._container: Any = None
-        self._lock = asyncio.Lock()
+        # A threading.Lock (not asyncio.Lock) guards container creation so a
+        # cached sandbox stays usable across the throw-away event loops that
+        # the sync shell path spins up via asyncio.run. asyncio.Lock binds to
+        # the first loop that awaits it and would raise on the next one.
+        self._create_lock = threading.Lock()
         self._closed = False
         self._atexit_registered = False
 
@@ -84,6 +89,10 @@ class DockerSandbox(SandboxBase):
     @property
     def host_workdir(self) -> Path | None:
         return self._host_path
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
 
     async def __aenter__(self) -> "DockerSandbox":
         await self._ensure_container()
@@ -185,7 +194,17 @@ class DockerSandbox(SandboxBase):
         return self._workdir / path
 
     async def _ensure_container(self) -> Any:
-        async with self._lock:
+        if self._closed:
+            raise RuntimeError("DockerSandbox has been closed.")
+        if self._container is not None:
+            return self._container
+        # The blocking docker calls and the creation guard both live in a
+        # single worker thread, so the threading.Lock serialises concurrent
+        # creators regardless of which event loop (or thread) drives them.
+        return await asyncio.to_thread(self._create_container_sync)
+
+    def _create_container_sync(self) -> Any:
+        with self._create_lock:
             if self._closed:
                 raise RuntimeError("DockerSandbox has been closed.")
             if self._container is not None:
@@ -205,29 +224,34 @@ class DockerSandbox(SandboxBase):
             if self._host_path is not None:
                 kwargs["volumes"] = {str(self._host_path): {"bind": str(self._workdir), "mode": "rw"}}
 
-            self._client = await asyncio.to_thread(docker.from_env)
-            self._container = await asyncio.to_thread(self._client.containers.run, self._image, **kwargs)
+            client = docker.from_env()
+            container = client.containers.run(self._image, **kwargs)
+            self._client = client
+            self._container = container
             if not self._atexit_registered:
                 atexit.register(self._atexit_close)
                 self._atexit_registered = True
-            logger.info("Docker sandbox container started (id=%s, image=%s)", self._container.short_id, self._image)
-            return self._container
+            logger.info("Docker sandbox container started (id=%s, image=%s)", container.short_id, self._image)
+            return container
 
     async def _restart_container(self) -> None:
-        async with self._lock:
+        await asyncio.to_thread(self._restart_container_sync)
+
+    def _restart_container_sync(self) -> None:
+        with self._create_lock:
             if self._container is None:
                 return
             old = self._container
             self._container = None
+        try:
+            old.stop(timeout=1)
+        except Exception as e:
+            logger.debug("Suppressed exception during container stop on restart: %s", e)
+        if not self._auto_remove:
             try:
-                await asyncio.to_thread(old.stop, timeout=1)
+                old.remove(force=True)
             except Exception as e:
-                logger.debug("Suppressed exception during container stop on restart: %s", e)
-            if not self._auto_remove:
-                try:
-                    await asyncio.to_thread(old.remove, force=True)
-                except Exception as e:
-                    logger.debug("Suppressed exception during container remove on restart: %s", e)
+                logger.debug("Suppressed exception during container remove on restart: %s", e)
 
     async def aclose(self) -> None:
         if self._atexit_registered:

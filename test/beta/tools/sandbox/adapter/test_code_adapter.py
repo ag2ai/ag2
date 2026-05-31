@@ -38,6 +38,15 @@ class TestCodeAdapterFileMode:
         assert result.exit_code == 0
         assert "2" in result.output
 
+    async def test_file_mode_cleans_up_temp_script(self, tmp_path: Path) -> None:
+        if shutil.which("node") is None:
+            pytest.skip("node not installed")
+        sandbox = LocalSandbox(tmp_path)
+        adapter = CodeAdapter(sandbox, languages=("python", "javascript"))
+        await adapter.run("console.log(1)", "javascript")
+        # The temp ag2_*.js script must not linger in a persistent workdir.
+        assert list(tmp_path.glob("ag2_*.js")) == []
+
 
 @pytest.mark.asyncio
 class TestCodeAdapterLanguages:

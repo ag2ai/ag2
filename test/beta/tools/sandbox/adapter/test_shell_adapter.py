@@ -80,9 +80,18 @@ class TestShellAdapterRunSync:
         assert "from-sync" in result
 
     @pytest.mark.asyncio
-    async def test_run_sync_in_event_loop_with_factory_raises(self, tmp_path: Path) -> None:
+    async def test_singleton_factory_in_event_loop_uses_fast_path(self, tmp_path: Path) -> None:
+        # A SingletonFactory wrapping a LocalSandbox unwraps to the local
+        # fast path, so run_sync works even inside an active event loop.
         sandbox = LocalSandbox(tmp_path)
         adapter = ShellAdapter(SingletonFactory(sandbox))
+        assert "hi" in adapter.run_sync("echo hi")
+
+    @pytest.mark.asyncio
+    async def test_run_sync_in_event_loop_with_factory_raises(self, tmp_path: Path) -> None:
+        # A generic (non-local) factory has no sync fast path, so run_sync
+        # cannot nest asyncio.run inside an active loop.
+        adapter = ShellAdapter(_RecordingFactory(LocalSandbox(tmp_path)))
         with pytest.raises(RuntimeError, match="active event loop"):
             adapter.run_sync("echo hi")
 

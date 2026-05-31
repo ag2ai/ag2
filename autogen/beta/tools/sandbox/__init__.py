@@ -4,13 +4,15 @@
 
 from .adapter import CodeAdapter, LanguageRunner, ShellAdapter
 from .base import ExecResult, Sandbox, SandboxBase
-from .factory import SandboxFactory, SingletonFactory
-from .local import LocalSandbox
+from .factory import CallableFactory, SandboxFactory, SingletonFactory
+from .local import LocalEnvironment, LocalSandbox
 
 __all__ = (
+    "CallableFactory",
     "CodeAdapter",
     "ExecResult",
     "LanguageRunner",
+    "LocalEnvironment",
     "LocalSandbox",
     "Sandbox",
     "SandboxBase",

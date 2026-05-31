@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from autogen.beta.tools.sandbox.base import ExecResult, Sandbox
@@ -29,8 +29,7 @@ class ShellAdapter:
                  :class:`SandboxFactory` (opened per :meth:`run` so
                  :class:`~autogen.beta.annotations.Variable` parameters
                  get resolved against the active Context).
-        allowed / blocked / ignore / readonly: filter set, identical
-                 to the v1 :class:`LocalShellEnvironment` semantics.
+        allowed / blocked / ignore / readonly: command filter set.
         env: Extra environment variables passed into each command.
         timeout: Per-command timeout in seconds. ``None`` lets the
                  backend pick its default.
@@ -55,11 +54,26 @@ class ShellAdapter:
         self._timeout = timeout
 
     @property
-    def workdir(self) -> PurePosixPath:
-        """Working directory exposed to callers as a sandbox-side POSIX path."""
-        if isinstance(self._sandbox, SandboxFactory):
+    def workdir(self) -> "Path | PurePosixPath":
+        """Working directory exposed to callers.
+
+        For a host-backed sandbox (local subprocess, incl. a
+        :class:`~autogen.beta.tools.sandbox.LocalEnvironment` /
+        :class:`SingletonFactory` wrapping one) this is the real host
+        :class:`~pathlib.Path` (so ``.exists()`` etc. work); for a remote /
+        container backend it is the sandbox-side :class:`PurePosixPath`. A
+        not-yet-opened remote :class:`SandboxFactory` reports the
+        conventional ``/workspace`` since no sandbox is bound yet.
+        """
+        sandbox = self._sandbox
+        if isinstance(sandbox, SingletonFactory):
+            sandbox = sandbox.sandbox
+        if isinstance(sandbox, SandboxFactory):
             return PurePosixPath("/workspace")
-        return self._sandbox.workdir  # type: ignore[union-attr]
+        host = sandbox.host_workdir
+        if host is not None:
+            return host
+        return sandbox.workdir
 
     def _filter(self, command: str) -> str | None:
         if self._allowed is not None:
@@ -104,6 +118,8 @@ class ShellAdapter:
             return denied
 
         sandbox = self._sandbox
+        if isinstance(sandbox, SingletonFactory):
+            sandbox = sandbox.sandbox
         if isinstance(sandbox, LocalSandbox):
             result = sandbox.exec_sync(
                 ["sh", "-c", command],
@@ -146,7 +162,7 @@ def _format(result: ExecResult) -> str:
 
 def _host_workdir_for(sandbox: "Sandbox | SandboxFactory"):  # type: ignore[no-untyped-def]
     if isinstance(sandbox, SingletonFactory):
-        sandbox = sandbox._sandbox  # noqa: SLF001
+        sandbox = sandbox.sandbox
     if isinstance(sandbox, SandboxFactory):
         return None
     return getattr(sandbox, "host_workdir", None)

@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
+import threading
+from collections.abc import AsyncIterator, Hashable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -39,16 +40,26 @@ class DaytonaResources:
     disk: int | None = None
 
 
-class DaytonaSandboxFactory:
+class DaytonaEnvironment:
     """:class:`SandboxFactory` for :class:`DaytonaSandbox`.
+
+    This is the backend object you hand to a tool::
+
+        env = DaytonaEnvironment(api_key=Variable("daytona_key"), image="python:3.12")
+        shell = SandboxShellTool(env)
+        code = SandboxCodeTool(env, languages=("python", "typescript"))
 
     All shaping parameters (``api_key``, ``api_url``, ``target``,
     ``snapshot``, ``image``, ``env_vars``) accept a
     :class:`~autogen.beta.annotations.Variable` for deferred resolution
     from ``context.variables`` — useful for per-tenant credentials or
-    A/B-tested images. Variables are resolved on each :meth:`open` call,
-    and a fresh :class:`DaytonaSandbox` is created and torn down per
-    scope.
+    A/B-tested images. Variables are resolved on each :meth:`open` call.
+
+    Sandboxes are **cached** by resolved parameters: opens with the same
+    resolved values reuse one cloud sandbox (state persists across tool
+    calls); distinct values (e.g. per-tenant ``image=Variable(...)``) get
+    distinct sandboxes. Cached sandboxes live until :meth:`aclose` (or
+    per-sandbox atexit).
     """
 
     def __init__(
@@ -84,6 +95,9 @@ class DaytonaSandboxFactory:
         self._timeout = timeout
         self._workdir = workdir
 
+        self._cache: dict[Hashable, DaytonaSandbox] = {}
+        self._cache_lock = threading.Lock()
+
     @asynccontextmanager
     async def open(
         self,
@@ -106,45 +120,79 @@ class DaytonaSandboxFactory:
         if snapshot is not None and image is not None:
             raise ValueError("Specify either `snapshot` or `image`, not both.")
 
-        config_kwargs: dict[str, str] = {}
-        if api_key is not None:
-            config_kwargs["api_key"] = api_key
-        if api_url is not None:
-            config_kwargs["api_url"] = api_url
-        if target is not None:
-            config_kwargs["target"] = target
+        assert isinstance(env_vars, dict)
 
-        client = AsyncDaytona(DaytonaConfig(**config_kwargs))
-
-        params: CreateSandboxFromSnapshotParams | CreateSandboxFromImageParams
-        if snapshot is not None:
-            params = CreateSandboxFromSnapshotParams(
-                snapshot=snapshot,
-                env_vars=env_vars,
-                auto_stop_interval=0,
-            )
-        elif image is not None:
-            sdk_resources = None
-            r = self._resources
-            if r is not None and any(v is not None for v in (r.cpu, r.memory, r.disk)):
-                sdk_resources = Resources(cpu=r.cpu, memory=r.memory, disk=r.disk)
-            params = CreateSandboxFromImageParams(
-                image=image,
-                env_vars=env_vars,
-                resources=sdk_resources,
-                auto_stop_interval=0,
-            )
-        else:
-            params = CreateSandboxFromSnapshotParams(
-                env_vars=env_vars,
-                auto_stop_interval=0,
-            )
-
-        sandbox = DaytonaSandbox(
-            client=client,
-            params=params,
-            timeout=self._timeout,
-            workdir=self._workdir,
+        key: Hashable = (
+            api_key,
+            api_url,
+            target,
+            snapshot,
+            repr(image),
+            tuple(sorted(env_vars.items())),
+            self._workdir,
+            self._timeout,
         )
-        async with sandbox:
-            yield sandbox
+
+        with self._cache_lock:
+            sandbox = self._cache.get(key)
+            if sandbox is None or sandbox.closed:
+                # Build the client + params only on a cache miss — a cache hit
+                # reuses the existing sandbox and its client untouched.
+                config_kwargs: dict[str, str] = {}
+                if api_key is not None:
+                    config_kwargs["api_key"] = api_key
+                if api_url is not None:
+                    config_kwargs["api_url"] = api_url
+                if target is not None:
+                    config_kwargs["target"] = target
+                client = AsyncDaytona(DaytonaConfig(**config_kwargs))
+
+                params: CreateSandboxFromSnapshotParams | CreateSandboxFromImageParams
+                if snapshot is not None:
+                    params = CreateSandboxFromSnapshotParams(
+                        snapshot=snapshot,
+                        env_vars=env_vars,
+                        auto_stop_interval=0,
+                    )
+                elif image is not None:
+                    sdk_resources = None
+                    r = self._resources
+                    if r is not None and any(v is not None for v in (r.cpu, r.memory, r.disk)):
+                        sdk_resources = Resources(cpu=r.cpu, memory=r.memory, disk=r.disk)
+                    params = CreateSandboxFromImageParams(
+                        image=image,
+                        env_vars=env_vars,
+                        resources=sdk_resources,
+                        auto_stop_interval=0,
+                    )
+                else:
+                    params = CreateSandboxFromSnapshotParams(
+                        env_vars=env_vars,
+                        auto_stop_interval=0,
+                    )
+
+                sandbox = DaytonaSandbox(
+                    client=client,
+                    params=params,
+                    timeout=self._timeout,
+                    workdir=self._workdir,
+                )
+                self._cache[key] = sandbox
+
+        await sandbox.__aenter__()
+        # Factory owns the lifecycle; do not delete on scope exit.
+        yield sandbox
+
+    async def aclose(self) -> None:
+        """Delete every cached sandbox. Safe to call multiple times."""
+        with self._cache_lock:
+            sandboxes = list(self._cache.values())
+            self._cache.clear()
+        for sandbox in sandboxes:
+            await sandbox.aclose()
+
+    async def __aenter__(self) -> "DaytonaEnvironment":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.aclose()

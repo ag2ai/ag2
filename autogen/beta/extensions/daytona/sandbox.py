@@ -6,6 +6,7 @@ import asyncio
 import atexit
 import logging
 import shlex
+from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -27,7 +28,7 @@ class DaytonaSandbox(SandboxBase):
     """Sandbox backed by a Daytona managed cloud sandbox.
 
     All shaping parameters are concrete values — :class:`Variable`
-    resolution lives on :class:`DaytonaSandboxFactory`.
+    resolution lives on :class:`DaytonaEnvironment`.
 
     Lifecycle: the sandbox is created on ``__aenter__`` and torn down
     on ``__aexit__`` / :meth:`aclose`. Lazy creation on first call is
@@ -46,7 +47,7 @@ class DaytonaSandbox(SandboxBase):
             if isinstance(value, Variable):
                 raise TypeError(
                     f"DaytonaSandbox.{name} must be a concrete value; got Variable. "
-                    "Wrap with DaytonaSandboxFactory to resolve Variables from a Context."
+                    "Wrap with DaytonaEnvironment to resolve Variables from a Context."
                 )
 
         if timeout < 1:
@@ -57,7 +58,12 @@ class DaytonaSandbox(SandboxBase):
         self._default_timeout = timeout
         self._workdir = PurePosixPath(workdir)
         self._sandbox: Any = None
-        self._lock = asyncio.Lock()
+        # See DockerSandbox for the cross-loop rationale. Daytona's create is
+        # async (can't be pushed to a worker thread cleanly), so we keep a
+        # per-loop asyncio.Lock that only guards the one-time creation; once
+        # the sandbox exists, callers short-circuit before ever touching it.
+        self._lock: asyncio.Lock | None = None
+        self._lock_loop: asyncio.AbstractEventLoop | None = None
         self._closed = False
         self._atexit_registered = False
 
@@ -68,6 +74,17 @@ class DaytonaSandbox(SandboxBase):
     @property
     def host_workdir(self) -> Path | None:
         return None
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def _creation_lock(self) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
+        return self._lock
 
     async def __aenter__(self) -> "DaytonaSandbox":
         await self._ensure_sandbox()
@@ -116,8 +133,20 @@ class DaytonaSandbox(SandboxBase):
         data: bytes = await sandbox.fs.download_file(str(target))
         return data
 
+    async def remove_file(self, path: PurePosixPath) -> None:
+        if path.is_absolute():
+            raise ValueError(f"Absolute paths are not allowed in remove_file: {path}")
+        sandbox = await self._ensure_sandbox()
+        target = self._workdir / path
+        with suppress(DaytonaNotFoundError):
+            await sandbox.fs.delete_file(str(target))
+
     async def _ensure_sandbox(self) -> Any:
-        async with self._lock:
+        if self._closed:
+            raise RuntimeError("DaytonaSandbox has been closed.")
+        if self._sandbox is not None:
+            return self._sandbox
+        async with self._creation_lock():
             if self._closed:
                 raise RuntimeError("DaytonaSandbox has been closed.")
             if self._sandbox is not None:

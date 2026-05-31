@@ -5,19 +5,13 @@
 from autogen.beta.exceptions import missing_additional_dependency
 
 try:
-    from .environment import DockerCodeEnvironment
-    from .factory import DockerSandboxFactory
+    from .factory import DockerEnvironment
     from .sandbox import DockerSandbox
-    from .shell import DockerShellEnvironment
 except ImportError as e:
-    DockerCodeEnvironment = missing_additional_dependency("DockerCodeEnvironment", "docker>=6.0.0,<8", e)  # type: ignore[misc]
+    DockerEnvironment = missing_additional_dependency("DockerEnvironment", "docker>=6.0.0,<8", e)  # type: ignore[misc]
     DockerSandbox = missing_additional_dependency("DockerSandbox", "docker>=6.0.0,<8", e)  # type: ignore[misc]
-    DockerSandboxFactory = missing_additional_dependency("DockerSandboxFactory", "docker>=6.0.0,<8", e)  # type: ignore[misc]
-    DockerShellEnvironment = missing_additional_dependency("DockerShellEnvironment", "docker>=6.0.0,<8", e)  # type: ignore[misc]
 
 __all__ = (
-    "DockerCodeEnvironment",
+    "DockerEnvironment",
     "DockerSandbox",
-    "DockerSandboxFactory",
-    "DockerShellEnvironment",
 )

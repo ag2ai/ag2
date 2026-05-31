@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 from autogen.beta.tools.code.environment.base import CodeLanguage
 
 from .base import ExecResult, SandboxBase
+from .factory import SingletonFactory
 
 
 def _resolve_workdir_path(path: PurePosixPath, host_workdir: Path) -> Path:
@@ -84,6 +85,9 @@ class LocalSandbox(SandboxBase):
                  Overridable per :meth:`exec` call.
         max_output: Maximum number of characters in :attr:`ExecResult.output`.
                     Excess is truncated with a trailing notice.
+        env_vars: Default environment variables merged into every command
+                  (on top of the inherited parent environment). Per-call
+                  ``env`` values passed to :meth:`exec` take precedence.
         languages: Languages this sandbox advertises via
                    :attr:`supported_languages` — informational only;
                    the canonical language matrix lives on :class:`CodeAdapter`.
@@ -97,6 +101,7 @@ class LocalSandbox(SandboxBase):
         cleanup: bool | None = None,
         timeout: float = 60,
         max_output: int = 100_000,
+        env_vars: dict[str, str] | None = None,
         languages: tuple[CodeLanguage, ...] = ("python", "bash"),
     ) -> None:
         if timeout <= 0:
@@ -120,8 +125,19 @@ class LocalSandbox(SandboxBase):
 
         self._default_timeout = timeout
         self._max_output = max_output
+        self._env_vars = dict(env_vars) if env_vars else {}
         self._languages = tuple(languages)
         self._closed = False
+
+    def _merge_env(self, env: dict[str, str] | None) -> dict[str, str] | None:
+        """Merge the sandbox's default ``env_vars`` with a per-call ``env``.
+
+        Per-call values win. Returns ``None`` when there is nothing to add,
+        so the subprocess inherits the parent environment unchanged.
+        """
+        if not self._env_vars and env is None:
+            return None
+        return {**self._env_vars, **(env or {})}
 
     @property
     def workdir(self) -> PurePosixPath:
@@ -155,7 +171,7 @@ class LocalSandbox(SandboxBase):
         return _run_subprocess(
             argv,
             cwd=self._host_workdir,
-            env=env,
+            env=self._merge_env(env),
             timeout=timeout if timeout is not None else self._default_timeout,
             max_output=self._max_output,
         )
@@ -176,7 +192,7 @@ class LocalSandbox(SandboxBase):
             _run_subprocess,
             argv,
             cwd=self._host_workdir,
-            env=env,
+            env=self._merge_env(env),
             timeout=timeout if timeout is not None else self._default_timeout,
             max_output=self._max_output,
         )
@@ -199,7 +215,8 @@ class LocalSandbox(SandboxBase):
         if not argv:
             return
 
-        merged_env = {**os.environ, **env} if env is not None else None
+        call_env = self._merge_env(env)
+        merged_env = {**os.environ, **call_env} if call_env is not None else None
         deadline_timeout = timeout if timeout is not None else self._default_timeout
 
         proc = await asyncio.create_subprocess_exec(
@@ -256,6 +273,12 @@ class LocalSandbox(SandboxBase):
         target = _resolve_workdir_path(path, self._host_workdir)
         return await asyncio.to_thread(target.read_bytes)
 
+    async def remove_file(self, path: PurePosixPath) -> None:
+        if self._closed:
+            raise RuntimeError("LocalSandbox has been closed.")
+        target = _resolve_workdir_path(path, self._host_workdir)
+        await asyncio.to_thread(target.unlink, True)  # missing_ok=True
+
     async def aclose(self) -> None:
         if self._closed:
             return
@@ -274,3 +297,56 @@ class LocalSandbox(SandboxBase):
     def _atexit_cleanup(self) -> None:
         if self._cleanup_workdir:
             shutil.rmtree(self._host_workdir, ignore_errors=True)
+
+
+class LocalEnvironment(SingletonFactory):
+    """Local-subprocess backend — the default environment for
+    :class:`~autogen.beta.tools.SandboxShellTool`.
+
+    A :class:`~autogen.beta.tools.sandbox.SandboxFactory` over a single
+    :class:`LocalSandbox` with a fixed working directory. Hand it to a tool
+    the same way you would a :class:`DockerEnvironment` /
+    :class:`DaytonaEnvironment`::
+
+        shell = SandboxShellTool(LocalEnvironment("/tmp/proj"), allowed=["git"])
+
+    Commands run via ``subprocess`` on the host, so there is no real
+    isolation — that is why :class:`SandboxShellTool` (which filters
+    commands) defaults to it, but :class:`SandboxCodeTool` (which runs
+    arbitrary model-written code) does not and requires an explicit backend.
+
+    Args:
+        path: Working directory. ``None`` creates a temporary directory.
+        cleanup: Delete ``path`` on close. Defaults to ``True`` for an
+                 auto temp dir, ``False`` for an explicit path.
+        timeout: Default per-command timeout in seconds.
+        max_output: Maximum characters in a single command's output.
+        env_vars: Environment variables merged into every command.
+        languages: Informational language list for the sandbox.
+    """
+
+    def __init__(
+        self,
+        path: str | os.PathLike[str] | None = None,
+        *,
+        cleanup: bool | None = None,
+        timeout: float = 60,
+        max_output: int = 100_000,
+        env_vars: dict[str, str] | None = None,
+        languages: tuple[CodeLanguage, ...] = ("python", "bash"),
+    ) -> None:
+        super().__init__(
+            LocalSandbox(
+                path,
+                cleanup=cleanup,
+                timeout=timeout,
+                max_output=max_output,
+                env_vars=env_vars,
+                languages=languages,
+            )
+        )
+
+    async def aclose(self) -> None:
+        """Close the underlying :class:`LocalSandbox` (deletes its workdir
+        when ``cleanup`` was set). Safe to call multiple times."""
+        await self.sandbox.aclose()

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.beta import Context, Variable
-from autogen.beta.extensions.docker import DockerSandbox, DockerSandboxFactory
+from autogen.beta.extensions.docker import DockerEnvironment, DockerSandbox
 from autogen.beta.tools.sandbox import SandboxFactory
 
 
@@ -36,7 +36,7 @@ def _fake_client(container: Any) -> Any:
 
 
 def test_satisfies_factory_protocol() -> None:
-    factory: SandboxFactory = DockerSandboxFactory()
+    factory: SandboxFactory = DockerEnvironment()
     assert isinstance(factory, SandboxFactory)
 
 
@@ -46,7 +46,7 @@ class TestOpen:
         container = _fake_container()
         client = _fake_client(container)
         with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
-            factory = DockerSandboxFactory(image="python:3.12-slim")
+            factory = DockerEnvironment(image="python:3.12-slim")
             async with factory.open() as sandbox:
                 assert isinstance(sandbox, DockerSandbox)
 
@@ -55,7 +55,7 @@ class TestOpen:
         client = _fake_client(container)
         ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
         with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
-            factory = DockerSandboxFactory(image=Variable("tenant_image"))
+            factory = DockerEnvironment(image=Variable("tenant_image"))
             async with factory.open(ctx) as sandbox:
                 await sandbox.exec(["python", "--version"])
 
@@ -65,7 +65,7 @@ class TestOpen:
         container = _fake_container()
         client = _fake_client(container)
         with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
-            factory = DockerSandboxFactory(image="python:3.12-slim")
+            factory = DockerEnvironment(image="python:3.12-slim")
             async with factory.open() as sandbox:
                 await sandbox.exec(["python", "--version"])
 
@@ -73,25 +73,46 @@ class TestOpen:
 
     async def test_open_missing_variable_raises_key_error(self) -> None:
         ctx = Context(stream=MagicMock(), variables={})
-        factory = DockerSandboxFactory(image=Variable("tenant_image"))
+        factory = DockerEnvironment(image=Variable("tenant_image"))
 
         with pytest.raises(KeyError, match="tenant_image"):
             async with factory.open(ctx):
                 pass
 
     async def test_open_variable_without_context_raises(self) -> None:
-        factory = DockerSandboxFactory(image=Variable("tenant_image"))
+        factory = DockerEnvironment(image=Variable("tenant_image"))
 
         with pytest.raises(RuntimeError, match="Variable but no Context"):
             async with factory.open():
                 pass
 
-    async def test_open_tears_container_down_on_exit(self) -> None:
+    async def test_open_keeps_container_alive_for_reuse(self) -> None:
+        # Caching: the container survives scope exit so the next open() reuses
+        # it (state persists). Only aclose() tears it down.
         container = _fake_container()
         client = _fake_client(container)
         with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
-            factory = DockerSandboxFactory()
+            factory = DockerEnvironment()
             async with factory.open() as sandbox:
                 await sandbox.exec(["echo", "hi"])
+            container.stop.assert_not_called()
+
+            async with factory.open() as sandbox2:
+                assert sandbox2 is sandbox
+            # one container created across both opens
+            assert client.containers.run.call_count == 1
+
+            await factory.aclose()
+        container.stop.assert_called_once()
+
+    async def test_aclose_tears_down_cached_container(self) -> None:
+        container = _fake_container()
+        client = _fake_client(container)
+        with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
+            factory = DockerEnvironment()
+            async with factory.open() as sandbox:
+                await sandbox.exec(["echo", "hi"])
+            await factory.aclose()
+            await factory.aclose()  # idempotent
 
         container.stop.assert_called_once()

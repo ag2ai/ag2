@@ -128,6 +128,16 @@ class Sandbox(Protocol):
         """
         ...
 
+    async def remove_file(self, path: PurePosixPath) -> None:
+        """Delete ``path`` inside the sandbox. Best-effort; never raises if
+        the file is already gone.
+
+        ``path`` is relative to :attr:`workdir`. Used by the
+        :class:`~autogen.beta.tools.sandbox.adapter.CodeAdapter` to clean up
+        the temp files it writes for file-mode languages.
+        """
+        ...
+
     async def aclose(self) -> None:
         """Release backend resources.
 
@@ -186,6 +196,18 @@ class SandboxBase(ABC):
         raise NotImplementedError(
             f"{type(self).__name__} does not support get_file. Override the method on the subclass."
         )
+
+    async def remove_file(self, path: PurePosixPath) -> None:
+        """Default cleanup: ``rm -f`` inside the sandbox.
+
+        Works on any POSIX backend that can ``exec``. Backends with a native
+        delete API (local filesystem, Daytona ``fs.delete_file``) should
+        override for directness. Never raises on a missing file.
+        """
+        if path.is_absolute():
+            raise ValueError(f"Absolute paths are not allowed in remove_file: {path}")
+        target = self.workdir / path
+        await self.exec(["rm", "-f", str(target)])
 
     async def aclose(self) -> None:
         """Default cleanup: nothing.

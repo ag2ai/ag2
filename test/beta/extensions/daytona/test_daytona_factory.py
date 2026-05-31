@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autogen.beta import Context, Variable
-from autogen.beta.extensions.daytona import DaytonaSandbox, DaytonaSandboxFactory
+from autogen.beta.extensions.daytona import DaytonaEnvironment, DaytonaSandbox
 from autogen.beta.tools.sandbox import SandboxFactory
 
 
@@ -42,18 +42,18 @@ def _patch_async_daytona(sandbox: Any) -> Any:
 
 
 def test_satisfies_factory_protocol() -> None:
-    factory: SandboxFactory = DaytonaSandboxFactory(api_key="test")
+    factory: SandboxFactory = DaytonaEnvironment(api_key="test")
     assert isinstance(factory, SandboxFactory)
 
 
 def test_snapshot_and_image_mutually_exclusive() -> None:
     with pytest.raises(ValueError, match="snapshot.*image"):
-        DaytonaSandboxFactory(snapshot="snap", image="python:3.12")
+        DaytonaEnvironment(snapshot="snap", image="python:3.12")
 
 
 def test_invalid_timeout_rejected() -> None:
     with pytest.raises(ValueError, match="timeout"):
-        DaytonaSandboxFactory(api_key="test", timeout=0)
+        DaytonaEnvironment(api_key="test", timeout=0)
 
 
 @pytest.mark.asyncio
@@ -61,7 +61,7 @@ class TestOpen:
     async def test_open_yields_daytona_sandbox(self) -> None:
         sandbox = _fake_sandbox()
         with _patch_async_daytona(sandbox):
-            factory = DaytonaSandboxFactory(api_key="test", image="python:3.12")
+            factory = DaytonaEnvironment(api_key="test", image="python:3.12")
             async with factory.open() as sb:
                 assert isinstance(sb, DaytonaSandbox)
 
@@ -69,7 +69,7 @@ class TestOpen:
         sandbox = _fake_sandbox()
         ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11"})
         with _patch_async_daytona(sandbox) as patched:
-            factory = DaytonaSandboxFactory(api_key="test", image=Variable("tenant_image"))
+            factory = DaytonaEnvironment(api_key="test", image=Variable("tenant_image"))
             async with factory.open(ctx) as _sb:
                 pass
 
@@ -78,22 +78,40 @@ class TestOpen:
 
     async def test_open_missing_variable_raises_key_error(self) -> None:
         ctx = Context(stream=MagicMock(), variables={})
-        factory = DaytonaSandboxFactory(api_key="test", image=Variable("tenant_image"))
+        factory = DaytonaEnvironment(api_key="test", image=Variable("tenant_image"))
         with pytest.raises(KeyError, match="tenant_image"):
             async with factory.open(ctx):
                 pass
 
     async def test_open_variable_credentials_without_context_raises(self) -> None:
-        factory = DaytonaSandboxFactory(api_key=Variable("k"))
+        factory = DaytonaEnvironment(api_key=Variable("k"))
         with pytest.raises(RuntimeError, match="Variable but no Context"):
             async with factory.open():
                 pass
 
-    async def test_open_tears_sandbox_down_on_exit(self) -> None:
+    async def test_open_keeps_sandbox_alive_for_reuse(self) -> None:
+        # Caching: the sandbox survives scope exit so the next open() reuses
+        # it. Only aclose() deletes it.
         sandbox = _fake_sandbox()
         with _patch_async_daytona(sandbox):
-            factory = DaytonaSandboxFactory(api_key="test", image="python:3.12")
+            factory = DaytonaEnvironment(api_key="test", image="python:3.12")
             async with factory.open() as sb:
                 await sb.exec(["echo", "hi"])
+            sandbox.delete.assert_not_awaited()
+
+            async with factory.open() as sb2:
+                assert sb2 is sb
+
+            await factory.aclose()
+        sandbox.delete.assert_awaited_once()
+
+    async def test_aclose_tears_down_cached_sandbox(self) -> None:
+        sandbox = _fake_sandbox()
+        with _patch_async_daytona(sandbox):
+            factory = DaytonaEnvironment(api_key="test", image="python:3.12")
+            async with factory.open() as sb:
+                await sb.exec(["echo", "hi"])
+            await factory.aclose()
+            await factory.aclose()  # idempotent
 
         sandbox.delete.assert_awaited_once()

@@ -474,56 +474,43 @@ tool = TavilySearchTool(
 
 ---
 
-## LocalShellTool
+## SandboxShellTool
 
-`LocalShellTool` gives an agent the ability to run shell commands in a local subprocess. By default it creates a temporary working directory that is cleaned up on process exit.
+`SandboxShellTool` gives an agent the ability to run shell commands inside an environment you choose. With no argument it uses a `LocalEnvironment` with a temporary working directory that is cleaned up on process exit. See the [Sandbox Shell page](/docs/beta/tools/local_shell) for the full guide.
 
 !!! warning
-    `LocalShellTool` executes arbitrary shell commands. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run.
+    A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run — or a `DockerEnvironment` / `DaytonaEnvironment` for real isolation.
 
 ```python linenums="1"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools import SandboxShellTool, LocalEnvironment
 
 agent = Agent(
     "engineer",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[LocalShellTool("/tmp/my_project")],
+    tools=[SandboxShellTool(LocalEnvironment("/tmp/my_project"))],
 )
 ```
 
-Passing a path string creates a `LocalShellEnvironment` in that directory. Passing nothing creates a temporary directory.
+The first argument is the environment; the backend (where commands run) is configured there. Passing nothing uses a temporary local directory.
 
 ### Restricting commands
 
-Use `LocalShellEnvironment` directly to control what the agent can run:
+Command policy lives on the tool:
 
 ```python linenums="1"
-from autogen.beta.tools import LocalShellTool
-from autogen.beta.tools.shell import LocalShellEnvironment
+from autogen.beta.tools import SandboxShellTool, LocalEnvironment
 
 # Allow only specific commands
-sh = LocalShellTool(LocalShellEnvironment(
-    path="/tmp/my_project",
-    allowed=["git", "python", "pip"],
-))
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), allowed=["git", "python", "pip"])
 
 # Block dangerous commands
-sh = LocalShellTool(LocalShellEnvironment(
-    path="/tmp/my_project",
-    blocked=["rm -rf", "curl", "wget"],
-))
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), blocked=["rm -rf", "curl", "wget"])
 
 # Read-only mode — agent can inspect but not modify
-sh = LocalShellTool(LocalShellEnvironment(
-    path="/tmp/my_project",
-    readonly=True,
-))
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), readonly=True)
 
 # Hide sensitive files from the agent
-sh = LocalShellTool(LocalShellEnvironment(
-    path="/tmp/my_project",
-    ignore=["**/.env", "*.key", "secrets/**"],
-))
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), ignore=["**/.env", "*.key", "secrets/**"])
 ```

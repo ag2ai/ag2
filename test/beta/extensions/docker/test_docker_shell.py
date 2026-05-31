@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.beta import Context, Variable
-from autogen.beta.extensions.docker import DockerSandbox, DockerShellEnvironment
-from autogen.beta.tools.shell.environment import SandboxShellEnvironment
+from autogen.beta.extensions.docker import DockerEnvironment, DockerSandbox
+from autogen.beta.tools.sandbox import ShellAdapter
 
 
 def _exec_result(output: bytes = b"ok\n", exit_code: int = 0) -> SimpleNamespace:
@@ -34,12 +34,12 @@ def _patch_docker(container: Any) -> Any:
     return patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client)
 
 
-class TestDockerShellEnvironment:
+class TestShellAdapterOverDocker:
     def test_run_executes_shell_command(self) -> None:
         container = _fake_container(_exec_result(b"hello\n"))
         with _patch_docker(container):
-            env = DockerShellEnvironment()
-            result = env.run("echo hello")
+            shell = ShellAdapter(DockerEnvironment())
+            result = shell.run_sync("echo hello")
 
         assert result == "hello"
         assert container.exec_run.call_args.args[0] == ["sh", "-c", "echo hello"]
@@ -47,8 +47,8 @@ class TestDockerShellEnvironment:
     def test_allowed_blocks_non_matching_command(self) -> None:
         container = _fake_container()
         with _patch_docker(container):
-            env = DockerShellEnvironment(allowed=["echo"])
-            result = env.run("touch file.txt")
+            shell = ShellAdapter(DockerEnvironment(), allowed=["echo"])
+            result = shell.run_sync("touch file.txt")
 
         assert result == "Command not allowed: 'touch file.txt'"
         container.exec_run.assert_not_called()
@@ -56,8 +56,8 @@ class TestDockerShellEnvironment:
     def test_blocked_rejects_matching_command(self) -> None:
         container = _fake_container()
         with _patch_docker(container):
-            env = DockerShellEnvironment(blocked=["rm -rf"])
-            result = env.run("rm -rf /workspace")
+            shell = ShellAdapter(DockerEnvironment(), blocked=["rm -rf"])
+            result = shell.run_sync("rm -rf /workspace")
 
         assert result == "Command not allowed: 'rm -rf /workspace'"
         container.exec_run.assert_not_called()
@@ -65,8 +65,8 @@ class TestDockerShellEnvironment:
     def test_nonzero_exit_code_is_included(self) -> None:
         container = _fake_container(_exec_result(b"nope\n", exit_code=7))
         with _patch_docker(container):
-            env = DockerShellEnvironment()
-            result = env.run("exit 7")
+            shell = ShellAdapter(DockerEnvironment())
+            result = shell.run_sync("exit 7")
 
         assert "nope" in result
         assert "exit code: 7" in result
@@ -81,23 +81,22 @@ class TestVariableResolution:
         )
         ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
         with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
-            env = DockerShellEnvironment(image=Variable("tenant_image"))
-            env.run("echo hi", context=ctx)
+            shell = ShellAdapter(DockerEnvironment(image=Variable("tenant_image")))
+            shell.run_sync("echo hi", context=ctx)
 
         assert client.containers.run.call_args.args[0] == "python:3.11-slim"
 
     def test_missing_variable_raises_key_error(self) -> None:
         ctx = Context(stream=MagicMock(), variables={})
-        env = DockerShellEnvironment(image=Variable("tenant_image"))
+        shell = ShellAdapter(DockerEnvironment(image=Variable("tenant_image")))
 
         with pytest.raises(KeyError, match="tenant_image"):
-            env.run("echo hi", context=ctx)
+            shell.run_sync("echo hi", context=ctx)
 
 
 @pytest.mark.asyncio
-async def test_sandbox_shell_run_inside_event_loop_raises_clear_error() -> None:
-    sandbox = DockerSandbox()
-    env = SandboxShellEnvironment(sandbox)
+async def test_run_sync_inside_event_loop_raises_clear_error() -> None:
+    shell = ShellAdapter(DockerSandbox())
 
     with pytest.raises(RuntimeError, match="active event loop"):
-        env.run("echo hi")
+        shell.run_sync("echo hi")

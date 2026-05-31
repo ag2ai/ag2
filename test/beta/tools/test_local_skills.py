@@ -12,7 +12,7 @@ from dirty_equals import IsPartialDict
 from autogen.beta import Context
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
 from autogen.beta.tools import SkillsToolkit
-from autogen.beta.tools.shell.environment.local import LocalShellEnvironment
+from autogen.beta.tools.sandbox import LocalSandbox, ShellAdapter
 from autogen.beta.tools.skills import LocalRuntime
 from autogen.beta.tools.skills.local_skills.loader import SkillLoader, parse_frontmatter
 
@@ -259,9 +259,23 @@ async def test_run_skill_script_schema(skill_tree: Path, context: Context) -> No
 
 def test_run_skill_script_executes(skill_tree: Path) -> None:
     scripts_dir = skill_tree / "react-best-practices" / "scripts"
-    env = LocalShellEnvironment(path=scripts_dir, cleanup=False)
+    env = ShellAdapter(LocalSandbox(path=scripts_dir, cleanup=False))
 
     # cwd is scripts_dir, so pass just the filename — same as tool.py does
-    result = env.run("python scaffold.py")
+    result = env.run_sync("python scaffold.py")
 
     assert "scaffold" in result
+
+
+def test_local_runtime_uses_supplied_sandbox(tmp_path: Path) -> None:
+    # A user-supplied Sandbox backend is honoured by shell(); commands run in
+    # the sandbox's own workdir rather than the scripts_dir.
+    sandbox_dir = tmp_path / "box"
+    sandbox_dir.mkdir()
+    (sandbox_dir / "marker.txt").write_text("present")
+
+    runtime = LocalRuntime(dir=tmp_path / "skills", sandbox=LocalSandbox(path=sandbox_dir))
+    env = runtime.shell(tmp_path / "unused-scripts-dir")
+    result = env.run_sync("cat marker.txt")
+
+    assert "present" in result

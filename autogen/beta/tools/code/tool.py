@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 from collections.abc import Iterable
 from contextlib import AsyncExitStack, ExitStack
 from typing import TYPE_CHECKING
@@ -11,63 +10,93 @@ from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.sandbox import CodeAdapter
+from autogen.beta.tools.sandbox import CodeAdapter, Sandbox, SandboxFactory
 from autogen.beta.tools.tool import Tool
 
 from .environment import CodeEnvironment, CodeLanguage
 
 if TYPE_CHECKING:
-    from autogen.beta.annotations import Variable
+    from autogen.beta.tools.sandbox import LanguageRunner
 
 
 class SandboxCodeTool(Tool):
-    """Exposes a single ``run_code(code, language)`` function backed by a
-    :class:`CodeEnvironment` — Daytona, Docker, or any other implementation
-    of the protocol.
+    """Exposes a single ``run_code(code, language)`` function that runs
+    code inside an *environment* you choose — Docker, Daytona, or any
+    custom backend.
 
-    Unlike :class:`CodeExecutionTool` (which delegates execution to the LLM
-    provider's built-in sandbox), ``SandboxCodeTool`` runs client-side, so
-    it works on every provider regardless of native code-execution support.
+    The **environment** decides *where* code runs and carries all backend
+    configuration; the **tool** decides which ``languages`` are accepted
+    and how each maps to a runner. The same environment can back both a
+    :class:`SandboxCodeTool` and a
+    :class:`~autogen.beta.tools.SandboxShellTool`.
 
-    There is no default backend: ``environment`` (or ``adapter``) is required.
-    The class name is a contract — it executes whatever the model writes,
-    so it should only be wired to a backend that genuinely sandboxes
-    execution. Convenience class-methods build the adapter for you:
-    :meth:`SandboxCodeTool.docker`, :meth:`SandboxCodeTool.daytona`.
+    Unlike :class:`~autogen.beta.tools.CodeExecutionTool` (which delegates
+    execution to the LLM provider's built-in sandbox), ``SandboxCodeTool``
+    runs client-side, so it works on every provider regardless of native
+    code-execution support.
+
+    There is **no default backend**: ``environment`` is required. The class
+    name is a contract — it executes whatever the model writes, so it must
+    be wired to a backend that genuinely sandboxes execution. A
+    :class:`~autogen.beta.tools.LocalEnvironment` is accepted but only when
+    passed explicitly (it offers no isolation).
 
     Examples::
 
-        from autogen.beta.extensions.daytona import DaytonaCodeEnvironment
-        from autogen.beta.extensions.docker import DockerCodeEnvironment
-        from autogen.beta.tools.sandbox import CodeAdapter, LocalSandbox
+        from autogen.beta.tools import SandboxCodeTool
+        from autogen.beta.extensions.docker import DockerEnvironment
 
-        # Preferred: adapter over any backend
-        code = SandboxCodeTool(adapter=CodeAdapter(LocalSandbox(), languages=("python",)))
+        docker = DockerEnvironment(image="python:3.12-slim")
+        code = SandboxCodeTool(docker, languages=("python", "bash"))
 
-        # Convenience shortcuts
-        code = SandboxCodeTool.docker(image="python:3.12-slim")
+        # Advanced: pass a pre-built CodeAdapter (custom runners):
+        from autogen.beta.tools.sandbox import CodeAdapter, LocalEnvironment, LanguageRunner
 
-        # Legacy: wrap an environment directly
-        code = SandboxCodeTool(DockerCodeEnvironment(image="python:3.12-slim"))
+        code = SandboxCodeTool(
+            CodeAdapter(
+                LocalEnvironment(),
+                languages=("typescript",),
+                runners={"typescript": LanguageRunner(file_extension="ts", file_runner_argv=("tsx",))},
+            )
+        )
+
+    Args:
+        environment: What runs the code. Either a **backend** — a
+                     :class:`~autogen.beta.tools.sandbox.SandboxFactory`
+                     (``DockerEnvironment`` / ``DaytonaEnvironment`` /
+                     ``LocalEnvironment``) or a bare
+                     :class:`~autogen.beta.tools.sandbox.Sandbox`, which is
+                     wrapped in a :class:`CodeAdapter` using ``languages`` /
+                     ``runners`` — or a ready
+                     :class:`~autogen.beta.tools.code.CodeEnvironment` (incl.
+                     a pre-built :class:`CodeAdapter`), used as-is. Required.
+        languages: Languages this tool accepts (backend form only).
+        runners: Override / extend the default language→runner mapping
+                 (backend form only).
+        name / description / middleware: Tool wiring.
     """
 
     def __init__(
         self,
-        environment: "CodeEnvironment | CodeAdapter | None" = None,
-        name: str = "run_code",
+        environment: "SandboxFactory | Sandbox | CodeEnvironment",
         *,
+        languages: tuple[CodeLanguage, ...] = ("python", "bash"),
+        runners: "dict[CodeLanguage, LanguageRunner] | None" = None,
+        name: str = "run_code",
         description: str = "Execute code in a sandboxed environment. Supported languages: {languages}.",
         middleware: Iterable[ToolMiddleware] = (),
-        adapter: CodeAdapter | None = None,
     ) -> None:
-        if adapter is not None and environment is not None:
-            raise ValueError("Pass either `environment` or `adapter`, not both.")
-        env: CodeEnvironment | CodeAdapter
-        if adapter is not None:
-            env = adapter
-        elif environment is None:
-            raise TypeError("SandboxCodeTool requires an `environment` or `adapter`.")
+        env: CodeEnvironment
+        if isinstance(environment, (Sandbox, SandboxFactory)):
+            env = CodeAdapter(environment, languages=languages, runners=runners)
         else:
+            # Already a CodeEnvironment (incl. CodeAdapter) — use as-is.
+            if runners is not None:
+                raise ValueError(
+                    "`runners` only applies when `environment` is a backend "
+                    "(Sandbox / SandboxFactory); configure runners on your "
+                    "CodeAdapter / CodeEnvironment instead."
+                )
             env = environment
 
         async def run_code(code: str, language: CodeLanguage, ctx: Context) -> str:
@@ -87,79 +116,10 @@ class SandboxCodeTool(Tool):
         self.name = name
 
     @property
-    def environment(self) -> "CodeEnvironment | CodeAdapter":
-        """The underlying execution environment."""
+    def environment(self) -> "CodeEnvironment":
+        """The underlying code environment (a :class:`CodeAdapter` when a
+        backend was passed, otherwise the object you supplied)."""
         return self._env
-
-    @classmethod
-    def docker(
-        cls,
-        *,
-        image: "str | Variable" = "python:3.12-slim",
-        env_vars: "dict[str, str] | Variable | None" = None,
-        timeout: float = 60,
-        network_mode: "str | Variable" = "none",
-        mem_limit: str | None = "512m",
-        cpu_quota: int | None = None,
-        user: str | None = None,
-        auto_remove: bool = True,
-        host_path: str | os.PathLike[str] | None = None,
-        workdir: str = "/workspace",
-        languages: tuple[CodeLanguage, ...] = ("python", "bash"),
-        name: str = "run_code",
-        description: str = "Execute code in a sandboxed environment. Supported languages: {languages}.",
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> "SandboxCodeTool":
-        """Shorthand for ``SandboxCodeTool(adapter=CodeAdapter(DockerSandboxFactory(...)))``."""
-        from autogen.beta.extensions.docker import DockerSandboxFactory
-
-        factory = DockerSandboxFactory(
-            image=image,
-            env_vars=env_vars,
-            timeout=timeout,
-            network_mode=network_mode,
-            mem_limit=mem_limit,
-            cpu_quota=cpu_quota,
-            user=user,
-            auto_remove=auto_remove,
-            host_path=host_path,
-            workdir=workdir,
-        )
-        adapter = CodeAdapter(factory, languages=languages, timeout=timeout)
-        return cls(name=name, description=description, middleware=middleware, adapter=adapter)
-
-    @classmethod
-    def daytona(
-        cls,
-        *,
-        api_key: "str | Variable | None" = None,  # pragma: allowlist secret
-        api_url: "str | Variable | None" = None,
-        target: "str | Variable | None" = None,
-        snapshot: "str | Variable | None" = None,
-        image: "str | Variable | None" = None,
-        env_vars: "dict[str, str] | Variable | None" = None,
-        timeout: int = 60,
-        languages: tuple[CodeLanguage, ...] = ("python", "bash", "javascript", "typescript"),
-        workdir: str = "/workspace",
-        name: str = "run_code",
-        description: str = "Execute code in a sandboxed environment. Supported languages: {languages}.",
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> "SandboxCodeTool":
-        """Shorthand for ``SandboxCodeTool(adapter=CodeAdapter(DaytonaSandboxFactory(...)))``."""
-        from autogen.beta.extensions.daytona import DaytonaSandboxFactory
-
-        factory = DaytonaSandboxFactory(
-            api_key=api_key,
-            api_url=api_url,
-            target=target,
-            snapshot=snapshot,
-            image=image,
-            env_vars=env_vars,
-            timeout=timeout,
-            workdir=workdir,
-        )
-        adapter = CodeAdapter(factory, languages=languages, timeout=timeout)
-        return cls(name=name, description=description, middleware=middleware, adapter=adapter)
 
     async def schemas(self, context: "Context") -> list:  # type: ignore[type-arg]
         return await self._tool.schemas(context)

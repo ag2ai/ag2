@@ -162,6 +162,18 @@ class TestLocalSandboxFileIO:
         await sandbox.put_file(PurePosixPath("hello.txt"), b"world")
         assert await sandbox.get_file(PurePosixPath("hello.txt")) == b"world"
 
+    async def test_remove_file_deletes(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        await sandbox.put_file(PurePosixPath("temp.txt"), b"x")
+        assert (tmp_path / "temp.txt").exists()
+        await sandbox.remove_file(PurePosixPath("temp.txt"))
+        assert not (tmp_path / "temp.txt").exists()
+
+    async def test_remove_file_missing_is_noop(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        # missing_ok=True under the hood — must not raise
+        await sandbox.remove_file(PurePosixPath("never_existed.txt"))
+
 
 @pytest.mark.asyncio
 class TestLocalSandboxStream:

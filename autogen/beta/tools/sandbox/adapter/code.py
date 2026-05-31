@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
@@ -138,10 +138,11 @@ class CodeAdapter:
                     timeout=self._timeout,
                 )
             finally:
-                # Best-effort cleanup; backends without delete capabilities
-                # leave the temp file behind, which is harmless inside a
-                # disposable sandbox.
-                pass
+                # Best-effort cleanup so persistent sandboxes (e.g. a
+                # reused container or a LocalSandbox over a fixed workdir)
+                # do not accumulate temp scripts. Never fails the run.
+                with suppress(Exception):
+                    await sandbox.remove_file(path)
             return CodeRunResult(output=result.output, exit_code=result.exit_code)
 
     @asynccontextmanager
