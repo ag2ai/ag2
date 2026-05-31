@@ -1,0 +1,18 @@
+// Please modify the content, remove these four lines of comment and rename this file to OAI_CONFIG_LIST to run the sample code.
+// If using pyautogen v0.1.x with Azure OpenAI, please replace "base_url" with "api_base" (line 14 and line 21 below). Use "pip list" to check version of pyautogen installed.
+//
+// NOTE: This configuration lists gpt-4o as the default model. If you use a different model, you may need to revise various system prompts (especially if using weaker models like gpt-4o-mini). Proceed with caution when updating this default and be aware of additional risks related to alignment and safety.
+[
+    {
+        "model": "gpt-4o",
+        "api_key": "<your OpenAI API key here>",
+        "tags": ["gpt-4o", "tool", "vision"]
+    },
+    {
+        "model": "<your Azure OpenAI deployment name>",
+        "api_key": "<your Azure OpenAI API key here>",
+        "base_url": "<your Azure OpenAI API base here>",
+        "api_type": "azure",
+        "api_version": "<your Azure OpenAI API version here>"
+    }
+]

@@ -1,0 +1,7 @@
+{
+  "server": {
+    "url": "{{ server_url }}"
+  },
+  "authentication": {{ authentications | tojson(indent=2) }},
+  "operations": {{ operations | tojson(indent=2) }}
+}

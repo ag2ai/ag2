@@ -1,0 +1,94 @@
+---
+title: The Myth of Reasoning
+authors: [sonichi]
+tags: [Research, Reasoning]
+---
+
+![threads](img/threads.jpeg)
+
+**TL;DR**
+
+- **Human reasoning is often mischaracterized as purely logical; it's iterative, intuitive, and driven by communication needs.**
+- **AI can be a valuable partner in augmenting human reasoning.**
+- **Viewing AI as a system of components, rather than a monolithic model, may better capture the iterative nature of reasoning.**
+
+One major criticism of AI today, including the state-of-the-art LLMs, is that they fall short in reasoning capability compared to humans. This criticism often stems from a fundamental misunderstanding of how human reasoning actually works. We tend to hold up an idealized image of human thought – rational, logical, step-by-step – and judge AI against this standard. But is this image accurate?
+
+\<!-- more -->
+
+## The Illusion of Linear Reasoning
+
+From school essays to scientific papers, from legal arguments to business proposals, we are trained to present our thoughts in a clear, linear, and logically structured manner. A leads to B, which leads to C, therefore D. This structured presentation is essential for effective communication, persuasion, and justification. It allows others to follow our train of thought, evaluate our arguments, and verify our conclusions.
+
+However, the _product_ of reasoning (the structured argument) is often mistaken for the _process_ of reasoning itself. We see the polished final output and assume the underlying cognitive journey was equally neat and tidy. This creates the myth of the inherently logical human thinker.
+
+![cognition](img/cognition.jpg)
+
+## The Messy Reality of Human Cognition
+
+Cognitive science paints a different picture. Our actual thought processes are often far more chaotic, intuitive, and associative. We leap between ideas, rely on heuristics (mental shortcuts), draw on emotions and past experiences, and make connections that aren't strictly logical. As psychologists like Daniel Kahneman have shown, our thinking is heavily influenced by cognitive biases – systematic patterns of deviation from norm or rationality in judgment. We jump to conclusions (System 1 thinking) and only sometimes engage in slower, more deliberate, logical analysis (System 2 thinking), often only when necessary or when our initial intuition is challenged.
+
+Think about solving a complex problem. Do you typically lay out a perfect sequence of logical steps from the start? More likely, you explore different avenues, hit dead ends, have sudden insights (the "Aha!" moment), backtrack, and connect disparate pieces of information. I have worked with some of the greatest mathematicians of our age, and the same is true: The process is iterative and often feels more like navigating a maze than walking a straight line.
+
+## Reasoning for Communication, Not Just Cognition
+
+So, why the disconnect? Why do we present our reasoning so differently from how we arrive at it? The answer lies largely in the social function of reasoning. We need to convince others, explain our decisions, and justify our beliefs. A clean, logical argument is far more persuasive and easier to understand than a rambling account of our messy internal thought process.
+
+***The linear arguments we construct are often post-hoc rationalizations. We arrive at a conclusion through a mix of intuition, heuristics, and partial reasoning, and then we build the logical scaffolding to support it, primarily for the benefit of communicating it to others. The iterative refinement mentioned in the TL;DR is key here – we polish and structure our thoughts _after_ the initial messy generation phase.***
+
+Furthermore, the refinement and communication can be interleaved. For relatively simple problems, we can communicate to ourselves during the iterative refinement process; for harder problems, we need to communicate to others to get their feedback. Programmers often spend a few days debugging their own code and can’t figure it out; when they present it to another peer they are able to quickly spot the issue. What’s even more interesting is that sometimes the peer doesn’t need to do anything but listening, and the programmer suddenly understands what went wrong during the presentation. This "explaining effect" highlights how articulation itself forces structure and clarity onto our messy thoughts.
+
+## Implications for AI
+
+Understanding this distinction between internal cognition and external communication has direct implications for how we evaluate AI. When we criticize LLMs for not "reasoning" like humans, are we comparing them to the idealized myth or the messy reality?
+
+Current AI, particularly LLMs, excels at processing vast amounts of information, identifying patterns, and generating coherent text that _mimics_ structured arguments. They can produce outputs that _appear_ logically sound. If we restrict ourselves to produce such outputs in the same one-shot fashion, i.e., forbidding revisions after each word is written, the majority of us are likely to underperform LLMs. Their ability to access and synthesize information rapidly allows them to construct plausible chains of argument quickly.
+
+If we do allow iterative refinements, we can often achieve superior results. This iterative process is where human cognition currently shines. We refine based on deeper understanding, real-world feedback, critical self-reflection, and interaction with others. We can spot subtle flaws in logic, question underlying assumptions, and integrate new information in ways that are highly personalized.
+
+A few research questions come to my mind, for example:
+
+1.  If we break down the “reasoning” capabilities of LLMs into more elementary capabilities, how proficient are LLMs at each, such as those mentioned above?
+2.  Can we design an AI system that explicitly applies a (nonlinear) iterative refinement process, leveraging the elementary capabilities of LLMs, to achieve a much better outcome?
+
+Answering these questions will help us understand where the bottleneck is, and whether reasoning should be considered as a composite capability that depends on more rudimentary ones.
+
+![partner](img/partner.jpg)
+
+## Bridging the Gap: AI as a Reasoning Partner?
+
+Even before we can create AI that perfectly replicates the idealized (and mythical) linear human reasoner, or one that perfectly mimics our messy internal cognition, a fruitful path might be to develop AI that complements and augments our _actual_ reasoning processes.
+
+Imagine AI tools that act like the helpful peer in the programming example – tools we can "explain" our thinking to, which then help us structure our arguments, identify potential biases, play devil's advocate, or check for logical consistency. AI could become a powerful partner in the _iterative refinement_ stage, helping us bridge the gap between our messy initial thoughts and the clear, communicable arguments we need to produce. They could assist in navigating the maze, not just in describing the path after the fact.
+
+The first research question above is still relevant in this path.
+
+## Reasoning Model or Reasoning System?
+
+While it is attractive to embed the reasoning process into a model based on next token prediction, the nonlinearity nature we analyzed above challenges that goal. Trying to capture the backtracking, the "Aha!" moments, the integration of external feedback, and the critical self-assessment inherent in human reasoning within a purely sequential generation process seems fundamentally limited. A single pass, even a very sophisticated one, struggles to replicate a process defined by loops, revisions, and strategic exploration.
+
+Many potential improvements in modeling can be made. For example, one can design a model that repeats the same architecture and weights to mimic the "iterative refinement" effect partially inside the model. Fundamentally, it does not perform the kind of refinement that requires information outside the model.
+
+An alternative approach might be to conceptualize advanced AI reasoning not as a monolithic "reasoning model" but as a "reasoning system." Such a system could orchestrate multiple components, including LLMs, in a structured yet flexible workflow that mirrors human iterative refinement.
+
+Think of a system where:
+
+* An LLM generates initial hypotheses or argument fragments.
+* Another component (perhaps another LLM instance with different instructions, or a more specialized module) critiques these outputs, checking for logical consistency, factual accuracy, or potential biases.
+* Based on the critique, the system might query external knowledge bases or request further clarification (simulating seeking feedback or information).
+* The initial arguments are then revised and refined, potentially through multiple cycles.
+
+This system-level approach directly addresses the second research question: designing an architecture that explicitly implements iterative refinement. Success would depend heavily on understanding the elementary capabilities (the first research question) – knowing which tasks current LLMs excel at (e.g., generation, summarization, pattern matching) and where other components might be needed (e.g., rigorous logical verification, causal inference, planning). If we can find a simple architecture plus necessary improvements in modeling to make this approach work, it will allow us to reach a higher level of intelligence without increasing the opaqueness of the mechanism.
+
+![iter](img/iter.jpg)
+
+## Conclusion: Embracing the Iteration
+
+The myth of linear human reasoning has perhaps led us down a path of evaluating AI against an unrealistic standard and potentially focusing too heavily on perfecting monolithic, end-to-end reasoning models. By acknowledging the messy, iterative reality of our own cognition, we open up new perspectives.
+
+****The challenge shifts from building a perfect single-shot reasoner to designing intelligent systems that can navigate the complexities of iterative refinement. This involves understanding the strengths and weaknesses of current AI components (like LLMs) and orchestrating them effectively. It also reinforces the potential of AI as a reasoning partner, a tool that plugs into and enhances our own natural, non-linear thought processes.****
+
+Ultimately, understanding reasoning as an emergent capability of an iterative system, rather than an atomic skill, might be the key to both evaluating current AI more accurately and building more genuinely intelligent machines in the future.
+
+_This post itself is an artifact initiated by an improvised idea when I had a little personal time on a Wednesday morning, although a lot of background thinking has been made since years ago, sometimes subconsciously. I can't count how many iterative refinements have been made implicitly or explicitly, and it will continue to evolve with your feedback. Please share your feedback on AG2 [Discord](https://discord.gg/pAbnFJrkgZ) server.
+I appreciate the feedback from [Davor Runje](https://github.com/davorrunje), [George Sideris](https://github.com/giorgossideris)._

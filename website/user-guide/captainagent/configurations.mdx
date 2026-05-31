@@ -1,0 +1,94 @@
+---
+title: Configurations in `nested_config`
+---
+
+CaptainAgent requires `nested_config` for configuration. Below is an example, we will break it down and provide a detailed explanation.
+
+```
+nested_config = {
+    "autobuild_init_config": {
+        "config_file_or_env": "OAI_CONFIG_LIST",
+        "builder_model": "gpt-4o",
+        "agent_model": "gpt-4o",
+    },
+    "autobuild_build_config": {
+        "default_llm_config": {"temperature": 1, "top_p": 0.95, "max_tokens": 1500, "seed": 52},
+        "code_execution_config": {"timeout": 300, "work_dir": "groupchat", "last_n_messages": 1},
+        "coding": True,
+        "library_path_or_json": "captainagent_expert_library.json",
+    },
+    "autobuild_tool_config": {
+        "tool_root": "default",  # this will use the tool library we provide
+        "retriever": "all-mpnet-base-v2",
+    },
+    "group_chat_config": {"max_round": 15},
+    "group_chat_llm_config": llm_config.copy(),
+}
+```
+
+<div class="info">
+<Info>
+If you run CaptainAgent without specifying a `nested_config`, a default is used and this **requires an OAI_CONFIG_LIST**.
+
+**The default model used is OpenAI's GPT-4o**.
+
+To see the default configuration and the OpenAI model used, see the [captainagent.py](https://github.com/ag2ai/ag2/blob/ceb75d865d0a7eb2b7c0bc51776e093681e0970e/autogen/agentchat/contrib/captainagent.py) file.
+
+For advice on using OAI_CONFIG_LIST, [see the documentation](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive#introduction-to-config-list).
+
+</Info>
+</div>
+
+## `autobuild_init_config`
+This section is used to configure the initial setup of autobuild. `autobuild_init_config` takes in arguments from `AgentBuilder.__init__()`. Check the full list of arguments [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/captainagent/agent_builder.py#L184).
+
+### `config_file_or_env`
+Configures the path to API key config. Defaults to `OAI_CONFIG_LIST`.
+
+### `builder_model`
+Configures the backbone of agent builder. The builder is used for agent selection from the library. Defaults to `gpt-4o`.
+
+### `agent_model`
+Configures the backbone of agents in the group chat. Defaults to `gpt-4o`.
+
+### Other `kwargs`
+`autobuild_init_config` takes in arguments from `AgentBuilder.__init__()`. Check the full list of arguments [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/captainagent/agent_builder.py#L184).
+
+## `autobuild_build_config`
+This section is used to configure the building process of autobuild. `autobuild_build_config` takes in arguments for `AgentBuilder.build()`. Check the full list of arguments [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/captainagent/agent_builder.py#L364).
+
+### `default_llm_config`
+Configures the default parameters for the builder during the autobuild process. Defaults to `{"temperature": 1, "top_p": 0.95, "max_tokens": 2048}`. `config_list` is **not** needed here.
+
+### `code_execution_config`
+Configures how the user proxy executes code within the nested chat. Defaults to `{"timeout": 300, "work_dir": "groupchat", "last_n_messages": 1, "use_docker": False}`. Full configuration docs [here](/docs/api-reference/autogen/UserProxyAgent).
+
+### `coding`
+Enables or disables whether to add the user proxy in the nested chat. Defaults to `True`.
+
+### `library_path_or_json`
+Specifies the path to the agent library file. For details on customizing your own agent library, refer to the [agent library page](/docs/topics/captainagent/agent_library).
+
+### `kwargs`
+`autobuild_build_config` takes in arguments for `AgentBuilder.build()`. Check the full list of arguments [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/captainagent/agent_builder.py#L364).
+
+## `autobuild_tool_config`
+This section is used to configure how to retrieve the tool library for the agents in the group chat. For details on customizing your own tool library, refer to the [tool library page](/docs/topics/captainagent/tool_library).
+
+### `tool_root`
+Specifies the root directory of the tool library. When set to `'default'`, it will load the default library we provide.
+
+### `retriever`
+Configures the retriever model used for fetching relevant tools from the library. Defaults to `all-mpnet-base-v2`. The value is valid as long as it is found by [SentenceTransformers library](https://huggingface.co/sentence-transformers).
+
+## `group_chat_config`
+This section is used to configure the group chat settings. `group_chat_config` also takes in arguments for initializing `autogen.GroupChat`. Refer to all the configurables [here](/docs/reference/agentchat/groupchat).
+
+### `max_round`
+Specifies the maximum number of rounds in a group chat session. Defaults to `15`.
+
+### `kwargs`
+`group_chat_config` also takes in arguments for initializing `autogen.GroupChat`. Refer to all the configurables [here](/docs/reference/agentchat/groupchat).
+
+## `group_chat_llm_config`
+Specifies the LLM config of the `GroupChatManager`.

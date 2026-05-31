@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ag2 WebRTC Chat</title>
+    <script>
+        // Dynamically set the WebSocket URLs using the injected port
+        const port = {{ port }};
+        const socketUrl = `ws://localhost:${port}/session`;
+    </script>
+    <script src="https://github.com/ag2ai/ag2-js-client/releases/download/v0.3.1/index.global.js"></script>
+    <script src="/static/main.js" type="module" defer></script>
+</head>
+<body>
+    <h1>Ag2 WebRTC Chat</h1>
+    <div id="connecting"
+
+        <p>Ensure microphone and speaker access is enabled.</p>
+        <p>Connecting you to the AG2 agent ...</p>
+    </div>
+    <h2 id="connected">Connected, you may now converse with the RealtimeAgent.</h2>
+    <h2 id="disconnected">Disconnected from the RealtimeAgent.</h2>
+</body>
+</html>

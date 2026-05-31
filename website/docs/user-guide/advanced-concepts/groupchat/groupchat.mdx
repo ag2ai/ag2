@@ -1,0 +1,355 @@
+---
+title: GroupChat
+sidebarTitle: Overview
+---
+
+So far we have only seen conversation patterns that involve two agents or a sequence of two-agent chats. AutoGen provides a more general conversation pattern called group chat, which involves more than two agents.
+
+The core idea of group chat is that all agents contribute to a single conversation thread and share the same context.
+
+This is useful for tasks that require collaboration among multiple agents.
+
+The figure below illustrates how group chat works.
+
+![group_chat](../assets/group-chat.png)
+
+A group chat is orchestrated by a special agent type `GroupChatManager`. In the first step of the group chat, the Group Chat Manager selects an agent to speak. Then, the selected agent speaks and the message is sent back to the Group Chat Manager, who **broadcasts** the message to all other agents in the group.
+
+This process repeats until the conversation stops.
+
+The Group Chat Manager can use several strategies to select the next agent.
+
+Currently, the following strategies are supported:
+
+1. `round_robin`: The Group Chat Manager selects agents in a round-robin
+   fashion based on the order of the agents provided.
+2. `random`: The Group Chat Manager selects agents randomly.
+3. `manual`: The Group Chat Manager selects agents by asking for human input.
+4. `auto`: The default strategy, which selects agents using the Group Chat
+   Manager's LLM.
+
+To illustrate this pattern, let's consider a simple example of a group chat among the same arithmetic operator agents as in the previous example, with the objective of turning a number into a specific target number using a sequence of arithmetic operations powered by the agents.
+
+In this example, we use the `auto` strategy to select the next agent.
+
+To help the Group Chat Manager select the next agent, we also set the `description` of the agents. Without the `description`, the Group Chat Manager will use the agents' `system_message`, which may be not be the best choice.
+
+```python
+# The `description` attribute is a string that describes the agent.
+# It can also be set in `ConversableAgent` constructor.
+adder_agent.description = "Add 1 to each input number."
+multiplier_agent.description = "Multiply each input number by 2."
+subtracter_agent.description = "Subtract 1 from each input number."
+divider_agent.description = "Divide each input number by 2."
+number_agent.description = "Return the numbers given."
+```
+
+We first create a `GroupChat` object and provide the list of agents. If we were to use the `round_robin` strategy, this list would specify the order of the agents to be selected.
+
+We also initialize the group chat with an empty message list and a maximum round of 6, which means there will be at most 6 iterations of selecting speaker, agent speaks and broadcasting message.
+
+<Note>
+**Unique Agent Names Required**: All agents in a `GroupChat` must have unique names. If you attempt to create a `GroupChat` with duplicate agent names, a `ValueError` will be raised. This ensures that speaker selection and message routing work correctly.
+
+```python
+# This will raise a ValueError
+agent1 = ConversableAgent("assistant", ...)
+agent2 = ConversableAgent("assistant", ...)  # Duplicate name!
+group_chat = GroupChat(agents=[agent1, agent2], ...)  # ValueError!
+```
+</Note>
+
+```python
+from autogen import GroupChat
+
+group_chat = GroupChat(
+    agents=[adder_agent, multiplier_agent, subtracter_agent, divider_agent, number_agent],
+    messages=[],
+    max_round=6,
+)
+```
+
+Now we create a `GroupChatManager` object and provide the `GroupChat` object as input. We also need to specify the `llm_config` of the Group Chat Manager so it can use the LLM to select the next agent (the `auto` strategy).
+
+```python
+from autogen import GroupChatManager
+
+group_chat_manager = GroupChatManager(
+    groupchat=group_chat,
+    llm_config=llm_config,
+)
+```
+
+Finally, we have the Number Agent from before to start a two-agent chat with the Group Chat Manager, which runs the group chat internally and terminates the two-agent chat when the internal group chat is done. Because the Number Agent is selected to speak by us, it counts as the first round of the group chat.
+
+```python
+chat_result = number_agent.initiate_chat(
+    group_chat_manager,
+    message="My number is 3, I want to turn it into 13.",
+    summary_method="reflection_with_llm",
+)
+
+print(chat_result.summary)
+```
+
+You will see that the Number Agent is selected to speak first, then the Group Chat Manager selects the Multiplier Agent to speak, then the Adder Agent, and so on. The number is operated upon by each agent in the group chat, and the final result is 13.
+
+### Send Introductions
+
+In the previous example, we set the `description` of the agents to help the Group Chat Manager select the next agent. This only helps the Group Chat Manager, however, does not help the participating agents to know about each other.
+
+Sometimes it is useful have each agent introduce themselves to other agents in the group chat. This can be done by setting the `send_introductions=True`.
+
+```python
+group_chat_with_introductions = GroupChat(
+    agents=[adder_agent, multiplier_agent, subtracter_agent, divider_agent, number_agent],
+    messages=[],
+    max_round=6,
+    send_introductions=True,
+)
+```
+
+Under the hood, the Group Chat Manager sends a message containing the agents' names and descriptions to all agents in the group chat before the group chat starts.
+
+### Group Chat in a Sequential Chat
+
+Group chat can also be used as a part of a sequential chat.
+
+In this case, the Group Chat Manager is treated as a regular agent in the sequence of two-agent chats.
+
+```python
+# Let's use the group chat with introduction messages created above.
+group_chat_manager_with_intros = GroupChatManager(
+    groupchat=group_chat_with_introductions,
+    llm_config=llm_config,
+)
+
+# Start a sequence of two-agent chats between the number agent and
+# the group chat manager.
+chat_result = number_agent.initiate_chats(
+    [
+        {
+            "recipient": group_chat_manager_with_intros,
+            "message": "My number is 3, I want to turn it into 13.",
+        },
+        {
+            "recipient": group_chat_manager_with_intros,
+            "message": "Turn this number to 32.",
+        },
+    ]
+)
+```
+
+In the above example, the Group Chat Manager runs the group chat two times. In the first time the number 3 becomes 13, and the last message of this group chat is being used as the carryover for the next group chat, which starts from 13.
+
+You will also see from the warning message that the Group Chat Manager's history is being cleared after the first group chat, which is the default.
+
+To keep the history of the Group Chat Manager, you can set the `clear_history=False` for the first chat.
+
+### Constrained Speaker Selection
+
+Group chat is a powerful conversation pattern, but it can be hard to control if the number of participating agents is large.
+
+AG2 provides a way to constrain the selection of the next speaker by using the `allowed_or_disallowed_speaker_transitions` argument of the `GroupChat` class.
+
+The `allowed_or_disallowed_speaker_transitions` argument is a dictionary that maps a given agent to a list of agents that can (or cannot) be selected to speak next. The `speaker_transitions_type` argument specifies whether the transitions are allowed or disallowed.
+
+Here is an example:
+
+```python
+allowed_transitions = {
+    number_agent: [adder_agent, number_agent],
+    adder_agent: [multiplier_agent, number_agent],
+    subtracter_agent: [divider_agent, number_agent],
+    multiplier_agent: [subtracter_agent, number_agent],
+    divider_agent: [adder_agent, number_agent],
+}
+```
+
+In this example, the allowed transitions are specified for each agent.
+
+The Number Agent can be followed by the Adder Agent and the Number Agent, the Adder Agent can be followed by the Multiplier Agent and the Number Agent, and so on.
+
+Let's put this into the group chat and see how it works.
+
+The `speaker_transitions_type` is set to `allowed` so the transitions are positive constraints.
+
+```python
+constrained_graph_chat = GroupChat(
+    agents=[adder_agent, multiplier_agent, subtracter_agent, divider_agent, number_agent],
+    allowed_or_disallowed_speaker_transitions=allowed_transitions,
+    speaker_transitions_type="allowed",
+    messages=[],
+    max_round=12,
+    send_introductions=True,
+)
+
+constrained_group_chat_manager = GroupChatManager(
+    groupchat=constrained_graph_chat,
+    llm_config=llm_config,
+)
+
+chat_result = number_agent.initiate_chat(
+    constrained_group_chat_manager,
+    message="My number is 3, I want to turn it into 10. Once I get to 10, keep it there.",
+    summary_method="reflection_with_llm",
+)
+```
+
+When this is run, the agents are selected following the constraints we have specified.
+
+### Changing the select speaker role name
+
+As part of the Group chat process, when the select_speaker_method is set to 'auto' (the default value), a select speaker message is sent to the LLM to determine the next speaker.
+
+Each message in the chat sequence has a `role` attribute that is typically `user`, `assistant`, or `system`. The select speaker message is the last in the chat sequence when used and, by default, has a role of `system`.
+
+When using some models, such as Mistral through Mistral.AI's API, the role on the last message in the chat sequence has to be `user`.
+
+To change the default behaviour, Autogen provides a way to set the value of the select speaker message's role to any string value by setting the `role_for_select_speaker_messages` parameter in the GroupChat's constructor. The default value is `system` and by setting it to `user` you can accommodate the last message role requirement of Mistral.AI's API.
+
+
+## Conversation Patterns
+
+`GroupChat` has four built-in conversation patterns:
+
+| Method | Agent selection|
+| --- | --- |
+| `auto` <em>(default)</em> | Automatic, chosen by the `GroupChatManager` using an LLM |
+| `round_robin` | Sequentially in their added order |
+| `random` | Randomly |
+| `manual` | Selected by you at each turn |
+| *Callable* | Create your own flow |
+
+Coordinating the `GroupChat` is the `GroupChatManager`, an agent that provides a way to start and resume multi-agent chats.
+
+Let's continue our lesson planner example to include a lesson reviewer and a teacher agent.
+
+Before jumping into the code, here's a quick run down of what you need to do:
+- If using `auto` speaker selection, add specific descriptions to agents for GroupChatManager to use
+- Create a `GroupChat` and a `GroupChatManager`
+- Start the chat with the `GroupChatManager`
+
+
+<Tip>
+You can start any multi-agent chats using the `initiate_chat` method
+</Tip>
+
+import Example from "/snippets/python-examples/groupchat.mdx";
+
+<Example/>
+
+1. Separate to `system_message`, we add a `description` for our planner and reviewer agents and this is used exclusively for the purposes of determining the next agent by the `GroupChatManager` when using automatic speaker selection.
+
+2. The teacher's `system_message` is suitable as a description so, by not setting it, the `GroupChatManager` will use the `system_message` for the teacher when determining the next agent.
+
+3. The workflow is ended when the teacher's message contains the phrase "DONE!".
+
+4. Construct the `GroupChat` with our agents and selection method as automatic (which is the default).
+
+5. `GroupChat` requires a `GroupChatManager` to manage the chat and an LLM configuration is needed because they'll use an LLM to decide the next agent.
+
+6. Starting a chat with the `GroupChatManager` as the `recipient` kicks off the group chat.
+
+    ```console
+    teacher_agent (to group_manager):
+
+    Today, let's introduce our kids to the solar system.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: planner_agent
+
+
+    >>>>>>>> USING AUTO REPLY...
+    planner_agent (to group_manager):
+
+    <title>Exploring the Solar System</title>
+    <learning_objectives>
+    1. Identify and name the planets in the solar system.
+    2. Describe key characteristics of each planet.
+    3. Understand the concept of orbit and how planets revolve around the sun.
+    4. Develop an appreciation for the scale and structure of our solar system.
+    </learning_objectives>
+    <script>
+    "Good morning, class! Today, we are going to embark on an exciting journey through our solar system. Have any of you ever looked up at the night sky and wondered what those bright dots are? Well, those dots are often stars, but some of them are planets in our own solar system!
+
+    To start our adventure, I want you to close your eyes and imagine standing on a giant spaceship, ready to zoom past the sun. Does anyone know what the sun is? (Pause for responses.) Right! The sun is a star at the center of our solar system.
+
+    Today, we are going to learn about the planets that travel around the sun - but not just their names, we're going to explore what makes each of them special! We will create a model of the solar system together, and by the end of the lesson, you will be able to name all the planets and tell me something interesting about each one.
+
+    So, are you ready to blast off and discover the wonders of space? Let's begin!"
+    </script>
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: reviewer_agent
+
+
+    >>>>>>>> USING AUTO REPLY...
+    reviewer_agent (to group_manager):
+
+    **Review of the Lesson Plan: Exploring the Solar System**
+
+    1. **Alignment with Curriculum Standards**: Ensure that the lesson includes specific references to the fourth grade science standards for the solar system. This could include discussing gravity, the differences between inner and outer planets, and the role of the sun as a stable center of our solar system. Adding this information will support a deeper understanding of the topic and ensure compliance with state educational standards.
+
+    2. **Interactive Activities**: While creating a model of the solar system is a great hands-on activity, consider including additional interactive elements such as a group discussion or a game that reinforces the learning objectives. For instance, incorporating a "planet facts" game where students can share interesting facts about each planet would further engage the students and foster collaborative learning.
+
+    3. **Assessment of Learning**: It would be beneficial to include a formative assessment to gauge students' understanding at the end of the lesson. This could be a quick quiz, a group presentation about one planet, or a drawing activity where students depict their favorite planet and share one fact about it. This will help reinforce the learning objectives and provide students with an opportunity to demonstrate their knowledge.
+
+    Making these adjustments will enhance the educational experience and align it more closely with fourth-grade learning goals.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: planner_agent
+
+
+    >>>>>>>> USING AUTO REPLY...
+    planner_agent (to group_manager):
+
+    **Revised Lesson Plan: Exploring the Solar System**
+
+    <title>Exploring the Solar System</title>
+    <learning_objectives>
+    1. Identify and name the planets in the solar system according to grade-level science standards.
+    2. Describe key characteristics of each planet, including differences between inner and outer planets.
+    3. Understand the concept of orbit and how gravity keeps planets revolving around the sun.
+    4. Develop an appreciation for the scale and structure of our solar system and the sun's role as the center.
+    </learning_objectives>
+    <script>
+    "Good morning, class! Today, we are going to embark on an exciting journey through our solar system. Have any of you ever looked up at the night sky and wondered what those bright dots are? Well, those dots are often stars, but some of them are planets in our own solar system!
+
+    To start our adventure, I want you to close your eyes and imagine standing on a giant spaceship, ready to zoom past the sun. Does anyone know what the sun is? (Pause for responses.) That's right! The sun is a star at the center of our solar system.
+
+    Now, today's goal is not only to learn the names of the planets but also to explore what makes each of them unique. We'll create a model of the solar system together, and through this process, we will also talk about the differences between the inner and outer planets.
+
+    As part of our exploration, we'll play a fun "planet facts" game. After learning about the planets, I will divide you into small groups, and each group will get a planet to research. You’ll find interesting facts about the planet, and we will come together to share what you discovered!
+
+    At the end of our lesson, I'll give you a quick quiz to see how much you've learned about the planets, or you can draw your favorite planet and share one cool fact you found with the class.
+
+    So, are you ready to blast off and discover the wonders of space? Let's begin!"
+    </script>
+
+    **Interactive Activities**:
+    - **Planet Facts Game**: After discussing each planet, students will work in groups to find and share a unique fact about their assigned planet.
+
+    **Assessment of Learning**:
+    - **Individual Reflection Drawing**: Students draw their favorite planet and write one fact about it.
+    - **Quick Quiz**: A short quiz at the end to assess understanding of the planets and their characteristics.
+
+    This revised plan incorporates additional interactive elements and assessments that align with educational standards and enhance the overall learning experience.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: teacher_agent
+
+
+    >>>>>>>> USING AUTO REPLY...
+    teacher_agent (to group_manager):
+
+    DONE!
+
+    --------------------------------------------------------------------------------
+    ```
+
+Now, let's look at how this is done in a Swarm.

@@ -1,0 +1,43 @@
+codecov:
+  require_ci_to_pass: yes
+  notify:
+    # manual_trigger: true
+    wait_for_ci: yes
+
+coverage:
+  status:
+    project:
+      default:
+        # Basic settings
+        informational: true
+        target: auto
+        threshold: 1%
+        base: auto
+        if_ci_failed: success
+        branches:
+          - main
+    patch:
+      default:
+        # Settings for new code in PRs
+        informational: true
+        target: auto
+        threshold: 1%
+        if_ci_failed: success
+        base: auto
+
+# Configure codecov bot behavior
+comment:
+# Show only changed files in PR comment
+  layout: "files"
+  behavior: new
+  # Hide PR comment if there are no changes in coverage
+  require_changes: true
+  hide_project_coverage: true
+
+# Ignore certain paths/files
+ignore:
+  - "test/**/*"
+  - "website/**/*"
+
+github_checks:
+  annotations: false

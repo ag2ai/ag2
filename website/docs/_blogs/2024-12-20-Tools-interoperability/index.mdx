@@ -1,0 +1,55 @@
+---
+title: Cross-Framework LLM Tool Integration with AG2
+authors: [rjambrecic]
+tags: [Tools, Non-OpenAI Models]
+---
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/B_NTwUoJrew?si=HpN75Qioc12H3R7k" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+**TL;DR**
+AG2 lets you bring in **Tools** from different frameworks like **LangChain**, **CrewAI**, and **PydanticAI**.
+
+- [LangChain Tools](https://python.langchain.com/v0.1/docs/modules/tools): Useful for tasks like API querying and web scraping.
+- [CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main): Offers a variety of tools for web scraping, search, and more.
+- [PydanticAI Tools](https://ai.pydantic.dev/tools/): Adds context-driven tools and structured data processing.
+
+\<!-- more -->
+
+**With AG2, you can combine these tools and enhance your agents' capabilities.**
+
+
+In this post, we’ll walk through how to integrate tools from various frameworks—like [LangChain Tools](https://python.langchain.com/v0.1/docs/modules/tools),
+[CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main), and [PydanticAI Tools](https://ai.pydantic.dev/tools/)—into AG2.
+
+Because, really, the magic happens when you combine them all. This allows you to use tools from different frameworks within AG2, giving your agents more power and flexibility.
+This blog builds upon the concepts covered in the [Tool Integration notebook](/docs/use-cases/notebooks/notebooks/tools_interoperability).
+
+In this post, you will understand how to configure agents, adapt these tools for use in AG2, and validate the integration through practical examples.
+
+import Langchain from "/snippets/interop/langchain.mdx";
+import CrewAI from "/snippets/interop/crewai.mdx";
+import PydanticAI from "/snippets/interop/pydanticai.mdx";
+
+## LangChain Tools Integration
+
+<Langchain/>
+
+## CrewAI Tools Integration
+
+<CrewAI/>
+
+## PydanticAI Tools Integration
+
+<PydanticAI/>
+
+## Summary
+
+In this post, we've explored how to integrate tools from multiple frameworks (LangChain, CrewAI, and PydanticAI) into the AG2 framework, enabling cross-framework interoperability. By integrating these tools, you can enhance your agents with a variety of capabilities, such as API querying, web scraping, and structured data processing.
+
+- **LangChain** offers a wide range of pre-built tools for working with APIs and web scraping, making it easy to extend AG2's functionality.
+- **CrewAI** brings diverse tools for search, web scraping, and more, allowing for robust agent interactions.
+- **PydanticAI** introduces dependency injection and context-driven logic, enabling efficient data handling without relying on LLMs.
+
+With AG2's flexible architecture and the power of these frameworks, developers can create agents that are more capable and adaptable. By following the integration steps for each framework, you can enhance your agents' performance, expand their capabilities, and create more dynamic interactions.
+
+Now you should have a better understanding of how to integrate tools from different frameworks into AG2, and how to use these tools effectively within your own projects.

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Chat</title>
+    <script>
+        // Dynamically set the WebSocket URLs using the injected port
+        const port = {{ port }};
+        const socketUrl = `ws://localhost:${port}/media-stream`;
+    </script>
+    <script src="https://github.com/ag2ai/ag2-js-client/releases/download/v0.3.1/index.global.js"></script>
+    <script src="/static/main.js" type="module" defer></script>
+</head>
+<body>
+    <h1>Audio Chat</h1>
+    <p>Ensure microphone and speaker access is enabled.</p>
+</body>
+</html>

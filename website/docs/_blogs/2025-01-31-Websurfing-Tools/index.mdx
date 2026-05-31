@@ -1,0 +1,30 @@
+---
+title: Adding Browsing Capabilities to AG2
+authors: [rjambrecic]
+tags: [Tools]
+---
+
+## Introduction
+
+Previously, in our [Cross-Framework LLM Tool Integration](/docs/blog/2024-12-20-Tools-interoperability) guide, we combined tools from frameworks like **LangChain**, **CrewAI**, and **PydanticAI** to enhance AG2.
+
+Now, we’re taking AG2 even further by integrating [`Browser Use`](https://github.com/browser-use/browser-use) and [`Crawl4AI`](https://github.com/unclecode/crawl4ai), enabling agents to navigate websites, extract dynamic content, and interact with web pages. This unlocks new possibilities for automated data collection, web automation, and more.
+![Browser Use Example](/docs/user-guide/reference-agents/assets/websurferagent_animated.gif)
+
+## `Browser Use` Integration
+
+import BrowserUse from "/snippets/reference-tools/browser-use.mdx";
+
+<BrowserUse/>
+
+## `Crawl4AI` Integration
+The integration process follows a straightforward approach.
+
+import Crawl4AI from "/snippets/reference-tools/crawl4ai.mdx";
+
+<Crawl4AI/>
+
+## Conclusion
+With `Browser Use` and `Crawl4AI`, AG2 gets a serious upgrade for web browsing and data extraction. `Browser Use` makes it easy to navigate and interact with web pages, while `Crawl4AI` helps scrape and structure data, with or without AI processing.
+
+Whether you need quick web access, detailed data extraction, or AI-powered insights, these tools make it simple to integrate real-time web content into your projects. Now you're all set to build smarter, more automated agents that can browse, extract, and use web data with ease. 🚀

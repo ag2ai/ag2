@@ -1,0 +1,25 @@
+name: Deploy MkDocs to GitHub Pages
+
+on:
+  push:
+    branches: main
+    paths:
+      - "autogen/**"
+      - "website/**"
+      - ".github/workflows/deploy-website.yml"
+      - ".github/workflows/mkdocs-check-broken-links.yml"
+      - ".github/workflows/build-mkdocs.yml"
+      - "scripts/broken-links-check.sh"
+      - "scripts/docs_build_mkdocs.sh"
+      - "scripts/docs_serve_mkdocs.sh"
+      - ".muffet-excluded-links.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build_and_deploy:
+    uses: ./.github/workflows/build-mkdocs.yml
+    with:
+      python-version: "3.10"

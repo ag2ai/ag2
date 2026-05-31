@@ -1,0 +1,125 @@
+---
+title: "Introducing CaptainAgent for Adaptive Team Building"
+authors: [jialeliu, LinxinS97, jieyuz2, skzhang1, qingyunwu]
+tags: [AG2 Agents]
+---
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/laGZmQUolBY?si=oU9FSfWPGCTbJ1Y_" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+**TL;DR**
+- We introduce CaptainAgent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://docs.ag2.ai/0.9/docs/user-guide/advanced-concepts/orchestration/orchestrations) conversation pattern in AG2.
+- CaptainAgent supports all types of `ConversableAgents` implemented in AG2.
+
+\<!-- more -->
+
+![Illustration of how CaptainAgent build a team](img/overall.webp)
+
+# Introduction
+
+Given an ad-hoc task, dynamically assembling a group of agents capable of effectively solving the problem is a complex challenge. In many cases, we manually design and select the agents involved. In this blog, we introduce **CaptainAgent**, an intelligent agent that can autonomously assemble a team of agents tailored to meet diverse and complex task requirements.
+CaptainAgent iterates over the following two steps until the problem is successfully solved.
+- (**Step 1**) CaptainAgent will break down the task, recommend several roles needed for each subtask, and then create a team of agents accordingly. Each agent in the team is either generated from scratch or retrieved and selected from an agent library if provided. Each of them will also be equipped with predefined tools retrieved from a tool library if provided.
+![Building workflow](img/build.webp)
+- (**Step 2**) For each subtask, the corresponding team of agents will jointly solve it. Once it's done, a summarization and reflection step will be triggered to generate a report based on the multi-agent conversation history. Based on the report, CaptainAgent will decide whether to adjust the subtasks and corresponding team (go to Step 1) or to terminate and output the results.
+![Building workflow](img/chat.webp)
+
+The design of CaptainAgent allows it to leverage agents and tools from a pre-specified agent library and tool library. In the following section, we demonstrate how to use CaptainAgent with or without the provided library.
+
+\<!-- more -->
+
+To install AG2 with CaptainAgent:
+
+```bash
+pip install -U ag2[openai,captainagent]
+```
+
+<Tip>
+If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[openai,captainagent]
+```
+or
+```bash
+pip install -U ag2[openai,captainagent]
+```
+as `autogen` and `ag2` are aliases for the same PyPI package.
+</Tip>
+
+# Using CaptainAgent without pre-specified agent/tool libraries
+CaptainAgent can serve as a drop-in replacement for the general `AssistantAgent` class in AG2. It also allows customization such as agent/tool libraries. When the libraries are provided, CaptainAgent will try to leverage them when solving a task.
+Without them, CaptainAgent will automatically generate new agents.
+
+```python
+from autogen.agentchat.contrib.captainagent import CaptainAgent
+from autogen import UserProxyAgent, LLMConfig
+
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", temperature=0).where(model="gpt-5")
+
+## build agents
+captain_agent = CaptainAgent(
+    name="captain_agent",
+    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
+    llm_config=llm_config,
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER"
+)
+
+query = "Search arxiv for the latest paper about large language models and discuss its potential application in software engineering."
+result = user_proxy.initiate_chat(captain_agent, message=query)
+```
+
+# Using CaptainAgent with pre-specified agent/tool libraries
+To use CaptainAgent with pre-specified agent/tool libraries, we just need to specify the path to the agent library and tool library. The two libraries are independent, so you can choose to use one of the libraries or both.
+The tool library we provide requires subscribing to specific APIs, please refer to the [docs](/docs/user-guide/reference-agents/captainagent) for details. The following example does not necessarily require tool usage, so it's fine if you are subscribing to them.
+
+To use agents from an agent library, you just need to specify a `library_path` sub-field or a `autobuild_tool_config` field in CaptainAgent's configuration.
+
+```python
+from autogen.agentchat.contrib.captainagent import CaptainAgent
+from autogen import UserProxyAgent, LLMConfig
+
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", temperature=0).where(model="gpt-5")
+
+## build agents
+captain_agent = CaptainAgent(
+    name="captain_agent",
+    nested_config=nested_mode_config,
+    agent_lib="captainagent_expert_library.json",
+    tool_lib="default",
+    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
+    llm_config=llm_config,
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER"
+)
+
+query = "Search arxiv for the latest paper about large language models and discuss its potential application in software engineering."
+result = user_proxy.initiate_chat(captain_agent, message=query)
+```
+
+# Further Reading
+For a detailed description of how to configure the CaptainAgent, please refer to
+- [document](/docs/user-guide/reference-agents/captainagent).
+- [Notebook example](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_captainagent)
+
+Please also refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about CaptainAgent and the proposed new team-building paradigm: adaptive build.
+
+
+
+If you find this blog useful, please consider citing:
+```
+@article{song2024adaptive,
+      title={Adaptive In-conversation Team Building for Language Model Agents},
+      author={Linxin Song and Jiale Liu and Jieyu Zhang and Shaokun Zhang and Ao Luo and Shijian Wang and Qingyun Wu and Chi Wang},
+      year={2024},
+      eprint={2405.19425},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2405.19425},
+}
+```

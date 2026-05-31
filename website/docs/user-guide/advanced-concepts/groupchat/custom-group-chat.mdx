@@ -1,0 +1,720 @@
+---
+title: Customized GroupChat flows
+sidebarTitle: Custom GroupChat
+---
+
+<Tip>
+If you haven't had a chance to read about or use AG2's GroupChat orchestration, check out the [GroupChat Overview](/docs/user-guide/advanced-concepts/groupchat/groupchat) for more information.
+</Tip>
+
+`GroupChat`'s four built-in conversation patterns, `automatic`, `round robin`, `random`, and `manual` provide a good degree of flexibility to orchestrate agents in a group chat setting.
+
+However, there are two additional methods to control the flow in a GroupChat:
+
+1. Use a `Callable` as a speaker selection method
+
+2. Define a graph specifying valid transitions
+
+Here's a walk-through of each of these methods.
+
+## 1. Callable speaker selection method
+By specifying a `Callable` as the speaker selection method for a GroupChat, a function is called after each agent replies and the agent it returns will be the next agent.
+
+#### Setting up
+
+```python
+# Imports and an LLM configuration for our agents
+import os
+from autogen import (
+    AssistantAgent,
+    UserProxyAgent,
+    Agent,
+    GroupChat,
+    GroupChatManager,
+)
+
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-5"}
+```
+
+#### Agents and workflow
+
+We have 5 agents in our workflow:
+
+- Planner: Give a plan and revise.
+- Engineer: Retrieves papers from the web by writing code.
+- Executor: Executes code.
+- Scientist: Reads papers and writes summaries.
+- Admin (us): Our Human-in-the-loop approving or ending the chat.
+
+```python
+planner = AssistantAgent(
+    name="Planner",
+    system_message="""Planner. Suggest a plan. Revise the plan based on feedback from admin and critic, until admin approval.
+The plan may involve an engineer who can write code and a scientist who doesn't write code.
+No agent can search the web, use the Engineer to write code to perform any task requiring web access.
+Explain the plan first. Be clear which step is performed by an engineer, and which step is performed by a scientist.
+""",
+    llm_config=config_list,
+)
+
+user_proxy = UserProxyAgent(
+    name="Admin",
+    system_message="A human admin. Interact with the planner to discuss the plan. Plan execution needs to be approved by this admin.",
+    code_execution_config=False,
+)
+
+engineer = AssistantAgent(
+    name="Engineer",
+    llm_config=config_list,
+    system_message="""Engineer. You follow the approved plan and MUST write python/shell code to solve tasks. Wrap the code in a code block that specifies the script type. The user can't modify your code. So do not suggest incomplete code which requires others to modify. Don't use a code block if it's not intended to be executed by the executor.
+Don't include multiple code blocks in one response. Do not ask others to copy and paste the result. Check the execution result returned by the executor.
+Do not install additional packages.
+If the result indicates there is an error, fix the error and output the code again. Suggest the full code instead of partial code or code changes. If the error can't be fixed or if the task is not solved even after the code is executed successfully, analyze the problem, revisit your assumption, collect additional info you need, and think of a different approach to try.
+""",
+)
+scientist = AssistantAgent(
+    name="Scientist",
+    llm_config=config_list,
+    system_message="""Scientist. You follow an approved plan. You are able to categorize papers after seeing their abstracts printed. You don't write code.""",
+)
+
+executor = UserProxyAgent(
+    name="Executor",
+    system_message="Executor. Execute the code written by the engineer and report the result.",
+    human_input_mode="NEVER",
+    code_execution_config={
+        "last_n_messages": 3,
+        "work_dir": "paper",
+        "use_docker": False,
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+)
+```
+
+The planned workflow is:
+
+1. The planner interact with Admin (user) to revise a plan. Only when the Admin (human) types "Approve" can we move to the next step.
+2. The engineer will write code to retrieve papers. The code will be executed by executor.
+3. When the code is executed successfully, the scientist will read the papers and write a summary.
+4. The summary will be reviewed by the Admin and give comments. When the Admin types "TERMINATE", the process will be terminated.
+
+Here's the magic function that will be used at each turn to determine the next agent.
+
+By using the chat's messages, retrieved through `groupchat.messages` we can evaluate where we are up to in the workflow and the next agent.
+
+If all fails, we will revert back to the `random` speaker selection method.
+
+```python
+def custom_speaker_selection_func(last_speaker: Agent, groupchat: GroupChat):
+    """Define a customized speaker selection function.
+    A recommended way is to define a transition for each speaker in the groupchat.
+
+    Returns:
+        Return an `Agent` class or a string from ['auto', 'manual', 'random', 'round_robin'] to select a default method to use.
+    """
+    messages = groupchat.messages
+
+    # We'll start with a transition to the planner
+    if len(messages) <= 1:
+        return planner
+
+    if last_speaker is user_proxy:
+        if "Approve" in messages[-1]["content"]:
+            # If the last message is approved, let the engineer to speak
+            return engineer
+        elif messages[-2]["name"] == "Planner":
+            # If it is the planning stage, let the planner to continue
+            return planner
+        elif messages[-2]["name"] == "Scientist":
+            # If the last message is from the scientist, let the scientist to continue
+            return scientist
+
+    elif last_speaker is planner:
+        # Always let the user to speak after the planner
+        return user_proxy
+
+    elif last_speaker is engineer:
+        if "```python" in messages[-1]["content"]:
+            # If the last message is a python code block, let the executor to speak
+            return executor
+        else:
+            # Otherwise, let the engineer to continue
+            return engineer
+
+    elif last_speaker is executor:
+        if "exitcode: 1" in messages[-1]["content"]:
+            # If the last message indicates an error, let the engineer to improve the code
+            return engineer
+        else:
+            # Otherwise, let the scientist to speak
+            return scientist
+
+    elif last_speaker is scientist:
+        # Always let the user to speak after the scientist
+        return user_proxy
+
+    else:
+        return "random"
+```
+
+#### Create GroupChat and run
+
+Make sure to assign the speaker selection function to the GroupChat.
+
+```python
+groupchat = GroupChat(
+    agents=[user_proxy, engineer, scientist, planner, executor],
+    messages=[],
+    max_round=20,
+    # Here we specify our custom speaker selection function
+    speaker_selection_method=custom_speaker_selection_func
+)
+
+manager = GroupChatManager(
+    groupchat=groupchat,
+    llm_config=config_list)
+
+user_proxy.initiate_chat(
+    manager,
+    message="Find a latest paper about gpt-4 on arxiv and find its potential applications in software."
+)
+```
+
+In the output we can see that:
+- It transitioned straight to the Planner
+- After receiving approval from us it transitioned to the Engineer
+- After the Engineer it finds Python code goes to the executor to execute the code
+- The code ran successfully so it transitioned to the Scientist
+- After the Scientist it returned to us and we ended the chat
+
+```console
+Admin (to chat_manager):
+
+Find a latest paper about gpt-4 on arxiv and find its potential applications in software.
+
+--------------------------------------------------------------------------------
+Planner (to chat_manager):
+
+**Initial Plan:**
+
+1. **Scientist's Task: Literature Review**
+   - The scientist will conduct a comprehensive literature review to find the latest paper about GPT-4 on arXiv. This involves using search queries related to GPT-4 and filtering results by the most recent publications.
+
+2. **Scientist's Task: Analysis of the Paper**
+   - Once the latest paper is identified, the scientist will read through the paper to understand its contents, focusing on the methodology, results, and discussions about potential applications in software.
+
+3. **Scientist's Task: Identifying Potential Applications**
+   - The scientist will then brainstorm and list potential applications of GPT-4 in software, based on the findings from the paper. This may include applications in natural language processing, code generation, chatbots, and more.
+
+4. **Engineer's Task: Technical Feasibility Assessment**
+   - The engineer will review the list of potential applications provided by the scientist and assess the technical feasibility of each application. This involves considering the current state of software technology, the capabilities of GPT-4, and the practicality of integrating GPT-4 into existing systems.
+
+5. **Engineer's Task: Prototype Development Plan**
+   - For applications deemed technically feasible, the engineer will draft a plan for developing a prototype that demonstrates the use of GPT-4 in a software application. This plan will outline the required resources, estimated timeline, and the steps for implementation.
+
+6. **Joint Task: Finalizing the Plan**
+   - The scientist and engineer will collaborate to finalize the plan, ensuring that it is scientifically sound and technically viable. They will prepare a document detailing the plan for potential applications and the prototype development.
+
+7. **Presentation to Admin**
+   - The finalized plan will be presented to the admin for approval. The admin will review the plan and provide feedback.
+
+8. **Revisions Based on Feedback**
+   - Based on the admin's feedback, the scientist and engineer will make necessary revisions to the plan. This iterative process will continue until the admin approves the plan.
+
+**Awaiting Admin's Feedback:** Please review the initial plan and provide feedback on any adjustments or additional details you would like to see.
+
+--------------------------------------------------------------------------------
+Admin (to chat_manager):
+
+Approve
+
+--------------------------------------------------------------------------------
+Engineer (to chat_manager):
+
+Since the plan has been approved, I will now proceed with the first step, which is to find the latest paper about GPT-4 on arXiv. To do this, I will write a Python script that uses the arXiv API to search for papers related to GPT-4 and filter them by the most recent publications.
+
+Here is the Python script that accomplishes this task:
+
+'''python
+import requests
+from datetime import datetime
+
+# Define the URL for the arXiv API
+ARXIV_API_URL = "http://export.arxiv.org/api/query"
+
+# Define the search parameters
+search_query = "all:gpt-4"
+start = 0
+max_results = 1
+sort_by = "submittedDate"
+sort_order = "descending"
+
+# Construct the query
+query_params = {
+    "search_query": search_query,
+    "start": start,
+    "max_results": max_results,
+    "sortBy": sort_by,
+    "sortOrder": sort_order
+}
+
+# Send the request to the arXiv API
+response = requests.get(ARXIV_API_URL, params=query_params)
+
+# Check if the request was successful
+if response.status_code == 200:
+    # Parse the response
+    feed = response.text
+    # Find the entry element, which contains the paper information
+    start_entry = feed.find('<entry>')
+    end_entry = feed.find('</entry>')
+    entry = feed[start_entry:end_entry]
+
+    # Extract the title
+    start_title = entry.find('<title>') + 7
+    end_title = entry.find('</title>')
+    title = entry[start_title:end_title].strip()
+
+    # Extract the published date
+    start_published = entry.find('<published>') + 12
+    end_published = entry.find('</published>')
+    published = entry[start_published:end_published].strip()
+
+    # Extract the summary
+    start_summary = entry.find('<summary>') + 9
+    end_summary = entry.find('</summary>')
+    summary = entry[start_summary:end_summary].strip()
+
+    # Extract the authors
+    authors = []
+    start_author = entry.find('<author>')
+    end_author = entry.find('</author>')
+    while start_author != -1 and end_author != -1:
+        start_name = entry.find('<name>', start_author) + 6
+        end_name = entry.find('</name>', start_author)
+        author_name = entry[start_name:end_name].strip()
+        authors.append(author_name)
+        start_author = entry.find('<author>', end_author)
+        end_author = entry.find('</author>', start_author)
+
+    # Print the results
+    print(f"Title: {title}")
+    print(f"Published Date: {published}")
+    print(f"Authors: {', '.join(authors)}")
+    print(f"Summary: {summary}")
+else:
+    print("Failed to retrieve data from arXiv API.")
+'''
+
+This script will output the title, published date, authors, and summary of the most recent paper related to GPT-4 on arXiv. Please note that the actual content of the paper and its potential applications in software will need to be analyzed manually after retrieving the paper information.
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+Executor (to chat_manager):
+
+exitcode: 0 (execution succeeded)
+Code output:
+Title: A Data-Centric Approach To Generate Faithful and High Quality Patient
+  Summaries with Large Language Models
+Published Date: 024-02-23T16:32:28Z
+Authors: Stefan Hegselmann, Shannon Zejiang Shen, Florian Gierse, Monica Agrawal, David Sontag, Xiaoyi Jiang
+Summary: Patients often face difficulties in understanding their hospitalizations,
+while healthcare workers have limited resources to provide explanations. In
+this work, we investigate the potential of large language models to generate
+patient summaries based on doctors' notes and study the effect of training data
+on the faithfulness and quality of the generated summaries. To this end, we
+develop a rigorous labeling protocol for hallucinations, and have two medical
+experts annotate 100 real-world summaries and 100 generated summaries. We show
+that fine-tuning on hallucination-free data effectively reduces hallucinations
+from 2.60 to 1.55 per summary for Llama 2, while preserving relevant
+information. Although the effect is still present, it is much smaller for GPT-4
+when prompted with five examples (0.70 to 0.40). We also conduct a qualitative
+evaluation using hallucination-free and improved training data. GPT-4 shows
+very good results even in the zero-shot setting. We find that common
+quantitative metrics do not correlate well with faithfulness and quality.
+Finally, we test GPT-4 for automatic hallucination detection, which yields
+promising results.
+
+
+--------------------------------------------------------------------------------
+Scientist (to chat_manager):
+
+Based on the abstract provided, the paper titled "A Data-Centric Approach To Generate Faithful and High Quality Patient Summaries with Large Language Models" explores the use of large language models, including GPT-4, to generate patient summaries from doctors' notes. The study focuses on the impact of training data on the faithfulness and quality of the generated summaries and also investigates the potential of GPT-4 for automatic hallucination detection.
+
+**Potential Applications in Software:**
+
+1. **Healthcare Documentation Automation:**
+   - GPT-4 could be used to develop software that assists healthcare professionals in creating accurate and comprehensive patient summaries by automatically processing doctors' notes and other medical records.
+
+2. **Clinical Decision Support Systems:**
+   - Integrating GPT-4 into clinical decision support systems could provide healthcare workers with insights and suggestions based on a patient's medical history, potentially improving diagnosis and treatment planning.
+
+3. **Patient Education and Communication:**
+   - Software applications could leverage GPT-4 to translate complex medical information into patient-friendly summaries, enhancing patient understanding of their health conditions and treatments.
+
+4. **Medical Training and Simulation:**
+   - GPT-4 could be used to create realistic medical scenarios for training medical students and professionals, simulating patient interactions and generating case studies.
+
+5. **Data Quality Assurance:**
+   - The paper suggests that GPT-4 can be used for automatic hallucination detection, which refers to the identification of inaccuracies or fabrications in generated text. This could be applied to software that ensures the quality and reliability of medical documentation.
+
+6. **Research and Development:**
+   - GPT-4 could assist researchers in summarizing and synthesizing large volumes of medical literature, aiding in the discovery of new insights and the development of novel treatments.
+
+7. **Personalized Health Monitoring:**
+   - Software applications could use GPT-4 to provide personalized health monitoring and advice by analyzing user input, such as symptoms or lifestyle factors, and generating tailored health recommendations.
+
+These potential applications highlight the versatility of GPT-4 in the realm of healthcare software, offering opportunities to enhance patient care, improve healthcare workflows, and support medical education and research.
+
+--------------------------------------------------------------------------------
+Admin (to chat_manager):
+
+TERMINATE
+
+--------------------------------------------------------------------------------
+```
+
+## 2. Specified flows using graphs
+Using a graph, you can specify the valid transitions using the automatic speaker selection method for a GroupChat (`speaker_selection_method="auto"`, which is the default).
+
+A graph is simply a dictionary specifying, for each agent, which agents they can transition to.
+
+```python
+# agent_a can transition to any other agent, however, those agents can only transition to agent_a
+transition_graph = {
+    agent_a: [agent_b, agent_c],
+    agent_b: [agent_a],
+    agent_c: [agent_a],
+}
+```
+
+At each turn, the LLM will be presented with the valid agents based on the graph, limiting the transitions to those you've specified.
+
+<Note>
+There are a number of interesting transition paths you can create with a graph, see the [Finite State Machine documentation](/docs/use-cases/notebooks/notebooks/agentchat_groupchat_finite_state_machine) to explore them.
+</Note>
+
+In this walk-through we're going to create a game with three teams, each team has three players (with the first as a team leader). Each player has a number of chocolates that no other player knows about, even the team leader.
+
+The goal of the game is to tally up all the chocolates across the three teams, with each team leader responsible for tallying up their team's chocolate count.
+
+To control the flow of the conversation, team leaders can transition to each other and transitions within a team can only be with their team members.
+
+Here's what that should look like with our three teams, A, B, and C. Agents labelled zero will be the team leaders.
+
+![Swarm Enhanced Demonstration](../assets/group-chat-fsm.png)
+
+```python
+# Imports and LLM Configuration
+from autogen import ConversableAgent, GroupChat, GroupChatManager
+import random
+import os
+
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-5"}
+
+# Helper function to get an agent from our working list by name
+def get_agent_by_name(agents, name) -> ConversableAgent:
+    for agent in agents:
+        if agent.name == name:
+            return agent
+```
+Here we dictionaries for our agents, the graph, and the number of chocolates for each agent
+```python
+# Create an empty directed graph
+agents = []
+speaker_transitions_dict = {}
+secret_values = {}
+```
+This looks more complicated than it is, we're creating each agent for the three teams, giving them a random number of chocolates and explicit instructions on what they need to do.
+
+For each team we create the allowable transitions for inside that team, which are just with each other.
+
+```python
+# Outer loop for prefixes 'A', 'B', 'C'
+for prefix in ["A", "B", "C"]:
+    # Add 3 nodes with each prefix to the graph using a for loop
+    for i in range(3):
+        node_id = f"{prefix}{i}"
+        secret_value = random.randint(1, 5)  # Generate a random secret value
+        secret_values[node_id] = secret_value
+
+        # Create an ConversableAgent for each node (assuming ConversableAgent is a defined class)
+        agents.append(
+            ConversableAgent(
+                name=node_id,
+                system_message=f"""Your name is {node_id}.
+                    Do not respond as the speaker named in the NEXT tag if your name is not in the NEXT tag. Instead, suggest a relevant team leader to handle the mis-tag, with the NEXT: tag.
+
+                    You have {secret_value} chocolates.
+
+                    The list of players are [A0, A1, A2, B0, B1, B2, C0, C1, C2].
+
+                    Your first character of your name is your team, and your second character denotes that you are a team leader if it is 0.
+                    CONSTRAINTS: Team members can only talk within the team, whilst team leader can talk to team leaders of other teams but not team members of other teams.
+
+                    You can use NEXT: to suggest the next speaker. You have to respect the CONSTRAINTS, and can only suggest one player from the list of players, i.e., do not suggest A3 because A3 is not from the list of players.
+                    Team leaders must make sure that they know the sum of the individual chocolate count of all three players in their own team, i.e., A0 is responsible for team A only.
+
+                    Keep track of the player's tally using a JSON format so that others can check the total tally. Use
+                    A0:?, A1:?, A2:?,
+                    B0:?, B1:?, B2:?,
+                    C0:?, C1:?, C2:?
+
+                    If you are the team leader, you should aggregate your team's total chocolate count to cooperate.
+                    Once the team leader know their team's tally, they can suggest another team leader for them to find their team tally, because we need all three team tallys to succeed.
+                    Use NEXT: to suggest the next speaker, e.g., NEXT: A0.
+
+                    Once we have the total tally from all nine players, sum up all three teams' tally, then terminate the discussion using DONE!.
+                    """,
+                llm_config=config_list,
+            )
+        )
+        speaker_transitions_dict[agents[-1]] = []
+
+
+    # For each team, create the team's internal transitions (any agent to any agent in a team)
+    for source_node in range(3):
+        source_id = f"{prefix}{source_node}"
+        for target_node in range(3):
+            target_id = f"{prefix}{target_node}"
+            if source_node != target_node:  # To avoid self-loops
+                speaker_transitions_dict[get_agent_by_name(agents, source_id)].append(
+                    get_agent_by_name(agents, name=target_id)
+                )
+```
+
+Here we create the transitions between the three team leaders who can transition to any other team leader.
+
+```python
+# Adding edges between teams
+speaker_transitions_dict[get_agent_by_name(agents, "A0")].append(get_agent_by_name(agents, name="B0"))
+speaker_transitions_dict[get_agent_by_name(agents, "A0")].append(get_agent_by_name(agents, name="C0"))
+speaker_transitions_dict[get_agent_by_name(agents, "B0")].append(get_agent_by_name(agents, name="A0"))
+speaker_transitions_dict[get_agent_by_name(agents, "B0")].append(get_agent_by_name(agents, name="C0"))
+speaker_transitions_dict[get_agent_by_name(agents, "C0")].append(get_agent_by_name(agents, name="A0"))
+speaker_transitions_dict[get_agent_by_name(agents, "C0")].append(get_agent_by_name(agents, name="B0"))
+```
+
+#### Create GroupChat and run
+Here we set the graph to the GroupChat when creating it using the `allowed_or_disallowed_speaker_transitions` parameter. We also specify `speaker_transitions_type` to "allowed" to indicate the provided transitions are allowed (alternative is "disallowed").
+```python
+group_chat = GroupChat(
+    agents=agents,
+    messages=[],
+    max_round=20,
+    allowed_or_disallowed_speaker_transitions=speaker_transitions_dict,
+    speaker_transitions_type="allowed",
+)
+
+# The GroupChatManager will end the chat when DONE! is received, which agents can say when all counts are done
+manager = GroupChatManager(
+    groupchat=group_chat,
+    llm_config=config_list,
+    code_execution_config=False,
+    is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper(),
+)
+
+# Start the game from Team A's team leader.
+agents[0].initiate_chat(
+    manager,
+    message="""
+        There are 9 players in this game, split equally into Teams A, B, C. Therefore each team has 3 players, including the team leader.
+        The task is to find out the sum of chocolate count from all nine players. I will now start with my team.
+        NEXT: A1
+        """,
+)
+```
+
+Looking at the output, we can see there were 20 chocolates across all the teams and the agents worked through it methodically team by team.
+```console
+A0 (to chat_manager):
+
+
+There are 9 players in this game, split equally into Teams A, B, C. Therefore each team has 3 players, including the team leader.
+The task is to find out the sum of chocolate count from all nine players. I will now start with my team.
+NEXT: A1
+
+--------------------------------------------------------------------------------
+
+Next speaker: A1
+
+
+>>>>>>>> USING AUTO REPLY...
+A1 (to chat_manager):
+
+I have 1 chocolate.
+Here is the current tally for Team A:
+
+A0: ?, A1: 1, A2: ?
+
+NEXT: A2
+
+--------------------------------------------------------------------------------
+
+Next speaker: A2
+
+
+>>>>>>>> USING AUTO REPLY...
+A2 (to chat_manager):
+
+I have 2 chocolates.
+
+Here is the updated tally for Team A:
+
+A0: ?, A1: 1, A2: 2
+
+NEXT: A0
+
+--------------------------------------------------------------------------------
+
+Next speaker: A0
+
+
+>>>>>>>> USING AUTO REPLY...
+A0 (to chat_manager):
+
+Thank you, Team A. Let's update the tally:
+
+A0: 4, A1: 1, A2: 2
+
+Team A's tally is 7 chocolates in total.
+
+I will now suggest the team leader of Team B to start determining their tally.
+
+NEXT: B0
+
+--------------------------------------------------------------------------------
+
+Next speaker: B0
+
+
+>>>>>>>> USING AUTO REPLY...
+B0 (to chat_manager):
+
+I have 4 chocolates. Let me coordinate with Team B to find out the total tally.
+
+Here is the current tally for Team B:
+
+B0: 4, B1: ?, B2: ?
+
+NEXT: B1
+
+--------------------------------------------------------------------------------
+
+Next speaker: B1
+
+
+>>>>>>>> USING AUTO REPLY...
+B1 (to chat_manager):
+
+I have 1 chocolate.
+
+Here is the updated tally for Team B:
+
+B0: 4, B1: 1, B2: ?
+
+NEXT: B2
+
+--------------------------------------------------------------------------------
+
+Next speaker: B2
+
+
+>>>>>>>> USING AUTO REPLY...
+B2 (to chat_manager):
+
+I have 1 chocolate.
+
+Here is the updated tally for Team B:
+
+B0: 4, B1: 1, B2: 1
+
+Team B's tally is 6 chocolates in total.
+
+I will now suggest the team leader of Team C to start determining their tally.
+
+NEXT: C0
+
+--------------------------------------------------------------------------------
+
+Next speaker: B0
+
+
+>>>>>>>> USING AUTO REPLY...
+B0 (to chat_manager):
+
+It seems there was a mis-tag. Please let C0, the team leader of Team C, determine their team's chocolate tally.
+
+NEXT: C0
+
+--------------------------------------------------------------------------------
+
+Next speaker: C0
+
+
+>>>>>>>> USING AUTO REPLY...
+C0 (to chat_manager):
+
+I have 3 chocolates. Let me coordinate with Team C to find out the total tally.
+
+Here is the current tally for Team C:
+
+C0: 3, C1: ?, C2: ?
+
+NEXT: C1
+
+--------------------------------------------------------------------------------
+
+Next speaker: C1
+
+
+>>>>>>>> USING AUTO REPLY...
+C1 (to chat_manager):
+
+I have 1 chocolate.
+
+Here is the updated tally for Team C:
+
+C0: 3, C1: 1, C2: ?
+
+NEXT: C2
+
+--------------------------------------------------------------------------------
+
+Next speaker: C2
+
+
+>>>>>>>> USING AUTO REPLY...
+C2 (to chat_manager):
+
+I have 3 chocolates.
+
+Here is the updated tally for Team C:
+
+C0: 3, C1: 1, C2: 3
+
+Team C's tally is 7 chocolates in total.
+
+Since all teams have their tally ready, let's sum up the total:
+
+Team A's tally: 7 chocolates
+Team B's tally: 6 chocolates
+Team C's tally: 7 chocolates
+
+Total tally: 7 + 6 + 7 = 20 chocolates
+
+DONE!
+
+--------------------------------------------------------------------------------
+```
+### More GroupChat examples
+- [GroupChat with Customized Speaker Selection Method](/docs/use-cases/notebooks/notebooks/agentchat_groupchat_customized)
+- [GroupChat with Coder and Visualization Critic](/docs/use-cases/notebooks/notebooks/agentchat_groupchat_vis)
+- [GroupChat with Retrieval-Augmented Generation](/docs/use-cases/notebooks/notebooks/agentchat_groupchat_RAG)
+- [Implementing Swarm with a GroupChat](/docs/use-cases/notebooks/notebooks/agentchat_swarm_w_groupchat_legacy)
+
+### API
+[GroupChat](/docs/api-reference/autogen/GroupChat)
+[GroupChatManager](/docs/api-reference/autogen/GroupChatManager)

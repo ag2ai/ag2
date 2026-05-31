@@ -1,0 +1,111 @@
+---
+title: Human in the Loop
+sidebarTitle: Human in the Loop
+---
+
+# Human in the Loop
+
+Agents often need guidance or approval from human users to proceed safely and effectively. The Human-in-the-Loop (**HITL**) feature allows an agent to temporarily pause its execution and wait for human input before continuing.
+
+## What is Human in the Loop? Why do we need it?
+
+Human-in-the-Loop (**HITL**) is a pattern where a human user is integrated into the decision-making process of an autonomous system. In the context of the agent framework, it provides a structured way to ask for human confirmation or additional information during the execution of a tool.
+
+We need HITL for several reasons:
+
+- **Safety**: To prevent the agent from performing irreversible or harmful actions (e.g., executing arbitrary code, dropping a database table, or making financial transactions).
+- **Quality Assurance**: To allow humans to review and approve generated artifacts (e.g., code, emails, or reports) before they are finalized.
+- **Handling Ambiguity**: To provide the agent with additional context or clarification when it encounters a situation it cannot resolve autonomously.
+
+### Typical Use Cases
+
+- **Execution Approval**: Asking the user "Are you sure you want to execute this shell command?" before proceeding.
+- **Requesting Missing Information**: Prompting the user for a password, an API key, or a specific piece of data required by a tool.
+- **Content Review**: Displaying an AI-generated draft to the user and asking for approval or edit suggestions.
+
+## HITL Usage from Context
+
+You can request human input directly from within a tool using the `Context` object. The `ctx.input()` method pauses the tool's execution until the user provides a response.
+
+Here is an example of a tool that asks for human confirmation:
+
+```python linenums="1" hl_lines="6-9"
+from autogen.beta import Context, Agent, tool
+
+@tool
+async def execute_query(context: Context) -> str:
+    # Pause and ask for human input
+    user_response = await context.input(
+        "Are you sure you want to run this query? (yes/no)",
+        timeout=60.0
+    )
+
+    if user_response.strip().lower() != "yes":
+        return "Query cancelled."
+
+    return "Query executed successfully."
+
+agent = Agent(
+    name="my_agent",
+    tools=[execute_query]
+)
+```
+
+!!! warning
+    If the required human input is not provided (for example, if a HITL hook is not registered on the agent), the framework raises a `HumanInputNotProvidedError`.
+
+## HITL Registration
+
+To handle the input requests made by `context.input()`, you must register a **HITL hook** on your `Agent`.
+
+A **HITL** hook is a callback function that consumes a `HumanInputRequest` event and returns a `HumanMessage`. Like tools, HITL hooks support all context features, including dependency injection and variables.
+
+### By Argument
+
+You can register a HITL hook by passing it as the `hitl_hook` argument when initializing the `Agent`.
+
+```python linenums="1" hl_lines="4-11 15"
+from autogen.beta import Agent
+from autogen.beta.events import HumanInputRequest, HumanMessage
+
+def my_hitl_hook(event: HumanInputRequest) -> HumanMessage:
+    # event.content contains the prompt passed to context.input()
+    print(f"Agent asks: {event.content}")
+
+    # Collect input from the user (e.g., via standard input)
+    user_input = input("Your answer: ")
+
+    return HumanMessage(content=user_input)
+
+agent = Agent(
+    name="my_agent",
+    hitl_hook=my_hitl_hook,
+)
+```
+
+!!! note "Sync / Async"
+    Your HITL hook can be defined as either a synchronous (`def`) or asynchronous (`async def`) function. The framework handles both seamlessly.
+
+### By Decorator
+
+Alternatively, you can register or override a HITL hook using the `@my_agent.hitl_hook` decorator after the agent has been created.
+
+```python linenums="1" hl_lines="6"
+from autogen.beta import Agent
+from autogen.beta.events import HumanInputRequest, HumanMessage
+
+agent = Agent(name="my_agent", tools=[execute_query])
+
+@agent.hitl_hook
+async def async_hitl_hook(event: HumanInputRequest) -> HumanMessage:
+    # An asynchronous hook example
+    print(f"Prompt: {event.content}")
+
+    # A hypothetical async UI function
+    user_input = await get_input_from_ui()
+
+    return HumanMessage(content=user_input)
+```
+
+!!! warning "Overriding Hooks"
+    If a HITL hook is already set (for instance, via the constructor argument) and you apply the `@my_agent.hitl_hook` decorator, the decorator will override the existing one.

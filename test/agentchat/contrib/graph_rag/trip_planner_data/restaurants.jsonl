@@ -1,0 +1,12 @@
+{"id":1,"name":"Trattoria da Enzo","description":"A cozy trattoria known for its traditional Roman dishes and welcoming atmosphere.","city":"Rome","rating":4.5,"food_type":"Italian"}
+{"id":2,"name":"Il Pagliaccio","description":"An elegant Michelin-starred restaurant offering contemporary Italian cuisine.","city":"Rome","rating":4.8,"food_type":"Italian"}
+{"id":3,"name":"Bros' Burger","description":"A popular burger joint in Milan known for its gourmet burgers and relaxed vibe.","city":"Milan","rating":4.3,"food_type":"Burgers"}
+{"id":4,"name":"Osteria Francescana","description":"A world-renowned restaurant in Modena, known for its innovative Italian cuisine.","city":"Modena","rating":4.9,"food_type":"Italian"}
+{"id":5,"name":"La Bottega del Buon Caffè","description":"An upscale restaurant in Florence offering seasonal Tuscan cuisine with a modern twist.","city":"Florence","rating":4.7,"food_type":"Italian"}
+{"id":6,"name":"Antiche Carampane","description":"A charming trattoria in Venice known for its seafood dishes and Venetian specialties.","city":"Venice","rating":4.6,"food_type":"Seafood"}
+{"id":7,"name":"Ristorante Quadri","description":"A historic restaurant in Venice's Piazza San Marco, offering gourmet Italian cuisine.","city":"Venice","rating":4.8,"food_type":"Italian"}
+{"id":8,"name":"Da Cimino","description":"A family-run trattoria in Palermo known for its authentic Sicilian cuisine.","city":"Palermo","rating":4.4,"food_type":"Sicilian"}
+{"id":9,"name":"Il Gambero Rosso","description":"A renowned seafood restaurant in Naples, offering fresh catch of the day and traditional dishes.","city":"Naples","rating":4.5,"food_type":"Seafood"}
+{"id":10,"name":"Taverna del Capitano","description":"A charming restaurant in Sorrento known for its seafood and stunning views of the Bay of Naples.","city":"Sorrento","rating":4.7,"food_type":"Seafood"}
+{"id":11,"name":"Tonnarello","description":"Casual stop for pasta, meatballs & other simple Roman dishes, plus patio seating & acoustic guitar.","city":"Rome","rating":4.7,"food_type":"Italian"}
+{"id":12,"name":"Osteria delle Commari","description":"Local home style Roman restaurant near Vatican Museums.","city":"Rome","rating":4.3,"food_type":"Italian"}

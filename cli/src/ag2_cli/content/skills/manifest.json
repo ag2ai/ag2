@@ -1,0 +1,6 @@
+{
+  "name": "skills",
+  "display_name": "AG2 Skills",
+  "description": "Coding guidance, workflows, and agents for building multi-agent applications with the AG2 framework",
+  "version": "0.3.0"
+}

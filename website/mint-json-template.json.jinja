@@ -1,0 +1,613 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "AG2",
+  "logo": {
+    "dark": "/logo/ag2-white.svg",
+    "light": "/logo/ag2.svg"
+  },
+  "metadata": {
+    "og:image": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
+  },
+  "favicon": "/logo/favicon.svg",
+  "analytics": {
+    "ga4": {
+        "measurementId": "G-2GN2KN2CE4"
+    }
+  },
+  "redirects": [
+    {
+      "source": "/reference/:slug*",
+      "destination": "/docs/api-reference/:slug*"
+    },
+    {
+      "source": "/blog/:slug*",
+      "destination": "/docs/blog/:slug*"
+    },
+    {
+      "source": "/notebooks/:slug*",
+      "destination": "/docs/use-cases/notebooks/notebooks/:slug*"
+    }
+  ],
+  "search": {
+    "prompt": "Search or ask..."
+  },
+  "colors": {
+    "primary": "#4b9cd6",
+    "light": "#63a9db",
+    "dark": "#338fd1",
+    "anchors": {
+      "from": "#338fd1",
+      "to": "#63a9db"
+    }
+  },
+  "topbarCtaButton": {
+    "type": "github",
+    "url": "https://github.com/ag2ai/ag2"
+  },
+  "font": {
+    "headings": {
+      "family": "Jersey 10"
+    },
+    "body": {
+      "family": "Inter"
+    }
+  },
+  "tabs": [
+    {
+      "name": "Home",
+      "url": "docs/home"
+    },
+    {
+      "name": "User Guide",
+      "url": "docs/user-guide"
+    },
+    {
+      "name": "API References",
+      "url": "docs/api-reference"
+    },
+    {
+      "name": "Use Cases",
+      "url": "docs/use-cases"
+    },
+    {
+      "name": "Beta",
+      "url": "docs/beta"
+    },
+    {
+      "name": "User Stories",
+      "url": "docs/user-stories"
+    },
+    {
+      "name": "Contribute",
+      "url": "docs/contributor-guide"
+    },
+    {
+      "name": "FAQs",
+      "url": "docs/faq"
+    },
+    {
+      "name": "Ecosystem",
+      "url": "docs/ecosystem"
+    },
+    {
+      "name": "Blog",
+      "url": "docs/blog"
+    }
+  ],
+  "anchors": [],
+  "navigation": [
+    {
+      "group": "Quick Start",
+      "pages": [
+        "docs/quick-start"
+      ]
+    },
+    {
+      "group": "User Guide",
+      "pages": [
+        "docs/user-guide/basic-concepts/installing-ag2",
+        "docs/user-guide/basic-concepts/overview",
+        "docs/user-guide/release-roadmap",
+        {
+          "group": "Basic Concepts",
+          "pages": [
+            "docs/user-guide/basic-concepts/llm-configuration",
+            "docs/user-guide/basic-concepts/conversable-agent",
+            "docs/user-guide/basic-concepts/human-in-the-loop",
+            "docs/user-guide/basic-concepts/introducing-group-chat",
+            "docs/user-guide/basic-concepts/introducing-tools",
+            "docs/user-guide/basic-concepts/structured-outputs"
+          ]
+        },
+        {
+          "group": "Advanced Concepts",
+          "pages": [
+            "docs/user-guide/advanced-concepts/llm-configuration-deep-dive",
+            {
+              "group": "Agent Orchestration Deep Dive",
+              "pages":
+              [
+                "docs/user-guide/advanced-concepts/orchestration/orchestrations",
+                "docs/user-guide/advanced-concepts/orchestration/two-agent-chat",
+                "docs/user-guide/advanced-concepts/orchestration/sequential-chat",
+                "docs/user-guide/advanced-concepts/orchestration/nested-chat",
+                {
+                  "group": "Group Chats",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/introduction",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/agent-tools-functions",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/patterns",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/safeguards"
+                  ]
+                },
+                {
+                  "group": "Swarm",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/orchestration/swarm/deprecation"
+                  ]
+                },
+                "docs/user-guide/advanced-concepts/orchestration/ending-a-chat",
+                {
+                  "group": "Pattern Cookbook",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/overview",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/context_aware_routing",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/escalation",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/feedback_loop",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/hierarchical",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/organic",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/pipeline",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/redundant",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/star",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/triage_with_tasks"
+                  ]
+                }
+              ]
+            },
+            {
+              "group": "Tools",
+              "pages":
+              [
+                "docs/user-guide/advanced-concepts/tools/index",
+                "docs/user-guide/advanced-concepts/tools/basics",
+                "docs/user-guide/advanced-concepts/tools/controlling-use",
+                "docs/user-guide/advanced-concepts/tools/tools-with-secrets",
+                "docs/user-guide/advanced-concepts/tools/ag2-built-in-tools-support",
+                {
+                  "group": "Model Context Protocol",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/tools/mcp/client",
+                    "docs/user-guide/advanced-concepts/tools/mcp/mcp_client_session_manager"
+                  ]
+                },
+                {
+                  "group": "Interoperability",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/tools/interop/langchain",
+                    "docs/user-guide/advanced-concepts/tools/interop/crewai",
+                    "docs/user-guide/advanced-concepts/tools/interop/pydanticai"
+                  ]
+                }
+              ]
+            },
+            {
+              "group": "RealtimeAgent",
+              "pages":
+              [
+                "docs/user-guide/advanced-concepts/realtime-agent/index",
+                "docs/user-guide/advanced-concepts/realtime-agent/websocket",
+                "docs/user-guide/advanced-concepts/realtime-agent/webrtc",
+                "docs/user-guide/advanced-concepts/realtime-agent/twilio"
+              ]
+            },
+            "docs/user-guide/advanced-concepts/rag",
+            "docs/user-guide/advanced-concepts/code-execution",
+            "docs/user-guide/advanced-concepts/iterating-runs"
+          ]
+        },
+        {
+          "group": "Model Providers",
+          "pages": [
+            "docs/user-guide/models/amazon-bedrock",
+            "docs/user-guide/models/anthropic",
+            "docs/user-guide/models/cerebras",
+            "docs/user-guide/models/cohere",
+            "docs/user-guide/models/deepseek-v3",
+            "docs/user-guide/models/google-gemini",
+            "docs/user-guide/models/google-vertexai",
+            "docs/user-guide/models/groq",
+            "docs/user-guide/models/huggingface",
+            {
+              "group": "LiteLLM Proxy Server",
+              "pages":
+              [
+                "docs/user-guide/models/litellm-proxy-server/installation",
+                "docs/user-guide/models/litellm-proxy-server/openai",
+                "docs/user-guide/models/litellm-proxy-server/azure",
+                "docs/user-guide/models/litellm-proxy-server/watsonx"
+              ]
+            },
+            "docs/user-guide/models/lm-studio",
+            "docs/user-guide/models/mistralai",
+            "docs/user-guide/models/ollama",
+            "docs/user-guide/models/openai",
+            "docs/user-guide/models/openai_responses",
+            "docs/user-guide/models/grok-and-oai-compatible-models",
+            "docs/user-guide/models/togetherai",
+            "docs/user-guide/models/vLLM"
+          ]
+        },
+        {
+          "group": "Reference Agents",
+          "pages": [
+            "docs/user-guide/reference-agents/index",
+            "docs/user-guide/reference-agents/captainagent",
+            {
+              "group": "Communication Platforms",
+              "pages":
+              [
+                "docs/user-guide/reference-agents/communication-platforms/overview",
+                "docs/user-guide/reference-agents/communication-platforms/discordagent",
+                "docs/user-guide/reference-agents/communication-platforms/slackagent",
+                "docs/user-guide/reference-agents/communication-platforms/telegramagent"
+              ]
+            },
+            {
+              "group": "DocAgent",
+              "pages":
+              [
+                "docs/user-guide/reference-agents/docagent/index",
+                "docs/user-guide/reference-agents/docagent/docagent-performance"
+              ]
+            },
+            "docs/user-guide/reference-agents/a2uiagent",
+            "docs/user-guide/reference-agents/reasoningagent",
+            "docs/user-guide/reference-agents/deepresearchagent",
+            "docs/user-guide/reference-agents/websurferagent",
+            "docs/user-guide/reference-agents/wikipediaagent"
+          ]
+        },
+        {
+          "group": "Reference Tools",
+          "pages":
+          [
+            "docs/user-guide/reference-tools/index",
+            {
+              "group": "Google APIs",
+              "pages":
+              [
+                "docs/user-guide/reference-tools/google-api/youtube-search",
+                "docs/user-guide/reference-tools/google-api/google-search",
+                "docs/user-guide/reference-tools/google-api/google-drive"
+              ]
+            },
+            "docs/user-guide/reference-tools/perplexity-search",
+            "docs/user-guide/reference-tools/wikipedia-search",
+            "docs/user-guide/reference-tools/browser-use",
+            "docs/user-guide/reference-tools/code-execution",
+            {
+              "group": "Communication Platforms",
+              "pages":
+              [
+                "docs/user-guide/reference-tools/communication-platforms/discord",
+                "docs/user-guide/reference-tools/communication-platforms/slack",
+                "docs/user-guide/reference-tools/communication-platforms/telegram"
+              ]
+            },
+            "docs/user-guide/reference-tools/crawl4ai",
+            "docs/user-guide/reference-tools/deep-research",
+            "docs/user-guide/reference-tools/quick-research",
+            "docs/user-guide/reference-tools/firecrawl",
+            "docs/user-guide/reference-tools/searxng-search",
+            "docs/user-guide/reference-tools/tavily-search",
+            "docs/user-guide/reference-tools/tinyfish"
+          ]
+        },
+        {
+          "group": "A2A",
+          "pages": [
+            "docs/user-guide/a2a/index",
+            "docs/user-guide/a2a/server",
+            "docs/user-guide/a2a/client",
+            "docs/user-guide/a2a/a2ui"
+          ]
+        },
+        {
+          "group": "AG-UI",
+          "pages": [
+            "docs/user-guide/ag-ui/index",
+            "docs/user-guide/ag-ui/copilotkit-quickstart",
+            "docs/user-guide/ag-ui/backend-deepdive",
+            "docs/user-guide/ag-ui/a2ui"
+          ]
+        },
+        {
+          "group": "Observability",
+          "pages": [
+            "docs/user-guide/observability/logging_events",
+            "docs/user-guide/tracing/opentelemetry",
+            "docs/user-guide/tracing/remote-agents",
+            "docs/user-guide/tracing/local-setup"
+          ]
+        },
+        {
+          "group": "Deployments",
+          "pages": [
+            "docs/user-guide/deployments/deploy-an-agent-to-vertexai"
+          ]
+        },
+        {
+          "group": "CLI",
+          "pages": [
+            "docs/user-guide/cli/index",
+            "docs/user-guide/cli/run",
+            "docs/user-guide/cli/create",
+            "docs/user-guide/cli/serve",
+            "docs/user-guide/cli/test",
+            "docs/user-guide/cli/install",
+            "docs/user-guide/cli/replay",
+            "docs/user-guide/cli/arena",
+            "docs/user-guide/cli/proxy",
+            "docs/user-guide/cli/publish"
+          ]
+        },
+            "docs/user-guide/FAQ"
+      ]
+    },
+    {
+      "group": "Beta",
+      "pages": [
+        "docs/beta/motivation",
+        "docs/beta/agents",
+        "docs/beta/agent_harness",
+        "docs/beta/structured_output",
+        {
+          "group": "Models & Providers",
+          "pages": [
+            "docs/beta/model_configuration",
+            "docs/beta/inputs/inputs"
+          ]
+        },
+        "docs/beta/system_prompts",
+        "docs/beta/tasks",
+        "docs/beta/task_delegation",
+        {
+          "group": "Voice & Realtime",
+          "pages": [
+            "docs/beta/live/live",
+            "docs/beta/live/stt_tts",
+            "docs/beta/live/live_agent"
+          ]
+        },
+        {
+          "group": "Multi-Agent Network",
+          "pages": [
+            "docs/beta/network/overview",
+            "docs/beta/network/quick_start",
+            "docs/beta/network/hub_and_identity",
+            "docs/beta/network/agent_clients",
+            "docs/beta/network/human_client",
+            "docs/beta/network/network_assigned_tools",
+            {
+              "group": "Session Adapters",
+              "pages": [
+                "docs/beta/network/adapters_overview",
+                "docs/beta/network/conversation",
+                "docs/beta/network/consulting",
+                "docs/beta/network/discussion",
+                "docs/beta/network/workflow",
+                "docs/beta/network/context_variables",
+                "docs/beta/network/termination",
+                "docs/beta/network/migration_from_group_chat",
+                {
+                  "group": "Pattern Cookbook",
+                  "pages": [
+                    "docs/beta/network/pattern_cookbook/pattern_cookbook",
+                    "docs/beta/network/pattern_cookbook/pipeline",
+                    "docs/beta/network/pattern_cookbook/hierarchical",
+                    "docs/beta/network/pattern_cookbook/star",
+                    "docs/beta/network/pattern_cookbook/coordinator",
+                    "docs/beta/network/pattern_cookbook/escalation",
+                    "docs/beta/network/pattern_cookbook/redundant",
+                    "docs/beta/network/pattern_cookbook/feedback_loop",
+                    "docs/beta/network/pattern_cookbook/context_aware_routing",
+                    "docs/beta/network/pattern_cookbook/triage_with_tasks"
+                  ]
+                }
+              ]
+            },
+            "docs/beta/network/envelopes_and_events",
+            "docs/beta/network/expectations_and_audit",
+            "docs/beta/network/task_observation",
+            "docs/beta/network/views_and_skills"
+          ]
+        },
+        {
+          "group": "Tools",
+          "pages": [
+            "docs/beta/tools/tools",
+            "docs/beta/tools/toolkits",
+            "docs/beta/tools/common_toolkits",
+            "docs/beta/tools/mcp_servers",
+            "docs/beta/tools/builtin_tools",
+            "docs/beta/tools/code_execution",
+            "docs/beta/tools/local_shell",
+            "docs/beta/tools/tool_middleware",
+            "docs/beta/tools/approval_required"
+          ]
+        },
+        {
+          "group": "Extensions",
+          "pages": [
+            {
+              "group": "Tools",
+              "pages": [
+                {
+                  "group": "Search",
+                  "pages": [
+                    "docs/beta/extensions/tools/search/exa",
+                    "docs/beta/extensions/tools/search/tinyfish"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "group": "Context Features",
+          "pages": [
+            "docs/beta/context/variables",
+            "docs/beta/context/inject",
+            "docs/beta/context/human_in_the_loop"
+          ]
+        },
+        "docs/beta/depends",
+        "docs/beta/middleware",
+        "docs/beta/telemetry",
+        "docs/beta/testing",
+        {
+          "group": "Evaluation",
+          "pages": [
+            "docs/beta/evaluation/evaluation",
+            "docs/beta/evaluation/getting-started",
+            "docs/beta/evaluation/scorers",
+            "docs/beta/evaluation/runs",
+            "docs/beta/evaluation/variants",
+            "docs/beta/evaluation/pairwise",
+            "docs/beta/evaluation/persistence"
+          ]
+        },
+        {
+          "group": "Advanced Features",
+          "pages": [
+            "docs/beta/advanced/files",
+            "docs/beta/advanced/stream",
+            "docs/beta/advanced/observers",
+            "docs/beta/advanced/watches",
+            "docs/beta/advanced/knowledge_store",
+            "docs/beta/advanced/assembly",
+            "docs/beta/advanced/compaction",
+            "docs/beta/advanced/aggregation"
+          ]
+        },
+        {
+          "group": "AG-UI",
+          "pages": [
+            "docs/beta/ag-ui/index",
+            "docs/beta/ag-ui/copilotkit-quickstart",
+            "docs/beta/ag-ui/backend-deepdive"
+          ]
+        },
+        {
+          "group": "A2A",
+          "pages": [
+            "docs/beta/a2a/overview",
+            "docs/beta/a2a/server",
+            "docs/beta/a2a/client",
+            "docs/beta/a2a/tasks_and_push",
+            "docs/beta/a2a/advanced"
+          ]
+        },
+        "docs/beta/ag2_compatibility",
+        "docs/beta/roadmap",
+        "docs/beta/contribution_policy",
+        {
+          "group": "Code Examples",
+          "pages": [
+            "docs/beta/code_examples/code_examples",
+            "docs/beta/code_examples/01_hello_agent",
+            "docs/beta/code_examples/02_recipe_builder",
+            "docs/beta/code_examples/03_travel_planner",
+            "docs/beta/code_examples/04_token_watchdog",
+            "docs/beta/code_examples/05_research_squad",
+            "docs/beta/code_examples/06_journal_companion",
+            "docs/beta/code_examples/07_long_doc_chat",
+            "docs/beta/code_examples/08_safety_guard"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Contributor Guide",
+      "pages": [
+        "docs/contributor-guide/contributing",
+        "docs/contributor-guide/setup-development-environment",
+        "docs/contributor-guide/documentation",
+        "docs/contributor-guide/file-bug-report",
+        "docs/contributor-guide/maintainer",
+        {
+          "group": "How AG2 Works",
+          "pages": [
+            "docs/contributor-guide/how-ag2-works/overview",
+            "docs/contributor-guide/how-ag2-works/initiate-chat",
+            "docs/contributor-guide/how-ag2-works/generate-reply",
+            "docs/contributor-guide/how-ag2-works/hooks"
+          ]
+        },
+        {
+          "group": "Building Agents & Tools",
+          "pages": [
+            "docs/contributor-guide/building/creating-a-tool",
+            "docs/contributor-guide/building/creating-an-agent"
+          ]
+        },
+        "docs/contributor-guide/pre-commit",
+        "docs/contributor-guide/tests",
+        "docs/contributor-guide/Research"
+      ]
+    },
+    {
+      "group": "Ecosystem",
+      "pages": [
+        "docs/ecosystem/agentops",
+        "docs/ecosystem/azure_cosmos_db",
+        "docs/ecosystem/bindu",
+        "docs/ecosystem/composio",
+        "docs/ecosystem/databricks",
+        "docs/ecosystem/hindsight",
+        "docs/ecosystem/llamaindex",
+        "docs/ecosystem/mem0",
+        "docs/ecosystem/memgpt",
+        "docs/ecosystem/microsoft-fabric",
+        "docs/ecosystem/ollama",
+        "docs/ecosystem/pgvector",
+        "docs/ecosystem/portkey",
+        "docs/ecosystem/promptflow",
+        "docs/ecosystem/waldiez"
+      ]
+    },
+     {
+      "group": "Use Cases",
+      "pages": [
+        {
+          "group": "Use cases",
+          "pages": [
+            "docs/use-cases/use-cases/customer-service",
+            "docs/use-cases/use-cases/game-design",
+            "docs/use-cases/use-cases/travel-planning"
+          ]
+        },
+        {
+          "group": "Notebooks",
+          "pages": ["docs/use-cases/notebooks/Notebooks"]
+        },
+        "docs/use-cases/community-gallery/community-gallery"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "x": "https://x.com/ag2oss",
+    "github": "https://github.com/ag2ai/ag2",
+    "linkedin": "https://www.linkedin.com/company/ag2ai",
+    "discord": "https://discord.gg/pAbnFJrkgZ",
+    "youtube": "https://www.youtube.com/@ag2ai"
+  }
+}
