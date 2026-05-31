@@ -34,11 +34,12 @@ from autogen.beta.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
     VideoInput,
 )
-from autogen.beta.exceptions import UnsupportedInputError
+from autogen.beta.exceptions import ToolNotFoundError, UnsupportedInputError
 from autogen.beta.files.types import FileProvider, UploadedFile
 
 
@@ -851,8 +852,22 @@ class TestUnsupportedInputs:
             )
 
 
-def test_tool_result_missing_result_does_not_crash() -> None:
-    event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t")])
+def test_hallucinated_tool_call_maps_with_error_text() -> None:
+    # Regression: a not-found tool call used to leave result=None and crash on r.result.parts.
+    call = ToolCallEvent(id="tc_1", name="ghost_tool")
+    event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
+
     result = convert_messages([event], SerializerCls)
 
-    assert result == [{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": []}]}]
+    assert result == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "tc_1",
+                    "content": "autogen.beta.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
+                }
+            ],
+        }
+    ]
