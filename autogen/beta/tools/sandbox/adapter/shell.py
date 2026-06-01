@@ -16,8 +16,10 @@ if TYPE_CHECKING:
 
 
 class ShellAdapter:
-    """One :class:`ShellEnvironment` implementation that works on every
-    :class:`Sandbox`.
+    """Shell surface (``run`` / ``run_sync``) over any :class:`Sandbox`.
+
+    Implements the command policy once and works on every backend — local
+    subprocess, Docker container, Daytona sandbox, or any custom one.
 
     Filtering (``allowed`` / ``blocked`` / ``ignore`` / ``readonly``)
     lives here once. Execution delegates to the wrapped
@@ -30,6 +32,10 @@ class ShellAdapter:
                  :class:`~autogen.beta.annotations.Variable` parameters
                  get resolved against the active Context).
         allowed / blocked / ignore / readonly: command filter set.
+                 ``blocked`` is best-effort: it only matches the head command's
+                 prefix, so chaining (``;`` / ``|`` / ``&&`` / ``$(...)``) can
+                 bypass it. It is **not** a security boundary — use ``allowed`` /
+                 ``readonly`` or an isolated container for that.
         env: Extra environment variables passed into each command.
         timeout: Per-command timeout in seconds. ``None`` lets the
                  backend pick its default.
@@ -87,11 +93,12 @@ class ShellAdapter:
         if self._blocked is not None and any(matches(p, command) for p in self._blocked):
             return f"Command not allowed: {command!r}"
         if self._ignore is not None:
-            host = _host_workdir_for(self._sandbox)
-            if host is not None:
-                denied = check_ignore(command, host, self._ignore)
-                if denied is not None:
-                    return denied
+            # self.workdir gives a host Path for local backends and a
+            # PurePosixPath for remote/container ones — check_ignore handles
+            # both, so ignore applies on every backend (not just local).
+            denied = check_ignore(command, self.workdir, self._ignore)
+            if denied is not None:
+                return denied
         return None
 
     async def run(
@@ -158,11 +165,3 @@ def _format(result: ExecResult) -> str:
         suffix = f"[exit code: {result.exit_code}]"
         return f"{result.output}\n{suffix}" if result.output else suffix
     return result.output
-
-
-def _host_workdir_for(sandbox: "Sandbox | SandboxFactory"):  # type: ignore[no-untyped-def]
-    if isinstance(sandbox, SingletonFactory):
-        sandbox = sandbox.sandbox
-    if isinstance(sandbox, SandboxFactory):
-        return None
-    return getattr(sandbox, "host_workdir", None)

@@ -59,7 +59,12 @@ class SandboxShellTool(Tool):
                      local subprocess (``LocalEnvironment()``).
         allowed: Whitelist of command prefixes. When ``readonly`` is set and
                  ``allowed`` is ``None``, a read-only command set is used.
-        blocked: Blacklist of command prefixes.
+        blocked: Blacklist of command prefixes. Best-effort only: it matches
+                 just the head command's prefix, so chaining (``;`` / ``|`` /
+                 ``&&`` / ``$(...)``) bypasses it (``echo x; rm -rf ~`` is not
+                 blocked by ``blocked=["rm"]``). It is **not** a security
+                 boundary — use ``allowed`` / ``readonly`` or an isolated
+                 container backend for that.
         ignore: Glob patterns of paths that may not appear in a command.
         readonly: Restrict to read-only commands (cat/ls/grep/…).
         name / description / middleware: Tool wiring.
@@ -94,8 +99,12 @@ class SandboxShellTool(Tool):
                 readonly=readonly,
             )
 
-        def run_shell_command(command: str, ctx: Context) -> str:
-            return adapter.run_sync(command, context=ctx)
+        async def run_shell_command(command: str, ctx: Context) -> str:
+            # Async so the command runs in the agent's own event loop. A sync
+            # tool fn would be driven via asyncio.run() per call (a fresh loop
+            # each time), which breaks remote backends whose client is bound to
+            # the first loop (e.g. Daytona's httpx keep-alive pool).
+            return await adapter.run(command, context=ctx)
 
         self._adapter = adapter
         self._workdir = adapter.workdir

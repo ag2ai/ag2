@@ -118,7 +118,7 @@ class SkillsToolkit(Toolkit):
         runtime = self._runtime
 
         @tool(name=name, description=description, middleware=middleware)
-        def _run_skill_script(
+        async def _run_skill_script(
             name: Annotated[
                 str,
                 Field(description="Skill name returned by list_skills."),
@@ -159,7 +159,11 @@ class SkillsToolkit(Toolkit):
             if args:
                 command.extend(args)
 
+            # async + await env.run(...) so the command runs in the agent's own
+            # event loop. A sync path would drive remote backends via a throwaway
+            # asyncio.run() per call (a fresh loop each time), breaking clients
+            # bound to the first loop (e.g. Daytona's httpx keep-alive pool).
             env = runtime.shell(scripts_dir)
-            return env.run_sync(shlex.join(command))
+            return await env.run(shlex.join(command))
 
         return _run_skill_script

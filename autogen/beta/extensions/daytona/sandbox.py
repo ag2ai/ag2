@@ -93,6 +93,12 @@ class DaytonaSandbox(SandboxBase):
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
+    def __deepcopy__(self, memo: dict) -> "DaytonaSandbox":  # type: ignore[type-arg]
+        # A live cloud-sandbox handle holding loop-bound async state — not
+        # deepcopy-able and not meaningfully duplicable. Sharing on copy is the
+        # only sane semantics (lets a bare DaytonaSandbox be attached to a tool).
+        return self
+
     async def exec(
         self,
         argv: list[str],

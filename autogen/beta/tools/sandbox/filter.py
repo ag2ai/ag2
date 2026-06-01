@@ -2,18 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Command-level filters shared by :class:`ShellAdapter` and the legacy
-:class:`ShellEnvironment` aliases.
+"""Command-level filters used by :class:`ShellAdapter`.
 
-These helpers used to live on :mod:`autogen.beta.tools.shell.environment.base`,
-but the adapter that needs them sits inside the sandbox package — keeping them
-here lets the adapter import them without triggering ``shell`` package
-initialisation (which would re-enter sandbox and deadlock).
+The adapter implements the ``allowed`` / ``blocked`` / ``ignore`` / ``readonly``
+shell surface on top of any :class:`~autogen.beta.tools.sandbox.base.Sandbox`.
+These helpers live in the sandbox package so the adapter can import them without
+triggering ``shell`` package initialisation (which would re-enter sandbox and
+deadlock).
 """
 
 import fnmatch
+import posixpath
 import shlex
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath
 
 # Commands that only read state and never modify the filesystem.
 # Used when ``ShellAdapter.readonly=True`` and no explicit ``allowed``
@@ -80,25 +81,38 @@ def contains_shell_operator(command: str) -> bool:
     return any(op in command for op in _SHELL_OPERATORS)
 
 
-def check_ignore(command: str, workdir: Path, patterns: list[str]) -> str | None:
+def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) -> str | None:
     """Return ``"Access denied: <path>"`` if any literal path in *command* matches *patterns*.
 
     Tokens are extracted via :func:`shlex.split` to handle quoted paths. Each
     token is resolved relative to *workdir* and checked against each pattern.
     Returns ``None`` if no pattern matches.
+
+    *workdir* may be a host :class:`~pathlib.Path` (local backend) or a
+    :class:`~pathlib.PurePosixPath` (remote/container backend). For a host path
+    tokens are resolved against the real filesystem (symlinks included); for a
+    pure path they are normalised lexically (``posixpath.normpath``) so the
+    filter works on remote backends without touching the host filesystem.
     """
     try:
         tokens = shlex.split(command)
     except ValueError:
         tokens = command.split()
 
-    resolved_workdir = workdir.resolve()
+    host_backed = isinstance(workdir, Path)
+    if host_backed:
+        resolved_workdir: PurePath = workdir.resolve()
+    else:
+        resolved_workdir = PurePosixPath(posixpath.normpath(str(workdir)))
 
     for token in tokens:
-        try:
-            resolved = (workdir / token).resolve()
-        except Exception:
-            continue
+        if host_backed:
+            try:
+                resolved: PurePath = (workdir / token).resolve()
+            except Exception:
+                continue
+        else:
+            resolved = PurePosixPath(posixpath.normpath(posixpath.join(str(workdir), token)))
 
         try:
             rel = str(resolved.relative_to(resolved_workdir)).replace("\\", "/")

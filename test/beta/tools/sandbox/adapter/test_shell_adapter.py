@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest.mock import MagicMock
 
 import pytest
 
 from autogen.beta import Context
-from autogen.beta.tools.sandbox import LocalSandbox, Sandbox, ShellAdapter, SingletonFactory
+from autogen.beta.tools.sandbox import ExecResult, LocalSandbox, Sandbox, ShellAdapter, SingletonFactory
 
 
 class _RecordingFactory:
@@ -22,6 +22,26 @@ class _RecordingFactory:
     async def open(self, context: object = None) -> AsyncIterator[Sandbox]:
         self.contexts.append(context)
         yield self._sandbox
+
+
+class _FakeRemoteSandbox:
+    """A remote/container-style sandbox: a sandbox-side ``PurePosixPath``
+    workdir and no host filesystem (``host_workdir is None``)."""
+
+    def __init__(self) -> None:
+        self.execs: list[Sequence[str]] = []
+
+    @property
+    def workdir(self) -> PurePosixPath:
+        return PurePosixPath("/workspace")
+
+    @property
+    def host_workdir(self) -> None:
+        return None
+
+    async def exec(self, argv: Sequence[str], *, env: object = None, timeout: object = None) -> ExecResult:
+        self.execs.append(argv)
+        return ExecResult(output="ok", exit_code=0)
 
 
 class TestShellAdapterFiltering:
@@ -43,6 +63,24 @@ class TestShellAdapterFiltering:
         adapter = ShellAdapter(sandbox, ignore=["**/.env"])
         result = adapter.run_sync("cat .env")
         assert "Access denied" in result
+
+    @pytest.mark.asyncio
+    async def test_ignore_applies_on_remote_backend(self) -> None:
+        # A remote backend has no host workdir; ignore must still apply by
+        # matching literal argv paths against the sandbox-side workdir.
+        sandbox = _FakeRemoteSandbox()
+        adapter = ShellAdapter(sandbox, ignore=["**/.env"])
+        result = await adapter.run("cat .env")
+        assert "Access denied" in result
+        assert sandbox.execs == []  # blocked before reaching the backend
+
+    @pytest.mark.asyncio
+    async def test_ignore_allows_non_matching_on_remote_backend(self) -> None:
+        sandbox = _FakeRemoteSandbox()
+        adapter = ShellAdapter(sandbox, ignore=["**/.env"])
+        result = await adapter.run("cat README.md")
+        assert "ok" in result
+        assert len(sandbox.execs) == 1
 
     def test_readonly_blocks_writes_by_default(self, tmp_path: Path) -> None:
         sandbox = LocalSandbox(tmp_path)

@@ -148,3 +148,10 @@ class DockerEnvironment:
 
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
+
+    def __deepcopy__(self, memo: dict) -> "DockerEnvironment":  # type: ignore[type-arg]
+        # Shared resource handle: a copy is the SAME factory. The cached
+        # containers (and the threading.Lock guarding them — not deepcopy-able)
+        # are reused, not duplicated. This is what lets Agent.add_tool deepcopy
+        # a SandboxShellTool / SandboxCodeTool backed by this environment.
+        return self

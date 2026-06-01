@@ -2,9 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import json
 import sys
-from pathlib import Path
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -12,7 +15,7 @@ from autogen.beta import Agent, MemoryStream
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import LocalEnvironment, SandboxShellTool
-from autogen.beta.tools.sandbox import ShellAdapter
+from autogen.beta.tools.sandbox import ExecResult, SandboxFactory, ShellAdapter
 from autogen.beta.tools.sandbox.filter import check_ignore, matches
 
 
@@ -89,6 +92,26 @@ class TestCheckIgnore:
     def test_absolute_path_outside_workdir_blocked(self, tmp_path: Path) -> None:
         # Absolute path outside workdir must be denied regardless of patterns
         result = check_ignore("cat /etc/passwd", tmp_path, ["**/.env"])
+        assert result is not None
+        assert "Access denied" in result
+
+    def test_remote_pure_workdir_blocks_matching_path(self) -> None:
+        # Finding #2: a remote backend has no host filesystem — paths are
+        # checked lexically against a PurePosixPath workdir, no .resolve().
+        result = check_ignore("cat .env", PurePosixPath("/workspace"), ["**/.env"])
+        assert result is not None
+        assert ".env" in result
+
+    def test_remote_pure_workdir_allows_safe_path(self) -> None:
+        assert check_ignore("cat README.md", PurePosixPath("/workspace"), ["**/.env"]) is None
+
+    def test_remote_pure_workdir_blocks_traversal(self) -> None:
+        result = check_ignore("cat ../../etc/passwd", PurePosixPath("/workspace"), ["**/.env"])
+        assert result is not None
+        assert "Access denied" in result
+
+    def test_remote_pure_workdir_blocks_absolute_outside(self) -> None:
+        result = check_ignore("cat /etc/passwd", PurePosixPath("/workspace"), ["**/.env"])
         assert result is not None
         assert "Access denied" in result
 
@@ -370,3 +393,70 @@ class TestShellExecution:
         schemas = await shell.schemas(None)  # type: ignore[arg-type]
         description = schemas[0].function.description
         assert str(tmp_path) in description, f"workdir not in description: {description!r}"
+
+
+class _LoopRecordingSandbox:
+    """Minimal Sandbox that records the event loop each exec runs on."""
+
+    def __init__(self, loops: list[int]) -> None:
+        self._loops = loops
+
+    @property
+    def workdir(self) -> PurePosixPath:
+        return PurePosixPath("/workspace")
+
+    @property
+    def host_workdir(self) -> None:
+        return None
+
+    async def __aenter__(self) -> "_LoopRecordingSandbox":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def exec(
+        self, argv: list[str], *, env: dict[str, str] | None = None, timeout: float | None = None
+    ) -> ExecResult:
+        self._loops.append(id(asyncio.get_running_loop()))
+        return ExecResult(output="ok", exit_code=0)
+
+
+class _RecordingFactory:
+    """A SandboxFactory (not a SingletonFactory) yielding the recording sandbox."""
+
+    def __init__(self) -> None:
+        self.loops: list[int] = []
+        self._sandbox = _LoopRecordingSandbox(self.loops)
+
+    @asynccontextmanager
+    async def open(self, context: object = None) -> "AsyncIterator[_LoopRecordingSandbox]":
+        yield self._sandbox
+
+
+class TestShellRunsInAgentLoop:
+    """Regression for finding #1: SandboxShellTool's tool fn must be async so
+    every command runs in the agent's single event loop — not via a throw-away
+    asyncio.run() per call (which breaks loop-bound remote clients)."""
+
+    def _tc(self, command: str) -> ToolCallEvent:
+        return ToolCallEvent(arguments=json.dumps({"command": command}), name="run_shell_command")
+
+    @pytest.mark.asyncio
+    async def test_sequential_commands_share_one_event_loop(self) -> None:
+        factory = _RecordingFactory()
+        assert isinstance(factory, SandboxFactory)
+        shell = SandboxShellTool(factory)
+        config = TestConfig(
+            ModelResponse(tool_calls=ToolCallsEvent([self._tc("echo a")])),
+            ModelResponse(tool_calls=ToolCallsEvent([self._tc("echo b")])),
+            "done",
+        )
+        agent = Agent("a", config=config, tools=[shell])
+
+        await agent.ask("run two commands")
+
+        assert len(factory.loops) == 2, f"expected 2 exec calls, got {factory.loops}"
+        assert len(set(factory.loops)) == 1, (
+            f"shell commands ran on different event loops — the sync asyncio.run regression is back: {factory.loops}"
+        )

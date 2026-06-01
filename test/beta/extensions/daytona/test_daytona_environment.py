@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from copy import deepcopy
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,7 +11,12 @@ import pytest
 
 from autogen.beta import Context, Variable
 from autogen.beta.extensions.daytona import DaytonaEnvironment, DaytonaSandbox
+from autogen.beta.tools import SandboxShellTool
 from autogen.beta.tools.sandbox import SandboxFactory
+
+
+def _fake_daytona_client() -> Any:
+    return SimpleNamespace(create=AsyncMock(return_value=None), close=AsyncMock(return_value=None))
 
 
 def _fake_sandbox() -> Any:
@@ -115,3 +121,22 @@ class TestOpen:
             await factory.aclose()  # idempotent
 
         sandbox.delete.assert_awaited_once()
+
+
+class TestDeepcopy:
+    """Regression for finding #4: the threading.Lock held by the environment
+    makes it un-deepcopy-able, which broke Agent.add_tool (it deepcopies every
+    tool). __deepcopy__ returns self (shared handle)."""
+
+    def test_environment_deepcopy_returns_same_instance(self) -> None:
+        env = DaytonaEnvironment(api_key="test", image="python:3.12")
+        assert deepcopy(env) is env
+
+    def test_sandbox_deepcopy_returns_same_instance(self) -> None:
+        sandbox = DaytonaSandbox(client=_fake_daytona_client(), params={})
+        assert deepcopy(sandbox) is sandbox
+
+    def test_tool_backed_by_environment_is_deepcopyable(self) -> None:
+        # Exactly what Agent.add_tool -> FunctionTool.ensure_tool does.
+        tool = SandboxShellTool(DaytonaEnvironment(api_key="test", image="python:3.12"))
+        assert isinstance(deepcopy(tool), SandboxShellTool)

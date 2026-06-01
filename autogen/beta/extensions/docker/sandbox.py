@@ -101,6 +101,12 @@ class DockerSandbox(SandboxBase):
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
+    def __deepcopy__(self, memo: dict) -> "DockerSandbox":  # type: ignore[type-arg]
+        # A live container handle holding a threading.Lock — not deepcopy-able
+        # and not meaningfully duplicable. Sharing on copy is the only sane
+        # semantics (lets a bare DockerSandbox be attached to a tool).
+        return self
+
     async def exec(
         self,
         argv: list[str],
