@@ -23,7 +23,7 @@ from ..tools import Tool, Toolkit
 
 with optional_import_block():
     from mcp.shared.message import SessionMessage
-    from mcp.types import CallToolResult, ReadResourceResult, ResourceTemplate, TextContent
+    from mcp.types import CallToolResult, GetPromptResult, Prompt as MCPPrompt, ReadResourceResult, ResourceTemplate, TextContent
     from mcp.types import Tool as MCPTool
 
 __all__ = ["ResultSaved", "create_toolkit"]
@@ -255,15 +255,78 @@ Here is the correct format for the URI template:
 
     @classmethod
     @require_optional_import("mcp", "mcp")
+    def convert_prompt(  # type: ignore[no-any-unimported]
+        cls, prompt: Any, session: "ClientSession", **kwargs: Any
+    ) -> Tool:
+        """Convert an MCP prompt into an AG2 Tool.
+
+        Args:
+            prompt: The MCP prompt to convert.
+            session: The MCP client session.
+
+        Returns:
+            Tool: The converted AG2 Tool.
+        """
+        if not isinstance(prompt, MCPPrompt):
+            raise ValueError(f"Expected an instance of `mcp.types.Prompt`, got {type(prompt)}")
+
+        mcp_prompt: MCPPrompt = prompt  # type: ignore[no-any-unimported]
+
+        # Build argument descriptions for the docstring
+        arg_descriptions: list[str] = []
+        arg_properties: dict[str, Any] = {}
+        required_args: list[str] = []
+
+        if mcp_prompt.arguments:
+            for arg in mcp_prompt.arguments:
+                arg_descriptions.append(f"    {arg.name}: {arg.description or ''}")
+                arg_properties[arg.name] = {
+                    "type": "string",
+                    "description": arg.description or "",
+                }
+                if arg.required:
+                    required_args.append(arg.name)
+
+        arguments_description = "\n".join(arg_descriptions)
+        if arguments_description:
+            arguments_description = "\n\nArguments:\n" + arguments_description
+
+        prompt_description = f"{mcp_prompt.description or ''}{arguments_description}"
+
+        async def get_prompt(  # type: ignore[no-any-unimported]
+            **arguments: dict[str, Any],
+        ) -> "GetPromptResult":  # type: ignore[no-any-unimported]
+            result = await session.get_prompt(mcp_prompt.name, arguments)
+            return result
+
+        # Build JSON schema from prompt arguments
+        input_schema: dict[str, Any] = {
+            "type": "object",
+            "properties": arg_properties,
+        }
+        if required_args:
+            input_schema["required"] = required_args
+
+        ag2_tool = Tool(
+            name=mcp_prompt.name,
+            description=prompt_description.strip(),
+            func_or_tool=get_prompt,
+            parameters_json_schema=input_schema,
+        )
+        return ag2_tool
+
+    @classmethod
+    @require_optional_import("mcp", "mcp")
     async def load_mcp_toolkit(
         cls,
         session: "ClientSession",
         *,
         use_mcp_tools: bool,
         use_mcp_resources: bool,
+        use_mcp_prompts: bool,
         resource_download_folder: Path | None,
     ) -> Toolkit:  # type: ignore[no-any-unimported]
-        """Load all available MCP tools and convert them to AG2 Toolkit."""
+        """Load all available MCP capabilities and convert them to AG2 Toolkit."""
         all_ag2_tools: list[Tool] = []
 
         if use_mcp_tools:
@@ -282,6 +345,13 @@ Here is the correct format for the URI template:
                 for resource_template in resource_templates.resourceTemplates
             ]
             all_ag2_tools.extend(ag2_resources)
+
+        if use_mcp_prompts:
+            prompts = await session.list_prompts()
+            ag2_prompts: list[Tool] = [
+                cls.convert_prompt(prompt=prompt, session=session) for prompt in prompts.prompts
+            ]
+            all_ag2_tools.extend(ag2_prompts)
 
         return Toolkit(tools=all_ag2_tools)
 
@@ -331,6 +401,7 @@ async def create_toolkit(
     *,
     use_mcp_tools: bool = True,
     use_mcp_resources: bool = True,
+    use_mcp_prompts: bool = True,
     resource_download_folder: Path | str | None = None,
 ) -> Toolkit:  # type: ignore[no-any-unimported]
     """Create a toolkit from the MCP client session.
@@ -339,6 +410,7 @@ async def create_toolkit(
         session (ClientSession): The MCP client session.
         use_mcp_tools (bool): Whether to include MCP tools in the toolkit.
         use_mcp_resources (bool): Whether to include MCP resources in the toolkit.
+        use_mcp_prompts (bool): Whether to include MCP prompts in the toolkit.
         resource_download_folder (Optional[Union[Path, str]]): The folder to download files to.
 
     Returns:
@@ -352,6 +424,7 @@ async def create_toolkit(
         session=session,
         use_mcp_tools=use_mcp_tools,
         use_mcp_resources=use_mcp_resources,
+        use_mcp_prompts=use_mcp_prompts,
         resource_download_folder=resource_download_folder,
     )
 

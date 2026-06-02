@@ -18,6 +18,7 @@ from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.mcp.mcp_client import (
     DEFAULT_HTTP_REQUEST_TIMEOUT,
     DEFAULT_SSE_EVENT_READ_TIMEOUT,
+    MCPClient,
     MCPClientSessionManager,
     ResultSaved,
     SseConfig,
@@ -29,7 +30,7 @@ from test.credentials import Credentials
 with optional_import_block():
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
-    from mcp.types import ReadResourceResult, TextResourceContents
+    from mcp.types import GetPromptResult, Prompt, PromptArgument, ReadResourceResult, TextResourceContents
 
 
 class TestMCPClient:
@@ -215,6 +216,216 @@ class TestMCPClient:
             await result.process()
             summary = await result.summary
             assert "6912" in summary
+
+
+class TestMCPPrompts:
+    """Tests for MCP prompts support."""
+
+    @pytest.fixture
+    def prompts_server_params(self) -> "StdioServerParameters":  # type: ignore[no-any-unimported]
+        server_file = Path(__file__).parent / "prompts_server.py"
+        return StdioServerParameters(
+            command="python3",
+            args=[str(server_file)],
+        )
+
+    @pytest.mark.asyncio
+    async def test_prompts_list_and_get(self, prompts_server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
+        """Test that the prompts server provides prompts and get_prompt works."""
+        import anyio
+        from anyio import BrokenResourceError
+
+        try:
+            async with (
+                stdio_client(prompts_server_params) as (read, write),
+                ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
+            ):
+                await session.initialize()
+                result = await session.list_prompts()
+                prompt_names = [p.name for p in result.prompts]
+                assert "greeting" in prompt_names
+                assert "echo" in prompt_names
+                assert "code_review" in prompt_names
+
+                # Verify echo prompt has arguments
+                for p in result.prompts:
+                    if p.name == "echo":
+                        assert p.arguments is not None
+                        assert p.arguments[0].name == "message"
+                        assert p.arguments[0].required is True
+
+                # Get prompts and verify content
+                greeting = await session.get_prompt("greeting")
+                assert len(greeting.messages) == 1
+
+                echo = await session.get_prompt("echo", {"message": "test"})
+                assert "test" in echo.messages[0].content.text
+
+                review = await session.get_prompt(
+                    "code_review", {"code": "print(1)", "language": "python"}
+                )
+                assert "python" in review.messages[0].content.text
+        except BaseExceptionGroup as eg:
+            # Filter out BrokenResourceError during cleanup (MCP SDK quirk)
+            remaining = [
+                e
+                for e in eg.exceptions
+                if not (
+                    isinstance(e, BrokenResourceError)
+                    or (
+                        hasattr(e, "exceptions")
+                        and all(isinstance(x, BrokenResourceError) for x in e.exceptions)
+                    )
+                )
+            ]
+            if remaining:
+                raise BaseExceptionGroup("remaining errors", remaining)
+
+    @pytest.mark.asyncio
+    async def test_convert_prompt(self) -> None:  # type: ignore[no-any-unimported]
+        """Test converting an MCP prompt to an AG2 Tool using a mock session."""
+        from mcp.types import PromptMessage, TextContent
+
+        mock_session = AsyncMock()
+        mock_get_prompt = AsyncMock(
+            return_value=GetPromptResult(
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=TextContent(type="text", text="Echoing: hello world"),
+                    )
+                ]
+            )
+        )
+        mock_session.get_prompt = mock_get_prompt
+
+        mcp_prompt = Prompt(
+            name="test_echo",
+            description="Echo a message",
+            arguments=[
+                PromptArgument(name="message", description="The message to echo", required=True),
+            ],
+        )
+
+        tool = MCPClient.convert_prompt(prompt=mcp_prompt, session=mock_session)
+
+        assert tool.name == "test_echo"
+        assert "Echo a message" in tool.description
+
+        # Verify the function schema (from parameters_json_schema)
+        func_schema = tool._func_schema  # type: ignore[attr-defined]
+        assert func_schema is not None
+        assert func_schema["function"]["name"] == "test_echo"
+        assert "message" in func_schema["function"]["parameters"]["properties"]
+
+        # Call the tool
+        result = await tool(message="hello world")
+        mock_get_prompt.assert_called_once_with("test_echo", {"message": "hello world"})
+
+    @pytest.mark.asyncio
+    async def test_convert_prompt_no_args(self) -> None:  # type: ignore[no-any-unimported]
+        """Test converting a prompt without arguments."""
+        mock_session = AsyncMock()
+
+        mcp_prompt = Prompt(
+            name="simple_greeting",
+            description="A greeting prompt",
+        )
+
+        tool = MCPClient.convert_prompt(prompt=mcp_prompt, session=mock_session)
+
+        assert tool.name == "simple_greeting"
+        assert "A greeting prompt" in tool.description
+
+        # Should have empty properties since no args
+        assert tool._func_schema["function"]["parameters"]["properties"] == {}  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_convert_prompt_invalid_type(self) -> None:  # type: ignore[no-any-unimported]
+        """Test that convert_prompt raises ValueError for non-Prompt types."""
+        mock_session = AsyncMock()
+
+        with pytest.raises(ValueError, match="Expected an instance of"):
+            MCPClient.convert_prompt(prompt="not_a_prompt", session=mock_session)
+
+    @pytest.mark.asyncio
+    async def test_prompts_in_toolkit(self) -> None:  # type: ignore[no-any-unimported]
+        """Test that prompts are included in the toolkit via load_mcp_toolkit."""
+        mock_session = AsyncMock()
+        mock_session.list_prompts = AsyncMock(
+            return_value=type(
+                "ListPromptsResult",
+                (),
+                {
+                    "prompts": [
+                        Prompt(name="prompt_a", description="Prompt A"),
+                        Prompt(name="prompt_b", description="Prompt B"),
+                    ]
+                },
+            )()
+        )
+
+        toolkit = await MCPClient.load_mcp_toolkit(
+            session=mock_session,
+            use_mcp_tools=False,
+            use_mcp_resources=False,
+            use_mcp_prompts=True,
+            resource_download_folder=None,
+        )
+
+        assert len(toolkit) == 2
+        assert toolkit.get_tool("prompt_a") is not None
+        assert toolkit.get_tool("prompt_b") is not None
+
+    @pytest.mark.asyncio
+    async def test_prompts_disabled(self) -> None:  # type: ignore[no-any-unimported]
+        """Test that prompts can be excluded from the toolkit."""
+        mock_session = AsyncMock()
+
+        toolkit = await MCPClient.load_mcp_toolkit(
+            session=mock_session,
+            use_mcp_tools=False,
+            use_mcp_resources=False,
+            use_mcp_prompts=False,
+            resource_download_folder=None,
+        )
+
+        assert len(toolkit) == 0
+        # list_prompts should not have been called
+        mock_session.list_prompts.assert_not_called()
+
+
+    @pytest.mark.asyncio
+    async def test_prompts_in_full_toolkit(self, prompts_server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
+        """Test that prompts are included alongside tools and resources."""
+        import anyio
+        from anyio import BrokenResourceError
+
+        try:
+            async with (
+                stdio_client(prompts_server_params) as (read, write),
+                ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
+            ):
+                await session.initialize()
+                # The prompts server has no tools/resources, so with all enabled
+                # we should still get only prompts
+                toolkit = await create_toolkit(session=session)
+                assert len(toolkit) == 3
+        except BaseExceptionGroup as eg:
+            # Filter out BrokenResourceError during cleanup (MCP SDK quirk)
+            remaining = [
+                e
+                for e in eg.exceptions
+                if not (
+                    isinstance(e, BrokenResourceError)
+                    or (
+                        hasattr(e, "exceptions")
+                        and all(isinstance(x, BrokenResourceError) for x in e.exceptions)
+                    )
+                )
+            ]
+            if remaining:
+                raise BaseExceptionGroup("remaining errors", remaining)
 
 
 class MockClientSession:
