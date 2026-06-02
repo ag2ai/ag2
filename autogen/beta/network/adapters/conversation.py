@@ -43,9 +43,11 @@ from ..views.base import ViewPolicy
 from ..views.builtin import WindowedSummary
 from .base import (
     AdapterResult,
+    ExpectedTurn,
     default_build_packet_envelope,
     default_build_round_envelope,
     default_build_text_envelope,
+    default_expected_next,
     default_extract_turn_input,
     default_render_envelope,
 )
@@ -171,6 +173,15 @@ class ConversationAdapter:
         # Conversations end via explicit ``Hub.close_channel`` or TTL
         # — never via adapter-initiated transitions on accepted content.
         return AdapterResult()
+
+    def expected_next(
+        self,
+        metadata: ChannelMetadata,
+        state: ConversationState,
+    ) -> ExpectedTurn | None:
+        # Conversation has no turn ordering — any participant may
+        # speak at any time, so there is no expected next speaker.
+        return default_expected_next(metadata, state)
 
     def default_view_policy(
         self,

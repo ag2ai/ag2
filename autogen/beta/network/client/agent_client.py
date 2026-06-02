@@ -134,6 +134,38 @@ class AgentClient:
         self._disconnected = True
         self._on_envelope = None
 
+    async def resume_pending_turns(self) -> int:
+        """Re-fire the notify handler against every turn the protocol
+        currently expects from this agent.
+
+        Asks the hub for :class:`PendingTurn` entries
+        (:meth:`Hub.pending_turns_for`), fetches each turn's triggering
+        envelope from the WAL, and feeds it back through
+        :meth:`receive`. Returns the number of turns re-fired. Entries
+        without a triggering envelope are skipped — e.g. a freshly
+        opened channel where the creator has nothing to react to yet.
+
+        Idempotent under at-least-once delivery: if a prior reply
+        already landed, the agent's handler can short-circuit via
+        :meth:`Hub.find_envelope_by_causation` so the same logical
+        turn is not posted twice.
+        """
+        pending = await self._hub.pending_turns_for(self.agent_id)
+        triggered = 0
+        for turn in pending:
+            if turn.triggering_envelope_id is None:
+                continue
+            wal = await self._hub.read_wal(turn.channel_id)
+            envelope = next(
+                (e for e in wal if e.envelope_id == turn.triggering_envelope_id),
+                None,
+            )
+            if envelope is None:
+                continue
+            await self.receive(envelope)
+            triggered += 1
+        return triggered
+
     async def _run_default_handler(self, envelope: Envelope) -> None:
         """Bound-method wrapper around :func:`handlers.default_handler`.
 
@@ -175,8 +207,7 @@ class AgentClient:
         """Open a channel via the hub and return its :class:`Channel` handle.
 
         ``target`` accepts peer **names** or agent_ids; resolution goes
-        through the bound :class:`HubClient` so in-process and any
-        future cross-process transport take the same code path.
+        through the bound :class:`HubClient`.
         """
         if self._disconnected:
             raise RuntimeError("AgentClient is disconnected")

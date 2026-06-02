@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from autogen.beta.events import (
+    TaskCancelled,
     TaskCompleted,
     TaskExpired,
     TaskFailed,
@@ -50,10 +51,10 @@ class TaskMirror:
     ``agent_id``). Attach to a stream for the duration of a notify
     handler / Agent.ask call, then detach.
 
-    The mirror routes through a :class:`HubClient` so the same call
-    sites work for both in-process and any future cross-process
-    transport. Tests that hold a bare ``Hub`` can still pass it
-    directly via the legacy ``hub=`` keyword for convenience.
+    The mirror routes through a :class:`HubClient` so task-event
+    forwarding goes through the same surface as the rest of the client.
+    Tests that hold a bare ``Hub`` can still pass it directly via the
+    ``hub=`` keyword for convenience.
 
     Failures forwarding to the hub are swallowed — the mirror must
     never crash the agent's turn.
@@ -141,6 +142,7 @@ class TaskMirror:
             stream.where(TaskCompleted).subscribe(self._on_completed, sync_to_thread=False),
             stream.where(TaskFailed).subscribe(self._on_failed, sync_to_thread=False),
             stream.where(TaskExpired).subscribe(self._on_expired, sync_to_thread=False),
+            stream.where(TaskCancelled).subscribe(self._on_cancelled, sync_to_thread=False),
         ]
 
     def detach(self, stream: "Stream", sub_ids: list[object]) -> None:
@@ -240,6 +242,19 @@ class TaskMirror:
         except Exception as exc:
             await self._escalate(event.task_id, "expired", exc)
         await self._record_observation_if_tagged(event.task_id, TaskState.EXPIRED)
+
+    async def _on_cancelled(self, event: TaskCancelled) -> None:
+        try:
+            await self._update(
+                event.task_id,
+                state=TaskState.CANCELLED,
+                error=event.reason or None,
+            )
+        except NotFoundError:
+            pass
+        except Exception as exc:
+            await self._escalate(event.task_id, "cancelled", exc)
+        await self._record_observation_if_tagged(event.task_id, TaskState.CANCELLED)
 
     async def _record_observation_if_tagged(self, task_id: str, outcome: TaskState) -> None:
         """If the task's spec carried a ``capability`` tag, push the

@@ -186,6 +186,21 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         if metadata.is_terminal() or metadata.state != ChannelState.ACTIVE:
             return
 
+        # At-least-once redelivery guard. If this agent already posted a
+        # reply caused by this envelope, the turn is already done —
+        # re-running the LLM would duplicate the post. The reply carries
+        # ``causation_id = envelope.envelope_id`` (stamped below), so a
+        # prior reply is found under this agent's (channel, causation)
+        # key. Checked before the turn-ownership probe so a redelivery is
+        # a no-op regardless of whose turn it now is.
+        prior = await client._hub_client.find_envelope_by_causation(
+            metadata.channel_id,
+            sender_id=client.agent_id,
+            causation_id=envelope.envelope_id,
+        )
+        if prior is not None:
+            return
+
         # "Can we respond now?" — ask the hub via the public probe surface
         # so the handler doesn't need to reach into adapter internals.
         if not client._hub_client.can_send(envelope.channel_id, client.agent_id):

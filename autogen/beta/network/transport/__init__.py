@@ -2,16 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Transport layer — frames + Link Protocol + ``LocalLink``.
+"""Transport layer — frames + Link Protocol + ``LocalLink`` + ``WsLink``.
 
-Ships ``LocalLink`` (in-memory duplex). The ``Link`` Protocol surface
-lets cross-process transports plug in without affecting layers above.
+Ships ``LocalLink`` (in-memory duplex) and ``WsLink`` (WebSocket).
+``WsLink`` requires the ``ag2[network-ws]`` extra; if ``websockets``
+is not installed the names are replaced with a stub that raises a
+descriptive ``ImportError`` on use.
 """
+
+from autogen.beta.exceptions import missing_optional_dependency
 
 from .frames import (
     AcceptFrame,
     ErrorFrame,
-    EventFrame,
     Frame,
     HelloFrame,
     NotifyFrame,
@@ -19,8 +22,6 @@ from .frames import (
     PongFrame,
     ReceiptFrame,
     SendFrame,
-    SubscribeFrame,
-    UnsubscribeFrame,
     WelcomeFrame,
     decode_frame,
     encode_frame,
@@ -28,10 +29,17 @@ from .frames import (
 from .link import LinkClient, LinkEndpoint
 from .local import LocalLink, LocalLinkClient, LocalLinkEndpoint
 
+try:
+    from .ws import WsLink, WsLinkClient, WsLinkEndpoint, serve_ws
+except ImportError as e:
+    WsLink = missing_optional_dependency("WsLink", "network-ws", e)  # type: ignore[misc, assignment]
+    WsLinkClient = missing_optional_dependency("WsLinkClient", "network-ws", e)  # type: ignore[misc, assignment]
+    WsLinkEndpoint = missing_optional_dependency("WsLinkEndpoint", "network-ws", e)  # type: ignore[misc, assignment]
+    serve_ws = missing_optional_dependency("serve_ws", "network-ws", e)  # type: ignore[misc, assignment]
+
 __all__ = (
     "AcceptFrame",
     "ErrorFrame",
-    "EventFrame",
     "Frame",
     "HelloFrame",
     "LinkClient",
@@ -44,9 +52,11 @@ __all__ = (
     "PongFrame",
     "ReceiptFrame",
     "SendFrame",
-    "SubscribeFrame",
-    "UnsubscribeFrame",
     "WelcomeFrame",
+    "WsLink",
+    "WsLinkClient",
+    "WsLinkEndpoint",
     "decode_frame",
     "encode_frame",
+    "serve_ws",
 )
