@@ -49,9 +49,5 @@ class HubBackedCheckpointStore:
         return await self._hub.read_task_checkpoint(task_id)
 
 
-# Structural conformance check: confirm at import time that
-# ``HubBackedCheckpointStore`` satisfies the Protocol. The check is
-# free (Protocol membership) and surfaces any drift between the
-# Protocol surface and this canonical impl immediately.
-_protocol_check: CheckpointStore = HubBackedCheckpointStore.__new__(HubBackedCheckpointStore)
-del _protocol_check
+if TYPE_CHECKING:
+    _check: CheckpointStore = HubBackedCheckpointStore.__new__(HubBackedCheckpointStore)
