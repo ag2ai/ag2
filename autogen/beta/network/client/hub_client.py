@@ -8,10 +8,11 @@ Lazy-connects the underlying ``LinkClient`` on first ``register``;
 demultiplexes inbound ``NotifyFrame``s to the appropriate
 ``AgentClient``; provides discovery passthroughs.
 
-With ``LocalLink``, the ``HubClient`` holds an explicit in-process
-``hub`` reference so register / discovery / mutation cut through wire
-serialisation. A cross-process transport keeps ``hub=None`` and runs
-every operation through frames.
+The ``HubClient`` holds an in-process ``hub`` reference: register,
+discovery, and identity/channel mutation are direct method calls on
+it. The link carries dispatched envelopes — they arrive as
+``NotifyFrame``s and the receiving side acks them with
+``ReceiptFrame``s.
 """
 
 import asyncio
@@ -27,7 +28,7 @@ from ..channel import ChannelMetadata, ChannelState
 from ..envelope import Envelope
 from ..identity import Passport, Resume
 from ..rule import Rule
-from ..transport.frames import NotifyFrame
+from ..transport.frames import NotifyFrame, ReceiptFrame
 from ..transport.local import LocalLink, LocalLinkClient
 from ..views.base import ViewPolicy
 from .agent_client import AgentClient
@@ -46,11 +47,10 @@ logger = logging.getLogger(__name__)
 class HubClient:
     """One connection to a hub. Multiple ``AgentClient``s register through it.
 
-    Takes a ``link`` (currently ``LocalLink``) and an explicit ``hub``
+    Takes a ``link`` (``LocalLink``) and an in-process ``hub``
     reference. The link carries dispatched envelopes via
-    ``NotifyFrame``; the direct hub reference is used for register /
-    discovery / mutation calls (cuts through wire serialisation when
-    we're in-process).
+    ``NotifyFrame`` and their acks via ``ReceiptFrame``; the hub
+    reference serves register / discovery / mutation as direct calls.
 
     A single tenant process should hold one ``HubClient`` per hub it
     connects to.
@@ -111,18 +111,67 @@ class HubClient:
         (``audience=None``) reach the right ``AgentClient`` without
         the demuxer re-walking channel participants. Frames missing a
         ``recipient_id`` fall back to ``audience``-based routing.
+
+        After the receiving handler returns, a ``ReceiptFrame`` flows
+        back to the hub so the per-agent inbox cursor advances and a
+        future reconnect does not replay the envelope. Handler
+        exceptions produce a ``nack`` receipt so the cursor stays put
+        and the envelope is replayed on the next reconnect.
         """
         if frame.recipient_id:
             client = self._clients.get(frame.recipient_id)
             if client is not None:
-                await client.receive(frame.envelope)
+                await self._deliver_and_ack(client, frame.envelope, frame.recipient_id)
             return
         if frame.envelope.audience is None:
             return
         for recipient_id in frame.envelope.audience:
             client = self._clients.get(recipient_id)
             if client is not None:
-                await client.receive(frame.envelope)
+                await self._deliver_and_ack(client, frame.envelope, recipient_id)
+
+    async def _deliver_and_ack(
+        self,
+        client: AgentClient,
+        envelope: Envelope,
+        recipient_id: str,
+    ) -> None:
+        status = "ack"
+        reason = ""
+        try:
+            await client.receive(envelope)
+        except Exception as exc:
+            # Handler exceptions are already surfaced through
+            # ``HubListener.on_turn_failed`` by the default handler;
+            # the receipt mirrors the outcome so the cursor reflects
+            # what was actually processed.
+            status = "nack"
+            reason = str(exc)
+            logger.exception(
+                "notify handler raised: channel=%s event=%s recipient=%s",
+                envelope.channel_id,
+                envelope.event_type,
+                recipient_id,
+            )
+        if not envelope.envelope_id or self._client_link is None:
+            return
+        try:
+            await self._client_link.send_frame(
+                ReceiptFrame(
+                    envelope_id=envelope.envelope_id,
+                    status=status,
+                    recipient_id=recipient_id,
+                    channel_id=envelope.channel_id,
+                    reason=reason,
+                )
+            )
+        except Exception:
+            logger.exception(
+                "receipt send failed: channel=%s envelope=%s recipient=%s",
+                envelope.channel_id,
+                envelope.envelope_id,
+                recipient_id,
+            )
 
     # ── Registration ─────────────────────────────────────────────────────────
 
@@ -138,10 +187,11 @@ class HubClient:
     ) -> AgentClient:
         """Register an agent and return its ``AgentClient`` handle.
 
-        Direct hub call for register (in-process); the resulting
-        ``agent_id`` is bound to this connection's endpoint so
-        dispatched ``NotifyFrame``s reach the right ``AgentClient``. A
-        cross-process transport binds via ``HelloFrame`` instead.
+        Direct hub call for register; the resulting ``agent_id`` is
+        bound to this connection's endpoint so dispatched
+        ``NotifyFrame``s reach the right ``AgentClient``. (Over a wire
+        transport, an endpoint binds to an already-registered identity
+        through the ``HelloFrame`` handshake rather than this call.)
 
         ``attach_plugin=True`` (default) attaches the ``NetworkPlugin``
         which adds ``say`` and ``delegate`` to ``agent.tools`` and
@@ -177,6 +227,81 @@ class HubClient:
             hub_client=self,
         )
         self._clients[passport.agent_id] = client
+
+        if attach_plugin:
+            plugin = NetworkPlugin(client)
+            plugin.register(agent)
+
+        return client
+
+    async def attach(
+        self,
+        agent: Agent,
+        name: str,
+        *,
+        passport: Passport | None = None,
+        resume: Resume | None = None,
+        rule: Rule | None = None,
+        skill_md: str | None = None,
+        attach_plugin: bool = True,
+    ) -> AgentClient:
+        """Bind ``agent`` to the hub identity named ``name``.
+
+        Reconnect-aware companion to :meth:`register`. If ``name`` is
+        already registered with the hub the existing ``agent_id`` is
+        re-bound to this connection's endpoint — any prior endpoint
+        mapping for that identity is evicted (the prior endpoint stays
+        alive for any other agents bound to it). A fresh
+        :class:`AgentClient` is constructed against the existing
+        passport / resume / rule loaded from the hub.
+
+        If ``name`` is not registered, falls back to
+        :meth:`register`. ``passport`` and ``resume`` become required
+        in that path; ``rule`` / ``skill_md`` / ``attach_plugin``
+        are passed through identically.
+
+        Idempotent for the same ``HubClient`` connection: calling
+        ``attach`` twice with the same ``name`` and the same agent
+        re-binds harmlessly.
+        """
+        if self._closed:
+            raise RuntimeError("HubClient is closed")
+
+        existing_agent_id = self._hub.find_agent_id(name)
+        if existing_agent_id is None:
+            if passport is None or resume is None:
+                raise ValueError(
+                    f"attach({name!r}): name is not registered; "
+                    "passport and resume are required to fall back to register()"
+                )
+            return await self.register(
+                agent,
+                passport,
+                resume,
+                skill_md=skill_md,
+                rule=rule,
+                attach_plugin=attach_plugin,
+            )
+
+        # Re-bind path: identity exists, hook this connection's
+        # endpoint to it and build a fresh AgentClient against the
+        # persisted passport / resume / rule.
+        client_link = self._ensure_connected()
+        existing_passport = await self._hub.get_agent(existing_agent_id)
+        existing_resume = await self._hub.get_resume(existing_agent_id)
+        existing_rule = await self._hub.get_rule(existing_agent_id)
+
+        self._hub.bind_endpoint(client_link.endpoint_id, existing_agent_id)
+
+        client = AgentClient(
+            agent=agent,
+            passport=existing_passport,
+            resume=existing_resume,
+            rule=existing_rule,
+            hub=self._hub,
+            hub_client=self,
+        )
+        self._clients[existing_agent_id] = client
 
         if attach_plugin:
             plugin = NetworkPlugin(client)
@@ -238,11 +363,11 @@ class HubClient:
         self._clients[passport.agent_id] = human  # type: ignore[assignment]
         return human
 
-    # ── Hub control-plane passthrough ────────────────────────────────────────
+    # ── Hub passthrough ──────────────────────────────────────────────────────
     #
-    # Forwards directly to the in-process hub. A cross-process transport
-    # would replace these bodies with frame-based RPC; the call sites on
-    # ``AgentClient`` / handlers stay the same.
+    # Forwards directly to the in-process hub: discovery, identity
+    # mutation, channel lifecycle, and task observation. ``AgentClient``
+    # and the default handlers reach the hub only through these methods.
 
     # — Discovery —
 
@@ -254,6 +379,13 @@ class HubClient:
 
     async def get_skill(self, agent_id: str) -> str | None:
         return await self._hub.get_skill(agent_id)
+
+    def find_agent_id(self, name: str) -> str | None:
+        """Non-raising name → agent_id lookup."""
+        return self._hub.find_agent_id(name)
+
+    async def get_rule(self, agent_id: str) -> Rule:
+        return await self._hub.get_rule(agent_id)
 
     async def list_agents(
         self,
@@ -368,6 +500,23 @@ class HubClient:
 
     async def read_wal(self, channel_id: str, *, since: int = 0, until: int | None = None) -> list[Envelope]:
         return await self._hub.read_wal(channel_id, since=since, until=until)
+
+    async def find_envelope_by_causation(
+        self,
+        channel_id: str,
+        *,
+        sender_id: str,
+        causation_id: str,
+    ) -> Envelope | None:
+        """Return the envelope a sender previously posted under this
+        causation key, or ``None``. The default notify handler uses this
+        to skip work when an at-least-once redelivery re-triggers a turn
+        it has already answered."""
+        return await self._hub.find_envelope_by_causation(
+            channel_id,
+            sender_id=sender_id,
+            causation_id=causation_id,
+        )
 
     def can_send(
         self,

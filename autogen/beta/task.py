@@ -6,29 +6,46 @@
 
 A ``Task`` is a wrapper any ``Agent`` (or other actor) can use to give a
 unit of work a trackable lifecycle. The Task emits ``TaskStarted``,
-``TaskProgress``, ``TaskCompleted``, ``TaskFailed``, and ``TaskExpired``
-events on a bound stream so any observer (network mirror, watcher, UI,
-test harness) can follow along without participating in execution.
+``TaskProgress``, ``TaskCompleted``, ``TaskFailed``, ``TaskExpired``,
+and ``TaskCancelled`` events on a bound stream so any observer (network
+mirror, watcher, UI, test harness) can follow along without
+participating in execution.
 
 Tasks are agent-owned. The framework does not assign or schedule them.
 Standalone usage requires no hub or network — events fly past harmlessly
 if no observer subscribes. Network observation is layered on top via
 ``autogen.beta.network``.
+
+Tasks can checkpoint owner-defined resume state via
+:meth:`Task.checkpoint`. When ``Task`` is constructed with
+``checkpoint_store=`` (typically the network's
+``HubBackedCheckpointStore``), the state is persisted under
+``task_id``. Construction with ``resume_from=prior_task_id`` reads
+back the prior checkpoint and exposes it via :attr:`resumed_state` so
+the owner can pick up mid-flow after a restart.
 """
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated, Any, Protocol, runtime_checkable
 from uuid import uuid4
 
 from .annotations import Inject
 from .context import ConversationContext
-from .events import TaskCompleted, TaskExpired, TaskFailed, TaskProgress, TaskStarted
+from .events import (
+    TaskCancelled,
+    TaskCompleted,
+    TaskExpired,
+    TaskFailed,
+    TaskProgress,
+    TaskStarted,
+)
 from .stream import MemoryStream
 
 __all__ = (
     "TERMINAL_TASK_STATES",
+    "CheckpointStore",
     "Task",
     "TaskInject",
     "TaskMetadata",
@@ -48,13 +65,36 @@ class TaskState(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     EXPIRED = "expired"
+    CANCELLED = "cancelled"
 
 
 TERMINAL_TASK_STATES: frozenset[TaskState] = frozenset({
     TaskState.COMPLETED,
     TaskState.FAILED,
     TaskState.EXPIRED,
+    TaskState.CANCELLED,
 })
+
+
+@runtime_checkable
+class CheckpointStore(Protocol):
+    """Persistence Protocol for owner-supplied task resume state.
+
+    Implementations write opaque JSON-serialisable dicts keyed by
+    ``task_id`` and read them back. The framework never inspects the
+    payload — the owner picks what to checkpoint, when, and how to
+    interpret it on resume. ``read`` returns ``None`` if no checkpoint
+    has been written for the given id.
+
+    Networked agents typically use ``HubBackedCheckpointStore`` (in
+    ``autogen.beta.network.client.checkpoint``) which delegates to the
+    hub. Standalone agents may supply any store satisfying this
+    Protocol or omit checkpointing entirely.
+    """
+
+    async def write(self, task_id: str, state: dict[str, Any]) -> None: ...
+
+    async def read(self, task_id: str) -> dict[str, Any] | None: ...
 
 
 @dataclass(slots=True)
@@ -135,6 +175,8 @@ class Task:
         spec: TaskSpec,
         context: ConversationContext | None = None,
         ttl_seconds: int | None = None,
+        checkpoint_store: CheckpointStore | None = None,
+        resume_from: str | None = None,
     ) -> None:
         # __init__ stores params; side effects happen in __aenter__.
         self._owner_id = owner_id
@@ -145,6 +187,12 @@ class Task:
         self._metadata: TaskMetadata | None = None
         self._had_previous_dep = False
         self._previous_dep: Any = None
+        self._checkpoint_store = checkpoint_store
+        self._resume_from = resume_from
+        # Populated in ``__aenter__`` by reading from ``checkpoint_store``
+        # when ``resume_from`` is set; ``None`` otherwise (including the
+        # case where the resume target has no checkpoint on file).
+        self._resumed_state: dict[str, Any] | None = None
 
     @property
     def task_id(self) -> str:
@@ -169,6 +217,17 @@ class Task:
         if self._context is None:
             raise RuntimeError("Task has no bound context (use 'async with task: ...')")
         return self._context
+
+    @property
+    def resumed_state(self) -> dict[str, Any] | None:
+        """The checkpoint loaded for a ``resume_from`` task, if any.
+
+        ``None`` when no ``resume_from`` was supplied, when no
+        ``checkpoint_store`` was wired, or when the target task had no
+        checkpoint on file. The value is the exact dict the prior
+        owner passed to :meth:`Task.checkpoint`; callers interpret it.
+        """
+        return self._resumed_state
 
     async def progress(self, payload: dict[str, Any]) -> None:
         """Emit ``TaskProgress``; merges payload into ``metadata.progress``.
@@ -260,6 +319,52 @@ class Task:
             )
         )
 
+    async def cancel(self, reason: str = "") -> None:
+        """Terminal: emit ``TaskCancelled``; state ← CANCELLED.
+
+        Owner-driven cancellation — distinct from ``fail`` (the work
+        could not complete) and ``expire`` (TTL elapsed). Peers may
+        request cancellation via the ``ag2.task.cancel_request``
+        envelope; the owner decides whether to honour by calling this
+        method. ``reason`` is a free-form diagnostic surfaced on the
+        emitted ``TaskCancelled`` event. No-op if already terminal.
+        """
+        if self._metadata is None:
+            raise RuntimeError("Task.cancel() called before __aenter__")
+        if self._metadata.state in TERMINAL_TASK_STATES:
+            return
+        self._metadata.state = TaskState.CANCELLED
+        self._metadata.completed_at = _now_iso()
+        if reason:
+            self._metadata.error = reason
+        await self.context.send(
+            TaskCancelled(
+                task_id=self._metadata.task_id,
+                agent_name=self._owner_id,
+                objective=self._spec.title,
+                reason=reason,
+            )
+        )
+
+    async def checkpoint(self, state: dict[str, Any]) -> None:
+        """Persist owner-supplied resume state via the configured store.
+
+        Distinct from :meth:`progress` — progress is observable
+        bookkeeping (emitted as ``TaskProgress``); a checkpoint is a
+        crash-recovery snapshot the owner reads back on the next run
+        via ``Task(..., resume_from=task_id)``. Silent no-op when no
+        ``checkpoint_store`` was supplied (standalone agents that
+        haven't opted in pay no cost) or when the task is already
+        terminal.
+        """
+        if self._metadata is None:
+            raise RuntimeError("Task.checkpoint() called before __aenter__")
+        if self._metadata.state in TERMINAL_TASK_STATES:
+            return
+        if self._checkpoint_store is None:
+            return
+        await self._checkpoint_store.write(self._metadata.task_id, dict(state))
+
     async def __aenter__(self) -> "Task":
         if self._metadata is not None:
             raise RuntimeError(f"Task already entered (state={self._metadata.state})")
@@ -267,6 +372,9 @@ class Task:
         if self._context is None:
             self._context = ConversationContext(stream=MemoryStream())
             self._owns_context = True
+
+        if self._resume_from is not None and self._checkpoint_store is not None:
+            self._resumed_state = await self._checkpoint_store.read(self._resume_from)
 
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
