@@ -1,0 +1,578 @@
+## Multi-Agent Examples with MCP
+
+This guide builds on the [MCP Clients](/docs/user-guide/advanced-concepts/tools/mcp/client) tutorial and demonstrates how to use MCP tools in multi-agent setups.
+
+You will learn three patterns:
+
+1. **Multi-agent with one MCP server** -- Two or more agents share a single MCP server session.
+2. **Multi-agent with multiple MCP servers** -- Each agent connects to its own MCP server.
+3. **Single-agent with multiple MCP servers** -- One agent uses tools from several MCP servers.
+
+These examples assume you have already installed AG2 with MCP support:
+
+```bash
+pip install -U ag2[openai,mcp]
+```
+
+### Setting Up MCP Servers
+
+We will create two simple MCP servers for the examples below.
+
+**math_server.py** exposes `add` and `multiply` tools:
+
+```python
+mcp_math_server_code = """# math_server.py
+import argparse
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("MathServer")
+
+
+@mcp.tool()
+def add(a: int, b: int) -> int:
+    \"\"\"Add two numbers\"\"\"
+    return a + b
+
+
+@mcp.tool()
+def multiply(a: int, b: int) -> int:
+    \"\"\"Multiply two numbers\"\"\"
+    return a * b
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Math MCP Server")
+    parser.add_argument("transport", choices=["stdio"], help="Transport mode")
+    args = parser.parse_args()
+    mcp.run(transport=args.transport)
+"""
+```
+
+**text_server.py** exposes `uppercase` and `reverse` tools:
+
+```python
+mcp_text_server_code = """# text_server.py
+import argparse
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("TextServer")
+
+
+@mcp.tool()
+def uppercase(text: str) -> str:
+    \"\"\"Convert text to uppercase\"\"\"
+    return text.upper()
+
+
+@mcp.tool()
+def reverse(text: str) -> str:
+    \"\"\"Reverse the text\"\"\"
+    return text[::-1]
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Text MCP Server")
+    parser.add_argument("transport", choices=["stdio"], help="Transport mode")
+    args = parser.parse_args()
+    mcp.run(transport=args.transport)
+"""
+```
+
+Write both server scripts to disk:
+
+```python
+from pathlib import Path
+
+Path("math_server.py").write_text(mcp_math_server_code)
+Path("text_server.py").write_text(mcp_text_server_code)
+```
+
+---
+
+### Example 1: Multi-Agent with One MCP Server
+
+In this pattern, two agents share the same MCP session. One agent (the **planner**) suggests tool calls, while the other agent (the **executor**) executes them. Both use tools from the same MCP server -- `math_server.py`.
+
+```python
+import asyncio
+from datetime import timedelta
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+from autogen import AssistantAgent, LLMConfig
+from autogen.mcp import create_toolkit
+
+# Only needed for Jupyter notebooks
+import nest_asyncio
+
+nest_asyncio.apply()
+
+math_server_path = Path("math_server.py")
+
+
+async def example_1() -> None:
+    """Multi-agent with one MCP server: planner suggests, executor runs."""
+    server_params = StdioServerParameters(
+        command="python",
+        args=[str(math_server_path), "stdio"],
+    )
+
+    async with stdio_client(server_params) as (read, write), ClientSession(
+        read, write, read_timeout_seconds=timedelta(seconds=30)
+    ) as session:
+        await session.initialize()
+        toolkit = await create_toolkit(session=session)
+
+        # Planner suggests tool calls (has LLM config)
+        planner = AssistantAgent(
+            name="planner",
+            llm_config=LLMConfig(
+                config_list={"model": "gpt-5-nano", "api_type": "openai"}
+            ),
+            system_message="You are a math planner. Use the available tools to solve problems.",
+        )
+
+        # Executor runs tool calls (no LLM needed for execution)
+        executor = AssistantAgent(
+            name="executor",
+            human_input_mode="NEVER",
+        )
+
+        # Register: planner suggests tools, executor runs them
+        toolkit.register_for_llm(planner)
+        toolkit.register_for_execution(executor)
+
+        # Start the two-agent conversation
+        result = await executor.a_initiate_chat(
+            recipient=planner,
+            message="Calculate 123456 + 789012 and multiply the result by 2.",
+            max_turns=4,
+        )
+
+
+asyncio.run(example_1())
+```
+
+#### What Happens
+
+1. The `executor` sends the math problem to the `planner`.
+2. The `planner` (assistant role) decides to use the `add` and `multiply` tools and suggests tool calls.
+3. The `executor` receives the tool call suggestions and executes them against the MCP server.
+4. Tool results are sent back to the `planner`, which produces the final answer.
+
+#### Expected Output
+
+```console
+executor (to planner):
+
+Calculate 123456 + 789012 and multiply the result by 2.
+
+--------------------------------------------------------------------------------
+planner (to executor):
+
+***** Suggested tool call (add) *****
+Arguments: {"a": 123456, "b": 789012}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION add...
+
+executor (to planner):
+
+***** Response from calling tool (add) *****
+912468
+**********************************************************************
+
+--------------------------------------------------------------------------------
+planner (to executor):
+
+***** Suggested tool call (multiply) *****
+Arguments: {"a": 912468, "b": 2}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION multiply...
+
+executor (to planner):
+
+***** Response from calling tool (multiply) *****
+1824936
+**********************************************************************
+
+--------------------------------------------------------------------------------
+planner (to executor):
+
+The result of 123456 + 789012 = 912468.
+Multiplying 912468 by 2 gives **1824936**.
+```
+
+---
+
+### Example 2: Multi-Agent with Multiple MCP Servers
+
+In this pattern, each agent has its own dedicated MCP server. A shared **user proxy** agent acts as the executor for all tools, coordinating between the specialist agents.
+
+```python
+async def example_2() -> None:
+    """Multi-agent with multiple MCP servers: each agent has its own server."""
+
+    math_params = StdioServerParameters(
+        command="python",
+        args=[str(math_server_path), "stdio"],
+    )
+    text_params = StdioServerParameters(
+        command="python",
+        args=[str(Path("text_server.py")), "stdio"],
+    )
+
+    # Open both server sessions
+    async with stdio_client(math_params) as (r_math, w_math), ClientSession(
+        r_math, w_math, read_timeout_seconds=timedelta(seconds=30)
+    ) as math_session:
+        await math_session.initialize()
+        math_toolkit = await create_toolkit(session=math_session)
+
+        async with stdio_client(text_params) as (r_text, w_text), ClientSession(
+            r_text, w_text, read_timeout_seconds=timedelta(seconds=30)
+        ) as text_session:
+            await text_session.initialize()
+            text_toolkit = await create_toolkit(session=text_session)
+
+            # Shared user proxy that executes all tools
+            user_proxy = AssistantAgent(
+                name="user_proxy",
+                human_input_mode="NEVER",
+            )
+
+            # Mathematician agent -- suggests math tools
+            mathematician = AssistantAgent(
+                name="mathematician",
+                llm_config=LLMConfig(
+                    config_list={"model": "gpt-5-nano", "api_type": "openai"}
+                ),
+                system_message="You are a mathematician. Use math tools to calculate.",
+            )
+            math_toolkit.register_for_llm(mathematician)
+            for tool in math_toolkit.tools:
+                tool.register_for_execution(user_proxy)
+
+            # Text processor agent -- suggests text tools
+            text_processor = AssistantAgent(
+                name="text_processor",
+                llm_config=LLMConfig(
+                    config_list={"model": "gpt-5-nano", "api_type": "openai"}
+                ),
+                system_message="You are a text processor. Use text tools to transform text.",
+            )
+            text_toolkit.register_for_llm(text_processor)
+            for tool in text_toolkit.tools:
+                tool.register_for_execution(user_proxy)
+
+            # Step 1: User proxy asks mathematician to calculate
+            print("=== Step 1: Mathematician ===")
+            result1 = await user_proxy.a_initiate_chat(
+                recipient=mathematician,
+                message="Add 10 and 20, then multiply the sum by 3.",
+                max_turns=4,
+            )
+            last_math_msg = result1.chat_history[-1]["content"]
+            print(f"Mathematician result: {last_math_msg}")
+
+            # Step 2: User proxy asks text processor to transform
+            print("\n=== Step 2: Text Processor ===")
+            result2 = await user_proxy.a_initiate_chat(
+                recipient=text_processor,
+                message="Convert 'hello' to uppercase, then reverse it.",
+                max_turns=4,
+            )
+            last_text_msg = result2.chat_history[-1]["content"]
+            print(f"Text processor result: {last_text_msg}")
+
+
+asyncio.run(example_2())
+```
+
+#### What Happens
+
+1. **Session per server**: Each MCP server (`MathServer`, `TextServer`) runs in its own `stdio` session.
+2. **Agent per server**: The `mathematician` agent only knows about math tools. The `text_processor` agent only knows about text tools.
+3. **Shared executor**: The `user_proxy` agent executes tool calls for both specialists.
+4. **Sequential collaboration**: The user proxy talks to each specialist in turn, creating a sequential workflow.
+
+This pattern scales to any number of MCP servers and specialist agents.
+
+#### Expected Output
+
+```console
+=== Step 1: Mathematician ===
+user_proxy (to mathematician):
+
+Add 10 and 20, then multiply the sum by 3.
+
+--------------------------------------------------------------------------------
+mathematician (to user_proxy):
+
+***** Suggested tool call (add) *****
+Arguments: {"a": 10, "b": 20}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION add...
+
+user_proxy (to mathematician):
+
+***** Response from calling tool (add) *****
+30
+**********************************************************************
+
+--------------------------------------------------------------------------------
+mathematician (to user_proxy):
+
+***** Suggested tool call (multiply) *****
+Arguments: {"a": 30, "b": 3}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION multiply...
+
+user_proxy (to mathematician):
+
+***** Response from calling tool (multiply) *****
+90
+**********************************************************************
+
+--------------------------------------------------------------------------------
+mathematician (to user_proxy):
+
+The result of (10 + 20) * 3 is **90**.
+
+=== Step 2: Text Processor ===
+user_proxy (to text_processor):
+
+Convert 'hello' to uppercase, then reverse it.
+
+--------------------------------------------------------------------------------
+text_processor (to user_proxy):
+
+***** Suggested tool call (uppercase) *****
+Arguments: {"text": "hello"}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION uppercase...
+
+user_proxy (to text_processor):
+
+***** Response from calling tool (uppercase) *****
+HELLO
+**********************************************************************
+
+--------------------------------------------------------------------------------
+text_processor (to user_proxy):
+
+***** Suggested tool call (reverse) *****
+Arguments: {"text": "HELLO"}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION reverse...
+
+user_proxy (to text_processor):
+
+***** Response from calling tool (reverse) *****
+OLLEH
+**********************************************************************
+
+--------------------------------------------------------------------------------
+text_processor (to user_proxy):
+
+The result: 'hello' uppercased is 'HELLO', and reversed it becomes **OLLEH**.
+```
+
+---
+
+### Example 3: Single-Agent with Multiple MCP Servers
+
+In this pattern, a single agent has access to tools from multiple MCP servers simultaneously. The toolkits from both servers are combined and registered with one agent.
+
+```python
+async def example_3() -> None:
+    """Single agent with tools from multiple MCP servers."""
+
+    math_params = StdioServerParameters(
+        command="python",
+        args=[str(math_server_path), "stdio"],
+    )
+    text_params = StdioServerParameters(
+        command="python",
+        args=[str(Path("text_server.py")), "stdio"],
+    )
+
+    # Open both sessions
+    async with stdio_client(math_params) as (r_math, w_math), ClientSession(
+        r_math, w_math, read_timeout_seconds=timedelta(seconds=30)
+    ) as math_session:
+        await math_session.initialize()
+        math_toolkit = await create_toolkit(session=math_session)
+
+        async with stdio_client(text_params) as (r_text, w_text), ClientSession(
+            r_text, w_text, read_timeout_seconds=timedelta(seconds=30)
+        ) as text_session:
+            await text_session.initialize()
+            text_toolkit = await create_toolkit(session=text_session)
+
+            # One agent, tools from both servers
+            assistant = AssistantAgent(
+                name="assistant",
+                llm_config=LLMConfig(
+                    config_list={"model": "gpt-5-nano", "api_type": "openai"}
+                ),
+                system_message=(
+                    "You have access to math tools (add, multiply) and "
+                    "text tools (uppercase, reverse). Use them as needed."
+                ),
+            )
+
+            # Register all tools from both servers with the single agent
+            for tool in math_toolkit.tools:
+                tool.register_for_llm(assistant)
+                tool.register_for_execution(assistant)
+            for tool in text_toolkit.tools:
+                tool.register_for_llm(assistant)
+                tool.register_for_execution(assistant)
+
+            # Combine all tools
+            all_tools = math_toolkit.tools + text_toolkit.tools
+
+            # The agent can now use tools from either server in a single run
+            result = await assistant.a_run(
+                message=(
+                    "1. Add 100 and 200.\n"
+                    "2. Multiply the result by 4.\n"
+                    "3. Convert the string 'multi-agent' to uppercase.\n"
+                    "4. Reverse the uppercase result."
+                ),
+                tools=all_tools,
+                max_turns=6,
+                user_input=False,
+            )
+
+
+asyncio.run(example_3())
+```
+
+#### What Happens
+
+1. **Multiple sessions**: Two separate MCP sessions are opened -- one for `MathServer` and one for `TextServer`.
+2. **Separate toolkits**: Each session produces its own `Toolkit`.
+3. **Combined registration**: All tools from both toolkits are registered with a single agent (both for LLM suggestions and execution).
+4. **Cross-server task**: The agent seamlessly uses math tools from one server and text tools from another within the same task.
+
+#### Expected Output
+
+```console
+assistant (to user):
+
+***** Suggested tool call (add) *****
+Arguments: {"a": 100, "b": 200}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION add...
+
+assistant (to user):
+
+***** Response from calling tool (add) *****
+300
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (multiply) *****
+Arguments: {"a": 300, "b": 4}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION multiply...
+
+assistant (to user):
+
+***** Response from calling tool (multiply) *****
+1200
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (uppercase) *****
+Arguments: {"text": "multi-agent"}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION uppercase...
+
+assistant (to user):
+
+***** Response from calling tool (uppercase) *****
+MULTI-AGENT
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (reverse) *****
+Arguments: {"text": "MULTI-AGENT"}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION reverse...
+
+assistant (to user):
+
+***** Response from calling tool (reverse) *****
+TNEG-AITLUM
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+Here are the results:
+1. 100 + 200 = **300**
+2. 300 * 4 = **1200**
+3. 'multi-agent' uppercased = **MULTI-AGENT**
+4. Reversed uppercase = **TNEG-AITLUM**
+
+TERMINATE
+```
+
+---
+
+### Summary
+
+| Scenario | Agents | MCP Servers | Sessions | Pattern |
+|---|---|---|---|---|
+| Example 1 | 2 (planner + executor) | 1 | 1 | One server shared by two agents; planner suggests, executor runs |
+| Example 2 | 2 (specialists) + 1 (user proxy) | 2 | 2 | Each specialist has its own server; user proxy coordinates |
+| Example 3 | 1 | 2 | 2 | One agent uses tools from multiple servers in a single run |
+
+Key takeaways:
+
+- **Multiple agents can share one MCP server session** by registering the same toolkit with different roles (LLM vs. execution).
+- **Each agent can have its own MCP server** by opening separate sessions per agent.
+- **One agent can use multiple MCP servers** by combining toolkits from separate sessions.
+- An MCP client session is tied to one server. To connect to multiple servers, you need multiple sessions.
+- There is no restriction on sharing a session across agents or combining tools from multiple sessions into one agent.
+
+For advanced session management patterns (on-demand sessions, dynamic server selection), see the [MCP Client Session Manager](/docs/user-guide/advanced-concepts/tools/mcp/mcp_client_session_manager) guide.
