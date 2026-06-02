@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -35,8 +36,8 @@ class TestSingletonFactory:
         sandbox = LocalSandbox(tmp_path)
         factory = SingletonFactory(sandbox)
         async with factory.open() as sb:
-            await sb.exec(["/bin/echo", "hi"])
-        result = await sandbox.exec(["/bin/echo", "still-alive"])
+            await sb.exec([sys.executable, "-c", "pass"])
+        result = await sandbox.exec([sys.executable, "-c", "pass"])
         assert result.exit_code == 0
 
 
@@ -57,7 +58,7 @@ class TestCallableFactory:
     async def test_nullary_builder(self, tmp_path: Path) -> None:
         factory = CallableFactory(lambda: LocalSandbox(tmp_path))
         async with factory.open() as sb:
-            result = await sb.exec(["/bin/echo", "hi"])
+            result = await sb.exec([sys.executable, "-c", "pass"])
         assert result.exit_code == 0
 
     async def test_context_aware_builder_receives_context(self, tmp_path: Path) -> None:
@@ -69,7 +70,7 @@ class TestCallableFactory:
 
         factory = CallableFactory(build)
         async with factory.open(context=None) as sb:
-            await sb.exec(["/bin/echo", "hi"])
+            await sb.exec([sys.executable, "-c", "pass"])
         assert seen == [None]
 
     async def test_async_builder(self, tmp_path: Path) -> None:
@@ -78,7 +79,7 @@ class TestCallableFactory:
 
         factory = CallableFactory(build)
         async with factory.open() as sb:
-            result = await sb.exec(["/bin/echo", "hi"])
+            result = await sb.exec([sys.executable, "-c", "pass"])
         assert result.exit_code == 0
 
     async def test_satisfies_protocol(self, tmp_path: Path) -> None:

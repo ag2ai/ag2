@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ class TestCodeAdapterInline:
         assert result.exit_code == 0
         assert "42" in result.output
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="bash is POSIX-only")
     async def test_bash_runs_inline(self, tmp_path: Path) -> None:
         sandbox = LocalSandbox(tmp_path)
         adapter = CodeAdapter(sandbox, languages=("bash",))

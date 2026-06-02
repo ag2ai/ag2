@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -179,7 +180,7 @@ class TestLocalSandboxFileIO:
 class TestLocalSandboxStream:
     async def test_stream_yields_command_output(self) -> None:
         sandbox = LocalSandbox()
-        chunks = [chunk async for chunk in sandbox.stream(["/bin/echo", "hello"])]
+        chunks = [chunk async for chunk in sandbox.stream([sys.executable, "-c", "print('hello')"])]
         assert b"".join(chunks).strip() == b"hello"
 
     async def test_stream_collects_all_stdout(self) -> None:
@@ -187,10 +188,11 @@ class TestLocalSandboxStream:
         chunks = [
             chunk
             async for chunk in sandbox.stream(
-                ["python3", "-c", "import sys; [print(i) for i in range(5)]"],
+                [sys.executable, "-c", "import sys; [print(i) for i in range(5)]"],
             )
         ]
-        joined = b"".join(chunks).decode().strip().split("\n")
+        # splitlines() normalizes platform line endings (\n vs \r\n on Windows).
+        joined = b"".join(chunks).decode().strip().splitlines()
         assert joined == ["0", "1", "2", "3", "4"]
 
     async def test_stream_empty_argv_yields_nothing(self) -> None:

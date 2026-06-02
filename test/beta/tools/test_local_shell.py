@@ -375,6 +375,7 @@ class TestShellExecution:
         assert "world" in tool_results[0], f"cat was blocked by readonly=True: {tool_results[0]!r}"
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(sys.platform == "win32", reason="touch is POSIX-only")
     async def test_readonly_overridden_by_explicit_allowed(self, tmp_path: Path) -> None:
         output = tmp_path / "out.txt"
         shell = SandboxShellTool(
