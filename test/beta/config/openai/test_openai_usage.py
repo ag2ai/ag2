@@ -4,7 +4,7 @@
 
 """Tests for OpenAI client usage normalization (cache token lifting)."""
 
-from openai.types.completion_usage import CompletionUsage, PromptTokensDetails
+from openai.types.completion_usage import CompletionTokensDetails, CompletionUsage, PromptTokensDetails
 
 from autogen.beta.config.openai.mappers import normalize_usage
 from autogen.beta.events import Usage
@@ -45,3 +45,20 @@ class TestNormalizeUsage:
         usage = CompletionUsage(prompt_tokens=50, completion_tokens=10, total_tokens=60, prompt_tokens_details=None)
         result = normalize_usage(usage)
         assert result.cache_read_input_tokens is None
+
+    def test_lifts_reasoning_tokens(self):
+        usage = CompletionUsage(
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+            completion_tokens_details=CompletionTokensDetails(reasoning_tokens=15),
+        )
+        result = normalize_usage(usage)
+        # reasoning tokens map to thinking_tokens, NOT cache_creation_input_tokens
+        assert result == Usage(
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+            thinking_tokens=15,
+        )
+        assert result.cache_creation_input_tokens is None
