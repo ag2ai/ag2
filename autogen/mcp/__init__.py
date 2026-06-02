@@ -3,5 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .mcp_client import create_toolkit
+from .mcp_server import create_mcp_server
 
-__all__ = ["create_toolkit"]
+__all__ = ["create_mcp_server", "create_toolkit"]
