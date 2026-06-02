@@ -5,9 +5,12 @@
 
 Hooks into an agent's ``safeguard_tool_outputs`` and ``safeguard_llm_inputs``
 hookable methods to scan tool results and outgoing LLM messages against the
-ATR open detection ruleset. ATR is an MIT-licensed community ruleset
-(https://github.com/Agent-Threat-Rule/agent-threat-rules); the ``pyatr``
-package is an optional dependency and this module degrades gracefully if it
+ATR open detection ruleset. Matching is delegated to the ``pyatr`` engine (the
+reference ATR evaluator), so the full ATR rule semantics -- multi-field
+conditions, any/all logic, severity, categories -- are honoured rather than
+re-implemented. ATR is MIT-licensed
+(https://github.com/Agent-Threat-Rule/agent-threat-rules); ``pyatr`` is an
+optional dependency and this capability degrades gracefully to a no-op when it
 is not installed.
 
 Usage::
@@ -23,9 +26,9 @@ from __future__ import annotations
 
 import json
 import logging
-import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from ....import_utils import optional_import_block
@@ -33,7 +36,8 @@ from ...assistant_agent import ConversableAgent
 from .agent_capability import AgentCapability
 
 with optional_import_block():
-    import pyatr  # type: ignore[import-not-found]
+    from pyatr.engine import ATREngine
+    from pyatr.types import AgentEvent
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +52,13 @@ _SEVERITY_ORDER: dict[str, int] = {
 
 _DEFAULT_ACTION = "warn"
 _VALID_ACTIONS = ("allow", "warn", "block")
+
+# Maps each hookable method to the ATR (event_type, field) the content is
+# evaluated as, so rules keyed on a specific surface still fire.
+_HOOK_EVENT: dict[str, tuple[str, str]] = {
+    "tool_output": ("tool_response", "tool_response"),
+    "llm_input": ("llm_input", "user_input"),
+}
 
 
 @dataclass(frozen=True)
@@ -72,97 +83,32 @@ class ATRMatch:
         }
 
 
-@dataclass
-class _CompiledRule:
-    """Internal representation of an ATR rule reduced to a regex matcher."""
-
-    rule_id: str
-    severity: str
-    category: str
-    pattern: re.Pattern[str]
-
-
-def _default_rule_loader() -> list[dict[str, Any]]:
-    """Load rules from the optional ``pyatr`` package.
-
-    Returns an empty list if ``pyatr`` is not installed, so the capability is
-    a no-op rather than a hard failure when the optional dependency is
-    missing.
-    """
-    try:
-        # pyatr exposes a load_rules() helper in the published distribution.
-        # We probe for a few plausible accessors to stay forward-compatible.
-        if hasattr(pyatr, "load_rules"):
-            return list(pyatr.load_rules())  # type: ignore[no-any-return]
-        if hasattr(pyatr, "rules"):
-            return list(pyatr.rules())  # type: ignore[no-any-return]
-        if hasattr(pyatr, "Ruleset"):
-            ruleset = pyatr.Ruleset()  # type: ignore[attr-defined]
-            return list(getattr(ruleset, "rules", []))
-        # pyatr was importable but exposes no recognised accessor (covers the
-        # renamed-package / v2-breaking-change case raised in review on #2828).
-        # Surface this explicitly so a silent zero-rule load doesn't mask a
-        # genuine integration bug.
-        logger.warning(
-            "pyatr is importable but exposes no recognised rule accessor "
-            "(load_rules / rules / Ruleset); ATRGuardrail will be a no-op."
-        )
-    except NameError:
-        # pyatr was not importable; optional dependency missing.
-        logger.debug("pyatr not installed; ATRGuardrail will load zero rules.")
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("ATR rule load failed: %s", exc)
-    return []
-
-
-def _compile_rule(raw: dict[str, Any]) -> _CompiledRule | None:
-    """Compile a single ATR rule dict to a regex matcher.
-
-    Rules without a usable pattern are skipped. Only ``pattern`` /
-    ``regex`` / ``signature`` style fields are honoured here; richer ATR
-    matchers (semantic, multi-stage) remain server-side in PanGuard.
-    """
-    rule_id = str(raw.get("id") or raw.get("rule_id") or "").strip()
-    if not rule_id:
-        return None
-    pattern = raw.get("pattern") or raw.get("regex") or raw.get("signature")
-    if not isinstance(pattern, str) or not pattern:
-        return None
-    try:
-        compiled = re.compile(pattern, re.IGNORECASE | re.MULTILINE)
-    except re.error as exc:
-        logger.debug("Skipping ATR rule %s (invalid regex): %s", rule_id, exc)
-        return None
-    severity = str(raw.get("severity") or "medium").lower()
-    if severity not in _SEVERITY_ORDER:
-        severity = "medium"
-    category = str(raw.get("category") or "uncategorised")
-    return _CompiledRule(rule_id=rule_id, severity=severity, category=category, pattern=compiled)
-
-
 class ATRGuardrail(AgentCapability):
     """Composable capability that screens tool outputs and outgoing LLM
-    messages against ATR rules.
+    messages against ATR rules, evaluated by the ``pyatr`` engine.
 
-    The capability subscribes to two ``ConversableAgent`` hookable methods:
+    Subscribes to two ``ConversableAgent`` hookable methods:
 
-    - ``safeguard_tool_outputs`` — invoked after every tool/function call;
-      we scan the serialised tool response for matches.
-    - ``safeguard_llm_inputs`` — invoked before sending messages to the LLM;
-      we scan the most recent message content for matches.
+    - ``safeguard_tool_outputs`` -- invoked after every tool/function call; the
+      serialised tool response is evaluated as an ATR ``tool_response`` event.
+    - ``safeguard_llm_inputs`` -- invoked before sending messages to the LLM;
+      the most recent message content is evaluated as an ATR ``llm_input``
+      event.
 
     Matches are recorded on ``self.matches`` and forwarded to the optional
     ``on_match`` callback. In ``action="block"`` mode a match on
-    ``safeguard_llm_inputs`` returns ``None`` so the core hook chain halts
-    the send; tool outputs are not blocked (they have already executed) but
-    the matched content is redacted in ``block`` mode.
+    ``safeguard_llm_inputs`` returns ``None`` so the core hook chain halts the
+    send; tool outputs are not blocked (they have already executed) but the
+    matched content is redacted.
     """
 
     def __init__(
         self,
         action: str = _DEFAULT_ACTION,
         min_severity: str = "low",
-        rule_loader: Callable[[], Iterable[dict[str, Any]]] | None = None,
+        *,
+        rules_dir: str | Path | None = None,
+        engine: "ATREngine | None" = None,
         on_match: Callable[[ATRMatch], None] | None = None,
     ) -> None:
         """Args:
@@ -170,9 +116,10 @@ class ATRGuardrail(AgentCapability):
             or ``"block"`` (record, redact tool outputs, drop LLM inputs).
         min_severity: Lowest severity to act on. One of ``info``, ``low``,
             ``medium``, ``high``, ``critical``.
-        rule_loader: Zero-argument callable returning an iterable of ATR
-            rule dicts. Defaults to loading from the optional ``pyatr``
-            package. Override in tests or to pin a specific ruleset.
+        rules_dir: Optional directory of ATR rule YAML files. When omitted, the
+            rules bundled with ``pyatr`` (>= 0.2.6) are used.
+        engine: Optional pre-built :class:`pyatr.engine.ATREngine`, primarily
+            for tests or pinning a specific ruleset; overrides ``rules_dir``.
         on_match: Optional callback fired once per match.
         """
         if action not in _VALID_ACTIONS:
@@ -184,27 +131,8 @@ class ATRGuardrail(AgentCapability):
         self.min_severity = min_severity
         self._severity_floor = _SEVERITY_ORDER[min_severity]
         self._on_match = on_match
-        self._loader = rule_loader or _default_rule_loader
+        self._engine = engine if engine is not None else _build_engine(rules_dir)
         self.matches: list[ATRMatch] = []
-        self._rules: list[_CompiledRule] = self._load_compiled_rules()
-
-    # ------------------------------------------------------------------ rules
-
-    def _load_compiled_rules(self) -> list[_CompiledRule]:
-        compiled: list[_CompiledRule] = []
-        try:
-            raw_rules = list(self._loader())
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning("ATR rule_loader raised %s; continuing with zero rules.", exc)
-            return compiled
-        for raw in raw_rules:
-            if not isinstance(raw, dict):
-                continue
-            rule = _compile_rule(raw)
-            if rule is not None and _SEVERITY_ORDER[rule.severity] >= self._severity_floor:
-                compiled.append(rule)
-        logger.info("ATRGuardrail loaded %d rules at or above severity %s.", len(compiled), self.min_severity)
-        return compiled
 
     # ------------------------------------------------------------- capability
 
@@ -216,10 +144,9 @@ class ATRGuardrail(AgentCapability):
     # ----------------------------------------------------------------- hooks
 
     def _on_tool_output(self, response: dict[str, Any]) -> dict[str, Any]:
-        """Scan a tool response. Returns the original dict, a redacted copy
-        in ``block`` mode, or the unchanged dict in ``allow``/``warn`` mode.
-        """
-        if not self._rules:
+        """Scan a tool response. Returns the original dict, or a redacted copy
+        in ``block`` mode (the tool has already executed, so it is not blocked)."""
+        if self._engine is None:
             return response
         text = self._stringify(response.get("content"))
         match = self._scan(text, hook="tool_output")
@@ -232,11 +159,9 @@ class ATRGuardrail(AgentCapability):
         return response
 
     def _on_llm_input(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
-        """Scan the most recent LLM input message. Returns ``None`` in
-        ``block`` mode on match (which halts the send), otherwise the
-        original list.
-        """
-        if not self._rules or not messages:
+        """Scan the most recent LLM input message. Returns ``None`` in ``block``
+        mode on match (halting the send), otherwise the original list."""
+        if self._engine is None or not messages:
             return messages
         last = messages[-1]
         text = self._stringify(last.get("content"))
@@ -250,19 +175,29 @@ class ATRGuardrail(AgentCapability):
     # --------------------------------------------------------------- scanning
 
     def _scan(self, text: str, hook: str) -> ATRMatch | None:
-        if not text:
+        if not text or self._engine is None:
             return None
-        for rule in self._rules:
-            m = rule.pattern.search(text)
-            if m is None:
+        event_type, field = _HOOK_EVENT[hook]
+        try:
+            results = self._engine.evaluate(
+                AgentEvent(content=text, event_type=event_type, fields={field: text})
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("ATR evaluation failed on %s: %s", hook, exc)
+            return None
+        # pyatr returns matches sorted by severity (critical first); act on the
+        # highest-severity match at or above the configured floor.
+        for m in results:
+            severity = (m.severity or "medium").lower()
+            if _SEVERITY_ORDER.get(severity, _SEVERITY_ORDER["medium"]) < self._severity_floor:
                 continue
-            snippet = text[max(0, m.start() - 24) : min(len(text), m.end() + 24)]
+            tags = getattr(m, "tags", None) or {}
             match = ATRMatch(
-                rule_id=rule.rule_id,
-                severity=rule.severity,
-                category=rule.category,
+                rule_id=m.rule_id,
+                severity=severity,
+                category=tags.get("category", "uncategorised"),
                 hook=hook,
-                snippet=snippet,
+                snippet=" ".join(text.split())[:120],
                 action=self.action,
             )
             self.matches.append(match)
@@ -301,3 +236,28 @@ class ATRGuardrail(AgentCapability):
             return json.dumps(content, ensure_ascii=False, default=str)
         except (TypeError, ValueError):
             return str(content)
+
+
+def _build_engine(rules_dir: str | Path | None) -> "ATREngine | None":
+    """Build the default ATR engine, or ``None`` when ``pyatr`` is absent."""
+    try:
+        engine = ATREngine()
+    except NameError:
+        logger.debug("pyatr is not installed; ATRGuardrail will be a no-op.")
+        return None
+    if rules_dir is not None:
+        loaded = engine.load_rules_from_directory(rules_dir)
+    elif hasattr(engine, "load_default_rules"):
+        loaded = engine.load_default_rules()
+    else:  # pyatr < 0.2.6 has no bundled rules
+        logger.warning(
+            "pyatr>=0.2.6 is required for the bundled rule set; found an older "
+            "version. Pass rules_dir or upgrade pyatr; ATRGuardrail is a no-op."
+        )
+        loaded = 0
+    if loaded == 0:
+        logger.warning(
+            "ATRGuardrail loaded 0 ATR rules and will be a no-op. Install "
+            "pyatr>=0.2.6 (which bundles the rule set) or pass rules_dir."
+        )
+    return engine
