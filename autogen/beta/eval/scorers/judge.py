@@ -68,6 +68,7 @@ def agent_judge(
     key: str,
     scale: tuple[float, float] = (0.0, 1.0),
     include_trace: bool = False,
+    include_reference: bool = True,
     retries: int = 1,
     middleware: Iterable[MiddlewareFactory] = (),
     threshold: float | None = None,
@@ -88,6 +89,11 @@ def agent_judge(
         include_trace: When ``True``, the agent's tool-call trajectory (calls,
             results, errors) is rendered into the judge prompt (process grading).
             Default grades the final answer only.
+        include_reference: When ``True`` (default), render the task's reference
+            answer into the prompt as a ``## Reference`` section whenever
+            ``reference_outputs`` is present. Set ``False`` for dimensions that must
+            judge the answer on its own (e.g. faithfulness / grounding), so the
+            golden answer cannot leak into the grade.
         retries: How many times ``content()`` re-asks the judge if its output
             fails :class:`Verdict` validation. Default ``1``.
         middleware: Middleware factories attached to the judge agent. Pass
@@ -115,7 +121,14 @@ def agent_judge(
         reference_outputs: dict[str, Any] | None,
         trace: Trace,
     ) -> Feedback:
-        prompt = _render_prompt(inputs, outputs, reference_outputs, trace, include_trace=include_trace)
+        prompt = _render_prompt(
+            inputs,
+            outputs,
+            reference_outputs,
+            trace,
+            include_trace=include_trace,
+            include_reference=include_reference,
+        )
         reply = await judge.ask(prompt)
         verdict = await reply.content(retries=retries)
         if verdict is None:
@@ -148,6 +161,7 @@ def _render_prompt(
     trace: Trace,
     *,
     include_trace: bool,
+    include_reference: bool,
 ) -> str:
     sections: list[str] = []
     task_input = inputs.get("input")
@@ -155,7 +169,7 @@ def _render_prompt(
         sections.append(f"## Task input\n{task_input}")
     answer = outputs.get("body")
     sections.append(f"## Agent answer\n{answer if answer is not None else '(no answer)'}")
-    if reference_outputs:
+    if include_reference and reference_outputs:
         sections.append(f"## Reference\n{json.dumps(reference_outputs)}")
     if include_trace:
         sections.append(f"## Trajectory\n{_render_trajectory(trace)}")
