@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.beta import Context, Variable
-from autogen.beta.extensions.docker import DockerEnvironment, DockerSandbox
-from autogen.beta.tools.sandbox import ShellAdapter
+from autogen.beta.extensions.docker import DockerEnvironment
+from autogen.beta.tools.sandbox.adapter import ShellAdapter
 
 
 def _exec_result(output: bytes = b"ok\n", exit_code: int = 0) -> SimpleNamespace:
@@ -34,46 +34,48 @@ def _patch_docker(container: Any) -> Any:
     return patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client)
 
 
+@pytest.mark.asyncio
 class TestShellAdapterOverDocker:
-    def test_run_executes_shell_command(self) -> None:
+    async def test_run_executes_shell_command(self) -> None:
         container = _fake_container(_exec_result(b"hello\n"))
         with _patch_docker(container):
             shell = ShellAdapter(DockerEnvironment())
-            result = shell.run_sync("echo hello")
+            result = await shell.run("echo hello")
 
         assert result == "hello"
         assert container.exec_run.call_args.args[0] == ["sh", "-c", "echo hello"]
 
-    def test_allowed_blocks_non_matching_command(self) -> None:
+    async def test_allowed_blocks_non_matching_command(self) -> None:
         container = _fake_container()
         with _patch_docker(container):
             shell = ShellAdapter(DockerEnvironment(), allowed=["echo"])
-            result = shell.run_sync("touch file.txt")
+            result = await shell.run("touch file.txt")
 
         assert result == "Command not allowed: 'touch file.txt'"
         container.exec_run.assert_not_called()
 
-    def test_blocked_rejects_matching_command(self) -> None:
+    async def test_blocked_rejects_matching_command(self) -> None:
         container = _fake_container()
         with _patch_docker(container):
             shell = ShellAdapter(DockerEnvironment(), blocked=["rm -rf"])
-            result = shell.run_sync("rm -rf /workspace")
+            result = await shell.run("rm -rf /workspace")
 
         assert result == "Command not allowed: 'rm -rf /workspace'"
         container.exec_run.assert_not_called()
 
-    def test_nonzero_exit_code_is_included(self) -> None:
+    async def test_nonzero_exit_code_is_included(self) -> None:
         container = _fake_container(_exec_result(b"nope\n", exit_code=7))
         with _patch_docker(container):
             shell = ShellAdapter(DockerEnvironment())
-            result = shell.run_sync("exit 7")
+            result = await shell.run("exit 7")
 
         assert "nope" in result
         assert "exit code: 7" in result
 
 
+@pytest.mark.asyncio
 class TestVariableResolution:
-    def test_image_resolved_from_context(self) -> None:
+    async def test_image_resolved_from_context(self) -> None:
         container = _fake_container(_exec_result(b"ok\n"))
         client = SimpleNamespace(
             containers=SimpleNamespace(run=MagicMock(return_value=container)),
@@ -82,21 +84,13 @@ class TestVariableResolution:
         ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
         with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
             shell = ShellAdapter(DockerEnvironment(image=Variable("tenant_image")))
-            shell.run_sync("echo hi", context=ctx)
+            await shell.run("echo hi", context=ctx)
 
         assert client.containers.run.call_args.args[0] == "python:3.11-slim"
 
-    def test_missing_variable_raises_key_error(self) -> None:
+    async def test_missing_variable_raises_key_error(self) -> None:
         ctx = Context(stream=MagicMock(), variables={})
         shell = ShellAdapter(DockerEnvironment(image=Variable("tenant_image")))
 
         with pytest.raises(KeyError, match="tenant_image"):
-            shell.run_sync("echo hi", context=ctx)
-
-
-@pytest.mark.asyncio
-async def test_run_sync_inside_event_loop_raises_clear_error() -> None:
-    shell = ShellAdapter(DockerSandbox())
-
-    with pytest.raises(RuntimeError, match="active event loop"):
-        shell.run_sync("echo hi")
+            await shell.run("echo hi", context=ctx)

@@ -2,9 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from inspect import Parameter, isawaitable, signature
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from .base import Sandbox
@@ -68,54 +67,4 @@ class SingletonFactory:
         yield self._sandbox
 
 
-# A factory function may take the context (per-tenant resolution) or no
-# argument at all. Both sync and async return values are accepted.
-SandboxBuilder = (
-    Callable[["ConversationContext | None"], "Sandbox | Awaitable[Sandbox]"]
-    | Callable[[], "Sandbox | Awaitable[Sandbox]"]
-)
-
-
-class CallableFactory:
-    """Adapt a plain callable into a :class:`SandboxFactory`.
-
-    The callable produces a fresh :class:`Sandbox` per :meth:`open`; the
-    factory owns its lifecycle and tears it down when the scope exits. The
-    callable may accept the active
-    :class:`~autogen.beta.context.ConversationContext` (to resolve
-    per-tenant values itself) or take no argument, and may be sync or async.
-
-    Useful for ad-hoc backends without writing a dedicated factory class::
-
-        CallableFactory(lambda ctx: MySandbox(token=ctx.variables["tok"]))
-    """
-
-    def __init__(self, builder: SandboxBuilder) -> None:
-        self._builder = builder
-        # builders that declare a parameter receive the context; nullary ones
-        # are called without it.
-        self._wants_context = _takes_one_arg(builder)
-
-    @asynccontextmanager
-    async def open(
-        self,
-        context: "ConversationContext | None" = None,
-    ) -> AsyncIterator[Sandbox]:
-        result = self._builder(context) if self._wants_context else self._builder()  # type: ignore[call-arg]
-        sandbox = await result if isawaitable(result) else result
-        async with sandbox:
-            yield sandbox
-
-
-def _takes_one_arg(builder: SandboxBuilder) -> bool:
-    try:
-        sig = signature(builder)
-    except (TypeError, ValueError):
-        return False
-    return len([p for p in sig.parameters.values() if p.kind in _POSITIONAL_KINDS]) >= 1
-
-
-_POSITIONAL_KINDS = (Parameter.POSITIONAL_ONLY, Parameter.POSITIONAL_OR_KEYWORD)
-
-
-__all__ = ("CallableFactory", "SandboxFactory", "SingletonFactory")
+__all__ = ("SandboxFactory", "SingletonFactory")

@@ -11,7 +11,7 @@ import daytona
 import pytest
 
 from autogen.beta.annotations import Variable
-from autogen.beta.extensions.daytona import DaytonaSandbox
+from autogen.beta.extensions.daytona.sandbox import DaytonaSandbox
 from autogen.beta.tools.sandbox import ExecResult
 
 
@@ -89,13 +89,6 @@ class TestFileIO:
         sandbox = DaytonaSandbox(client=_fake_client(remote), params={}, workdir="/srv")
         await sandbox.put_file(PurePosixPath("hello.txt"), b"world")
         remote.fs.upload_file.assert_awaited_once_with(b"world", "/srv/hello.txt")
-
-    async def test_get_file_uses_download_file(self) -> None:
-        remote = _fake_sandbox()
-        remote.fs.download_file = AsyncMock(return_value=b"data")
-        sandbox = DaytonaSandbox(client=_fake_client(remote), params={}, workdir="/srv")
-        data = await sandbox.get_file(PurePosixPath("hello.txt"))
-        assert data == b"data"
 
     async def test_absolute_path_rejected(self) -> None:
         sandbox = DaytonaSandbox(client=_fake_client(_fake_sandbox()), params={})

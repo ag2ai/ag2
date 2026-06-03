@@ -10,7 +10,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Context
-from autogen.beta.tools.sandbox import ExecResult, LocalSandbox, Sandbox, ShellAdapter, SingletonFactory
+from autogen.beta.tools.sandbox import ExecResult, Sandbox
+from autogen.beta.tools.sandbox.adapter import ShellAdapter
+from autogen.beta.tools.sandbox.local import LocalSandbox
 
 
 class _RecordingFactory:
@@ -44,27 +46,27 @@ class _FakeRemoteSandbox:
         return ExecResult(output="ok", exit_code=0)
 
 
+@pytest.mark.asyncio
 class TestShellAdapterFiltering:
-    def test_allowed_blocks_non_matching_command(self, tmp_path: Path) -> None:
+    async def test_allowed_blocks_non_matching_command(self, tmp_path: Path) -> None:
         sandbox = LocalSandbox(tmp_path)
         adapter = ShellAdapter(sandbox, allowed=["echo"])
-        result = adapter.run_sync("touch file.txt")
+        result = await adapter.run("touch file.txt")
         assert "Command not allowed" in result
 
-    def test_blocked_rejects_matching_command(self, tmp_path: Path) -> None:
+    async def test_blocked_rejects_matching_command(self, tmp_path: Path) -> None:
         sandbox = LocalSandbox(tmp_path)
         adapter = ShellAdapter(sandbox, blocked=["rm -rf"])
-        result = adapter.run_sync("rm -rf /workspace")
+        result = await adapter.run("rm -rf /workspace")
         assert "Command not allowed" in result
 
-    def test_ignore_denies_access_to_matching_path(self, tmp_path: Path) -> None:
+    async def test_ignore_denies_access_to_matching_path(self, tmp_path: Path) -> None:
         (tmp_path / ".env").write_text("SECRET=1")
         sandbox = LocalSandbox(tmp_path)
         adapter = ShellAdapter(sandbox, ignore=["**/.env"])
-        result = adapter.run_sync("cat .env")
+        result = await adapter.run("cat .env")
         assert "Access denied" in result
 
-    @pytest.mark.asyncio
     async def test_ignore_applies_on_remote_backend(self) -> None:
         # A remote backend has no host workdir; ignore must still apply by
         # matching literal argv paths against the sandbox-side workdir.
@@ -74,7 +76,6 @@ class TestShellAdapterFiltering:
         assert "Access denied" in result
         assert sandbox.execs == []  # blocked before reaching the backend
 
-    @pytest.mark.asyncio
     async def test_ignore_allows_non_matching_on_remote_backend(self) -> None:
         sandbox = _FakeRemoteSandbox()
         adapter = ShellAdapter(sandbox, ignore=["**/.env"])
@@ -82,16 +83,16 @@ class TestShellAdapterFiltering:
         assert "ok" in result
         assert len(sandbox.execs) == 1
 
-    def test_readonly_blocks_writes_by_default(self, tmp_path: Path) -> None:
+    async def test_readonly_blocks_writes_by_default(self, tmp_path: Path) -> None:
         sandbox = LocalSandbox(tmp_path)
         adapter = ShellAdapter(sandbox, readonly=True)
-        result = adapter.run_sync("touch new.txt")
+        result = await adapter.run("touch new.txt")
         assert "Command not allowed" in result
 
-    def test_readonly_allows_read_commands(self, tmp_path: Path) -> None:
+    async def test_readonly_allows_read_commands(self, tmp_path: Path) -> None:
         sandbox = LocalSandbox(tmp_path)
         adapter = ShellAdapter(sandbox, readonly=True)
-        result = adapter.run_sync("echo hello")
+        result = await adapter.run("echo hello")
         assert "hello" in result
 
 
@@ -108,30 +109,6 @@ class TestShellAdapterAsync:
         adapter = ShellAdapter(sandbox)
         result = await adapter.run("exit 7")
         assert "exit code: 7" in result
-
-
-class TestShellAdapterRunSync:
-    def test_uses_local_fast_path_for_local_sandbox(self, tmp_path: Path) -> None:
-        sandbox = LocalSandbox(tmp_path)
-        adapter = ShellAdapter(sandbox)
-        result = adapter.run_sync("echo from-sync")
-        assert "from-sync" in result
-
-    @pytest.mark.asyncio
-    async def test_singleton_factory_in_event_loop_uses_fast_path(self, tmp_path: Path) -> None:
-        # A SingletonFactory wrapping a LocalSandbox unwraps to the local
-        # fast path, so run_sync works even inside an active event loop.
-        sandbox = LocalSandbox(tmp_path)
-        adapter = ShellAdapter(SingletonFactory(sandbox))
-        assert "hi" in adapter.run_sync("echo hi")
-
-    @pytest.mark.asyncio
-    async def test_run_sync_in_event_loop_with_factory_raises(self, tmp_path: Path) -> None:
-        # A generic (non-local) factory has no sync fast path, so run_sync
-        # cannot nest asyncio.run inside an active loop.
-        adapter = ShellAdapter(_RecordingFactory(LocalSandbox(tmp_path)))
-        with pytest.raises(RuntimeError, match="active event loop"):
-            adapter.run_sync("echo hi")
 
 
 @pytest.mark.asyncio

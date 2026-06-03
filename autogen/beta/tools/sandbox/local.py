@@ -8,7 +8,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-from collections.abc import AsyncIterator
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
 
@@ -150,31 +149,6 @@ class LocalSandbox(SandboxBase):
     def supported_languages(self) -> tuple[CodeLanguage, ...]:
         return self._languages
 
-    def exec_sync(
-        self,
-        argv: list[str],
-        *,
-        env: dict[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> ExecResult:
-        """Synchronous counterpart of :meth:`exec`.
-
-        Lets :class:`ShellAdapter.run_sync` execute against a local sandbox
-        without paying for an event loop per command.
-        """
-        if self._closed:
-            raise RuntimeError("LocalSandbox has been closed.")
-        if not argv:
-            return ExecResult(output="", exit_code=2)
-
-        return _run_subprocess(
-            argv,
-            cwd=self._host_workdir,
-            env=self._merge_env(env),
-            timeout=timeout if timeout is not None else self._default_timeout,
-            max_output=self._max_output,
-        )
-
     async def exec(
         self,
         argv: list[str],
@@ -196,81 +170,12 @@ class LocalSandbox(SandboxBase):
             max_output=self._max_output,
         )
 
-    async def stream(
-        self,
-        argv: list[str],
-        *,
-        env: dict[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> AsyncIterator[bytes]:
-        """Stream stdout+stderr chunks from a local subprocess.
-
-        Uses :func:`asyncio.create_subprocess_exec` and concurrently reads
-        both pipes, so large output volumes do not deadlock on a full
-        pipe buffer.
-        """
-        if self._closed:
-            raise RuntimeError("LocalSandbox has been closed.")
-        if not argv:
-            return
-
-        call_env = self._merge_env(env)
-        merged_env = {**os.environ, **call_env} if call_env is not None else None
-        deadline_timeout = timeout if timeout is not None else self._default_timeout
-
-        proc = await asyncio.create_subprocess_exec(
-            *argv,
-            cwd=str(self._host_workdir),
-            env=merged_env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        assert proc.stdout is not None and proc.stderr is not None
-        queue: asyncio.Queue[bytes | None] = asyncio.Queue()
-
-        async def _pump(reader: asyncio.StreamReader) -> None:
-            while True:
-                chunk = await reader.read(4096)
-                if not chunk:
-                    break
-                await queue.put(chunk)
-            await queue.put(None)
-
-        readers = asyncio.gather(_pump(proc.stdout), _pump(proc.stderr))
-        try:
-            done_count = 0
-            while done_count < 2:
-                try:
-                    item = await asyncio.wait_for(queue.get(), timeout=deadline_timeout)
-                except asyncio.TimeoutError:
-                    proc.kill()
-                    raise
-                if item is None:
-                    done_count += 1
-                    continue
-                yield item
-        finally:
-            with suppress(Exception):
-                await readers
-            with suppress(ProcessLookupError):
-                if proc.returncode is None:
-                    proc.kill()
-            with suppress(Exception):
-                await proc.wait()
-
     async def put_file(self, path: PurePosixPath, content: bytes) -> None:
         if self._closed:
             raise RuntimeError("LocalSandbox has been closed.")
         target = _resolve_workdir_path(path, self._host_workdir)
         target.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(target.write_bytes, content)
-
-    async def get_file(self, path: PurePosixPath) -> bytes:
-        if self._closed:
-            raise RuntimeError("LocalSandbox has been closed.")
-        target = _resolve_workdir_path(path, self._host_workdir)
-        return await asyncio.to_thread(target.read_bytes)
 
     async def remove_file(self, path: PurePosixPath) -> None:
         if self._closed:

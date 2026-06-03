@@ -15,7 +15,7 @@ from autogen.beta import Agent, MemoryStream
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import LocalEnvironment, SandboxShellTool
-from autogen.beta.tools.sandbox import ExecResult, SandboxFactory, ShellAdapter
+from autogen.beta.tools.sandbox import ExecResult, SandboxFactory
 from autogen.beta.tools.sandbox.filter import check_ignore, matches
 
 
@@ -133,11 +133,6 @@ class TestSandboxShellToolConstruction:
         with pytest.raises(AttributeError):
             shell.workdir = tmp_path  # type: ignore[misc]
 
-    def test_prebuilt_adapter_rejects_filter_kwargs(self, tmp_path: Path) -> None:
-        adapter = ShellAdapter(LocalEnvironment(tmp_path))
-        with pytest.raises(ValueError, match="pre-built ShellAdapter"):
-            SandboxShellTool(adapter, allowed=["echo"])
-
 
 class TestShellExecution:
     def _make_tool_call(self, command: str) -> ToolCallEvent:
@@ -151,15 +146,6 @@ class TestShellExecution:
             ModelResponse(tool_calls=ToolCallsEvent([self._make_tool_call(command)])),
             final_reply,
         )
-
-    def test_run_sync_works_without_active_event_loop(self, tmp_path: Path) -> None:
-        adapter = ShellAdapter(LocalEnvironment(tmp_path))
-        assert adapter.run_sync("echo sync") == "sync"
-
-    @pytest.mark.asyncio
-    async def test_run_sync_works_inside_active_event_loop(self, tmp_path: Path) -> None:
-        adapter = ShellAdapter(LocalEnvironment(tmp_path))
-        assert adapter.run_sync("echo async") == "async"
 
     @pytest.mark.asyncio
     async def test_allowed_permits_matching_command(self, tmp_path: Path) -> None:

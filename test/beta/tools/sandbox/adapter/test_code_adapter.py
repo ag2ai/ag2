@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from autogen.beta.tools.sandbox import CodeAdapter, LanguageRunner, LocalSandbox
+from autogen.beta.tools.sandbox import CodeAdapter, LanguageRunner
+from autogen.beta.tools.sandbox.local import LocalSandbox
 
 
 @pytest.mark.asyncio

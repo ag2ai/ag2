@@ -16,7 +16,9 @@ from autogen.beta import Context
 from autogen.beta.events import ToolCallEvent, ToolErrorEvent
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
 from autogen.beta.tools import SkillsToolkit
-from autogen.beta.tools.sandbox import ExecResult, LocalSandbox, Sandbox, ShellAdapter
+from autogen.beta.tools.sandbox import ExecResult, Sandbox
+from autogen.beta.tools.sandbox.adapter import ShellAdapter
+from autogen.beta.tools.sandbox.local import LocalSandbox
 from autogen.beta.tools.skills import LocalRuntime
 from autogen.beta.tools.skills.local_skills.loader import SkillLoader, parse_frontmatter
 
@@ -261,12 +263,13 @@ async def test_run_skill_script_schema(skill_tree: Path, context: Context) -> No
     }
 
 
-def test_run_skill_script_executes(skill_tree: Path) -> None:
+@pytest.mark.asyncio
+async def test_run_skill_script_executes(skill_tree: Path) -> None:
     scripts_dir = skill_tree / "react-best-practices" / "scripts"
     env = ShellAdapter(LocalSandbox(path=scripts_dir, cleanup=False))
 
     # cwd is scripts_dir, so pass just the filename — same as tool.py does
-    result = env.run_sync("python scaffold.py")
+    result = await env.run("python scaffold.py")
 
     assert "scaffold" in result
 
@@ -319,7 +322,8 @@ async def test_run_skill_script_runs_in_event_loop_with_remote_backend(skill_tre
     assert factory.sandbox.execs  # the command reached the backend via the async path
 
 
-def test_local_runtime_uses_supplied_sandbox(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_local_runtime_uses_supplied_sandbox(tmp_path: Path) -> None:
     # A user-supplied Sandbox backend is honoured by shell(); commands run in
     # the sandbox's own workdir rather than the scripts_dir.
     sandbox_dir = tmp_path / "box"
@@ -328,6 +332,6 @@ def test_local_runtime_uses_supplied_sandbox(tmp_path: Path) -> None:
 
     runtime = LocalRuntime(dir=tmp_path / "skills", sandbox=LocalSandbox(path=sandbox_dir))
     env = runtime.shell(tmp_path / "unused-scripts-dir")
-    result = env.run_sync("cat marker.txt")
+    result = await env.run("cat marker.txt")
 
     assert "present" in result

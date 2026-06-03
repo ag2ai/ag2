@@ -2,12 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import sys
 from pathlib import Path, PurePosixPath
 
 import pytest
 
-from autogen.beta.tools.sandbox import ExecResult, LocalSandbox, Sandbox
+from autogen.beta.tools.sandbox import ExecResult, Sandbox
+from autogen.beta.tools.sandbox.local import LocalSandbox
 
 
 @pytest.mark.asyncio
@@ -138,11 +138,6 @@ class TestLocalSandboxFileIO:
         await sandbox.put_file(PurePosixPath("note.txt"), b"hello")
         assert (tmp_path / "note.txt").read_bytes() == b"hello"
 
-    async def test_get_file_reads_relative_to_workdir(self, tmp_path: Path) -> None:
-        (tmp_path / "data.bin").write_bytes(b"\x00\x01\x02")
-        sandbox = LocalSandbox(tmp_path)
-        assert await sandbox.get_file(PurePosixPath("data.bin")) == b"\x00\x01\x02"
-
     async def test_put_file_creates_intermediate_dirs(self, tmp_path: Path) -> None:
         sandbox = LocalSandbox(tmp_path)
         await sandbox.put_file(PurePosixPath("sub/dir/x.txt"), b"x")
@@ -158,11 +153,6 @@ class TestLocalSandboxFileIO:
         with pytest.raises(ValueError, match="escapes"):
             await sandbox.put_file(PurePosixPath("../outside.txt"), b"x")
 
-    async def test_put_then_get_round_trip(self, tmp_path: Path) -> None:
-        sandbox = LocalSandbox(tmp_path)
-        await sandbox.put_file(PurePosixPath("hello.txt"), b"world")
-        assert await sandbox.get_file(PurePosixPath("hello.txt")) == b"world"
-
     async def test_remove_file_deletes(self, tmp_path: Path) -> None:
         sandbox = LocalSandbox(tmp_path)
         await sandbox.put_file(PurePosixPath("temp.txt"), b"x")
@@ -174,28 +164,3 @@ class TestLocalSandboxFileIO:
         sandbox = LocalSandbox(tmp_path)
         # missing_ok=True under the hood — must not raise
         await sandbox.remove_file(PurePosixPath("never_existed.txt"))
-
-
-@pytest.mark.asyncio
-class TestLocalSandboxStream:
-    async def test_stream_yields_command_output(self) -> None:
-        sandbox = LocalSandbox()
-        chunks = [chunk async for chunk in sandbox.stream([sys.executable, "-c", "print('hello')"])]
-        assert b"".join(chunks).strip() == b"hello"
-
-    async def test_stream_collects_all_stdout(self) -> None:
-        sandbox = LocalSandbox()
-        chunks = [
-            chunk
-            async for chunk in sandbox.stream(
-                [sys.executable, "-c", "import sys; [print(i) for i in range(5)]"],
-            )
-        ]
-        # splitlines() normalizes platform line endings (\n vs \r\n on Windows).
-        joined = b"".join(chunks).decode().strip().splitlines()
-        assert joined == ["0", "1", "2", "3", "4"]
-
-    async def test_stream_empty_argv_yields_nothing(self) -> None:
-        sandbox = LocalSandbox()
-        chunks = [chunk async for chunk in sandbox.stream([])]
-        assert chunks == []

@@ -10,7 +10,7 @@ from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.sandbox import CodeAdapter, Sandbox, SandboxFactory
+from autogen.beta.tools.sandbox import CodeAdapter, SandboxFactory
 from autogen.beta.tools.tool import Tool
 
 from .environment import CodeEnvironment, CodeLanguage
@@ -64,10 +64,8 @@ class SandboxCodeTool(Tool):
         environment: What runs the code. Either a **backend** — a
                      :class:`~autogen.beta.tools.sandbox.SandboxFactory`
                      (``DockerEnvironment`` / ``DaytonaEnvironment`` /
-                     ``LocalEnvironment``) or a bare
-                     :class:`~autogen.beta.tools.sandbox.Sandbox`, which is
-                     wrapped in a :class:`CodeAdapter` using ``languages`` /
-                     ``runners`` — or a ready
+                     ``LocalEnvironment``), wrapped in a :class:`CodeAdapter`
+                     using ``languages`` / ``runners`` — or a ready
                      :class:`~autogen.beta.tools.code.CodeEnvironment` (incl.
                      a pre-built :class:`CodeAdapter`), used as-is. Required.
         languages: Languages this tool accepts (backend form only).
@@ -78,7 +76,7 @@ class SandboxCodeTool(Tool):
 
     def __init__(
         self,
-        environment: "SandboxFactory | Sandbox | CodeEnvironment",
+        environment: "SandboxFactory | CodeEnvironment",
         *,
         languages: tuple[CodeLanguage, ...] = ("python", "bash"),
         runners: "dict[CodeLanguage, LanguageRunner] | None" = None,
@@ -87,14 +85,14 @@ class SandboxCodeTool(Tool):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         env: CodeEnvironment
-        if isinstance(environment, (Sandbox, SandboxFactory)):
+        if isinstance(environment, SandboxFactory):
             env = CodeAdapter(environment, languages=languages, runners=runners)
         else:
             # Already a CodeEnvironment (incl. CodeAdapter) — use as-is.
             if runners is not None:
                 raise ValueError(
                     "`runners` only applies when `environment` is a backend "
-                    "(Sandbox / SandboxFactory); configure runners on your "
+                    "(SandboxFactory); configure runners on your "
                     "CodeAdapter / CodeEnvironment instead."
                 )
             env = environment

@@ -2,21 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from autogen.beta.tools.sandbox.base import ExecResult, Sandbox
 from autogen.beta.tools.sandbox.factory import SandboxFactory, SingletonFactory
 from autogen.beta.tools.sandbox.filter import READONLY_COMMANDS, check_ignore, contains_shell_operator, matches
-from autogen.beta.tools.sandbox.local import LocalSandbox
 
 if TYPE_CHECKING:
     from autogen.beta.context import ConversationContext
 
 
 class ShellAdapter:
-    """Shell surface (``run`` / ``run_sync``) over any :class:`Sandbox`.
+    """Shell surface (``run``) over any :class:`Sandbox`.
 
     Implements the command policy once and works on every backend — local
     subprocess, Docker container, Daytona sandbox, or any custom one.
@@ -113,40 +111,6 @@ class ShellAdapter:
 
         result = await self._exec_async(command, context)
         return _format(result)
-
-    def run_sync(
-        self,
-        command: str,
-        *,
-        context: "ConversationContext | None" = None,
-    ) -> str:
-        denied = self._filter(command)
-        if denied is not None:
-            return denied
-
-        sandbox = self._sandbox
-        if isinstance(sandbox, SingletonFactory):
-            sandbox = sandbox.sandbox
-        if isinstance(sandbox, LocalSandbox):
-            result = sandbox.exec_sync(
-                ["sh", "-c", command],
-                env=self._env,
-                timeout=self._timeout,
-            )
-            return _format(result)
-
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            pass
-        else:
-            raise RuntimeError(
-                f"{type(self).__name__}.run_sync() cannot be invoked from inside an "
-                "active event loop. Drive the underlying SandboxFactory directly "
-                "from async callers."
-            )
-
-        return asyncio.run(self.run(command, context=context))
 
     async def _exec_async(
         self,

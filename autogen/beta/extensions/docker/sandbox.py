@@ -9,7 +9,6 @@ import logging
 import os
 import tarfile
 import threading
-from collections.abc import AsyncIterator
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -140,59 +139,11 @@ class DockerSandbox(SandboxBase):
             exit_code=result.exit_code or 0,
         )
 
-    async def stream(
-        self,
-        argv: list[str],
-        *,
-        env: dict[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> AsyncIterator[bytes]:
-        if not argv:
-            return
-
-        container = await self._ensure_container()
-        exec_kwargs: dict[str, Any] = {
-            "stderr": True,
-            "stdout": True,
-            "workdir": str(self._workdir),
-            "stream": True,
-        }
-        if env is not None:
-            exec_kwargs["environment"] = env
-
-        result = await asyncio.to_thread(container.exec_run, argv, **exec_kwargs)
-        stream_iter = result.output
-
-        def _next_chunk() -> bytes | None:
-            try:
-                chunk = next(stream_iter)
-            except StopIteration:
-                return None
-            return bytes(chunk) if not isinstance(chunk, bytes) else chunk
-
-        deadline = timeout if timeout is not None else self._default_timeout
-        while True:
-            try:
-                chunk = await asyncio.wait_for(asyncio.to_thread(_next_chunk), timeout=deadline)
-            except asyncio.TimeoutError:
-                await self._restart_container()
-                raise
-            if chunk is None:
-                return
-            yield chunk
-
     async def put_file(self, path: PurePosixPath, content: bytes) -> None:
         target = self._resolve_inside(path)
         archive = _make_single_file_tar(target.name, content)
         container = await self._ensure_container()
         await asyncio.to_thread(container.put_archive, str(target.parent), archive)
-
-    async def get_file(self, path: PurePosixPath) -> bytes:
-        target = self._resolve_inside(path)
-        container = await self._ensure_container()
-        stream, _stat = await asyncio.to_thread(container.get_archive, str(target))
-        raw = b"".join(stream)
-        return _extract_single_file_from_tar(raw, target.name)
 
     def _resolve_inside(self, path: PurePosixPath) -> PurePosixPath:
         if path.is_absolute():
@@ -303,12 +254,3 @@ def _make_single_file_tar(name: str, content: bytes) -> bytes:
         info.size = len(content)
         tf.addfile(info, io.BytesIO(content))
     return buf.getvalue()
-
-
-def _extract_single_file_from_tar(data: bytes, name: str) -> bytes:
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r") as tf:
-        member = tf.getmember(name)
-        f = tf.extractfile(member)
-        if f is None:
-            raise FileNotFoundError(name)
-        return f.read()

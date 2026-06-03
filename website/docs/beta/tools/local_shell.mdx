@@ -74,7 +74,7 @@ sh = SandboxShellTool(
 
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
-| `environment` | `None` | Backend (`LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment`), bare `Sandbox`, or a pre-built `ShellAdapter`. `None` → `LocalEnvironment()` |
+| `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment`. `None` → `LocalEnvironment()` |
 | `allowed` | `None` | Whitelist of command prefixes. `None` → all commands allowed |
 | `blocked` | `None` | Blacklist of command prefixes. `None` → nothing blocked |
 | `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"` |

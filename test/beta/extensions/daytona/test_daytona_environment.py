@@ -10,7 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autogen.beta import Context, Variable
-from autogen.beta.extensions.daytona import DaytonaEnvironment, DaytonaSandbox
+from autogen.beta.extensions.daytona import DaytonaEnvironment
+from autogen.beta.extensions.daytona.sandbox import DaytonaSandbox
 from autogen.beta.tools import SandboxShellTool
 from autogen.beta.tools.sandbox import SandboxFactory
 

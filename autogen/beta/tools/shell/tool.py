@@ -10,7 +10,8 @@ from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.sandbox import LocalEnvironment, Sandbox, SandboxFactory, ShellAdapter
+from autogen.beta.tools.sandbox import LocalEnvironment, SandboxFactory
+from autogen.beta.tools.sandbox.adapter import ShellAdapter
 from autogen.beta.tools.tool import Tool
 
 
@@ -44,18 +45,11 @@ class SandboxShellTool(Tool):
         docker = DockerEnvironment(image="python:3.12-slim", network_mode="none")
         shell = SandboxShellTool(docker, readonly=True)
 
-        # Advanced: pass a pre-built ShellAdapter (custom backend / filters):
-        from autogen.beta.tools.sandbox import ShellAdapter, CallableFactory
-
-        shell = SandboxShellTool(ShellAdapter(CallableFactory(make_sandbox), allowed=["node"]))
-
     Args:
         environment: The execution backend — a
                      :class:`~autogen.beta.tools.sandbox.SandboxFactory`
                      (``LocalEnvironment`` / ``DockerEnvironment`` /
-                     ``DaytonaEnvironment``), a bare
-                     :class:`~autogen.beta.tools.sandbox.Sandbox`, or a
-                     pre-built :class:`ShellAdapter`. ``None`` defaults to a
+                     ``DaytonaEnvironment``). ``None`` defaults to a
                      local subprocess (``LocalEnvironment()``).
         allowed: Whitelist of command prefixes. When ``readonly`` is set and
                  ``allowed`` is ``None``, a read-only command set is used.
@@ -72,7 +66,7 @@ class SandboxShellTool(Tool):
 
     def __init__(
         self,
-        environment: "SandboxFactory | Sandbox | ShellAdapter | None" = None,
+        environment: "SandboxFactory | None" = None,
         *,
         allowed: list[str] | None = None,
         blocked: list[str] | None = None,
@@ -82,22 +76,14 @@ class SandboxShellTool(Tool):
         description: str = "Execute a shell command in the working directory: {workdir}",
         middleware: Iterable["ToolMiddleware"] = (),
     ) -> None:
-        if isinstance(environment, ShellAdapter):
-            if allowed is not None or blocked is not None or ignore is not None or readonly:
-                raise ValueError(
-                    "Filter arguments (allowed/blocked/ignore/readonly) are not allowed when "
-                    "passing a pre-built ShellAdapter — configure them on the adapter instead."
-                )
-            adapter = environment
-        else:
-            backend: Sandbox | SandboxFactory = environment if environment is not None else LocalEnvironment()
-            adapter = ShellAdapter(
-                backend,
-                allowed=allowed,
-                blocked=blocked,
-                ignore=ignore,
-                readonly=readonly,
-            )
+        backend: SandboxFactory = environment if environment is not None else LocalEnvironment()
+        adapter = ShellAdapter(
+            backend,
+            allowed=allowed,
+            blocked=blocked,
+            ignore=ignore,
+            readonly=readonly,
+        )
 
         async def run_shell_command(command: str, ctx: Context) -> str:
             # Async so the command runs in the agent's own event loop. A sync

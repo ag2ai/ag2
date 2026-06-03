@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Protocol, runtime_checkable
@@ -92,21 +91,6 @@ class Sandbox(Protocol):
         """
         ...
 
-    def stream(
-        self,
-        argv: list[str],
-        *,
-        env: dict[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> AsyncIterator[bytes]:
-        """Stream output of ``argv`` as it is produced.
-
-        Optional capability. Backends without native streaming may yield
-        the whole output once at the end (the :class:`SandboxBase` default
-        does exactly that).
-        """
-        ...
-
     async def put_file(self, path: PurePosixPath, content: bytes) -> None:
         """Write ``content`` to ``path`` inside the sandbox.
 
@@ -114,16 +98,6 @@ class Sandbox(Protocol):
         rejected to keep writes confined to the workdir).
 
         Optional capability. Backends without filesystem write support
-        raise :class:`NotImplementedError`.
-        """
-        ...
-
-    async def get_file(self, path: PurePosixPath) -> bytes:
-        """Read ``path`` from inside the sandbox.
-
-        ``path`` is relative to :attr:`workdir`.
-
-        Optional capability. Backends without filesystem read support
         raise :class:`NotImplementedError`.
         """
         ...
@@ -172,29 +146,9 @@ class SandboxBase(ABC):
         timeout: float | None = None,
     ) -> ExecResult: ...
 
-    async def stream(
-        self,
-        argv: list[str],
-        *,
-        env: dict[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> AsyncIterator[bytes]:
-        """Default streaming implementation: run :meth:`exec`, yield once.
-
-        Backends with native streaming should override this method.
-        """
-        result = await self.exec(argv, env=env, timeout=timeout)
-        if result.output:
-            yield result.output.encode()
-
     async def put_file(self, path: PurePosixPath, content: bytes) -> None:
         raise NotImplementedError(
             f"{type(self).__name__} does not support put_file. Override the method on the subclass."
-        )
-
-    async def get_file(self, path: PurePosixPath) -> bytes:
-        raise NotImplementedError(
-            f"{type(self).__name__} does not support get_file. Override the method on the subclass."
         )
 
     async def remove_file(self, path: PurePosixPath) -> None:

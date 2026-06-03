@@ -9,7 +9,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from autogen.beta.tools.sandbox import LocalSandbox, Sandbox, SandboxFactory, ShellAdapter
+from autogen.beta.tools.sandbox import Sandbox, SandboxFactory
+from autogen.beta.tools.sandbox.adapter import ShellAdapter
+from autogen.beta.tools.sandbox.local import LocalSandbox
 from autogen.beta.tools.skills.local_skills.loader import SkillLoader
 from autogen.beta.tools.skills.skill_types import SkillMetadata
 

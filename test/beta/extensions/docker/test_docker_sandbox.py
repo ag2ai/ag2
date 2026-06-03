@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.beta.annotations import Variable
-from autogen.beta.extensions.docker import DockerSandbox
+from autogen.beta.extensions.docker.sandbox import DockerSandbox
 from autogen.beta.tools.sandbox import ExecResult
 
 
@@ -156,23 +156,6 @@ class TestFileIO:
             assert tf.getnames() == ["hello.txt"]
             f = tf.extractfile("hello.txt")
             assert f is not None and f.read() == b"world"
-
-    async def test_get_file_extracts_from_get_archive(self) -> None:
-        buf = io.BytesIO()
-        with tarfile.open(fileobj=buf, mode="w") as tf:
-            payload = b"\x01\x02\x03"
-            info = tarfile.TarInfo(name="data.bin")
-            info.size = len(payload)
-            tf.addfile(info, io.BytesIO(payload))
-        tar_bytes = buf.getvalue()
-
-        container = _fake_container()
-        container.get_archive = MagicMock(return_value=(iter([tar_bytes]), {}))
-        with _patch_docker(container):
-            sandbox = DockerSandbox(workdir="/sandbox")
-            data = await sandbox.get_file(PurePosixPath("data.bin"))
-
-        assert data == b"\x01\x02\x03"
 
     async def test_absolute_path_rejected(self) -> None:
         sandbox = DockerSandbox()

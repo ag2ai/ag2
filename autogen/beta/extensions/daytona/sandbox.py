@@ -131,14 +131,6 @@ class DaytonaSandbox(SandboxBase):
         target = self._workdir / path
         await sandbox.fs.upload_file(content, str(target))
 
-    async def get_file(self, path: PurePosixPath) -> bytes:
-        if path.is_absolute():
-            raise ValueError(f"Absolute paths are not allowed in put_file/get_file: {path}")
-        sandbox = await self._ensure_sandbox()
-        target = self._workdir / path
-        data: bytes = await sandbox.fs.download_file(str(target))
-        return data
-
     async def remove_file(self, path: PurePosixPath) -> None:
         if path.is_absolute():
             raise ValueError(f"Absolute paths are not allowed in remove_file: {path}")

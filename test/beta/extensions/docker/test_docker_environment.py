@@ -10,7 +10,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.beta import Context, Variable
-from autogen.beta.extensions.docker import DockerEnvironment, DockerSandbox
+from autogen.beta.extensions.docker import DockerEnvironment
+from autogen.beta.extensions.docker.sandbox import DockerSandbox
 from autogen.beta.tools import SandboxShellTool
 from autogen.beta.tools.sandbox import SandboxFactory
 
