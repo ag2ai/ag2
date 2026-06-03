@@ -36,7 +36,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 
 from autogen.beta.knowledge import KnowledgeStore
-from autogen.beta.task import TERMINAL_TASK_STATES, TaskMetadata, TaskSpec, TaskState
+from autogen.beta.task import TERMINAL_TASK_STATES, TaskMetadata, TaskState
 
 from ..adapters.base import ChannelAdapter
 from ..adapters.consulting import ConsultingAdapter
@@ -73,7 +73,6 @@ from ..ids import make_id
 from ..remote import RemoteAgentProxy
 from ..rule import Rule, parse_duration
 from ..transport.frames import (
-    AcceptFrame,
     ErrorFrame,
     Frame,
     HelloFrame,
@@ -81,7 +80,8 @@ from ..transport.frames import (
     PingFrame,
     PongFrame,
     ReceiptFrame,
-    SendFrame,
+    RequestFrame,
+    ResponseFrame,
     WelcomeFrame,
 )
 from ..transport.link import LinkEndpoint
@@ -1020,6 +1020,16 @@ class Hub:
         has no current registration.
         """
         return self._name_to_id.get(name)
+
+    def name_to_id_map(self) -> dict[str, str]:
+        """Snapshot of the ``name → agent_id`` directory.
+
+        Public read surface so callers that need reverse name
+        resolution (e.g. ``WorkflowAdapter`` resolving handoff target
+        names to ids) don't reach into the private index. Returns a
+        copy so mutation can't corrupt the registry.
+        """
+        return dict(self._name_to_id)
 
     async def get_rule(self, agent_id: str) -> Rule:
         """Return the rule attached to ``agent_id``.
@@ -2074,12 +2084,8 @@ class Hub:
                 self._agent_to_endpoint.pop(agent_id, None)
 
     async def _dispatch_frame(self, endpoint: LinkEndpoint, frame: Frame) -> None:
-        if isinstance(frame, SendFrame):
-            try:
-                envelope_id = await self.post_envelope(frame.envelope)
-                await endpoint.send_frame(AcceptFrame(envelope_id=envelope_id))
-            except NetworkError as exc:
-                await endpoint.send_frame(ErrorFrame(code=_error_code(exc), message=str(exc)))
+        if isinstance(frame, RequestFrame):
+            await self._handle_request(endpoint, frame)
         elif isinstance(frame, HelloFrame):
             agent_id = self._name_to_id.get(frame.name)
             if agent_id is None:
@@ -2108,6 +2114,204 @@ class Hub:
             await self._handle_receipt(frame)
         elif isinstance(frame, PingFrame):
             await endpoint.send_frame(PongFrame())
+
+    async def _handle_request(self, endpoint: LinkEndpoint, frame: RequestFrame) -> None:
+        """Execute a control-plane RPC and reply with a ``ResponseFrame``.
+
+        ``frame.op`` selects the operation; ``frame.params`` is the
+        JSON argument dict. Results are serialised to JSON-compatible
+        values (``to_dict`` for record types, lists thereof for
+        collections). A :class:`NetworkError` maps to
+        ``ok=False`` with the matching ``error_code``; any other
+        exception surfaces as ``error_code="error"``. The same hub
+        methods back both the in-process and the wire path, so
+        behaviour is identical regardless of where the caller lives.
+        """
+        try:
+            result = await self._dispatch_request_op(endpoint, frame.op, frame.params)
+        except NetworkError as exc:
+            await endpoint.send_frame(
+                ResponseFrame(
+                    request_id=frame.request_id,
+                    ok=False,
+                    error_code=_error_code(exc),
+                    error_message=str(exc),
+                )
+            )
+            return
+        except Exception as exc:
+            logger.exception("control-plane op failed: op=%s", frame.op)
+            await endpoint.send_frame(
+                ResponseFrame(
+                    request_id=frame.request_id,
+                    ok=False,
+                    error_code="error",
+                    error_message=str(exc),
+                )
+            )
+            return
+        await endpoint.send_frame(ResponseFrame(request_id=frame.request_id, ok=True, result=result))
+
+    async def _dispatch_request_op(self, endpoint: LinkEndpoint, op: str, params: dict) -> object:
+        """Map one control-plane ``op`` to its hub method + (de)serialisation.
+
+        Long but flat by design: one place to see the entire wire
+        control surface. Each branch deserialises ``params`` into the
+        hub method's arguments and serialises the return value back to
+        a JSON-compatible shape.
+        """
+        # ── Registration / identity ──────────────────────────────────
+        if op == "register":
+            passport = Passport.from_dict(params["passport"])
+            resume = Resume.from_dict(params["resume"])
+            rule = Rule.from_dict(params["rule"]) if params.get("rule") is not None else None
+            registered = await self.register(
+                passport,
+                resume,
+                skill_md=params.get("skill_md"),
+                rule=rule,
+            )
+            # Bind the calling connection to the freshly-stamped identity
+            # so dispatched notifies route back to this endpoint.
+            self.bind_endpoint(endpoint.endpoint_id, registered.agent_id)
+            return registered.to_dict()
+        if op == "get_agent":
+            return (await self.get_agent(params["name_or_id"])).to_dict()
+        if op == "get_resume":
+            return (await self.get_resume(params["agent_id"])).to_dict()
+        if op == "get_skill":
+            return await self.get_skill(params["agent_id"])
+        if op == "get_rule":
+            return (await self.get_rule(params["agent_id"])).to_dict()
+        if op == "find_agent_id":
+            return self.find_agent_id(params["name"])
+        if op == "names_for":
+            return {aid: self.name_for(aid) for aid in params["agent_ids"]}
+        if op == "list_agents":
+            agents = await self.list_agents(
+                capability=params.get("capability"),
+                query=params.get("query"),
+                kind=params.get("kind"),
+                sort_by=params.get("sort_by"),
+                limit=params.get("limit", 50),
+            )
+            return [p.to_dict() for p in agents]
+        if op == "set_resume":
+            await self.set_resume(params["agent_id"], Resume.from_dict(params["resume"]))
+            return None
+        if op == "set_skill":
+            await self.set_skill(params["agent_id"], params.get("skill_md"))
+            return None
+        if op == "set_rule":
+            await self.set_rule(params["agent_id"], Rule.from_dict(params["rule"]))
+            return None
+        if op == "unregister":
+            await self.unregister(params["agent_id"])
+            return None
+
+        # ── Channels ─────────────────────────────────────────────────
+        if op == "create_channel":
+            metadata = await self.create_channel(
+                creator_id=params["creator_id"],
+                manifest_type=params["manifest_type"],
+                manifest_version=params.get("manifest_version", 1),
+                participants=params["participants"],
+                required_acks=params.get("required_acks"),
+                ttl=params.get("ttl"),
+                knobs=params.get("knobs"),
+                intent=params.get("intent"),
+                labels=params.get("labels"),
+            )
+            return metadata.to_dict()
+        if op == "get_channel":
+            return (await self.get_channel(params["channel_id"])).to_dict()
+        if op == "list_channels":
+            channels = await self.list_channels(
+                agent_id=params.get("agent_id"),
+                limit=params.get("limit", 50),
+            )
+            return [m.to_dict() for m in channels]
+        if op == "close_channel":
+            metadata = await self.close_channel(params["channel_id"], reason=params.get("reason", ""))
+            return metadata.to_dict()
+        if op == "post_envelope":
+            return await self.post_envelope(Envelope.from_dict(params["envelope"]))
+        if op == "read_wal":
+            wal = await self.read_wal(
+                params["channel_id"],
+                since=params.get("since", 0),
+                until=params.get("until"),
+            )
+            return [e.to_dict() for e in wal]
+        if op == "find_envelope_by_causation":
+            envelope = await self.find_envelope_by_causation(
+                params["channel_id"],
+                sender_id=params["sender_id"],
+                causation_id=params["causation_id"],
+            )
+            return envelope.to_dict() if envelope is not None else None
+        if op == "can_send":
+            return self.can_send(
+                params["channel_id"],
+                params["sender_id"],
+                event_type=params.get("event_type"),
+            )
+        if op == "pending_turns_for":
+            turns = await self.pending_turns_for(params["agent_id"])
+            return [dataclasses.asdict(t) for t in turns]
+        if op == "report_turn_failure":
+            await self.report_turn_failure(
+                channel_id=params["channel_id"],
+                agent_id=params["agent_id"],
+                envelope_id=params["envelope_id"],
+                exc=RuntimeError(params.get("error", "")),
+            )
+            return None
+
+        # ── Tasks (observe-only) ─────────────────────────────────────
+        if op == "get_task":
+            return (await self.get_task(params["task_id"])).to_dict()
+        if op == "list_tasks":
+            state = TaskState(params["state"]) if params.get("state") is not None else None
+            tasks = await self.list_tasks(
+                agent_id=params.get("agent_id"),
+                channel_id=params.get("channel_id"),
+                state=state,
+                limit=params.get("limit", 50),
+            )
+            return [t.to_dict() for t in tasks]
+        if op == "observe_task":
+            await self.observe_task(TaskMetadata.from_dict(params["metadata"]))
+            return None
+        if op == "update_task":
+            state = TaskState(params["state"]) if params.get("state") is not None else None
+            await self.update_task(
+                params["task_id"],
+                state=state,
+                progress=params.get("progress"),
+                result=params.get("result"),
+                error=params.get("error"),
+            )
+            return None
+        if op == "record_observation":
+            await self.record_observation(
+                owner_id=params["owner_id"],
+                capability=params["capability"],
+                outcome=TaskState(params["outcome"]),
+                latency_ms=params.get("latency_ms"),
+                task_id=params.get("task_id"),
+            )
+            return None
+        if op == "fire_task_event":
+            await self.fire_task_event(params["task_id"], params["kind"], params.get("payload", {}))
+            return None
+        if op == "checkpoint_task":
+            await self.checkpoint_task(params["task_id"], params["state"])
+            return None
+        if op == "read_task_checkpoint":
+            return await self.read_task_checkpoint(params["task_id"])
+
+        raise ProtocolError(f"unknown control-plane op: {op!r}")
 
     async def _handle_receipt(self, frame: ReceiptFrame) -> None:
         """Process a delivery receipt from a client.
@@ -2421,7 +2625,7 @@ class Hub:
     async def _persist_task_metadata(self, metadata: TaskMetadata) -> None:
         await self._store.write(
             task_metadata_path(metadata.task_id),
-            json.dumps(_task_metadata_to_dict(metadata)),
+            json.dumps(metadata.to_dict()),
         )
 
     async def _load_agent(self, agent_id: str) -> None:
@@ -2489,66 +2693,7 @@ class Hub:
         metadata_data = await self._store.read(task_metadata_path(task_id))
         if metadata_data is None:
             return
-        metadata = _task_metadata_from_dict(json.loads(metadata_data))
+        metadata = TaskMetadata.from_dict(json.loads(metadata_data))
         self._tasks[task_id] = metadata
         if metadata.channel_id:
             self._channel_tasks.setdefault(metadata.channel_id, set()).add(task_id)
-
-
-def _task_metadata_to_dict(metadata: TaskMetadata) -> dict[str, object]:
-    """Serialise framework-core ``TaskMetadata`` for hub persistence.
-
-    Mirrors the dataclass shape but coerces ``state`` (an Enum) to a
-    string and ``spec`` (a ``TaskSpec`` dataclass) to a dict.
-    """
-    return {
-        "task_id": metadata.task_id,
-        "owner_id": metadata.owner_id,
-        "spec": {
-            "title": metadata.spec.title,
-            "description": metadata.spec.description,
-            "payload": dict(metadata.spec.payload),
-            "capability": metadata.spec.capability,
-        },
-        "state": metadata.state.value,
-        "created_at": metadata.created_at,
-        "started_at": metadata.started_at,
-        "completed_at": metadata.completed_at,
-        "expires_at": metadata.expires_at,
-        "last_progress_at": metadata.last_progress_at,
-        "progress": dict(metadata.progress),
-        "result": metadata.result,
-        "error": metadata.error,
-        "channel_id": metadata.channel_id,
-    }
-
-
-def _task_metadata_from_dict(data: dict[str, object]) -> TaskMetadata:
-    spec_data = data.get("spec") or {}
-    if isinstance(spec_data, dict):
-        capability_raw = spec_data.get("capability")
-        spec = TaskSpec(
-            title=str(spec_data.get("title", "")),
-            description=str(spec_data.get("description", "")),
-            payload=dict(spec_data.get("payload") or {}),  # type: ignore[arg-type]
-            capability=capability_raw if isinstance(capability_raw, str) else None,
-        )
-    else:
-        spec = TaskSpec(title="")
-    state_raw = data.get("state", TaskState.CREATED.value)
-    state = TaskState(state_raw) if isinstance(state_raw, str) else state_raw
-    return TaskMetadata(
-        task_id=str(data["task_id"]),
-        owner_id=str(data["owner_id"]),
-        spec=spec,
-        state=state,  # type: ignore[arg-type]
-        created_at=str(data.get("created_at", "")),
-        started_at=data.get("started_at"),  # type: ignore[arg-type]
-        completed_at=data.get("completed_at"),  # type: ignore[arg-type]
-        expires_at=data.get("expires_at"),  # type: ignore[arg-type]
-        last_progress_at=data.get("last_progress_at"),  # type: ignore[arg-type]
-        progress=dict(data.get("progress") or {}),  # type: ignore[arg-type]
-        result=data.get("result"),
-        error=str(data.get("error", "")),
-        channel_id=data.get("channel_id"),  # type: ignore[arg-type]
-    )

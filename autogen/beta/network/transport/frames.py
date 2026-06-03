@@ -4,9 +4,21 @@
 
 """Wire frames for the ``Link`` Protocol.
 
-The vocabulary covers what ``LocalLink`` needs plus ``HelloFrame`` /
-``WelcomeFrame`` so the same shape works over a network transport
-without renaming.
+Three families share one vocabulary:
+
+* Handshake — ``HelloFrame`` / ``WelcomeFrame`` open and authenticate
+  a connection (and trigger replay on reconnect).
+* Control plane — ``RequestFrame`` / ``ResponseFrame`` carry a
+  request/response RPC correlated by ``request_id``. Every hub control
+  operation (register, discovery, channel lifecycle, posting an
+  envelope, task ops) crosses the wire through this pair.
+* Data plane — ``NotifyFrame`` (hub → client delivery) and
+  ``ReceiptFrame`` (client → hub ack/nack) are the async push path.
+
+``PingFrame`` / ``PongFrame`` stay defined as a heartbeat vocabulary;
+``LocalLink`` skips wire pings and ``WsLink`` delegates heartbeat to
+the WebSocket library, but the frames remain available to any binding
+that wants application-level pings.
 
 ``encode_frame`` / ``decode_frame`` produce JSON-compatible dicts.
 ``LocalLink`` passes Frame dataclasses through in-memory queues
@@ -20,7 +32,6 @@ from typing import Any, ClassVar, TypeAlias
 from ..envelope import Envelope
 
 __all__ = (
-    "AcceptFrame",
     "ErrorFrame",
     "Frame",
     "HelloFrame",
@@ -28,7 +39,8 @@ __all__ = (
     "PingFrame",
     "PongFrame",
     "ReceiptFrame",
-    "SendFrame",
+    "RequestFrame",
+    "ResponseFrame",
     "WelcomeFrame",
     "decode_frame",
     "encode_frame",
@@ -82,32 +94,60 @@ class PongFrame:
 
 
 @dataclass(slots=True)
-class SendFrame:
-    """client → hub: post an envelope into a channel.
+class RequestFrame:
+    """client → hub: invoke a control-plane operation.
 
-    Hub stamps ``envelope_id`` and ``created_at`` at accept and replies
-    with ``AcceptFrame`` (or ``ErrorFrame`` on rejection).
+    ``op`` names the operation (``"register"``, ``"create_channel"``,
+    ``"post_envelope"``, ``"get_agent"``, …); ``params`` is a
+    JSON-compatible argument dict whose shape is defined per ``op``.
+    ``request_id`` is a client-minted correlation id the hub echoes on
+    the matching :class:`ResponseFrame` so concurrent in-flight
+    requests on one connection demux unambiguously.
+
+    Posting an envelope is just another op (``"post_envelope"`` with
+    ``params={"envelope": <envelope dict>}``); the hub stamps
+    ``envelope_id`` / ``created_at`` and returns the id in the
+    response. There is no separate send frame — the request/response
+    pair carries it with correlation for free.
     """
 
-    kind: ClassVar[str] = "send"
-    envelope: Envelope
+    kind: ClassVar[str] = "request"
+    request_id: str
+    op: str
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
-class AcceptFrame:
-    """hub → client: ack of a ``send`` with the hub-stamped ``envelope_id``."""
+class ResponseFrame:
+    """hub → client: result of a :class:`RequestFrame`.
 
-    kind: ClassVar[str] = "accept"
-    envelope_id: str
+    ``request_id`` echoes the request. ``ok`` is ``True`` on success —
+    ``result`` then carries the JSON-compatible return value (a dict, a
+    list of dicts, a scalar, or ``None``). On failure ``ok`` is
+    ``False`` and ``error_code`` / ``error_message`` describe the
+    rejection; ``error_code`` mirrors :class:`ErrorFrame.code`
+    (``"not_found"``, ``"access_denied"``, ``"protocol_error"``,
+    ``"auth_failed"``, …) so the client can re-raise the matching
+    :class:`NetworkError` subclass.
+    """
+
+    kind: ClassVar[str] = "response"
+    request_id: str
+    ok: bool
+    result: Any = None
+    error_code: str = ""
+    error_message: str = ""
 
 
 @dataclass(slots=True)
 class ErrorFrame:
-    """hub → client: structured rejection.
+    """hub → client: structured rejection outside the request/response path.
 
-    ``code`` is a stable identifier (``"protocol_error"``,
-    ``"access_denied"``, ``"not_found"``, ``"inbox_full"``, …).
-    ``envelope_id`` is set when the error relates to a specific send.
+    Used for handshake failures (a :class:`HelloFrame` with an unknown
+    name or a failed auth claim). ``code`` is a stable identifier
+    (``"protocol_error"``, ``"access_denied"``, ``"not_found"``,
+    ``"auth_failed"``, …). Control-plane operation failures travel on
+    :class:`ResponseFrame` instead, correlated by ``request_id``.
     """
 
     kind: ClassVar[str] = "error"
@@ -166,8 +206,8 @@ Frame: TypeAlias = (
     | WelcomeFrame
     | PingFrame
     | PongFrame
-    | SendFrame
-    | AcceptFrame
+    | RequestFrame
+    | ResponseFrame
     | ErrorFrame
     | NotifyFrame
     | ReceiptFrame
@@ -179,8 +219,8 @@ _FRAME_CLASSES: dict[str, type] = {
     "welcome": WelcomeFrame,
     "ping": PingFrame,
     "pong": PongFrame,
-    "send": SendFrame,
-    "accept": AcceptFrame,
+    "request": RequestFrame,
+    "response": ResponseFrame,
     "error": ErrorFrame,
     "notify": NotifyFrame,
     "receipt": ReceiptFrame,

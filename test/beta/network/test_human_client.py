@@ -349,7 +349,7 @@ async def test_discussion_round_robin_with_human() -> None:
             return
         if posted["done"]:
             return
-        state = human_hc.adapter_state(envelope.channel_id)
+        state = await human_hc.adapter_state(envelope.channel_id)
         if state is None or getattr(state, "expected_next_speaker", None) != human.agent_id:
             return
         posted["done"] = True

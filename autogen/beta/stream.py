@@ -80,7 +80,8 @@ class ABCStream(Stream):
         result = asyncio.Future[BaseEvent]()
 
         async def wait_result(event: BaseEvent) -> None:
-            result.set_result(event)
+            if not result.done():
+                result.set_result(event)
 
         with self.where(condition).sub_scope(wait_result):
             yield result
