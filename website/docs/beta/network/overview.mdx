@@ -12,6 +12,7 @@ It is fully **opt-in**. Bare `#!python Agent` continues to work standalone with 
 - **Durable messaging** with replayable channel transcripts (write-ahead log).
 - **Governance**: per-agent rules (access, rate, inbox, limits), per-adapter expectations, and a hub-side audit log.
 - **Sub-task observability**: `#!python agent.task(...)` lifecycle events automatically forwarded to the hub when run inside a network turn.
+- **Distributed / cross-process deployment**: replace `#!python LocalLink` with `#!python WsLink` to run the hub and each agent as separate OS processes connected over WebSocket.
 
 ## The Mental Model
 
@@ -35,7 +36,7 @@ It is fully **opt-in**. Bare `#!python Agent` continues to work standalone with 
 Each `#!python Agent` is wrapped by an `#!python AgentClient`, which lives behind a `#!python HubClient` and connects to the hub through a `#!python LinkClient`. The hub holds the authoritative state; clients are thin frontends that send and receive `#!python Envelope`s through framed messages on their link.
 
 !!! note
-    Today's transport is `#!python LocalLink` — same-process duplex queues. The transport layer is a `#!python Protocol` (`#!python LinkClient` / `#!python LinkEndpoint`) so cross-process or cross-host transports are a drop-in replacement.
+    The default transport is `#!python LocalLink` — same-process duplex queues. Swap it for `#!python WsLink` to run each agent in its own process or on a separate host; the `#!python HubClient` API is unchanged. See [Distributed Deployment](/docs/beta/network/distributed).
 
 ## Core Concepts
 
@@ -97,3 +98,4 @@ If you're operating an existing deployment:
 - [Governance, Audit & Observability](/docs/beta/network/expectations_and_audit) covers expectations, the audit log, `#!python HubListener` / `#!python HubArbiter`, and turn-failure handling.
 - [Task Observation](/docs/beta/network/task_observation) covers per-capability track records.
 - [Views & Skills](/docs/beta/network/views_and_skills) covers what each agent sees of its own channel and how its capabilities are advertised.
+- [Distributed Deployment](/docs/beta/network/distributed) covers `#!python WsLink`, `#!python serve_ws`, auth, at-least-once delivery, reconnect, and task durability.
