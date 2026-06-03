@@ -13,7 +13,6 @@ descriptive ``ImportError`` on use.
 from autogen.beta.exceptions import missing_optional_dependency
 
 from .frames import (
-    AcceptFrame,
     ErrorFrame,
     Frame,
     HelloFrame,
@@ -21,12 +20,13 @@ from .frames import (
     PingFrame,
     PongFrame,
     ReceiptFrame,
-    SendFrame,
+    RequestFrame,
+    ResponseFrame,
     WelcomeFrame,
     decode_frame,
     encode_frame,
 )
-from .link import LinkClient, LinkEndpoint
+from .link import LinkClient, LinkEndpoint, LinkFactory
 from .local import LocalLink, LocalLinkClient, LocalLinkEndpoint
 
 try:
@@ -38,12 +38,12 @@ except ImportError as e:
     serve_ws = missing_optional_dependency("serve_ws", "network-ws", e)  # type: ignore[misc, assignment]
 
 __all__ = (
-    "AcceptFrame",
     "ErrorFrame",
     "Frame",
     "HelloFrame",
     "LinkClient",
     "LinkEndpoint",
+    "LinkFactory",
     "LocalLink",
     "LocalLinkClient",
     "LocalLinkEndpoint",
@@ -51,7 +51,8 @@ __all__ = (
     "PingFrame",
     "PongFrame",
     "ReceiptFrame",
-    "SendFrame",
+    "RequestFrame",
+    "ResponseFrame",
     "WelcomeFrame",
     "WsLink",
     "WsLinkClient",

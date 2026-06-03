@@ -260,22 +260,33 @@ class TaskMirror:
         """If the task's spec carried a ``capability`` tag, push the
         observation through so the owner's ``Resume.observed`` updates.
 
-        ``capability`` and ``started_at`` come from the in-process hub
-        cache (``_tasks``); both ``hub_client._hub`` and the legacy
-        ``hub`` arg provide the same in-process view.
+        Reads the task's ``capability`` + ``started_at`` from the
+        in-process hub cache when one is present (using the hub clock
+        for latency); cross-process it fetches the observed
+        ``TaskMetadata`` over the wire via ``HubClient.get_task`` and
+        uses the local clock. Either way the observation is pushed
+        through ``_record`` (hub-client-routed, so RPC cross-process).
         """
         if outcome not in TERMINAL_TASK_STATES:
             return
-        if self._hub is None:
-            return
-        task_meta = self._hub._tasks.get(task_id)
+        task_meta: TaskMetadata | None = None
+        now_iso: str | None = None
+        if self._hub is not None:
+            task_meta = self._hub._tasks.get(task_id)
+            now_iso = self._hub._clock()
+        elif self._hub_client is not None:
+            try:
+                task_meta = await self._hub_client.get_task(task_id)
+            except Exception:
+                task_meta = None
+            now_iso = datetime.now(timezone.utc).isoformat()
         if task_meta is None or task_meta.spec.capability is None:
             return
         latency_ms: int | None = None
-        if task_meta.started_at:
+        if task_meta.started_at and now_iso is not None:
             try:
                 started = datetime.fromisoformat(task_meta.started_at).timestamp()
-                now = datetime.fromisoformat(self._hub._clock()).timestamp()
+                now = datetime.fromisoformat(now_iso).timestamp()
                 latency_ms = int(max(0.0, now - started) * 1000)
             except Exception:
                 latency_ms = None
