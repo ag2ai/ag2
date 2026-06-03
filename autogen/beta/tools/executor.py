@@ -121,12 +121,9 @@ def _tool_not_found(known_tools: Iterable[str]) -> Callable[..., Any]:
     async def _tool_not_found(event: "ToolCallEvent", context: "Context") -> None:
         if event.name not in known_tools:
             err = ToolNotFoundError(event.name)
-            event = ToolNotFoundEvent(
-                parent_id=event.id,
-                name=event.name,
-                content=repr(err),
-                error=err,
-            )
-            await context.send(event)
+            # Build via from_call so the event always carries a populated
+            # ``result`` (the formatted error). Constructing it by hand is what
+            # left ``result`` as ``None`` and crashed the provider mappers.
+            await context.send(ToolNotFoundEvent.from_call(event, err))
 
     return _tool_not_found

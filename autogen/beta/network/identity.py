@@ -68,10 +68,16 @@ class Passport:
 
     ``kind`` discriminates participant types — ``"agent"`` (default LLM
     participant), ``"human"`` (out-of-band non-LLM participant driven by
-    an external UI), or ``"remote_agent"`` (reserved for a future
-    federation / A2A bridge; not yet activated). ``None`` is treated as
-    ``"agent"`` for back-compat with passports persisted before this
-    field existed.
+    an external UI), or ``"remote_agent"`` (a participant that lives on
+    another hub; the local hub holds the passport as a cache and
+    dispatches to it via a registered ``RemoteAgentProxy``). ``None``
+    is treated as ``"agent"`` for back-compat with passports persisted
+    before this field existed.
+
+    ``hub_id`` is ``None`` for every locally-registered participant.
+    For remote participants the local hub caches, it carries the
+    originating hub's identifier so the canonical URN form is
+    ``f"hub://{hub_id}/{agent_id}"``.
     """
 
     name: str  # human/LLM-facing address; unique per hub
@@ -82,6 +88,7 @@ class Passport:
     region: str | None = None
     auth: AuthBlock = field(default_factory=AuthBlock)
     kind: PassportKind | None = None  # None ≡ "agent" for back-compat
+    hub_id: str | None = None  # None for local registrations; set for federated peers
     version: int = 1
 
     # Hub-stamped at registration. None on construction.

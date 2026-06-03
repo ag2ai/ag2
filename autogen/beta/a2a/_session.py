@@ -9,7 +9,7 @@ from typing import Any
 from a2a.client import A2ACardResolver, Client
 
 from .config import A2AConfig
-from .transports._http import make_a2a_client, make_httpx_client, select_transport
+from .transports._http import make_a2a_client, make_httpx_client, select_interface, validate_protocol_version
 
 
 def with_tenant(config: A2AConfig, override: str | None, **kwargs: Any) -> dict[str, Any]:
@@ -44,7 +44,8 @@ async def open_session(config: A2AConfig) -> AsyncIterator[Client]:
             config.preset_card
             or await A2ACardResolver(httpx_client=httpx_client, base_url=config.card_url).get_agent_card()
         )
-        transport = select_transport(card, url=config.card_url, prefer=config.prefer)
+        iface, transport = select_interface(card, url=config.card_url, prefer=config.prefer)
+        validate_protocol_version(iface, url=config.card_url, transport=transport)
         sdk = make_a2a_client(
             card=card,
             httpx_client=httpx_client,
