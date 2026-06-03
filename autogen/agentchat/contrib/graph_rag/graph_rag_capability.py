@@ -29,7 +29,7 @@ class GraphRagCapability(AgentCapability):
         max_consecutive_auto_reply=3,
         ...
     )
-    graph_rag_capability = GraphRagCapbility(graph_query_engine)
+    graph_rag_capability = GraphRagCapability(graph_query_engine)
     graph_rag_capability.add_to_agent(graph_rag_agent)
 
     user_proxy = UserProxyAgent(

@@ -79,7 +79,7 @@ from .mappers import (
     payload_to_call,
 )
 from .transports import TransportName
-from .transports._http import make_a2a_client, make_httpx_client, select_transport
+from .transports._http import make_a2a_client, make_httpx_client, select_interface, validate_protocol_version
 
 if TYPE_CHECKING:
     import grpc.aio
@@ -278,7 +278,8 @@ class A2AClient(LLMClient):
             self._agent_card = await A2ACardResolver(
                 httpx_client=self._httpx_client, base_url=self._card_url
             ).get_agent_card()
-        transport = select_transport(self._agent_card, url=self._card_url, prefer=self._prefer)
+        iface, transport = select_interface(self._agent_card, url=self._card_url, prefer=self._prefer)
+        validate_protocol_version(iface, url=self._card_url, transport=transport)
         self._sdk_client = make_a2a_client(
             card=self._agent_card,
             httpx_client=self._httpx_client,
