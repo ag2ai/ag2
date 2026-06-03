@@ -50,7 +50,7 @@ class ShellAdapter:
         env: dict[str, str] | None = None,
         timeout: float | None = None,
     ) -> None:
-        self._sandbox = sandbox
+        self._factory: SandboxFactory = sandbox if isinstance(sandbox, SandboxFactory) else SingletonFactory(sandbox)
         self._allowed: list[str] | None = list(READONLY_COMMANDS) if readonly and allowed is None else allowed
         self._blocked = blocked
         self._ignore = ignore
@@ -69,11 +69,10 @@ class ShellAdapter:
         not-yet-opened remote :class:`SandboxFactory` reports the
         conventional ``/workspace`` since no sandbox is bound yet.
         """
-        sandbox = self._sandbox
-        if isinstance(sandbox, SingletonFactory):
-            sandbox = sandbox.sandbox
-        if isinstance(sandbox, SandboxFactory):
+        factory = self._factory
+        if not isinstance(factory, SingletonFactory):
             return PurePosixPath("/workspace")
+        sandbox = factory.sandbox
         host = sandbox.host_workdir
         if host is not None:
             return host
@@ -118,10 +117,8 @@ class ShellAdapter:
         context: "ConversationContext | None",
     ) -> ExecResult:
         argv = ["sh", "-c", command]
-        if isinstance(self._sandbox, SandboxFactory):
-            async with self._sandbox.open(context) as sandbox:
-                return await sandbox.exec(argv, env=self._env, timeout=self._timeout)
-        return await self._sandbox.exec(argv, env=self._env, timeout=self._timeout)  # type: ignore[union-attr]
+        async with self._factory.open(context) as sandbox:
+            return await sandbox.exec(argv, env=self._env, timeout=self._timeout)
 
 
 def _format(result: ExecResult) -> str:

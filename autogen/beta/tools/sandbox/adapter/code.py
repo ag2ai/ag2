@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from autogen.beta.tools.code.environment.base import CodeLanguage, CodeRunResult
 from autogen.beta.tools.sandbox.base import Sandbox
-from autogen.beta.tools.sandbox.factory import SandboxFactory
+from autogen.beta.tools.sandbox.factory import SandboxFactory, SingletonFactory
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -95,7 +95,7 @@ class CodeAdapter:
             if lang not in merged:
                 raise ValueError(f"No LanguageRunner registered for language {lang!r}.")
 
-        self._sandbox = sandbox
+        self._factory: SandboxFactory = sandbox if isinstance(sandbox, SandboxFactory) else SingletonFactory(sandbox)
         self._languages: tuple[CodeLanguage, ...] = tuple(languages)
         self._runners = merged
         self._timeout = timeout
@@ -150,8 +150,5 @@ class CodeAdapter:
         self,
         context: "ConversationContext | None",
     ) -> "AsyncIterator[Sandbox]":
-        if isinstance(self._sandbox, SandboxFactory):
-            async with self._sandbox.open(context) as sb:
-                yield sb
-        else:
-            yield self._sandbox
+        async with self._factory.open(context) as sb:
+            yield sb
