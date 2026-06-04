@@ -105,27 +105,42 @@ class LocalSandbox(SandboxBase):
         if timeout <= 0:
             raise ValueError("`timeout` must be > 0 seconds.")
 
-        cleanup_flag = cleanup if cleanup is not None else (path is None)
+        self._path = os.fspath(path) if path is not None else None
+        self._cleanup_workdir = cleanup if cleanup is not None else (path is None)
 
-        if path is None:
-            tmpdir = tempfile.mkdtemp(prefix="ag2_sandbox_")
-            self._host_workdir = Path(tmpdir)
-        else:
-            self._host_workdir = Path(path).resolve()
-            self._host_workdir.mkdir(parents=True, exist_ok=True)
-
-        self._workdir = PurePosixPath(self._host_workdir.as_posix())
-        self._cleanup_workdir = cleanup_flag
+        # Workdir is materialized lazily on first runtime use (see
+        # _ensure_workdir): no filesystem side effects at construction time.
+        self._host_workdir: Path | None = None
+        self._workdir: PurePosixPath | None = None
         self._atexit_registered = False
-        if cleanup_flag:
-            atexit.register(self._atexit_cleanup)
-            self._atexit_registered = True
 
         self._default_timeout = timeout
         self._max_output = max_output
         self._env_vars = dict(env_vars) if env_vars else {}
         self._languages = tuple(languages)
         self._closed = False
+
+    def _ensure_workdir(self) -> Path:
+        """Materialize the working directory on first use.
+
+        Runs synchronously without awaiting, so concurrent first calls in
+        the same event loop cannot interleave inside it. Idempotent.
+        """
+        if self._host_workdir is not None:
+            return self._host_workdir
+
+        if self._path is None:
+            host_workdir = Path(tempfile.mkdtemp(prefix="ag2_sandbox_"))
+        else:
+            host_workdir = Path(self._path).resolve()
+            host_workdir.mkdir(parents=True, exist_ok=True)
+
+        self._host_workdir = host_workdir
+        self._workdir = PurePosixPath(host_workdir.as_posix())
+        if self._cleanup_workdir and not self._atexit_registered:
+            atexit.register(self._atexit_cleanup)
+            self._atexit_registered = True
+        return host_workdir
 
     def _merge_env(self, env: dict[str, str] | None) -> dict[str, str] | None:
         """Merge the sandbox's default ``env_vars`` with a per-call ``env``.
@@ -139,11 +154,13 @@ class LocalSandbox(SandboxBase):
 
     @property
     def workdir(self) -> PurePosixPath:
+        self._ensure_workdir()
+        assert self._workdir is not None
         return self._workdir
 
     @property
     def host_workdir(self) -> Path:
-        return self._host_workdir
+        return self._ensure_workdir()
 
     @property
     def supported_languages(self) -> tuple[CodeLanguage, ...]:
@@ -161,10 +178,11 @@ class LocalSandbox(SandboxBase):
         if not argv:
             return ExecResult(output="", exit_code=2)
 
+        host_workdir = self._ensure_workdir()
         return await asyncio.to_thread(
             _run_subprocess,
             argv,
-            cwd=self._host_workdir,
+            cwd=host_workdir,
             env=self._merge_env(env),
             timeout=timeout if timeout is not None else self._default_timeout,
             max_output=self._max_output,
@@ -173,14 +191,14 @@ class LocalSandbox(SandboxBase):
     async def put_file(self, path: PurePosixPath, content: bytes) -> None:
         if self._closed:
             raise RuntimeError("LocalSandbox has been closed.")
-        target = _resolve_workdir_path(path, self._host_workdir)
+        target = _resolve_workdir_path(path, self._ensure_workdir())
         target.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(target.write_bytes, content)
 
     async def remove_file(self, path: PurePosixPath) -> None:
         if self._closed:
             raise RuntimeError("LocalSandbox has been closed.")
-        target = _resolve_workdir_path(path, self._host_workdir)
+        target = _resolve_workdir_path(path, self._ensure_workdir())
         await asyncio.to_thread(target.unlink, True)  # missing_ok=True
 
     async def aclose(self) -> None:
@@ -194,10 +212,10 @@ class LocalSandbox(SandboxBase):
             with suppress(ValueError):
                 atexit.unregister(self._atexit_cleanup)
             self._atexit_registered = False
-        if self._cleanup_workdir:
+        if self._cleanup_workdir and self._host_workdir is not None:
             shutil.rmtree(self._host_workdir, ignore_errors=True)
             self._cleanup_workdir = False
 
     def _atexit_cleanup(self) -> None:
-        if self._cleanup_workdir:
+        if self._cleanup_workdir and self._host_workdir is not None:
             shutil.rmtree(self._host_workdir, ignore_errors=True)
