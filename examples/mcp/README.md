@@ -83,6 +83,22 @@ Without a token, `/mcp` returns `401` with a `WWW-Authenticate` header pointing 
 metadata; an insufficient scope returns `403`. The demo uses a static-token verifier —
 replace it with one that checks your IdP's JWKS / introspection in production.
 
+## Embed in an existing FastAPI / Starlette app
+
+`build_streamable_http()` returns a Starlette app whose **lifespan** runs the MCP
+session manager — and mounted sub-apps don't get their lifespan run by the parent, so a
+plain `app.mount(...)` fails with *"Task group is not initialized"*. Use
+`MCPServer(agent).mount_into(app, path="/mcp")` instead: it adds the MCP routes at the
+app root (so `path` and the host-root `.well-known` land where clients expect) and
+composes the lifespan into your app's. Any auth (`security=`) stays scoped to the MCP
+route, so the rest of your app is unaffected.
+
+```bash
+uvicorn examples.mcp.server_embedded:app --host 127.0.0.1 --port 8000
+#   GET  /        -> your API
+#   POST /mcp     -> the AG2 agent over MCP
+```
+
 ## Files
 
 | File | What it does |
@@ -90,6 +106,7 @@ replace it with one that checks your IdP's JWKS / introspection in production.
 | `server_stdio.py`       | Wraps the agent and serves it over stdio (`MCPServer(agent).run_stdio()`). |
 | `server_http.py`        | Exposes `app = MCPServer(agent).build_streamable_http()` for uvicorn. |
 | `server_http_auth.py`   | Streamable-HTTP server with OAuth Resource Server auth + `.well-known` discovery. |
+| `server_embedded.py`    | Mounts the agent into a FastAPI app via `MCPServer.mount_into(app)`. |
 | `client_demo.py`        | Launches the stdio server and calls the `ask` tool once. |
 | `client_interactive.py` | Interactive multi-turn stdio chat. |
 | `client_http.py`        | Calls a running streamable-HTTP server. |

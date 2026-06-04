@@ -16,9 +16,8 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import CallToolResult, ContentBlock
 from mcp.types import Tool as MCPTool
 from starlette.applications import Starlette
-from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
-from starlette.routing import Mount, Route
+from starlette.routing import BaseRoute, Mount, Route
 
 from autogen.beta.agent import Agent
 
@@ -124,6 +123,71 @@ class MCPServer:
         ``401`` (with a ``WWW-Authenticate`` header pointing at the metadata),
         insufficient scopes get ``403``. ``security.resource_url`` must point at this
         endpoint (its path component must equal ``path``).
+
+        To embed MCP in an existing ASGI app instead of running this standalone,
+        use :meth:`mount_into` (it wires the lifespan for you).
+        """
+        routes, manager = self._streamable_routes(
+            path=path, stateless=stateless, json_response=json_response, security=security
+        )
+
+        @asynccontextmanager
+        async def lifespan(_: Starlette) -> AsyncIterator[None]:
+            async with manager.run():
+                yield
+
+        return Starlette(routes=routes, lifespan=lifespan)
+
+    def mount_into(
+        self,
+        app: Starlette,
+        *,
+        path: str = "/mcp",
+        stateless: bool = False,
+        json_response: bool = False,
+        security: Requirement | None = None,
+    ) -> Starlette:
+        """Mount this MCP server into an existing Starlette/FastAPI ``app``.
+
+        Adds the MCP routes to ``app`` (the endpoint at ``path``, plus the RFC 9728
+        ``/.well-known/oauth-protected-resource`` route when ``security`` is set) and
+        composes the streamable-HTTP session-manager lifespan into ``app``'s lifespan,
+        so you don't have to wire it yourself — without it, requests fail with
+        "Task group is not initialized". Any existing lifespan is preserved.
+
+        Routes are added at the app root, so ``path`` and the host-root
+        ``.well-known`` route land exactly where MCP clients expect them. Bearer auth
+        (when ``security`` is set) is scoped to the MCP route only, so the rest of
+        ``app`` is unaffected. Call this during setup, before the app starts serving.
+        """
+        routes, manager = self._streamable_routes(
+            path=path, stateless=stateless, json_response=json_response, security=security
+        )
+        app.router.routes.extend(routes)
+
+        previous_lifespan = app.router.lifespan_context
+
+        @asynccontextmanager
+        async def lifespan(scope_app: Any) -> AsyncIterator[Any]:
+            async with manager.run(), previous_lifespan(scope_app) as state:
+                yield state
+
+        app.router.lifespan_context = lifespan
+        return app
+
+    def _streamable_routes(
+        self,
+        *,
+        path: str,
+        stateless: bool,
+        json_response: bool,
+        security: Requirement | None,
+    ) -> "tuple[list[BaseRoute], StreamableHTTPSessionManager]":
+        """Build the streamable-HTTP routes + session manager shared by
+        :meth:`build_streamable_http` and :meth:`mount_into`.
+
+        Bearer auth is wrapped *around the MCP route* (not as app-level middleware)
+        so it stays scoped when the route is injected into a host app.
         """
         manager = StreamableHTTPSessionManager(
             app=self._server,
@@ -134,13 +198,8 @@ class MCPServer:
         async def handle(scope: "Scope", receive: "Receive", send: "Send") -> None:
             await manager.handle_request(scope, receive, send)
 
-        @asynccontextmanager
-        async def lifespan(_: Starlette) -> AsyncIterator[None]:
-            async with manager.run():
-                yield
-
         if security is None:
-            return Starlette(routes=[Mount(path, app=handle)], lifespan=lifespan)
+            return [Mount(path, app=handle)], manager
 
         metadata = security.to_metadata()
         resource_path = urlparse(str(metadata.resource)).path or "/"
@@ -148,12 +207,18 @@ class MCPServer:
             raise ValueError(
                 f"security.resource_url path ({resource_path!r}) must match the MCP endpoint path ({path!r})."
             )
-        required_scopes = list(security.required_scopes)
-        routes = [
-            Route(
-                path,
-                endpoint=RequireAuthMiddleware(handle, required_scopes, build_resource_metadata_url(metadata.resource)),
+        guarded = AuthenticationMiddleware(
+            AuthContextMiddleware(
+                RequireAuthMiddleware(
+                    handle,
+                    list(security.required_scopes),
+                    build_resource_metadata_url(metadata.resource),
+                ),
             ),
+            backend=BearerAuthBackend(security.verifier),
+        )
+        routes: list[BaseRoute] = [
+            Route(path, endpoint=guarded),
             *create_protected_resource_routes(
                 resource_url=metadata.resource,
                 authorization_servers=metadata.authorization_servers,
@@ -162,11 +227,7 @@ class MCPServer:
                 resource_documentation=metadata.resource_documentation,
             ),
         ]
-        middleware = [
-            Middleware(AuthenticationMiddleware, backend=BearerAuthBackend(security.verifier)),
-            Middleware(AuthContextMiddleware),
-        ]
-        return Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
+        return routes, manager
 
     async def run_stdio(self) -> None:
         """Serve the agent over stdio until the client disconnects."""
