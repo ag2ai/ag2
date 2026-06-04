@@ -5,19 +5,26 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
+from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
+from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
+from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import CallToolResult, ContentBlock
 from mcp.types import Tool as MCPTool
 from starlette.applications import Starlette
-from starlette.routing import Mount
+from starlette.middleware import Middleware
+from starlette.middleware.authentication import AuthenticationMiddleware
+from starlette.routing import Mount, Route
 
 from autogen.beta.agent import Agent
 
 from .executor import AgentExecutor
 from .info import build_server_info
+from .security import Requirement
 
 if TYPE_CHECKING:
     from starlette.types import Receive, Scope, Send
@@ -106,8 +113,18 @@ class MCPServer:
         path: str = "/mcp",
         stateless: bool = False,
         json_response: bool = False,
+        security: Requirement | None = None,
     ) -> Starlette:
-        """Return a Starlette ASGI app serving MCP over streamable HTTP at ``path``."""
+        """Return a Starlette ASGI app serving MCP over streamable HTTP at ``path``.
+
+        When ``security`` is given (build it with
+        :func:`autogen.beta.mcp.security.require`), the app additionally serves
+        RFC 9728 Protected Resource Metadata at ``/.well-known/oauth-protected-resource``
+        and requires a valid bearer token on ``path`` — missing/invalid tokens get
+        ``401`` (with a ``WWW-Authenticate`` header pointing at the metadata),
+        insufficient scopes get ``403``. ``security.resource_url`` must point at this
+        endpoint (its path component must equal ``path``).
+        """
         manager = StreamableHTTPSessionManager(
             app=self._server,
             stateless=stateless,
@@ -122,7 +139,34 @@ class MCPServer:
             async with manager.run():
                 yield
 
-        return Starlette(routes=[Mount(path, app=handle)], lifespan=lifespan)
+        if security is None:
+            return Starlette(routes=[Mount(path, app=handle)], lifespan=lifespan)
+
+        metadata = security.to_metadata()
+        resource_path = urlparse(str(metadata.resource)).path or "/"
+        if resource_path.rstrip("/") != path.rstrip("/"):
+            raise ValueError(
+                f"security.resource_url path ({resource_path!r}) must match the MCP endpoint path ({path!r})."
+            )
+        required_scopes = list(security.required_scopes)
+        routes = [
+            Route(
+                path,
+                endpoint=RequireAuthMiddleware(handle, required_scopes, build_resource_metadata_url(metadata.resource)),
+            ),
+            *create_protected_resource_routes(
+                resource_url=metadata.resource,
+                authorization_servers=metadata.authorization_servers,
+                scopes_supported=metadata.scopes_supported,
+                resource_name=metadata.resource_name,
+                resource_documentation=metadata.resource_documentation,
+            ),
+        ]
+        middleware = [
+            Middleware(AuthenticationMiddleware, backend=BearerAuthBackend(security.verifier)),
+            Middleware(AuthContextMiddleware),
+        ]
+        return Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
 
     async def run_stdio(self) -> None:
         """Serve the agent over stdio until the client disconnects."""

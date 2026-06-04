@@ -62,10 +62,35 @@ Then connect a client to `http://127.0.0.1:8000/mcp` (in the MCP Inspector choos
 "Streamable HTTP" transport). `app` is a plain Starlette ASGI app — attach CORS / auth
 middleware to it as needed.
 
+## Authenticated server (OAuth 2.0 Resource Server)
+
+Pass a `security=` requirement (built with `autogen.beta.mcp.security.require`) to
+`build_streamable_http` to serve RFC 9728 protected-resource discovery and enforce
+bearer tokens on `/mcp`. Token *issuance* stays with your authorization server; you
+bring a `TokenVerifier` that validates the presented token.
+
+```bash
+uvicorn examples.mcp.server_http_auth:app --host 127.0.0.1 --port 8000
+
+# discover where to authenticate
+curl http://127.0.0.1:8000/.well-known/oauth-protected-resource/mcp
+
+# call it (the demo accepts the static token "demo-secret-token")
+python -m examples.mcp.client_http_auth
+```
+
+Without a token, `/mcp` returns `401` with a `WWW-Authenticate` header pointing at the
+metadata; an insufficient scope returns `403`. The demo uses a static-token verifier —
+replace it with one that checks your IdP's JWKS / introspection in production.
+
 ## Files
 
 | File | What it does |
 |------|--------------|
-| `server_stdio.py` | Wraps the agent and serves it over stdio (`MCPServer(agent).run_stdio()`). |
-| `server_http.py`  | Exposes `app = MCPServer(agent).build_streamable_http()` for uvicorn. |
-| `client_demo.py`  | Launches the stdio server and calls the `ask` tool end-to-end. |
+| `server_stdio.py`       | Wraps the agent and serves it over stdio (`MCPServer(agent).run_stdio()`). |
+| `server_http.py`        | Exposes `app = MCPServer(agent).build_streamable_http()` for uvicorn. |
+| `server_http_auth.py`   | Streamable-HTTP server with OAuth Resource Server auth + `.well-known` discovery. |
+| `client_demo.py`        | Launches the stdio server and calls the `ask` tool once. |
+| `client_interactive.py` | Interactive multi-turn stdio chat. |
+| `client_http.py`        | Calls a running streamable-HTTP server. |
+| `client_http_auth.py`   | Discovers metadata and calls the authenticated server with a bearer token. |
