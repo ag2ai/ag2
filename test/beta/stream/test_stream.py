@@ -270,3 +270,29 @@ async def test_context_propagates_to_substream(mock: MagicMock) -> None:
     await stream.send(ToolCallEvent(name="func1", arguments="test"), custom_ctx)
 
     mock.assert_called_once_with(custom_ctx)
+
+
+@pytest.mark.asyncio
+class TestStreamGet:
+    async def test_resolves_to_first_match(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream)
+
+        async with stream.get(ModelMessage) as result:
+            await stream.send(ModelMessage("first"), ctx)
+            event = await result
+
+        assert event == ModelMessage("first")
+
+    async def test_survives_second_matching_event(self) -> None:
+        # A second match arrives while the waiter is still subscribed; get keeps
+        # the first one instead of raising InvalidStateError on a redundant resolve.
+        stream = MemoryStream()
+        ctx = Context(stream)
+
+        async with stream.get(ModelMessage) as result:
+            await stream.send(ModelMessage("first"), ctx)
+            await stream.send(ModelMessage("second"), ctx)
+            event = await result
+
+        assert event == ModelMessage("first")

@@ -176,7 +176,7 @@ class Neo4jGraphQueryEngine:
             **kwargs: additional keyword arguments.
 
         Returns:
-            A GrapStoreQueryResult object containing the answer and related triplets.
+            A GraphStoreQueryResult object containing the answer and related triplets.
         """
         if not hasattr(self, "index"):
             raise ValueError("Property graph index is not created.")

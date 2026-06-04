@@ -56,7 +56,12 @@ def config_list_from_json(
         # The environment variable exists. We should use information from it.
         if os.path.exists(env_str):  # noqa: SIM108
             # It is a file location, and we need to load the json from the file.
-            json_str = Path(env_str).read_text()
+            # Pin UTF-8 so the read works on platforms whose default
+            # `locale.getencoding()` is not UTF-8 (notably Windows, where the
+            # default is cp1252 / cp932 and a non-ASCII byte in the JSON file
+            # raises UnicodeDecodeError mid-load). JSON is defined over UTF-8
+            # (RFC 8259 §8.1), so this matches the file's documented contract.
+            json_str = Path(env_str).read_text(encoding="utf-8")
         else:
             # Else, it should be a JSON string by itself.
             json_str = env_str
@@ -67,7 +72,10 @@ def config_list_from_json(
         # So, `env_or_file` is a filename. We should use the file location.
         config_list_path = Path(file_location) / env_or_file if file_location else Path(env_or_file)
 
-        with open(config_list_path) as json_file:
+        # Same UTF-8 pin as above — the JSON config file may carry non-ASCII
+        # bytes (vendor display names, custom labels) which crash on Windows
+        # without an explicit encoding.
+        with open(config_list_path, encoding="utf-8") as json_file:
             config_list = json.load(json_file)
 
     return filter_config(config_list, filter_dict)

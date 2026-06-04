@@ -16,7 +16,9 @@ from autogen.agentchat.group.context_condition import StringContextCondition
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.group_utils import (
+    _NO_AFTER_WORK_MATCHED,
     _create_on_condition_handoff_function,
+    _evaluate_after_works_conditions,
     _run_oncontextconditions,
     _validate_handoff_target,
     cleanup_temp_user_messages,
@@ -888,3 +890,231 @@ class TestHelperFunctions:
         ]
 
         assert processed_messages == expected_messages
+
+    # ---- Tests for TerminateTarget / _NO_AFTER_WORK_MATCHED sentinel fix (issue #2575) ----
+
+    def test_evaluate_after_works_returns_sentinel_when_no_handoffs(
+        self, agent1: MagicMock, mock_group_chat: MagicMock, user_proxy: MagicMock
+    ) -> None:
+        """Test that _evaluate_after_works_conditions returns _NO_AFTER_WORK_MATCHED
+        when the agent has no after_works configured."""
+        agent1.handoffs.after_works = []
+        result = _evaluate_after_works_conditions(agent1, mock_group_chat, user_proxy)
+        assert result is _NO_AFTER_WORK_MATCHED
+
+    def test_evaluate_after_works_returns_sentinel_when_no_handoffs_attr(
+        self, mock_group_chat: MagicMock, user_proxy: MagicMock
+    ) -> None:
+        """Test that _evaluate_after_works_conditions returns _NO_AFTER_WORK_MATCHED
+        when the agent has no handoffs attribute at all."""
+        agent_no_handoffs = MagicMock()
+        del agent_no_handoffs.handoffs
+        result = _evaluate_after_works_conditions(agent_no_handoffs, mock_group_chat, user_proxy)
+        assert result is _NO_AFTER_WORK_MATCHED
+
+    def test_evaluate_after_works_returns_none_for_terminate_target(
+        self, agent1: MagicMock, mock_group_chat: MagicMock, user_proxy: MagicMock
+    ) -> None:
+        """Test that _evaluate_after_works_conditions returns None (not sentinel)
+        when a TerminateTarget matches, allowing termination to propagate."""
+        agent1.handoffs.after_works = [OnContextCondition(target=TerminateTarget(), condition=None)]
+        mock_group_chat.agents = [agent1, user_proxy]
+        result = _evaluate_after_works_conditions(agent1, mock_group_chat, user_proxy)
+        # TerminateTarget resolves to None (termination signal), NOT the sentinel
+        assert result is None
+
+    def test_evaluate_after_works_returns_agent_for_agent_target(
+        self, agent1: MagicMock, agent2: MagicMock, mock_group_chat: MagicMock, user_proxy: MagicMock
+    ) -> None:
+        """Test that _evaluate_after_works_conditions returns the agent when
+        an AgentTarget matches."""
+        agent1.handoffs.after_works = [OnContextCondition(target=AgentTarget(agent=agent2), condition=None)]
+        mock_group_chat.agents = [agent1, agent2, user_proxy]
+        result = _evaluate_after_works_conditions(agent1, mock_group_chat, user_proxy)
+        assert result == agent2
+
+    @patch("autogen.agentchat.group.group_utils.get_last_agent_speaker")
+    def test_determine_next_agent_terminate_target_on_agent(
+        self,
+        mock_get_last_agent_speaker: MagicMock,
+        mock_group_chat: MagicMock,
+        agent1: MagicMock,
+        agent2: MagicMock,
+        user_proxy: MagicMock,
+        mock_tool_executor: MagicMock,
+    ) -> None:
+        """Test that TerminateTarget set as agent-level after_work takes precedence
+        over group-level GroupManagerTarget. This is the exact scenario from issue #2575:
+        an agent with set_after_work(TerminateTarget()) should stop the conversation,
+        not be silently overridden by AutoPattern's group_manager after_work."""
+        group_agent_names = ["agent1", "agent2"]
+        mock_group_chat.agents = [agent1, agent2, user_proxy, mock_tool_executor]
+        mock_group_chat.messages = [{"role": "assistant", "name": "agent2", "content": "Goodbye!"}]
+        mock_get_last_agent_speaker.return_value = agent2
+
+        # agent2 has TerminateTarget as after_work (like the issue's reproduction code)
+        agent2.handoffs.after_works = [OnContextCondition(target=TerminateTarget(), condition=None)]
+
+        # group-level after_work is GroupManagerTarget (like AutoPattern sets)
+        group_after_work = GroupManagerTarget()
+
+        next_agent = determine_next_agent(
+            agent2,
+            mock_group_chat,
+            agent1,
+            False,
+            mock_tool_executor,
+            group_agent_names,
+            user_proxy,
+            group_after_work,
+        )
+        # Agent-level TerminateTarget must terminate (return None),
+        # NOT fall through to GroupManagerTarget
+        assert next_agent is None
+
+    @patch("autogen.agentchat.group.group_utils.get_last_agent_speaker")
+    def test_determine_next_agent_no_agent_after_work_falls_through_to_group(
+        self,
+        mock_get_last_agent_speaker: MagicMock,
+        mock_group_chat: MagicMock,
+        agent1: MagicMock,
+        agent2: MagicMock,
+        user_proxy: MagicMock,
+        mock_tool_executor: MagicMock,
+    ) -> None:
+        """Test that when an agent has NO after_work, the group-level after_work
+        is used correctly (e.g., GroupManagerTarget returns 'auto')."""
+        group_agent_names = ["agent1", "agent2"]
+        mock_group_chat.agents = [agent1, agent2, user_proxy, mock_tool_executor]
+        mock_group_chat.messages = [{"role": "assistant", "name": "agent1", "content": "Hello!"}]
+        mock_get_last_agent_speaker.return_value = agent1
+
+        # No agent-level after_work
+        agent1.handoffs.after_works = []
+
+        # Group-level after_work is GroupManagerTarget
+        group_after_work = GroupManagerTarget()
+
+        next_agent = determine_next_agent(
+            agent1,
+            mock_group_chat,
+            agent1,
+            False,
+            mock_tool_executor,
+            group_agent_names,
+            user_proxy,
+            group_after_work,
+        )
+        # Should fall through to group-level GroupManagerTarget -> "auto"
+        assert next_agent == "auto"
+
+    @patch("autogen.agentchat.group.group_utils.get_last_agent_speaker")
+    def test_determine_next_agent_agent_target_takes_precedence_over_group(
+        self,
+        mock_get_last_agent_speaker: MagicMock,
+        mock_group_chat: MagicMock,
+        agent1: MagicMock,
+        agent2: MagicMock,
+        user_proxy: MagicMock,
+        mock_tool_executor: MagicMock,
+    ) -> None:
+        """Test that agent-level AgentTarget after_work takes precedence over
+        group-level after_work."""
+        group_agent_names = ["agent1", "agent2"]
+        mock_group_chat.agents = [agent1, agent2, user_proxy, mock_tool_executor]
+        mock_group_chat.messages = [{"role": "assistant", "name": "agent1", "content": "Hello!"}]
+        mock_get_last_agent_speaker.return_value = agent1
+
+        # agent1 has AgentTarget pointing to agent2
+        agent1.handoffs.after_works = [OnContextCondition(target=AgentTarget(agent=agent2), condition=None)]
+
+        # Group-level after_work is TerminateTarget (should NOT be reached)
+        group_after_work = TerminateTarget()
+
+        next_agent = determine_next_agent(
+            agent1,
+            mock_group_chat,
+            agent1,
+            False,
+            mock_tool_executor,
+            group_agent_names,
+            user_proxy,
+            group_after_work,
+        )
+        # Agent-level AgentTarget should take precedence
+        assert next_agent == agent2
+
+    @patch("autogen.agentchat.group.group_utils.get_last_agent_speaker")
+    def test_determine_next_agent_terminate_with_matching_condition(
+        self,
+        mock_get_last_agent_speaker: MagicMock,
+        mock_group_chat: MagicMock,
+        agent1: MagicMock,
+        agent2: MagicMock,
+        user_proxy: MagicMock,
+        mock_tool_executor: MagicMock,
+    ) -> None:
+        """Test that TerminateTarget with a matching context condition correctly
+        terminates the conversation."""
+        group_agent_names = ["agent1", "agent2"]
+        mock_group_chat.agents = [agent1, agent2, user_proxy, mock_tool_executor]
+        mock_group_chat.messages = [{"role": "assistant", "name": "agent2", "content": "Done!"}]
+        mock_get_last_agent_speaker.return_value = agent2
+
+        # agent2 has TerminateTarget with a condition that evaluates to True
+        # StringContextCondition checks if variable is truthy
+        condition = StringContextCondition(variable_name="should_terminate")
+        agent2.context_variables = ContextVariables(data={"should_terminate": "yes"})
+        agent2.handoffs.after_works = [OnContextCondition(target=TerminateTarget(), condition=condition)]
+
+        group_after_work = GroupManagerTarget()
+
+        next_agent = determine_next_agent(
+            agent2,
+            mock_group_chat,
+            agent1,
+            False,
+            mock_tool_executor,
+            group_agent_names,
+            user_proxy,
+            group_after_work,
+        )
+        assert next_agent is None
+
+    @patch("autogen.agentchat.group.group_utils.get_last_agent_speaker")
+    def test_determine_next_agent_terminate_condition_not_met_falls_through(
+        self,
+        mock_get_last_agent_speaker: MagicMock,
+        mock_group_chat: MagicMock,
+        agent1: MagicMock,
+        agent2: MagicMock,
+        user_proxy: MagicMock,
+        mock_tool_executor: MagicMock,
+    ) -> None:
+        """Test that when TerminateTarget's condition is NOT met, the group-level
+        after_work is used instead."""
+        group_agent_names = ["agent1", "agent2"]
+        mock_group_chat.agents = [agent1, agent2, user_proxy, mock_tool_executor]
+        mock_group_chat.messages = [{"role": "assistant", "name": "agent2", "content": "Continuing..."}]
+        mock_get_last_agent_speaker.return_value = agent2
+
+        # agent2 has TerminateTarget with a condition that evaluates to False
+        # StringContextCondition checks if variable is truthy; empty string is falsy
+        condition = StringContextCondition(variable_name="should_terminate")
+        agent2.context_variables = ContextVariables(data={"should_terminate": ""})
+        agent2.handoffs.after_works = [OnContextCondition(target=TerminateTarget(), condition=condition)]
+
+        group_after_work = GroupManagerTarget()
+
+        next_agent = determine_next_agent(
+            agent2,
+            mock_group_chat,
+            agent1,
+            False,
+            mock_tool_executor,
+            group_agent_names,
+            user_proxy,
+            group_after_work,
+        )
+        # Condition not met, falls through to group-level -> "auto"
+        assert next_agent == "auto"

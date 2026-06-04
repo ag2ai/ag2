@@ -45,6 +45,7 @@ from ..views.base import ViewPolicy
 from ..views.builtin import FullTranscript
 from .base import (
     AdapterResult,
+    ExpectedTurn,
     default_build_packet_envelope,
     default_build_round_envelope,
     default_build_text_envelope,
@@ -228,6 +229,25 @@ class ConsultingAdapter:
                 auto_close_reason="consulting_complete",
             )
         return AdapterResult()
+
+    def expected_next(
+        self,
+        metadata: ChannelMetadata,
+        state: ConsultingState,
+    ) -> ExpectedTurn | None:
+        # 1Q1R cycle: initiator first, then respondent. Once both have
+        # spoken the cycle is complete and no participant is expected.
+        if not state.initiator_sent:
+            return ExpectedTurn(
+                agent_id=self._initiator_id(metadata),
+                triggering_envelope_id=state.last_envelope_id,
+            )
+        if not state.respondent_replied:
+            return ExpectedTurn(
+                agent_id=self._respondent_id(metadata),
+                triggering_envelope_id=state.last_envelope_id,
+            )
+        return None
 
     def default_view_policy(
         self,
