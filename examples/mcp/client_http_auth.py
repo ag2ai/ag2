@@ -36,15 +36,15 @@ async def main() -> None:
 
     # 2) Call the MCP endpoint with a bearer token.
     headers = {"Authorization": f"Bearer {TOKEN}"}
-    async with streamablehttp_client(URL, headers=headers) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            tools = await session.list_tools()
-            print("tools:", [t.name for t in tools.tools])
-            result = await session.call_tool(
-                "ask", {"message": "Add 2 and 3 with calc_add; reply with just the number."}
-            )
-            print("reply:", [c.text for c in result.content if c.type == "text"])
+    async with (
+        streamablehttp_client(URL, headers=headers) as (read, write, _),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+        tools = await session.list_tools()
+        print("tools:", [t.name for t in tools.tools])
+        result = await session.call_tool("ask", {"message": "Add 2 and 3 with calc_add; reply with just the number."})
+        print("reply:", [c.text for c in result.content if c.type == "text"])
 
 
 if __name__ == "__main__":

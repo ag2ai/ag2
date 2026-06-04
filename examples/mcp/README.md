@@ -9,7 +9,7 @@ appears as a single conversational tool: `ask(message, context?)`.
 ```bash
 # from the repo root
 pip install -e ".[mcp,anthropic]"     # ag2 + the `mcp` extra + Anthropic provider
-export ANTHROPIC_API_KEY=sk-ant-...    # the examples use claude-sonnet-4-6
+export ANTHROPIC_API_KEY=<your-anthropic-key>    # the examples use claude-sonnet-4-6
 ```
 
 ## Run it locally (self-contained, no extra client needed)
@@ -46,7 +46,7 @@ Claude Desktop config (`claude_desktop_config.json`):
     "ag2-claude": {
       "command": "python",
       "args": ["-m", "examples.mcp.server_stdio"],
-      "env": { "ANTHROPIC_API_KEY": "sk-ant-..." }
+      "env": { "ANTHROPIC_API_KEY": "<your-anthropic-key>" }
     }
   }
 }

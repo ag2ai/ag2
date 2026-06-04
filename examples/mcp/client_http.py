@@ -31,21 +31,20 @@ async def main() -> None:
     url = os.environ.get("MCP_URL", DEFAULT_URL)
     message = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MESSAGE
 
-    async with streamablehttp_client(url) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
+    async with streamablehttp_client(url) as (read, write, _), ClientSession(read, write) as session:
+        await session.initialize()
 
-            tools = await session.list_tools()
-            print("exposed tools:", [t.name for t in tools.tools])
+        tools = await session.list_tools()
+        print("exposed tools:", [t.name for t in tools.tools])
 
-            result = await session.call_tool("ask", {"message": message}, progress_callback=on_progress)
+        result = await session.call_tool("ask", {"message": message}, progress_callback=on_progress)
 
-            print("isError:", result.isError)
-            if result.structuredContent is not None:
-                print("structuredContent:", result.structuredContent)
-            for block in result.content:
-                if block.type == "text":
-                    print("reply:", block.text)
+        print("isError:", result.isError)
+        if result.structuredContent is not None:
+            print("structuredContent:", result.structuredContent)
+        for block in result.content:
+            if block.type == "text":
+                print("reply:", block.text)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ from ._helpers import ChunkConfig, make_agent
 @pytest.mark.asyncio
 class TestProgress:
     async def test_chunks_forwarded_as_progress(self) -> None:
-        agent = make_agent(config=ChunkConfig("Hel", "lo!", final="Hello!"))
+        agent = make_agent(config=ChunkConfig("Hello, ", "world!", final="Hello, world!"))
         server = MCPServer(agent)
 
         updates: list[tuple[float, float | None, str | None]] = []
@@ -26,10 +26,10 @@ class TestProgress:
 
         assert result.isError is False
         # One progress notification per streamed chunk, monotonically increasing.
-        assert [m for _, _, m in updates] == ["Hel", "lo!"]
+        assert [m for _, _, m in updates] == ["Hello, ", "world!"]
         assert [p for p, _, _ in updates] == [1.0, 2.0]
         # Final body is still returned in full.
-        assert [c.text for c in result.content if c.type == "text"] == ["Hello!"]
+        assert [c.text for c in result.content if c.type == "text"] == ["Hello, world!"]
 
     async def test_no_progress_without_token(self) -> None:
         agent = make_agent(config=ChunkConfig("a", "b"))
