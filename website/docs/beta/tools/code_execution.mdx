@@ -42,7 +42,7 @@ See the [Built-in Tools page](/docs/beta/tools/builtin_tools#code-execution) for
 `SandboxCodeTool` exposes a `run_code(code, language)` function the agent can call. Because it's a regular function tool, it works on **any** model provider. Where the code actually runs is decided by the [`CodeEnvironment`](https://github.com/ag2ai/ag2/blob/main/autogen/beta/tools/code/environment/base.py){.external-link target="_blank"} you hand it.
 
 !!! note "`environment` is required"
-    `SandboxCodeTool` has no default backend. Pass `DaytonaCodeEnvironment`, `DockerCodeEnvironment`, or your own `CodeEnvironment` implementation.
+    `SandboxCodeTool` has no default backend. Pass `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation.
 
 !!! note "When to use this"
     You need custom packages or images, persistent state across calls, your own infrastructure, or you're working with a provider that doesn't have a native code-execution capability.
@@ -61,19 +61,19 @@ pip install "daytona>=0.171.0,<1"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.tools import SandboxCodeTool
-from autogen.beta.extensions.daytona import DaytonaCodeEnvironment
+from autogen.beta.extensions.daytona import DaytonaEnvironment
 
 agent = Agent(
     "analyst",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[SandboxCodeTool(DaytonaCodeEnvironment())],
+    tools=[SandboxCodeTool(DaytonaEnvironment())],
 )
 
 reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
 print(await reply.content())
 ```
 
-`DaytonaCodeEnvironment` reads `DAYTONA_API_KEY`, `DAYTONA_API_URL`, and `DAYTONA_TARGET` from the environment by default. Out-of-the-box supported languages: `python`, `bash`, `javascript`, `typescript`.
+`DaytonaEnvironment` reads `DAYTONA_API_KEY`, `DAYTONA_API_URL`, and `DAYTONA_TARGET` from the environment by default. Out-of-the-box supported languages: `python`, `bash`, `javascript`, `typescript`.
   </Tab>
 
   <Tab title="Docker">
@@ -87,12 +87,12 @@ pip install "ag2[docker]"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.tools import SandboxCodeTool
-from autogen.beta.extensions.docker import DockerCodeEnvironment
+from autogen.beta.extensions.docker import DockerEnvironment
 
 agent = Agent(
     "analyst",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[SandboxCodeTool(DockerCodeEnvironment(image="python:3.12-slim"))],
+    tools=[SandboxCodeTool(DockerEnvironment(image="python:3.12-slim"))],
 )
 ```
 
@@ -137,7 +137,7 @@ The `context` argument is the active `ConversationContext`, forwarded so backend
 The sandbox / container is created lazily on the first `run_code` call and reused for the lifetime of the environment instance. Cleanup is registered via `atexit` so resources are released even if you forget to close the environment. For tighter scoping, use the environment as an async context manager:
 
 ```python linenums="1"
-async with DaytonaCodeEnvironment(image="python:3.12") as env:
+async with DaytonaEnvironment(image="python:3.12") as env:
     agent = Agent(
         "analyst",
         config=AnthropicConfig(model="claude-sonnet-4-6"),
@@ -147,17 +147,17 @@ async with DaytonaCodeEnvironment(image="python:3.12") as env:
 # sandbox deleted here
 ```
 
-The same pattern works with `DockerCodeEnvironment` (container stopped + removed) and any other backend that implements `__aenter__` / `__aexit__`.
+The same pattern works with `DockerEnvironment` (container stopped + removed) and any other backend that implements `__aenter__` / `__aexit__`.
 
 ### Credentials and runtime config
 
-`DaytonaCodeEnvironment` accepts `Variable` markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerCodeEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
+`DaytonaEnvironment` accepts `Variable` markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
 
 ```python linenums="1"
 from autogen.beta import Variable
-from autogen.beta.extensions.daytona import DaytonaCodeEnvironment
+from autogen.beta.extensions.daytona import DaytonaEnvironment
 
-env = DaytonaCodeEnvironment(
+env = DaytonaEnvironment(
     api_key=Variable("daytona_key"),  # resolved from ctx.variables["daytona_key"]
     image=Variable("tenant_image"),
 )

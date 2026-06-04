@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .base import ShellEnvironment
-from .local import LocalShellEnvironment
+from .code import CodeAdapter, LanguageRunner
+from .shell import ShellAdapter
 
 __all__ = (
-    "LocalShellEnvironment",
-    "ShellEnvironment",
+    "CodeAdapter",
+    "LanguageRunner",
+    "ShellAdapter",
 )

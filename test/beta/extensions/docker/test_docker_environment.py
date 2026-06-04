@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from copy import deepcopy
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -9,19 +10,24 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.beta import Context, Variable
-from autogen.beta.extensions.docker import DockerCodeEnvironment
+from autogen.beta.extensions.docker import DockerEnvironment
+from autogen.beta.extensions.docker.sandbox import DockerSandbox
+from autogen.beta.tools import SandboxShellTool
+from autogen.beta.tools.sandbox import SandboxFactory
 
 
 def _exec_result(output: bytes = b"ok\n", exit_code: int = 0) -> SimpleNamespace:
     return SimpleNamespace(output=output, exit_code=exit_code)
 
 
-def _fake_container(exec_result: SimpleNamespace | None = None, container_id: str = "deadbeef") -> Any:
+def _fake_container(exec_result: SimpleNamespace | None = None) -> Any:
     return SimpleNamespace(
-        short_id=container_id,
+        short_id="deadbeef",
         exec_run=MagicMock(return_value=exec_result or _exec_result()),
         stop=MagicMock(return_value=None),
         remove=MagicMock(return_value=None),
+        put_archive=MagicMock(return_value=True),
+        get_archive=MagicMock(return_value=(iter([b""]), {})),
     )
 
 
@@ -32,175 +38,103 @@ def _fake_client(container: Any) -> Any:
     )
 
 
-def _patch_docker(container: Any) -> Any:
-    return patch(
-        "autogen.beta.extensions.docker.environment.docker.from_env",
-        return_value=_fake_client(container),
-    )
-
-
-class TestConstruction:
-    def test_invalid_timeout_rejected(self) -> None:
-        with pytest.raises(ValueError, match="timeout"):
-            DockerCodeEnvironment(timeout=0)
-
-    def test_supported_languages_default(self) -> None:
-        env = DockerCodeEnvironment()
-        assert env.supported_languages == ("python", "bash")
-
-    def test_supported_languages_custom(self) -> None:
-        env = DockerCodeEnvironment(languages=("python", "javascript"))
-        assert env.supported_languages == ("python", "javascript")
-
-    def test_construction_creates_no_container(self) -> None:
-        # CLAUDE.md: no side effects in __init__ — container must be lazy.
-        with patch("autogen.beta.extensions.docker.environment.docker.from_env") as mock_from_env:
-            DockerCodeEnvironment()
-            mock_from_env.assert_not_called()
-
-    def test_safety_defaults(self) -> None:
-        env = DockerCodeEnvironment()
-        assert env._network_mode == "none"
-        assert env._mem_limit == "512m"
-        assert env._auto_remove is True
+def test_satisfies_factory_protocol() -> None:
+    factory: SandboxFactory = DockerEnvironment()
+    assert isinstance(factory, SandboxFactory)
 
 
 @pytest.mark.asyncio
-class TestRun:
-    async def test_python_uses_python_dash_c(self) -> None:
-        container = _fake_container(_exec_result(b"42\n"))
-        with _patch_docker(container):
-            env = DockerCodeEnvironment()
-            result = await env.run("print(40+2)", "python")
-
-        assert result.exit_code == 0
-        assert "42" in result.output
-        cmd_arg = container.exec_run.call_args.args[0]
-        assert cmd_arg[:2] == ["python", "-c"]
-        assert cmd_arg[2] == "print(40+2)"
-
-    async def test_bash_uses_bash_dash_c(self) -> None:
-        container = _fake_container(_exec_result(b"hello\n"))
-        with _patch_docker(container):
-            env = DockerCodeEnvironment()
-            result = await env.run("echo hello", "bash")
-
-        assert result.exit_code == 0
-        cmd_arg = container.exec_run.call_args.args[0]
-        assert cmd_arg[:2] == ["bash", "-c"]
-
-    async def test_javascript_uses_node_via_tempfile(self) -> None:
-        container = _fake_container(_exec_result(b"1\n"))
-        with _patch_docker(container):
-            env = DockerCodeEnvironment(languages=("python", "bash", "javascript"))
-            await env.run("console.log(1)", "javascript")
-
-        # File-based path: cmd is ["sh", "-c", "<base64 decode then `node <file>`>"]
-        cmd_arg = container.exec_run.call_args.args[0]
-        assert cmd_arg[:2] == ["sh", "-c"]
-        assert "node " in cmd_arg[2]
-
-    async def test_disabled_language_returns_error_without_creating_container(self) -> None:
-        env = DockerCodeEnvironment(languages=("python",))
-        # No patch — container creation must not happen for a rejected language
-        result = await env.run("echo nope", "bash")
-
-        assert result.exit_code != 0
-        assert "not enabled" in result.output
-
-    async def test_container_created_only_once(self) -> None:
+class TestOpen:
+    async def test_open_yields_docker_sandbox(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
-        with patch(
-            "autogen.beta.extensions.docker.environment.docker.from_env",
-            return_value=client,
-        ):
-            env = DockerCodeEnvironment()
-            await env.run("print(1)", "python")
-            await env.run("print(2)", "python")
-            await env.run("print(3)", "python")
+        with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
+            factory = DockerEnvironment(image="python:3.12-slim")
+            async with factory.open() as sandbox:
+                assert isinstance(sandbox, DockerSandbox)
 
-        # Three runs, one container creation
-        assert client.containers.run.call_count == 1
-
-    async def test_run_passes_safety_kwargs(self) -> None:
-        container = _fake_container()
-        client = _fake_client(container)
-        with patch(
-            "autogen.beta.extensions.docker.environment.docker.from_env",
-            return_value=client,
-        ):
-            env = DockerCodeEnvironment(image="python:3.12-slim", mem_limit="256m", network_mode="none")
-            await env.run("print(1)", "python")
-
-        call = client.containers.run.call_args
-        assert call.args[0] == "python:3.12-slim"
-        assert call.kwargs["network_mode"] == "none"
-        assert call.kwargs["mem_limit"] == "256m"
-        assert call.kwargs["detach"] is True
-
-
-@pytest.mark.asyncio
-class TestLifecycle:
-    async def test_aclose_stops_container_and_closes_client(self) -> None:
-        container = _fake_container()
-        client = _fake_client(container)
-        with patch(
-            "autogen.beta.extensions.docker.environment.docker.from_env",
-            return_value=client,
-        ):
-            env = DockerCodeEnvironment()
-            await env.run("print(1)", "python")
-            await env.aclose()
-
-        container.stop.assert_called_once()
-        client.close.assert_called_once()
-
-    async def test_aclose_idempotent(self) -> None:
-        container = _fake_container()
-        with _patch_docker(container):
-            env = DockerCodeEnvironment()
-            await env.run("print(1)", "python")
-            await env.aclose()
-            await env.aclose()
-
-        container.stop.assert_called_once()
-
-    async def test_aclose_without_run_is_safe(self) -> None:
-        env = DockerCodeEnvironment()
-        await env.aclose()  # no container created — must not raise
-
-    async def test_async_context_manager_cleans_up(self) -> None:
-        container = _fake_container()
-        with _patch_docker(container):
-            async with DockerCodeEnvironment() as env:
-                await env.run("print(1)", "python")
-
-        container.stop.assert_called_once()
-
-
-@pytest.mark.asyncio
-class TestVariableResolution:
-    """Per CLAUDE.md: 2 tests for Variable params — resolve and missing-key."""
-
-    async def test_image_resolved_from_context(self) -> None:
+    async def test_open_resolves_image_variable_from_context(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
         ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
-        with patch(
-            "autogen.beta.extensions.docker.environment.docker.from_env",
-            return_value=client,
-        ):
-            env = DockerCodeEnvironment(image=Variable("tenant_image"))
-            await env.run("print(1)", "python", context=ctx)
+        with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
+            factory = DockerEnvironment(image=Variable("tenant_image"))
+            async with factory.open(ctx) as sandbox:
+                await sandbox.exec(["python", "--version"])
 
-        # The resolved image must be what was passed to containers.run
-        call = client.containers.run.call_args
-        assert call.args[0] == "python:3.11-slim"
+        assert client.containers.run.call_args.args[0] == "python:3.11-slim"
 
-    async def test_missing_variable_raises_key_error(self) -> None:
+    async def test_open_concrete_values_work_without_context(self) -> None:
+        container = _fake_container()
+        client = _fake_client(container)
+        with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
+            factory = DockerEnvironment(image="python:3.12-slim")
+            async with factory.open() as sandbox:
+                await sandbox.exec(["python", "--version"])
+
+        assert client.containers.run.call_args.args[0] == "python:3.12-slim"
+
+    async def test_open_missing_variable_raises_key_error(self) -> None:
         ctx = Context(stream=MagicMock(), variables={})
-        env = DockerCodeEnvironment(image=Variable("tenant_image"))
+        factory = DockerEnvironment(image=Variable("tenant_image"))
 
         with pytest.raises(KeyError, match="tenant_image"):
-            await env.run("print(1)", "python", context=ctx)
+            async with factory.open(ctx):
+                pass
+
+    async def test_open_variable_without_context_raises(self) -> None:
+        factory = DockerEnvironment(image=Variable("tenant_image"))
+
+        with pytest.raises(RuntimeError, match="Variable but no Context"):
+            async with factory.open():
+                pass
+
+    async def test_open_keeps_container_alive_for_reuse(self) -> None:
+        # Caching: the container survives scope exit so the next open() reuses
+        # it (state persists). Only aclose() tears it down.
+        container = _fake_container()
+        client = _fake_client(container)
+        with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
+            factory = DockerEnvironment()
+            async with factory.open() as sandbox:
+                await sandbox.exec(["echo", "hi"])
+            container.stop.assert_not_called()
+
+            async with factory.open() as sandbox2:
+                assert sandbox2 is sandbox
+            # one container created across both opens
+            assert client.containers.run.call_count == 1
+
+            await factory.aclose()
+        container.stop.assert_called_once()
+
+    async def test_aclose_tears_down_cached_container(self) -> None:
+        container = _fake_container()
+        client = _fake_client(container)
+        with patch("autogen.beta.extensions.docker.sandbox.docker.from_env", return_value=client):
+            factory = DockerEnvironment()
+            async with factory.open() as sandbox:
+                await sandbox.exec(["echo", "hi"])
+            await factory.aclose()
+            await factory.aclose()  # idempotent
+
+        container.stop.assert_called_once()
+
+
+class TestDeepcopy:
+    """Regression for finding #4: the threading.Lock held by the environment /
+    sandbox makes them un-deepcopy-able, which broke Agent.add_tool (it
+    deepcopies every tool). __deepcopy__ returns self (shared handle)."""
+
+    def test_environment_deepcopy_returns_same_instance(self) -> None:
+        env = DockerEnvironment(image="python:3.12-slim")
+        assert deepcopy(env) is env
+
+    def test_sandbox_deepcopy_returns_same_instance(self) -> None:
+        sandbox = DockerSandbox(image="python:3.12-slim")
+        assert deepcopy(sandbox) is sandbox
+
+    def test_tool_backed_by_environment_is_deepcopyable(self) -> None:
+        # Exactly what Agent.add_tool -> FunctionTool.ensure_tool does.
+        tool = SandboxShellTool(DockerEnvironment(image="python:3.12-slim"))
+        assert isinstance(deepcopy(tool), SandboxShellTool)

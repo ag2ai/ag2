@@ -161,6 +161,16 @@ scorers = [
 
 One judge = one criterion = one column. The score lands in `result.score_stats(key)`, so a *list* of judges is a multi-dimension **scorecard** — each criterion scored and aggregated independently. The numeric range defaults to `(0.0, 1.0)` and is **enforced** (out-of-range scores are clamped); pass `scale=(1, 5)` for a Likert range. The judge is an ordinary `Agent`, so it can be made deterministic using a `TestConfig` in CI.
 
+By default the judge sees the task's gold answer (rendered as a `## Reference` section whenever `reference_outputs` is present) — correct for a *correctness* judge, where matching the reference is the point. But for dimensions that must grade the answer **on its own** — *faithfulness*, *grounding* — leaking the gold answer lets the judge reward an answer for matching it rather than for being grounded in the agent's tool results. Pass `include_reference=False` to withhold the reference from those judges:
+
+```python linenums="1"
+scorers = [
+    agent_judge(config, criterion="The answer matches the reference.", key="correctness"),
+    agent_judge(config, criterion="Every claim is grounded in the tool results.",
+                key="faithfulness", include_reference=False),
+]
+```
+
 ## Pass / fail thresholds — `threshold`
 
 A judge returns a *number*, but for automation you often want a hard verdict — *reject anything below 0.7*. Pass `threshold=` to gate the judge: its column then lands in `result.pass_rate(key)` (pass iff `score >= threshold`) instead of `score_stats`, and the raw number is recorded in the feedback's `detail`.

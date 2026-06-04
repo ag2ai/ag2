@@ -9,8 +9,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from autogen.beta.tools.shell.environment.base import ShellEnvironment
-from autogen.beta.tools.shell.environment.local import LocalShellEnvironment
+from autogen.beta.tools.sandbox import Sandbox, SandboxFactory
+from autogen.beta.tools.sandbox.adapter import ShellAdapter
+from autogen.beta.tools.sandbox.local import LocalSandbox
 from autogen.beta.tools.skills.local_skills.loader import SkillLoader
 from autogen.beta.tools.skills.skill_types import SkillMetadata
 
@@ -28,9 +29,18 @@ class LocalRuntime(SkillRuntime):
         timeout:     Per-command timeout in seconds. Defaults to 60.
         max_output:  Maximum characters returned from a script run. Defaults to 100,000.
         blocked:     Command prefixes that are not allowed to run. Empty list → nothing blocked.
+                     Best-effort only (matches the head command prefix; chaining such
+                     as ``;`` / ``|`` / ``&&`` / ``$(...)`` bypasses it) — not a security
+                     boundary.
         extra_paths: Additional read-only directories to scan for skills.
                      Installed skills always go to *dir*; these paths are only
                      used for discovery.
+        sandbox:     Execution backend for ``run_skill_script``. ``None`` → a local
+                     subprocess rooted at the skill's ``scripts/`` directory. Pass a
+                     :class:`~autogen.beta.tools.sandbox.Sandbox` /
+                     :class:`~autogen.beta.tools.sandbox.SandboxFactory`
+                     (e.g. ``DockerEnvironment``) to run scripts inside that backend;
+                     the caller is responsible for making the scripts reachable there.
 
     Example::
 
@@ -53,6 +63,7 @@ class LocalRuntime(SkillRuntime):
     max_output: int = 100_000
     blocked: list[str] = field(default_factory=list)
     extra_paths: Sequence[str | os.PathLike[str]] | None = None
+    sandbox: "Sandbox | SandboxFactory | None" = None
 
     def __post_init__(self) -> None:
         self._install_dir = Path(self.dir) if self.dir is not None else Path(".agents/skills")
@@ -105,11 +116,24 @@ class LocalRuntime(SkillRuntime):
             raise FileNotFoundError(f"Cannot remove '{name}': skill not found in {self._install_dir}")
         shutil.rmtree(target)
 
-    def shell(self, scripts_dir: Path) -> ShellEnvironment:
-        return LocalShellEnvironment(
+    def shell(self, scripts_dir: Path) -> ShellAdapter:
+        if self.sandbox is not None:
+            # A user-supplied backend (Docker/Daytona/…). The backend owns its
+            # own workdir; the caller is responsible for making scripts
+            # reachable inside it (e.g. a bind-mounted host_path).
+            return ShellAdapter(
+                self.sandbox,
+                blocked=self.blocked or None,
+                timeout=self.timeout,
+            )
+        sandbox = LocalSandbox(
             path=scripts_dir,
             cleanup=False,
             timeout=self.timeout,
             max_output=self.max_output,
+        )
+        return ShellAdapter(
+            sandbox,
             blocked=self.blocked or None,
+            timeout=self.timeout,
         )
