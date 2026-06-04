@@ -279,6 +279,7 @@ together = ["together>=1.2"]
 websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
 websockets = ["websockets>=14.0,<17"]
+network-ws = ["ag2[websockets]"]
 watchdog = ["watchdog>=4.0,<7"]
 long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
@@ -383,7 +384,7 @@ dev = [
     "ag2[lint,test,types,docs]",
     "prek==0.3.8",
     "detect-secrets==1.5.0",
-    "uv==0.11.6",
+    "uv==0.11.15",
 ]
 
 [dependency-groups]

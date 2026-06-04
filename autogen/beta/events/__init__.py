@@ -32,7 +32,14 @@ from .lifecycle import (
     ObserverStarted,
     UnknownEvent,
 )
-from .task_events import TaskCompleted, TaskExpired, TaskFailed, TaskProgress, TaskStarted
+from .task_events import (
+    TaskCancelled,
+    TaskCompleted,
+    TaskExpired,
+    TaskFailed,
+    TaskProgress,
+    TaskStarted,
+)
 from .tool_events import (
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
@@ -100,6 +107,7 @@ __all__ = (
     "RecordedAudioEvent",
     "Severity",
     "SynthesizedAudioEvent",
+    "TaskCancelled",
     "TaskCompleted",
     "TaskExpired",
     "TaskFailed",

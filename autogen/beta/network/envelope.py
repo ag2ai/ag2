@@ -25,6 +25,8 @@ __all__ = (
     "EV_CONTEXT_SET",
     "EV_EXPECTATION_VIOLATED",
     "EV_PACKET",
+    "EV_TASK_CANCELLED",
+    "EV_TASK_CANCEL_REQUEST",
     "EV_TEXT",
     "Envelope",
     "Priority",
@@ -72,9 +74,21 @@ EV_EXPECTATION_VIOLATED = "ag2.expectation.violated"
 # ``{"set": {<key>: <value>, ...}, "delete": [<key>, ...]}``.
 EV_CONTEXT_SET = "ag2.context.set"
 
-# Idle-detection rides on ``max_silence`` expectations; task lifecycle is
-# mirrored as Python events on the agent's own stream
-# (see :mod:`autogen.beta.network.task_mirror`).
+# Task lifecycle is mirrored from the agent's stream into the hub's
+# ``TaskMetadata`` cache directly (see
+# :mod:`autogen.beta.network.task_mirror`). The two wire envelopes
+# below are the exception — cancellation has a peer-driven side that
+# needs an addressable envelope.
+#
+# * ``EV_TASK_CANCEL_REQUEST`` — peer asks the owner to cancel.
+#   ``event_data`` carries ``{"task_id": str, "reason": str}``.
+#   The owner is free to honour by calling ``Task.cancel`` or to
+#   ignore the request entirely.
+# * ``EV_TASK_CANCELLED`` — owner-emitted terminal envelope a peer
+#   handler can match on if it forwards cancellations into a channel.
+#   ``event_data`` carries ``{"task_id": str, "reason": str}``.
+EV_TASK_CANCEL_REQUEST = "ag2.task.cancel_request"
+EV_TASK_CANCELLED = "ag2.task.cancelled"
 
 
 @dataclass(slots=True)
