@@ -1,0 +1,134 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any
+
+from mcp.server.lowlevel import Server
+from mcp.server.stdio import stdio_server
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.types import CallToolResult, ContentBlock
+from mcp.types import Tool as MCPTool
+from starlette.applications import Starlette
+from starlette.routing import Mount
+
+from autogen.beta.agent import Agent
+
+from .executor import AgentExecutor
+from .info import build_server_info
+
+if TYPE_CHECKING:
+    from starlette.types import Receive, Scope, Send
+
+
+class MCPServer:
+    """Wrap an AG2 :class:`Agent` as an MCP server.
+
+    The agent is exposed as a single conversational tool (``ask`` by default)
+    that runs :meth:`Agent.ask` and returns the reply — the inverse of the
+    consume-side toolkit ``autogen.beta.tools.toolkits.mcp_server.MCPServer``,
+    which connects *to* an MCP server. The two classes share a name but live in
+    different modules; alias one if you import both.
+
+    Transport-agnostic state (the underlying low-level ``mcp`` server, the
+    agent, the executor) lives on the instance; transport selection happens via
+    the builders:
+
+    * :meth:`build_streamable_http` returns a Starlette ASGI app for remote /
+      production serving (run it with ``uvicorn``; attach CORS / auth to the
+      returned app yourself).
+    * :meth:`run_stdio` serves over stdin/stdout for local clients (Claude
+      Desktop, Cursor, the MCP Inspector).
+    """
+
+    __slots__ = ("_agent", "_executor", "_server", "_name", "_version", "_instructions")
+
+    def __init__(
+        self,
+        agent: Agent,
+        *,
+        name: str | None = None,
+        version: str | None = None,
+        instructions: str | None = None,
+        tool_name: str = "ask",
+        tool_description: str | None = None,
+        stream_progress: bool = True,
+    ) -> None:
+        self._agent = agent
+        self._name, self._version, self._instructions = build_server_info(
+            agent, name=name, version=version, instructions=instructions
+        )
+        self._executor = AgentExecutor(
+            agent,
+            tool_name=tool_name,
+            tool_description=tool_description,
+            stream_progress=stream_progress,
+        )
+        self._server = self._build_server()
+
+    @property
+    def agent(self) -> Agent:
+        return self._agent
+
+    @property
+    def server(self) -> Server:
+        """The underlying low-level ``mcp`` server (for advanced wiring / tests)."""
+        return self._server
+
+    def _build_server(self) -> Server:
+        server: Server = Server(name=self._name, version=self._version, instructions=self._instructions)
+        executor = self._executor
+
+        # ``mcp``'s low-level decorators are untyped; ignore the resulting noise.
+        @server.list_tools()  # type: ignore[no-untyped-call, misc]
+        async def _list_tools() -> list[MCPTool]:
+            return executor.list_tools()
+
+        @server.call_tool()  # type: ignore[no-untyped-call, misc]
+        async def _call_tool(
+            name: str, arguments: dict[str, Any]
+        ) -> list[ContentBlock] | tuple[list[ContentBlock], dict[str, Any]] | CallToolResult:
+            arguments = arguments or {}
+            return await executor.call(
+                name,
+                message=arguments.get("message", ""),
+                context=arguments.get("context"),
+                request_context=server.request_context,
+            )
+
+        return server
+
+    def build_streamable_http(
+        self,
+        *,
+        path: str = "/mcp",
+        stateless: bool = False,
+        json_response: bool = False,
+    ) -> Starlette:
+        """Return a Starlette ASGI app serving MCP over streamable HTTP at ``path``."""
+        manager = StreamableHTTPSessionManager(
+            app=self._server,
+            stateless=stateless,
+            json_response=json_response,
+        )
+
+        async def handle(scope: "Scope", receive: "Receive", send: "Send") -> None:
+            await manager.handle_request(scope, receive, send)
+
+        @asynccontextmanager
+        async def lifespan(_: Starlette) -> AsyncIterator[None]:
+            async with manager.run():
+                yield
+
+        return Starlette(routes=[Mount(path, app=handle)], lifespan=lifespan)
+
+    async def run_stdio(self) -> None:
+        """Serve the agent over stdio until the client disconnects."""
+        async with stdio_server() as (read_stream, write_stream):
+            await self._server.run(
+                read_stream,
+                write_stream,
+                self._server.create_initialization_options(),
+            )
