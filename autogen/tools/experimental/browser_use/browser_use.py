@@ -127,15 +127,25 @@ class BrowserUseTool(Tool):
                 controller=BrowserUseTool._get_controller(llm_config),
                 **agent_kwargs,
             )
-            result = await agent.run(max_steps=max_steps)
-            extracted_content = [
-                ExtractedContent(content=content, url=url)
-                for content, url in zip(result.extracted_content(), result.urls())
-            ]
-            return BrowserUseResult(
-                extracted_content=extracted_content,
-                final_result=result.final_result(),
-            )
+            try:
+                result = await agent.run(max_steps=max_steps)
+                extracted_content = [
+                    ExtractedContent(content=content, url=url)
+                    for content, url in zip(result.extracted_content(), result.urls())
+                ]
+                return BrowserUseResult(
+                    extracted_content=extracted_content,
+                    final_result=result.final_result(),
+                )
+            finally:
+                # Ensure the browser session is properly closed before the
+                # event loop is destroyed.  Without this, Playwright's async
+                # cleanup (__del__, weakref finalizers) fires on a closed loop
+                # and raises "RuntimeError: Event loop is closed".
+                try:
+                    await browser.close()
+                except Exception:
+                    pass  # best-effort cleanup
 
         super().__init__(
             name="browser_use",

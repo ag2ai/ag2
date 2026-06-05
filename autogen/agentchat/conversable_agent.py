@@ -2711,8 +2711,20 @@ class ConversableAgent(LLMAgent):
         def runner():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result["value"] = loop.run_until_complete(coro)
-            loop.close()
+            try:
+                result["value"] = loop.run_until_complete(coro)
+            finally:
+                # Cancel and drain any pending tasks (e.g. Playwright browser
+                # shutdown, httpx connection cleanup) before closing the loop.
+                # Without this, async libraries that schedule deferred cleanup
+                # via __del__ or weakref finalizers raise
+                # "RuntimeError: Event loop is closed" on subsequent calls.
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                loop.close()
 
         t = threading.Thread(target=runner)
         t.start()
