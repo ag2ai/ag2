@@ -62,7 +62,9 @@ class TestContextProvider:
         async def provider(access: object) -> AskContext:
             return AskContext(tools=[])
 
-        executor = AgentExecutor(Agent("greeter", config=TestConfig("hi")), stream_progress=False, context_provider=provider)
+        executor = AgentExecutor(
+            Agent("greeter", config=TestConfig("hi")), stream_progress=False, context_provider=provider
+        )
 
         result = await executor.call("ask", message="hello", context=None, request_context=None)
 
