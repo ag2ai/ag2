@@ -15,6 +15,7 @@ server proxies the upstream OpenID config and overlays ``issuer`` (+ an injected
 import logging
 from typing import Any
 
+import httpx
 from starlette.responses import JSONResponse
 from starlette.routing import BaseRoute, Route
 
@@ -38,12 +39,11 @@ def _overlay(upstream: dict[str, Any], meta: AuthorizationServerMetadata) -> dic
 async def _fetch_oidc(url: str) -> dict[str, Any]:
     """Fetch an upstream OpenID-configuration document (module-level so tests can
     monkeypatch it without hitting the network)."""
-    import httpx
-
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(url)
         resp.raise_for_status()
-        return resp.json()
+        doc: dict[str, Any] = resp.json()
+        return doc
 
 
 def authorization_server_routes(meta: AuthorizationServerMetadata) -> list[BaseRoute]:
@@ -57,7 +57,8 @@ def authorization_server_routes(meta: AuthorizationServerMetadata) -> list[BaseR
     async def _upstream() -> dict[str, Any]:
         if not cache.get("doc"):
             cache["doc"] = await _fetch_oidc(meta.upstream_oidc_url)
-        return cache["doc"]
+        doc: dict[str, Any] = cache["doc"]
+        return doc
 
     async def handler(_request: Any) -> JSONResponse:
         try:
