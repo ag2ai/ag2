@@ -32,3 +32,4 @@ docid	document_content
 31	information_retrieval get_youtube_caption Retrieves the captions for a YouTube video.
 32	information_retrieval youtube_download Downloads a YouTube video and returns the download link.
 33	information_retrieval get_wikipedia_text Retrieves the text content of a Wikipedia page. It does not support tables and other complex formatting.
+34	information_retrieval anybrowse_web_fetch Fetch a web page and convert it to clean Markdown. Handles JavaScript-heavy sites, Cloudflare-protected pages, and PDFs using a real Chrome browser.
