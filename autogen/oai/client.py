@@ -1050,11 +1050,13 @@ class OpenAIWrapper:
 
                 client = self._create_v2_client(V2Client, openai_config, response_format)
             elif api_type is not None and api_type.startswith("responses"):
-                # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
+                # OpenAI Responses API. Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
+                use_response_state = config.get("use_response_state", False)
+
                 @require_optional_import("openai>=2.30.0", "openai")
                 def create_responses_client() -> OpenAI:
                     client = OpenAI(**openai_config)
-                    self._clients.append(OpenAIResponsesClient(client, response_format=response_format))  # type: ignore[arg-type]
+                    self._clients.append(OpenAIResponsesClient(client, response_format=response_format, use_response_state=use_response_state))  # type: ignore[arg-type]
                     return client
 
                 client = create_responses_client()
@@ -1618,22 +1620,26 @@ class OpenAIResponsesEntryDict(LLMConfigEntryDict, total=False):
 
     tool_choice: Literal["none", "auto", "required"] | None
     built_in_tools: list[Literal["web_search", "image_generation", "apply_patch", "shell"]] | None
+    use_response_state: bool
 
 
 class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
-    """LLMConfig entry for the OpenAI Responses API (stateful, tool-enabled).
+    """LLMConfig entry for the OpenAI Responses API.
+
+    Supports both stateless (default) and stateful modes.  Stateless sends the
+    full message context each turn for reproducibility; stateful chains
+    responses via ``previous_response_id`` on the server side.
 
     This reuses all the OpenAI fields but changes *api_type* so the wrapper can
-    route traffic to the `client.responses` endpoint instead of
-    `chat.completions`.  It inherits everything else – including reasoning
-    fields – from *OpenAILLMConfigEntry* so users can simply set
+    route traffic to the ``client.responses`` endpoint instead of
+    ``chat.completions``.
 
     ```python
     {
-        "api_type": "responses_v2",  # <-- key differentiator
-        "model": "o3",  # reasoning model
-        "reasoning_effort": "medium",  # low / medium / high
-        "stream": True,
+        "api_type": "responses",
+        "model": "gpt-4o",
+        "use_response_state": False,  # default; set True for stateful threading
+        "built_in_tools": ["web_search"],
     }
     ```
     """
@@ -1649,6 +1655,7 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
     denied_commands: list[str] | None = None
     enable_command_filtering: bool = True
     dangerous_patterns: list[tuple[str, str]] | None = None
+    use_response_state: bool = False
 
     def create_client(self) -> ModelClient:  # pragma: no cover
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
