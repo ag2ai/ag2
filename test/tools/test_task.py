@@ -1012,3 +1012,99 @@ class TestHitlPropagation:
         mock.worker_hitl.assert_called_once_with("Need approval")
         mock.tool_got.assert_called_once_with("worker answer")
         mock.parent_hitl.assert_not_called()
+
+
+@pytest.mark.asyncio
+class TestAsToolStream:
+    """Tests for ``Agent.as_tool(stream=...)`` accepting Stream instances."""
+
+    async def test_accepts_stream_instance(self):
+        """Passing a MemoryStream() directly should capture sub-agent events."""
+        worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
+        worker = Agent("worker", config=worker_config)
+
+        coordinator_config = TestConfig(
+            ToolCallEvent(name="task_worker", arguments='{"objective": "Do work"}'),
+            ModelResponse(ModelMessage("OK.")),
+        )
+
+        # Pass a raw Stream instance (not a factory) — this is the common
+        # user mistake that the fix addresses.
+        worker_stream = MemoryStream()
+        coordinator = Agent(
+            "coordinator",
+            config=coordinator_config,
+            tools=[worker.as_tool(description="Worker", stream=worker_stream)],
+        )
+
+        parent_stream = MemoryStream()
+        reply = await coordinator.ask("Do work", stream=parent_stream)
+
+        assert reply.body == "OK."
+
+        # The worker stream should contain the sub-agent's events.
+        worker_events = list(await worker_stream.history.get_events())
+        assert len(worker_events) > 0, (
+            "Worker stream should capture sub-agent events when a Stream instance is passed to as_tool()"
+        )
+
+    async def test_accepts_stream_factory(self):
+        """Passing a StreamFactory callable should still work (backward compat)."""
+        worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
+        worker = Agent("worker", config=worker_config)
+
+        coordinator_config = TestConfig(
+            ToolCallEvent(name="task_worker", arguments='{"objective": "Do work"}'),
+            ModelResponse(ModelMessage("OK.")),
+        )
+
+        worker_stream = MemoryStream()
+
+        def factory(_agent: Agent, _ctx: Context) -> MemoryStream:
+            return worker_stream
+
+        coordinator = Agent(
+            "coordinator",
+            config=coordinator_config,
+            tools=[worker.as_tool(description="Worker", stream=factory)],
+        )
+
+        parent_stream = MemoryStream()
+        reply = await coordinator.ask("Do work", stream=parent_stream)
+
+        assert reply.body == "OK."
+
+        worker_events = list(await worker_stream.history.get_events())
+        assert len(worker_events) > 0
+
+    async def test_rejects_invalid_stream_type(self):
+        """Passing a non-Stream, non-callable object raises TypeError."""
+        worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
+        worker = Agent("worker", config=worker_config)
+
+        with pytest.raises(TypeError, match="stream must be a Stream instance"):
+            worker.as_tool(
+                description="Worker",
+                stream="not_a_stream",  # type: ignore[arg-type]
+            )
+
+    async def test_none_stream_creates_ephemeral(self):
+        """Passing stream=None should still work (backward compat)."""
+        worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
+        worker = Agent("worker", config=worker_config)
+
+        coordinator_config = TestConfig(
+            ToolCallEvent(name="task_worker", arguments='{"objective": "Do work"}'),
+            ModelResponse(ModelMessage("OK.")),
+        )
+
+        coordinator = Agent(
+            "coordinator",
+            config=coordinator_config,
+            tools=[worker.as_tool(description="Worker")],  # stream=None (default)
+        )
+
+        parent_stream = MemoryStream()
+        reply = await coordinator.ask("Do work", stream=parent_stream)
+
+        assert reply.body == "OK."
