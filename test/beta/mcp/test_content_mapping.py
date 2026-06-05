@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+from dataclasses import dataclass
 
 import pytest
 
 from autogen.beta import Agent
 from autogen.beta.events import BinaryResult, ModelMessage, ModelResponse
 from autogen.beta.mcp import MCPServer
-from autogen.beta.mcp.mappers import reply_to_content
+from autogen.beta.mcp.mappers import reply_to_content, to_structured_dict
 from autogen.beta.mcp.testing import connect
 from autogen.beta.testing import TestConfig
 
@@ -74,3 +75,15 @@ def test_empty_reply_maps_to_single_empty_text() -> None:
     assert len(blocks) == 1
     assert blocks[0].type == "text"
     assert blocks[0].text == ""
+
+
+def test_to_structured_dict_variants() -> None:
+    @dataclass
+    class Point:
+        x: int
+        y: str
+
+    assert to_structured_dict(Point(1, "a")) == {"x": 1, "y": "a"}  # dataclass -> dict
+    assert to_structured_dict({"k": 1}) == {"k": 1}  # dict passthrough
+    assert to_structured_dict(42) is None  # scalar -> None
+    assert to_structured_dict([1, 2]) is None  # list -> None

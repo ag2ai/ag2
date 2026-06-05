@@ -90,6 +90,21 @@ class TestFacadeServed:
         assert body["registration_endpoint"] == "https://idp/oauth2/register"
         assert body["token_endpoint"] == "https://idp/oauth2/token"
 
+    async def test_upstream_failure_returns_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def boom(url: str) -> dict:
+            raise RuntimeError("idp unreachable")
+
+        monkeypatch.setattr(authserver, "_fetch_oidc", boom)
+
+        agent = Agent("greeter", config=TestConfig("hi"))
+        app = MCPServer(agent).build_streamable_http(security=_facade_security())
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://srv") as client:
+            resp = await client.get("/.well-known/oauth-authorization-server")
+
+        assert resp.status_code == 503
+
     async def test_no_facade_means_no_as_route(self) -> None:
         agent = Agent("greeter", config=TestConfig("hi"))
         sec = require(
