@@ -69,7 +69,7 @@ from ..errors import (
     ProtocolError,
 )
 from ..identity import ObservedStat, Passport, Resume
-from ..ids import make_id
+from ..ids import _MonotonicIds, make_id
 from ..remote import RemoteAgentProxy
 from ..rule import Rule, parse_duration
 from ..transport.frames import (
@@ -267,9 +267,19 @@ class Hub:
         # reconnect with ``HelloFrame.since_envelope_id`` set, the hub
         # replays, per channel, every dispatched envelope whose id sorts
         # strictly above ``max(channel_cursor, since_envelope_id)``.
-        # Envelope ids are UUID7, so lexicographic compare matches
+        # Envelope ids come from ``self._mint_envelope_id`` (strictly
+        # monotonic, time-ordered), so lexicographic compare matches
         # dispatch ordering within a channel.
         self._inbox_cursors: dict[str, dict[str, str]] = {}
+
+        # Strictly-monotonic source for envelope ids. The cursor and
+        # replay above rely on per-channel WAL order == sort order, but
+        # ``time.time_ns`` can repeat within a tick on coarse-resolution
+        # clocks (Windows ~15 ms), so a plain ``make_id`` would sort two
+        # same-tick envelopes by their random suffix — non-deterministically.
+        # This clamps each id strictly above the last so sort order always
+        # tracks mint order. State is per-hub (no shared global counter).
+        self._mint_envelope_id = _MonotonicIds()
 
         # Federation dispatch registry keyed by ``proxy.scheme``. When
         # a recipient passport has ``effective_kind == "remote_agent"``
@@ -1789,7 +1799,7 @@ class Hub:
                 )
             adapter.validate_send(metadata, envelope, state)
 
-            envelope.envelope_id = make_id()
+            envelope.envelope_id = self._mint_envelope_id()
             envelope.created_at = self._clock()
 
             await self._wal_append(envelope)
@@ -2532,9 +2542,12 @@ class Hub:
                 event_type=event_type,
                 event_data={"reason": reason, "channel_id": channel_id},
             )
-            close_envelope.envelope_id = make_id()
-            close_envelope.created_at = self._clock()
+            # Mint inside the WAL lock so the id is assigned in append
+            # order — otherwise a concurrent send on this channel could
+            # mint a later id but append it first, breaking sort order.
             async with self._wal_lock(channel_id):
+                close_envelope.envelope_id = self._mint_envelope_id()
+                close_envelope.created_at = self._clock()
                 await self._wal_append(close_envelope)
             await self._dispatch(close_envelope, metadata)
             kind_label = "expired" if new_state == ChannelState.EXPIRED else "closed"
