@@ -85,6 +85,12 @@ class TestSecurityBuilders:
         with pytest.raises(ValueError, match="must match the MCP endpoint path"):
             MCPServer(agent).build_streamable_http(path="/other", security=_security())
 
+    def test_oauth2_scheme_rejects_schemeless_url(self) -> None:
+        # An OIDC issuer string (e.g. Stytch's) is not a usable AS URL — fail
+        # early with a clear message, not a cryptic AnyHttpUrl error later.
+        with pytest.raises(ValueError, match="absolute http"):
+            oauth2_scheme(url="stytch.com/project-test")
+
 
 @pytest.mark.asyncio
 class TestProtectedResourceMetadata:

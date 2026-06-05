@@ -2,8 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.auth.provider import AccessToken
 from mcp.types import CallToolResult, ContentBlock, TextContent
 from mcp.types import Tool as MCPTool
 from pydantic import ValidationError
@@ -34,6 +38,24 @@ CallToolReturn = list[ContentBlock] | tuple[list[ContentBlock], dict[str, Any]] 
 _LOGGER_NAME = "ag2.mcp"
 
 
+@dataclass
+class AskContext:
+    """Per-request context to inject into the agent turn — the kwargs
+    :meth:`Agent.ask` accepts. Returned by a ``context_provider``; any field
+    left ``None`` is omitted, so the default is the stateless behavior."""
+
+    variables: dict[str, Any] | None = None
+    tools: list[Any] | None = None
+    prompt: list[str] | str | None = None
+
+
+# Async hook: given the request's authenticated token (or ``None``), return the
+# per-request :class:`AskContext` to feed into ``Agent.ask``. Lets a host inject
+# session context (variables / tools / prompt) the stateless executor otherwise
+# omits — e.g. resolving the principal from the token and loading their tools.
+ContextProvider = Callable[[AccessToken | None], Awaitable[AskContext]]
+
+
 class AgentExecutor:
     """Bridge an MCP ``tools/call`` to a single :meth:`Agent.ask` turn.
 
@@ -43,7 +65,7 @@ class AgentExecutor:
     client as progress / log notifications when ``stream_progress`` is enabled.
     """
 
-    __slots__ = ("_agent", "_tool_name", "_tool_description", "_stream_progress")
+    __slots__ = ("_agent", "_tool_name", "_tool_description", "_stream_progress", "_context_provider")
 
     def __init__(
         self,
@@ -52,11 +74,13 @@ class AgentExecutor:
         tool_name: str = "ask",
         tool_description: str | None = None,
         stream_progress: bool = True,
+        context_provider: "ContextProvider | None" = None,
     ) -> None:
         self._agent = agent
         self._tool_name = tool_name
         self._tool_description = tool_description
         self._stream_progress = stream_progress
+        self._context_provider = context_provider
 
     def list_tools(self) -> list[MCPTool]:
         return [build_ask_tool(self._agent, tool_name=self._tool_name, tool_description=self._tool_description)]
@@ -80,7 +104,20 @@ class AgentExecutor:
         if self._stream_progress:
             self._wire_progress(stream, request_context)
 
-        reply = await self._agent.ask(*_build_inputs(message, context), stream=stream)
+        # Optional per-request context (variables/tools/prompt) from the host,
+        # derived from the authenticated token. Omitted fields keep ask()'s
+        # defaults, so without a provider this is the stateless behavior.
+        ask_kwargs: dict[str, Any] = {}
+        if self._context_provider is not None:
+            ctx = await self._context_provider(get_access_token())
+            if ctx.variables is not None:
+                ask_kwargs["variables"] = ctx.variables
+            if ctx.tools is not None:
+                ask_kwargs["tools"] = ctx.tools
+            if ctx.prompt is not None:
+                ask_kwargs["prompt"] = ctx.prompt
+
+        reply = await self._agent.ask(*_build_inputs(message, context), stream=stream, **ask_kwargs)
         content = reply_to_content(reply)
 
         if not self._has_object_output():

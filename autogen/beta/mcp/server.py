@@ -21,7 +21,8 @@ from starlette.routing import BaseRoute, Mount, Route
 
 from autogen.beta.agent import Agent
 
-from .executor import AgentExecutor
+from .authserver import authorization_server_routes
+from .executor import AgentExecutor, ContextProvider
 from .info import build_server_info
 from .security import Requirement
 
@@ -61,6 +62,7 @@ class MCPServer:
         tool_name: str = "ask",
         tool_description: str | None = None,
         stream_progress: bool = True,
+        context_provider: "ContextProvider | None" = None,
     ) -> None:
         self._agent = agent
         self._name, self._version, self._instructions = build_server_info(
@@ -71,6 +73,7 @@ class MCPServer:
             tool_name=tool_name,
             tool_description=tool_description,
             stream_progress=stream_progress,
+            context_provider=context_provider,
         )
         self._server = self._build_server()
 
@@ -227,6 +230,10 @@ class MCPServer:
                 resource_documentation=metadata.resource_documentation,
             ),
         ]
+        # AS facade: also serve our own authorization-server metadata when the
+        # requirement opts in (e.g. the IdP's discovery omits the DCR endpoint).
+        if security.authorization_server is not None:
+            routes.extend(authorization_server_routes(security.authorization_server))
         return routes, manager
 
     async def run_stdio(self) -> None:
