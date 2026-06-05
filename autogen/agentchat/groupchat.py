@@ -175,6 +175,7 @@ class GroupChat:
     select_speaker_auto_llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None
     role_for_select_speaker_messages: str | None = "system"
     eligibility_policies: list[AgentEligibilityPolicy] = field(default_factory=list)
+    message_filter: Callable[[dict[str, Any], str, "Agent"], bool] | None = None
 
     _VALID_SPEAKER_SELECTION_METHODS = ["auto", "manual", "random", "round_robin"]
     _VALID_SPEAKER_TRANSITIONS_TYPE = ["allowed", "disallowed", None]
@@ -317,6 +318,10 @@ class GroupChat:
                     f"eligibility_policies[{i}] does not implement AgentEligibilityPolicy "
                     f"(missing is_eligible method). Got {type(policy).__name__}."
                 )
+
+        # Validate message_filter
+        if self.message_filter is not None and not callable(self.message_filter):
+            raise ValueError(f"message_filter must be a callable or None, got {type(self.message_filter).__name__}.")
 
     def _apply_eligibility_policies(
         self,
@@ -1179,6 +1184,16 @@ class GroupChat:
                 return reply
         return None
 
+    def _should_deliver_message(self, message: dict[str, Any], sender_name: str, receiver: "Agent") -> bool:
+        """Check whether a message should be delivered to a receiver during broadcast.
+
+        Uses the user-provided ``message_filter`` callable if configured.
+        Returns ``True`` (deliver) when no filter is set.
+        """
+        if self.message_filter is None:
+            return True
+        return self.message_filter(message, sender_name, receiver)
+
 
 @export_module("autogen")
 class GroupChatManager(ConversableAgent):
@@ -1334,7 +1349,7 @@ class GroupChatManager(ConversableAgent):
             groupchat.append(message, speaker)
             # broadcast the message to all agents except the speaker
             for agent in groupchat.agents:
-                if agent != speaker:
+                if agent != speaker and groupchat._should_deliver_message(message, speaker.name, agent):
                     inter_reply = groupchat._run_inter_agent_guardrails(
                         src_agent_name=speaker.name,
                         dst_agent_name=agent.name,
@@ -1473,7 +1488,7 @@ class GroupChatManager(ConversableAgent):
 
             # broadcast the message to all agents except the speaker
             for agent in groupchat.agents:
-                if agent != speaker:
+                if agent != speaker and groupchat._should_deliver_message(message, speaker.name, agent):
                     await self.a_send(message, agent, request_reply=False, silent=True)
             if i == groupchat.max_round - 1:
                 # the last round
