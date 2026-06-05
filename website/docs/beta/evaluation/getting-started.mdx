@@ -17,6 +17,9 @@ Four pieces, that's all: a **dataset**, your **agent**, one or more **scorers**,
 
 Start as small as possible: two questions, an agent, one check. This calls a real model, so set a key first (`export OPENAI_API_KEY=...`); Step 5 below shows how to run with none.
 
+!!! note "Install the `tracing` extra"
+    `run_agent` produces each task's trace via OpenTelemetry, so it requires the tracing extra: `pip install "ag2[tracing]"`. (Grading already-captured traces with `evaluate_traces` does not need the extra.)
+
 ```python linenums="1"
 import asyncio
 

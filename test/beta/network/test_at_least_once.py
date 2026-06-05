@@ -21,6 +21,7 @@ Two test patterns coexist here:
 
 import asyncio
 import json
+from unittest import mock
 
 import pytest
 
@@ -157,6 +158,46 @@ class TestReceiptCursorAdvance:
             await alice_hc.close()
             await bob_hc.close()
             await hub.close()
+
+    @pytest.mark.asyncio
+    async def test_cursor_tracks_wal_head_when_clock_does_not_advance(self) -> None:
+        """Regression: envelope ids must sort in WAL-append order even when
+        the wall clock does not advance between mints — coarse-resolution
+        timers (Windows ~15 ms) or many envelopes inside one tick. The hub
+        mints through a strictly-monotonic source, so the cursor follows the
+        WAL head instead of landing on whichever same-tick envelope drew the
+        largest random suffix. Frozen here (the worst case of a coarse clock)
+        so the assertion would fail ~always without strict monotonicity."""
+        with mock.patch("autogen.beta.network.ids.time") as fake_time:
+            fake_time.time_ns.return_value = 1_700_000_000_000_000_000
+
+            hub = await _new_hub()
+            link = LocalLink(hub)
+            alice_hc = HubClient(link, hub=hub)
+            bob_hc = HubClient(link, hub=hub)
+            alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+            bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+
+            try:
+                # conversation channel: no turn-taking, so one sender may
+                # post many envelopes back-to-back (all within the frozen tick).
+                channel = await alice.open(type="conversation", target=["bob"])
+                for i in range(20):
+                    await channel.send(f"msg {i}")
+                await wait_for_text_count(hub, channel.channel_id, 20)
+
+                wal = await hub.read_wal(channel.channel_id)
+                env_ids = [e.envelope_id for e in wal]
+                assert env_ids == sorted(env_ids)  # sort order == append order
+                assert len(set(env_ids)) == len(env_ids)  # all unique
+
+                last_text = [e for e in wal if e.event_type == EV_TEXT][-1]
+                await _await_cursor(hub, bob.agent_id, channel.channel_id, lambda c: c == last_text.envelope_id)
+                assert hub.inbox_cursor(bob.agent_id, channel.channel_id) == last_text.envelope_id
+            finally:
+                await alice_hc.close()
+                await bob_hc.close()
+                await hub.close()
 
     @pytest.mark.asyncio
     async def test_ack_is_monotonic_under_out_of_order_receipts(self) -> None:

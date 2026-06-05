@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 
 import pytest
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 pytest.importorskip("opentelemetry.sdk")
 
@@ -535,3 +537,128 @@ async def test_run_and_evaluate_of_its_trace_agree(tmp_path: Path) -> None:
     assert eval_result.tasks[0].feedback == run_result.tasks[0].feedback
     assert eval_result.tasks[0].budget_violation == run_result.tasks[0].budget_violation
     assert eval_result.pass_rate("called_get_weather") == run_result.pass_rate("called_get_weather")
+
+
+@pytest.mark.asyncio
+class TestTelemetryInjection:
+    """span_attributes / span_processors / real trace-id capture (the platform-unblock work)."""
+
+    async def test_span_attributes_stamped_and_eval_ids_seeded(self, tmp_path: Path) -> None:
+        """every emitted span carries caller attrs + auto-seeded eval ids (task_id per task)."""
+        captured = InMemorySpanExporter()
+        await run_agent(
+            [{"task_id": "t-tokyo", "inputs": {"input": "Tokyo?"}}],
+            agent=_build_weather_agent,
+            scorers=[called_get_weather],
+            store_dir=tmp_path,
+            model_config={"t-tokyo": _cassette("Tokyo")},
+            concurrency=1,
+            run_id="run-123",
+            variant="v3",
+            label="checkout-suite",
+            span_attributes={"ag2.org.id": "org-9"},
+            span_processors=[SimpleSpanProcessor(captured)],
+        )
+
+        spans = captured.get_finished_spans()
+        assert spans
+        for span in spans:
+            attrs = dict(span.attributes or {})
+            assert attrs["ag2.eval.run_id"] == "run-123"
+            assert attrs["ag2.eval.task_id"] == "t-tokyo"
+            assert attrs["ag2.eval.variant"] == "v3"
+            assert attrs["ag2.eval.label"] == "checkout-suite"
+            assert attrs["ag2.org.id"] == "org-9"
+
+    async def test_caller_attributes_win_on_conflict(self, tmp_path: Path) -> None:
+        """A caller-supplied ag2.eval.run_id overrides the auto-seeded one."""
+        captured = InMemorySpanExporter()
+        await run_agent(
+            [{"task_id": "t1", "inputs": {"input": "Tokyo?"}}],
+            agent=_build_weather_agent,
+            scorers=[called_get_weather],
+            store_dir=tmp_path,
+            model_config={"t1": _cassette("Tokyo")},
+            concurrency=1,
+            run_id="seeded",
+            span_attributes={"ag2.eval.run_id": "override"},
+            span_processors=[SimpleSpanProcessor(captured)],
+        )
+        assert all(dict(s.attributes or {})["ag2.eval.run_id"] == "override" for s in captured.get_finished_spans())
+
+    async def test_injected_processor_is_additive_grading_unchanged(self, tmp_path: Path) -> None:
+        """the capturing processor sees the spans, and grading is identical with/without it."""
+        suite = [{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}]
+        scorers = [called_get_weather, city_argument_correct]
+
+        baseline = await run_agent(
+            suite,
+            agent=_build_weather_agent,
+            scorers=scorers,
+            store_dir=tmp_path,
+            model_config={"t1": _cassette("Tokyo")},
+            concurrency=1,
+            run_id="baseline",
+        )
+        captured = InMemorySpanExporter()
+        injected = await run_agent(
+            suite,
+            agent=_build_weather_agent,
+            scorers=scorers,
+            store_dir=tmp_path,
+            model_config={"t1": _cassette("Tokyo")},
+            concurrency=1,
+            run_id="injected",
+            span_processors=[SimpleSpanProcessor(captured)],
+        )
+
+        assert captured.get_finished_spans()  # the external processor received spans
+        assert injected.tasks[0].feedback == baseline.tasks[0].feedback
+
+    async def test_trace_ref_holds_real_otel_trace_id(self, tmp_path: Path) -> None:
+        """TaskResult.trace_ref.trace_id equals the real OTEL trace id of the emitted spans."""
+        captured = InMemorySpanExporter()
+        result = await run_agent(
+            [{"task_id": "t1", "inputs": {"input": "Tokyo?"}}],
+            agent=_build_weather_agent,
+            scorers=[called_get_weather],
+            store_dir=tmp_path,
+            model_config={"t1": _cassette("Tokyo")},
+            concurrency=1,
+            span_processors=[SimpleSpanProcessor(captured)],
+        )
+
+        spans = captured.get_finished_spans()
+        assert spans
+        otel_ids = {format(s.context.trace_id, "032x") for s in spans}
+        assert len(otel_ids) == 1  # one trace for this single-agent task
+        trace_ref = result.tasks[0].trace_ref
+        assert trace_ref is not None
+        assert trace_ref.trace_id == otel_ids.pop()
+
+    async def test_evaluate_traces_populates_trace_ref(self, tmp_path: Path) -> None:
+        """evaluate_traces carries the source's TraceRef onto each TaskResult."""
+        suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}}])
+        agent = Agent("weather", config=_cassette("Tokyo"), tools=[get_weather])
+        produced = (await run_agent(suite, agent=agent, scorers=[], store_dir=tmp_path)).tasks[0].trace
+        source = InMemoryTraceSource([(TraceRef(trace_id="trace-abc", task_id="t1"), produced)])
+
+        result = await evaluate_traces(source, scorers=[called_get_weather], store_dir=tmp_path, suite=suite)
+
+        assert result.tasks[0].trace_ref == TraceRef(trace_id="trace-abc", task_id="t1")
+
+    async def test_no_extra_args_is_unchanged(self, tmp_path: Path) -> None:
+        """a no-arg run still grades identically (trace_ref present, eval ids self-seeded)."""
+        result = await run_agent(
+            [{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}],
+            agent=_build_weather_agent,
+            scorers=[called_get_weather, city_argument_correct],
+            store_dir=tmp_path,
+            model_config={"t1": _cassette("Tokyo")},
+            concurrency=1,
+        )
+        assert result.tasks[0].feedback == (
+            Feedback(key="called_get_weather", score=True),
+            Feedback(key="city_argument_correct", score=True),
+        )
+        assert result.tasks[0].trace_ref is not None

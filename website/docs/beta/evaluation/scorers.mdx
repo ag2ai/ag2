@@ -83,6 +83,9 @@ A load-bearing distinction:
 
 Write scorers reference-free whenever you can — the same code then runs everywhere.
 
+!!! note "Guard reference-based scorers against missing references"
+    A task without `reference_outputs` injects `reference_outputs=None`. Guard for it — `#!python if reference_outputs is None: return None` to skip the task, or `#!python return False` to count it as a fail. An unguarded `#!python reference_outputs["city"]` raises on `None`, which the framework records as `#!python score=None` (the run continues, but the task neither passes nor counts).
+
 ## One question per scorer
 
 Don't bundle. A god-scorer like

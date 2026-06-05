@@ -19,8 +19,9 @@ from autogen.beta.eval import (
     Suite,
     TaskResult,
     Trace,
+    TraceRef,
 )
-from autogen.beta.eval.results.store import to_dict
+from autogen.beta.eval.results.store import load_run, to_dict
 from autogen.beta.events import HumanMessage, ModelResponse, ToolCallEvent, Usage
 
 
@@ -31,6 +32,7 @@ def _make_result(
     exception: BaseException | None = None,
     budget_violation: bool = False,
     run_id: str = "test-run",
+    trace_ref: TraceRef | None = None,
 ) -> RunResult:
     suite = Suite.from_list([
         {
@@ -47,6 +49,7 @@ def _make_result(
         trace=trace,
         feedback=feedback,
         budget_violation=budget_violation,
+        trace_ref=trace_ref,
     )
     return RunResult(
         run_id=run_id,
@@ -221,3 +224,26 @@ class TestRoundTrip:
         data = json.loads(target.read_text(encoding="utf-8"))
         assert data["run_id"] == "test-run"
         assert data["schema_version"] == "0.1"
+
+
+class TestTraceRefSerialization:
+    def test_trace_ref_serialized_when_present(self) -> None:
+        ref = TraceRef(trace_id="abc123", task_id="t1", metadata={"k": "v"})
+        data = to_dict(_make_result(trace_ref=ref))
+        [task] = data["tasks"]
+        assert task["trace_ref"] == {"trace_id": "abc123", "task_id": "t1", "metadata": {"k": "v"}}
+
+    def test_trace_ref_is_null_when_absent(self) -> None:
+        data = to_dict(_make_result())
+        [task] = data["tasks"]
+        assert task["trace_ref"] is None
+
+    def test_trace_ref_round_trips_through_disk(self, tmp_path: Path) -> None:
+        """save then load_run restores trace_ref (trace_id / task_id / metadata)."""
+        ref = TraceRef(trace_id="otel-deadbeef", task_id="t1", metadata={"region": "us"})
+        target = tmp_path / "run.json"
+        _make_result(trace_ref=ref).save(target)
+
+        loaded = load_run(target)
+
+        assert loaded.tasks[0].trace_ref == ref

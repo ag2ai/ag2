@@ -27,7 +27,7 @@ import inspect
 import os
 import time
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import replace
 from functools import partial
 from typing import Any
@@ -40,7 +40,7 @@ from autogen.beta.stream import MemoryStream, Stream
 from autogen.import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
-    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
@@ -70,6 +70,8 @@ async def run_agent(
     label: str | None = None,
     stream: Stream | None = None,
     variant: str | None = None,
+    span_attributes: dict[str, str] | None = None,
+    span_processors: "Sequence[SpanProcessor] | None" = None,
 ) -> RunResult:
     """Run an evaluation suite end-to-end.
 
@@ -126,6 +128,20 @@ async def run_agent(
         variant: Tags this run's ``TaskEvaluated`` events with a variant name.
             Set by :func:`~autogen.beta.eval.run_variants` for each variant in a
             sweep; leave ``None`` for a standalone run.
+        span_attributes: Extra attributes stamped on **every** span the agent
+            emits during production (passed to ``TelemetryMiddleware``). The run
+            is auto-seeded with ``ag2.eval.run_id`` and — when set —
+            ``ag2.eval.variant`` / ``ag2.eval.label``; each task additionally
+            gets ``ag2.eval.task_id``. Caller-supplied keys win on conflict, so
+            you can scope spans for an external backend (e.g.
+            ``{"ag2.org.id": org_id}``).
+        span_processors: Optional OpenTelemetry ``SpanProcessor`` s attached to
+            each task's tracer provider **in addition to** the internal
+            in-memory exporter that grading reads. Use this to export the same
+            spans to your own backend — e.g.
+            ``[BatchSpanProcessor(OTLPSpanExporter(...))]``. Export is purely
+            additive: the in-memory processor (the grading source) is never
+            replaced, so grading output is identical with or without it.
 
     Returns:
         A :class:`RunResult` containing per-task results and metadata.
@@ -138,9 +154,24 @@ async def run_agent(
     tasks_to_run = _expand_repeats(resolved_suite, repeats)
     suite_to_grade = Suite(tuple(tasks_to_run), name=resolved_suite.name, source=resolved_suite.source)
 
+    # Resolve run_id up front so it can be stamped on the produced spans; caller keys win.
+    resolved_run_id = run_id if run_id is not None else uuid4().hex
+    run_span_attributes = {
+        "ag2.eval.run_id": resolved_run_id,
+        **({"ag2.eval.variant": variant} if variant else {}),
+        **({"ag2.eval.label": label} if label else {}),
+        **(span_attributes or {}),
+    }
+
     started = time.perf_counter()
     source = await _produce(
-        tasks_to_run, factory, accepts_config=accepts_config, model_config=model_config, concurrency=concurrency
+        tasks_to_run,
+        factory,
+        accepts_config=accepts_config,
+        model_config=model_config,
+        concurrency=concurrency,
+        span_attributes=run_span_attributes,
+        span_processors=span_processors,
     )
     return await _grade(
         source,
@@ -149,7 +180,7 @@ async def run_agent(
         store_dir=store_dir,
         budgets=budgets,
         concurrency=concurrency,
-        run_id=run_id,
+        run_id=resolved_run_id,
         label=label,
         stream=stream,
         variant=variant,
@@ -309,6 +340,8 @@ async def _produce(
     accepts_config: bool,
     model_config: ModelConfig | dict[str, ModelConfig] | None,
     concurrency: int,
+    span_attributes: dict[str, str] | None = None,
+    span_processors: "Sequence[SpanProcessor] | None" = None,
 ) -> InMemoryTraceSource:
     """Run ``factory``'s agent across ``tasks``, returning one Trace per task (in order)."""
     tasks = list(tasks)
@@ -320,7 +353,18 @@ async def _produce(
         )
     semaphore = asyncio.Semaphore(max(1, concurrency))
     produced = await asyncio.gather(
-        *(_produce_one(semaphore, task, factory, accepts_config, model_config) for task in tasks)
+        *(
+            _produce_one(
+                semaphore,
+                task,
+                factory,
+                accepts_config,
+                model_config,
+                span_attributes=span_attributes,
+                span_processors=span_processors,
+            )
+            for task in tasks
+        )
     )
     return InMemoryTraceSource(produced)
 
@@ -332,12 +376,19 @@ async def _produce_one(
     factory: Callable[..., Agent],
     accepts_config: bool,
     model_config: ModelConfig | dict[str, ModelConfig] | None,
+    *,
+    span_attributes: dict[str, str] | None = None,
+    span_processors: "Sequence[SpanProcessor] | None" = None,
 ) -> tuple[TraceRef, Trace]:
     async with semaphore:
         config = _resolve_task_config(task, model_config)
         exporter = InMemorySpanExporter()
         provider = TracerProvider()
+        # In-memory processor is the grading source; caller processors are additive, never replace it.
         provider.add_span_processor(SimpleSpanProcessor(exporter))
+        for processor in span_processors or ():
+            provider.add_span_processor(processor)
+        task_attributes = {**(span_attributes or {}), "ag2.eval.task_id": task.task_id}
         stream = MemoryStream()
         exception: BaseException | None = None
         duration_ms = 0
@@ -350,6 +401,7 @@ async def _produce_one(
                 tracer_provider=provider,
                 agent_name=getattr(target, "name", "agent"),
                 capture_content=True,
+                span_attributes=task_attributes,
             )
             started = time.perf_counter()
             try:
@@ -361,7 +413,10 @@ async def _produce_one(
         # run_agent()'s Trace is reconstructed from the emitted spans — the same span→Trace path
         # evaluate_traces() uses, so the two grade identically. Pre-span failures (factory raise, or
         # ask erroring before the agent span starts) emit no spans → fall back to the caught exception.
-        trace = readable_spans_to_trace(exporter.get_finished_spans(), duration_ms=duration_ms)
+        spans = exporter.get_finished_spans()
+        # Real root-span trace id, for deep-linking to an external backend; synthetic fallback if no spans.
+        otel_trace_id = format(spans[0].context.trace_id, "032x") if spans else uuid4().hex
+        trace = readable_spans_to_trace(spans, duration_ms=duration_ms)
         if trace.exception is None and exception is not None:
             trace = Trace(events=trace.events, exception=exception, duration_ms=duration_ms)
-        return (TraceRef(trace_id=uuid4().hex, task_id=task.task_id), trace)
+        return (TraceRef(trace_id=otel_trace_id, task_id=task.task_id), trace)
