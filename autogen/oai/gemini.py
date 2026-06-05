@@ -307,12 +307,21 @@ class GeminiClient:
         tool_config = params.get("tool_config")
         include_thoughts = params.get("include_thoughts")
         thinking_budget = params.get("thinking_budget")
-        # Note: thinking_level is defined in GeminiLLMConfigEntry but not yet supported
-        # by google.genai.types.ThinkingConfig. Kept in config for forward compatibility.
-        thinking_config = ThinkingConfig(
-            include_thoughts=include_thoughts,
-            thinking_budget=thinking_budget,
-        )
+        thinking_level = params.get("thinking_level")
+
+        # Only create ThinkingConfig when at least one thinking parameter is set,
+        # to avoid sending an empty config to models that don't support thinking.
+        thinking_config = None
+        if include_thoughts is not None or thinking_budget is not None or thinking_level is not None:
+            tc_kwargs: dict[str, Any] = {}
+            if include_thoughts is not None:
+                tc_kwargs["include_thoughts"] = include_thoughts
+            if thinking_budget is not None:
+                tc_kwargs["thinking_budget"] = thinking_budget
+            if thinking_level is not None:
+                # Normalize to lowercase to match the google-genai SDK expectation
+                tc_kwargs["thinking_level"] = thinking_level.lower() if isinstance(thinking_level, str) else thinking_level
+            thinking_config = ThinkingConfig(**tc_kwargs)
         generation_config = {
             gemini_term: params[autogen_term]
             for autogen_term, gemini_term in self.PARAMS_MAPPING.items()
@@ -369,7 +378,7 @@ class GeminiClient:
                 system_instruction=system_instruction,
                 tools=tools,
                 tool_config=tool_config,
-                thinking_config=thinking_config if thinking_config is not None else None,
+                thinking_config=thinking_config,
                 **generation_config,
             )
             chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])
@@ -414,7 +423,18 @@ class GeminiClient:
                 raise ValueError(
                     f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
                 )
-            parts = response.candidates[0].content.parts
+            if response.candidates[0].finish_reason and response.candidates[0].finish_reason.name == "RECITATION":
+                parts = [VertexAIPart.from_text("Unsuccessful Finish Reason: RECITATION")]
+                error_finish_reason = "content_filter"
+            elif not response.candidates[0].content or not response.candidates[0].content.parts:
+                parts = [
+                    VertexAIPart.from_text(
+                        f"Unsuccessful Finish Reason: ({str(response.candidates[0].finish_reason)}) NO CONTENT RETURNED"
+                    )
+                ]
+                error_finish_reason = "content_filter"
+            else:
+                parts = response.candidates[0].content.parts
         else:
             raise ValueError(f"Unexpected response type: {type(response)}")
 
@@ -591,8 +611,8 @@ class GeminiClient:
         if messages is None or len(messages) == 0 or messages[0].get("role") != "system":
             return None
 
-        message = messages.pop(0)
-        content = message["content"]
+        message = messages[0]
+        content = message.get("content")
 
         # Multi-model uses a list of dictionaries as content with text for the system message
         # Otherwise normal agents will have strings as content
@@ -751,6 +771,9 @@ class GeminiClient:
         """
         rst = []
         for message in messages:
+            # Skip system messages - they are extracted separately as system_instruction
+            if message.get("role") == "system":
+                continue
             parts, part_type = self._oai_content_to_gemini_content(message)
             role = "user" if message.get("role", "user") in ["user", "system"] else "model"
 
@@ -936,7 +959,7 @@ class GeminiClient:
         function_declaration = FunctionDeclaration()
         function_declaration.name = tool["function"]["name"]
         function_declaration.description = tool["function"]["description"]
-        if len(tool["function"]["parameters"]["properties"]) != 0:
+        if tool["function"]["parameters"].get("properties"):
             function_declaration.parameters = GeminiClient._create_gemini_function_declaration_schema(
                 copy.deepcopy(tool["function"]["parameters"])
             )

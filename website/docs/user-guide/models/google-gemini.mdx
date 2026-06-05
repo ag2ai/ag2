@@ -199,7 +199,7 @@ for event in response.events:
 
 ## Gemini vision example
 
-Gemini's models have vision capabilitiesso we can create multimodal agents.
+Gemini's models have vision capabilities so we can create multimodal agents.
 
 Here, we ask a question about
 ![Coding Example](./assets/chat-example.png)
@@ -263,22 +263,37 @@ In summary, the image depicts a typical chat interface used for customer support
 
 ## ThinkingConfig
 
-ThinkingConfig has two configuration options:
+ThinkingConfig has three configuration options:
 
 - `thinking_budget`: Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.
 The ranges can be found here: [thinking budget ranges](https://ai.google.dev/gemini-api/docs/thinking#:~:text=The%20following%20are%20thinkingBudget%20configuration%20details%20for%20each%20model%20type.%20You%20can%20disable%20thinking%20by%20setting%20thinkingBudget%20to%200.%20Setting%20the%20thinkingBudget%20to%20%2D1%20turns%20on%20dynamic%20thinking%2C%20meaning%20the%20model%20will%20adjust%20the%20budget%20based%20on%20the%20complexity%20of%20the%20request.)
+- `thinking_level`: The level of thinking tokens that the model should generate. Supported values are "high", "medium", "low", and "minimal". Use with Gemini 3 models (`gemini-3-pro-preview`, `gemini-3-flash-preview`).
 - `include_thoughts`: Indicates whether to include thoughts in the response. If true, thoughts are returned only if the model supports thought and thoughts are available.
 
-Note: `thinking_level` is accepted in the configuration for forward compatibility but is not yet supported by the Google GenAI SDK.
-
 ```python
-# example configuration for ThinkingConfig Support (AI Studio)
+# example configuration for ThinkingConfig with thinking_budget (Gemini 2.5 series)
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-2.5-flash",
         "api_type": "google",
         "api_key": "your-google-gemini-api-key",
         "thinking_budget": -1,  # -1 = AUTOMATIC, 0 = DISABLED
+        "include_thoughts": True,
+    }
+)
+
+agent = ConversableAgent(name="agent", description="you are a helpful assistant", llm_config=llm_config)
+response = agent.run(message=prompt, max_turns=2).process()
+```
+
+```python
+# example configuration for ThinkingConfig with thinking_level (Gemini 3 series)
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-flash-preview",
+        "api_type": "google",
+        "api_key": "your-google-gemini-api-key",
+        "thinking_level": "high",  # "high", "medium", "low", or "minimal"
         "include_thoughts": True,
     }
 )
