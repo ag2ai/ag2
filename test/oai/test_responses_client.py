@@ -2924,3 +2924,167 @@ def test_shell_tool_convert_messages_to_input_filters_tool_responses_for_process
 
     # Tool response should be filtered out
     assert len(input_items) == 0
+
+
+# -----------------------------------------------------------------------------
+# Tests: use_response_state / reset_state
+# -----------------------------------------------------------------------------
+
+
+def test_stateless_by_default(mocked_openai_client):
+    """Client should be stateless by default (use_response_state=False)."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+    assert client.use_response_state is False
+    assert client.previous_response_id is None
+
+
+def test_stateful_mode_via_init(mocked_openai_client):
+    """use_response_state=True enables stateful chaining."""
+    client = OpenAIResponsesClient(mocked_openai_client, use_response_state=True)
+    assert client.use_response_state is True
+
+
+def test_stateless_does_not_inject_previous_response_id(mocked_openai_client):
+    """In stateless mode, previous_response_id should NOT be injected into params."""
+    mocked_openai_client.responses.create.return_value = _FakeResponse(output=[], usage=_FakeUsage(
+        input_tokens=10, output_tokens=5, total_tokens=15,
+        output_tokens_details={"reasoning_tokens": 0},
+    ))
+
+    client = OpenAIResponsesClient(mocked_openai_client, use_response_state=False)
+    # Simulate a prior response having set the id
+    client.previous_response_id = "resp_old_123"
+
+    client.create(params={"messages": [{"role": "user", "content": "Hello"}]})
+
+    call_kwargs = mocked_openai_client.responses.create.call_args[1]
+    assert "previous_response_id" not in call_kwargs
+
+
+def test_stateful_injects_previous_response_id(mocked_openai_client):
+    """In stateful mode, previous_response_id should be injected into params."""
+    resp1 = _FakeResponse(output=[], usage=_FakeUsage(
+        input_tokens=10, output_tokens=5, total_tokens=15,
+        output_tokens_details={"reasoning_tokens": 0},
+    ))
+    resp1.id = "resp_001"
+    resp2 = _FakeResponse(output=[], usage=_FakeUsage(
+        input_tokens=10, output_tokens=5, total_tokens=15,
+        output_tokens_details={"reasoning_tokens": 0},
+    ))
+    resp2.id = "resp_002"
+    mocked_openai_client.responses.create.side_effect = [resp1, resp2]
+
+    client = OpenAIResponsesClient(mocked_openai_client, use_response_state=True)
+    client.create(params={"messages": [{"role": "user", "content": "Hello"}]})
+    assert client.previous_response_id == "resp_001"
+
+    # Second call should inject the previous id
+    client.create(params={"messages": [{"role": "user", "content": "Follow up"}]})
+    call_kwargs = mocked_openai_client.responses.create.call_args[1]
+    assert call_kwargs.get("previous_response_id") == "resp_001"
+
+
+def test_stateless_does_not_update_previous_response_id(mocked_openai_client):
+    """In stateless mode, previous_response_id should NOT be updated after create."""
+    resp = _FakeResponse(output=[], usage=_FakeUsage(
+        input_tokens=10, output_tokens=5, total_tokens=15,
+        output_tokens_details={"reasoning_tokens": 0},
+    ))
+    resp.id = "resp_new"
+    mocked_openai_client.responses.create.return_value = resp
+
+    client = OpenAIResponsesClient(mocked_openai_client, use_response_state=False)
+    client.create(params={"messages": [{"role": "user", "content": "Hello"}]})
+
+    assert client.previous_response_id is None
+
+
+def test_per_call_use_response_state_override(mocked_openai_client):
+    """Per-call use_response_state overrides the instance default."""
+    resp = _FakeResponse(output=[], usage=_FakeUsage(
+        input_tokens=10, output_tokens=5, total_tokens=15,
+        output_tokens_details={"reasoning_tokens": 0},
+    ))
+    resp.id = "resp_override"
+    mocked_openai_client.responses.create.return_value = resp
+
+    # Instance is stateless, but per-call enables stateful
+    client = OpenAIResponsesClient(mocked_openai_client, use_response_state=False)
+    client.create(params={
+        "messages": [{"role": "user", "content": "Hello"}],
+        "use_response_state": True,
+    })
+
+    assert client.previous_response_id == "resp_override"
+
+
+def test_reset_state_clears_previous_response_id(mocked_openai_client):
+    """reset_state() should clear previous_response_id."""
+    client = OpenAIResponsesClient(mocked_openai_client, use_response_state=True)
+    client.previous_response_id = "resp_stale"
+    client.reset_state()
+    assert client.previous_response_id is None
+
+
+def test_reset_state_allows_new_conversation(mocked_openai_client):
+    """After reset_state(), the next call should NOT chain the old response."""
+    resp1 = _FakeResponse(output=[], usage=_FakeUsage(
+        input_tokens=10, output_tokens=5, total_tokens=15,
+        output_tokens_details={"reasoning_tokens": 0},
+    ))
+    resp1.id = "resp_before_reset"
+    resp2 = _FakeResponse(output=[], usage=_FakeUsage(
+        input_tokens=10, output_tokens=5, total_tokens=15,
+        output_tokens_details={"reasoning_tokens": 0},
+    ))
+    resp2.id = "resp_after_reset"
+    mocked_openai_client.responses.create.side_effect = [resp1, resp2]
+
+    client = OpenAIResponsesClient(mocked_openai_client, use_response_state=True)
+    client.create(params={"messages": [{"role": "user", "content": "First turn"}]})
+    assert client.previous_response_id == "resp_before_reset"
+
+    client.reset_state()
+    assert client.previous_response_id is None
+
+    # Next call should NOT inject previous_response_id
+    client.create(params={"messages": [{"role": "user", "content": "New conversation"}]})
+    call_kwargs = mocked_openai_client.responses.create.call_args[1]
+    assert "previous_response_id" not in call_kwargs
+    assert client.previous_response_id == "resp_after_reset"
+
+
+def test_stateful_combined_retrieval_for_tool_calls(mocked_openai_client):
+    """Stateful mode retrieves previous response once for both apply_patch and shell calls."""
+    apply_patch_item = MagicMock()
+    apply_patch_item.model_dump.return_value = {
+        "type": "apply_patch_call",
+        "call_id": "call_patch_1",
+        "status": "completed",
+    }
+    shell_item = MagicMock()
+    shell_item.model_dump.return_value = {
+        "type": "shell_call",
+        "call_id": "call_shell_1",
+        "status": "completed",
+    }
+
+    prev_response = MagicMock()
+    prev_response.output = [apply_patch_item, shell_item]
+    mocked_openai_client.responses.retrieve.return_value = prev_response
+
+    new_response = _FakeResponse(output=[], usage=_FakeUsage(
+        input_tokens=10, output_tokens=5, total_tokens=15,
+        output_tokens_details={"reasoning_tokens": 0},
+    ))
+    new_response.id = "resp_new"
+    mocked_openai_client.responses.create.return_value = new_response
+
+    client = OpenAIResponsesClient(mocked_openai_client, use_response_state=True)
+    client.previous_response_id = "resp_old"
+
+    client.create(params={"input": [{"role": "user", "content": [{"type": "input_text", "text": "go"}]}]})
+
+    # Should have retrieved the previous response exactly once
+    mocked_openai_client.responses.retrieve.assert_called_once_with("resp_old")
