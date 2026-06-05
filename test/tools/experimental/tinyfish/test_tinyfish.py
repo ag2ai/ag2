@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental.tinyfish import TinyFishFetchTool, TinyFishSearchTool, TinyFishTool, tinyfish_tool
 
 
@@ -125,6 +126,7 @@ class TestTinyFishTool:
         assert result["data"]["status"] == "no_result"
 
 
+@run_for_optional_imports(["tinyfish"], "tinyfish")
 class TestTinyFishExecutionHelpers:
     """Test TinyFish SDK response mapping helpers."""
 
