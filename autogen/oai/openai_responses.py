@@ -180,6 +180,7 @@ class OpenAIResponsesClient:
         self,
         client: "OpenAI",
         response_format: BaseModel | dict[str, Any] | None = None,
+        use_response_state: bool = False,
     ):
         self._oai_client = client  # plain openai.OpenAI instance
         self.response_format = response_format  # kept for parity but unused for now
@@ -194,8 +195,20 @@ class OpenAIResponsesClient:
         }
         self.previous_response_id = None
 
+        # Stateful mode: when True, chains responses via previous_response_id.
+        # Default is False (stateless) for reproducibility and GroupChat safety.
+        self.use_response_state = use_response_state
+
         # Image costs are calculated manually (rather than off returned information)
         self.image_costs = 0
+
+    def reset_state(self) -> None:
+        """Reset the conversation state (previous_response_id).
+
+        Call this to start a new conversation thread when using stateful mode,
+        or to clear stale state between independent interactions.
+        """
+        self.previous_response_id = None
 
     # ------------------------------------------------------------------ helpers
     # responses objects embed usage similarly to chat completions
@@ -823,11 +836,20 @@ class OpenAIResponsesClient:
 
         If the caller provided a classic *messages* array we convert it to the
         *input* format expected by the Responses API.
+
+        Stateful behavior is controlled by ``use_response_state``:
+        - Per-call override: pass ``use_response_state`` in *params*
+        - Instance default: set on ``__init__`` or assign to the attribute
+        When *False* (default), ``previous_response_id`` is never injected and
+        each request is fully self-contained (stateless).
         """
         params = params.copy()
 
         # Import here to avoid circular import
         from autogen.tools.experimental.shell import ShellExecutor
+
+        # Determine stateful mode: per-call param overrides instance attribute
+        use_state = params.pop("use_response_state", self.use_response_state)
 
         image_generation_tool_params = {"type": "image_generation"}
         web_search_tool_params = {"type": "web_search"}
@@ -848,40 +870,31 @@ class OpenAIResponsesClient:
         if dangerous_patterns is None:
             dangerous_patterns = ShellExecutor.DEFAULT_DANGEROUS_PATTERNS
 
-        if self.previous_response_id is not None and "previous_response_id" not in params:
+        # Only chain previous response when stateful mode is enabled
+        if use_state and self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
 
-        # Check previous response for apply_patch_call items that need outputs
-        previous_apply_patch_calls = {}
-        if self.previous_response_id is not None:
+        # Check previous response for pending built-in tool calls (apply_patch, shell)
+        # that need outputs. Combined into a single retrieval to avoid duplicate API calls.
+        previous_apply_patch_calls: dict[str, Any] = {}
+        previous_shell_calls: dict[str, Any] = {}
+        if use_state and self.previous_response_id is not None:
             try:
                 previous_response = self._oai_client.responses.retrieve(self.previous_response_id)
                 previous_output = getattr(previous_response, "output", [])
                 for item in previous_output:
                     if hasattr(item, "model_dump"):
                         item = item.model_dump()
-                    if item.get("type") == "apply_patch_call":
-                        call_id = item.get("call_id")
-                        if call_id:
-                            previous_apply_patch_calls[call_id] = item
+                    item_type = item.get("type")
+                    call_id = item.get("call_id")
+                    if not call_id:
+                        continue
+                    if item_type == "apply_patch_call":
+                        previous_apply_patch_calls[call_id] = item
+                    elif item_type == "shell_call":
+                        previous_shell_calls[call_id] = item
             except Exception as e:
-                logger.debug(f"[apply_patch] Could not retrieve previous response: {e}")
-
-        # Check previous response for shell_call items that need outputs
-        previous_shell_calls = {}
-        if self.previous_response_id is not None:
-            try:
-                previous_response = self._oai_client.responses.retrieve(self.previous_response_id)
-                previous_output = getattr(previous_response, "output", [])
-                for item in previous_output:
-                    if hasattr(item, "model_dump"):
-                        item = item.model_dump()
-                    if item.get("type") == "shell_call":
-                        call_id = item.get("call_id")
-                        if call_id:
-                            previous_shell_calls[call_id] = item
-            except Exception as exc:  # pragma: no cover - retrieval best-effort
-                logger.debug("[shell] Could not inspect previous response: %s", exc)
+                logger.debug(f"Could not retrieve previous response for tool calls: {e}")
 
         # Back-compat: transform messages → input if needed ------------------
         if "messages" in params and "input" not in params:
@@ -978,12 +991,14 @@ class OpenAIResponsesClient:
                         return self._oai_client.responses.create(**kwargs)
 
             response = _create_or_parse(**params)
-            self.previous_response_id = response.id
+            if use_state:
+                self.previous_response_id = response.id
             return response
         # No structured output
         params = self._parse_params(params)
         response = self._oai_client.responses.create(**params)
-        self.previous_response_id = response.id
+        if use_state:
+            self.previous_response_id = response.id
         # Accumulate image costs
         self._add_image_cost(response)
         return response
