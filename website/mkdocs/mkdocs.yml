@@ -118,7 +118,7 @@ plugins:
       nav_file: SUMMARY.md
   - minify:
       minify_html: true
-      minify_js: true
+      minify_js: false
       minify_css: true
       htmlmin_opts:
         remove_comments: true
