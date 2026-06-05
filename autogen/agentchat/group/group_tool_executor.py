@@ -140,10 +140,20 @@ class GroupToolExecutor(ConversableAgent):
             name = current_tool._name
             description = current_tool._description
 
+            # Preserve parameters_json_schema from the original tool
+            parameters_json_schema = (
+                current_tool._func_schema["function"]["parameters"] if current_tool._func_schema else None
+            )
+
             # Recreate the tool without the context_variables parameter
             tool_func = self._modify_context_variables_param(tool_func, context_variables)
             tool_func = inject_params(tool_func)
-            return ConversableAgent._create_tool_if_needed(func_or_tool=tool_func, name=name, description=description)
+            return ConversableAgent._create_tool_if_needed(
+                func_or_tool=tool_func,
+                name=name,
+                description=description,
+                parameters_json_schema=parameters_json_schema,
+            )
         return None
 
     def _change_tool_context_variables_to_depends(

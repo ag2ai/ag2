@@ -61,18 +61,31 @@ class Tool:
                 f"Parameter 'func_or_tool' must be a function, method or a Tool instance, it is '{type(func_or_tool)}' instead."
             )
 
-        self._func_schema = (
-            {
+        # Build _func_schema from parameters_json_schema if provided;
+        # when constructing from an existing Tool, propagate its _func_schema
+        # unless explicitly overridden.
+        if parameters_json_schema:
+            self._func_schema = {
                 "type": "function",
                 "function": {
-                    "name": name,
-                    "description": description,
+                    "name": self._name,
+                    "description": self._description,
                     "parameters": parameters_json_schema,
                 },
             }
-            if parameters_json_schema
-            else None
-        )
+        elif isinstance(func_or_tool, Tool) and func_or_tool._func_schema is not None:
+            # Propagate the parent tool's schema (updated with new name/description if overridden)
+            parent_schema = func_or_tool._func_schema["function"]
+            self._func_schema = {
+                "type": "function",
+                "function": {
+                    "name": self._name,
+                    "description": self._description,
+                    "parameters": parent_schema["parameters"],
+                },
+            }
+        else:
+            self._func_schema = None
 
     @property
     def name(self) -> str:
@@ -97,6 +110,10 @@ class Tool:
         """
         if self._func_schema:
             agent.update_tool_signature(self._func_schema, is_remove=False)
+            # Ensure the tool is tracked in agent._tools so that
+            # agent.tools (used by GroupToolExecutor, swarm, etc.) can see it.
+            if self not in agent._tools:
+                agent._tools.append(self)
         else:
             agent.register_for_llm()(self)
 
