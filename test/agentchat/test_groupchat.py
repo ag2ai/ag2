@@ -2402,3 +2402,96 @@ def test_groupchatmanager_no_llm_config():
         ),
     ):
         agent_a.initiate_chat(manager, message="Hello")
+
+
+# -----------------------------------------------------------------------------
+# Tests: message_filter
+# -----------------------------------------------------------------------------
+
+
+def test_message_filter_none_delivers_all():
+    """Default (no filter) should deliver messages to all agents."""
+    agent_a = autogen.ConversableAgent("A", llm_config=False, human_input_mode="NEVER")
+    agent_b = autogen.ConversableAgent("B", llm_config=False, human_input_mode="NEVER")
+    agent_c = autogen.ConversableAgent("C", llm_config=False, human_input_mode="NEVER")
+
+    gc = GroupChat(agents=[agent_a, agent_b, agent_c], messages=[], max_round=2, speaker_selection_method="round_robin")
+    assert gc.message_filter is None
+    # _should_deliver_message should always return True when no filter
+    assert gc._should_deliver_message({"content": "hi"}, "A", agent_b) is True
+    assert gc._should_deliver_message({"content": "hi"}, "A", agent_c) is True
+
+
+def test_message_filter_blocks_irrelevant_messages():
+    """message_filter should prevent delivery to filtered-out agents."""
+    agent_a = autogen.ConversableAgent("A", llm_config=False, human_input_mode="NEVER")
+    agent_b = autogen.ConversableAgent("B", llm_config=False, human_input_mode="NEVER")
+    agent_c = autogen.ConversableAgent("C", llm_config=False, human_input_mode="NEVER")
+
+    # Only deliver messages from A to B, and from B to A; C never receives anything
+    def my_filter(message, sender_name, receiver):
+        if receiver.name == "C":
+            return False
+        return True
+
+    gc = GroupChat(
+        agents=[agent_a, agent_b, agent_c],
+        messages=[],
+        max_round=2,
+        speaker_selection_method="round_robin",
+        message_filter=my_filter,
+    )
+
+    msg = {"content": "hello from A", "name": "A"}
+    assert gc._should_deliver_message(msg, "A", agent_b) is True
+    assert gc._should_deliver_message(msg, "A", agent_c) is False
+    assert gc._should_deliver_message(msg, "B", agent_a) is True
+    assert gc._should_deliver_message(msg, "B", agent_c) is False
+
+
+def test_message_filter_selective_by_sender():
+    """message_filter can route messages based on sender name."""
+    agent_coder = autogen.ConversableAgent("Coder", llm_config=False, human_input_mode="NEVER")
+    agent_reviewer = autogen.ConversableAgent("Reviewer", llm_config=False, human_input_mode="NEVER")
+    agent_writer = autogen.ConversableAgent("Writer", llm_config=False, human_input_mode="NEVER")
+
+    # Coder's messages only go to Reviewer; Writer's messages only go to Coder
+    def route_filter(message, sender_name, receiver):
+        if sender_name == "Coder" and receiver.name == "Reviewer":
+            return True
+        if sender_name == "Writer" and receiver.name == "Coder":
+            return True
+        return False
+
+    gc = GroupChat(
+        agents=[agent_coder, agent_reviewer, agent_writer],
+        messages=[],
+        max_round=2,
+        speaker_selection_method="round_robin",
+        message_filter=route_filter,
+    )
+
+    coder_msg = {"content": "code", "name": "Coder"}
+    assert gc._should_deliver_message(coder_msg, "Coder", agent_reviewer) is True
+    assert gc._should_deliver_message(coder_msg, "Coder", agent_writer) is False
+
+    writer_msg = {"content": "docs", "name": "Writer"}
+    assert gc._should_deliver_message(writer_msg, "Writer", agent_coder) is True
+    assert gc._should_deliver_message(writer_msg, "Writer", agent_reviewer) is False
+
+
+def test_message_filter_validation():
+    """message_filter must be callable or None."""
+    agent = autogen.ConversableAgent("A", llm_config=False, human_input_mode="NEVER")
+
+    # None is fine
+    gc = GroupChat(agents=[agent], messages=[], message_filter=None)
+    assert gc.message_filter is None
+
+    # Callable is fine
+    gc = GroupChat(agents=[agent], messages=[], message_filter=lambda m, s, r: True)
+    assert callable(gc.message_filter)
+
+    # Non-callable raises
+    with pytest.raises(ValueError, match="message_filter must be a callable or None"):
+        GroupChat(agents=[agent], messages=[], message_filter="not_callable")
