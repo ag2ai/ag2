@@ -50,6 +50,18 @@ class TestContentMapping:
         assert audio.mimeType == "audio/wav"
         assert base64.b64decode(audio.data) == _AUDIO
 
+    async def test_missing_media_type_defaults_to_image(self) -> None:
+        # No media-type key in metadata -> _media_type falls back to the default.
+        response = ModelResponse(message=ModelMessage(""), files=[BinaryResult(_IMG, metadata={})])
+        server = MCPServer(Agent("painter", config=TestConfig(response)))
+
+        async with connect(server) as session:
+            result = await session.call_tool("ask", {"message": "draw"})
+
+        image = next(c for c in result.content if c.type == "image")
+        assert image.mimeType == "image/png"
+        assert base64.b64decode(image.data) == _IMG
+
     async def test_other_blob_maps_to_embedded_resource(self) -> None:
         response = ModelResponse(
             message=ModelMessage(""),

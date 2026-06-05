@@ -9,7 +9,7 @@ try:
     from .info import build_ask_tool, build_server_info
     from .security import AuthorizationServerMetadata, proxy_authorization_server
     from .server import MCPServer
-except ImportError as e:
+except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is absent
     MCPServer = missing_optional_dependency("MCPServer", "mcp", e)  # type: ignore[misc]
     build_ask_tool = missing_optional_dependency("build_ask_tool", "mcp", e)  # type: ignore[misc]
     build_server_info = missing_optional_dependency("build_server_info", "mcp", e)  # type: ignore[misc]

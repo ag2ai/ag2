@@ -236,7 +236,7 @@ class MCPServer:
             routes.extend(authorization_server_routes(security.authorization_server))
         return routes, manager
 
-    async def run_stdio(self) -> None:
+    async def run_stdio(self) -> None:  # pragma: no cover - needs real stdio pipes (see examples/mcp)
         """Serve the agent over stdio until the client disconnects."""
         async with stdio_server() as (read_stream, write_stream):
             await self._server.run(

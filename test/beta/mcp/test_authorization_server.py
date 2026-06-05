@@ -90,6 +90,25 @@ class TestFacadeServed:
         assert body["registration_endpoint"] == "https://idp/oauth2/register"
         assert body["token_endpoint"] == "https://idp/oauth2/token"
 
+    async def test_upstream_is_fetched_once_then_cached(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = {"n": 0}
+
+        async def counting_fetch(url: str) -> dict:
+            calls["n"] += 1
+            return dict(_UPSTREAM)
+
+        monkeypatch.setattr(authserver, "_fetch_oidc", counting_fetch)
+
+        agent = Agent("greeter", config=TestConfig("hi"))
+        app = MCPServer(agent).build_streamable_http(security=_facade_security())
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://srv") as client:
+            await client.get("/.well-known/oauth-authorization-server")
+            await client.get("/.well-known/openid-configuration")  # same handler/cache
+
+        assert calls["n"] == 1  # fetched once, second request served from cache
+
     async def test_upstream_failure_returns_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def boom(url: str) -> dict:
             raise RuntimeError("idp unreachable")

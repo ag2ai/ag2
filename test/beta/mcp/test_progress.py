@@ -4,8 +4,11 @@
 
 import pytest
 
+from autogen.beta import Agent
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.mcp import MCPServer
 from autogen.beta.mcp.testing import connect
+from autogen.beta.testing import TestConfig
 
 from ._helpers import ChunkConfig, make_agent
 
@@ -55,3 +58,18 @@ class TestProgress:
 
         assert result.isError is False
         assert updates == []
+
+    async def test_tool_events_are_logged(self) -> None:
+        # An agent that makes a tool call emits ToolCall/ToolResult events, which
+        # the progress forwarder reports as MCP log notifications.
+        agent = Agent("tooler", config=TestConfig(ToolCallEvent(name="ping", arguments="{}"), "done"))
+
+        @agent.tool
+        def ping() -> str:
+            return "pong"
+
+        async with connect(MCPServer(agent)) as session:
+            result = await session.call_tool("ask", {"message": "go"})
+
+        assert result.isError is False
+        assert [c.text for c in result.content if c.type == "text"] == ["done"]

@@ -39,7 +39,7 @@ def _overlay(upstream: dict[str, Any], meta: AuthorizationServerMetadata) -> dic
 async def _fetch_oidc(url: str) -> dict[str, Any]:
     """Fetch an upstream OpenID-configuration document (module-level so tests can
     monkeypatch it without hitting the network)."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:  # pragma: no cover - thin httpx wrapper; facade tests monkeypatch this
         resp = await client.get(url)
         resp.raise_for_status()
         doc: dict[str, Any] = resp.json()

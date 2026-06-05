@@ -5,13 +5,19 @@
 from pydantic import BaseModel
 
 from autogen.beta import Agent
-from autogen.beta.mcp import build_ask_tool, build_server_info
+from autogen.beta.mcp import MCPServer, build_ask_tool, build_server_info
 from autogen.beta.testing import TestConfig
 
 
 class Weather(BaseModel):
     city: str
     temp_c: float
+
+
+def test_server_exposes_agent() -> None:
+    agent = Agent("greeter", config=TestConfig("hi"))
+
+    assert MCPServer(agent).agent is agent
 
 
 class TestServerInfo:
