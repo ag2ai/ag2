@@ -59,14 +59,15 @@ Sample OAI_CONFIG_LIST
     },
     {
         "model": "gemini-2.5-pro",
+        "api_key": "your Google's GenAI Key goes here",
         "api_type": "google"
     },
     {
-        "model": "gemini-3.1-pro-preview",
+        "model": "gemini-2.5-pro",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
-        "api_type": "google"
+        "api_type": "google_vertex"
     }
 ]
 ```
@@ -87,14 +88,9 @@ from autogen.code_utils import content_str
 seed = 42  # for caching, use None for no caching
 llm_config = LLMConfig(
     config_list={
-        "model": "gemini-3.1-pro-preview",
+        "model": "gemini-2.5-flash",
         "api_type": "google",
-        "project_id": "your-awesome-google-cloud-project-id",
-        "location": "us-west1",
-        "google_application_credentials": "your-google-service-account-key.json",
-        "api_key": api_key,
-        "thinking_level": "High",
-        "include_thoughts": True,
+        "api_key": "your-google-gemini-api-key",
     }
 )
 
@@ -218,19 +214,14 @@ llm_config = LLMConfig(
     config_list={
         "model": "gemini-2.5-flash",
         "api_type": "google",
-        "project_id": "your-awesome-google-cloud-project-id",
-        "location": "us-west1",
-        "google_application_credentials": "your-google-service-account-key.json",
-        "api_key": api_key,
-        "thinking_budget": -1, # '-1' means AUTOMATIC Gemini adjusts based on complexity of tasks
-        "include_thoughts": True,
+        "api_key": "your-google-gemini-api-key",
     }
 )
 
 image_agent = MultimodalConversableAgent(
     "Gemini Vision",
     max_consecutive_auto_reply=1,
-    llm_config=llm_config_gemini_vision,
+    llm_config=llm_config,
 )
 
 user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER", max_consecutive_auto_reply=0)
@@ -272,25 +263,22 @@ In summary, the image depicts a typical chat interface used for customer support
 
 ## ThinkingConfig
 
-ThinkConfig has three configuration:
+ThinkingConfig has two configuration options:
 
-- `thinking budget`: Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.
-the ranges can be found here: [thinking budget ranges](https://ai.google.dev/gemini-api/docs/thinking#:~:text=The%20following%20are%20thinkingBudget%20configuration%20details%20for%20each%20model%20type.%20You%20can%20disable%20thinking%20by%20setting%20thinkingBudget%20to%200.%20Setting%20the%20thinkingBudget%20to%20%2D1%20turns%20on%20dynamic%20thinking%2C%20meaning%20the%20model%20will%20adjust%20the%20budget%20based%20on%20the%20complexity%20of%20the%20request.)
-- `thinking level`: The level of thoughts tokens that the model should generate.
+- `thinking_budget`: Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.
+The ranges can be found here: [thinking budget ranges](https://ai.google.dev/gemini-api/docs/thinking#:~:text=The%20following%20are%20thinkingBudget%20configuration%20details%20for%20each%20model%20type.%20You%20can%20disable%20thinking%20by%20setting%20thinkingBudget%20to%200.%20Setting%20the%20thinkingBudget%20to%20%2D1%20turns%20on%20dynamic%20thinking%2C%20meaning%20the%20model%20will%20adjust%20the%20budget%20based%20on%20the%20complexity%20of%20the%20request.)
 - `include_thoughts`: Indicates whether to include thoughts in the response. If true, thoughts are returned only if the model supports thought and thoughts are available.
 
+Note: `thinking_level` is accepted in the configuration for forward compatibility but is not yet supported by the Google GenAI SDK.
+
 ```python
-# example configuration for ThinkingConfig Support
+# example configuration for ThinkingConfig Support (AI Studio)
 llm_config = LLMConfig(
     config_list={
-        "model": "gemini-3.1-pro-preview",
+        "model": "gemini-2.5-flash",
         "api_type": "google",
-        "project_id": "your-awesome-google-cloud-project-id",
-        "location": "us-west1",
-        "google_application_credentials": "your-google-service-account-key.json",
-        "api_key": api_key,
-        # "thinking_budget": 10000,
-        "thinking_level": "High", # Use the thinkingLevel parameter with Gemini 3 Pro. While thinkingBudget is accepted for backwards compatibility, using it with Gemini 3 Pro is recommended
+        "api_key": "your-google-gemini-api-key",
+        "thinking_budget": -1,  # -1 = AUTOMATIC, 0 = DISABLED
         "include_thoughts": True,
     }
 )
