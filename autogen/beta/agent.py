@@ -85,6 +85,7 @@ from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
 from .types import ClassInfo, Omittable, omit
+from .usage import UsageReport
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
@@ -175,6 +176,7 @@ class AgentReply(Generic[TResult, TAgent]):
         agent: "Agent[TAgent]",
         provider: Provider | None,
         response_schema: ResponseProto[TResult] | None,
+        events: Iterable[BaseEvent] = (),
     ) -> None:
         self.response = response
         self.context = context
@@ -182,6 +184,10 @@ class AgentReply(Generic[TResult, TAgent]):
         self.__agent = agent
         self.__provider = provider
         self.__schema = response_schema
+        # Snapshot of the stream history at reply time — ``usage`` aggregates
+        # token usage from the event log (the source of truth) without holding
+        # extra state.
+        self.__events = list(events)
 
     async def content(
         self,
@@ -237,6 +243,11 @@ class AgentReply(Generic[TResult, TAgent]):
     @property
     def history(self) -> History:
         return self.context.stream.history
+
+    @property
+    def usage(self) -> UsageReport:
+        """Token usage aggregated over the whole run (all events on this stream)."""
+        return UsageReport.from_events(self.__events)
 
     @overload
     async def ask(
@@ -1189,6 +1200,7 @@ class Agent(Generic[TResult]):
                         client=client,
                         provider=self.dependency_provider,
                         response_schema=final_schema,
+                        events=list(await context.stream.history.get_events()),
                     )
                 finally:
                     # Emit Completed while observers are still registered,

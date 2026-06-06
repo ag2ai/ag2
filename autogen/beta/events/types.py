@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from dataclasses import field as dataclass_field
 from typing import Any
 from uuid import uuid4
@@ -31,6 +31,19 @@ class Usage:
             self.cache_creation_input_tokens,
             self.thinking_tokens,
         ))
+
+    def __add__(self, other: "Usage") -> "Usage":
+        """Field-wise sum. ``None + None`` stays ``None``; otherwise a missing
+        side counts as ``0`` so partial reports still aggregate. With this in
+        place, ``sum(usages, Usage())`` aggregates an iterable."""
+        if not isinstance(other, Usage):
+            return NotImplemented
+        summed: dict[str, float | None] = {}
+        for f in fields(self):
+            a = getattr(self, f.name)
+            b = getattr(other, f.name)
+            summed[f.name] = None if a is None and b is None else (a or 0) + (b or 0)
+        return Usage(**summed)
 
 
 class ModelEvent(BaseEvent):
