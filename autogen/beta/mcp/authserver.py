@@ -51,7 +51,9 @@ def authorization_server_routes(meta: AuthorizationServerMetadata) -> list[BaseR
     """Routes serving RFC 8414 + OIDC authorization-server metadata for the AS
     facade, by proxying ``meta.upstream_oidc_url`` (fetched once and cached) and
     overlaying it via :func:`_overlay`. Served at the host-root well-known paths
-    so they match an issuer equal to the server's own base."""
+    so they match an issuer equal to the server's own base.
+
+    The upstream doc is cached for the process lifetime (no TTL)."""
     logger = logging.getLogger(_LOGGER_NAME)
     cache: dict[str, Any] = {}
 

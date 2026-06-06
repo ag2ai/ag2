@@ -38,7 +38,7 @@ CallToolReturn = list[ContentBlock] | tuple[list[ContentBlock], dict[str, Any]] 
 _LOGGER_NAME = "ag2.mcp"
 
 
-@dataclass
+@dataclass(slots=True)
 class AskContext:
     """Per-request context to inject into the agent turn — the kwargs
     :meth:`Agent.ask` accepts. Returned by a ``context_provider``; any field
