@@ -4,6 +4,8 @@
 
 from uuid import uuid4
 
+import pytest
+
 from autogen.beta import Usage, UsageRecord, UsageReport
 from autogen.beta.events import ModelMessage, ModelResponse, TaskCompleted
 
@@ -38,7 +40,8 @@ class TestUsageArithmetic:
         assert Usage() + Usage() == Usage()
 
     def test_add_rejects_non_usage(self) -> None:
-        assert Usage().__add__(42) is NotImplemented  # type: ignore[arg-type]
+        with pytest.raises(TypeError):
+            Usage() + 42  # type: ignore[operator]
 
     def test_builtin_sum_aggregates(self) -> None:
         usages = [

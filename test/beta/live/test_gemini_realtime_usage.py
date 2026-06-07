@@ -11,8 +11,6 @@ from google.genai import types as gtypes
 from autogen.beta import Usage
 from autogen.beta.live.gemini import normalize_realtime_usage
 
-pytestmark = pytest.mark.gemini_realtime
-
 
 def test_maps_live_fields() -> None:
     # Live API names output tokens ``response_token_count`` (not the batch

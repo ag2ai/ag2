@@ -14,8 +14,6 @@ from openai.types.realtime.realtime_response_usage_input_token_details import (
 from autogen.beta import Usage
 from autogen.beta.live.openai import normalize_realtime_usage
 
-pytestmark = pytest.mark.openai_realtime
-
 
 def test_maps_standard_fields() -> None:
     usage = RealtimeResponseUsage(
