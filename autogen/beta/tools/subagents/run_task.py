@@ -32,13 +32,7 @@ class TaskResult:
 
 
 def _reply_usage(reply: "AgentReply | None") -> Usage:
-    """Sum token usage across the sub-agent's whole run, defaulting to empty.
-
-    ``reply.usage`` aggregates every model call on the sub-agent's stream, so a
-    tool-looping sub-agent (≥2 model calls) rolls up its full usage here.
-    Using ``reply.response.usage`` would capture only the final turn and
-    undercount the rollup carried back to the parent via ``TaskCompleted``.
-    """
+    """Sum token usage across the sub-agent's whole run, defaulting to empty."""
     return reply.usage.total if reply else Usage()
 
 

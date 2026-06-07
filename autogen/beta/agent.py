@@ -184,9 +184,6 @@ class AgentReply(Generic[TResult, TAgent]):
         self.__agent = agent
         self.__provider = provider
         self.__schema = response_schema
-        # Snapshot of the stream history at reply time — ``usage`` aggregates
-        # token usage from the event log (the source of truth) without holding
-        # extra state.
         self.__events = list(events)
 
     async def content(
