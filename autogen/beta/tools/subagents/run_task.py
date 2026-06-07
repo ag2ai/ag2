@@ -32,10 +32,14 @@ class TaskResult:
 
 
 def _reply_usage(reply: "AgentReply | None") -> Usage:
-    """Pull the typed Usage from an AgentReply, defaulting to an empty Usage."""
-    if reply and reply.response and reply.response.usage:
-        return reply.response.usage
-    return Usage()
+    """Sum token usage across the sub-agent's whole run, defaulting to empty.
+
+    ``reply.usage`` aggregates every model call on the sub-agent's stream, so a
+    tool-looping sub-agent (≥2 model calls) rolls up its full usage here.
+    Using ``reply.response.usage`` would capture only the final turn and
+    undercount the rollup carried back to the parent via ``TaskCompleted``.
+    """
+    return reply.usage.total if reply else Usage()
 
 
 def _make_hitl_bridge(parent_context: Context):

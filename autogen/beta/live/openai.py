@@ -42,6 +42,7 @@ from autogen.beta.events import (
     ToolResultEvent,
     TranscriptionChunkEvent,
     TranscriptionCompletedEvent,
+    Usage,
 )
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -54,6 +55,7 @@ from .stt import VoiceInput
 if TYPE_CHECKING:
     from openai.types.audio.speech_model import SpeechModel
     from openai.types.audio_model import AudioModel
+    from openai.types.realtime.realtime_response_usage import RealtimeResponseUsage
 
     from autogen.beta.annotations import Context
 
@@ -307,7 +309,7 @@ class RealTimeConfig(RealtimeConfig):
                 context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
                 context.stream.where(ToolResultEvent).sub_scope(_forward_tool_result),
             ):
-                recv_task = asyncio.create_task(_pump_events(conn, context))
+                recv_task = asyncio.create_task(_pump_events(conn, context, self.model))
 
                 try:
                     yield
@@ -353,9 +355,22 @@ async def _send_tool_result(
     await conn.response.create()
 
 
+def normalize_realtime_usage(usage: "RealtimeResponseUsage | None") -> Usage:
+    if usage is None:
+        return Usage()
+    input_details = usage.input_token_details
+    return Usage(
+        prompt_tokens=usage.input_tokens,
+        completion_tokens=usage.output_tokens,
+        total_tokens=usage.total_tokens,
+        cache_read_input_tokens=input_details.cached_tokens if input_details else None,
+    )
+
+
 async def _pump_events(
     conn: AsyncRealtimeConnection,
     context: ConversationContext,
+    model: str,
 ) -> None:
     text = ""
     async for event in conn:
@@ -393,8 +408,9 @@ async def _pump_events(
                 ModelResponse(
                     # text always none for audio output
                     message=ModelMessage(text) if text else None,
-                    # TODO: map usage
-                    # usage=event.response.usage,
+                    usage=normalize_realtime_usage(event.response.usage),
+                    model=model,
+                    provider="openai",
                 )
             )
             text = ""
