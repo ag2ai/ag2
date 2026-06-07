@@ -76,7 +76,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ./coverage.xml
           flags: teachable, ${{ matrix.python-version }}, ${{ matrix.os }}
@@ -143,7 +143,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ./coverage.xml
           flags: autobuild, captainagent, ${{ matrix.python-version }}, ${{ matrix.os }}
