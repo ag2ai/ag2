@@ -21,14 +21,13 @@ from autogen.beta.tools.skills import LocalRuntime
 
 
 @pytest.mark.asyncio
-async def test_tool_exposes_three_functions(skill_tree: Path, context: Context) -> None:
+async def test_tool_exposes_all_functions(skill_tree: Path, context: Context) -> None:
     tool = SkillsToolkit(runtime=skill_tree)
 
     schemas = await tool.schemas(context)
 
-    assert len(schemas) == 3
     names = {s.function.name for s in schemas}  # type: ignore[union-attr]
-    assert names == {"list_skills", "load_skill", "run_skill_script"}
+    assert names == {"list_skills", "load_skill", "read_skill_resource", "run_skill_script"}
 
 
 @pytest.mark.asyncio
@@ -50,6 +49,78 @@ async def test_run_skill_script_schema(skill_tree: Path, context: Context) -> No
             }),
         }),
     }
+
+
+@pytest.mark.asyncio
+async def test_name_param_constrained_to_discovered_skills(skill_tree: Path, context: Context) -> None:
+    # The activation tools constrain `name` to a Literal enum of discovered
+    # skills so the model cannot pass an unknown name (spec Step 4 Tip).
+    toolkit = SkillsToolkit(LocalRuntime(dir=skill_tree))
+
+    [load_schema] = await toolkit.load_skill().schemas(context)
+    [run_schema] = await toolkit.run_skill_script().schemas(context)
+
+    expected_enum = sorted(["react-best-practices", "markdown-guide"])
+    load_name = asdict(load_schema)["function"]["parameters"]["properties"]["name"]
+    run_name = asdict(run_schema)["function"]["parameters"]["properties"]["name"]
+    assert sorted(load_name["enum"]) == expected_enum
+    assert sorted(run_name["enum"]) == expected_enum
+
+
+@pytest.mark.asyncio
+async def test_name_param_falls_back_to_string_when_empty(tmp_path: Path, context: Context) -> None:
+    # No skills → a Literal cannot be empty, so `name` stays a plain string.
+    toolkit = SkillsToolkit(LocalRuntime(dir=tmp_path / "empty"))
+
+    [load_schema] = await toolkit.load_skill().schemas(context)
+
+    name_prop = asdict(load_schema)["function"]["parameters"]["properties"]["name"]
+    assert name_prop["type"] == "string"
+    assert "enum" not in name_prop
+
+
+@pytest.mark.asyncio
+async def test_load_skill_wraps_content_with_resources(skill_tree: Path, context: Context) -> None:
+    # load_skill returns the body wrapped in identifying tags, the absolute
+    # skill directory, and a non-eager listing of bundled resources (spec Step 4).
+    load_tool = SkillsToolkit(LocalRuntime(dir=skill_tree)).load_skill()
+
+    event = ToolCallEvent(name="load_skill", arguments=json.dumps({"name": "react-best-practices"}))
+    result = await load_tool(event, context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    content = result.result.parts[0].content
+    assert '<skill_content name="react-best-practices">' in content
+    assert "React Best Practices" in content
+    assert f"Skill directory: {skill_tree / 'react-best-practices'}" in content
+    assert "<file>scripts/scaffold.py</file>" in content
+    # Body only: the YAML frontmatter is stripped before wrapping (spec Step 4).
+    assert "description: Best practices for React development" not in content
+    assert "version: 1.2.0" not in content
+
+
+@pytest.mark.asyncio
+async def test_read_skill_resource_returns_content(skill_tree: Path, context: Context) -> None:
+    # read_skill_resource reads a bundled file given a path relative to the
+    # skill directory (the files listed in <skill_resources>).
+    read_tool = SkillsToolkit(LocalRuntime(dir=skill_tree)).read_skill_resource()
+
+    args = json.dumps({"name": "react-best-practices", "resource": "scripts/scaffold.py"})
+    result = await read_tool(ToolCallEvent(name="read_skill_resource", arguments=args), context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    assert 'print("scaffold")' in result.result.parts[0].content
+
+
+@pytest.mark.asyncio
+async def test_read_skill_resource_rejects_path_traversal(skill_tree: Path, context: Context) -> None:
+    # A resource path escaping the skill directory is rejected, not read.
+    read_tool = SkillsToolkit(LocalRuntime(dir=skill_tree)).read_skill_resource()
+
+    args = json.dumps({"name": "react-best-practices", "resource": "../markdown-guide/SKILL.md"})
+    result = await read_tool(ToolCallEvent(name="read_skill_resource", arguments=args), context)
+
+    assert isinstance(result, ToolErrorEvent)
 
 
 @pytest.mark.asyncio

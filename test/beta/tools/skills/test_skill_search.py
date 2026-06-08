@@ -364,20 +364,36 @@ def test_lock_read_nonexistent(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_toolkit_exposes_six_tools(tmp_path: Path, context: Context) -> None:
+async def test_toolkit_exposes_all_tools(tmp_path: Path, context: Context) -> None:
     toolkit = SkillSearchToolkit(runtime=tmp_path / "skills")
 
     schemas = list(await toolkit.schemas(context))
 
-    assert len(schemas) == 6
     names = {s.function.name for s in schemas}  # type: ignore[union-attr]
-    assert names == {"search_skills", "install_skill", "remove_skill", "list_skills", "load_skill", "run_skill_script"}
+    assert names == {
+        "search_skills",
+        "install_skill",
+        "remove_skill",
+        "list_skills",
+        "load_skill",
+        "read_skill_resource",
+        "run_skill_script",
+    }
 
 
 @pytest.mark.asyncio
 async def test_toolkit_individual_tools_accessible(tmp_path: Path, context: Context) -> None:
     toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
 
-    for attr in ("search_skills", "install_skill", "remove_skill", "list_skills", "load_skill", "run_skill_script"):
+    tools = (
+        "search_skills",
+        "install_skill",
+        "remove_skill",
+        "list_skills",
+        "load_skill",
+        "read_skill_resource",
+        "run_skill_script",
+    )
+    for attr in tools:
         [schema] = await getattr(toolkit, attr)().schemas(context)
         assert schema.function.name == attr  # type: ignore[union-attr]

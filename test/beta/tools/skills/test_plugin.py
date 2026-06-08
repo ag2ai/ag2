@@ -22,16 +22,33 @@ class TestSkillPlugin:
         reply = await agent.ask("hi")
 
         [catalog] = reply.context.prompt
-        assert "- react-best-practices: Best practices for React development" in catalog
-        assert "- markdown-guide: Guide for writing Markdown" in catalog
+        # XML catalog format (spec Step 3).
+        assert "<available_skills>" in catalog
+        assert "<name>react-best-practices</name>" in catalog
+        assert "<description>Best practices for React development</description>" in catalog
+        assert "<name>markdown-guide</name>" in catalog
+        # Activation instruction + per-skill location (spec Step 3).
+        assert "call load_skill(name)" in catalog
+        location = skill_tree / "react-best-practices" / "SKILL.md"
+        assert f"<location>{location}</location>" in catalog
 
-    async def test_empty_skills_prompt(self, tmp_path: Path) -> None:
+    async def test_empty_skills_contributes_nothing(self, tmp_path: Path) -> None:
+        # No skills → no catalog and no dead tools (spec Step 3).
+        agent = Agent(
+            "a",
+            config=TestConfig(ToolCallEvent(name="load_skill"), "done"),
+            plugins=[SkillPlugin(tmp_path / "empty")],
+        )
+
+        with pytest.raises(ToolNotFoundError, match="load_skill"):
+            await agent.ask("hi")
+
+    async def test_empty_skills_prompt_is_empty(self, tmp_path: Path) -> None:
         agent = Agent("a", config=TestConfig("done"), plugins=[SkillPlugin(tmp_path / "empty")])
 
         reply = await agent.ask("hi")
 
-        [catalog] = reply.context.prompt
-        assert "no local skills" in catalog.lower()
+        assert reply.context.prompt == []
 
     async def test_does_not_expose_list_skills_tool(self, skill_tree: Path) -> None:
         # The spec puts the catalog in the prompt, so the plugin registers no

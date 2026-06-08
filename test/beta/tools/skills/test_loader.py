@@ -114,6 +114,59 @@ def test_loader_rejects_invalid_skill_name(skill_tree: Path) -> None:
         loader.load("../react-best-practices")
 
 
+def test_parse_frontmatter_recovers_unquoted_colon() -> None:
+    # A value containing a colon is invalid YAML; the best-effort fallback
+    # quotes it and recovers (cross-client compatibility).
+    text = "---\nname: my-skill\ndescription: Use this skill when: the user asks\n---\nBody"
+    result = parse_frontmatter(text)
+    assert result["name"] == "my-skill"
+    assert result["description"] == "Use this skill when: the user asks"
+
+
+def _write_skill(base: Path, dir_name: str, body: str) -> None:
+    skill_dir = base / dir_name
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(body, encoding="utf-8")
+
+
+def test_loader_lenient_warns_but_loads_name_mismatch(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    # Per the agentskills.io client guide, a name that doesn't match the
+    # directory is a cosmetic issue: warn but load anyway (cross-client compat).
+    _write_skill(tmp_path, "good", "---\nname: good\ndescription: A valid skill\n---\n")
+    _write_skill(tmp_path, "bad-dir", "---\nname: other-name\ndescription: Mismatched\n---\n")
+
+    loader = SkillLoader(tmp_path, strict=False)
+    with caplog.at_level("WARNING"):
+        names = {m.name for m in loader.discover()}
+
+    assert names == {"good", "other-name"}
+    assert "does not match directory 'bad-dir'" in caplog.text
+
+
+def test_loader_lenient_skips_empty_description(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    _write_skill(tmp_path, "no-desc", "---\nname: no-desc\n---\n")
+
+    loader = SkillLoader(tmp_path, strict=False)
+    with caplog.at_level("WARNING"):
+        skills = loader.discover()
+
+    assert skills == []
+    assert "Skipping skill 'no-desc'" in caplog.text
+    assert "description" in caplog.text
+
+
+def test_loader_collision_warns_and_first_wins(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    for scope in ("project", "user"):
+        _write_skill(tmp_path / scope, "my-skill", f"---\nname: my-skill\ndescription: from {scope}\n---\n")
+
+    loader = SkillLoader(tmp_path / "project", tmp_path / "user", strict=False)
+    with caplog.at_level("WARNING"):
+        [meta] = loader.discover()
+
+    assert meta.description == "from project"
+    assert "shadowed" in caplog.text
+
+
 def test_loader_strict_requires_name_and_description(tmp_path: Path) -> None:
     skill_dir = tmp_path / "no-frontmatter-required-fields"
     skill_dir.mkdir(parents=True)

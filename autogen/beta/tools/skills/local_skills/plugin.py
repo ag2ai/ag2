@@ -4,6 +4,7 @@
 
 import os
 from collections.abc import Iterable
+from xml.sax.saxutils import escape
 
 from autogen.beta.agent import Plugin
 from autogen.beta.middleware import ToolMiddleware
@@ -19,12 +20,20 @@ def SkillPlugin(  # noqa: N802
     """Skills-spec ``Plugin`` that auto-loads skill metadata into the prompt.
 
     Follows the ``agentskills.io`` progressive-disclosure pattern, but instead
-    of exposing a ``list_skills`` tool call, it injects the skill catalog
-    (name + description) into the system prompt on agent startup. The model
-    discovers what is available without spending a tool round-trip, then:
+    of exposing a ``list_skills`` tool call, it injects the skill catalog as an
+    ``<available_skills>`` XML block (name + description + location per skill)
+    into the system prompt on agent startup. The model discovers what is
+    available without spending a tool round-trip, then:
 
     1. ``load_skill(name)`` — read the full ``SKILL.md`` on demand.
-    2. ``run_skill_script(name, script, args)`` — execute a skill script.
+    2. ``read_skill_resource(name, resource)`` — read a bundled resource file.
+    3. ``run_skill_script(name, script, args)`` — execute a skill script.
+
+    The catalog and the activation tools are a **construction-time snapshot**:
+    the tools constrain ``name`` to the set of skills present when the plugin is
+    built, and the catalog lists exactly that set — the two never drift apart.
+    When no skills are found, the plugin contributes nothing (no catalog, no
+    tools) so the model is not shown dead tools.
 
     Default runtime scans ``./.agents/skills`` and ``~/.agents/skills``::
 
@@ -40,22 +49,39 @@ def SkillPlugin(  # noqa: N802
         middleware: Tool middleware applied to the skill tools.
     """
     toolkit = SkillsToolkit(runtime, middleware=middleware)
+    skills = toolkit.discover_skills()
+    if not skills:
+        # No skills: omit the catalog and register no dead tools (spec Step 3).
+        return Plugin()
 
-    # Closure built once at plugin construction (not per request), so the
-    # prompt hook is reused across every turn without re-allocation — same
-    # pattern as Agent's subtask tools. The runtime scan happens when the
-    # hook runs (per turn), so newly installed skills are picked up.
-    async def _skills_prompt() -> str:
-        skills = toolkit.discover_skills()
-        if not skills:
-            return "You have no local skills available."
-        catalog = "\n".join(f"- {s['name']}: {s['description']}" for s in skills)
-        return f"You have access to the following local skills:\n<skills>\n{catalog}\n</skills>"
+    catalog = "\n".join(_skill_xml(s) for s in skills)
+    prompt = (
+        "The following skills provide specialized instructions for specific tasks.\n"
+        "When a task matches a skill's description, call load_skill(name) to load its\n"
+        "full instructions before proceeding.\n"
+        f"<available_skills>\n{catalog}\n</available_skills>"
+    )
 
     return Plugin(
         tools=(
             toolkit.load_skill(),
+            toolkit.read_skill_resource(),
             toolkit.run_skill_script(),
         ),
-        prompt=_skills_prompt,
+        prompt=prompt,
+    )
+
+
+def _skill_xml(skill: dict[str, str]) -> str:
+    """Render one catalog entry as a ``<skill>`` XML element.
+
+    Values are XML-escaped so a description containing ``&``/``<``/``>`` cannot
+    break the surrounding ``<available_skills>`` block.
+    """
+    return (
+        "  <skill>\n"
+        f"    <name>{escape(skill['name'])}</name>\n"
+        f"    <description>{escape(skill['description'])}</description>\n"
+        f"    <location>{escape(skill['location'])}</location>\n"
+        "  </skill>"
     )
