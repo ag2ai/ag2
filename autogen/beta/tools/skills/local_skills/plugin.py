@@ -4,19 +4,22 @@
 
 import os
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
 from xml.sax.saxutils import escape
 
-from autogen.beta.agent import Plugin
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.skills.local_skills.toolkit import SkillsToolkit
 from autogen.beta.tools.skills.runtime import SkillRuntime
+
+if TYPE_CHECKING:
+    from autogen.beta.agent import Plugin
 
 
 def SkillPlugin(  # noqa: N802
     runtime: SkillRuntime | str | os.PathLike[str] | None = None,
     *,
     middleware: Iterable[ToolMiddleware] = (),
-) -> Plugin:
+) -> "Plugin":
     """Skills-spec ``Plugin`` that auto-loads skill metadata into the prompt.
 
     Follows the ``agentskills.io`` progressive-disclosure pattern, but instead
@@ -48,8 +51,13 @@ def SkillPlugin(  # noqa: N802
             ``None`` uses the default :class:`LocalRuntime`.
         middleware: Tool middleware applied to the skill tools.
     """
+    # prevent circular import
+    # TODO: refactor it after moving some parts to "internal" package
+    from autogen.beta.agent import Plugin
+
     toolkit = SkillsToolkit(runtime, middleware=middleware)
     skills = toolkit.discover_skills()
+
     if not skills:
         # No skills: omit the catalog and register no dead tools (spec Step 3).
         return Plugin()
