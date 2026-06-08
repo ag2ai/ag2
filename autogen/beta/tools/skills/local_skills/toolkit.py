@@ -6,7 +6,6 @@ import os
 import shlex
 import stat
 from collections.abc import Iterable
-from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field
@@ -56,6 +55,7 @@ class SkillsToolkit(Toolkit):
         self,
         runtime: SkillRuntime | str | os.PathLike[str] | None = None,
         *,
+        name: str = "local_skills_toolkit",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         if runtime is not None:
@@ -67,7 +67,7 @@ class SkillsToolkit(Toolkit):
             self.list_skills(),
             self.load_skill(),
             self.run_skill_script(),
-            name="local_skills_toolkit",
+            name=name,
             middleware=middleware,
         )
 
@@ -76,6 +76,9 @@ class SkillsToolkit(Toolkit):
         """The underlying ``SkillRuntime`` used to discover and load skills."""
         return self._runtime
 
+    def discover_skills(self) -> list[dict[str, str]]:
+        return [{"name": m.name, "description": m.description} for m in self._runtime.discover()]
+
     def list_skills(
         self,
         *,
@@ -83,11 +86,9 @@ class SkillsToolkit(Toolkit):
         description: str = "List available local skills with name and short description.",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        runtime = self._runtime
-
         @tool(name=name, description=description, middleware=middleware)
         def _list_skills() -> list[dict[str, str]]:
-            return [{"name": m.name, "description": m.description} for m in runtime.discover()]
+            return self.discover_skills()
 
         return _list_skills
 
@@ -98,13 +99,11 @@ class SkillsToolkit(Toolkit):
         description: str = "Load the full SKILL.md content for a specific skill.",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        runtime = self._runtime
-
         @tool(name=name, description=description, middleware=middleware)
         def _load_skill(
             name: Annotated[str, Field(description="Skill name returned by list_skills.")],
         ) -> str:
-            return runtime.load(name)
+            return self._runtime.load(name)
 
         return _load_skill
 
@@ -115,8 +114,6 @@ class SkillsToolkit(Toolkit):
         description: str = "Run a script from a skill's scripts directory. Only .py and .sh scripts are supported.",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        runtime = self._runtime
-
         @tool(name=name, description=description, middleware=middleware)
         async def _run_skill_script(
             name: Annotated[
@@ -132,13 +129,9 @@ class SkillsToolkit(Toolkit):
                 Field(description="Optional script arguments passed as positional parameters."),
             ] = None,
         ) -> str:
-            skill_dir = runtime.get_path(name)
+            skill_dir = self._runtime.get_path(name)
             scripts_dir = skill_dir / "scripts"
-            script_path = Path(script)
-            if script_path.name != script:
-                raise ValueError("script must be a filename inside the skill scripts directory")
-
-            resolved_script = (scripts_dir / script_path.name).resolve()
+            resolved_script = (scripts_dir / script).resolve()
             if not resolved_script.is_file() or not resolved_script.is_relative_to(scripts_dir.resolve()):
                 raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
 
@@ -163,7 +156,7 @@ class SkillsToolkit(Toolkit):
             # event loop. A sync path would drive remote backends via a throwaway
             # asyncio.run() per call (a fresh loop each time), breaking clients
             # bound to the first loop (e.g. Daytona's httpx keep-alive pool).
-            env = runtime.shell(scripts_dir)
+            env = self._runtime.shell(scripts_dir)
             return await env.run(shlex.join(command))
 
         return _run_skill_script
