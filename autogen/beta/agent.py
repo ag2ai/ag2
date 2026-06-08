@@ -49,6 +49,7 @@ from .events import (
     ModelRequest,
     ModelResponse,
     ToolResultsEvent,
+    UsageEvent,
 )
 from .events.conditions import Condition
 from .events.lifecycle import (
@@ -1149,6 +1150,19 @@ class Agent(Generic[TResult]):
 
                 messages = await context.stream.history.get_events()
                 result = await llm_call(messages, context)
+                # Emit usage at the point it is spent, decoupled from the
+                # response, so token accounting never depends on a response
+                # being produced. UsageReport reads these events alone.
+                if result.usage:
+                    await context.send(
+                        UsageEvent(
+                            result.usage,
+                            kind="model_call",
+                            model=result.model,
+                            provider=result.provider,
+                            finish_reason=result.finish_reason,
+                        )
+                    )
                 await context.send(result)
 
             with ExitStack() as stack:

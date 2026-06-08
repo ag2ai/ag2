@@ -2,13 +2,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from typing import Any
 from uuid import uuid4
 
 from .base import BaseEvent, Field
 from .tool_events import ToolCallsEvent
+
+
+def _add_tokens(a: float | None, b: float | None) -> float | None:
+    """Add two optional token counts. ``None + None`` stays ``None`` so a
+    field absent on both sides isn't fabricated as ``0``; if either side has a
+    value, the missing side counts as ``0``."""
+    if a is None and b is None:
+        return None
+    return (a or 0) + (b or 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,17 +42,19 @@ class Usage:
         ))
 
     def __add__(self, other: "Usage") -> "Usage":
-        """Field-wise sum. ``None + None`` stays ``None``; otherwise a missing
-        side counts as ``0`` so partial reports still aggregate. With this in
-        place, ``sum(usages, Usage())`` aggregates an iterable."""
+        """Field-wise sum so ``sum(usages, Usage())`` aggregates an iterable."""
         if not isinstance(other, Usage):
             return NotImplemented
-        summed: dict[str, float | None] = {}
-        for f in fields(self):
-            a = getattr(self, f.name)
-            b = getattr(other, f.name)
-            summed[f.name] = None if a is None and b is None else (a or 0) + (b or 0)
-        return Usage(**summed)
+        return Usage(
+            prompt_tokens=_add_tokens(self.prompt_tokens, other.prompt_tokens),
+            completion_tokens=_add_tokens(self.completion_tokens, other.completion_tokens),
+            total_tokens=_add_tokens(self.total_tokens, other.total_tokens),
+            cache_read_input_tokens=_add_tokens(self.cache_read_input_tokens, other.cache_read_input_tokens),
+            cache_creation_input_tokens=_add_tokens(
+                self.cache_creation_input_tokens, other.cache_creation_input_tokens
+            ),
+            thinking_tokens=_add_tokens(self.thinking_tokens, other.thinking_tokens),
+        )
 
 
 class ModelEvent(BaseEvent):
@@ -136,6 +147,32 @@ class ModelResponse(ModelEvent):
         if self.tool_calls:
             msg["tool_calls"] = self.tool_calls.to_api()
         return msg
+
+
+class UsageEvent(BaseEvent):
+    """Token usage for a single unit of work, emitted at the point the tokens
+    are spent.
+
+    Decoupled from :class:`ModelResponse` so token accounting is independent of
+    whether a response is produced and persisted: every LLM call (main loop,
+    live session, history compaction, memory aggregation) and every sub-task
+    rollup emits one of these onto the stream. :class:`~autogen.beta.UsageReport`
+    aggregates the event log over these events alone — the single source of
+    truth, so there is no double counting.
+
+    Persisted (not transient): the report reads it back from history.
+    """
+
+    usage: Usage = Field(default_factory=Usage, kw_only=False)
+    kind: str = Field(default="model_call")
+    """``"model_call"`` for a direct LLM call, ``"subtask"`` for a sub-agent
+    rollup, ``"compaction"`` / ``"aggregation"`` for internal maintenance calls."""
+
+    model: str | None = Field(default=None, compare=False)
+    provider: str | None = Field(default=None, compare=False)
+    finish_reason: str | None = Field(default=None, compare=False)
+    label: str | None = Field(default=None, compare=False)
+    """Sub-agent name for ``"subtask"`` events; ``None`` otherwise."""
 
 
 class ModelMessageChunk(ModelEvent):

@@ -28,6 +28,7 @@ from autogen.beta.events import (
     TranscriptionChunkEvent,
     TranscriptionCompletedEvent,
     Usage,
+    UsageEvent,
 )
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -305,6 +306,10 @@ async def _pump_events(
                         )
 
             if message.server_content is not None and message.server_content.turn_complete:
+                if usage:
+                    await context.send(
+                        UsageEvent(usage, kind="model_call", model=model, provider="gemini"),
+                    )
                 await context.send(
                     ModelResponse(
                         message=ModelMessage(text) if text else None,

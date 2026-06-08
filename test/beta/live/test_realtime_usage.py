@@ -6,7 +6,7 @@ import pytest
 
 from autogen.beta import Usage, UsageReport
 from autogen.beta.context import ConversationContext
-from autogen.beta.events import ModelMessage, ModelResponse
+from autogen.beta.events import UsageEvent
 from autogen.beta.live import LiveAgent
 from autogen.beta.stream import MemoryStream
 
@@ -14,22 +14,22 @@ from autogen.beta.stream import MemoryStream
 @pytest.mark.asyncio
 class TestUsageReportSurface:
     async def test_aggregates_session_history(self) -> None:
-        """``LiveAgent.usage_report`` sums the ``ModelResponse`` usage emitted
+        """``LiveAgent.usage_report`` sums the ``UsageEvent`` events emitted
         onto the session stream over the course of a live conversation."""
         ctx = ConversationContext(stream=MemoryStream())
 
         await ctx.send(
-            ModelResponse(
-                message=ModelMessage("hi"),
-                usage=Usage(prompt_tokens=100, completion_tokens=40),
+            UsageEvent(
+                Usage(prompt_tokens=100, completion_tokens=40),
+                kind="model_call",
                 model="gpt-realtime",
                 provider="openai",
             )
         )
         await ctx.send(
-            ModelResponse(
-                message=ModelMessage("bye"),
-                usage=Usage(prompt_tokens=20, completion_tokens=8),
+            UsageEvent(
+                Usage(prompt_tokens=20, completion_tokens=8),
+                kind="model_call",
                 model="gpt-realtime",
                 provider="openai",
             )

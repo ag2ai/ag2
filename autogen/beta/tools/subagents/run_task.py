@@ -13,6 +13,7 @@ from autogen.beta.events import (
     TaskFailed,
     TaskStarted,
     Usage,
+    UsageEvent,
 )
 from autogen.beta.stream import MemoryStream, Stream
 
@@ -117,6 +118,13 @@ async def run_task(
         )
 
         if emit_events:
+            # The sub-agent's per-call UsageEvents live on its private stream;
+            # emit a single rollup onto the parent so the parent's usage report
+            # accounts for the sub-task without seeing its individual calls.
+            if usage:
+                await parent_context.send(
+                    UsageEvent(usage, kind="subtask", label=agent.name),
+                )
             await parent_context.send(
                 TaskCompleted(
                     task_id=task_id,

@@ -43,6 +43,7 @@ from autogen.beta.events import (
     TranscriptionChunkEvent,
     TranscriptionCompletedEvent,
     Usage,
+    UsageEvent,
 )
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -404,11 +405,16 @@ async def _pump_events(
             # done event emits after all text and audio chunks are emitted
             # so, we can emit the final message and usage here
             # without `response.text.done` event processing
+            usage = normalize_realtime_usage(event.response.usage)
+            if usage:
+                await context.send(
+                    UsageEvent(usage, kind="model_call", model=model, provider="openai"),
+                )
             await context.send(
                 ModelResponse(
                     # text always none for audio output
                     message=ModelMessage(text) if text else None,
-                    usage=normalize_realtime_usage(event.response.usage),
+                    usage=usage,
                     model=model,
                     provider="openai",
                 )
