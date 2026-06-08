@@ -8,6 +8,7 @@ import pytest
 from autogen.beta import Agent
 from autogen.beta.mcp import MCPServer
 from autogen.beta.mcp.security import AccessToken, Requirement, oauth2_scheme, require
+from autogen.beta.mcp.testing import serve
 from autogen.beta.testing import TestConfig
 
 _INIT_BODY = {
@@ -45,11 +46,9 @@ def _security(*, required_scopes: list[str] | None = None) -> Requirement:
     )
 
 
-def _app(*, required_scopes: list[str] | None = None, json_response: bool = False):
+def _app(*, required_scopes: list[str] | None = None, json_response: bool = False) -> MCPServer:
     agent = Agent("greeter", config=TestConfig("hi"))
-    return MCPServer(agent).build_streamable_http(
-        security=_security(required_scopes=required_scopes), json_response=json_response
-    )
+    return MCPServer(agent, security=_security(required_scopes=required_scopes), json_response=json_response)
 
 
 class TestSecurityBuilders:
@@ -83,7 +82,7 @@ class TestSecurityBuilders:
     def test_path_mismatch_raises(self) -> None:
         agent = Agent("greeter", config=TestConfig("hi"))
         with pytest.raises(ValueError, match="must match the MCP endpoint path"):
-            MCPServer(agent).build_streamable_http(path="/other", security=_security())
+            MCPServer(agent, path="/other", security=_security())
 
     def test_oauth2_scheme_rejects_schemeless_url(self) -> None:
         # An OIDC issuer string (e.g. Stytch's) is not a usable AS URL — fail
@@ -141,10 +140,8 @@ class TestEnforcement:
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
         }
-        async with app.router.lifespan_context(app):
-            transport = httpx.ASGITransport(app=app)
-            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-                resp = await client.post("/mcp", headers=headers, json=_INIT_BODY)
+        async with serve(app) as client:
+            resp = await client.post("/mcp", headers=headers, json=_INIT_BODY)
 
         # Auth passed (not 401/403) and the MCP layer handled the initialize handshake.
         assert resp.status_code == 200

@@ -1,27 +1,3 @@
-"""Serve an AG2 agent as an MCP server over streamable HTTP with OAuth (Resource Server).
-
-Demonstrates RFC 9728 protected-resource discovery + bearer-token enforcement.
-The server advertises its authorization server(s) at
-``/.well-known/oauth-protected-resource/mcp`` and requires a valid bearer token
-on ``/mcp``.
-
-This example uses a trivial static-token verifier so it runs without an external
-IdP. In production, replace ``StaticTokenVerifier`` with one that validates tokens
-against your authorization server (JWKS signature check or token introspection).
-
-Run:
-
-    uvicorn examples.mcp.server_http_auth:app --host 127.0.0.1 --port 8000
-
-Discover:
-
-    curl http://127.0.0.1:8000/.well-known/oauth-protected-resource/mcp
-
-Then call /mcp with header:  Authorization: Bearer demo-secret-token
-
-Requires ANTHROPIC_API_KEY in the environment.
-"""
-
 from collections.abc import Sequence
 
 import uvicorn
@@ -67,7 +43,7 @@ security = require(
     resource_name="AG2 demo agent",
 )
 
-app = MCPServer(agent).build_streamable_http(path="/mcp", security=security)
+app = MCPServer(agent, path="/mcp", security=security)
 
 
 if __name__ == "__main__":

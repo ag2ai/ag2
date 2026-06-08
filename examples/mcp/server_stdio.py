@@ -1,19 +1,3 @@
-"""Serve an AG2 agent as an MCP server over stdio (local clients).
-
-Point Claude Desktop / Cursor / the MCP Inspector at this module to call the
-agent through the standard MCP protocol.
-
-Run directly:
-
-    python -m examples.mcp.server_stdio
-
-Or via the MCP Inspector:
-
-    npx @modelcontextprotocol/inspector python -m examples.mcp.server_stdio
-
-Requires ANTHROPIC_API_KEY in the environment.
-"""
-
 import asyncio
 
 from autogen.beta import Agent

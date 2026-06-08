@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+import importlib.metadata
+from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
@@ -13,21 +14,63 @@ from mcp.server.auth.routes import build_resource_metadata_url, create_protected
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import CallToolResult, ContentBlock
+from mcp.types import CallToolResult, ContentBlock, Icon
 from mcp.types import Tool as MCPTool
 from starlette.applications import Starlette
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.routing import BaseRoute, Mount, Route
 
 from autogen.beta.agent import Agent
+from autogen.beta.history import MemoryStorage
 
-from .authserver import authorization_server_routes
 from .executor import AgentExecutor, ContextProvider
-from .info import build_server_info
+from .prompts import Prompt, PromptProvider
+from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
+from .sessions import SessionConfig, SessionStore
 
 if TYPE_CHECKING:
-    from starlette.types import Receive, Scope, Send
+    from starlette.types import Lifespan, Receive, Scope, Send
+
+# An MCP ``Server`` lifespan: an async context manager yielding server-scoped
+# state, reachable in every ``tools/call`` via ``request_context.lifespan_context``.
+ServerLifespan = Callable[[Server], AbstractAsyncContextManager[Any]]
+
+_DEFAULT_VERSION = "0.0.0"
+
+
+def _package_version() -> str:
+    try:
+        return importlib.metadata.version("ag2")
+    except importlib.metadata.PackageNotFoundError:  # pragma: no cover - ag2 always installed in practice
+        return _DEFAULT_VERSION
+
+
+def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | None:
+    if sessions is False:
+        return None
+    cfg = sessions if isinstance(sessions, SessionConfig) else SessionConfig()
+    return SessionStore(
+        max_sessions=cfg.max_sessions,
+        ttl=cfg.ttl,
+        storage=cfg.storage or MemoryStorage(),
+    )
+
+
+def _session_manager_lifespan(manager: StreamableHTTPSessionManager) -> "Lifespan[Any]":
+    """An ASGI lifespan that runs the streamable-HTTP session manager.
+
+    ``StreamableHTTPSessionManager`` must be entered via ``manager.run()`` before
+    it can serve requests; this wires that into the app's lifespan so a standalone
+    ``uvicorn`` run (which drives lifespan automatically) just works.
+    """
+
+    @asynccontextmanager
+    async def lifespan(_: Starlette) -> AsyncIterator[None]:
+        async with manager.run():
+            yield
+
+    return lifespan
 
 
 class MCPServer:
@@ -35,22 +78,53 @@ class MCPServer:
 
     The agent is exposed as a single conversational tool (``ask`` by default)
     that runs :meth:`Agent.ask` and returns the reply — the inverse of the
-    consume-side toolkit ``autogen.beta.tools.toolkits.mcp_server.MCPServer``,
-    which connects *to* an MCP server. The two classes share a name but live in
-    different modules; alias one if you import both.
+    consume-side toolkit ``autogen.beta.tools.MCPToolkit``, which connects *to*
+    an MCP server.
 
-    Transport-agnostic state (the underlying low-level ``mcp`` server, the
-    agent, the executor) lives on the instance; transport selection happens via
-    the builders:
+    The instance is itself an ASGI3 application: it serves MCP over streamable
+    HTTP and manages its own lifespan, so a standalone ``uvicorn`` run just works::
 
-    * :meth:`build_streamable_http` returns a Starlette ASGI app for remote /
-      production serving (run it with ``uvicorn``; attach CORS / auth to the
-      returned app yourself).
-    * :meth:`run_stdio` serves over stdin/stdout for local clients (Claude
-      Desktop, Cursor, the MCP Inspector).
+        app = MCPServer(agent, path="/mcp")
+        uvicorn.run(app, host="127.0.0.1", port=8000)
+
+    For local clients (Claude Desktop, Cursor, the MCP Inspector), :meth:`run_stdio`
+    serves over stdin/stdout instead. The HTTP transport parameters (``path``,
+    ``stateless``, ``json_response``, ``security``) are ignored over stdio.
+
+    ``name`` / ``version`` / ``instructions`` / ``website_url`` / ``icons``
+    populate the ``initialize`` handshake's ``serverInfo`` + ``instructions``.
+    ``instructions`` is client-facing "how to use this server" guidance — it is
+    *not* derived from the agent's system prompt (which is internal); pass it
+    explicitly when you want to advertise usage hints.
+
+    ``sessions`` controls multi-turn history. By default (``True``) each MCP
+    session (keyed by the transport's ``mcp-session-id``, or a per-process key
+    over stdio) keeps its own conversation history that accumulates across calls;
+    pass a :class:`~autogen.beta.mcp.sessions.SessionConfig` to tune the bound /
+    TTL / backend, or ``False`` to make every call stateless. A stateless HTTP
+    transport (``stateless=True``) issues no session id, so it stays stateless
+    regardless of this setting.
+
+    ``resources`` / ``resource_templates`` / ``prompts`` expose MCP resources and
+    prompts alongside the conversational tool; the corresponding capability is
+    advertised only when a non-empty collection is supplied.
     """
 
-    __slots__ = ("_agent", "_executor", "_server", "_name", "_version", "_instructions")
+    __slots__ = (
+        "_agent",
+        "_executor",
+        "_server",
+        "_name",
+        "_version",
+        "_instructions",
+        "_website_url",
+        "_icons",
+        "_lifespan",
+        "_session_store",
+        "_resource_provider",
+        "_prompt_provider",
+        "_http",
+    )
 
     def __init__(
         self,
@@ -59,23 +133,47 @@ class MCPServer:
         name: str | None = None,
         version: str | None = None,
         instructions: str | None = None,
+        website_url: str | None = None,
+        icons: list[Icon] | None = None,
         tool_name: str = "ask",
         tool_description: str | None = None,
         stream_progress: bool = True,
         context_provider: "ContextProvider | None" = None,
+        lifespan: "ServerLifespan | None" = None,
+        sessions: "bool | SessionConfig" = True,
+        resources: "Sequence[Resource]" = (),
+        resource_templates: "Sequence[ResourceTemplate]" = (),
+        prompts: "Sequence[Prompt]" = (),
+        path: str = "/mcp",
+        stateless: bool = False,
+        json_response: bool = False,
+        security: Requirement | None = None,
     ) -> None:
         self._agent = agent
-        self._name, self._version, self._instructions = build_server_info(
-            agent, name=name, version=version, instructions=instructions
+        self._name = name or agent.name
+        self._version = version or _package_version()
+        self._instructions = instructions
+        self._website_url = website_url
+        self._icons = icons
+        self._lifespan = lifespan
+        self._session_store = _build_session_store(sessions)
+        self._resource_provider = (
+            ResourceProvider(resources, resource_templates) if (resources or resource_templates) else None
         )
+        self._prompt_provider = PromptProvider(prompts) if prompts else None
         self._executor = AgentExecutor(
             agent,
             tool_name=tool_name,
             tool_description=tool_description,
             stream_progress=stream_progress,
             context_provider=context_provider,
+            session_store=self._session_store,
         )
         self._server = self._build_server()
+        routes, manager = self._streamable_routes(
+            path=path, stateless=stateless, json_response=json_response, security=security
+        )
+        self._http: Starlette = Starlette(routes=routes, lifespan=_session_manager_lifespan(manager))
 
     @property
     def agent(self) -> Agent:
@@ -87,7 +185,17 @@ class MCPServer:
         return self._server
 
     def _build_server(self) -> Server:
-        server: Server = Server(name=self._name, version=self._version, instructions=self._instructions)
+        kwargs: dict[str, Any] = {}
+        if self._lifespan is not None:
+            kwargs["lifespan"] = self._lifespan
+        server: Server = Server(
+            name=self._name,
+            version=self._version,
+            instructions=self._instructions,
+            website_url=self._website_url,
+            icons=self._icons,
+            **kwargs,
+        )
         executor = self._executor
 
         # ``mcp``'s low-level decorators are untyped; ignore the resulting noise.
@@ -107,76 +215,30 @@ class MCPServer:
                 request_context=server.request_context,
             )
 
+        if self._resource_provider is not None:
+            self._resource_provider.register(server)
+        if self._prompt_provider is not None:
+            self._prompt_provider.register(server)
+
         return server
 
-    def build_streamable_http(
-        self,
-        *,
-        path: str = "/mcp",
-        stateless: bool = False,
-        json_response: bool = False,
-        security: Requirement | None = None,
-    ) -> Starlette:
-        """Return a Starlette ASGI app serving MCP over streamable HTTP at ``path``.
+    async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
+        """ASGI3 entrypoint serving MCP over streamable HTTP.
+
+        Handles the ``lifespan`` scope (running the streamable-HTTP session
+        manager) and the ``http`` scope (MCP requests, bearer auth, and — when
+        ``security`` is set — RFC 9728 Protected Resource Metadata at
+        ``/.well-known/oauth-protected-resource``). Run it standalone::
+
+            uvicorn.run(MCPServer(agent, path="/mcp"), host="127.0.0.1", port=8000)
 
         When ``security`` is given (build it with
-        :func:`autogen.beta.mcp.security.require`), the app additionally serves
-        RFC 9728 Protected Resource Metadata at ``/.well-known/oauth-protected-resource``
-        and requires a valid bearer token on ``path`` — missing/invalid tokens get
-        ``401`` (with a ``WWW-Authenticate`` header pointing at the metadata),
-        insufficient scopes get ``403``. ``security.resource_url`` must point at this
-        endpoint (its path component must equal ``path``).
-
-        To embed MCP in an existing ASGI app instead of running this standalone,
-        use :meth:`mount_into` (it wires the lifespan for you).
+        :func:`autogen.beta.mcp.security.require`), missing/invalid tokens get
+        ``401`` (with a ``WWW-Authenticate`` header pointing at the metadata) and
+        insufficient scopes get ``403``. ``security.resource_url`` must point at
+        this endpoint (its path component must equal ``path``).
         """
-        routes, manager = self._streamable_routes(
-            path=path, stateless=stateless, json_response=json_response, security=security
-        )
-
-        @asynccontextmanager
-        async def lifespan(_: Starlette) -> AsyncIterator[None]:
-            async with manager.run():
-                yield
-
-        return Starlette(routes=routes, lifespan=lifespan)
-
-    def mount_into(
-        self,
-        app: Starlette,
-        *,
-        path: str = "/mcp",
-        stateless: bool = False,
-        json_response: bool = False,
-        security: Requirement | None = None,
-    ) -> Starlette:
-        """Mount this MCP server into an existing Starlette/FastAPI ``app``.
-
-        Adds the MCP routes to ``app`` (the endpoint at ``path``, plus the RFC 9728
-        ``/.well-known/oauth-protected-resource`` route when ``security`` is set) and
-        composes the streamable-HTTP session-manager lifespan into ``app``'s lifespan,
-        so you don't have to wire it yourself — without it, requests fail with
-        "Task group is not initialized". Any existing lifespan is preserved.
-
-        Routes are added at the app root, so ``path`` and the host-root
-        ``.well-known`` route land exactly where MCP clients expect them. Bearer auth
-        (when ``security`` is set) is scoped to the MCP route only, so the rest of
-        ``app`` is unaffected. Call this during setup, before the app starts serving.
-        """
-        routes, manager = self._streamable_routes(
-            path=path, stateless=stateless, json_response=json_response, security=security
-        )
-        app.router.routes.extend(routes)
-
-        previous_lifespan = app.router.lifespan_context
-
-        @asynccontextmanager
-        async def lifespan(scope_app: Any) -> AsyncIterator[Any]:
-            async with manager.run(), previous_lifespan(scope_app) as state:
-                yield state
-
-        app.router.lifespan_context = lifespan
-        return app
+        await self._http(scope, receive, send)
 
     def _streamable_routes(
         self,
@@ -186,11 +248,10 @@ class MCPServer:
         json_response: bool,
         security: Requirement | None,
     ) -> "tuple[list[BaseRoute], StreamableHTTPSessionManager]":
-        """Build the streamable-HTTP routes + session manager shared by
-        :meth:`build_streamable_http` and :meth:`mount_into`.
+        """Build the streamable-HTTP routes + session manager for the ASGI app.
 
         Bearer auth is wrapped *around the MCP route* (not as app-level middleware)
-        so it stays scoped when the route is injected into a host app.
+        so it stays scoped if the route is mounted into a host app.
         """
         manager = StreamableHTTPSessionManager(
             app=self._server,
@@ -230,10 +291,6 @@ class MCPServer:
                 resource_documentation=metadata.resource_documentation,
             ),
         ]
-        # AS facade: also serve our own authorization-server metadata when the
-        # requirement opts in (e.g. the IdP's discovery omits the DCR endpoint).
-        if security.authorization_server is not None:
-            routes.extend(authorization_server_routes(security.authorization_server))
         return routes, manager
 
     async def run_stdio(self) -> None:  # pragma: no cover - needs real stdio pipes

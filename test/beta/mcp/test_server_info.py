@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import importlib.metadata
+
 from pydantic import BaseModel
 
 from autogen.beta import Agent
-from autogen.beta.mcp import MCPServer, build_ask_tool, build_server_info
+from autogen.beta.mcp import MCPServer, build_ask_tool
 from autogen.beta.testing import TestConfig
 
 
@@ -24,25 +26,28 @@ class TestServerInfo:
     def test_defaults_from_agent(self) -> None:
         agent = Agent("greeter", "You are a greeter.", config=TestConfig("hi"))
 
-        name, version, instructions = build_server_info(agent)
+        server = MCPServer(agent).server
 
-        assert name == "greeter"
-        assert version == "0.1.0"
-        assert instructions == "You are a greeter."
+        assert server.name == "greeter"
+        assert server.version == importlib.metadata.version("ag2")
+        # instructions is client-facing usage guidance, NOT the agent's system prompt.
+        assert server.instructions is None
 
     def test_overrides(self) -> None:
         agent = Agent("greeter", "You are a greeter.", config=TestConfig("hi"))
 
-        name, version, instructions = build_server_info(agent, name="custom", version="2.0.0", instructions="override")
+        server = MCPServer(
+            agent,
+            name="custom",
+            version="2.0.0",
+            instructions="override",
+            website_url="https://example.com",
+        ).server
 
-        assert (name, version, instructions) == ("custom", "2.0.0", "override")
-
-    def test_no_prompt_has_none_instructions(self) -> None:
-        agent = Agent("bare", config=TestConfig("hi"))
-
-        _, _, instructions = build_server_info(agent)
-
-        assert instructions is None
+        assert server.name == "custom"
+        assert server.version == "2.0.0"
+        assert server.instructions == "override"
+        assert server.website_url == "https://example.com"
 
 
 class TestAskTool:
@@ -66,14 +71,14 @@ class TestAskTool:
     def test_no_output_schema_without_response_schema(self) -> None:
         agent = Agent("greeter", config=TestConfig("hi"))
 
-        tool = build_ask_tool(agent)
+        tool = build_ask_tool(agent, response_schema=agent._response_schema)
 
         assert tool.outputSchema is None
 
     def test_output_schema_from_response_schema(self) -> None:
         agent = Agent("weather", config=TestConfig("hi"), response_schema=Weather)
 
-        tool = build_ask_tool(agent)
+        tool = build_ask_tool(agent, response_schema=agent._response_schema)
 
         assert tool.outputSchema is not None
         assert tool.outputSchema["type"] == "object"
