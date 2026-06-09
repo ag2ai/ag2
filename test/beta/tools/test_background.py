@@ -10,6 +10,7 @@ from autogen.beta import Agent, Context, MemoryStream, tool
 from autogen.beta.events import (
     DrainedModelRequest,
     ModelMessage,
+    ModelRequest,
     ModelResponse,
     ToolCallEvent,
 )
@@ -228,10 +229,8 @@ class TestLifecycle:
 
         # The merged request from the second ask carries both the leftover
         # bg message and the new user msg as parts of one ModelRequest.
-        from autogen.beta.events import ModelRequest as MR
-
         events = list(await second.context.stream.history.get_events())
-        requests = [e for e in events if isinstance(e, MR)]
+        requests = [e for e in events if isinstance(e, ModelRequest)]
         merged = requests[-1]
         contents = [p.content for p in merged.parts if hasattr(p, "content")]
         assert "late bg result" in contents

@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -11,20 +12,70 @@ import yaml
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
 from autogen.beta.tools.skills.skill_types import SkillMetadata
 
+logger = logging.getLogger(__name__)
+
+_UNQUOTED_COLON_RE = re.compile(r"^(\s*[A-Za-z0-9_-]+:\s+)(.*)$")
+
 
 def parse_frontmatter(text: str) -> dict[str, object]:
     """Parse YAML frontmatter (``--- ... ---``) from a SKILL.md file.
 
     Returns a dict of parsed key-value pairs using :func:`yaml.safe_load`.
     Returns an empty dict when there is no valid frontmatter block.
+
+    Skill files authored for other clients sometimes contain technically
+    invalid YAML that those clients' parsers happen to accept — most commonly an
+    unquoted scalar whose value contains a colon (``description: Use when: ...``).
+    A best-effort recovery quotes such values and retries once before giving up.
     """
     if not text.startswith("---"):
         return {}
     end = text.find("\n---", 3)
     if end == -1:
         return {}
-    parsed = yaml.safe_load(text[3:end].strip())
+    block = text[3:end].strip()
+    try:
+        parsed = yaml.safe_load(block)
+    except yaml.YAMLError:
+        parsed = _recover_malformed_yaml(block)
     return {str(k): v for k, v in parsed.items()} if isinstance(parsed, dict) else {}
+
+
+def _recover_malformed_yaml(block: str) -> object:
+    """Quote unquoted ``key: value`` scalars containing a colon and retry once.
+
+    Returns ``None`` when the block is still unparsable after the fix.
+    """
+    fixed_lines: list[str] = []
+    for line in block.splitlines():
+        m = _UNQUOTED_COLON_RE.match(line)
+        if m and ":" in m.group(2):
+            value = m.group(2).strip()
+            if value and value[0] not in "\"'>|[{":
+                escaped = value.replace('"', '\\"')
+                line = f'{m.group(1)}"{escaped}"'
+        fixed_lines.append(line)
+    try:
+        return yaml.safe_load("\n".join(fixed_lines))
+    except yaml.YAMLError:
+        return None
+
+
+def strip_frontmatter(text: str) -> str:
+    """Return the markdown body after the YAML frontmatter block, trimmed.
+
+    Returns the whole text (trimmed) when there is no ``--- ... ---`` block.
+    """
+    if not text.startswith("---"):
+        return text.strip()
+    end = text.find("\n---", 3)
+    if end == -1:
+        return text.strip()
+    # Skip past the closing '---' line to the start of the body.
+    after = text[end + 1 :]
+    newline = after.find("\n")
+    body = after[newline + 1 :] if newline != -1 else ""
+    return body.strip()
 
 
 class SkillLoader:
@@ -74,7 +125,13 @@ class SkillLoader:
         force a rescan (e.g. after installing or removing a skill).
 
         When the same skill name appears in more than one path, the first
-        occurrence (higher-priority path) wins.
+        occurrence (higher-priority path) wins; the shadowed skill is skipped
+        with a warning.
+
+        In ``strict`` mode a malformed skill raises (the install path relies on
+        this). In lenient mode the malformed skill is skipped with a warning and
+        the remaining skills still load — a single bad skill never aborts the
+        whole scan.
         """
         if self._cache is not None:
             return sorted(self._cache.values(), key=lambda m: m.name)
@@ -89,24 +146,72 @@ class SkillLoader:
                 skill_md = skill_dir / "SKILL.md"
                 if not skill_md.exists():
                     continue
-                text = skill_md.read_text(encoding="utf-8")
-                fm_raw = {k: v for k, v in parse_frontmatter(text).items() if v is not None}
-                fm = {k: str(v) for k, v in fm_raw.items()}
-                meta = SkillMetadata(
-                    name=fm.get("name") or skill_dir.name,
-                    description=fm.get("description") or "",
-                    path=skill_dir,
-                    has_scripts=(skill_dir / "scripts").is_dir(),
-                    version=fm.get("version") or None,
-                    license=fm.get("license") or None,
-                    compatibility=fm.get("compatibility") or None,
-                )
-                if self._strict:
-                    self.validate_skill_metadata(skill_dir, fm_raw, meta)
-                if meta.name not in seen:
-                    seen[meta.name] = meta
+                try:
+                    meta = self._load_metadata(skill_dir, skill_md)
+                except (InvalidSkillError, OSError, yaml.YAMLError) as exc:
+                    if self._strict:
+                        raise
+                    logger.warning("Skipping skill %r: %s", skill_dir.name, exc)
+                    continue
+                if meta.name in seen:
+                    logger.warning(
+                        "Skill name %r in %s is shadowed by a higher-priority skill; ignoring",
+                        meta.name,
+                        skill_dir,
+                    )
+                    continue
+                seen[meta.name] = meta
         self._cache = seen
         return sorted(seen.values(), key=lambda m: m.name)
+
+    def _load_metadata(self, skill_dir: Path, skill_md: Path) -> SkillMetadata:
+        """Build and validate the metadata for one skill.
+
+        Strict mode raises :class:`InvalidSkillError` on any spec violation (the
+        install path relies on this). Lenient mode follows the agentskills.io
+        client guide: cosmetic name issues (mismatched directory, length,
+        charset) warn but still load, while a missing/empty description is the
+        only metadata reason to skip. :meth:`discover` routes the raised error
+        (re-raise in strict mode, skip-with-warning in lenient mode).
+        """
+        text = skill_md.read_text(encoding="utf-8")
+        fm_raw = {k: v for k, v in parse_frontmatter(text).items() if v is not None}
+        fm = {k: str(v) for k, v in fm_raw.items()}
+        meta = SkillMetadata(
+            name=fm.get("name") or skill_dir.name,
+            description=fm.get("description") or "",
+            path=skill_dir,
+            has_scripts=(skill_dir / "scripts").is_dir(),
+            version=fm.get("version") or None,
+            license=fm.get("license") or None,
+            compatibility=fm.get("compatibility") or None,
+        )
+        if self._strict:
+            self.validate_skill_metadata(skill_dir, fm_raw, meta)
+        else:
+            self._validate_lenient(skill_dir, meta)
+        return meta
+
+    def _validate_lenient(self, skill_dir: Path, meta: SkillMetadata) -> None:
+        """Warn on cosmetic issues, raise only when the skill is unusable.
+
+        See https://agentskills.io/client-implementation/adding-skills-support:
+        name mismatch / over-length / unexpected charset relax to warnings to
+        keep skills authored for other clients usable; a missing or empty
+        description is essential for disclosure, so it raises (→ skip).
+        """
+        if not meta.description:
+            raise InvalidSkillError(f"Skill {skill_dir.name!r} has a missing or empty description")
+        name = meta.name
+        if name != skill_dir.name:
+            logger.warning("Skill name %r does not match directory %r; loading anyway", name, skill_dir.name)
+        if len(name) > 64:
+            logger.warning("Skill name %r exceeds 64 characters; loading anyway", name)
+        if not self._SKILL_NAME_RE.fullmatch(name):
+            logger.warning(
+                "Skill name %r is not lowercase alnum with single hyphens; loading anyway",
+                name,
+            )
 
     def load(self, name: str) -> str:
         """Return the full text of a skill's ``SKILL.md`` by skill name.
