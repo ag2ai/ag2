@@ -4,7 +4,6 @@
 
 """Tests for BedrockV2Client."""
 
-import base64
 import json
 from unittest.mock import MagicMock, Mock, patch
 
@@ -160,7 +159,6 @@ class TestBedrockV2ClientCreate:
     def test_create_response_with_image(self, bedrock_v2_client, mock_bedrock_runtime):
         """Test creating response with image content."""
         image_bytes = b"fake_image_data"
-        base64_image = base64.b64encode(image_bytes).decode("utf-8")
 
         mock_response = {
             "stopReason": "stop",
