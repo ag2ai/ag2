@@ -43,6 +43,13 @@ jobs:
       - name: Verify the build
         run: |
           ls -la ./website/mkdocs/site
+          # Ensure the Beta-scoped llms.txt files were generated and copied into the site.
+          for f in llms.txt llms-full.txt; do
+            if [ ! -s "./website/mkdocs/site/$f" ]; then
+              echo "::error::Expected non-empty ./website/mkdocs/site/$f (llms.txt generation failed)"
+              exit 1
+            fi
+          done
         working-directory: .
 
       - name: Configure Git user
