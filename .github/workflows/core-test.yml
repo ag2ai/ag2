@@ -54,6 +54,14 @@ jobs:
     env:
       AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
       YEPCODE_API_TOKEN: ${{ secrets.YEPCODE_API_TOKEN }}
+      # `import autogen` loads the Gemini client -> vertexai -> grpc. On macOS
+      # grpc uses the legacy `poll` engine, and its pthread_atfork handler
+      # writes INFO logs ("ev_poll_posix.cc: FD from fork parent still in poll
+      # list") into the child's stderr when the code executor forks a
+      # subprocess. The executor captures that stderr into command output,
+      # breaking output assertions. Silence grpc's fork-time logging.
+      GRPC_VERBOSITY: NONE
+      GRPC_ENABLE_FORK_SUPPORT: "0"
     strategy:
       fail-fast: false
       matrix:
@@ -108,7 +116,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ./coverage.xml
           flags: core-without-llm, ${{ matrix.os }}, ${{ matrix.python-version }}

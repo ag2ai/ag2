@@ -5,6 +5,7 @@
 from .base import (
     AgentTurn,
     BaseMiddleware,
+    ConditionalMiddleware,
     HumanInputHook,
     LLMCall,
     Middleware,
@@ -25,6 +26,7 @@ from .builtin import (
 __all__ = (
     "AgentTurn",
     "BaseMiddleware",
+    "ConditionalMiddleware",
     "HistoryLimiter",
     "HumanInputHook",
     "LLMCall",

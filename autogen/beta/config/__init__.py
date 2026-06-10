@@ -37,6 +37,11 @@ try:
 except ImportError as e:
     OllamaConfig = missing_optional_dependency("OllamaConfig", "ollama", e)  # type: ignore[misc]
 
+try:
+    from .xai import XAIConfig
+except ImportError as e:
+    XAIConfig = missing_optional_dependency("XAIConfig", "xai", e)  # type: ignore[misc]
+
 __all__ = (
     "AnthropicConfig",
     "ContainerInfo",
@@ -51,4 +56,5 @@ __all__ = (
     "OpenAIConfig",
     "OpenAIResponsesConfig",
     "VertexAIConfig",
+    "XAIConfig",
 )

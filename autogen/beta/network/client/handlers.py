@@ -23,7 +23,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING
 
-from autogen.beta.events import BaseEvent
+from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, TextInput
 from autogen.beta.stream import MemoryStream
 
 from ..channel import ChannelMetadata, ChannelState
@@ -34,10 +34,11 @@ from ..envelope import (
 )
 from ..policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, HUB_DEP
 from ..task_mirror import TaskMirror
-from ..views.base import ViewPolicy
+from ..views.base import NameResolver, ViewPolicy
 from .channel import Channel
 
 if TYPE_CHECKING:
+    from ..adapters.base import ChannelAdapter
     from .agent_client import AgentClient
 
 __all__ = (
@@ -53,6 +54,40 @@ logger = logging.getLogger(__name__)
 
 def _is_task_event(event_type: str) -> bool:
     return event_type.startswith("ag2.task.")
+
+
+async def _render_current_input(
+    view: ViewPolicy,
+    envelope: Envelope,
+    adapter: "ChannelAdapter",
+    participant_id: str,
+    metadata: ChannelMetadata,
+    name_for: NameResolver,
+) -> str | None:
+    """Render the current-turn envelope through the view.
+
+    Calls ``view.project([envelope])`` so named views apply consistent
+    values between current envelope and history. Falls back to
+    ``adapter.extract_turn_input`` when the view returns nothing (e.g.
+    rich input types like images or documents that ``render_envelope``
+    cannot represent as a string).
+    """
+    projected = await view.project(
+        [envelope],
+        participant_id=participant_id,
+        channel=metadata,
+        render_envelope=adapter.render_envelope,
+        name_for=name_for,
+    )
+    if projected:
+        event = projected[0]
+        if isinstance(event, ModelRequest):
+            for part in event.parts:
+                if isinstance(part, TextInput):
+                    return part.content
+        if isinstance(event, ModelMessage):
+            return event.content
+    return adapter.extract_turn_input(envelope)
 
 
 async def read_wal_until(client: "AgentClient", envelope: Envelope) -> list[Envelope]:
@@ -75,26 +110,34 @@ def resolve_view_policy(
     client: "AgentClient",
     metadata: ChannelMetadata,
 ) -> ViewPolicy:
-    """Return the adapter's default view policy for this participant."""
-    return client._hub_client.default_view_policy(metadata.channel_id, client.agent_id)
+    """Return the adapter's default view policy for this participant.
+
+    Resolves the adapter from the metadata in hand (no I/O) so the same
+    path works whether the hub is in-process or remote.
+    """
+    return client._hub_client.adapter_for_metadata(metadata).default_view_policy(metadata, client.agent_id)
 
 
 def stamp_dependencies(
     client: "AgentClient",
     channel: Channel,
+    state: object | None,
 ) -> dict[object, object]:
     """Build the ``context.dependencies`` dict for the LLM turn.
 
     ``CHANNEL_STATE_DEP`` resolves to the adapter's current State
-    object (``WorkflowState`` / ``DiscussionState`` / ...). Tools that
-    need to read channel-scoped state (e.g. ``context_vars`` on a
-    workflow channel) inject it via ``ChannelStateInject``.
+    object (``WorkflowState`` / ``DiscussionState`` / ...), passed in by
+    the caller (folded once per turn). Tools that need channel-scoped
+    state (e.g. ``context_vars`` on a workflow channel) inject it via
+    ``ChannelStateInject``. ``HUB_DEP`` resolves to the ``HubClient``
+    seam — the in-process-or-remote control surface — so an injected
+    dependency works in both deployment modes.
     """
     return {
         CHANNEL_DEP: channel,
         AGENT_CLIENT_DEP: client,
-        HUB_DEP: client._hub,
-        CHANNEL_STATE_DEP: client._hub_client.adapter_state(channel.channel_id),
+        HUB_DEP: client._hub_client,
+        CHANNEL_STATE_DEP: state,
     }
 
 
@@ -151,12 +194,27 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         if metadata.is_terminal() or metadata.state != ChannelState.ACTIVE:
             return
 
+        # At-least-once redelivery guard. If this agent already posted a
+        # reply caused by this envelope, the turn is already done —
+        # re-running the LLM would duplicate the post. The reply carries
+        # ``causation_id = envelope.envelope_id`` (stamped below), so a
+        # prior reply is found under this agent's (channel, causation)
+        # key. Checked before the turn-ownership probe so a redelivery is
+        # a no-op regardless of whose turn it now is.
+        prior = await client._hub_client.find_envelope_by_causation(
+            metadata.channel_id,
+            sender_id=client.agent_id,
+            causation_id=envelope.envelope_id,
+        )
+        if prior is not None:
+            return
+
         # "Can we respond now?" — ask the hub via the public probe surface
         # so the handler doesn't need to reach into adapter internals.
-        if not client._hub_client.can_send(envelope.channel_id, client.agent_id):
+        if not await client._hub_client.can_send(envelope.channel_id, client.agent_id):
             return  # not our turn / channel closing — don't engage LLM
 
-        adapter = client._hub_client.adapter_for(metadata.channel_id)
+        adapter = client._hub_client.adapter_for_metadata(metadata)
         channel = Channel(metadata=metadata, client=client)
         view = resolve_view_policy(client, metadata)
 
@@ -166,9 +224,12 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
             participant_id=client.agent_id,
             channel=metadata,
             render_envelope=adapter.render_envelope,
+            name_for=client._hub_client.name_for,
         )
 
-        current_input = adapter.extract_turn_input(envelope)
+        current_input = await _render_current_input(
+            view, envelope, adapter, client.agent_id, metadata, client._hub_client.name_for
+        )
         if not current_input:
             return
 
@@ -180,13 +241,16 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         if projection:
             await stream.history.storage.set_history(stream.id, projection)
 
-        dependencies = stamp_dependencies(client, channel)
+        # Fold the adapter state once for this turn (re-read after the
+        # LLM turn below, since tools may advance it). Cross-process this
+        # folds from the WAL; in-process it reads the hub's cache.
+        state = await client._hub_client.adapter_state(metadata.channel_id)
+        dependencies = stamp_dependencies(client, channel, state)
 
         # Adapter-scoped LLM tools for this turn (e.g. ``say`` for
         # consulting / discussion). Resolution is cached on the adapter
         # so the schema build cost is paid once per (adapter, client)
         # — see ``ChannelAdapter.tools_for`` default implementation.
-        state = client._hub_client.adapter_state(metadata.channel_id)
         adapter_tools: list = []
         try:
             adapter_tools = list(adapter.tools_for(client, metadata, state, client.agent_id))
@@ -220,7 +284,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
             # Default implementations returns EV_TEXT(body) or None.
             # State may have advanced inside the LLM turn (e.g. an
             # ``EV_CONTEXT_SET`` fold) — re-read here.
-            state = client._hub_client.adapter_state(metadata.channel_id)
+            state = await client._hub_client.adapter_state(metadata.channel_id)
             events = list(await stream.history.get_events())
             out_envelope = adapter.build_round_envelope(
                 metadata=metadata,
@@ -228,7 +292,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
                 reply=reply,
                 events=events,
                 state=state,
-                hub=client._hub,
+                hub=client._hub_client,
             )
         finally:
             mirror.detach(stream, sub_ids)

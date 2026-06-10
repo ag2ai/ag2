@@ -93,6 +93,36 @@ class TestStreamWhereTypeFilter:
         mock.assert_not_called()
 
 
+class TestStreamWhereNegation:
+    @pytest.mark.asyncio
+    async def test_where_inverted_type_excludes_matching(self, mock: MagicMock) -> None:
+        stream = MemoryStream()
+
+        stream.where(~ToolCallEvent).subscribe(mock)
+
+        event1 = ToolCallEvent(name="func1", arguments="test1")
+        event2 = ModelMessage("response")
+        event3 = ToolCallEvent(name="func2", arguments="test2")
+        await stream.send(event1, context=Context(stream))
+        await stream.send(event2, context=Context(stream))
+        await stream.send(event3, context=Context(stream))
+
+        assert [c[0][0] for c in mock.call_args_list] == [event2]
+
+    @pytest.mark.asyncio
+    async def test_where_inverted_type_with_union(self, mock: MagicMock) -> None:
+        stream = MemoryStream()
+
+        stream.where(~ToolCallEvent | ModelMessage).subscribe(mock)
+
+        event1 = ToolCallEvent(name="func1", arguments="test1")
+        event2 = ModelMessage("response")
+        await stream.send(event1, context=Context(stream))
+        await stream.send(event2, context=Context(stream))
+
+        assert [c[0][0] for c in mock.call_args_list] == [event2]
+
+
 class TestStreamWhereConditionFilter:
     @pytest.mark.asyncio
     async def test_where_condition_filter_by_condition(self, mock: MagicMock) -> None:
@@ -240,3 +270,29 @@ async def test_context_propagates_to_substream(mock: MagicMock) -> None:
     await stream.send(ToolCallEvent(name="func1", arguments="test"), custom_ctx)
 
     mock.assert_called_once_with(custom_ctx)
+
+
+@pytest.mark.asyncio
+class TestStreamGet:
+    async def test_resolves_to_first_match(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream)
+
+        async with stream.get(ModelMessage) as result:
+            await stream.send(ModelMessage("first"), ctx)
+            event = await result
+
+        assert event == ModelMessage("first")
+
+    async def test_survives_second_matching_event(self) -> None:
+        # A second match arrives while the waiter is still subscribed; get keeps
+        # the first one instead of raising InvalidStateError on a redundant resolve.
+        stream = MemoryStream()
+        ctx = Context(stream)
+
+        async with stream.get(ModelMessage) as result:
+            await stream.send(ModelMessage("first"), ctx)
+            await stream.send(ModelMessage("second"), ctx)
+            event = await result
+
+        assert event == ModelMessage("first")

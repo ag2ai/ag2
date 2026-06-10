@@ -91,7 +91,7 @@ def make_say_tool(agent_client: "AgentClient") -> object:
         # adapter is fetched from the public HubClient surface — the
         # tool never reaches into hub internals.
         try:
-            adapter = actual_client._hub_client.adapter_for(target_channel.channel_id)
+            adapter = actual_client._hub_client.adapter_for_metadata(target_channel.metadata)
         except Exception as exc:
             return f"Error: adapter unavailable for channel {target_channel.channel_id!r}: {exc}"
         envelope = adapter.build_text_envelope(

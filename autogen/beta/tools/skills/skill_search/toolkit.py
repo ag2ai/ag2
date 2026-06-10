@@ -10,10 +10,10 @@ from pydantic import Field
 
 from autogen.beta.exceptions import SkillDownloadError, SkillInstallError
 from autogen.beta.middleware import ToolMiddleware
-from autogen.beta.tools.final import Toolkit, tool
+from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 from autogen.beta.tools.skills.local_skills import SkillsToolkit
-from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
+from autogen.beta.tools.skills.runtime import SkillRuntime
 
 from .client import SkillsClient
 from .config import SkillsClientConfig
@@ -81,27 +81,24 @@ class SkillSearchToolkit(SkillsToolkit):
         runtime: SkillRuntime | str | os.PathLike[str] | None = None,
         *,
         client: SkillsClientConfig | None = None,
+        name: str = "skill_search_toolkit",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        if runtime is not None:
-            self._runtime: SkillRuntime = LocalRuntime.ensure_runtime(runtime)
-        else:
-            self._runtime = LocalRuntime()
+        super().__init__(
+            runtime,
+            name=name,
+            middleware=middleware,
+        )
 
         self._client = SkillsClient(client)
-        self._lock = SkillsLock(self._runtime.lock_dir / "skills-lock.json")
+        self._lock = SkillsLock(self.runtime.lock_dir / "skills-lock.json")
 
-        Toolkit.__init__(
-            self,
-            self.list_skills(),
-            self.load_skill(),
-            self.run_skill_script(),
+        for t in (
             self.search_skills(),
             self.install_skill(),
             self.remove_skill(),
-            name="local_skills_toolkit",
-            middleware=middleware,
-        )
+        ):
+            self._add_tool(t)
 
     def search_skills(
         self,

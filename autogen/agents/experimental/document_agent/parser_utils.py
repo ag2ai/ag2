@@ -112,14 +112,14 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
         if "markdown" in output_formats:
             # Export Docling document format to markdown:
             output_file = out_path / f"{doc_filename}.md"
-            with output_file.open("w") as fp:
+            with output_file.open("w", encoding="utf-8") as fp:
                 fp.write(res.document.export_to_markdown())
                 conv_files.append(output_file)
 
         if "json" in output_formats:
             # Export Docling document format to json
             output_file = out_path / f"{doc_filename}.json"
-            with output_file.open("w") as fp:
+            with output_file.open("w", encoding="utf-8") as fp:
                 fp.write(json.dumps(res.document.export_to_dict()))
                 conv_files.append(output_file)
 
@@ -129,6 +129,6 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
                 # Save the table as html
                 element_html_filename = output_dir / f"{doc_filename}-table-{table_ix + 1}.html"
                 logger.debug(f"Saving HTML table to {element_html_filename}")
-                with element_html_filename.open("w") as fp:
+                with element_html_filename.open("w", encoding="utf-8") as fp:
                     fp.write(table.export_to_html())
     return conv_files

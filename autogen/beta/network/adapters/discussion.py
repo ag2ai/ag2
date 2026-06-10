@@ -23,7 +23,6 @@ from ..channel import (
     Expectation,
     ParticipantSchema,
 )
-from ..client.tools.say import make_say_tool
 from ..envelope import (
     EV_CHANNEL_CLOSED,
     EV_CHANNEL_EXPIRED,
@@ -36,9 +35,10 @@ from ..envelope import (
 )
 from ..errors import ProtocolError
 from ..views.base import ViewPolicy
-from ..views.builtin import WindowedSummary
+from ..views.builtin import NamedWindowedSummary
 from .base import (
     AdapterResult,
+    ExpectedTurn,
     default_build_packet_envelope,
     default_build_round_envelope,
     default_build_text_envelope,
@@ -107,18 +107,21 @@ class DiscussionAdapter:
     Knobs: ``{"ordering": "round_robin"}`` (default). Unsupported
     orderings are rejected at create time.
 
-    Default view: :class:`WindowedSummary(recent_n=N*2)` where N =
-    participant count — keeps prompt size bounded at any turn count.
+    Default view: :class:`NamedWindowedSummary(recent_n=N*2)` where
+    N = participant count — keeps prompt size bounded at any turn
+    count AND prefixes each non-self projection line with the
+    sender's name so the LLM can tell its peers apart in a 3+ party
+    chat (the assistant/user role bit alone collapses every "other"
+    into one indistinguishable stream).
     """
 
     def __init__(self) -> None:
-        self._say_tool_cache: dict[str, object] = {}
         self.manifest = ChannelManifest(
             type=DISCUSSION_TYPE,
             version=1,
             participants=ParticipantSchema(min=2),
             knobs_schema={"ordering": "str"},
-            default_view_policy=WindowedSummary.name,
+            default_view_policy=NamedWindowedSummary.name,
             expectations=[
                 Expectation(
                     name="turn_within",
@@ -197,13 +200,25 @@ class DiscussionAdapter:
         # Speaker rotation happens entirely in ``fold``.
         return AdapterResult()
 
+    def expected_next(
+        self,
+        metadata: ChannelMetadata,
+        state: DiscussionState,
+    ) -> ExpectedTurn | None:
+        if state.expected_next_speaker is None:
+            return None
+        return ExpectedTurn(
+            agent_id=state.expected_next_speaker,
+            triggering_envelope_id=state.last_envelope_id,
+        )
+
     def default_view_policy(
         self,
         metadata: ChannelMetadata,
         participant_id: str,
     ) -> ViewPolicy:
         recent_n = max(len(metadata.participants) * 2, 4)
-        return WindowedSummary(recent_n=recent_n)
+        return NamedWindowedSummary(recent_n=recent_n)
 
     def extract_turn_input(self, envelope):
         return default_extract_turn_input(envelope)
@@ -215,22 +230,7 @@ class DiscussionAdapter:
         return default_render_envelope(envelope)
 
     def tools_for(self, client, metadata, state, participant_id):
-        """Discussion offers ``say`` only when it is this participant's
-        round (round-robin ordering). Tool resolution is memoized
-        per-client to avoid per-turn schema rebuild.
-        """
-        if state.expected_next_speaker == participant_id:
-            return [self._cached_say_tool(client)]
         return []
-
-    def _cached_say_tool(self, client):
-        """Memoize ``make_say_tool`` per ``client.agent_id``."""
-        cached = self._say_tool_cache.get(client.agent_id)
-        if cached is not None:
-            return cached
-        tool = make_say_tool(client)
-        self._say_tool_cache[client.agent_id] = tool
-        return tool
 
     def build_text_envelope(self, channel_id, sender_id, text, *, audience=None, causation_id=None):
         return default_build_text_envelope(channel_id, sender_id, text, audience=audience, causation_id=causation_id)

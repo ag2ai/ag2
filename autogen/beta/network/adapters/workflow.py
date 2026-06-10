@@ -53,7 +53,7 @@ from ..envelope import (
     Envelope,
 )
 from ..errors import ProtocolError
-from ..handoff import Handoff
+from ..handoff import Finish, Handoff
 from ..transitions import (
     ToolCalled,
     TransitionDecision,
@@ -61,9 +61,10 @@ from ..transitions import (
     WorkflowGraphError,
 )
 from ..views.base import ViewPolicy
-from ..views.builtin import WindowedSummary
+from ..views.builtin import NamedWindowedSummary
 from .base import (
     AdapterResult,
+    ExpectedTurn,
     default_build_packet_envelope,
     default_build_text_envelope,
     default_render_envelope,
@@ -134,8 +135,12 @@ class WorkflowAdapter:
     """Generic orchestrated multi-party channel.
 
     Knobs: ``{"graph": <TransitionGraph.to_dict()>}``. Participants:
-    2+. Default view: :class:`WindowedSummary(recent_n=N*2)` with
-    ``N`` = participant count.
+    2+. Default view: :class:`NamedWindowedSummary(recent_n=N*2)`
+    with ``N`` = participant count — bounded prompt size plus sender
+    labels on non-self projection lines so the orchestrator / next
+    speaker can tell its peers apart in a 3+ party chat (the
+    assistant/user role bit alone collapses every "other" into one
+    indistinguishable stream).
     """
 
     def __init__(self) -> None:
@@ -144,7 +149,7 @@ class WorkflowAdapter:
             version=1,
             participants=ParticipantSchema(min=2),
             knobs_schema={"graph": "TransitionGraph"},
-            default_view_policy=WindowedSummary.name,
+            default_view_policy=NamedWindowedSummary.name,
             expectations=[
                 Expectation(
                     name="turn_within",
@@ -239,18 +244,26 @@ class WorkflowAdapter:
         )
 
         # Routing resolution.
-        # If the packet carries a pre-resolved ``routing.target`` (set
-        # by the framework when a tool returned a typed ``Handoff``),
-        # trust it directly — dynamic Handoff supersedes graph rules.
-        # Otherwise run ``select_next`` so static rules (``ToolCalled``,
-        # ``ContextEquals``, ``FromSpeaker``) decide.
+        # ``kind: "finish"`` short-circuits to termination — a tool
+        # that returned ``Finish`` is the most explicit intent the
+        # agent can express. ``kind: "handoff"`` with a pre-resolved
+        # ``routing.target`` (from a typed ``Handoff`` return) trusts
+        # the tool's pick directly. Otherwise run ``select_next`` so
+        # static rules (``ToolCalled``, ``ContextEquals``,
+        # ``FromSpeaker``) decide.
+        finish_reason: str | None = None
         pre_resolved = None
         if envelope.event_type == EV_PACKET:
             routing = envelope.event_data.get("routing", {}) or {}
-            if routing.get("kind") == "handoff":
+            if routing.get("kind") == "finish":
+                finish_reason = routing.get("reason") or "finished"
+            elif routing.get("kind") == "handoff":
                 pre_resolved = routing.get("target")
 
-        if pre_resolved:
+        if finish_reason is not None:
+            new_state.expected_next_speaker = None
+            new_state.pending_close_reason = finish_reason
+        elif pre_resolved:
             new_state.expected_next_speaker = pre_resolved
             new_state.pending_close_reason = ""
         else:
@@ -326,13 +339,25 @@ class WorkflowAdapter:
             )
         return AdapterResult()
 
+    def expected_next(
+        self,
+        metadata: ChannelMetadata,
+        state: WorkflowState,
+    ) -> ExpectedTurn | None:
+        if state.expected_next_speaker is None:
+            return None
+        return ExpectedTurn(
+            agent_id=state.expected_next_speaker,
+            triggering_envelope_id=state.last_envelope_id,
+        )
+
     def default_view_policy(
         self,
         metadata: ChannelMetadata,
         participant_id: str,
     ) -> ViewPolicy:
         recent_n = max(len(metadata.participants) * 2, 4)
-        return WindowedSummary(recent_n=recent_n)
+        return NamedWindowedSummary(recent_n=recent_n)
 
     def extract_turn_input(self, envelope: Envelope) -> str | None:
         """Decode an inbound substantive envelope into the next
@@ -373,7 +398,7 @@ class WorkflowAdapter:
             except WorkflowGraphError:
                 graph = None
 
-        routing = _resolve_routing(events, graph, hub._name_to_id)
+        routing = _resolve_routing(events, graph, hub.name_to_id_map())
         body = reply.body or ""
 
         if routing["kind"] == "text" and not body:
@@ -529,11 +554,15 @@ def _resolve_routing(
     order (which mirrors the LLM's left-to-right tool-call order).
     For each call, in priority:
 
-    1. Dynamic ``Handoff`` — does the corresponding
+    1. Dynamic ``Finish`` — does the corresponding
+       ``ToolResultEvent`` carry a ``Finish`` instance? If so, the
+       call ends the channel; ``reason``/``summary`` ride on the
+       packet's routing field.
+    2. Dynamic ``Handoff`` — does the corresponding
        ``ToolResultEvent`` carry a ``Handoff`` instance? If so, the
        call's name + Handoff's ``target``/``reason`` becomes the
        routing.
-    2. Static ``ToolCalled`` match — does the call's name match a
+    3. Static ``ToolCalled`` match — does the call's name match a
        graph rule? If so, the call's name becomes the routing tool;
        ``select_next`` resolves the target at fold time.
 
@@ -558,6 +587,14 @@ def _resolve_routing(
 
     for call in calls:
         result_event = results_by_parent.get(call.id)
+        finish = _extract_finish(result_event) if result_event else None
+        if finish is not None:
+            return {
+                "kind": "finish",
+                "tool": call.name,
+                "reason": finish.reason,
+                "summary": finish.summary,
+            }
         handoff = _extract_handoff(result_event) if result_event else None
         if handoff is not None:
             target = name_to_id.get(handoff.target, handoff.target)
@@ -584,6 +621,17 @@ def _extract_handoff(result_event: ToolResultEvent) -> Handoff | None:
         return None
     for part in result.parts:
         if isinstance(part, DataInput) and isinstance(part.data, Handoff):
+            return part.data
+    return None
+
+
+def _extract_finish(result_event: ToolResultEvent) -> Finish | None:
+    """Look for a ``Finish`` instance in a tool result's parts."""
+    result = result_event.result
+    if result is None or not result.parts:
+        return None
+    for part in result.parts:
+        if isinstance(part, DataInput) and isinstance(part.data, Finish):
             return part.data
     return None
 

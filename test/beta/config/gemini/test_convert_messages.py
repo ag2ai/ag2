@@ -23,11 +23,12 @@ from autogen.beta.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
     VideoInput,
 )
-from autogen.beta.exceptions import UnsupportedInputError
+from autogen.beta.exceptions import ToolNotFoundError, UnsupportedInputError
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -486,3 +487,23 @@ class TestBuiltinToolEventReplay:
         )
 
         assert result == []
+
+
+def test_hallucinated_tool_call_maps_with_error_text() -> None:
+    # Regression: a not-found tool call used to leave result=None and crash on r.result.parts.
+    call = ToolCallEvent(id="tc_1", name="ghost_tool")
+    event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
+
+    [content] = convert_messages([event], SerializerCls)
+
+    assert content.model_dump(exclude_none=True) == {
+        "role": "user",
+        "parts": [
+            {
+                "function_response": {
+                    "name": "ghost_tool",
+                    "response": {"result": "autogen.beta.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"},
+                }
+            }
+        ],
+    }

@@ -199,7 +199,7 @@ def get_config_list(
         api_version (str, optional): The api version for openai api calls.
 
     Returns:
-        list: A list of configs for OepnAI API calls.
+        list: A list of configs for OpenAI API calls.
 
     Example:
     ```python

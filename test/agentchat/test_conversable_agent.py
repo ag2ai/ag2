@@ -15,6 +15,7 @@ import os
 import threading
 import time
 import unittest
+import warnings
 from collections.abc import Callable
 from typing import Annotated, Any, Literal
 from unittest.mock import MagicMock, patch
@@ -1414,6 +1415,80 @@ def test_summarize_chat_with_dict_summary():
     assert chat_res.summary == "This is a summary of the conversation."
 
 
+@pytest.mark.parametrize(
+    "summary_return, expected",
+    [
+        # Single-level message dict (existing behaviour).
+        ({"content": "plain string", "tool_calls": None}, "plain string"),
+        # Nested dict where "content" is itself a message dict — this is the
+        # shape some Ollama / Cohere responses produce and was the trigger
+        # for the RunCompletionEvent validation failure in #1811.
+        ({"content": {"content": "nested string", "tool_calls": None}}, "nested string"),
+        # Provider returns the message envelope without ever populating content.
+        ({"role": "assistant", "content": None}, ""),
+        # Callable returns None (e.g. summary computation failed silently).
+        (None, ""),
+        # Callable returns a non-string scalar.
+        (42, "42"),
+    ],
+    ids=["dict_with_str_content", "dict_with_nested_dict_content", "dict_with_none_content", "none", "scalar"],
+)
+def test_summarize_chat_coerces_arbitrary_returns_to_str(summary_return, expected):
+    """``RunCompletionEvent.summary`` is typed ``str``; whatever a callable
+    summary_method (or a provider-returned reflection response) yields must
+    therefore be reduced to a string before it reaches the event. Regression
+    coverage for #1811."""
+    user = UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        default_auto_reply="Hello.",
+        llm_config=False,
+        code_execution_config=False,
+    )
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply="This is a test assistant.",
+    )
+
+    def my_summary(sender, recipient, summary_args):
+        return summary_return
+
+    chat_res = user.initiate_chat(
+        assistant,
+        message="Hello",
+        max_turns=1,
+        summary_method=my_summary,
+    )
+    assert isinstance(chat_res.summary, str)
+    assert chat_res.summary == expected
+
+
+def test_last_msg_summary_unwraps_dict_content():
+    """``_last_msg_as_summary`` previously dropped to "" when the recipient's
+    last message had a dict-shaped ``content`` field (some providers wrap the
+    assistant content as a nested message dict). The summary should follow
+    the inner ``content`` instead. Regression coverage for #1811."""
+    user = UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        default_auto_reply="Hello.",
+        llm_config=False,
+        code_execution_config=False,
+    )
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply={"content": "This is a test assistant. TERMINATE", "tool_calls": None},
+    )
+
+    chat_res = user.initiate_chat(assistant, message="Hello", max_turns=1)
+    assert isinstance(chat_res.summary, str)
+    assert "This is a test assistant." in chat_res.summary
+    # TERMINATE should still be stripped on the dict-content path.
+    assert "TERMINATE" not in chat_res.summary
+
+
 def test_process_before_send():
     print_mock = unittest.mock.MagicMock()
 
@@ -2243,6 +2318,36 @@ def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
         assert len(executor.function_map) == 2
         assert "pre_tool" in executor.function_map
         assert "runtime_tool" in executor.function_map
+
+
+def test_run_method_passing_pre_registered_tool_no_warning_or_loss(mock_credentials: Credentials):
+    """Regression for #1770: passing tools=agent.tools to run() must not warn,
+    must not duplicate the tool entry, and must leave pre-registered tools intact
+    on the agent after the executor context exits.
+    """
+
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def pre_registered_tool(message: str) -> str:
+        return f"Pre-registered: {message}"
+
+    pre_tool = Tool(name="pre_tool", description="Pre-registered tool", func_or_tool=pre_registered_tool)
+    agent.register_for_llm()(pre_tool)
+
+    assert len(agent.llm_config.get("tools", [])) == 1
+
+    # Mirrors the user-facing pattern that triggers the bug (e.g., DeepResearchAgent
+    # called as agent.run(tools=agent.tools, ...)).
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        with agent._create_or_get_executor(tools=agent.tools) as executor:
+            tool_names = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+            assert tool_names == ["pre_tool"]
+            assert "pre_tool" in executor.function_map
+
+    # Pre-existing tool must remain registered on the agent after the context exits.
+    tool_names_after = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    assert tool_names_after == ["pre_tool"]
 
 
 class TestAsyncReplyFunctionSkipping:

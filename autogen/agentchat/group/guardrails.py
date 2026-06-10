@@ -62,7 +62,7 @@ class LLMGuardrail(Guardrail):
             raise ValueError("LLMConfig is required.")
 
         self.llm_config = llm_config.deepcopy()
-        setattr(self.llm_config, "response_format", GuardrailResult)
+        setattr(self.llm_config, "response_format", GuardrailCheckResult)
         self.client = OpenAIWrapper(**self.llm_config.model_dump())
 
         self.check_prompt = f"""You are a guardrail that checks if a condition is met in the conversation you are given.
@@ -145,12 +145,17 @@ class RegexGuardrail(Guardrail):
         return GuardrailResult(activated=False, justification="No match found in the context.", guardrail=self)
 
 
-class GuardrailResult(BaseModel):
-    """Represents the outcome of a guardrail check."""
+class GuardrailCheckResult(BaseModel):
+    """LLM-facing JSON schema for a guardrail check."""
 
     activated: bool
-    guardrail: Guardrail
     justification: str = Field(default="No justification provided")
+
+
+class GuardrailResult(GuardrailCheckResult):
+    """Represents the outcome of a guardrail check."""
+
+    guardrail: Guardrail
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -174,6 +179,7 @@ class GuardrailResult(BaseModel):
         """
         try:
             data = json.loads(text)
-            return GuardrailResult(**data, guardrail=guardrail)
+            parsed = GuardrailCheckResult.model_validate(data)
+            return GuardrailResult(**parsed.model_dump(), guardrail=guardrail)
         except (json.JSONDecodeError, ValueError) as e:
             raise ValueError(f"Failed to parse GuardrailResult from text: {text}") from e

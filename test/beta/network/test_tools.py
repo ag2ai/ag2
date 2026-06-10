@@ -24,6 +24,7 @@ from autogen.beta import Agent, Context
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
+    EV_TASK_CANCEL_REQUEST,
     Hub,
     HubClient,
     LocalLink,
@@ -36,6 +37,7 @@ from autogen.beta.network.client.tools.peers import make_peers_tool
 from autogen.beta.network.client.tools.tasks import make_tasks_tool
 from autogen.beta.network.policies import AGENT_CLIENT_DEP, CHANNEL_DEP
 from autogen.beta.stream import MemoryStream
+from autogen.beta.task import TaskMetadata, TaskSpec, TaskState
 from autogen.beta.testing import TestConfig
 
 
@@ -361,6 +363,161 @@ async def test_tasks_status_unknown_task_returns_error() -> None:
     assert "not found" in result
 
     await alice_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_tasks_cancel_posts_cancel_request_envelope_to_owner() -> None:
+    """``tasks(action="cancel")`` posts an ``ag2.task.cancel_request``
+    envelope into the task's channel addressed to the owner. The owner
+    is free to honour or ignore — the framework only delivers the ask.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+
+    channel = await alice.open(type="conversation", target="bob")
+
+    # Plant a long-running task in the hub on bob's behalf, associated with
+    # the open channel so the cancel verb has somewhere to ride.
+    await hub.observe_task(
+        TaskMetadata(
+            task_id="task-bob-1",
+            owner_id=bob.agent_id,
+            spec=TaskSpec(title="long index"),
+            state=TaskState.RUNNING,
+            channel_id=channel.channel_id,
+        )
+    )
+
+    tool = make_tasks_tool(alice)
+    deps = {AGENT_CLIENT_DEP: alice}
+    result = await _invoke(
+        tool,
+        {"action": "cancel", "task_id": "task-bob-1", "reason": "wrap up"},
+        dependencies=deps,
+    )
+    assert isinstance(result, str)
+    assert "cancel_request posted" in result
+
+    wal = await hub.read_wal(channel.channel_id)
+    requests = [e for e in wal if e.event_type == EV_TASK_CANCEL_REQUEST]
+    assert len(requests) == 1
+    assert requests[0].event_data == {"task_id": "task-bob-1", "reason": "wrap up"}
+    assert requests[0].audience == [bob.agent_id]
+    assert requests[0].sender_id == alice.agent_id
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_tasks_cancel_without_task_id_returns_error() -> None:
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+
+    tool = make_tasks_tool(alice)
+    deps = {AGENT_CLIENT_DEP: alice}
+    result = await _invoke(tool, {"action": "cancel"}, dependencies=deps)
+    assert isinstance(result, str)
+    assert "requires `task_id`" in result
+
+    await alice_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_tasks_cancel_unknown_task_returns_error() -> None:
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+
+    tool = make_tasks_tool(alice)
+    deps = {AGENT_CLIENT_DEP: alice}
+    result = await _invoke(tool, {"action": "cancel", "task_id": "ghost"}, dependencies=deps)
+    assert isinstance(result, str)
+    assert "not found" in result
+
+    await alice_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_tasks_cancel_terminal_task_is_a_no_op_with_message() -> None:
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+
+    # Plant a COMPLETED task; cancel must report it without posting an envelope.
+    await hub.observe_task(
+        TaskMetadata(
+            task_id="task-done",
+            owner_id=bob.agent_id,
+            spec=TaskSpec(title="x"),
+            state=TaskState.COMPLETED,
+        )
+    )
+
+    tool = make_tasks_tool(alice)
+    deps = {AGENT_CLIENT_DEP: alice}
+    result = await _invoke(tool, {"action": "cancel", "task_id": "task-done"}, dependencies=deps)
+    assert isinstance(result, str)
+    assert "already completed" in result
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_tasks_cancel_task_without_channel_returns_error() -> None:
+    """Cancel-requests ride on the task's channel; without one there's
+    nowhere to address the envelope."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+
+    await hub.observe_task(
+        TaskMetadata(
+            task_id="task-orphan",
+            owner_id=bob.agent_id,
+            spec=TaskSpec(title="standalone"),
+            state=TaskState.RUNNING,
+        )
+    )
+
+    tool = make_tasks_tool(alice)
+    deps = {AGENT_CLIENT_DEP: alice}
+    result = await _invoke(tool, {"action": "cancel", "task_id": "task-orphan"}, dependencies=deps)
+    assert isinstance(result, str)
+    assert "no associated channel" in result
+
+    await alice_hc.close()
+    await bob_hc.close()
     await hub.close()
 
 

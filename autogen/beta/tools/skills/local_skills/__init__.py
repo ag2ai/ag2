@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .plugin import SkillPlugin
 from .toolkit import SkillsToolkit
 
-__all__ = ("SkillsToolkit",)
+__all__ = (
+    "SkillPlugin",
+    "SkillsToolkit",
+)

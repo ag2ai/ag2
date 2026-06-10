@@ -15,11 +15,11 @@ Cross-process transports satisfy the same Protocol surface.
 """
 
 from collections.abc import AsyncIterator
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from .frames import Frame
 
-__all__ = ("LinkClient", "LinkEndpoint")
+__all__ = ("LinkClient", "LinkEndpoint", "LinkFactory")
 
 
 class LinkClient(Protocol):
@@ -75,4 +75,21 @@ class LinkEndpoint(Protocol):
 
     async def close(self) -> None:
         """Drain queues, signal close to the client-side handler."""
+        ...
+
+
+@runtime_checkable
+class LinkFactory(Protocol):
+    """Produces ``LinkClient`` connections to one hub.
+
+    ``HubClient`` holds a factory (``LocalLink`` in-process, ``WsLink``
+    over WebSocket) and calls :meth:`client` once to open its
+    connection. ``LocalLink`` additionally exposes a ``hub`` attribute
+    so an in-process ``HubClient`` can default to direct hub calls; a
+    wire factory has no such attribute and the ``HubClient`` routes
+    control-plane operations through ``RequestFrame`` RPC instead.
+    """
+
+    def client(self) -> LinkClient:
+        """Open (or allocate) a fresh ``LinkClient`` to the hub."""
         ...
