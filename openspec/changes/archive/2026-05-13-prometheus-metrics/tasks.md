@@ -21,7 +21,7 @@
 - [x] 4.1 Extend `on_llm_call` to emit `ag2_llm_calls_total` counter with all labels including `error_type`
 - [x] 4.2 Add duration tracking for `ag2_llm_call_duration_seconds` histogram with custom buckets
 - [x] 4.3 Implement `ag2_llm_tokens_total` counter with token type labels
-- [x] 4.4 Handle all token types: prompt, completion, cache_read_input, cache_creation_input
+- [x] 4.4 Handle all token types: prompt, completion, cache_read_input, cache_creation_input, thinking
 - [x] 4.5 Implement missing value normalization to "unknown"
 - [x] 4.6 Handle zero token values by omitting emission
 - [x] 4.7 Support streaming LLM responses for duration tracking

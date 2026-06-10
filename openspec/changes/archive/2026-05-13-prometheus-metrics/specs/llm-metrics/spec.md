@@ -53,6 +53,10 @@ The system SHALL emit a counter metric `ag2_llm_tokens_total` for token usage wi
 - **WHEN** an LLM response contains `cache_creation_input_tokens` in usage
 - **THEN** the counter is incremented with `token_type="cache_creation_input"` by the token count
 
+#### Scenario: Thinking tokens emitted
+- **WHEN** an LLM response contains `thinking_tokens` in usage
+- **THEN** the counter is incremented with `token_type="thinking"` by the token count
+
 #### Scenario: Zero token values omitted
 - **WHEN** an LLM response contains zero value for a token field
 - **THEN** that token type MAY be omitted from emission

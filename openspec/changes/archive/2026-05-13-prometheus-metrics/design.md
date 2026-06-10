@@ -14,7 +14,7 @@ The framework provides the necessary building blocks:
 - Use `prometheus_client` for direct Prometheus exposition
 - Emit counters and histograms for all runtime phases
 - Handle missing values by normalizing to `"unknown"`
-- Support all token types: `prompt`, `completion`, `cache_read_input`, `cache_creation_input`
+- Support all token types: `prompt`, `completion`, `cache_read_input`, `cache_creation_input`, `thinking`
 - Extract agent name from context via internal dependency key
 
 **Non-Goals:**

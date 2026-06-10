@@ -20,7 +20,7 @@ Operators need Prometheus-compatible metrics to monitor AG2 Beta workloads in pr
 - `ag2_human_input_duration_seconds` — human input duration with custom buckets: `[1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1200.0, 1800.0, 3600.0, +Inf]`
 
 ### Token Types
-Supported `token_type` values: `input`, `output`, `cache_read_input`, `cache_creation_input`
+Supported `token_type` values: `input`, `output`, `cache_read_input`, `cache_creation_input`, `thinking`
 
 ### Label Strategy
 - **Outcome labeling**: Single `outcome` label with values `"success"` or `"error"`, plus optional `error_type` label with exception name when `outcome="error"`
