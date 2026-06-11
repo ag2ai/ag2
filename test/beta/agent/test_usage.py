@@ -25,8 +25,9 @@ class TestAgentReplyUsage:
 
         reply = await agent.ask("Hello")
 
-        assert reply.usage.total == Usage(prompt_tokens=12, completion_tokens=3)
-        assert reply.usage.by_model == {"claude": Usage(prompt_tokens=12, completion_tokens=3)}
+        usage = await reply.usage()
+        assert usage.total == Usage(prompt_tokens=12, completion_tokens=3)
+        assert usage.by_model == {"claude": Usage(prompt_tokens=12, completion_tokens=3)}
 
     async def test_accumulates_over_run(self) -> None:
         agent = Agent("", config=TestConfig(_response("first", 10, 2), _response("second", 5, 1)))
@@ -35,5 +36,6 @@ class TestAgentReplyUsage:
         reply = await reply.ask("Follow up")
 
         # whole run accumulates all turns on the stream
-        assert reply.usage.total == Usage(prompt_tokens=15, completion_tokens=3)
-        assert len(reply.usage.records) == 2
+        usage = await reply.usage()
+        assert usage.total == Usage(prompt_tokens=15, completion_tokens=3)
+        assert len(usage.records) == 2

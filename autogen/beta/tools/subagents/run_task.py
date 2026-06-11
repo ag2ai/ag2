@@ -18,7 +18,7 @@ from autogen.beta.events import (
 from autogen.beta.stream import MemoryStream, Stream
 
 if TYPE_CHECKING:
-    from autogen.beta.agent import Agent, AgentReply
+    from autogen.beta.agent import Agent
 
 
 @dataclass
@@ -30,11 +30,6 @@ class TaskResult:
     stream: "Stream"
     usage: Usage
     error: Exception | None = None
-
-
-def _reply_usage(reply: "AgentReply | None") -> Usage:
-    """Sum token usage across the sub-agent's whole run, defaulting to empty."""
-    return reply.usage.total if reply else Usage()
 
 
 def _make_hitl_bridge(parent_context: Context):
@@ -106,7 +101,7 @@ async def run_task(
             variables=parent_context.variables.copy(),
         )
 
-        usage = _reply_usage(reply)
+        usage = (await reply.usage()).total
 
         result = TaskResult(
             task_id=task_id,

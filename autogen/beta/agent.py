@@ -177,7 +177,6 @@ class AgentReply(Generic[TResult, TAgent]):
         agent: "Agent[TAgent]",
         provider: Provider | None,
         response_schema: ResponseProto[TResult] | None,
-        events: Iterable[BaseEvent] = (),
     ) -> None:
         self.response = response
         self.context = context
@@ -185,7 +184,6 @@ class AgentReply(Generic[TResult, TAgent]):
         self.__agent = agent
         self.__provider = provider
         self.__schema = response_schema
-        self.__events = list(events)
 
     async def content(
         self,
@@ -242,10 +240,9 @@ class AgentReply(Generic[TResult, TAgent]):
     def history(self) -> History:
         return self.context.stream.history
 
-    @property
-    def usage(self) -> UsageReport:
+    async def usage(self) -> UsageReport:
         """Token usage aggregated over the whole run (all events on this stream)."""
-        return UsageReport.from_events(self.__events)
+        return UsageReport.from_events(await self.context.stream.history.get_events())
 
     @overload
     async def ask(
@@ -1211,7 +1208,6 @@ class Agent(Generic[TResult]):
                         client=client,
                         provider=self.dependency_provider,
                         response_schema=final_schema,
-                        events=list(await context.stream.history.get_events()),
                     )
                 finally:
                     # Emit Completed while observers are still registered,
