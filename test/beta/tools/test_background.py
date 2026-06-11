@@ -27,8 +27,12 @@ class TestBackgroundDelivery:
 
         @tool
         async def wait_for_bg(ctx: Context) -> str:
-            """Yield until the background subagent has appended to the inbox."""
-            for _ in range(200):
+            """Yield until the background subagent's message has been drained."""
+            for _ in range(300):
+                events = list(await ctx.stream.history.get_events())
+                drained = [e for e in events if isinstance(e, DrainedModelRequest)]
+                if any("Research findings." in p.content for r in drained for p in r.parts if hasattr(p, "content")):
+                    return "ok"
                 if ctx.pending_messages:
                     return "ok"
                 await asyncio.sleep(0.01)
