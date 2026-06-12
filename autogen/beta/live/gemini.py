@@ -27,6 +27,8 @@ from autogen.beta.events import (
     ToolResultEvent,
     TranscriptionChunkEvent,
     TranscriptionCompletedEvent,
+    Usage,
+    UsageEvent,
 )
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -206,7 +208,7 @@ class RealTimeConfig(RealtimeConfig):
                 context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
                 context.stream.where(ToolResultEvent).sub_scope(_forward_tool_result),
             ):
-                recv_task = asyncio.create_task(_pump_events(session, context))
+                recv_task = asyncio.create_task(_pump_events(session, context, self.model))
 
                 try:
                     yield
@@ -257,14 +259,28 @@ async def _send_tool_result(
     )
 
 
+def normalize_realtime_usage(metadata: "gtypes.UsageMetadata | None") -> Usage:
+    if metadata is None:
+        return Usage()
+    return Usage(
+        prompt_tokens=metadata.prompt_token_count,
+        completion_tokens=metadata.response_token_count,
+        total_tokens=metadata.total_token_count,
+        cache_read_input_tokens=metadata.cached_content_token_count,
+        thinking_tokens=metadata.thoughts_token_count,
+    )
+
+
 async def _pump_events(
     session: AsyncSession,
     context: ConversationContext,
+    model: str,
 ) -> None:
     # `session.receive()` is a per-turn iterator (it breaks after each
     # `turn_complete`), so wrap it in a loop to keep the conversation
     # alive across turns. An empty receive() means the connection closed.
     text = ""
+    usage = Usage()
     while True:
         had_message = False
         async for message in session.receive():
@@ -272,6 +288,11 @@ async def _pump_events(
 
             emitted = await _handle_server_content(message.server_content, context)
             text += emitted
+
+            # Usage arrives on its own message field (not server_content), often
+            # only once per turn; keep the latest seen value for the rollup.
+            if message.usage_metadata is not None:
+                usage = normalize_realtime_usage(message.usage_metadata)
 
             if message.tool_call is not None:
                 for fc in message.tool_call.function_calls or ():
@@ -285,12 +306,20 @@ async def _pump_events(
                         )
 
             if message.server_content is not None and message.server_content.turn_complete:
+                if usage:
+                    await context.send(
+                        UsageEvent(usage, kind="model_call", model=model, provider="gemini"),
+                    )
                 await context.send(
                     ModelResponse(
                         message=ModelMessage(text) if text else None,
+                        usage=usage,
+                        model=model,
+                        provider="gemini",
                     ),
                 )
                 text = ""
+                usage = Usage()
 
         if not had_message:
             return

@@ -20,7 +20,7 @@ from fast_depends.pydantic import PydanticSerializer
 from autogen.beta.annotations import Context
 from autogen.beta.config import ModelConfig
 from autogen.beta.context import ConversationContext
-from autogen.beta.events import BaseEvent, ModelRequest
+from autogen.beta.events import BaseEvent, ModelRequest, UsageEvent
 from autogen.beta.stream import MemoryStream
 
 from .knowledge import EventLogWriter, KnowledgeStore
@@ -140,14 +140,14 @@ class SummarizeCompact:
             await writer.persist_dropped(context.stream.id, old)
 
         # Summarize via LLM
-        summary_text = await self._summarize(old)
+        summary_text = await self._summarize(old, context)
         summary_event = CompactionSummary(
             summary=summary_text,
             event_count=len(old),
         )
         return [summary_event] + recent
 
-    async def _summarize(self, events: list[BaseEvent]) -> str:
+    async def _summarize(self, events: list[BaseEvent], context: Context) -> str:
         client = self._config.create()
         prompt_event = ModelRequest.ensure_request([
             "Summarize the following conversation history concisely, "
@@ -161,4 +161,15 @@ class SummarizeCompact:
             serializer=self._serializer,
         )
         self.last_usage = response.usage if hasattr(response, "usage") and response.usage else {}
+        # The summarization call runs on a throwaway stream; surface its usage
+        # onto the real agent stream so it isn't lost to monitoring.
+        if response.usage:
+            await context.send(
+                UsageEvent(
+                    response.usage,
+                    kind="compaction",
+                    model=response.model,
+                    provider=response.provider,
+                )
+            )
         return response.content or ""

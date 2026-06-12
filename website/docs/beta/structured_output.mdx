@@ -371,6 +371,9 @@ def validate_with_context(content: str, context: Context) -> str:
 
 Some models or providers do not support API-level structured output (no `response_format` JSON schema). `PromptedSchema` **injects the JSON Schema into the system prompt** and sets `json_schema` to `None` on the wire so the client does not request native structured mode. Validation still goes through the inner schema’s `validate` method.
 
+!!! note
+    **Amazon Bedrock** supports [native structured output](https://docs.aws.amazon.com/bedrock/latest/userguide/structured-output.html){.external-link target="_blank"} on the Converse API — `BedrockConfig` sends schemas via `outputConfig` automatically. Support is model-dependent (check the Bedrock model pages), and Bedrock compiles each new schema on first use, so the first request with a given schema can take noticeably longer than subsequent ones.
+
 ```python linenums="1" hl_lines="6"
 from autogen.beta import Agent, PromptedSchema
 

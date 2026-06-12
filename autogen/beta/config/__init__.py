@@ -22,6 +22,11 @@ except ImportError as e:
     AnthropicConfig = missing_optional_dependency("AnthropicConfig", "anthropic", e)  # type: ignore[misc]
 
 try:
+    from .bedrock import BedrockConfig
+except ImportError as e:
+    BedrockConfig = missing_optional_dependency("BedrockConfig", "bedrock", e)  # type: ignore[misc]
+
+try:
     from .dashscope import DashScopeConfig
 except ImportError as e:
     DashScopeConfig = missing_optional_dependency("DashScopeConfig", "dashscope", e)  # type: ignore[misc]
@@ -44,6 +49,7 @@ except ImportError as e:
 
 __all__ = (
     "AnthropicConfig",
+    "BedrockConfig",
     "ContainerInfo",
     "ContainerManager",
     "DashScopeConfig",
