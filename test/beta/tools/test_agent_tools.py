@@ -109,28 +109,39 @@ async def test_final_tool() -> None:
 
 @pytest.mark.asyncio()
 async def test_concurrent_tool_execution() -> None:
-    """Test that multiple tools are executed concurrently, not sequentially."""
-    execution_order: list[str] = []
+    """Test that multiple tools are executed concurrently, not sequentially.
+
+    Each tool blocks on a shared barrier that only releases once all three
+    have started. Concurrent execution releases it immediately; sequential
+    execution leaves the earlier tools waiting, so their bounded wait expires
+    and they never record completion — failing the ``finished`` assertion
+    fast instead of hanging.
+    """
+    started = 0
+    all_started = asyncio.Event()
+    finished: list[str] = []
+
+    async def _run(name: str) -> str:
+        nonlocal started
+        started += 1
+        if started == 3:
+            all_started.set()
+        try:
+            await asyncio.wait_for(all_started.wait(), timeout=2.0)
+        except asyncio.TimeoutError:
+            return "not-concurrent"
+        finished.append(name)
+        return f"result_{name}"
 
     async def slow_tool_a() -> str:
-        execution_order.append("a_start")
-        await asyncio.sleep(0.005)  # Simulate slow operation
-        execution_order.append("a_end")
-        return "result_a"
+        return await _run("a")
 
     async def slow_tool_b() -> str:
-        execution_order.append("b_start")
-        await asyncio.sleep(0.005)  # Simulate slow operation
-        execution_order.append("b_end")
-        return "result_b"
+        return await _run("b")
 
     async def slow_tool_c() -> str:
-        execution_order.append("c_start")
-        await asyncio.sleep(0.005)  # Simulate slow operation
-        execution_order.append("c_end")
-        return "result_c"
+        return await _run("c")
 
-    # Create an agent with multiple slow tools
     agent = Agent(
         "test_agent",
         tools=[slow_tool_a, slow_tool_b, slow_tool_c],
@@ -148,30 +159,7 @@ async def test_concurrent_tool_execution() -> None:
         ),
     )
 
-    # Trigger tool calls - they should execute concurrently
     result = await agent.ask("Execute all tools")
     assert result.body == "result"
-
-    # Verify all tools were executed
-    assert "a_start" in execution_order
-    assert "b_start" in execution_order
-    assert "c_start" in execution_order
-    assert "a_end" in execution_order
-    assert "b_end" in execution_order
-    assert "c_end" in execution_order
-
-    # Verify tools started before any finished (concurrent execution)
-    # All starts should happen before all ends
-    start_indices = [
-        execution_order.index("a_start"),
-        execution_order.index("b_start"),
-        execution_order.index("c_start"),
-    ]
-    end_indices = [
-        execution_order.index("a_end"),
-        execution_order.index("b_end"),
-        execution_order.index("c_end"),
-    ]
-
-    # The last start should happen before the first end for true concurrency
-    assert max(start_indices) < min(end_indices), "Tools should start executing concurrently"
+    assert started == 3
+    assert sorted(finished) == ["a", "b", "c"]
