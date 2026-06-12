@@ -24,7 +24,7 @@ This is the companion post to the AG2 Network series:
 
 ## The Harness
 
-![A single agent node showing MemoryStream at the bottom, AssemblyPolicy building the LLM context window from events, and three middleware call sites (on_turn, on_llm_call, on_tool_execution) wrapping the LLM call. TokenMonitor and LoopDetector observe the stream from the side.](img/harness.webp)
+![A single agent node: an inner LLM-and-Tools loop wrapped by the harness. AssemblyPolicy builds the context window before each call; four middleware call sites (on_turn, on_llm_call, on_tool_execution, on_human_input) wrap each operation; every event lands on the append-only MemoryStream; TokenMonitor and LoopDetector observe the stream; and a persistent Knowledge store (working memory, conversation summaries, event log) underpins it all — injected into assembly at the start of a turn and rewritten by aggregation at the end.](img/harness.webp)
 
 The `Agent` class in `autogen.beta` is a thin coordinator. It stitches together six independently-pluggable layers:
 
