@@ -24,8 +24,6 @@ This is the companion post to the AG2 Network series:
 
 ## The Harness
 
-![A single agent node: an inner LLM-and-Tools loop wrapped by the harness. AssemblyPolicy builds the context window before each call; four middleware call sites (on_turn, on_llm_call, on_tool_execution, on_human_input) wrap each operation; every event lands on the append-only MemoryStream; TokenMonitor and LoopDetector observe the stream; and a persistent Knowledge store (working memory, conversation summaries, event log) underpins it all — injected into assembly at the start of a turn and rewritten by aggregation at the end.](img/harness.webp)
-
 The `Agent` class in `autogen.beta` is a thin coordinator. It stitches together six independently-pluggable layers:
 
 | Layer | Role |
@@ -182,7 +180,11 @@ The `Middleware(cls, **kwargs)` wrapper is a factory: a new `BaseMiddleware` ins
 
 ### Built-in middleware
 
-AG2 ships `TelemetryMiddleware` (OpenTelemetry traces, spans, LLM semantic attributes) and `LoggingMiddleware` out of the box. See the [middleware docs](/docs/beta/middleware) for the full reference.
+AG2 ships `TelemetryMiddleware` (OpenTelemetry traces, spans, LLM semantic attributes) and `LoggingMiddleware` out of the box, plus history limiters — `HistoryLimiter` caps the history by event count, and `TokenLimiter` caps it by a token budget, trimming the conversation to fit before each call:
+
+![TokenLimiter middleware keeping the context window within a token budget: the MemoryStream conversation history measured against an 8,192-token budget limit; a TokenLimiter panel (max_tokens 8,192, chars_per_token 4, status nominal); and Assembly reading turns 5–12 into a 6,827-token context window for the LLM call.](img/harness.webp)
+
+See the [middleware docs](/docs/beta/middleware) for the full reference.
 
 ## Tools — @tool, Toolkit, and subagent delegation
 
