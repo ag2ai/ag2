@@ -48,6 +48,7 @@ from .events import (
     Input,
     ModelRequest,
     ModelResponse,
+    ToolCallsEvent,
     ToolResultsEvent,
     UsageEvent,
 )
@@ -1843,7 +1844,7 @@ class _AggregationMiddleware(BaseMiddleware):
         event: BaseEvent,
         context: Context,
     ) -> Any:
-        count_before = len(list(await context.stream.history.get_events()))
+        events_before = list(await context.stream.history.get_events())
 
         try:
             result = await call_next(event, context)
@@ -1863,7 +1864,11 @@ class _AggregationMiddleware(BaseMiddleware):
 
             if self._trigger.every_n_events > 0:
                 threshold = self._trigger.every_n_events
-                if count_after // threshold > count_before // threshold:
+                # Count conversational/work events only, not telemetry (e.g. UsageEvent).
+                _countable = (ModelRequest, ModelResponse, ToolCallsEvent, ToolResultsEvent)
+                n_before = sum(1 for e in events_before if isinstance(e, _countable))
+                n_after = sum(1 for e in events_after if isinstance(e, _countable))
+                if n_after // threshold > n_before // threshold:
                     should_aggregate = True
 
             if should_aggregate:
