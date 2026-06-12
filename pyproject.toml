@@ -392,6 +392,7 @@ dev = [
 optionals = [
     "ag2[redis]",
     "ag2[ag-ui]",
+    "ag2[mcp]", # autogen.beta.mcp — serve an Agent as an MCP server
     "ag2[tracing]",
     "ag2[watchdog]", # DiskKnowledgeStore
     # code execution

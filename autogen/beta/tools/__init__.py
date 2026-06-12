@@ -26,7 +26,7 @@ from .sandbox import LocalEnvironment
 from .search import DuckDuckSearchTool, PerplexitySearchToolkit, TavilySearchTool
 from .shell import SandboxShellTool
 from .skills import SkillPlugin, SkillSearchToolkit, SkillsToolkit
-from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
+from .toolkits import FilesystemToolkit, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
 
 __all__ = (
     "CodeExecutionTool",
@@ -36,10 +36,10 @@ __all__ = (
     "FilesystemToolkit",
     "ImageGenerationTool",
     "LocalEnvironment",
-    "MCPServer",
     "MCPServerConfig",
     "MCPServerTool",
     "MCPStdioServerConfig",
+    "MCPToolkit",
     "MemoryTool",
     "NetworkPolicy",
     "PerplexitySearchToolkit",

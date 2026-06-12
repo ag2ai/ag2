@@ -13,11 +13,12 @@ from autogen.beta.events import (
     TaskFailed,
     TaskStarted,
     Usage,
+    UsageEvent,
 )
 from autogen.beta.stream import MemoryStream, Stream
 
 if TYPE_CHECKING:
-    from autogen.beta.agent import Agent, AgentReply
+    from autogen.beta.agent import Agent
 
 
 @dataclass
@@ -29,13 +30,6 @@ class TaskResult:
     stream: "Stream"
     usage: Usage
     error: Exception | None = None
-
-
-def _reply_usage(reply: "AgentReply | None") -> Usage:
-    """Pull the typed Usage from an AgentReply, defaulting to an empty Usage."""
-    if reply and reply.response and reply.response.usage:
-        return reply.response.usage
-    return Usage()
 
 
 def _make_hitl_bridge(parent_context: Context):
@@ -107,7 +101,7 @@ async def run_task(
             variables=parent_context.variables.copy(),
         )
 
-        usage = _reply_usage(reply)
+        usage = (await reply.usage()).total
 
         result = TaskResult(
             task_id=task_id,
@@ -119,6 +113,13 @@ async def run_task(
         )
 
         if emit_events:
+            # The sub-agent's per-call UsageEvents live on its private stream;
+            # emit a single rollup onto the parent so the parent's usage report
+            # accounts for the sub-task without seeing its individual calls.
+            if usage:
+                await parent_context.send(
+                    UsageEvent(usage, kind="subtask", label=agent.name),
+                )
             await parent_context.send(
                 TaskCompleted(
                     task_id=task_id,

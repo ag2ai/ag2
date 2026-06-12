@@ -23,6 +23,7 @@ from autogen.beta.tools.final import FunctionParameters, FunctionTool, FunctionT
 from autogen.beta.tools.final import tool as _tool
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
+from autogen.beta.usage import UsageReport
 
 
 class RealtimeConfig(Protocol):
@@ -226,6 +227,12 @@ class LiveAgent:
     def add_observer(self, observer: Observer) -> None:
         """Register an observer (before calling run())."""
         self._observers.append(observer)
+
+    @staticmethod
+    async def usage_report(context: ConversationContext) -> UsageReport:
+        """Aggregate token usage over the live session's event log."""
+        events = await context.stream.history.get_events()
+        return UsageReport.from_events(events)
 
     @asynccontextmanager
     async def run(

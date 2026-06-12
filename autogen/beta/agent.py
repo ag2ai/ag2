@@ -49,6 +49,7 @@ from .events import (
     ModelRequest,
     ModelResponse,
     ToolResultsEvent,
+    UsageEvent,
 )
 from .events.conditions import Condition
 from .events.lifecycle import (
@@ -85,6 +86,7 @@ from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
 from .types import ClassInfo, Omittable, omit
+from .usage import UsageReport
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
@@ -237,6 +239,10 @@ class AgentReply(Generic[TResult, TAgent]):
     @property
     def history(self) -> History:
         return self.context.stream.history
+
+    async def usage(self) -> UsageReport:
+        """Token usage aggregated over the whole run (all events on this stream)."""
+        return UsageReport.from_events(await self.context.stream.history.get_events())
 
     @overload
     async def ask(
@@ -1141,6 +1147,19 @@ class Agent(Generic[TResult]):
 
                 messages = await context.stream.history.get_events()
                 result = await llm_call(messages, context)
+                # Emit usage at the point it is spent, decoupled from the
+                # response, so token accounting never depends on a response
+                # being produced. UsageReport reads these events alone.
+                if result.usage:
+                    await context.send(
+                        UsageEvent(
+                            result.usage,
+                            kind="model_call",
+                            model=result.model,
+                            provider=result.provider,
+                            finish_reason=result.finish_reason,
+                        )
+                    )
                 await context.send(result)
 
             with ExitStack() as stack:
