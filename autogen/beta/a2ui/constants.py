@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.a2a.constants import A2UI_MIME_TYPE
-
+A2UI_MIME_TYPE = "application/json+a2ui"
 A2UI_DEFAULT_DELIMITER = "---a2ui_JSON---"
 A2UI_DEFAULT_VERSION = "v0.9"
 A2UI_DEFAULT_ACTIVITY_TYPE = "a2ui-surface"

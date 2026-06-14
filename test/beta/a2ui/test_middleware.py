@@ -5,6 +5,8 @@
 import pytest
 
 from autogen.beta.a2ui import A2UIAgent
+from autogen.beta.a2ui.middleware import _degrade_to_text
+from autogen.beta.events import ModelMessage
 from autogen.beta.testing import TestConfig
 
 VALID_RESPONSE = (
@@ -87,3 +89,16 @@ class TestA2UIValidationMiddleware:
         )
         reply = await agent.ask("Show UI")
         assert reply.body == INVALID_RESPONSE_MISSING_CATALOG
+
+
+class TestDegradeToText:
+    def test_preserves_original_metadata(self) -> None:
+        original = ModelMessage("full text", metadata={"trace_id": "abc", "provider": "x"})
+        degraded = _degrade_to_text(original, "text only")
+        assert degraded.content == "text only"
+        assert degraded.metadata == {"trace_id": "abc", "provider": "x"}
+
+    def test_handles_none_message(self) -> None:
+        degraded = _degrade_to_text(None, "text only")
+        assert degraded.content == "text only"
+        assert degraded.metadata == {}

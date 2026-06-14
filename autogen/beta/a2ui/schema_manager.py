@@ -5,21 +5,13 @@
 import json
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from autogen.import_utils import optional_import_block
+from referencing import Registry, Resource
+from referencing.jsonschema import DRAFT202012
 
 from ._types import JsonObject, JsonSchema, JsonValue  # noqa: F401
 from .actions import A2UIAction
 from .constants import A2UI_DEFAULT_DELIMITER
-
-with optional_import_block():
-    from referencing import Registry, Resource
-    from referencing.jsonschema import DRAFT202012
-
-if TYPE_CHECKING:
-    # Imported for typing only; runtime import happens via ``optional_import_block``.
-    from referencing import Registry  # noqa: F811
 
 _VERSIONS_DIR = Path(__file__).parent
 
@@ -105,8 +97,13 @@ class A2UISchemaManager:
                 self._custom_catalog = custom_catalog
             else:
                 path = Path(custom_catalog)
-                with open(path) as f:
-                    self._custom_catalog = json.load(f)
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        self._custom_catalog = json.load(f)
+                except FileNotFoundError as e:
+                    raise FileNotFoundError(f"Custom catalog file not found: {path}") from e
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"Custom catalog file {path} is not valid JSON: {e}") from e
 
         if self._custom_catalog is not None:
             if "$id" not in self._custom_catalog:
@@ -250,33 +247,41 @@ class A2UISchemaManager:
                 ))
         return Registry().with_resources(resources)
 
+    def _load_json_file(self, path: Path) -> "list[JsonValue] | JsonSchema":
+        """Load and parse a JSON file, raising a clear error on failure."""
+        try:
+            with open(path, encoding="utf-8") as f:
+                result: list[JsonValue] | JsonSchema = json.load(f)
+                return result
+        except FileNotFoundError as e:
+            raise FileNotFoundError(
+                f"A2UI spec file not found for protocol version {self._protocol_version!r}: {path}"
+            ) from e
+        except json.JSONDecodeError as e:
+            raise ValueError(f"A2UI spec file {path} is not valid JSON: {e}") from e
+
     def _load_spec_json(self, filename: str) -> JsonSchema:
         """Load a JSON file from the spec/ subdirectory (upstream A2UI files)."""
-        path = self._spec_dir / filename
-        with open(path) as f:
-            data: JsonSchema = json.load(f)
-            return data
+        data: JsonSchema = self._load_json_file(self._spec_dir / filename)  # type: ignore[assignment]
+        return data
 
     def _load_spec_text(self, filename: str) -> str:
         """Load a text file from the spec/ subdirectory (upstream A2UI files)."""
         path = self._spec_dir / filename
         if path.exists():
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 return f.read().strip()
         return ""
 
     def _load_version_json(self, filename: str) -> "list[JsonValue] | JsonSchema":
         """Load a JSON file from the version directory (our files)."""
-        path = self._version_dir / filename
-        with open(path) as f:
-            result: list[JsonValue] | JsonSchema = json.load(f)
-            return result
+        return self._load_json_file(self._version_dir / filename)
 
     def _load_version_text(self, filename: str) -> str:
         """Load a text file from the version directory (our files)."""
         path = self._version_dir / filename
         if path.exists():
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 return f.read().strip()
         return ""
 

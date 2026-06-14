@@ -20,6 +20,17 @@ from .parser import A2UIParseResult, A2UIResponseParser, A2UIValidationResult
 logger = logging.getLogger(__name__)
 
 
+def _degrade_to_text(original: ModelMessage | None, text: str) -> ModelMessage:
+    """Rebuild a text-only ``ModelMessage`` while preserving original metadata.
+
+    The graceful-degradation path strips A2UI JSON from the message content.
+    Rebuilding the message naively would drop any ``metadata`` the provider
+    attached (e.g. tracing/usage hints), so it is carried over here.
+    """
+    metadata = dict(original.metadata) if original is not None and original.metadata else {}
+    return ModelMessage(text, metadata=metadata)
+
+
 class A2UIValidationMiddleware(MiddlewareFactory):
     """Factory that builds an A2UI validation middleware per turn.
 
@@ -90,7 +101,7 @@ class _A2UIValidationMiddleware(BaseMiddleware):
                     "A2UI validation failed after %d attempt(s). Returning text-only response.",
                     attempt + 1,
                 )
-                response.message = ModelMessage(parse_result.text)
+                response.message = _degrade_to_text(response.message, parse_result.text)
                 return response
 
             logger.info(
@@ -114,7 +125,7 @@ class _A2UIValidationMiddleware(BaseMiddleware):
         # which currently cannot happen (the final attempt always returns above).
         assert response is not None
         if last_parse_result is not None:
-            response.message = ModelMessage(last_parse_result.text)
+            response.message = _degrade_to_text(response.message, last_parse_result.text)
         return response
 
     def _validate(self, response_text: str) -> "tuple[A2UIParseResult, list[str] | None]":

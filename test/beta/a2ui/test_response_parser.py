@@ -144,6 +144,17 @@ class TestA2UIResponseParserValidation:
         ]
         result = parser_with_schema.validate(ops)
         assert result.is_valid is False
+
+    def test_validate_non_dict_operation_does_not_raise(self, parser_with_schema: A2UIResponseParser) -> None:
+        # A non-iterable, non-dict operation (e.g. a bare number) must not crash
+        # validation with a TypeError — it is reported as invalid instead.
+        ops = [
+            {"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}},
+            123,
+        ]
+        result = parser_with_schema.validate(ops)  # type: ignore[arg-type]
+        assert result.is_valid is False
+        assert result.errors
         assert len(result.errors) == 1
         assert "Operation 1" in result.errors[0]
 

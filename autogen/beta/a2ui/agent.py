@@ -112,8 +112,18 @@ class A2UIAgent(Agent):
                 actions are auto-injected into the system prompt.
             system_message: Custom prefix system message. If None, uses
                 ``DEFAULT_SYSTEM_MESSAGE``.
-            **: All remaining keyword arguments are forwarded to
-                ``autogen.beta.Agent``.
+            hitl_hook: Human-in-the-loop hook, forwarded to ``autogen.beta.Agent``.
+            tools: Tools/callables the agent may call, forwarded to ``autogen.beta.Agent``.
+            middleware: Extra middleware factories, forwarded to ``autogen.beta.Agent``
+                (the A2UI validation middleware is appended automatically).
+            observers: Event observers, forwarded to ``autogen.beta.Agent``.
+            dependencies: Dependency-injection values, forwarded to ``autogen.beta.Agent``.
+            variables: Context variables, forwarded to ``autogen.beta.Agent``.
+            response_schema: Structured-output schema, forwarded to ``autogen.beta.Agent``.
+            plugins: Plugins, forwarded to ``autogen.beta.Agent``.
+            knowledge: Knowledge configuration, forwarded to ``autogen.beta.Agent``.
+            tasks: Sub-task delegation configuration, forwarded to ``autogen.beta.Agent``.
+            assembly: Assembly policies, forwarded to ``autogen.beta.Agent``.
         """
         self.schema_manager = A2UISchemaManager(
             protocol_version=protocol_version,

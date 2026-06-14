@@ -8,13 +8,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from autogen.import_utils import optional_import_block, require_optional_import
+import jsonschema
 
 from ._types import JsonSchema, ServerToClientMessage
 from .constants import A2UI_DEFAULT_DELIMITER
-
-with optional_import_block():
-    import jsonschema
 
 if TYPE_CHECKING:
     from referencing import Registry
@@ -158,7 +155,6 @@ class A2UIResponseParser:
         )
         return "\n".join(lines)
 
-    @require_optional_import(["jsonschema"], "a2ui")
     def validate(self, operations: Sequence[ServerToClientMessage]) -> A2UIValidationResult:
         """Validate A2UI operations against the server_to_client schema."""
         if self._schema is None:
@@ -190,6 +186,14 @@ class A2UIResponseParser:
                             jsonschema.validate(instance=op, schema=self._schema)
                     except jsonschema.ValidationError as e2:
                         errors.append(f"Operation {i}: {e2.message}")
+            except jsonschema.RefResolutionError as re:
+                # A ref we cannot resolve means we could not validate this op —
+                # surface it instead of letting it escape as an unhandled crash.
+                logger.warning("Schema ref resolution failed for operation %d: %s", i, re)
+                errors.append(f"Operation {i}: could not resolve schema reference ({re})")
+            except Exception as exc:
+                logger.warning("Unexpected error validating operation %d: %s", i, exc)
+                errors.append(f"Operation {i}: unexpected validation error ({exc})")
 
         # Spec rule (server_to_client.json + a2ui.org):
         # across all updateComponents ops, at least one component must have id 'root'.
@@ -213,15 +217,21 @@ class A2UIResponseParser:
 
     def _drill_into_components(self, op: ServerToClientMessage) -> list[str]:
         """Validate individual components in an updateComponents operation."""
+        if not isinstance(op, dict):
+            return [f"Expected operation to be an object, got {type(op).__name__}"]
         if "updateComponents" not in op or not self._component_schemas:
             return []
 
-        components = op.get("updateComponents", {}).get("components", [])
+        update_components = op.get("updateComponents")
+        components = update_components.get("components", []) if isinstance(update_components, dict) else []
         if not components:
             return []
 
         comp_errors: list[str] = []
         for comp in components:
+            if not isinstance(comp, dict):
+                comp_errors.append(f"Expected component to be an object, got {type(comp).__name__}")
+                continue
             comp_type = comp.get("component", "unknown")
             comp_id = comp.get("id", "?")
             schema = self._component_schemas.get(comp_type)
@@ -244,7 +254,12 @@ class A2UIResponseParser:
             except jsonschema.ValidationError as ce:
                 comp_errors.append(f"Component '{comp_id}' ({comp_type}): {ce.message}")
             except jsonschema.RefResolutionError as re:
+                # Do not swallow: a ref we cannot resolve means we could not
+                # validate the component, so surface it as an error instead of
+                # silently treating an unvalidated component as valid.
                 logger.warning("Schema ref resolution failed for component '%s' (%s): %s", comp_id, comp_type, re)
+                comp_errors.append(f"Component '{comp_id}' ({comp_type}): could not resolve schema reference ({re})")
             except Exception as exc:
                 logger.warning("Unexpected error validating component '%s' (%s): %s", comp_id, comp_type, exc)
+                comp_errors.append(f"Component '{comp_id}' ({comp_type}): unexpected validation error ({exc})")
         return comp_errors
