@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import jsonschema
 
 from ._types import A2UIVersion, JsonSchema, ServerToClientMessage
-from .constants import A2UI_DEFAULT_DELIMITER
+from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 if TYPE_CHECKING:
     from referencing import Registry
@@ -57,23 +57,76 @@ def strip_markdown_fences(text: str) -> str:
     return text.strip()
 
 
-class A2UIResponseParser:
-    """Parses and validates A2UI JSON from agent responses.
+def _parse_json_block(json_part: str) -> "tuple[list[ServerToClientMessage], str | None]":
+    """Parse the content of an ``<a2ui-json>`` block into A2UI messages.
 
-    Looks for a delimiter in the agent's response text, extracts the JSON
-    array after it, and optionally validates against the A2UI schema.
+    Supports both shapes the A2UI ecosystem uses inside the tag:
+
+    - a JSON **array** (or single object) — the form the official prompt
+      examples instruct the LLM to emit;
+    - **JSONL** — one JSON object per line, the canonical A2UI wire format.
+
+    Returns ``(operations, parse_error)``; ``parse_error`` is ``None`` on
+    success. A whole-block parse is attempted first; only if that fails is the
+    block re-parsed line-by-line as JSONL.
+    """
+    try:
+        parsed = json.loads(json_part)
+    except json.JSONDecodeError as whole_error:
+        operations, jsonl_error = _parse_jsonl(json_part)
+        if jsonl_error is None:
+            return operations, None
+        # Surface the whole-block error: it's the more informative one when
+        # the block was meant to be a single array/object.
+        return [], f"Invalid JSON: {whole_error}"
+
+    if isinstance(parsed, dict):
+        return [parsed], None
+    if isinstance(parsed, list):
+        return parsed, None
+    return [], f"Expected JSON array or object, got {type(parsed).__name__}"
+
+
+def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | None]":
+    """Parse a JSONL block (one JSON value per line) into A2UI messages."""
+    operations: list[ServerToClientMessage] = []
+    for line in json_part.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as e:
+            return [], f"Invalid JSON: {e}"
+        if not isinstance(value, dict):
+            return [], f"Expected JSON object per line, got {type(value).__name__}"
+        operations.append(value)
+    if not operations:
+        return [], "No JSON objects found"
+    return operations, None
+
+
+class A2UIResponseParser:
+    """Parses and validates A2UI messages from agent responses.
+
+    Extracts the block the LLM wraps between the official A2UI tags
+    (``<a2ui-json>…</a2ui-json>``), treating everything outside the tag as
+    conversational prose, and optionally validates the messages against the
+    A2UI schema.
     """
 
     def __init__(
         self,
         version_string: A2UIVersion,
-        delimiter: str = A2UI_DEFAULT_DELIMITER,
+        open_tag: str = A2UI_JSON_OPEN_TAG,
+        close_tag: str = A2UI_JSON_CLOSE_TAG,
         server_to_client_schema: JsonSchema | None = None,
         schema_registry: "Registry | None" = None,
         component_schemas: dict[str, JsonSchema] | None = None,
         catalog_id: str | None = None,
     ) -> None:
-        self._delimiter = delimiter
+        self._open_tag = open_tag
+        self._close_tag = close_tag
         self._schema = server_to_client_schema
         self._registry = schema_registry
         self._version_string = version_string
@@ -81,58 +134,67 @@ class A2UIResponseParser:
         self._catalog_id = catalog_id
 
     @property
-    def delimiter(self) -> str:
-        return self._delimiter
+    def open_tag(self) -> str:
+        return self._open_tag
+
+    @property
+    def close_tag(self) -> str:
+        return self._close_tag
 
     @property
     def version_string(self) -> A2UIVersion:
         return self._version_string
 
     def parse(self, response: str) -> A2UIParseResult:
-        """Extract text and A2UI operations from an agent response."""
-        if self._delimiter not in response:
+        """Extract conversational text and A2UI messages from a response.
+
+        Text before/after the ``<a2ui-json>`` block is the prose; the block
+        content is parsed as a JSON array/object or JSONL. A missing closing
+        tag is tolerated — the block runs to the end of the response.
+        """
+        open_idx = response.find(self._open_tag)
+        if open_idx == -1:
             return A2UIParseResult(
                 text=response.strip(),
                 operations=[],
                 has_a2ui=False,
             )
 
-        text_part, json_part = response.split(self._delimiter, 1)
+        text_before = response[:open_idx]
+        after_open = response[open_idx + len(self._open_tag) :]
+
+        close_idx = after_open.find(self._close_tag)
+        if close_idx == -1:
+            # Tolerate a missing closing tag: take everything to the end.
+            json_part = after_open
+            text_after = ""
+        else:
+            json_part = after_open[:close_idx]
+            text_after = after_open[close_idx + len(self._close_tag) :]
+
+        text = " ".join(part.strip() for part in (text_before, text_after) if part.strip())
         json_part = strip_markdown_fences(json_part)
 
         if not json_part:
             return A2UIParseResult(
-                text=text_part.strip(),
+                text=text,
                 operations=[],
                 has_a2ui=False,
             )
 
-        try:
-            parsed = json.loads(json_part)
-        except json.JSONDecodeError as e:
+        operations, parse_error = _parse_json_block(json_part)
+        if parse_error is not None:
             return A2UIParseResult(
-                text=text_part.strip(),
+                text=text,
                 operations=[],
                 has_a2ui=True,
                 raw_json=json_part,
-                parse_error=f"Invalid JSON: {e}",
-            )
-
-        if isinstance(parsed, dict):
-            parsed = [parsed]
-
-        if not isinstance(parsed, list):
-            return A2UIParseResult(
-                text=text_part.strip(),
-                operations=[],
-                has_a2ui=True,
-                raw_json=json_part,
-                parse_error=f"Expected JSON array or object, got {type(parsed).__name__}",
+                parse_error=parse_error,
             )
 
         return A2UIParseResult(
-            text=text_part.strip(),
-            operations=parsed,
+            text=text,
+            operations=operations,
             has_a2ui=True,
             raw_json=json_part,
         )

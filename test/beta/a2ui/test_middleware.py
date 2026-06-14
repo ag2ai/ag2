@@ -4,36 +4,92 @@
 
 import pytest
 
-from autogen.beta.a2ui import A2UIAgent
-from autogen.beta.a2ui.middleware import _degrade_to_text
-from autogen.beta.events import ModelMessage
+from autogen.beta.a2ui import A2UIAgent, A2UIMessageEvent
+from autogen.beta.a2ui.middleware import _to_prose_message
+from autogen.beta.events import BaseEvent, ModelMessage
+from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
 VALID_RESPONSE = (
-    "Here is your UI.\n---a2ui_JSON---\n"
+    "Here is your UI.\n<a2ui-json>\n"
     '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", '
-    '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}]'
+    '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}]\n'
+    "</a2ui-json>"
+)
+
+# Canonical A2UI wire (JSONL) inside the tag — one message per line.
+VALID_RESPONSE_JSONL = (
+    "Here is your UI.\n<a2ui-json>\n"
+    '{"version": "v0.9", "createSurface": {"surfaceId": "s1", '
+    '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}\n'
+    '{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}\n'
+    "</a2ui-json>"
 )
 
 INVALID_RESPONSE_MISSING_CATALOG = (
-    "Here.\n---a2ui_JSON---\n"
-    '[{"version": "v0.9", "createSurface": {"surfaceId": "s1"}}]'  # missing catalogId
+    "Here.\n<a2ui-json>\n"
+    '[{"version": "v0.9", "createSurface": {"surfaceId": "s1"}}]\n'  # missing catalogId
+    "</a2ui-json>"
 )
 
-INVALID_RESPONSE_BROKEN_JSON = "Text.\n---a2ui_JSON---\n{not valid json}"
+INVALID_RESPONSE_BROKEN_JSON = "Text.\n<a2ui-json>\n{not valid json}\n</a2ui-json>"
+
+
+def _make_collecting_stream(events: list[A2UIMessageEvent]) -> MemoryStream:
+    """Build a stream that records every A2UIMessageEvent into ``events``."""
+    stream = MemoryStream()
+
+    @stream.subscribe
+    async def _record(event: BaseEvent) -> None:
+        if isinstance(event, A2UIMessageEvent):
+            events.append(event)
+
+    return stream
 
 
 @pytest.mark.asyncio()
 class TestA2UIValidationMiddleware:
-    async def test_valid_response_passes_through(self) -> None:
+    async def test_valid_response_emits_events_and_strips_prose(self) -> None:
         agent = A2UIAgent(
             name="test_agent",
             config=TestConfig(VALID_RESPONSE),
             validate_responses=True,
             validation_retries=2,
         )
-        reply = await agent.ask("Show UI")
-        assert reply.body == VALID_RESPONSE
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask("Show UI", stream=stream)
+
+        # Durable response keeps only the conversational prose.
+        assert reply.body == "Here is your UI."
+        # The A2UI message is carried out-of-band as a typed event.
+        assert len(events) == 1
+        assert events[0].message["createSurface"]["surfaceId"] == "s1"
+
+    async def test_jsonl_inside_tag_emits_one_event_per_message(self) -> None:
+        agent = A2UIAgent(
+            name="test_agent",
+            config=TestConfig(VALID_RESPONSE_JSONL),
+            validate_responses=True,
+            validation_retries=2,
+        )
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask("Show UI", stream=stream)
+
+        assert reply.body == "Here is your UI."
+        assert [e.message for e in events] == [
+            {
+                "version": "v0.9",
+                "createSurface": {
+                    "surfaceId": "s1",
+                    "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+                },
+            },
+            {"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}},
+        ]
 
     async def test_plain_text_bypasses_validation(self) -> None:
         agent = A2UIAgent(
@@ -42,8 +98,13 @@ class TestA2UIValidationMiddleware:
             validate_responses=True,
             validation_retries=2,
         )
-        reply = await agent.ask("Hi")
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask("Hi", stream=stream)
+
         assert reply.body == "Just plain text."
+        assert events == []
 
     async def test_retry_on_invalid_then_success(self) -> None:
         agent = A2UIAgent(
@@ -52,8 +113,14 @@ class TestA2UIValidationMiddleware:
             validate_responses=True,
             validation_retries=1,
         )
-        reply = await agent.ask("Show UI")
-        assert reply.body == VALID_RESPONSE
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask("Show UI", stream=stream)
+
+        assert reply.body == "Here is your UI."
+        # Event emitted only on the final successful attempt — never on retries.
+        assert len(events) == 1
 
     async def test_retry_exhausted_returns_text_only(self) -> None:
         agent = A2UIAgent(
@@ -66,9 +133,14 @@ class TestA2UIValidationMiddleware:
             validate_responses=True,
             validation_retries=2,
         )
-        reply = await agent.ask("Show UI")
-        # graceful degradation: text portion only, no A2UI delimiter
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask("Show UI", stream=stream)
+
+        # graceful degradation: prose only, no A2UI tag, no events.
         assert reply.body == "Here."
+        assert events == []
 
     async def test_json_parse_error_triggers_retry(self) -> None:
         agent = A2UIAgent(
@@ -78,7 +150,7 @@ class TestA2UIValidationMiddleware:
             validation_retries=1,
         )
         reply = await agent.ask("Show UI")
-        assert reply.body == VALID_RESPONSE
+        assert reply.body == "Here is your UI."
 
     async def test_no_retry_when_validation_disabled(self) -> None:
         # Invalid response should pass through unchanged when validation is off.
@@ -91,14 +163,14 @@ class TestA2UIValidationMiddleware:
         assert reply.body == INVALID_RESPONSE_MISSING_CATALOG
 
 
-class TestDegradeToText:
+class TestToProseMessage:
     def test_preserves_original_metadata(self) -> None:
         original = ModelMessage("full text", metadata={"trace_id": "abc", "provider": "x"})
-        degraded = _degrade_to_text(original, "text only")
-        assert degraded.content == "text only"
-        assert degraded.metadata == {"trace_id": "abc", "provider": "x"}
+        prose = _to_prose_message(original, "text only")
+        assert prose.content == "text only"
+        assert prose.metadata == {"trace_id": "abc", "provider": "x"}
 
     def test_handles_none_message(self) -> None:
-        degraded = _degrade_to_text(None, "text only")
-        assert degraded.content == "text only"
-        assert degraded.metadata == {}
+        prose = _to_prose_message(None, "text only")
+        assert prose.content == "text only"
+        assert prose.metadata == {}

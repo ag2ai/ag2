@@ -18,12 +18,13 @@ from autogen.beta.a2a.executor import AgentExecutor
 from autogen.beta.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
 from autogen.beta.a2a.mappers import ParsedMessage, task_state_to_status_update
 from autogen.beta.context import ConversationContext
-from autogen.beta.events import ClientToolCallEvent
+from autogen.beta.events import BaseEvent, ClientToolCallEvent
 from autogen.beta.stream import MemoryStream
 
-from .._types import A2UIVersion, JsonObject
+from .._types import A2UIVersion, JsonObject, ServerToClientMessage
 from ..agent import A2UIAgent
 from ..constants import A2UI_MIME_TYPE
+from ..events import A2UIMessageEvent
 from ..incoming import (
     A2UIIncomingAction,
     A2UIIncomingError,
@@ -56,10 +57,11 @@ class A2UIAgentExecutor(AgentExecutor):
          streaming, and middleware all work uniformly).
        - ``error`` envelopes (e.g. ``VALIDATION_FAILED``) are rewritten as
          a corrective ``TextInput`` so the agent can regenerate.
-    4. After the agent completes, parse the final ``ModelResponse.content``
-       for the A2UI delimiter and split it into a text ``Part`` plus a
-       canonical A2UI DataPart (MIME ``application/a2ui+json``) carrying
-       the operation list.
+    4. Collect the :class:`A2UIMessageEvent`s the validation middleware emits
+       during the turn and split the completed task into a text ``Part`` (the
+       conversational prose, already stripped from ``ModelResponse.content``)
+       plus a canonical A2UI DataPart (MIME ``application/a2ui+json``) carrying
+       the collected message list.
     """
 
     def __init__(self, agent: A2UIAgent) -> None:
@@ -188,6 +190,16 @@ class A2UIAgentExecutor(AgentExecutor):
         client_tools = [self._make_client_tool(s) for s in parsed.tool_schemas]
         initial_event = self._build_initial_event(parsed)
 
+        # The validation middleware emits one A2UIMessageEvent per validated
+        # A2UI message onto this turn's stream. Collect them as the single
+        # source of UI content (the event seam) instead of re-parsing text.
+        a2ui_messages: list[ServerToClientMessage] = []
+
+        @stream.subscribe
+        async def _collect_a2ui_messages(event: BaseEvent) -> None:
+            if isinstance(event, A2UIMessageEvent):
+                a2ui_messages.append(event.message)
+
         response, final_variables = await self._dispatch_to_agent(
             initial_event,
             stream,
@@ -208,9 +220,9 @@ class A2UIAgentExecutor(AgentExecutor):
             )
             return
 
-        full_text = response.message.content if response.message else ""
+        prose_text = response.message.content if response.message else ""
 
-        agent_msg = self._build_a2ui_message(updater, full_text or "", final_variables)
+        agent_msg = self._build_a2ui_message(updater, prose_text or "", a2ui_messages, final_variables)
         await updater.complete(message=agent_msg)
         await lifecycle_ctx.send(
             task_state_to_status_update(
@@ -225,27 +237,24 @@ class A2UIAgentExecutor(AgentExecutor):
     def _build_a2ui_message(
         self,
         updater: TaskUpdater,
-        final_text: str,
+        prose_text: str,
+        a2ui_messages: list[ServerToClientMessage],
         final_variables: dict[str, Any],
     ) -> Message | None:
-        """Build a finalization message that splits text from A2UI ops.
+        """Build a finalization message that splits prose from A2UI messages.
 
-        When the response contains an A2UI delimiter and valid operations,
-        a single canonical A2UI DataPart (carrying the full operation list)
-        is emitted alongside a text ``Part`` for the conversational text.
-        When the response has no A2UI content, this falls back to a single
-        text ``Part`` — same shape the base executor would produce.
+        When the turn produced A2UI messages (collected from the stream's
+        :class:`A2UIMessageEvent`s), a single canonical A2UI DataPart carrying
+        the full message list is emitted alongside a text ``Part`` for the
+        conversational prose. With no A2UI content this falls back to a single
+        text ``Part`` — the same shape the base executor would produce.
         """
         parts: list[Part] = []
 
-        if final_text:
-            parse_result = self._a2ui_agent.parser.parse(final_text)
-            if parse_result.has_a2ui and parse_result.operations and not parse_result.parse_error:
-                if parse_result.text:
-                    parts.append(Part(text=parse_result.text))
-                parts.extend(create_a2ui_parts(parse_result.operations))
-            else:
-                parts.append(Part(text=final_text))
+        if prose_text:
+            parts.append(Part(text=prose_text))
+        if a2ui_messages:
+            parts.extend(create_a2ui_parts(a2ui_messages))
 
         if not parts and not final_variables:
             return None

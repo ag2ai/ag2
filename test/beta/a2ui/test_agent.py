@@ -26,7 +26,9 @@ class TestA2UIAgentConstruction:
         prompt = "\n".join(agent._system_prompt)
         assert "A2UI" in prompt
         assert "v0.9" in prompt
-        assert "---a2ui_JSON---" in prompt
+        assert "<a2ui-json>" in prompt
+        assert "</a2ui-json>" in prompt
+        assert "---a2ui_JSON---" not in prompt
         assert "createSurface" in prompt
 
     def test_custom_system_message_prepended(self) -> None:
@@ -54,11 +56,12 @@ class TestA2UIAgentConstruction:
         with pytest.raises(ValueError, match="Custom catalog must include"):
             A2UIAgent(name="test_agent", custom_catalog={"components": {}})
 
-    def test_custom_delimiter(self) -> None:
-        agent = A2UIAgent(name="test_agent", response_delimiter="<<<A2UI>>>")
+    def test_prompt_uses_official_tags(self) -> None:
+        agent = A2UIAgent(name="test_agent")
         prompt = "\n".join(agent._system_prompt)
-        assert "<<<A2UI>>>" in prompt
-        assert "---a2ui_JSON---" not in prompt
+        # The official A2UI "Standard Prompt Tags" wrap the UI JSON block.
+        assert "<a2ui-json>" in prompt
+        assert "</a2ui-json>" in prompt
 
     def test_exclude_schema_from_prompt(self) -> None:
         agent = A2UIAgent(name="test_agent", include_schema_in_prompt=False)
@@ -84,8 +87,9 @@ class TestA2UIAgentConstruction:
     def test_parser_extracts_a2ui(self) -> None:
         agent = A2UIAgent(name="test_agent")
         response = (
-            "Here is your UI.\n---a2ui_JSON---\n"
-            '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}}]'
+            "Here is your UI.\n<a2ui-json>\n"
+            '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}}]\n'
+            "</a2ui-json>"
         )
         result = agent.parser.parse(response)
         assert result.has_a2ui is True
@@ -212,11 +216,12 @@ class TestA2UIAgentAsk:
         reply = await agent.ask("Hi")
         assert reply.body == "Hello, no UI needed."
 
-    async def test_valid_a2ui_passes_through(self) -> None:
+    async def test_valid_a2ui_strips_prose_into_response(self) -> None:
         valid_response = (
-            "Here is your UI.\n---a2ui_JSON---\n"
+            "Here is your UI.\n<a2ui-json>\n"
             '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", '
-            '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}]'
+            '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}]\n'
+            "</a2ui-json>"
         )
         agent = A2UIAgent(
             name="test_agent",
@@ -224,4 +229,6 @@ class TestA2UIAgentAsk:
             validate_responses=True,
         )
         reply = await agent.ask("Show me a UI")
-        assert reply.body == valid_response
+        # The durable response keeps prose only — the A2UI message rides the
+        # stream as an A2UIMessageEvent (see test_middleware).
+        assert reply.body == "Here is your UI."

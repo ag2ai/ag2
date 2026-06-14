@@ -5,7 +5,7 @@
 import json
 
 from autogen.beta.a2ui import to_jsonl
-from autogen.beta.a2ui.constants import A2UI_DEFAULT_DELIMITER
+from autogen.beta.a2ui.constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 from autogen.beta.a2ui.parser import A2UIResponseParser
 
 SAMPLE_OPS = [
@@ -38,10 +38,10 @@ class TestToJsonl:
         assert not to_jsonl(SAMPLE_OPS).endswith("\n")
 
     def test_roundtrip_parse_array_to_jsonl(self) -> None:
-        # parse(text + delimiter + JSON array) -> operations -> to_jsonl ->
-        # per-line json.loads recovers the original messages.
+        # parse(text + <a2ui-json> JSON array </a2ui-json>) -> operations ->
+        # to_jsonl -> per-line json.loads recovers the original messages.
         parser = A2UIResponseParser(version_string="v0.9")
-        response = f"Here is the UI.\n{A2UI_DEFAULT_DELIMITER}\n{json.dumps(SAMPLE_OPS)}"
+        response = f"Here is the UI.\n{A2UI_JSON_OPEN_TAG}\n{json.dumps(SAMPLE_OPS)}\n{A2UI_JSON_CLOSE_TAG}"
         parsed = parser.parse(response)
         assert parsed.has_a2ui
 

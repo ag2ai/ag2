@@ -25,9 +25,10 @@ class TestA2UIResponseParser:
     def test_parse_with_a2ui(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
         response = (
-            "Here is your UI.\n---a2ui_JSON---\n"
+            "Here is your UI.\n<a2ui-json>\n"
             '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", '
-            '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}]'
+            '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}]\n'
+            "</a2ui-json>"
         )
         result = parser.parse(response)
         assert result.text == "Here is your UI."
@@ -39,15 +40,32 @@ class TestA2UIResponseParser:
     def test_parse_single_object(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
         response = (
-            'UI below.\n---a2ui_JSON---\n{"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}}'
+            "UI below.\n<a2ui-json>\n"
+            '{"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}}\n</a2ui-json>'
         )
         result = parser.parse(response)
         assert result.has_a2ui is True
         assert len(result.operations) == 1
 
+    def test_parse_jsonl_inside_tag(self) -> None:
+        # Canonical A2UI wire format: one JSON message per line inside the tag.
+        parser = A2UIResponseParser(version_string="v0.9")
+        response = (
+            "Here.\n<a2ui-json>\n"
+            '{"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}}\n'
+            '{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}\n'
+            "</a2ui-json>"
+        )
+        result = parser.parse(response)
+        assert result.has_a2ui is True
+        assert result.parse_error is None
+        assert len(result.operations) == 2
+        assert "createSurface" in result.operations[0]
+        assert "deleteSurface" in result.operations[1]
+
     def test_parse_invalid_json(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
-        response = "Text\n---a2ui_JSON---\n{invalid json}"
+        response = "Text\n<a2ui-json>\n{invalid json}\n</a2ui-json>"
         result = parser.parse(response)
         assert result.has_a2ui is True
         assert result.operations == []
@@ -56,22 +74,40 @@ class TestA2UIResponseParser:
 
     def test_parse_non_array_non_object(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
-        response = 'Text\n---a2ui_JSON---\n"just a string"'
+        response = 'Text\n<a2ui-json>\n"just a string"\n</a2ui-json>'
         result = parser.parse(response)
         assert result.has_a2ui is True
         assert result.operations == []
         assert result.parse_error is not None
-        assert "Expected JSON array or object" in result.parse_error
+        assert "Expected JSON" in result.parse_error
 
-    def test_parse_empty_after_delimiter(self) -> None:
+    def test_parse_empty_inside_tag(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
-        result = parser.parse("Text\n---a2ui_JSON---\n")
+        result = parser.parse("Text\n<a2ui-json>\n</a2ui-json>")
         assert result.has_a2ui is False
         assert result.text == "Text"
 
-    def test_parse_custom_delimiter(self) -> None:
-        parser = A2UIResponseParser(version_string="v0.9", delimiter="<<<A2UI>>>")
-        response = 'Text\n<<<A2UI>>>\n[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]'
+    def test_parse_missing_close_tag_is_tolerated(self) -> None:
+        # The model forgot </a2ui-json>: take the block to the end of the response.
+        parser = A2UIResponseParser(version_string="v0.9")
+        response = 'Prose <a2ui-json>[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]'
+        result = parser.parse(response)
+        assert result.text == "Prose"
+        assert result.has_a2ui is True
+        assert len(result.operations) == 1
+        assert result.parse_error is None
+
+    def test_parse_prose_before_and_after_tag(self) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        response = 'Before. <a2ui-json>[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]</a2ui-json> After.'
+        result = parser.parse(response)
+        assert result.text == "Before. After."
+        assert result.has_a2ui is True
+        assert len(result.operations) == 1
+
+    def test_parse_custom_tags(self) -> None:
+        parser = A2UIResponseParser(version_string="v0.9", open_tag="<<<UI>>>", close_tag="<<</UI>>>")
+        response = 'Text\n<<<UI>>>\n[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]\n<<</UI>>>'
         result = parser.parse(response)
         assert result.has_a2ui is True
         assert len(result.operations) == 1
@@ -79,10 +115,11 @@ class TestA2UIResponseParser:
     def test_parse_multiple_operations(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
         response = (
-            "Here.\n---a2ui_JSON---\n"
+            "Here.\n<a2ui-json>\n"
             '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}}, '
             '{"version": "v0.9", "updateComponents": {"surfaceId": "s1", '
-            '"components": [{"id": "root", "component": "Text", "text": "Hello"}]}}]'
+            '"components": [{"id": "root", "component": "Text", "text": "Hello"}]}}]\n'
+            "</a2ui-json>"
         )
         result = parser.parse(response)
         assert len(result.operations) == 2
@@ -440,8 +477,8 @@ class TestParseWithMarkdownFences:
     def test_parse_json_wrapped_in_fences(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
         response = (
-            "Here is your UI.\n---a2ui_JSON---\n```json\n"
-            '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]\n```'
+            "Here is your UI.\n<a2ui-json>\n```json\n"
+            '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]\n```\n</a2ui-json>'
         )
         result = parser.parse(response)
         assert result.has_a2ui is True
@@ -450,7 +487,9 @@ class TestParseWithMarkdownFences:
 
     def test_parse_plain_fence(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
-        response = 'Text\n---a2ui_JSON---\n```\n{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}\n```'
+        response = (
+            'Text\n<a2ui-json>\n```\n{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}\n```\n</a2ui-json>'
+        )
         result = parser.parse(response)
         assert result.has_a2ui is True
         assert len(result.operations) == 1

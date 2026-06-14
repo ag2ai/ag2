@@ -175,7 +175,8 @@ class TestPromptSection:
         prompt = manager.generate_prompt_section()
         assert "A2UI Response Format" in prompt
         assert "v0.9" in prompt
-        assert "---a2ui_JSON---" in prompt
+        assert "<a2ui-json>" in prompt
+        assert "</a2ui-json>" in prompt
         assert "createSurface" in prompt
         assert "updateComponents" in prompt
 
@@ -207,10 +208,11 @@ class TestPromptSection:
         prompt = manager.generate_prompt_section(include_schema=False)
         assert "A2UI Message Schema" not in prompt
 
-    def test_custom_delimiter(self) -> None:
+    def test_uses_official_tags(self) -> None:
         manager = A2UISchemaManager()
-        prompt = manager.generate_prompt_section(response_delimiter="<<<A2UI>>>")
-        assert "<<<A2UI>>>" in prompt
+        prompt = manager.generate_prompt_section()
+        assert "<a2ui-json>" in prompt
+        assert "</a2ui-json>" in prompt
         assert "---a2ui_JSON---" not in prompt
 
     def test_event_action_in_prompt(self) -> None:

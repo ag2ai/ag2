@@ -15,17 +15,20 @@ from autogen.beta.events import (
 )
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
+from .events import A2UIMessageEvent
 from .parser import A2UIParseResult, A2UIResponseParser, A2UIValidationResult
 
 logger = logging.getLogger(__name__)
 
 
-def _degrade_to_text(original: ModelMessage | None, text: str) -> ModelMessage:
-    """Rebuild a text-only ``ModelMessage`` while preserving original metadata.
+def _to_prose_message(original: ModelMessage | None, text: str) -> ModelMessage:
+    """Rebuild a prose-only ``ModelMessage`` while preserving original metadata.
 
-    The graceful-degradation path strips A2UI JSON from the message content.
-    Rebuilding the message naively would drop any ``metadata`` the provider
-    attached (e.g. tracing/usage hints), so it is carried over here.
+    A2UI content is carried out-of-band as :class:`A2UIMessageEvent`s, so the
+    durable ``ModelMessage`` keeps only the conversational text. This is also
+    the graceful-degradation path. Rebuilding the message naively would drop
+    any ``metadata`` the provider attached (e.g. tracing/usage hints), so it
+    is carried over here.
     """
     metadata = dict(original.metadata) if original is not None and original.metadata else {}
     return ModelMessage(text, metadata=metadata)
@@ -92,6 +95,13 @@ class _A2UIValidationMiddleware(BaseMiddleware):
 
             parse_result, validation_errors = self._validate(text)
             if validation_errors is None:
+                # Valid (or no A2UI at all). When A2UI content is present, emit
+                # one A2UIMessageEvent per message onto the stream and keep the
+                # durable response prose-only — transports consume the events.
+                if parse_result.has_a2ui:
+                    for op in parse_result.operations:
+                        await context.send(A2UIMessageEvent(op))
+                    response.message = _to_prose_message(response.message, parse_result.text)
                 return response
 
             last_parse_result = parse_result
@@ -101,7 +111,7 @@ class _A2UIValidationMiddleware(BaseMiddleware):
                     "A2UI validation failed after %d attempt(s). Returning text-only response.",
                     attempt + 1,
                 )
-                response.message = _degrade_to_text(response.message, parse_result.text)
+                response.message = _to_prose_message(response.message, parse_result.text)
                 return response
 
             logger.info(
@@ -125,7 +135,7 @@ class _A2UIValidationMiddleware(BaseMiddleware):
         # which currently cannot happen (the final attempt always returns above).
         assert response is not None
         if last_parse_result is not None:
-            response.message = _degrade_to_text(response.message, last_parse_result.text)
+            response.message = _to_prose_message(response.message, last_parse_result.text)
         return response
 
     def _validate(self, response_text: str) -> "tuple[A2UIParseResult, list[str] | None]":

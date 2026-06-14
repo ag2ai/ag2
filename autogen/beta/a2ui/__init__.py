@@ -7,6 +7,7 @@ from autogen.beta.exceptions import missing_optional_dependency
 try:
     from .actions import A2UIAction
     from .agent import A2UIAgent
+    from .events import A2UIMessageEvent
     from .incoming import (
         A2UIIncomingAction,
         A2UIIncomingError,
@@ -20,6 +21,7 @@ try:
 except ImportError as e:
     A2UIAction = missing_optional_dependency("A2UIAction", "a2ui", e)  # type: ignore[misc]
     A2UIAgent = missing_optional_dependency("A2UIAgent", "a2ui", e)  # type: ignore[misc]
+    A2UIMessageEvent = missing_optional_dependency("A2UIMessageEvent", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingAction = missing_optional_dependency("A2UIIncomingAction", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingError = missing_optional_dependency("A2UIIncomingError", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingParseResult = missing_optional_dependency("A2UIIncomingParseResult", "a2ui", e)  # type: ignore[misc]
@@ -37,6 +39,7 @@ __all__ = (
     "A2UIIncomingAction",
     "A2UIIncomingError",
     "A2UIIncomingParseResult",
+    "A2UIMessageEvent",
     "A2UIParseResult",
     "A2UIResponseParser",
     "A2UISchemaManager",

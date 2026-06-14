@@ -12,7 +12,7 @@ from referencing.jsonschema import DRAFT202012
 
 from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue  # noqa: F401
 from .actions import A2UIAction
-from .constants import A2UI_DEFAULT_DELIMITER
+from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 _VERSIONS_DIR = Path(__file__).parent
 
@@ -320,7 +320,6 @@ class A2UISchemaManager:
         self,
         include_schema: bool = True,
         include_rules: bool = True,
-        response_delimiter: str = A2UI_DEFAULT_DELIMITER,
         actions: list[A2UIAction] | None = None,
     ) -> str:
         """Generate the A2UI portion of the system prompt."""
@@ -332,14 +331,15 @@ class A2UISchemaManager:
         sections.append(
             f"## A2UI Response Format ({v})\n\n"
             f"You can generate rich UI responses using the A2UI {v} protocol. "
-            "When you want to display a UI, respond with your text message first, "
-            f"then the delimiter `{response_delimiter}`, "
-            "then a JSON array of A2UI message objects.\n\n"
+            "When you want to display a UI, write your conversational text first, "
+            f"then wrap a JSON array of A2UI message objects between the "
+            f"`{A2UI_JSON_OPEN_TAG}` and `{A2UI_JSON_CLOSE_TAG}` tags.\n\n"
             "Example response format:\n"
             "```\n"
             "Here is the UI you requested.\n"
-            f"{response_delimiter}\n"
+            f"{A2UI_JSON_OPEN_TAG}\n"
             f"{example_json}\n"
+            f"{A2UI_JSON_CLOSE_TAG}\n"
             "```"
         )
 

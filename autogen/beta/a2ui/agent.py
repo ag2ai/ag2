@@ -17,7 +17,6 @@ from autogen.beta.tools.tool import Tool
 
 from ._types import A2UIVersion, JsonSchema
 from .actions import A2UIAction
-from .constants import A2UI_DEFAULT_DELIMITER
 from .middleware import A2UIValidationMiddleware
 from .parser import A2UIResponseParser
 from .schema_manager import A2UISchemaManager
@@ -34,10 +33,11 @@ class A2UIAgent(Agent):
     """An autogen.beta.Agent that produces A2UI rich UI output.
 
     Supports protocol versions v0.9 (default), v0.9.1, and v1.0 with the basic
-    catalog and optional custom catalogs. The LLM emits text + delimiter + A2UI
-    JSON; the agent validates
-    the JSON against the catalog schema via a retry-on-error middleware
-    before yielding the final ``ModelResponse``.
+    catalog and optional custom catalogs. The LLM emits conversational prose
+    plus an ``<a2ui-json>…</a2ui-json>`` block; the agent validates the messages
+    against the catalog schema via a retry-on-error middleware, emits each
+    validated message as an ``A2UIMessageEvent`` on the stream, and yields a
+    prose-only ``ModelResponse``.
 
     Example::
 
@@ -66,7 +66,6 @@ class A2UIAgent(Agent):
         custom_catalog_rules: str | None = None,
         include_schema_in_prompt: bool = True,
         include_rules_in_prompt: bool = True,
-        response_delimiter: str = A2UI_DEFAULT_DELIMITER,
         validate_responses: bool = True,
         validation_retries: int = 1,
         actions: Sequence[A2UIAction] = (),
@@ -101,7 +100,6 @@ class A2UIAgent(Agent):
             include_schema_in_prompt: Whether to include the full JSON schema
                 in the system prompt (better validation, more tokens).
             include_rules_in_prompt: Whether to include catalog rules.
-            response_delimiter: Delimiter separating text from A2UI JSON.
             validate_responses: Validate A2UI output against the schema and
                 retry on failure. Requires ``ag2[a2ui]`` (jsonschema).
             validation_retries: Number of *additional* retries when validation
@@ -133,20 +131,17 @@ class A2UIAgent(Agent):
         )
         self.parser = A2UIResponseParser(
             version_string=self.schema_manager.version_string,
-            delimiter=response_delimiter,
             server_to_client_schema=(self.schema_manager.server_to_client_schema if validate_responses else None),
             schema_registry=(self.schema_manager.build_schema_registry() if validate_responses else None),
             component_schemas=(self.schema_manager.get_component_schemas() if validate_responses else None),
             catalog_id=(self.schema_manager.catalog_id if validate_responses else None),
         )
         self.actions: tuple[A2UIAction, ...] = tuple(actions)
-        self.response_delimiter = response_delimiter
         self.validation_retries = validation_retries
 
         self.a2ui_prompt_section = self.schema_manager.generate_prompt_section(
             include_schema=include_schema_in_prompt,
             include_rules=include_rules_in_prompt,
-            response_delimiter=response_delimiter,
             actions=list(self.actions),
         )
         base_prompt = system_message if system_message is not None else DEFAULT_SYSTEM_MESSAGE

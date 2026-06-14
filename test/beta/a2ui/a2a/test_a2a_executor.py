@@ -15,9 +15,7 @@ from autogen.beta.testing import TestConfig
 VERSION = "v0.9"
 CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 
-A2UI_RESPONSE = (
-    f'Here is your UI.\n---a2ui_JSON---\n[{{"version": "{VERSION}", "deleteSurface": {{"surfaceId": "s1"}}}}]'
-)
+DELETE_SURFACE_MSG = {"version": VERSION, "deleteSurface": {"surfaceId": "s1"}}
 
 ACTION_ENVELOPE = {
     "version": VERSION,
@@ -76,47 +74,52 @@ class TestExtractA2UIEnvelopes:
 
 
 class TestBuildA2UIMessage:
-    """Splitting the final response into text + canonical A2UI DataPart."""
+    """Splitting the completed turn into prose text + canonical A2UI DataPart.
+
+    The A2UI messages arrive as a collected list (gathered from the stream's
+    A2UIMessageEvents), and the prose is already stripped by the middleware.
+    """
 
     def test_splits_text_and_a2ui_datapart(self) -> None:
         executor = _make_executor()
         updater = MagicMock()
-        executor._build_a2ui_message(updater, A2UI_RESPONSE, {})
+        executor._build_a2ui_message(updater, "Here is your UI.", [DELETE_SURFACE_MSG], {})
 
         parts = updater.new_agent_message.call_args.kwargs["parts"]
         assert len(parts) == 2
         assert parts[0].text == "Here is your UI."
         assert is_a2ui_part(parts[1])
-        assert get_a2ui_data(parts[1]) is not None
+        assert get_a2ui_data(parts[1]) == [DELETE_SURFACE_MSG]
+
+    def test_a2ui_only_without_prose(self) -> None:
+        executor = _make_executor()
+        updater = MagicMock()
+        executor._build_a2ui_message(updater, "", [DELETE_SURFACE_MSG], {})
+
+        parts = updater.new_agent_message.call_args.kwargs["parts"]
+        assert len(parts) == 1
+        assert is_a2ui_part(parts[0])
+        assert get_a2ui_data(parts[0]) == [DELETE_SURFACE_MSG]
 
     def test_plain_text_single_part(self) -> None:
         executor = _make_executor()
         updater = MagicMock()
-        executor._build_a2ui_message(updater, "Just text.", {})
+        executor._build_a2ui_message(updater, "Just text.", [], {})
 
         parts = updater.new_agent_message.call_args.kwargs["parts"]
         assert len(parts) == 1
         assert parts[0].text == "Just text."
 
-    def test_invalid_json_falls_back_to_full_text(self) -> None:
-        executor = _make_executor()
-        updater = MagicMock()
-        executor._build_a2ui_message(updater, "Text\n---a2ui_JSON---\n{not json}", {})
-
-        parts = updater.new_agent_message.call_args.kwargs["parts"]
-        assert len(parts) == 1
-        assert "---a2ui_JSON---" in parts[0].text
-
     def test_returns_none_when_no_parts_and_no_variables(self) -> None:
         executor = _make_executor()
         updater = MagicMock()
-        assert executor._build_a2ui_message(updater, "", {}) is None
+        assert executor._build_a2ui_message(updater, "", [], {}) is None
         updater.new_agent_message.assert_not_called()
 
     def test_context_update_variables_go_to_metadata(self) -> None:
         executor = _make_executor()
         updater = MagicMock()
-        executor._build_a2ui_message(updater, "Just text.", {"count": 3})
+        executor._build_a2ui_message(updater, "Just text.", [], {"count": 3})
 
         metadata = updater.new_agent_message.call_args.kwargs["metadata"]
         assert metadata is not None
