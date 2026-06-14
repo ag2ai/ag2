@@ -19,6 +19,9 @@ from .._types import JsonObject
 A2UI_CLIENT_CAPABILITIES_METADATA_KEY = "a2uiClientCapabilities"
 A2UI_CLIENT_DATA_MODEL_METADATA_KEY = "a2uiClientDataModel"
 
+# TODO(a2ui-transports): parametrize by negotiated protocol version. This is
+# A2A transport-level version negotiation; left hardcoded to v0.9 until the
+# transport phase wires the negotiated version through to these parsers.
 _VERSION_KEY = "v0.9"
 
 

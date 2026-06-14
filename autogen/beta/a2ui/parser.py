@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import jsonschema
 
-from ._types import JsonSchema, ServerToClientMessage
+from ._types import A2UIVersion, JsonSchema, ServerToClientMessage
 from .constants import A2UI_DEFAULT_DELIMITER
 
 if TYPE_CHECKING:
@@ -66,7 +66,7 @@ class A2UIResponseParser:
 
     def __init__(
         self,
-        version_string: str,
+        version_string: A2UIVersion,
         delimiter: str = A2UI_DEFAULT_DELIMITER,
         server_to_client_schema: JsonSchema | None = None,
         schema_registry: "Registry | None" = None,
@@ -85,7 +85,7 @@ class A2UIResponseParser:
         return self._delimiter
 
     @property
-    def version_string(self) -> str:
+    def version_string(self) -> A2UIVersion:
         return self._version_string
 
     def parse(self, response: str) -> A2UIParseResult:
@@ -207,7 +207,7 @@ class A2UIResponseParser:
             if not has_root:
                 errors.append(
                     "No component with id 'root' found across updateComponents — "
-                    "the A2UI v0.9 spec requires the component tree to have a 'root' node."
+                    "the A2UI spec requires the component tree to have a 'root' node."
                 )
 
         return A2UIValidationResult(

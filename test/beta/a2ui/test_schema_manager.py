@@ -22,6 +22,43 @@ class TestA2UISchemaManager:
         with pytest.raises(ValueError, match="Unsupported A2UI protocol version"):
             A2UISchemaManager(protocol_version="v0.7")
 
+    def test_v0_9_1_init_loads_specs(self) -> None:
+        manager = A2UISchemaManager(protocol_version="v0.9.1")
+        assert manager.protocol_version == "v0.9.1"
+        assert manager.version_string == "v0.9.1"
+        # v0.9.1 reuses v0.9's canonical identifiers (shared catalog/$ids).
+        assert manager.catalog_id == "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+        assert manager.server_to_client_schema is not None
+        assert manager.basic_catalog_schema is not None
+        # Registry must build without unresolved cross-file $refs.
+        assert manager.build_schema_registry() is not None
+
+    def test_default_catalog_id_is_canonical_resolving_url(self) -> None:
+        # Must match the official catalog id renderers advertise (not a 404).
+        manager = A2UISchemaManager()
+        assert manager.catalog_id == "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+
+    def test_v1_0_init_loads_specs(self) -> None:
+        manager = A2UISchemaManager(protocol_version="v1.0")
+        assert manager.protocol_version == "v1.0"
+        assert manager.version_string == "v1.0"
+        assert "v1_0" in manager.catalog_id
+        assert manager.server_to_client_schema is not None
+        assert manager.basic_catalog_schema is not None
+        assert manager.common_types_schema is not None
+        # v1.0 adds two server->client message types beyond v0.9's four.
+        defs = manager.server_to_client_schema.get("$defs", {})
+        assert isinstance(defs, dict)
+        assert "CallFunctionMessage" in defs
+        assert "ActionResponseMessage" in defs
+
+    def test_v1_0_prompt_mentions_new_message_types(self) -> None:
+        manager = A2UISchemaManager(protocol_version="v1.0")
+        prompt = manager.generate_prompt_section(include_schema=False)
+        assert "v1.0" in prompt
+        assert "callFunction" in prompt
+        assert "actionResponse" in prompt
+
     def test_custom_catalog_id_from_catalog(self) -> None:
         manager = A2UISchemaManager(custom_catalog={"$id": "https://mycompany.com/custom.json", "components": {}})
         assert manager.catalog_id == "https://mycompany.com/custom.json"

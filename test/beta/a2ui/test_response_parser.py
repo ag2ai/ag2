@@ -27,7 +27,7 @@ class TestA2UIResponseParser:
         response = (
             "Here is your UI.\n---a2ui_JSON---\n"
             '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", '
-            '"catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json"}}]'
+            '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}]'
         )
         result = parser.parse(response)
         assert result.text == "Here is your UI."
@@ -105,7 +105,7 @@ class TestA2UIResponseParserValidation:
                 "version": "v0.9",
                 "createSurface": {
                     "surfaceId": "s1",
-                    "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json",
+                    "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
                 },
             }
         ]
@@ -157,6 +157,102 @@ class TestA2UIResponseParserValidation:
         assert result.errors
         assert len(result.errors) == 1
         assert "Operation 1" in result.errors[0]
+
+
+class TestA2UIResponseParserV091Validation:
+    @pytest.fixture()
+    def parser_v091(self) -> A2UIResponseParser:
+        manager = A2UISchemaManager(protocol_version="v0.9.1")
+        return A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+            component_schemas=manager.get_component_schemas(),
+            catalog_id=manager.catalog_id,
+        )
+
+    def test_accepts_v0_9_1_version_string(self, parser_v091: A2UIResponseParser) -> None:
+        ops = [{"version": "v0.9.1", "deleteSurface": {"surfaceId": "s1"}}]
+        assert parser_v091.validate(ops).is_valid is True
+
+    def test_also_accepts_v0_9_version_string(self, parser_v091: A2UIResponseParser) -> None:
+        # v0.9.1's version field is the enum ["v0.9", "v0.9.1"] — both are valid.
+        ops = [{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]
+        assert parser_v091.validate(ops).is_valid is True
+
+
+class TestA2UIResponseParserV1Validation:
+    @pytest.fixture()
+    def parser_v1(self) -> A2UIResponseParser:
+        manager = A2UISchemaManager(protocol_version="v1.0")
+        return A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+            component_schemas=manager.get_component_schemas(),
+            catalog_id=manager.catalog_id,
+        )
+
+    def test_validate_call_function(self, parser_v1: A2UIResponseParser) -> None:
+        # 'openUrl' is a function defined in the v1.0 basic catalog.
+        ops = [
+            {
+                "version": "v1.0",
+                "functionCallId": "fc-1",
+                "callFunction": {"call": "openUrl", "args": {"url": "https://example.com"}},
+            }
+        ]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is True
+        assert result.errors == []
+
+    def test_validate_action_response_value(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "actionId": "act-1", "actionResponse": {"value": 42}}]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is True
+
+    def test_validate_action_response_error(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [
+            {
+                "version": "v1.0",
+                "actionId": "act-1",
+                "actionResponse": {"error": {"code": "NOT_FOUND", "message": "missing"}},
+            }
+        ]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is True
+
+    def test_action_response_rejects_value_and_error_together(self, parser_v1: A2UIResponseParser) -> None:
+        # Spec: actionResponse carries exactly one of value | error (oneOf).
+        ops = [
+            {
+                "version": "v1.0",
+                "actionId": "act-1",
+                "actionResponse": {"value": 1, "error": {"code": "c", "message": "m"}},
+            }
+        ]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is False
+
+    def test_call_function_requires_function_call_id(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "callFunction": {"call": "openUrl"}}]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is False
+
+    def test_create_surface_valid_in_v1(self, parser_v1: A2UIResponseParser) -> None:
+        # createSurface is shared across versions; the v1.0 parser accepts it
+        # with the v1.0 version string and catalog id.
+        ops = [
+            {
+                "version": "v1.0",
+                "createSurface": {
+                    "surfaceId": "s1",
+                    "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                },
+            }
+        ]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is True
 
 
 class TestPerComponentValidation:

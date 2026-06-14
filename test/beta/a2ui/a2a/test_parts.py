@@ -5,11 +5,15 @@
 from a2a.types import Part
 
 from autogen.beta.a2ui.a2a import create_a2ui_parts, get_a2ui_data, is_a2ui_part
+from autogen.beta.a2ui.constants import A2UI_MIME_TYPE
 
 SAMPLE_OPS = [
     {
         "version": "v0.9",
-        "createSurface": {"surfaceId": "s1", "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json"},
+        "createSurface": {
+            "surfaceId": "s1",
+            "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+        },
     },
     {"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}},
 ]
@@ -21,6 +25,13 @@ class TestCreateA2UIParts:
         assert len(parts) == 1
         assert is_a2ui_part(parts[0])
         assert get_a2ui_data(parts[0]) == SAMPLE_OPS
+
+    def test_datapart_uses_canonical_a2ui_mime(self) -> None:
+        # The canonical A2A encoding for A2UI uses MIME ``application/a2ui+json``;
+        # ``application/json+a2ui`` would break A2A interop.
+        assert A2UI_MIME_TYPE == "application/a2ui+json"
+        [part] = create_a2ui_parts(SAMPLE_OPS)
+        assert part.media_type == A2UI_MIME_TYPE
 
     def test_canonical_wraps_single_dict_in_list(self) -> None:
         parts = create_a2ui_parts(SAMPLE_OPS[0])

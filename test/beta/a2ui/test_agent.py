@@ -216,7 +216,7 @@ class TestA2UIAgentAsk:
         valid_response = (
             "Here is your UI.\n---a2ui_JSON---\n"
             '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", '
-            '"catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json"}}]'
+            '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}]'
         )
         agent = A2UIAgent(
             name="test_agent",

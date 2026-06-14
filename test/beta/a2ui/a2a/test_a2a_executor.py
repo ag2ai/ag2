@@ -13,7 +13,7 @@ from autogen.beta.a2ui.incoming import A2UIIncomingAction
 from autogen.beta.testing import TestConfig
 
 VERSION = "v0.9"
-CATALOG = "https://a2ui.org/specification/v0_9/basic_catalog.json"
+CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 
 A2UI_RESPONSE = (
     f'Here is your UI.\n---a2ui_JSON---\n[{{"version": "{VERSION}", "deleteSurface": {{"surfaceId": "s1"}}}}]'

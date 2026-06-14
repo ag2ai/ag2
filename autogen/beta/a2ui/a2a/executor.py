@@ -21,7 +21,7 @@ from autogen.beta.context import ConversationContext
 from autogen.beta.events import ClientToolCallEvent
 from autogen.beta.stream import MemoryStream
 
-from .._types import JsonObject
+from .._types import A2UIVersion, JsonObject
 from ..agent import A2UIAgent
 from ..constants import A2UI_MIME_TYPE
 from ..incoming import (
@@ -58,7 +58,7 @@ class A2UIAgentExecutor(AgentExecutor):
          a corrective ``TextInput`` so the agent can regenerate.
     4. After the agent completes, parse the final ``ModelResponse.content``
        for the A2UI delimiter and split it into a text ``Part`` plus a
-       canonical A2UI DataPart (MIME ``application/json+a2ui``) carrying
+       canonical A2UI DataPart (MIME ``application/a2ui+json``) carrying
        the operation list.
     """
 
@@ -67,7 +67,7 @@ class A2UIAgentExecutor(AgentExecutor):
         self._a2ui_agent = agent
 
     @property
-    def protocol_version(self) -> str:
+    def protocol_version(self) -> A2UIVersion:
         return self._a2ui_agent.protocol_version
 
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:

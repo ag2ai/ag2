@@ -12,7 +12,7 @@ from autogen.beta.testing import TestConfig
 VALID_RESPONSE = (
     "Here is your UI.\n---a2ui_JSON---\n"
     '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", '
-    '"catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json"}}]'
+    '"catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}]'
 )
 
 INVALID_RESPONSE_MISSING_CATALOG = (

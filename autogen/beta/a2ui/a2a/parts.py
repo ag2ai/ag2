@@ -16,12 +16,12 @@ from a2a.types import Part
 
 from autogen.beta.a2a.mappers import data_part, is_data_part_with_mime, part_data_to_python
 
-from .._types import JsonObject
+from .._types import JsonObject, ServerToClientMessage
 from ..constants import A2UI_MIME_TYPE
 
 
 def create_a2ui_parts(
-    operations: JsonObject | list[JsonObject],
+    operations: ServerToClientMessage | list[ServerToClientMessage],
     *,
     legacy_split: bool = False,
 ) -> list[Part]:
@@ -31,7 +31,7 @@ def create_a2ui_parts(
     list of operations — the canonical A2A v1.0 encoding for A2UI.
 
     Args:
-        operations: A single A2UI operation dict or a list of them.
+        operations: A single A2UI server→client message or a list of them.
         legacy_split: If True, emit one DataPart per operation with
             ``data`` as a single object. Use this for pre-A2A-v1.0
             renderers that don't accept a list in ``data``.

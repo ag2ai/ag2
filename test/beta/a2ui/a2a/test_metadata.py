@@ -18,14 +18,14 @@ class TestParseClientCapabilities:
             A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {
                 "v0.9": {
                     "supportedCatalogIds": [
-                        "https://a2ui.org/specification/v0_9/basic_catalog.json",
+                        "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
                     ],
                     "inlineCatalogs": [{"catalogId": "https://mycompany.com/inline.json"}],
                 }
             }
         }
         assert parse_client_capabilities(metadata) == A2UIClientCapabilities(
-            supported_catalog_ids=["https://a2ui.org/specification/v0_9/basic_catalog.json"],
+            supported_catalog_ids=["https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"],
             inline_catalogs=[{"catalogId": "https://mycompany.com/inline.json"}],
         )
 

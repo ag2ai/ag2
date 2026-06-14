@@ -15,7 +15,7 @@ from autogen.beta.observers import Observer
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.tool import Tool
 
-from ._types import JsonSchema
+from ._types import A2UIVersion, JsonSchema
 from .actions import A2UIAction
 from .constants import A2UI_DEFAULT_DELIMITER
 from .middleware import A2UIValidationMiddleware
@@ -33,8 +33,9 @@ DEFAULT_SYSTEM_MESSAGE = (
 class A2UIAgent(Agent):
     """An autogen.beta.Agent that produces A2UI rich UI output.
 
-    Supports protocol version v0.9 with the basic catalog and optional custom
-    catalogs. The LLM emits text + delimiter + A2UI JSON; the agent validates
+    Supports protocol versions v0.9 (default), v0.9.1, and v1.0 with the basic
+    catalog and optional custom catalogs. The LLM emits text + delimiter + A2UI
+    JSON; the agent validates
     the JSON against the catalog schema via a retry-on-error middleware
     before yielding the final ``ModelResponse``.
 
@@ -60,7 +61,7 @@ class A2UIAgent(Agent):
         *,
         config: ModelConfig | None = None,
         # A2UI-specific
-        protocol_version: str = "v0.9",
+        protocol_version: A2UIVersion = "v0.9",
         custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
         custom_catalog_rules: str | None = None,
         include_schema_in_prompt: bool = True,
@@ -91,7 +92,7 @@ class A2UIAgent(Agent):
                 system prompt. May be a string, a callable prompt hook, or
                 an iterable of either.
             config: LLM model configuration.
-            protocol_version: A2UI protocol version. Currently only "v0.9".
+            protocol_version: A2UI protocol version: "v0.9" (default), "v0.9.1", or "v1.0".
             custom_catalog: A custom catalog that extends the basic catalog.
                 Can be a path or dict. Must include a ``$id`` field used as
                 the catalogId in A2UI messages.
@@ -179,7 +180,7 @@ class A2UIAgent(Agent):
         )
 
     @property
-    def protocol_version(self) -> str:
+    def protocol_version(self) -> A2UIVersion:
         """The A2UI protocol version this agent targets."""
         return self.schema_manager.protocol_version
 

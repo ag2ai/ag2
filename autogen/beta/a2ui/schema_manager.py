@@ -5,21 +5,46 @@
 import json
 import os
 from pathlib import Path
+from typing import TypedDict
 
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
-from ._types import JsonObject, JsonSchema, JsonValue  # noqa: F401
+from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue  # noqa: F401
 from .actions import A2UIAction
 from .constants import A2UI_DEFAULT_DELIMITER
 
 _VERSIONS_DIR = Path(__file__).parent
 
-_VERSION_CONFIG: dict[str, dict[str, str]] = {
+
+class _VersionConfigEntry(TypedDict):
+    """Per-version identifiers used to load specs and stamp wire messages."""
+
+    default_catalog_id: str
+    schema_base_uri: str
+    version_string: A2UIVersion
+
+
+# Catalog ids / schema base uris are the canonical A2UI identifiers (they
+# resolve on a2ui.org and must match what renderers advertise in
+# ``supportedCatalogIds``). v0.9.1 is a backward-compatible patch over v0.9: it
+# reuses v0.9's schema ``$id``s and catalog, and only widens the ``version``
+# enum to accept ``"v0.9.1"`` — hence its identifiers point at ``v0_9``.
+_VERSION_CONFIG: dict[A2UIVersion, _VersionConfigEntry] = {
     "v0.9": {
-        "default_catalog_id": "https://a2ui.org/specification/v0_9/basic_catalog.json",
+        "default_catalog_id": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
         "schema_base_uri": "https://a2ui.org/specification/v0_9/",
         "version_string": "v0.9",
+    },
+    "v0.9.1": {
+        "default_catalog_id": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+        "schema_base_uri": "https://a2ui.org/specification/v0_9/",
+        "version_string": "v0.9.1",
+    },
+    "v1.0": {
+        "default_catalog_id": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+        "schema_base_uri": "https://a2ui.org/specification/v1_0/",
+        "version_string": "v1.0",
     },
 }
 
@@ -36,12 +61,13 @@ class A2UISchemaManager:
     components. Custom catalogs are loaded alongside the basic catalog and
     both are included in the system prompt.
 
-    Directory structure per version::
+    One directory per supported version (``v0_9/``, ``v0_9_1/``, ``v1_0/``),
+    each with the same layout (shown for ``v0_9/``)::
 
         v0_9/
         ├── prompt_example.json     # Our prompt example (version-specific)
         ├── prompt_message_types.md # Message type examples to help the LLM (version-specific)
-        └── spec/                   # Copied directly from google/A2UI
+        └── spec/                   # Vendored as-is from a2ui-project/a2ui
             ├── server_to_client.json
             ├── basic_catalog.json
             ├── common_types.json
@@ -51,7 +77,7 @@ class A2UISchemaManager:
 
     def __init__(
         self,
-        protocol_version: str = "v0.9",
+        protocol_version: A2UIVersion = "v0.9",
         custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
         custom_catalog_rules: str | None = None,
         spec_dir: "str | os.PathLike[str] | None" = None,
@@ -59,7 +85,7 @@ class A2UISchemaManager:
         """Initialize the schema manager.
 
         Args:
-            protocol_version: The A2UI protocol version. Currently only "v0.9".
+            protocol_version: The A2UI protocol version: "v0.9" (default), "v0.9.1", or "v1.0".
             custom_catalog: A custom catalog that extends the basic catalog. Can be:
                 - A file path (str or PathLike) to a JSON catalog file
                 - A dict with the catalog schema directly
@@ -117,7 +143,7 @@ class A2UISchemaManager:
             self._catalog_id = str(_VERSION_CONFIG[protocol_version]["default_catalog_id"])
 
     @property
-    def protocol_version(self) -> str:
+    def protocol_version(self) -> A2UIVersion:
         return self._protocol_version
 
     @property
@@ -145,7 +171,7 @@ class A2UISchemaManager:
         return self._common_types
 
     @property
-    def version_string(self) -> str:
+    def version_string(self) -> A2UIVersion:
         """The version string used in A2UI messages (e.g., 'v0.9')."""
         return _VERSION_CONFIG[self._protocol_version]["version_string"]
 

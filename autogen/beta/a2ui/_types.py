@@ -13,6 +13,10 @@ JsonSchema: TypeAlias = dict[str, "JsonValue"]
 """A JSON Schema document. Same shape as ``JsonObject``; named distinctly
 so call sites express intent (schema vs. arbitrary data)."""
 
+A2UIVersion: TypeAlias = Literal["v0.9", "v0.9.1", "v1.0"]
+"""Supported A2UI protocol versions. ``v0.9.1`` is a backward-compatible patch
+over ``v0.9``; ``callFunction`` / ``actionResponse`` are valid only for ``v1.0``."""
+
 
 class CreateSurfaceContent(TypedDict, total=False):
     """Payload of a ``createSurface`` message.
@@ -29,7 +33,7 @@ class CreateSurfaceContent(TypedDict, total=False):
 class CreateSurfaceMessage(TypedDict, total=False):
     """``createSurface`` envelope."""
 
-    version: Literal["v0.9"]
+    version: A2UIVersion
     createSurface: CreateSurfaceContent
 
 
@@ -43,7 +47,7 @@ class UpdateComponentsContent(TypedDict, total=False):
 class UpdateComponentsMessage(TypedDict, total=False):
     """``updateComponents`` envelope."""
 
-    version: Literal["v0.9"]
+    version: A2UIVersion
     updateComponents: UpdateComponentsContent
 
 
@@ -58,7 +62,7 @@ class UpdateDataModelContent(TypedDict, total=False):
 class UpdateDataModelMessage(TypedDict, total=False):
     """``updateDataModel`` envelope."""
 
-    version: Literal["v0.9"]
+    version: A2UIVersion
     updateDataModel: UpdateDataModelContent
 
 
@@ -71,87 +75,98 @@ class DeleteSurfaceContent(TypedDict, total=False):
 class DeleteSurfaceMessage(TypedDict, total=False):
     """``deleteSurface`` envelope."""
 
-    version: Literal["v0.9"]
+    version: A2UIVersion
     deleteSurface: DeleteSurfaceContent
 
 
-ServerToClientMessage: TypeAlias = (
-    CreateSurfaceMessage | UpdateComponentsMessage | UpdateDataModelMessage | DeleteSurfaceMessage
-)
+class CallFunctionContent(TypedDict, total=False):
+    """Payload of a ``callFunction`` message (v1.0).
+
+    Mirrors ``server_to_client.json#/$defs/CallFunctionMessage/properties/callFunction``
+    (a ``common_types.json#/$defs/FunctionCall`` with ``call`` required). Per spec,
+    ``args`` values may be any ``DynamicValue`` (including ``DataBinding`` refs and
+    nested function calls), not just plain JSON scalars/objects.
+    """
+
+    call: str
+    args: JsonObject
 
 
-class ActionPayload(TypedDict, total=False):
-    """Payload of an ``action`` client→server message."""
+class CallFunctionMessage(TypedDict, total=False):
+    """``callFunction`` envelope (v1.0): server-initiated client function call.
 
-    name: str
-    surfaceId: str
-    sourceComponentId: str
-    timestamp: str
-    context: JsonObject
+    ``functionCallId`` is a unique id the client copies verbatim into its
+    function response or error. ``version`` is ``v1.0``-only — this message type
+    does not exist in v0.9.
+    """
+
+    version: Literal["v1.0"]
+    functionCallId: str
+    wantResponse: bool
+    callFunction: CallFunctionContent
 
 
-class ErrorPayload(TypedDict, total=False):
-    """Payload of an ``error`` client→server message.
+class ActionResponseError(TypedDict, total=False):
+    """The ``error`` arm of an ``actionResponse`` body (v1.0).
 
-    ``path`` is only set for ``code == "VALIDATION_FAILED"`` per spec.
+    Both ``code`` and ``message`` are required by spec; kept ``total=False`` to
+    match the structural (duck-typed) convention used throughout this module.
     """
 
     code: str
-    surfaceId: str
     message: str
-    path: str
 
 
-class ActionEnvelope(TypedDict, total=False):
-    """``action`` envelope."""
+class ActionResponseContent(TypedDict, total=False):
+    """Payload of an ``actionResponse`` message (v1.0).
 
-    version: Literal["v0.9"]
-    action: ActionPayload
+    Per spec the body carries exactly one of ``value`` or ``error``.
+    """
 
-
-class ErrorEnvelope(TypedDict, total=False):
-    """``error`` envelope."""
-
-    version: Literal["v0.9"]
-    error: ErrorPayload
+    value: JsonValue
+    error: ActionResponseError
 
 
-ClientToServerMessage: TypeAlias = ActionEnvelope | ErrorEnvelope
+class ActionResponseMessage(TypedDict, total=False):
+    """``actionResponse`` envelope (v1.0): server response to a client action.
+
+    ``version`` is ``v1.0``-only — this message type does not exist in v0.9.
+    """
+
+    version: Literal["v1.0"]
+    actionId: str
+    actionResponse: ActionResponseContent
 
 
-class ClientCapabilitiesV09Payload(TypedDict, total=False):
-    """``a2uiClientCapabilities.v0.9`` body."""
-
-    supportedCatalogIds: list[str]
-    inlineCatalogs: list[JsonObject]
-
-
-class ClientCapabilitiesEnvelope(TypedDict, total=False):
-    """Outer wrapper keyed by version, e.g. ``{"v0.9": {...}}``."""
-
-    v09: ClientCapabilitiesV09Payload
+ServerToClientMessage: TypeAlias = (
+    CreateSurfaceMessage
+    | UpdateComponentsMessage
+    | UpdateDataModelMessage
+    | DeleteSurfaceMessage
+    | CallFunctionMessage
+    | ActionResponseMessage
+)
 
 
-class ClientDataModelPayload(TypedDict, total=False):
-    """``a2uiClientDataModel`` body."""
-
-    version: Literal["v0.9"]
-    surfaces: dict[str, JsonObject]
+# NOTE: client→server (action/error) and client-capability / data-model wire
+# shapes are intentionally NOT modeled as TypedDicts here. The code that parses
+# them decodes into dedicated dataclasses instead — see ``incoming.py``
+# (``A2UIIncomingAction`` / ``A2UIIncomingError``) and ``a2a/metadata.py``
+# (``A2UIClientCapabilities`` / ``A2UIClientDataModel``). If a future phase needs
+# typed inbound wire structures, add them here AND wire them into those parsers.
 
 
 __all__ = (
-    "ActionEnvelope",
-    "ActionPayload",
-    "ClientCapabilitiesEnvelope",
-    "ClientCapabilitiesV09Payload",
-    "ClientDataModelPayload",
-    "ClientToServerMessage",
+    "A2UIVersion",
+    "ActionResponseContent",
+    "ActionResponseError",
+    "ActionResponseMessage",
+    "CallFunctionContent",
+    "CallFunctionMessage",
     "CreateSurfaceContent",
     "CreateSurfaceMessage",
     "DeleteSurfaceContent",
     "DeleteSurfaceMessage",
-    "ErrorEnvelope",
-    "ErrorPayload",
     "JsonObject",
     "JsonScalar",
     "JsonSchema",
