@@ -43,11 +43,14 @@ from .compact import CompactStrategy, CompactTrigger
 from .config import LLMClient, ModelConfig
 from .events import (
     BaseEvent,
+    DrainedModelRequest,
     HumanInputRequest,
     Input,
     ModelRequest,
     ModelResponse,
+    ToolCallsEvent,
     ToolResultsEvent,
+    UsageEvent,
 )
 from .events.conditions import Condition
 from .events.lifecycle import (
@@ -76,7 +79,7 @@ from .observers import Observer
 from .observers import observer as observer_factory
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
-from .task import Task, TaskSpec
+from .task import CheckpointStore, Task, TaskSpec
 from .tools.executor import ToolExecutor
 from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
@@ -84,6 +87,7 @@ from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
 from .types import ClassInfo, Omittable, omit
+from .usage import UsageReport
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
@@ -236,6 +240,10 @@ class AgentReply(Generic[TResult, TAgent]):
     @property
     def history(self) -> History:
         return self.context.stream.history
+
+    async def usage(self) -> UsageReport:
+        """Token usage aggregated over the whole run (all events on this stream)."""
+        return UsageReport.from_events(await self.context.stream.history.get_events())
 
     @overload
     async def ask(
@@ -668,6 +676,8 @@ class Agent(Generic[TResult]):
         capability: str | None = None,
         ttl_seconds: int | None = None,
         context: Context | None = None,
+        checkpoint_store: CheckpointStore | None = None,
+        resume_from: str | None = None,
     ) -> Task:
         """Create a ``Task`` whose lifecycle this Agent owns.
 
@@ -685,6 +695,13 @@ class Agent(Generic[TResult]):
         agent is registered with the network, the ``TaskMirror`` calls
         ``Hub.record_observation`` on the terminal event so the matching
         ``Resume.observed[capability]`` track record updates.
+
+        ``checkpoint_store`` plus ``resume_from`` opt the task into
+        restart-recoverable work: ``checkpoint(state)`` writes via the
+        store, and on the next run ``resume_from=<prior_task_id>``
+        reads that state back into ``task.resumed_state``. Standalone
+        agents that don't supply a store pay no cost — checkpoint
+        calls become silent no-ops.
         """
         spec = TaskSpec(
             title=title,
@@ -697,6 +714,8 @@ class Agent(Generic[TResult]):
             spec=spec,
             context=context,
             ttl_seconds=ttl_seconds,
+            checkpoint_store=checkpoint_store,
+            resume_from=resume_from,
         )
 
     def tool(
@@ -1109,9 +1128,39 @@ class Agent(Generic[TResult]):
                 agent_turn = partial(mw.on_turn, agent_turn)
                 llm_call = partial(mw.on_llm_call, llm_call)
 
-            async def _call_client(context: Context) -> None:
+            async def _call_client(event: BaseEvent, context: Context) -> None:
+                # Skip the LLM trigger when re-entered with a request we
+                # injected ourselves a few lines below. Identity is carried by
+                # the DrainedModelRequest subtype rather than a mutable flag
+                # on Context, so the contract is checkable by isinstance and
+                # independent of subscriber ordering.
+                if isinstance(event, DrainedModelRequest):
+                    return
+
+                # Drain any pending enqueued input into the conversation before
+                # the LLM sees the next call. Re-emit as DrainedModelRequest
+                # so observers/logging/history storage still see it, while the
+                # isinstance check above short-circuits the recursive entry
+                # instead of issuing a second LLM call.
+                merged = _drain_pending(context)
+                if merged is not None:
+                    await context.send(DrainedModelRequest(merged.parts))
+
                 messages = await context.stream.history.get_events()
                 result = await llm_call(messages, context)
+                # Emit usage at the point it is spent, decoupled from the
+                # response, so token accounting never depends on a response
+                # being produced. UsageReport reads these events alone.
+                if result.usage:
+                    await context.send(
+                        UsageEvent(
+                            result.usage,
+                            kind="model_call",
+                            model=result.model,
+                            provider=result.provider,
+                            finish_reason=result.finish_reason,
+                        )
+                    )
                 await context.send(result)
 
             with ExitStack() as stack:
@@ -1212,16 +1261,60 @@ class Agent(Generic[TResult]):
 
 
 async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
+    # Drain stream-level inbox before the first model call: any messages
+    # enqueued by background tasks from a previous ``ask`` (or any other
+    # producer) get merged into this turn's initial ModelRequest so the LLM
+    # sees them as one user turn, ordered before the new request.
+    if isinstance(event, ModelRequest):
+        leftover = _drain_pending(context)
+        if leftover is not None:
+            event = ModelRequest([*leftover.parts, *event.parts])
+
+    # Sending the event triggers _call_client via the stream subscriber,
+    # which drains any pending enqueued input before the LLM call.
     async with context.stream.get(ModelResponse) as result:
         await context.send(event)
         message: ModelResponse = await result
 
-    while message.tool_calls and not message.response_force:
-        async with context.stream.get(ModelResponse) as result:
-            await context.send(message.tool_calls)
-            message = await result
+    while True:
+        if message.tool_calls and not message.response_force:
+            # Sending tool_calls triggers the tool executor, which produces a
+            # ToolResultsEvent (or, for `final` tool results, a ModelResponse
+            # directly). _call_client (auto-subscribed to ToolResultsEvent)
+            # drains pending input and calls the LLM; we capture whichever
+            # ModelResponse lands first.
+            async with context.stream.get(ModelResponse) as result:
+                await context.send(message.tool_calls)
+                message = await result
+            continue
 
-    return message
+        # Model has nothing more to do this turn. Drain any leftover enqueued
+        # input into one more request to give it a chance to react. Background
+        # tasks are not awaited — if they finish in time their enqueue lands
+        # here, otherwise their result is lost (see ``spawn_background``).
+        merged = _drain_pending(context)
+        if merged is not None:
+            async with context.stream.get(ModelResponse) as result:
+                await context.send(merged)
+                message = await result
+            continue
+
+        return message
+
+
+def _drain_pending(context: Context) -> ModelRequest | None:
+    """Drain the pending queue and return a single merged ``ModelRequest``.
+
+    Returns ``None`` if the queue was empty (so callers can short-circuit).
+    Multiple enqueues are merged because the wire form only cares about the
+    flat list of parts — one merged request keeps history compact.
+    """
+    queue = context.pending_messages
+    if not queue:
+        return None
+    parts: list[Input] = [part for request in queue for part in request.parts]
+    queue.clear()
+    return ModelRequest(parts)
 
 
 def _wrap_prompt_hook(
@@ -1751,7 +1844,7 @@ class _AggregationMiddleware(BaseMiddleware):
         event: BaseEvent,
         context: Context,
     ) -> Any:
-        count_before = len(list(await context.stream.history.get_events()))
+        events_before = list(await context.stream.history.get_events())
 
         try:
             result = await call_next(event, context)
@@ -1771,7 +1864,11 @@ class _AggregationMiddleware(BaseMiddleware):
 
             if self._trigger.every_n_events > 0:
                 threshold = self._trigger.every_n_events
-                if count_after // threshold > count_before // threshold:
+                # Count conversational/work events only, not telemetry (e.g. UsageEvent).
+                _countable = (ModelRequest, ModelResponse, ToolCallsEvent, ToolResultsEvent)
+                n_before = sum(1 for e in events_before if isinstance(e, _countable))
+                n_after = sum(1 for e in events_after if isinstance(e, _countable))
+                if n_after // threshold > n_before // threshold:
                     should_aggregate = True
 
             if should_aggregate:

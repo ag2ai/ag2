@@ -5,7 +5,7 @@
 import asyncio
 import base64
 from collections.abc import AsyncIterator, Iterable
-from contextlib import ExitStack, asynccontextmanager
+from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import replace
 from typing import Any, get_args
 
@@ -46,6 +46,7 @@ from autogen.beta.tools.final.function_tool import (
     FunctionDefinition,
     FunctionToolSchema,
 )
+from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 from autogen.beta.types import (
     AudioMediaType,
@@ -83,13 +84,13 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
     else:
         async with (
             httpx.AsyncClient(
-                headers=config.headers,
+                headers=config.headers,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 timeout=config.connection_timeout,
                 proxy=config.proxy,
                 verify=config.verify,
             ) as client,
             streamable_http_client(
-                config.server_url,
+                config.server_url,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 http_client=client,
             ) as (read_stream, write_stream, _),
             ClientSession(read_stream, write_stream) as session,
@@ -125,7 +126,7 @@ class _MCPProxyTool(Tool):
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),
@@ -140,7 +141,8 @@ class _MCPProxyTool(Tool):
             result = await execution(event, context)
             await context.send(result)
 
-        stack.enter_context(context.stream.where(ToolCallEvent.name == self.name).sub_scope(execute))
+        # ``Event.field == value`` builds a Condition at runtime; mypy sees ``bool``.
+        stack.enter_context(context.stream.where(ToolCallEvent.name == self.name).sub_scope(execute))  # type: ignore[arg-type]
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent | ToolErrorEvent":
         try:
@@ -157,7 +159,7 @@ class _MCPProxyTool(Tool):
         return ToolResultEvent.from_call(event, result=_extract_content(result))
 
 
-class MCPServer(Toolkit):
+class MCPToolkit(Toolkit):
     """Expose the tools of an MCP server as ordinary local tools.
 
     Accepts either:
@@ -193,7 +195,7 @@ class MCPServer(Toolkit):
             middleware=middleware,
         )
 
-    async def schemas(self, context: "Context") -> Iterable[FunctionToolSchema]:
+    async def schemas(self, context: "Context") -> Iterable[ToolSchema]:
         await self._discover_tools(context)
         return await super().schemas(context)
 
@@ -210,11 +212,12 @@ class MCPServer(Toolkit):
             async with _mcp_session(resolved) as session:
                 raw_tools = (await session.list_tools()).tools
 
+            # Both already resolved (Variable -> concrete) by _resolve_config above.
             allowed = resolved.allowed_tools
-            blocked = set(resolved.blocked_tools or [])
+            blocked = set(resolved.blocked_tools or [])  # type: ignore[arg-type]
 
             for raw in raw_tools:
-                if allowed is not None and raw.name not in allowed:
+                if allowed is not None and raw.name not in allowed:  # type: ignore[operator]
                     continue
                 if raw.name in blocked:
                     continue

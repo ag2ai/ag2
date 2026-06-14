@@ -11,6 +11,7 @@ from .input_events import (
     BinaryType,
     DataInput,
     DocumentInput,
+    DrainedModelRequest,
     FileIdInput,
     ImageInput,
     Input,
@@ -31,7 +32,14 @@ from .lifecycle import (
     ObserverStarted,
     UnknownEvent,
 )
-from .task_events import TaskCompleted, TaskExpired, TaskFailed, TaskProgress, TaskStarted
+from .task_events import (
+    TaskCancelled,
+    TaskCompleted,
+    TaskExpired,
+    TaskFailed,
+    TaskProgress,
+    TaskStarted,
+)
 from .tool_events import (
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
@@ -53,6 +61,7 @@ from .types import (
     ModelReasoning,
     ModelResponse,
     Usage,
+    UsageEvent,
 )
 from .voice import (
     RecordedAudioEvent,
@@ -79,6 +88,7 @@ __all__ = (
     "Condition",
     "DataInput",
     "DocumentInput",
+    "DrainedModelRequest",
     "EventLogFailed",
     "Field",
     "FileIdInput",
@@ -98,6 +108,7 @@ __all__ = (
     "RecordedAudioEvent",
     "Severity",
     "SynthesizedAudioEvent",
+    "TaskCancelled",
     "TaskCompleted",
     "TaskExpired",
     "TaskFailed",
@@ -116,5 +127,6 @@ __all__ = (
     "UnknownEvent",
     "UrlInput",
     "Usage",
+    "UsageEvent",
     "VideoInput",
 )

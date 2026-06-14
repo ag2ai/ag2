@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.exceptions import missing_optional_dependency
+from autogen.beta.exceptions import missing_additional_dependency
 
 try:
-    from .environment import DockerCodeEnvironment
+    from .environment import DockerEnvironment
 except ImportError as e:
-    DockerCodeEnvironment = missing_optional_dependency("DockerCodeEnvironment", "docker", e)  # type: ignore[misc]
+    DockerEnvironment = missing_additional_dependency("DockerEnvironment", "docker>=6.0.0,<8", e)  # type: ignore[misc]
 
-__all__ = ("DockerCodeEnvironment",)
+__all__ = ("DockerEnvironment",)

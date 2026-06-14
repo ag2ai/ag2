@@ -2,12 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .local_skills import SkillsToolkit
+from .local_skills import SkillPlugin, SkillsToolkit
 from .runtime import LocalRuntime
 from .skill_search import SkillSearchToolkit, SkillsClientConfig
 
 __all__ = (
     "LocalRuntime",
+    "SkillPlugin",
     "SkillSearchToolkit",
     "SkillsClientConfig",
     "SkillsToolkit",

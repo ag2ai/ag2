@@ -212,7 +212,7 @@ $functions"""
     def _setup_functions(self) -> None:
         func_file_content = _build_python_functions_file(self._functions)
         func_file = self._work_dir / f"{self._functions_module}.py"
-        func_file.write_text(func_file_content)
+        func_file.write_text(func_file_content, encoding="utf-8")
 
         # Collect requirements
         lists_of_packages = [x.python_packages for x in self._functions if isinstance(x, FunctionWithRequirements)]

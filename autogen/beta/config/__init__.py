@@ -22,6 +22,11 @@ except ImportError as e:
     AnthropicConfig = missing_optional_dependency("AnthropicConfig", "anthropic", e)  # type: ignore[misc]
 
 try:
+    from .bedrock import BedrockConfig
+except ImportError as e:
+    BedrockConfig = missing_optional_dependency("BedrockConfig", "bedrock", e)  # type: ignore[misc]
+
+try:
     from .dashscope import DashScopeConfig
 except ImportError as e:
     DashScopeConfig = missing_optional_dependency("DashScopeConfig", "dashscope", e)  # type: ignore[misc]
@@ -37,8 +42,14 @@ try:
 except ImportError as e:
     OllamaConfig = missing_optional_dependency("OllamaConfig", "ollama", e)  # type: ignore[misc]
 
+try:
+    from .xai import XAIConfig
+except ImportError as e:
+    XAIConfig = missing_optional_dependency("XAIConfig", "xai", e)  # type: ignore[misc]
+
 __all__ = (
     "AnthropicConfig",
+    "BedrockConfig",
     "ContainerInfo",
     "ContainerManager",
     "DashScopeConfig",
@@ -50,4 +61,5 @@ __all__ = (
     "OpenAIConfig",
     "OpenAIResponsesConfig",
     "VertexAIConfig",
+    "XAIConfig",
 )

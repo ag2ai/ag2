@@ -453,3 +453,36 @@ class TestContextExpressionNewSyntax:
             ).evaluate(context)
             is True
         )
+
+    def test_string_injection_prevention(self) -> None:
+        """Regression test for GHSA-9fvw-gr53-m7fw: string context vars must not allow eval injection.
+
+        The exploit requires expression-chaining via `or` (not `;`, which eval() rejects as
+        multi-statement syntax). This test uses a sentinel with an observable side effect so
+        it fails on unpatched code and passes only after the escaping fix.
+        """
+        import builtins
+
+        # Expression-chaining payload: on unpatched code, MARK executes.
+        # eval sees: '' or MARK('PWNED') or '' == 'safe'
+        sentinel: list[str] = []
+        builtins.MARK = sentinel.append  # type: ignore[attr-defined]
+        try:
+            malicious_value = "' or MARK('PWNED') or '"
+            context = ContextVariables(data={"user_input": malicious_value})
+            result = ContextExpression("${user_input} == 'safe'").evaluate(context)
+            assert result is False
+            assert sentinel == [], "Injection executed — escaping fix not applied"
+        finally:
+            del builtins.MARK  # type: ignore[attr-defined]
+
+        # Backslash in value must not cause a SyntaxError or escape sequence issue
+        backslash_value = "path\\to\\file"
+        context2 = ContextVariables(data={"path_var": backslash_value})
+        result2 = ContextExpression("${path_var} == 'other'").evaluate(context2)
+        assert result2 is False
+
+        # Benign string comparison still works
+        context3 = ContextVariables(data={"status": "active"})
+        result3 = ContextExpression("${status} == 'active'").evaluate(context3)
+        assert result3 is True

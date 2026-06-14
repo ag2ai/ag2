@@ -28,6 +28,7 @@ imports tenant modules — the trust boundary runs through ``HubClient``
 
 import asyncio
 import contextlib
+import dataclasses
 import fnmatch
 import json
 import logging
@@ -35,7 +36,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 
 from autogen.beta.knowledge import KnowledgeStore
-from autogen.beta.task import TERMINAL_TASK_STATES, TaskMetadata, TaskSpec, TaskState
+from autogen.beta.task import TERMINAL_TASK_STATES, TaskMetadata, TaskState
 
 from ..adapters.base import ChannelAdapter
 from ..adapters.consulting import ConsultingAdapter
@@ -62,22 +63,25 @@ from ..envelope import (
 )
 from ..errors import (
     AccessDeniedError,
+    AuthError,
     NetworkError,
     NotFoundError,
     ProtocolError,
 )
 from ..identity import ObservedStat, Passport, Resume
-from ..ids import make_id
+from ..ids import _MonotonicIds, make_id
+from ..remote import RemoteAgentProxy
 from ..rule import Rule, parse_duration
 from ..transport.frames import (
-    AcceptFrame,
     ErrorFrame,
     Frame,
     HelloFrame,
     NotifyFrame,
     PingFrame,
     PongFrame,
-    SendFrame,
+    ReceiptFrame,
+    RequestFrame,
+    ResponseFrame,
     WelcomeFrame,
 )
 from ..transport.link import LinkEndpoint
@@ -96,10 +100,12 @@ from .layout import (
     by_capability_path,
     channel_metadata_path,
     channels_root,
+    inbox_cursor_path,
     passport_path,
     resume_path,
     rule_path,
     skill_path,
+    task_checkpoint_path,
     task_metadata_path,
     tasks_root,
     wal_path,
@@ -107,10 +113,28 @@ from .layout import (
 from .listener import HubListener
 from .sweepers import _IntervalSweeper
 
-__all__ = ("Hub",)
+__all__ = ("Hub", "PendingTurn")
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class PendingTurn:
+    """A turn the protocol expects this agent to take.
+
+    ``triggering_envelope_id`` names the envelope that put the turn on
+    the agent — typically the previous speaker's send. ``None`` if no
+    envelope drove the expectation (e.g. fresh channel where the
+    expected speaker is the creator with nothing yet posted).
+    ``expected_at`` is when the turn became theirs (the triggering
+    envelope's ``created_at``, or the current hub clock if no trigger
+    envelope is available).
+    """
+
+    channel_id: str
+    triggering_envelope_id: str | None
+    expected_at: str
 
 
 def _utc_now_iso() -> str:
@@ -121,6 +145,7 @@ _ERROR_CODE_MAP: dict[type, str] = {
     NotFoundError: "not_found",
     AccessDeniedError: "access_denied",
     ProtocolError: "protocol_error",
+    AuthError: "auth_failed",
 }
 
 
@@ -233,6 +258,46 @@ class Hub:
         # a transport with ack frames.
         self._inbox_pending: dict[str, int] = {}
 
+        # Per-recipient, per-channel delivery cursor:
+        # ``agent_id -> {channel_id -> last-acked envelope_id}``. Each
+        # channel is an independently-ordered stream (its own WAL +
+        # lock), so the cursor is scoped per channel: an ack in one
+        # channel must not advance the high-water mark of another, or an
+        # older unacked envelope elsewhere would never replay. On
+        # reconnect with ``HelloFrame.since_envelope_id`` set, the hub
+        # replays, per channel, every dispatched envelope whose id sorts
+        # strictly above ``max(channel_cursor, since_envelope_id)``.
+        # Envelope ids come from ``self._mint_envelope_id`` (strictly
+        # monotonic, time-ordered), so lexicographic compare matches
+        # dispatch ordering within a channel.
+        self._inbox_cursors: dict[str, dict[str, str]] = {}
+
+        # Strictly-monotonic source for envelope ids. The cursor and
+        # replay above rely on per-channel WAL order == sort order, but
+        # ``time.time_ns`` can repeat within a tick on coarse-resolution
+        # clocks (Windows ~15 ms), so a plain ``make_id`` would sort two
+        # same-tick envelopes by their random suffix — non-deterministically.
+        # This clamps each id strictly above the last so sort order always
+        # tracks mint order. State is per-hub (no shared global counter).
+        self._mint_envelope_id = _MonotonicIds()
+
+        # Federation dispatch registry keyed by ``proxy.scheme``. When
+        # a recipient passport has ``effective_kind == "remote_agent"``
+        # the hub looks up the proxy by ``recipient.auth.scheme`` and
+        # hands the envelope to ``proxy.dispatch(...)`` instead of
+        # sending a ``NotifyFrame`` to a local endpoint. No proxies
+        # ship in the framework; tenants register their own.
+        self._remote_proxies: dict[str, RemoteAgentProxy] = {}
+
+        # ``(channel_id, sender_id, causation_id) -> envelope_id``.
+        # Lets handlers short-circuit logically-duplicate work after an
+        # at-least-once redelivery: a sender that retries with the same
+        # ``causation_id`` looks up the prior envelope and skips the
+        # repeated side effect. Populated on every WAL append, pruned
+        # when a channel transitions to a terminal state, and rebuilt
+        # from active-channel WALs on ``hydrate()``.
+        self._causation_index: dict[tuple[str, str, str], str] = {}
+
         # Transport-side state.
         self._endpoints_by_id: dict[str, LinkEndpoint] = {}
         self._agent_to_endpoint: dict[str, str] = {}
@@ -327,6 +392,8 @@ class Hub:
         self._adapter_states.clear()
         self._tasks.clear()
         self._channel_tasks.clear()
+        self._inbox_cursors.clear()
+        self._causation_index.clear()
 
         # Identities.
         agent_children = await self._store.list(agents_root())
@@ -584,6 +651,32 @@ class Hub:
         """The currently active arbiter (read-only access for testing)."""
         return self._arbiter
 
+    def register_remote_proxy(self, proxy: RemoteAgentProxy) -> None:
+        """Register a federation proxy keyed by ``proxy.scheme``.
+
+        When the hub dispatches an envelope to a recipient whose
+        passport has ``effective_kind == "remote_agent"``, it looks up
+        the proxy by the recipient's ``auth.scheme`` and calls
+        ``proxy.dispatch(envelope, recipient)`` instead of sending a
+        ``NotifyFrame`` to a local endpoint. Re-registering at the
+        same ``scheme`` replaces the prior proxy.
+        """
+        self._remote_proxies[proxy.scheme] = proxy
+
+    def unregister_remote_proxy(self, scheme: str) -> RemoteAgentProxy | None:
+        """Remove the proxy registered for ``scheme`` and return it.
+
+        Returns ``None`` if no proxy was registered for ``scheme``.
+        The caller is responsible for awaiting ``proxy.close()``
+        — the hub leaves lifecycle decisions to whoever owns the
+        proxy instance.
+        """
+        return self._remote_proxies.pop(scheme, None)
+
+    def remote_proxy_for(self, scheme: str) -> RemoteAgentProxy | None:
+        """Read-only lookup against the proxy registry."""
+        return self._remote_proxies.get(scheme)
+
     def health(self) -> dict:
         """Return an operational snapshot of hub state.
 
@@ -790,8 +883,14 @@ class Hub:
         skill_md: str | None = None,
         rule: Rule | None = None,
     ) -> Passport:
-        adapter = self._auth.get(passport.auth.scheme)
-        await adapter.validate(passport, passport.auth.claim)
+        # Remote-agent passports represent participants on another hub
+        # and ``auth.scheme`` is a routing label consumed by the
+        # registered ``RemoteAgentProxy`` — not a credential to be
+        # validated locally. Skip the local auth check for them;
+        # authentication on the wire belongs to the originating hub.
+        if passport.effective_kind != "remote_agent":
+            adapter = self._auth.get(passport.auth.scheme)
+            await adapter.validate(passport, passport.auth.claim)
 
         async with self._registration_lock:
             # Reject a re-register that collides on ``name``: the prior
@@ -881,6 +980,8 @@ class Hub:
             # Drop inbox accounting so a future re-register with a
             # different agent_id starts from zero.
             self._inbox_pending.pop(agent_id, None)
+            self._inbox_cursors.pop(agent_id, None)
+            await self._store.delete(inbox_cursor_path(agent_id))
 
         await self._persist_capability_index()
         logger.info("agent unregistered: agent_id=%s", agent_id)
@@ -919,6 +1020,39 @@ class Hub:
         if resume is None:
             raise NotFoundError(f"resume not found: {agent_id}")
         return resume
+
+    def find_agent_id(self, name: str) -> str | None:
+        """Resolve ``name`` to its registered ``agent_id``, or ``None``.
+
+        Non-raising peer to :meth:`get_agent` — callers that need to
+        branch on "is this name registered?" without catching an
+        exception use this directly. Returns ``None`` when ``name``
+        has no current registration.
+        """
+        return self._name_to_id.get(name)
+
+    def name_to_id_map(self) -> dict[str, str]:
+        """Snapshot of the ``name → agent_id`` directory.
+
+        Public read surface so callers that need reverse name
+        resolution (e.g. ``WorkflowAdapter`` resolving handoff target
+        names to ids) don't reach into the private index. Returns a
+        copy so mutation can't corrupt the registry.
+        """
+        return dict(self._name_to_id)
+
+    async def get_rule(self, agent_id: str) -> Rule:
+        """Return the rule attached to ``agent_id``.
+
+        Raises :class:`NotFoundError` if no rule is registered — the
+        registration path stamps a default :class:`Rule` for every
+        agent, so a missing entry indicates the agent itself is
+        unregistered.
+        """
+        rule = self._rules.get(agent_id)
+        if rule is None:
+            raise NotFoundError(f"rule not found: {agent_id}")
+        return rule
 
     async def get_skill(self, agent_id: str) -> str | None:
         if agent_id in self._skills:
@@ -1501,6 +1635,30 @@ class Hub:
             results.append(metadata)
         return results[:limit]
 
+    async def checkpoint_task(self, task_id: str, state: dict[str, object]) -> None:
+        """Persist an owner-supplied resume snapshot for ``task_id``.
+
+        Writes a single JSON blob at ``tasks/{task_id}/checkpoint.json``;
+        last-write-wins, no history. The framework treats the payload as
+        opaque — owners pick what to store and how to interpret it on
+        resume. Pairs with :meth:`read_task_checkpoint` for the read
+        side; the canonical entry point is the ``HubBackedCheckpointStore``
+        on the client.
+        """
+        await self._store.write(task_checkpoint_path(task_id), json.dumps(state))
+
+    async def read_task_checkpoint(self, task_id: str) -> dict[str, object] | None:
+        """Read the resume snapshot for ``task_id``, or ``None`` if absent.
+
+        Returned dict is the value the owner most recently passed to
+        :meth:`checkpoint_task`. Malformed JSON on disk surfaces as an
+        exception — the framework does not silently swallow corruption.
+        """
+        raw = await self._store.read(task_checkpoint_path(task_id))
+        if raw is None:
+            return None
+        return json.loads(raw)
+
     # ── Sweeper hook ────────────────────────────────────────────────────────
 
     async def expire_due(self) -> None:
@@ -1641,7 +1799,7 @@ class Hub:
                 )
             adapter.validate_send(metadata, envelope, state)
 
-            envelope.envelope_id = make_id()
+            envelope.envelope_id = self._mint_envelope_id()
             envelope.created_at = self._clock()
 
             await self._wal_append(envelope)
@@ -1704,9 +1862,65 @@ class Hub:
             raise NotFoundError(f"endpoint not attached: {endpoint_id}")
         if agent_id not in self._passports:
             raise NotFoundError(f"agent not registered: {agent_id}")
+        # If the agent already has an endpoint binding (reconnect from a
+        # different connection), evict the prior mapping before stamping
+        # the new one. The prior endpoint stays alive — other agents
+        # bound to it keep working — but envelopes addressed to this
+        # agent now route through the new endpoint.
+        prior_endpoint_id = self._agent_to_endpoint.get(agent_id)
+        if prior_endpoint_id is not None and prior_endpoint_id != endpoint_id:
+            prior_bound = self._endpoint_to_agents.get(prior_endpoint_id)
+            if prior_bound is not None:
+                prior_bound.discard(agent_id)
+                if not prior_bound:
+                    self._endpoint_to_agents.pop(prior_endpoint_id, None)
+            prior_endpoint = self._endpoints_by_id.get(prior_endpoint_id)
+            if prior_endpoint is not None and prior_endpoint.agent_id == agent_id:
+                prior_endpoint.agent_id = None
         self._endpoints_by_id[endpoint_id].agent_id = agent_id
         self._agent_to_endpoint[agent_id] = endpoint_id
         self._endpoint_to_agents.setdefault(endpoint_id, set()).add(agent_id)
+
+    async def pending_turns_for(self, agent_id: str) -> "list[PendingTurn]":
+        """Return turns in active channels where the protocol expects this agent.
+
+        Walks every active channel the agent participates in, asks the
+        registered adapter via :meth:`ChannelAdapter.expected_next`,
+        and returns a :class:`PendingTurn` per channel where the agent
+        is named. Channels with no specific expected speaker (free-form
+        conversations) or where another participant is expected are
+        skipped. The triggering envelope's ``created_at`` is read from
+        the WAL; if the trigger envelope cannot be located the current
+        hub clock is used as a fallback.
+        """
+        if agent_id not in self._passports:
+            return []
+        results: list[PendingTurn] = []
+        for channel_id, metadata in self._active_channels.items():
+            if not any(p.agent_id == agent_id for p in metadata.participants):
+                continue
+            adapter = self._adapters.get((metadata.manifest.type, metadata.manifest.version))
+            state = self._adapter_states.get(channel_id)
+            if adapter is None or state is None:
+                continue
+            expected = adapter.expected_next(metadata, state)
+            if expected is None or expected.agent_id != agent_id:
+                continue
+            expected_at = ""
+            if expected.triggering_envelope_id:
+                wal = await self.read_wal(channel_id)
+                for env in wal:
+                    if env.envelope_id == expected.triggering_envelope_id:
+                        expected_at = env.created_at or ""
+                        break
+            results.append(
+                PendingTurn(
+                    channel_id=channel_id,
+                    triggering_envelope_id=expected.triggering_envelope_id,
+                    expected_at=expected_at or self._clock(),
+                )
+            )
+        return results
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -1719,6 +1933,12 @@ class Hub:
 
     async def _wal_append(self, envelope: Envelope) -> None:
         await self._store.append(wal_path(envelope.channel_id), envelope.to_json() + "\n")
+        # Track the envelope id under its (channel, sender, causation)
+        # key so a sender retrying with the same ``causation_id`` can
+        # find the prior accepted envelope and skip the side effect.
+        if envelope.causation_id and envelope.envelope_id:
+            key = (envelope.channel_id, envelope.sender_id, envelope.causation_id)
+            self._causation_index[key] = envelope.envelope_id
 
     async def _dispatch(self, envelope: Envelope, metadata: ChannelMetadata) -> None:
         """Send NotifyFrames to the audience (or all participants if broadcast).
@@ -1748,13 +1968,13 @@ class Hub:
                 recipients = [rid for rid in recipients if rid not in unknown] + list(replacement)
 
         for recipient_id in recipients:
+            recipient_passport = self._passports.get(recipient_id)
             if recipient_id == envelope.sender_id:
                 # Self-routing always delivers (protocol broadcasts
                 # include the sender so the sender's Channel handle
                 # sees the lifecycle event).
                 pass
             elif sender_passport is not None:
-                recipient_passport = self._passports.get(recipient_id)
                 recipient_rule = self._rules.get(recipient_id)
                 if recipient_passport is not None and recipient_rule is not None:
                     decision = await self._arbiter.authorize_dispatch(
@@ -1762,6 +1982,39 @@ class Hub:
                     )
                     if isinstance(decision, Deny):
                         continue
+
+            # Federation path: recipients living on another hub are
+            # dispatched through a registered ``RemoteAgentProxy``
+            # keyed by the recipient's auth scheme. Local endpoints are
+            # skipped entirely for these — the remote hub is what holds
+            # the binding.
+            if recipient_passport is not None and recipient_passport.effective_kind == "remote_agent":
+                scheme = recipient_passport.auth.scheme
+                proxy = self._remote_proxies.get(scheme)
+                if proxy is None:
+                    reason = NotFoundError(f"no remote proxy registered for scheme {scheme!r}")
+                    await self._fan_out("on_dispatch_failed", envelope, recipient_id, reason)
+                    logger.warning(
+                        "dispatch failed: channel=%s recipient=%s event=%s reason=%s",
+                        envelope.channel_id,
+                        recipient_id,
+                        envelope.event_type,
+                        reason,
+                    )
+                    continue
+                try:
+                    await proxy.dispatch(envelope, recipient_passport)
+                except Exception as exc:
+                    await self._fan_out("on_dispatch_failed", envelope, recipient_id, exc)
+                    logger.warning(
+                        "remote dispatch failed: channel=%s recipient=%s scheme=%s reason=%s",
+                        envelope.channel_id,
+                        recipient_id,
+                        scheme,
+                        exc,
+                    )
+                continue
+
             endpoint = self._endpoint_for(recipient_id)
             if endpoint is None:
                 continue
@@ -1820,18 +2073,44 @@ class Hub:
             raise
         except Exception:
             pass
+        finally:
+            self._cleanup_endpoint(endpoint)
+
+    def _cleanup_endpoint(self, endpoint: LinkEndpoint) -> None:
+        """Release an endpoint's bindings when its frame loop ends.
+
+        Called from the ``finally`` of :meth:`_handle_endpoint` so a
+        connection drop (client close, transport error) does not leave
+        a stale endpoint entry behind. Any agent still mapped to this
+        endpoint loses its binding — fresh attaches re-bind on demand.
+        """
+        endpoint_id = endpoint.endpoint_id
+        self._endpoints_by_id.pop(endpoint_id, None)
+        bound = self._endpoint_to_agents.pop(endpoint_id, None)
+        if not bound:
+            return
+        for agent_id in bound:
+            if self._agent_to_endpoint.get(agent_id) == endpoint_id:
+                self._agent_to_endpoint.pop(agent_id, None)
 
     async def _dispatch_frame(self, endpoint: LinkEndpoint, frame: Frame) -> None:
-        if isinstance(frame, SendFrame):
-            try:
-                envelope_id = await self.post_envelope(frame.envelope)
-                await endpoint.send_frame(AcceptFrame(envelope_id=envelope_id))
-            except NetworkError as exc:
-                await endpoint.send_frame(ErrorFrame(code=_error_code(exc), message=str(exc)))
+        if isinstance(frame, RequestFrame):
+            await self._handle_request(endpoint, frame)
         elif isinstance(frame, HelloFrame):
             agent_id = self._name_to_id.get(frame.name)
             if agent_id is None:
                 await endpoint.send_frame(ErrorFrame(code="not_found", message=f"unknown name: {frame.name}"))
+                return
+            passport = self._passports.get(agent_id)
+            if passport is None:
+                # Name index disagrees with passport cache — defensive, shouldn't happen.
+                await endpoint.send_frame(ErrorFrame(code="not_found", message=f"no passport for {frame.name}"))
+                return
+            try:
+                adapter = self._auth.get(frame.auth_scheme)
+                await adapter.validate(passport, frame.auth_claim)
+            except AuthError as exc:
+                await endpoint.send_frame(ErrorFrame(code="auth_failed", message=str(exc)))
                 return
             try:
                 self.bind_endpoint(endpoint.endpoint_id, agent_id)
@@ -1839,8 +2118,333 @@ class Hub:
                 await endpoint.send_frame(ErrorFrame(code=_error_code(exc), message=str(exc)))
                 return
             await endpoint.send_frame(WelcomeFrame(endpoint_id=endpoint.endpoint_id, hub_time=self._clock()))
+            if frame.since_envelope_id is not None:
+                await self._replay_for_recipient(agent_id, frame.since_envelope_id)
+        elif isinstance(frame, ReceiptFrame):
+            await self._handle_receipt(frame)
         elif isinstance(frame, PingFrame):
             await endpoint.send_frame(PongFrame())
+
+    async def _handle_request(self, endpoint: LinkEndpoint, frame: RequestFrame) -> None:
+        """Execute a control-plane RPC and reply with a ``ResponseFrame``.
+
+        ``frame.op`` selects the operation; ``frame.params`` is the
+        JSON argument dict. Results are serialised to JSON-compatible
+        values (``to_dict`` for record types, lists thereof for
+        collections). A :class:`NetworkError` maps to
+        ``ok=False`` with the matching ``error_code``; any other
+        exception surfaces as ``error_code="error"``. The same hub
+        methods back both the in-process and the wire path, so
+        behaviour is identical regardless of where the caller lives.
+        """
+        try:
+            result = await self._dispatch_request_op(endpoint, frame.op, frame.params)
+        except NetworkError as exc:
+            await endpoint.send_frame(
+                ResponseFrame(
+                    request_id=frame.request_id,
+                    ok=False,
+                    error_code=_error_code(exc),
+                    error_message=str(exc),
+                )
+            )
+            return
+        except Exception as exc:
+            logger.exception("control-plane op failed: op=%s", frame.op)
+            await endpoint.send_frame(
+                ResponseFrame(
+                    request_id=frame.request_id,
+                    ok=False,
+                    error_code="error",
+                    error_message=str(exc),
+                )
+            )
+            return
+        await endpoint.send_frame(ResponseFrame(request_id=frame.request_id, ok=True, result=result))
+
+    async def _dispatch_request_op(self, endpoint: LinkEndpoint, op: str, params: dict) -> object:
+        """Map one control-plane ``op`` to its hub method + (de)serialisation.
+
+        Long but flat by design: one place to see the entire wire
+        control surface. Each branch deserialises ``params`` into the
+        hub method's arguments and serialises the return value back to
+        a JSON-compatible shape.
+        """
+        # ── Registration / identity ──────────────────────────────────
+        if op == "register":
+            passport = Passport.from_dict(params["passport"])
+            resume = Resume.from_dict(params["resume"])
+            rule = Rule.from_dict(params["rule"]) if params.get("rule") is not None else None
+            registered = await self.register(
+                passport,
+                resume,
+                skill_md=params.get("skill_md"),
+                rule=rule,
+            )
+            # Bind the calling connection to the freshly-stamped identity
+            # so dispatched notifies route back to this endpoint.
+            self.bind_endpoint(endpoint.endpoint_id, registered.agent_id)
+            return registered.to_dict()
+        if op == "get_agent":
+            return (await self.get_agent(params["name_or_id"])).to_dict()
+        if op == "get_resume":
+            return (await self.get_resume(params["agent_id"])).to_dict()
+        if op == "get_skill":
+            return await self.get_skill(params["agent_id"])
+        if op == "get_rule":
+            return (await self.get_rule(params["agent_id"])).to_dict()
+        if op == "find_agent_id":
+            return self.find_agent_id(params["name"])
+        if op == "names_for":
+            return {aid: self.name_for(aid) for aid in params["agent_ids"]}
+        if op == "list_agents":
+            agents = await self.list_agents(
+                capability=params.get("capability"),
+                query=params.get("query"),
+                kind=params.get("kind"),
+                sort_by=params.get("sort_by"),
+                limit=params.get("limit", 50),
+            )
+            return [p.to_dict() for p in agents]
+        if op == "set_resume":
+            await self.set_resume(params["agent_id"], Resume.from_dict(params["resume"]))
+            return None
+        if op == "set_skill":
+            await self.set_skill(params["agent_id"], params.get("skill_md"))
+            return None
+        if op == "set_rule":
+            await self.set_rule(params["agent_id"], Rule.from_dict(params["rule"]))
+            return None
+        if op == "unregister":
+            await self.unregister(params["agent_id"])
+            return None
+
+        # ── Channels ─────────────────────────────────────────────────
+        if op == "create_channel":
+            metadata = await self.create_channel(
+                creator_id=params["creator_id"],
+                manifest_type=params["manifest_type"],
+                manifest_version=params.get("manifest_version", 1),
+                participants=params["participants"],
+                required_acks=params.get("required_acks"),
+                ttl=params.get("ttl"),
+                knobs=params.get("knobs"),
+                intent=params.get("intent"),
+                labels=params.get("labels"),
+            )
+            return metadata.to_dict()
+        if op == "get_channel":
+            return (await self.get_channel(params["channel_id"])).to_dict()
+        if op == "list_channels":
+            channels = await self.list_channels(
+                agent_id=params.get("agent_id"),
+                limit=params.get("limit", 50),
+            )
+            return [m.to_dict() for m in channels]
+        if op == "close_channel":
+            metadata = await self.close_channel(params["channel_id"], reason=params.get("reason", ""))
+            return metadata.to_dict()
+        if op == "post_envelope":
+            return await self.post_envelope(Envelope.from_dict(params["envelope"]))
+        if op == "read_wal":
+            wal = await self.read_wal(
+                params["channel_id"],
+                since=params.get("since", 0),
+                until=params.get("until"),
+            )
+            return [e.to_dict() for e in wal]
+        if op == "find_envelope_by_causation":
+            envelope = await self.find_envelope_by_causation(
+                params["channel_id"],
+                sender_id=params["sender_id"],
+                causation_id=params["causation_id"],
+            )
+            return envelope.to_dict() if envelope is not None else None
+        if op == "can_send":
+            return self.can_send(
+                params["channel_id"],
+                params["sender_id"],
+                event_type=params.get("event_type"),
+            )
+        if op == "pending_turns_for":
+            turns = await self.pending_turns_for(params["agent_id"])
+            return [dataclasses.asdict(t) for t in turns]
+        if op == "report_turn_failure":
+            await self.report_turn_failure(
+                channel_id=params["channel_id"],
+                agent_id=params["agent_id"],
+                envelope_id=params["envelope_id"],
+                exc=RuntimeError(params.get("error", "")),
+            )
+            return None
+
+        # ── Tasks (observe-only) ─────────────────────────────────────
+        if op == "get_task":
+            return (await self.get_task(params["task_id"])).to_dict()
+        if op == "list_tasks":
+            state = TaskState(params["state"]) if params.get("state") is not None else None
+            tasks = await self.list_tasks(
+                agent_id=params.get("agent_id"),
+                channel_id=params.get("channel_id"),
+                state=state,
+                limit=params.get("limit", 50),
+            )
+            return [t.to_dict() for t in tasks]
+        if op == "observe_task":
+            await self.observe_task(TaskMetadata.from_dict(params["metadata"]))
+            return None
+        if op == "update_task":
+            state = TaskState(params["state"]) if params.get("state") is not None else None
+            await self.update_task(
+                params["task_id"],
+                state=state,
+                progress=params.get("progress"),
+                result=params.get("result"),
+                error=params.get("error"),
+            )
+            return None
+        if op == "record_observation":
+            await self.record_observation(
+                owner_id=params["owner_id"],
+                capability=params["capability"],
+                outcome=TaskState(params["outcome"]),
+                latency_ms=params.get("latency_ms"),
+                task_id=params.get("task_id"),
+            )
+            return None
+        if op == "fire_task_event":
+            await self.fire_task_event(params["task_id"], params["kind"], params.get("payload", {}))
+            return None
+        if op == "checkpoint_task":
+            await self.checkpoint_task(params["task_id"], params["state"])
+            return None
+        if op == "read_task_checkpoint":
+            return await self.read_task_checkpoint(params["task_id"])
+
+        raise ProtocolError(f"unknown control-plane op: {op!r}")
+
+    async def _handle_receipt(self, frame: ReceiptFrame) -> None:
+        """Process a delivery receipt from a client.
+
+        ``status="ack"`` advances the recipient's cursor for the acked
+        envelope's channel (only if the acked envelope_id sorts strictly
+        above that channel's current cursor) and persists it.
+        ``status="nack"`` leaves the cursor in place — the envelope will
+        be replayed when the recipient reconnects — and is logged for
+        operational visibility.
+
+        Receipts whose ``recipient_id`` or ``channel_id`` is empty, or
+        whose ``recipient_id`` is unknown, are dropped silently: an
+        ack the hub cannot attribute to a (recipient, channel) cursor
+        has nothing to advance, and a stale receipt for an unregistered
+        agent has nothing to act on.
+        """
+        recipient_id = frame.recipient_id
+        if not recipient_id or recipient_id not in self._passports:
+            return
+        if frame.status == "ack":
+            if frame.envelope_id and frame.channel_id:
+                await self._advance_cursor(recipient_id, frame.channel_id, frame.envelope_id)
+        elif frame.status == "nack":
+            logger.warning(
+                "envelope nacked: recipient=%s channel=%s envelope=%s reason=%s",
+                recipient_id,
+                frame.channel_id,
+                frame.envelope_id,
+                frame.reason or "",
+            )
+
+    async def _advance_cursor(self, agent_id: str, channel_id: str, envelope_id: str) -> None:
+        """Move ``agent_id``'s cursor for ``channel_id`` forward to
+        ``envelope_id`` if it sorts strictly above the current value,
+        then persist the agent's full cursor map. Monotonic per channel
+        — an ack for an older id is a no-op."""
+        channels = self._inbox_cursors.setdefault(agent_id, {})
+        if envelope_id > channels.get(channel_id, ""):
+            channels[channel_id] = envelope_id
+            await self._store.write(
+                inbox_cursor_path(agent_id),
+                json.dumps(channels, sort_keys=True),
+            )
+
+    def inbox_cursor(self, agent_id: str, channel_id: str) -> str:
+        """Last envelope_id ``agent_id`` has acked in ``channel_id``.
+
+        Empty string when the agent has acked nothing in that channel
+        (or is unknown). Read-only view of the delivery high-water mark
+        a reconnect would replay past."""
+        return self._inbox_cursors.get(agent_id, {}).get(channel_id, "")
+
+    async def _replay_for_recipient(self, agent_id: str, since_envelope_id: str) -> None:
+        """Re-emit unacked envelopes past the recipient's high-water mark.
+
+        Per channel, ``high_water`` is the larger of that channel's
+        persisted cursor and the client-supplied ``since_envelope_id``
+        — replay starts strictly above it so the client never re-sees
+        an envelope it already acked locally, and an ack in one channel
+        never suppresses replay in another. Envelopes are replayed in
+        per-channel WAL order across every active channel the agent
+        participates in. Failures during replay fire
+        ``on_dispatch_failed`` and stop the channel's replay so an
+        offline recipient does not block reconnect.
+        """
+        endpoint = self._endpoint_for(agent_id)
+        if endpoint is None:
+            return
+        cursors = self._inbox_cursors.get(agent_id, {})
+
+        for channel_id, metadata in list(self._active_channels.items()):
+            if not any(p.agent_id == agent_id for p in metadata.participants):
+                continue
+            channel_cursor = cursors.get(channel_id, "")
+            high_water = channel_cursor if channel_cursor > since_envelope_id else since_envelope_id
+            wal = await self.read_wal(channel_id)
+            for envelope in wal:
+                if not envelope.envelope_id or envelope.envelope_id <= high_water:
+                    continue
+                if envelope.sender_id == agent_id:
+                    continue
+                if envelope.audience is not None and agent_id not in envelope.audience:
+                    continue
+                try:
+                    await endpoint.send_frame(NotifyFrame(envelope=envelope, recipient_id=agent_id))
+                except Exception as exc:
+                    await self._fan_out("on_dispatch_failed", envelope, agent_id, exc)
+                    logger.warning(
+                        "replay failed: channel=%s recipient=%s envelope=%s reason=%s",
+                        channel_id,
+                        agent_id,
+                        envelope.envelope_id,
+                        exc,
+                    )
+                    break
+
+    async def find_envelope_by_causation(
+        self,
+        channel_id: str,
+        *,
+        sender_id: str,
+        causation_id: str,
+    ) -> Envelope | None:
+        """Look up an envelope previously accepted under this causation key.
+
+        Handlers use this to short-circuit duplicate work after an
+        at-least-once redelivery: when the same sender re-posts an
+        envelope with the same ``causation_id`` (typical on retry),
+        the prior accepted envelope is returned so the handler can
+        skip the side effect. Returns ``None`` if no envelope is
+        recorded for the key — either it was never accepted or its
+        channel has already closed (terminal-channel pruning clears
+        the index).
+        """
+        envelope_id = self._causation_index.get((channel_id, sender_id, causation_id))
+        if envelope_id is None:
+            return None
+        wal = await self.read_wal(channel_id)
+        for envelope in wal:
+            if envelope.envelope_id == envelope_id:
+                return envelope
+        return None
 
     # ── Channel transition helpers ──────────────────────────────────────────
 
@@ -1938,9 +2542,12 @@ class Hub:
                 event_type=event_type,
                 event_data={"reason": reason, "channel_id": channel_id},
             )
-            close_envelope.envelope_id = make_id()
-            close_envelope.created_at = self._clock()
+            # Mint inside the WAL lock so the id is assigned in append
+            # order — otherwise a concurrent send on this channel could
+            # mint a later id but append it first, breaking sort order.
             async with self._wal_lock(channel_id):
+                close_envelope.envelope_id = self._mint_envelope_id()
+                close_envelope.created_at = self._clock()
                 await self._wal_append(close_envelope)
             await self._dispatch(close_envelope, metadata)
             kind_label = "expired" if new_state == ChannelState.EXPIRED else "closed"
@@ -1961,6 +2568,13 @@ class Hub:
             # WAL append + dispatch so we don't accidentally re-create
             # the lock we are trying to clean up.
             self._channel_locks.pop(channel_id, None)
+
+            # Causation lookups against a closed channel can never produce
+            # a meaningful retry decision, so drop every key for this
+            # channel and keep the index bounded by active-channel size.
+            stale_keys = [k for k in self._causation_index if k[0] == channel_id]
+            for k in stale_keys:
+                self._causation_index.pop(k, None)
         # ACTIVE state transitions originate from ``_activate_channel``
         # which fires the ``opened`` event directly — no need to fan
         # out again here.
@@ -2024,7 +2638,7 @@ class Hub:
     async def _persist_task_metadata(self, metadata: TaskMetadata) -> None:
         await self._store.write(
             task_metadata_path(metadata.task_id),
-            json.dumps(_task_metadata_to_dict(metadata)),
+            json.dumps(metadata.to_dict()),
         )
 
     async def _load_agent(self, agent_id: str) -> None:
@@ -2044,6 +2658,17 @@ class Hub:
             self._rules[agent_id] = Rule.from_dict(json.loads(rule_data))
         else:
             self._rules[agent_id] = Rule()
+
+        cursor_blob = await self._store.read(inbox_cursor_path(agent_id))
+        if cursor_blob:
+            try:
+                parsed = json.loads(cursor_blob)
+            except (ValueError, TypeError):
+                parsed = None
+            if isinstance(parsed, dict):
+                cursors = {str(c): str(e) for c, e in parsed.items() if c and e}
+                if cursors:
+                    self._inbox_cursors[agent_id] = cursors
 
     async def _load_channel(self, channel_id: str) -> None:
         metadata_data = await self._store.read(channel_metadata_path(channel_id))
@@ -2069,72 +2694,19 @@ class Hub:
         wal = await self.read_wal(channel_id)
         for envelope in wal:
             state = adapter.fold(envelope, state)
+            # Repopulate the causation index for active channels; terminal
+            # channels have already had their entries pruned when they
+            # closed and shouldn't reappear here.
+            if not metadata.is_terminal() and envelope.causation_id and envelope.envelope_id:
+                key = (channel_id, envelope.sender_id, envelope.causation_id)
+                self._causation_index[key] = envelope.envelope_id
         self._adapter_states[channel_id] = state
 
     async def _load_task(self, task_id: str) -> None:
         metadata_data = await self._store.read(task_metadata_path(task_id))
         if metadata_data is None:
             return
-        metadata = _task_metadata_from_dict(json.loads(metadata_data))
+        metadata = TaskMetadata.from_dict(json.loads(metadata_data))
         self._tasks[task_id] = metadata
         if metadata.channel_id:
             self._channel_tasks.setdefault(metadata.channel_id, set()).add(task_id)
-
-
-def _task_metadata_to_dict(metadata: TaskMetadata) -> dict[str, object]:
-    """Serialise framework-core ``TaskMetadata`` for hub persistence.
-
-    Mirrors the dataclass shape but coerces ``state`` (an Enum) to a
-    string and ``spec`` (a ``TaskSpec`` dataclass) to a dict.
-    """
-    return {
-        "task_id": metadata.task_id,
-        "owner_id": metadata.owner_id,
-        "spec": {
-            "title": metadata.spec.title,
-            "description": metadata.spec.description,
-            "payload": dict(metadata.spec.payload),
-            "capability": metadata.spec.capability,
-        },
-        "state": metadata.state.value,
-        "created_at": metadata.created_at,
-        "started_at": metadata.started_at,
-        "completed_at": metadata.completed_at,
-        "expires_at": metadata.expires_at,
-        "last_progress_at": metadata.last_progress_at,
-        "progress": dict(metadata.progress),
-        "result": metadata.result,
-        "error": metadata.error,
-        "channel_id": metadata.channel_id,
-    }
-
-
-def _task_metadata_from_dict(data: dict[str, object]) -> TaskMetadata:
-    spec_data = data.get("spec") or {}
-    if isinstance(spec_data, dict):
-        capability_raw = spec_data.get("capability")
-        spec = TaskSpec(
-            title=str(spec_data.get("title", "")),
-            description=str(spec_data.get("description", "")),
-            payload=dict(spec_data.get("payload") or {}),  # type: ignore[arg-type]
-            capability=capability_raw if isinstance(capability_raw, str) else None,
-        )
-    else:
-        spec = TaskSpec(title="")
-    state_raw = data.get("state", TaskState.CREATED.value)
-    state = TaskState(state_raw) if isinstance(state_raw, str) else state_raw
-    return TaskMetadata(
-        task_id=str(data["task_id"]),
-        owner_id=str(data["owner_id"]),
-        spec=spec,
-        state=state,  # type: ignore[arg-type]
-        created_at=str(data.get("created_at", "")),
-        started_at=data.get("started_at"),  # type: ignore[arg-type]
-        completed_at=data.get("completed_at"),  # type: ignore[arg-type]
-        expires_at=data.get("expires_at"),  # type: ignore[arg-type]
-        last_progress_at=data.get("last_progress_at"),  # type: ignore[arg-type]
-        progress=dict(data.get("progress") or {}),  # type: ignore[arg-type]
-        result=data.get("result"),
-        error=str(data.get("error", "")),
-        channel_id=data.get("channel_id"),  # type: ignore[arg-type]
-    )
