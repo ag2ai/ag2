@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -183,6 +184,7 @@ class AgentExecutor(A2AAgentExecutorBase):
                 pending_client_calls,
                 task_id,
                 context_id,
+                extra_prompt=self._extra_system_prompt(request_context),
             )
         except Exception:
             await updater.failed()
@@ -209,6 +211,17 @@ class AgentExecutor(A2AAgentExecutorBase):
         updater = TaskUpdater(event_queue, task_id, context_id)
         await updater.cancel()
 
+    def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
+        """Per-request system-prompt fragments to fold into the turn.
+
+        Extension point: ``execute`` calls this once per request and threads the
+        result through ``_run_one_turn`` into the agent's prompt, so a subclass
+        can inject request-derived instructions without reimplementing the
+        shared turn machinery. ``request_context`` is per-request, so this is
+        safe to read on a shared executor instance. The base returns nothing.
+        """
+        return ()
+
     async def _run_one_turn(
         self,
         parsed: ParsedMessage,
@@ -219,6 +232,7 @@ class AgentExecutor(A2AAgentExecutorBase):
         pending_client_calls: list[ClientToolCallEvent],
         task_id: str,
         context_id: str,
+        extra_prompt: Sequence[str] = (),
     ) -> None:
         client_tools = [self._make_client_tool(s) for s in parsed.tool_schemas]
         initial_event = self._build_initial_event(parsed)
@@ -228,6 +242,7 @@ class AgentExecutor(A2AAgentExecutorBase):
             stream,
             client_tools,
             incoming_variables=parsed.context_update,
+            extra_prompt=extra_prompt,
         )
 
         has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
@@ -310,6 +325,7 @@ class AgentExecutor(A2AAgentExecutorBase):
         client_tools: list[ClientTool],
         *,
         incoming_variables: dict[str, Any],
+        extra_prompt: Sequence[str] = (),
     ) -> tuple[ModelResponse, dict[str, Any]]:
         agent = self._agent
         if agent.config is None:
@@ -319,7 +335,7 @@ class AgentExecutor(A2AAgentExecutorBase):
         merged_variables = {**dict(agent._agent_variables), **incoming_variables}
         ctx = ConversationContext(
             stream,
-            prompt=list(agent._system_prompt),
+            prompt=[*agent._system_prompt, *extra_prompt],
             dependencies=dict(agent._agent_dependencies),
             variables=merged_variables,
             dependency_provider=agent.dependency_provider,

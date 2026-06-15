@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterable
 from typing import Any, Literal
 
 from autogen.beta.agent import Agent, KnowledgeConfig, Plugin, PromptType, TaskConfig
+from autogen.beta.annotations import Context
 from autogen.beta.assembly import AssemblyPolicy
 from autogen.beta.config import ModelConfig
 from autogen.beta.hitl import HumanHook
@@ -18,6 +19,11 @@ from autogen.beta.tools.tool import Tool
 from ._types import A2UIVersion, JsonSchema
 from .action_tool import A2UIActionTool
 from .actions import A2UIAction
+from .capabilities import (
+    A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY,
+    A2UIClientCapabilities,
+    capabilities_to_prompt,
+)
 from .middleware import A2UIValidationMiddleware
 from .parser import A2UIResponseParser
 from .schema_manager import A2UISchemaManager
@@ -168,7 +174,11 @@ class A2UIAgent(Agent):
             extra_prompts: list[PromptType] = [prompt]
         else:
             extra_prompts = list(prompt)
-        final_prompt: list[PromptType] = [full_system_prompt, *extra_prompts]
+        # The capabilities hook runs per-turn on the direct ``ask()`` path,
+        # reading caps a caller stashed in dependencies. Transports inject caps
+        # themselves (they build the context prompt directly and skip dynamic
+        # hooks), so this only adds negotiation to in-process ``ask()`` use.
+        final_prompt: list[PromptType] = [full_system_prompt, self._capabilities_prompt_hook, *extra_prompts]
 
         final_middleware: list[MiddlewareFactory] = list(middleware)
         if validate_responses:
@@ -207,6 +217,19 @@ class A2UIAgent(Agent):
             if action.name == name:
                 return action
         return None
+
+    async def _capabilities_prompt_hook(self, context: Context) -> str:
+        """Per-turn prompt fragment from caller-supplied client capabilities.
+
+        On the direct ``ask()`` path a caller can stash an
+        :class:`A2UIClientCapabilities` under
+        ``A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY`` in ``dependencies`` to drive
+        catalog negotiation. Returns ``""`` when none is present.
+        """
+        caps = context.dependencies.get(A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY)
+        if not isinstance(caps, A2UIClientCapabilities):
+            return ""
+        return capabilities_to_prompt(caps, catalog_id=self.catalog_id)
 
 
 def _split_tools(

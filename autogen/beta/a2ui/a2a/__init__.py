@@ -10,8 +10,7 @@ Requires both ``ag2[a2ui]`` (parser/agent) and ``ag2[a2a]`` (a2a-sdk).
 from autogen.beta.exceptions import missing_additional_dependency, missing_optional_dependency
 
 try:
-    from .extension import get_a2ui_agent_extension, try_activate_a2ui_extension
-    from .metadata import (
+    from ..capabilities import (
         A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
         A2UI_CLIENT_DATA_MODEL_METADATA_KEY,
         A2UIClientCapabilities,
@@ -19,6 +18,7 @@ try:
         parse_client_capabilities,
         parse_client_data_model,
     )
+    from .extension import get_a2ui_agent_extension, try_activate_a2ui_extension
     from .parts import create_a2ui_parts, get_a2ui_data, is_a2ui_part
 except ImportError as e:
     get_a2ui_agent_extension = missing_additional_dependency(  # type: ignore[misc]

@@ -5,7 +5,12 @@
 import pytest
 
 from autogen.beta import Agent
-from autogen.beta.a2ui import A2UIAction, A2UIAgent
+from autogen.beta.a2ui import (
+    A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY,
+    A2UIAction,
+    A2UIAgent,
+    A2UIClientCapabilities,
+)
 from autogen.beta.a2ui.middleware import A2UIValidationMiddleware
 from autogen.beta.testing import TestConfig
 
@@ -232,3 +237,24 @@ class TestA2UIAgentAsk:
         # The durable response keeps prose only — the A2UI message rides the
         # stream as an A2UIMessageEvent (see test_middleware).
         assert reply.body == "Here is your UI."
+
+
+@pytest.mark.asyncio()
+class TestCapabilitiesPromptHook:
+    async def test_caps_in_dependencies_inject_negotiation_prompt(self) -> None:
+        agent = A2UIAgent(name="t", config=TestConfig("ok"), validate_responses=False)
+        caps = A2UIClientCapabilities(supported_catalog_ids=["https://other.example/cat.json"])
+
+        reply = await agent.ask("hi", dependencies={A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY: caps})
+
+        joined = "\n".join(reply.context.prompt)
+        assert "## A2UI Client Capabilities" in joined
+        assert "did NOT list" in joined  # agent catalog absent from client's list
+
+    async def test_no_caps_adds_no_negotiation_prompt(self) -> None:
+        agent = A2UIAgent(name="t", config=TestConfig("ok"), validate_responses=False)
+
+        reply = await agent.ask("hi")
+
+        joined = "\n".join(reply.context.prompt)
+        assert "## A2UI Client Capabilities" not in joined

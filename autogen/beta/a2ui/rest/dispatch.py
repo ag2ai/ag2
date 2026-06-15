@@ -27,6 +27,7 @@ from autogen.beta.stream import MemoryStream
 
 from .._types import ServerToClientMessage
 from ..agent import A2UIAgent
+from ..capabilities import capabilities_to_prompt
 from ..events import A2UIMessageEvent
 from .request import A2UIServerRequest
 
@@ -80,10 +81,16 @@ async def stream_turn(agent: A2UIAgent, request: A2UIServerRequest) -> AsyncIter
         if isinstance(event, A2UIMessageEvent):
             a2ui_messages.append(event.message)
 
+    # Fold negotiated client capabilities into this turn's prompt so the LLM
+    # only targets components the client can render (transport-neutral seam,
+    # mirroring the A2A executor's ``_extra_system_prompt``).
+    caps_prompt = capabilities_to_prompt(request.client_capabilities, catalog_id=agent.catalog_id)
+    extra_prompt = [caps_prompt] if caps_prompt else []
+
     merged_variables = {**dict(agent._agent_variables), **request.variables}
     ctx = ConversationContext(
         stream,
-        prompt=[*agent._system_prompt, *request.prompt],
+        prompt=[*agent._system_prompt, *extra_prompt, *request.prompt],
         dependencies=dict(agent._agent_dependencies),
         variables=merged_variables,
         dependency_provider=agent.dependency_provider,

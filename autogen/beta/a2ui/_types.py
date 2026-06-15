@@ -151,7 +151,7 @@ ServerToClientMessage: TypeAlias = (
 # NOTE: client→server (action/error) and client-capability / data-model wire
 # shapes are intentionally NOT modeled as TypedDicts here. The code that parses
 # them decodes into dedicated dataclasses instead — see ``incoming.py``
-# (``A2UIIncomingAction`` / ``A2UIIncomingError``) and ``a2a/metadata.py``
+# (``A2UIIncomingAction`` / ``A2UIIncomingError``) and ``capabilities.py``
 # (``A2UIClientCapabilities`` / ``A2UIClientDataModel``). If a future phase needs
 # typed inbound wire structures, add them here AND wire them into those parsers.
 

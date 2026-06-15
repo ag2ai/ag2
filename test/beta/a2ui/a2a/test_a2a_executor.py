@@ -2,17 +2,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
+from types import SimpleNamespace
+from typing import Any, Self
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from a2a.types import Message, Part, Role
 
+from autogen.beta import Context
 from autogen.beta.a2a.mappers import ParsedMessage
 from autogen.beta.a2ui import A2UIAction, A2UIAgent
 from autogen.beta.a2ui.a2a import create_a2ui_parts, get_a2ui_data, is_a2ui_part
 from autogen.beta.a2ui.a2a.executor import A2UIAgentExecutor, _extract_a2ui_envelopes
+from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import ConversationContext
-from autogen.beta.events import TextInput
+from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, TextInput
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
@@ -277,3 +282,85 @@ class TestCallFunctionPause:
 
         updater.complete.assert_awaited_once()
         updater.requires_input.assert_not_awaited()
+
+
+class _PromptCaptureConfig(ModelConfig):
+    """Records the resolved ``context.prompt`` the agent sends to the model."""
+
+    def __init__(self) -> None:
+        self.prompts: list[list[str]] = []
+
+    def copy(self) -> Self:
+        return self
+
+    def create(self) -> "_PromptCaptureClient":
+        return _PromptCaptureClient(self.prompts)
+
+    def create_files_client(self) -> None:
+        raise NotImplementedError
+
+
+class _PromptCaptureClient(LLMClient):
+    def __init__(self, sink: list[list[str]]) -> None:
+        self._sink = sink
+
+    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+        self._sink.append(list(context.prompt))
+        return ModelResponse(ModelMessage("ok"))
+
+
+class TestCapabilitiesNegotiation:
+    @staticmethod
+    def _message_with_caps(supported: list[str]) -> Message:
+        return Message(
+            role=Role.ROLE_USER,
+            parts=[Part(text="hi")],
+            message_id="m1",
+            metadata={"a2uiClientCapabilities": {VERSION: {"supportedCatalogIds": supported}}},
+        )
+
+    def test_extra_system_prompt_from_message_caps(self) -> None:
+        executor = _make_executor()
+        rc = SimpleNamespace(message=self._message_with_caps(["https://other.example/c.json"]))
+
+        fragment = executor._extra_system_prompt(rc)
+
+        assert len(fragment) == 1
+        assert "## A2UI Client Capabilities" in fragment[0]
+        assert "did NOT list" in fragment[0]  # agent catalog absent from client's list
+
+    def test_extra_system_prompt_empty_without_message(self) -> None:
+        executor = _make_executor()
+        assert executor._extra_system_prompt(SimpleNamespace(message=None)) == ()
+
+    def test_extra_system_prompt_empty_without_caps(self) -> None:
+        executor = _make_executor()
+        msg = Message(role=Role.ROLE_USER, parts=[Part(text="hi")], message_id="m1")
+        assert executor._extra_system_prompt(SimpleNamespace(message=msg)) == ()
+
+    @pytest.mark.asyncio
+    async def test_extra_prompt_reaches_the_model(self) -> None:
+        config = _PromptCaptureConfig()
+        agent = A2UIAgent(name="ui_agent", config=config, validate_responses=False)
+        executor = A2UIAgentExecutor(agent)
+        stream = MemoryStream()
+        lifecycle_ctx = ConversationContext(stream)
+        updater = MagicMock()
+        updater.complete = AsyncMock()
+        updater.new_agent_message = MagicMock(
+            return_value=Message(role=Role.ROLE_AGENT, parts=[Part(text="ok")], message_id="m1")
+        )
+
+        await executor._run_one_turn(
+            ParsedMessage(inputs=[TextInput("hi")]),
+            updater,
+            stream,
+            lifecycle_ctx,
+            text_pieces=[],
+            pending_client_calls=[],
+            task_id="t1",
+            context_id="c1",
+            extra_prompt=["INJECTED-CAPS-FRAGMENT"],
+        )
+
+        assert "INJECTED-CAPS-FRAGMENT" in "\n".join(config.prompts[0])

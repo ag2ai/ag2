@@ -64,7 +64,11 @@ async def _read_request(agent: A2UIAgent, request: Request) -> "A2UIServerReques
     except Exception:  # noqa: BLE001 - transport/disconnect errors → 400, not 500
         return JSONResponse({"error": "could not read request body"}, status_code=400)
     try:
-        return parse_request(body, resolve_action=agent.get_action)
+        return parse_request(
+            body,
+            resolve_action=agent.get_action,
+            version_key=agent.schema_manager.version_string,
+        )
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 

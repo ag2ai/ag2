@@ -8,6 +8,14 @@ try:
     from .action_tool import A2UIActionTool, a2ui_action
     from .actions import A2UIAction
     from .agent import A2UIAgent
+    from .capabilities import (
+        A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY,
+        A2UIClientCapabilities,
+        A2UIClientDataModel,
+        capabilities_to_prompt,
+        parse_client_capabilities,
+        parse_client_data_model,
+    )
     from .events import A2UIMessageEvent
     from .incoming import (
         A2UIIncomingAction,
@@ -29,6 +37,14 @@ except ImportError as e:
     A2UIActionTool = missing_optional_dependency("A2UIActionTool", "a2ui", e)  # type: ignore[misc]
     a2ui_action = missing_optional_dependency("a2ui_action", "a2ui", e)  # type: ignore[misc]
     A2UIAgent = missing_optional_dependency("A2UIAgent", "a2ui", e)  # type: ignore[misc]
+    A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY = missing_optional_dependency(  # type: ignore[misc]
+        "A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY", "a2ui", e
+    )
+    A2UIClientCapabilities = missing_optional_dependency("A2UIClientCapabilities", "a2ui", e)  # type: ignore[misc]
+    A2UIClientDataModel = missing_optional_dependency("A2UIClientDataModel", "a2ui", e)  # type: ignore[misc]
+    capabilities_to_prompt = missing_optional_dependency("capabilities_to_prompt", "a2ui", e)  # type: ignore[misc]
+    parse_client_capabilities = missing_optional_dependency("parse_client_capabilities", "a2ui", e)  # type: ignore[misc]
+    parse_client_data_model = missing_optional_dependency("parse_client_data_model", "a2ui", e)  # type: ignore[misc]
     A2UIMessageEvent = missing_optional_dependency("A2UIMessageEvent", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingAction = missing_optional_dependency("A2UIIncomingAction", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingError = missing_optional_dependency("A2UIIncomingError", "a2ui", e)  # type: ignore[misc]
@@ -47,9 +63,12 @@ except ImportError as e:
     to_jsonl = missing_optional_dependency("to_jsonl", "a2ui", e)  # type: ignore[misc]
 
 __all__ = (
+    "A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY",
     "A2UIAction",
     "A2UIActionTool",
     "A2UIAgent",
+    "A2UIClientCapabilities",
+    "A2UIClientDataModel",
     "A2UIIncomingAction",
     "A2UIIncomingError",
     "A2UIIncomingFunctionResponse",
@@ -62,8 +81,11 @@ __all__ = (
     "A2UIValidationResult",
     "a2ui_action",
     "action_to_prompt",
+    "capabilities_to_prompt",
     "error_to_prompt",
     "function_response_to_prompt",
+    "parse_client_capabilities",
+    "parse_client_data_model",
     "parse_incoming_message",
     "sanitize_for_prompt",
     "to_jsonl",

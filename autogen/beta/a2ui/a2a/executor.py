@@ -5,6 +5,7 @@
 """A2A executor that understands A2UI message splitting and user actions."""
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,13 +16,18 @@ from a2a.types import Message, Part, Role, TaskState
 
 from autogen.beta.a2a.executor import AgentExecutor
 from autogen.beta.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
-from autogen.beta.a2a.mappers import ParsedMessage, task_state_to_status_update
+from autogen.beta.a2a.mappers import ParsedMessage, struct_to_dict, task_state_to_status_update
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import BaseEvent, ClientToolCallEvent
 from autogen.beta.stream import MemoryStream
 
 from .._types import A2UIVersion, JsonObject, ServerToClientMessage
 from ..agent import A2UIAgent
+from ..capabilities import (
+    A2UIClientCapabilities,
+    capabilities_to_prompt,
+    parse_client_capabilities,
+)
 from ..constants import A2UI_MIME_TYPE
 from ..events import A2UIMessageEvent
 from ..incoming import (
@@ -31,15 +37,9 @@ from ..incoming import (
     parse_incoming_message,
 )
 from .extension import try_activate_a2ui_extension
-from .metadata import parse_client_capabilities, parse_client_data_model
 from .parts import create_a2ui_parts, get_a2ui_data
 
 logger = logging.getLogger(__name__)
-
-# Keys used to stash parsed A2UI client metadata on ``RequestContext.metadata``
-# so downstream handlers (tools, middleware) can read it via DI.
-A2UI_CLIENT_CAPABILITIES_CONTEXT_KEY = "a2ui_client_capabilities"
-A2UI_CLIENT_DATA_MODEL_CONTEXT_KEY = "a2ui_client_data_model"
 
 
 class A2UIAgentExecutor(AgentExecutor):
@@ -48,8 +48,9 @@ class A2UIAgentExecutor(AgentExecutor):
     Extends :class:`autogen.beta.a2a.AgentExecutor` to:
 
     1. Negotiate the A2UI extension when the client requests it.
-    2. Parse client metadata (``a2uiClientCapabilities`` /
-       ``a2uiClientDataModel``) and stash it on ``RequestContext.metadata``.
+    2. Read ``a2uiClientCapabilities`` from the request message metadata and
+       fold catalog negotiation into the turn's system prompt
+       (:meth:`_extra_system_prompt`).
     3. Detect incoming A2UI DataParts on the request message:
        - ``action`` envelopes are rewritten as a ``TextInput`` prompt
          (Approach 3.B: server-actions and LLM-actions both flow through
@@ -75,30 +76,8 @@ class A2UIAgentExecutor(AgentExecutor):
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
         if request_context.message is not None:
             try_activate_a2ui_extension(request_context)
-            self._stash_client_metadata(request_context)
             self._rewrite_incoming_a2ui_parts(request_context)
         await super().execute(request_context, event_queue)
-
-    def _stash_client_metadata(self, request_context: RequestContext) -> None:
-        """Parse ``a2uiClient*`` metadata fields and store them on ``request_context.metadata``."""
-        msg = request_context.message
-        if msg is None:
-            return
-        msg_metadata = msg.metadata or {}
-        if not msg_metadata:
-            return
-
-        caps = parse_client_capabilities(msg_metadata)
-        data_model = parse_client_data_model(msg_metadata)
-        if caps is None and data_model is None:
-            return
-
-        if request_context.metadata is None:
-            request_context.metadata = {}
-        if caps is not None:
-            request_context.metadata[A2UI_CLIENT_CAPABILITIES_CONTEXT_KEY] = caps
-        if data_model is not None:
-            request_context.metadata[A2UI_CLIENT_DATA_MODEL_CONTEXT_KEY] = data_model
 
     def _rewrite_incoming_a2ui_parts(self, request_context: RequestContext) -> None:
         """Replace A2UI DataParts (``action``/``error``) with synthesized text prompts."""
@@ -145,6 +124,33 @@ class A2UIAgentExecutor(AgentExecutor):
             del msg.parts[:]
             msg.parts.extend(new_parts)
 
+    def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
+        """Fold negotiated client capabilities into the turn's system prompt.
+
+        Reads ``a2uiClientCapabilities`` straight off the incoming message
+        metadata and renders it as a per-turn prompt fragment so the LLM only
+        targets components the client can render. Returns nothing when the
+        client advertised no usable capabilities.
+        """
+        caps = self._client_capabilities(request_context)
+        if caps is None:
+            return ()
+        fragment = capabilities_to_prompt(caps, catalog_id=self._a2ui_agent.catalog_id)
+        return (fragment,) if fragment else ()
+
+    def _client_capabilities(self, request_context: RequestContext) -> "A2UIClientCapabilities | None":
+        """Decode ``a2uiClientCapabilities`` from the request message metadata.
+
+        ``RequestContext.metadata`` is a read-only copy, so the capabilities are
+        read from their source — ``message.metadata`` — converting the protobuf
+        ``Struct`` to a plain dict first.
+        """
+        msg = request_context.message
+        if msg is None or not msg.metadata:
+            return None
+        version_key = self._a2ui_agent.schema_manager.version_string
+        return parse_client_capabilities(struct_to_dict(msg.metadata), version_key=version_key)
+
     async def _run_one_turn(
         self,
         parsed: ParsedMessage,
@@ -155,6 +161,7 @@ class A2UIAgentExecutor(AgentExecutor):
         pending_client_calls: list[ClientToolCallEvent],
         task_id: str,
         context_id: str,
+        extra_prompt: Sequence[str] = (),
     ) -> None:
         client_tools = [self._make_client_tool(s) for s in parsed.tool_schemas]
         initial_event = self._build_initial_event(parsed)
@@ -174,6 +181,7 @@ class A2UIAgentExecutor(AgentExecutor):
             stream,
             client_tools,
             incoming_variables=parsed.context_update,
+            extra_prompt=extra_prompt,
         )
 
         prose_text = response.message.content if response.message else ""

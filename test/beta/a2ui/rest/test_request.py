@@ -4,13 +4,34 @@
 
 import pytest
 
-from autogen.beta.a2ui import A2UIAction
+from autogen.beta.a2ui import A2UIAction, A2UIClientCapabilities
 from autogen.beta.a2ui.rest import parse_request
 from autogen.beta.events import ModelRequest, ModelResponse
 
 
 def _no_actions(name: str) -> None:
     return None
+
+
+class TestParseRequestCapabilities:
+    def test_absent_capabilities_is_none(self) -> None:
+        req = parse_request({"messages": []}, resolve_action=_no_actions)
+        assert req.client_capabilities is None
+
+    def test_capabilities_parsed_for_version(self) -> None:
+        body = {
+            "messages": [],
+            "a2uiClientCapabilities": {"v1.0": {"supportedCatalogIds": ["https://x.example/c.json"]}},
+        }
+        req = parse_request(body, resolve_action=_no_actions, version_key="v1.0")
+        assert req.client_capabilities == A2UIClientCapabilities(
+            supported_catalog_ids=["https://x.example/c.json"], inline_catalogs=[]
+        )
+
+    def test_capabilities_version_mismatch_is_none(self) -> None:
+        body = {"messages": [], "a2uiClientCapabilities": {"v1.0": {"supportedCatalogIds": ["x"]}}}
+        req = parse_request(body, resolve_action=_no_actions)  # default version_key "v0.9"
+        assert req.client_capabilities is None
 
 
 class TestParseRequestShape:
