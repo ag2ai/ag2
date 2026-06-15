@@ -5,11 +5,12 @@
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AsyncExitStack
-from typing import Any, Self, TypeAlias, overload
+from typing import Any, TypeAlias, overload
 
 from fast_depends import Provider
 from fast_depends.library.serializer import SerializerProto
 from fast_depends.pydantic import PydanticSerializer
+from typing_extensions import Self
 
 from .annotations import Context
 from .assembly import AssemblyPolicy

@@ -19,8 +19,8 @@ import asyncio
 import json
 import logging
 import types
-from collections.abc import Callable, Iterable
-from contextlib import ExitStack, suppress
+from collections.abc import AsyncIterator, Callable, Iterable
+from contextlib import ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
@@ -76,7 +76,7 @@ from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .task import CheckpointStore, Task, TaskSpec
-from .tools.final import FunctionTool, FunctionToolSchema, tool
+from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
@@ -501,6 +501,13 @@ class Agent(PluginTarget, Generic[TResult]):
         self.config = config
         self._response_schema = ResponseSchema.ensure_schema(response_schema)
 
+        # Auto-injected tools (subtask toolkit, knowledge tool) live in
+        # ``self.tools`` alongside user tools, but must NOT be inherited by
+        # spawned subtasks — that would re-enable recursion (run_subtask) or
+        # leak the parent's knowledge tool. Track the bound instances so
+        # ``_spawn_subtask`` can exclude them by identity.
+        self._auto_tools: list[Tool] = []
+
         # Task spawning. ``tasks=False`` (the default) means no auto-injected
         # ``run_subtask`` / ``run_subtasks`` tools. Pass ``tasks=TaskConfig(...)``
         # to opt in.
@@ -508,8 +515,8 @@ class Agent(PluginTarget, Generic[TResult]):
             self._task_config: TaskConfig | None = None
         else:
             self._task_config = tasks
-
-        self._subtask_tools: list[Tool] = _build_subtask_tools(self) if self._task_config is not None else []
+            self.add_tool(_build_subtask_toolkit(self))
+            self._auto_tools.append(self.tools[-1])
 
         # Knowledge store + compaction/aggregation strategies
         kc = knowledge
@@ -523,11 +530,9 @@ class Agent(PluginTarget, Generic[TResult]):
         self._compact_trigger = kc.compact_trigger if kc and kc.compact_trigger else CompactTrigger()
         self._aggregate_strategy = kc.aggregate if kc else None
         self._aggregate_trigger = kc.aggregate_trigger if kc and kc.aggregate_trigger else AggregateTrigger()
-        self._knowledge_tools: list[Tool] = (
-            [_make_knowledge_tool(self._knowledge_store)]
-            if self._knowledge_store and self._knowledge_expose_tool
-            else []
-        )
+        if self._knowledge_store and self._knowledge_expose_tool:
+            self.add_tool(_make_knowledge_tool(self._knowledge_store))
+            self._auto_tools.append(self.tools[-1])
 
         # Assembly policies (empty by default; bare Agent has no harness).
         self._policies.extend(assembly)
@@ -789,19 +794,6 @@ class Agent(PluginTarget, Generic[TResult]):
             response_schema=response_schema,
         )
 
-    def _build_knowledge_tool(self) -> list[Tool]:
-        """Return the cached knowledge tool list (built at __init__ time)."""
-        return self._knowledge_tools
-
-    def _build_subtask_tools(self) -> list[Tool]:
-        """Return the cached subtask tool list (built at __init__ time).
-
-        Tools are built once per Agent instance to avoid reallocating closures
-        on every turn (and to satisfy AGENTS.md's "no nested functions in
-        runtime execution paths" rule).
-        """
-        return self._subtask_tools
-
     async def _spawn_subtask(self, task: str, ctx: Context) -> str:
         """Spawn a subtask Agent and delegate via ``run_task``.
 
@@ -818,7 +810,11 @@ class Agent(PluginTarget, Generic[TResult]):
         if tc is None:
             return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
 
-        inherited = _filter_subtask_tools(self.tools, tc.include_tools, tc.exclude_tools)
+        # Inherit only the parent's user-supplied tools — never the
+        # auto-injected subtask toolkit or knowledge tool (excluded by
+        # identity), so the child can't recurse or see parent-only tooling.
+        user_tools = [t for t in self.tools if not any(t is a for a in self._auto_tools)]
+        inherited = _filter_subtask_tools(user_tools, tc.include_tools, tc.exclude_tools)
 
         bare = Agent(
             name=f"subtask-{uuid4().hex[:8]}",
@@ -887,7 +883,6 @@ class Agent(PluginTarget, Generic[TResult]):
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
     ) -> "AgentReply[Any, Any]":
         additional_observers = list(additional_observers)
-        subtask_tools = self._subtask_tools
 
         # Bootstrap the knowledge store on first use, guarded by an asyncio
         # lock so concurrent asks on the same Agent can't double-bootstrap.
@@ -896,6 +891,7 @@ class Agent(PluginTarget, Generic[TResult]):
         if self._knowledge_store and not self._bootstrap_done:
             if self._bootstrap_lock is None:
                 self._bootstrap_lock = asyncio.Lock()
+
             async with self._bootstrap_lock:
                 if not self._bootstrap_done:
                     if not await self._knowledge_store.exists("/.initialized"):
@@ -903,8 +899,6 @@ class Agent(PluginTarget, Generic[TResult]):
                         bootstrap = self._bootstrap or DefaultBootstrap(mention_tool=self._knowledge_expose_tool)
                         await bootstrap.bootstrap(self._knowledge_store, self.name)
                     self._bootstrap_done = True
-
-        knowledge_tools = self._knowledge_tools
 
         if self._knowledge_store:
             context.dependencies[KnowledgeStore] = self._knowledge_store
@@ -952,8 +946,6 @@ class Agent(PluginTarget, Generic[TResult]):
                 chain(
                     self.tools,
                     additional_tools,
-                    subtask_tools,
-                    knowledge_tools,
                 )
             )
 
@@ -1057,17 +1049,9 @@ class Agent(PluginTarget, Generic[TResult]):
                     middleware=middleware_instances,
                 )
 
-                for obs in all_observers:
-                    obs.register(stack, context)
-
-                # Observers are live — emit Started so they can see their own
-                # lifecycle event if they subscribe to it.
-                for obs in all_observers:
-                    await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
-
-                try:
+                async with _observer_lifecycle(all_observers, stack, context):
                     message = await agent_turn(event, context)
-                    reply = AgentReply(
+                    return AgentReply(
                         message,
                         context=context,
                         agent=self,
@@ -1075,15 +1059,6 @@ class Agent(PluginTarget, Generic[TResult]):
                         provider=self.dependency_provider,
                         response_schema=final_schema,
                     )
-                finally:
-                    # Emit Completed while observers are still registered,
-                    # so observers subscribed to their own lifecycle event
-                    # see it before the ExitStack unregisters them.
-                    for obs in all_observers:
-                        with suppress(Exception):
-                            await context.send(ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)))
-
-                return reply
 
         finally:
             if self._knowledge_store and self._knowledge_write_event_log:
@@ -1198,6 +1173,35 @@ def _drain_pending(context: Context) -> ModelRequest | None:
     return ModelRequest(parts)
 
 
+@asynccontextmanager
+async def _observer_lifecycle(
+    observers: list[Observer],
+    stack: ExitStack,
+    context: Context,
+) -> AsyncIterator[None]:
+    """Register ``observers`` on ``stack`` and bracket the turn with lifecycle events.
+
+    Observers subscribe to the stream under the caller's ``ExitStack``, then an
+    ``ObserverStarted`` is emitted for each so an observer can see its own start.
+    On exit ``ObserverCompleted`` is emitted for each *before* the ``ExitStack``
+    unwinds the subscriptions, so an observer subscribed to its own completion
+    event still receives it.
+    """
+    for obs in observers:
+        obs.register(stack, context)
+
+    for obs in observers:
+        await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
+
+    try:
+        yield
+
+    finally:
+        for obs in observers:
+            with suppress(Exception):
+                await context.send(ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)))
+
+
 _RUN_SUBTASK_DESCRIPTION = (
     "Spawn an isolated subtask agent for self-contained focused work. "
     "The subtask runs with a fresh conversation history and inherits this "
@@ -1216,7 +1220,7 @@ _RUN_SUBTASKS_DESCRIPTION = (
 )
 
 
-def _build_subtask_tools(agent: "Agent[Any]") -> list[Tool]:
+def _build_subtask_toolkit(agent: "Agent[Any]") -> Toolkit:
     """Construct the ``run_subtask`` / ``run_subtasks`` tools for ``agent``.
 
     Called once per Agent instance from ``__init__``. The closures capture
@@ -1224,12 +1228,13 @@ def _build_subtask_tools(agent: "Agent[Any]") -> list[Tool]:
     re-allocation (per AGENTS.md: no nested function creation in runtime
     execution paths).
     """
+    toolkit = Toolkit()
 
-    @tool(name="run_subtask", description=_RUN_SUBTASK_DESCRIPTION)
+    @toolkit.tool(name="run_subtask", description=_RUN_SUBTASK_DESCRIPTION)
     async def run_subtask(task: str, ctx: Context) -> str:
         return await agent._spawn_subtask(task, ctx)
 
-    @tool(name="run_subtasks", description=_RUN_SUBTASKS_DESCRIPTION)
+    @toolkit.tool(name="run_subtasks", description=_RUN_SUBTASKS_DESCRIPTION)
     async def run_subtasks(ctx: Context, tasks: list[str], parallel: bool = True) -> str:
         if parallel:
             raw = await asyncio.gather(
@@ -1248,7 +1253,7 @@ def _build_subtask_tools(agent: "Agent[Any]") -> list[Tool]:
         parts = [f"## {task_desc}\n\n{result}" for task_desc, result in zip(tasks, results)]
         return "\n\n---\n\n".join(parts)
 
-    return [run_subtask, run_subtasks]
+    return toolkit
 
 
 def _filter_subtask_tools(
