@@ -86,7 +86,7 @@ from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
-from .types import ClassInfo, Omittable, omit
+from .types import ClassInfo, Omittable, SendableMessage, omit
 from .usage import UsageReport
 from .utils import CONTEXT_OPTION_NAME, build_model
 
@@ -248,7 +248,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -263,7 +263,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -278,7 +278,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -293,7 +293,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -306,7 +306,7 @@ class AgentReply(Generic[TResult, TAgent]):
 
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         prompt: Iterable[str] = (),
@@ -775,7 +775,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -791,7 +791,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
+        msg: SendableMessage | Input,
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
@@ -808,7 +808,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
+        msg: SendableMessage | Input,
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
@@ -825,7 +825,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
+        msg: SendableMessage | Input,
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
@@ -840,7 +840,7 @@ class Agent(Generic[TResult]):
 
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
@@ -859,29 +859,6 @@ class Agent(Generic[TResult]):
             dependencies=dependencies,
             variables=variables,
         )
-        return await self._drive(
-            ModelRequest.ensure_request(msg),
-            context=context,
-            config=config,
-            tools=tools,
-            middleware=middleware,
-            observers=observers,
-            response_schema=response_schema,
-            hitl_hook=hitl_hook,
-        )
-
-    async def _ask(
-        self,
-        *msg: str | Input,
-        context: Context,
-        config: ModelConfig | None = None,
-        tools: Iterable[Tool] = (),
-        middleware: Iterable[MiddlewareFactory] = (),
-        observers: Iterable[Observer] = (),
-        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
-        hitl_hook: HumanHook | None = None,
-    ) -> "AgentReply[Any, Any]":
-        """`Agent.ask()` alternative method to call agent with prebuild `context`."""
         return await self._drive(
             ModelRequest.ensure_request(msg),
             context=context,
@@ -930,6 +907,29 @@ class Agent(Generic[TResult]):
 
         return await self._drive(
             trigger,
+            context=context,
+            config=config,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
+            response_schema=response_schema,
+            hitl_hook=hitl_hook,
+        )
+
+    async def _ask(
+        self,
+        *msg: SendableMessage | Input,
+        context: Context,
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "AgentReply[Any, Any]":
+        """`Agent.ask()` alternative method to call agent with prebuild `context`."""
+        return await self._drive(
+            ModelRequest.ensure_request(msg),
             context=context,
             config=config,
             tools=tools,
