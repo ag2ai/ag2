@@ -4,8 +4,8 @@
 
 import pytest
 
-from autogen.beta import UsageRecord, UsageReport
 from autogen.beta.events import ModelMessage, ModelResponse, Usage, UsageEvent
+from autogen.beta.usage import UsageRecord, UsageReport
 
 
 def _usage_event(prompt: int, completion: int, *, model: str, provider: str) -> UsageEvent:

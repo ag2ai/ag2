@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context, MemoryStream, Usage, UsageReport, Variable, tool
+from autogen.beta import Agent, Context, MemoryStream, Variable, tool
 from autogen.beta import agent as actor_mod
 from autogen.beta.agent import TaskConfig
 from autogen.beta.events import (
@@ -21,12 +21,14 @@ from autogen.beta.events import (
     TaskStarted,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
     UsageEvent,
 )
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools.subagents import run_task as run_task_mod
 from autogen.beta.tools.subagents import subagent_tool
 from autogen.beta.tools.subagents.run_task import run_task
+from autogen.beta.usage import UsageReport
 
 
 def _make_parent_context(
