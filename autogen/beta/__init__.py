@@ -8,11 +8,14 @@ from .agent import Agent, AgentReply, KnowledgeConfig, TaskConfig
 from .annotations import Context, Inject, Variable
 from .events import (
     AudioInput,
+    BaseEvent,
     BinaryInput,
     DataInput,
     DocumentInput,
     ImageInput,
     TextInput,
+    ToolResultEvent,
+    ToolResultsEvent,
     Usage,
     VideoInput,
 )
@@ -31,6 +34,7 @@ __all__ = (
     "AgentReply",
     "AgentSpec",
     "AudioInput",
+    "BaseEvent",
     "BinaryInput",
     "Context",
     "DataInput",
@@ -50,6 +54,8 @@ __all__ = (
     "TaskSpec",
     "TextInput",
     "ToolResult",
+    "ToolResultEvent",
+    "ToolResultsEvent",
     "Toolkit",
     "Usage",
     "UsageRecord",

@@ -852,16 +852,30 @@ class Agent(Generic[TResult]):
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
-        config = config or self.config
-        if not config:
+        if not (config or self.config):
             raise ConfigNotProvidedError()
-        client = config.create()
-
         stream = stream or MemoryStream()
+        context = self._build_context(stream, prompt=prompt, dependencies=dependencies, variables=variables)
+        return await self._drive(
+            ModelRequest.ensure_request(msg),
+            context=context,
+            config=config,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
+            response_schema=response_schema,
+            hitl_hook=hitl_hook,
+        )
 
-        initial_event = ModelRequest.ensure_request(msg)
-
-        context = Context(
+    def _build_context(
+        self,
+        stream: Stream,
+        *,
+        prompt: Iterable[str] = (),
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+    ) -> Context:
+        return Context(
             stream,
             prompt=list(prompt),
             dependencies=self._agent_dependencies | (dependencies or {}),
@@ -869,15 +883,33 @@ class Agent(Generic[TResult]):
             dependency_provider=self.dependency_provider,
         )
 
+    async def _drive(
+        self,
+        trigger: BaseEvent,
+        *,
+        context: Context,
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "AgentReply[Any, Any]":
+        """Shared core for `ask`/`_ask`/`resume`: drive the loop from `trigger`."""
+        config = config or self.config
+        if not config:
+            raise ConfigNotProvidedError()
+        client = config.create()
+
         if not context.prompt:
             context.prompt.extend(self._system_prompt)
 
             for dp in self._dynamic_prompt:
-                p = await dp(initial_event, context)
+                p = await dp(trigger, context)
                 context.prompt.append(p)
 
         return await self._execute(
-            initial_event,
+            trigger,
             context=context,
             client=client,
             hitl_hook=hitl_hook,
@@ -899,29 +931,56 @@ class Agent(Generic[TResult]):
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
         """`Agent.ask()` alternative method to call agent with prebuild `context`."""
-        config = config or self.config
-        if not config:
-            raise ConfigNotProvidedError()
-        client = config.create()
-
-        initial_event = ModelRequest.ensure_request(msg)
-
-        if not context.prompt:
-            context.prompt.extend(self._system_prompt)
-
-            for dp in self._dynamic_prompt:
-                p = await dp(initial_event, context)
-                context.prompt.append(p)
-
-        return await self._execute(
-            initial_event,
+        return await self._drive(
+            ModelRequest.ensure_request(msg),
             context=context,
-            client=client,
-            hitl_hook=hitl_hook,
-            additional_tools=tools,
-            additional_middleware=middleware,
-            additional_observers=observers,
+            config=config,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
             response_schema=response_schema,
+            hitl_hook=hitl_hook,
+        )
+
+    async def resume(
+        self,
+        trigger: BaseEvent,
+        *,
+        history: Iterable[BaseEvent] = (),
+        stream: Stream | None = None,
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "AgentReply[Any, Any]":
+        """Resume a turn from a recorded trajectory, driven by an arbitrary event.
+
+        ``resume`` accepts any ``BaseEvent`` as the ``trigger`` (such as a
+        ``ToolResultsEvent``) so a turn can be continued from any event.
+
+        The agent's conversation state is restored by replacing the stream's history
+        with ``history``. If ``stream`` is omitted a fresh ``MemoryStream`` is
+        created; if one is supplied, its existing history is replaced.
+        """
+        if not (config or self.config):
+            raise ConfigNotProvidedError()
+        stream = stream or MemoryStream()
+        await stream.history.replace(list(history))
+        context = self._build_context(stream, prompt=prompt, dependencies=dependencies, variables=variables)
+        return await self._drive(
+            trigger,
+            context=context,
+            config=config,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
+            response_schema=response_schema,
+            hitl_hook=hitl_hook,
         )
 
     def _build_knowledge_tool(self) -> list[Tool]:
