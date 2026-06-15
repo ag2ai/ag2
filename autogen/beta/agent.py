@@ -19,18 +19,15 @@ import asyncio
 import json
 import logging
 import types
-import warnings
-from collections.abc import Awaitable, Callable, Iterable
-from contextlib import AsyncExitStack, ExitStack, suppress
+from collections.abc import Callable, Iterable
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypeAlias, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
-from fast_depends.library.serializer import SerializerProto
-from fast_depends.pydantic import PydanticSerializer
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
@@ -52,7 +49,6 @@ from .events import (
     ToolResultsEvent,
     UsageEvent,
 )
-from .events.conditions import Condition
 from .events.lifecycle import (
     AggregationCompleted,
     AggregationFailed,
@@ -76,19 +72,17 @@ from .middleware.base import (
     ToolMiddleware,
 )
 from .observers import Observer
-from .observers import observer as observer_factory
+from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .task import CheckpointStore, Task, TaskSpec
-from .tools.executor import ToolExecutor
-from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
+from .tools.final import FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
-from .types import ClassInfo, Omittable, SendableMessage, omit
+from .types import Omittable, SendableMessage, omit
 from .usage import UsageReport
-from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
@@ -100,10 +94,6 @@ logger = logging.getLogger(__name__)
 TResult = TypeVar313("TResult", default=str)
 TAgent = TypeVar313("TAgent", default=str)
 T2 = TypeVar("T2")
-
-
-PromptHook: TypeAlias = Callable[..., str] | Callable[..., Awaitable[str]]
-PromptType: TypeAlias = str | PromptHook
 
 
 @dataclass
@@ -378,7 +368,7 @@ def _get_stream_turn_lock(stream: Any) -> asyncio.Lock:
 _stream_id_locks: dict[int, asyncio.Lock] = {}
 
 
-class Agent(Generic[TResult]):
+class Agent(PluginTarget, Generic[TResult]):
     """The agentic unit of autogen.beta.
 
     An Agent runs a model loop, invokes tools, honours middleware, surfaces
@@ -496,45 +486,20 @@ class Agent(Generic[TResult]):
         knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | Literal[False] = False,
         assembly: Iterable[AssemblyPolicy] = (),
-    ):
-        self.name = name
-        self.config = config
-
-        self._agent_dependencies = dependencies or {}
-        self._agent_variables = variables or {}
-
-        self._middleware = list(middleware)
-        self._observers = list(observers)
-
-        self._serializer: SerializerProto = PydanticSerializer(
-            pydantic_config={"arbitrary_types_allowed": True},
-            use_fastdepends_errors=False,
+    ) -> None:
+        self._init_target(
+            name,
+            prompt=prompt,
+            hitl_hook=hitl_hook,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
+            dependencies=dependencies,
+            variables=variables,
+            plugins=plugins,
         )
-
-        self.dependency_provider = Provider()
-        self.tools: list[FunctionTool] = []
-        for t in tools:
-            self.add_tool(t)
-
-        self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
-        self.__tool_executor = ToolExecutor(self._serializer)
-
-        self._system_prompt: list[str] = []
-        self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
-
+        self.config = config
         self._response_schema = ResponseSchema.ensure_schema(response_schema)
-
-        if isinstance(prompt, str) or callable(prompt):
-            prompt = [prompt]
-
-        for p in prompt:
-            if isinstance(p, str):
-                self._system_prompt.append(p)
-            else:
-                self._dynamic_prompt.append(_wrap_prompt_hook(p))
-
-        for p in plugins:
-            p.register(self)
 
         # Task spawning. ``tasks=False`` (the default) means no auto-injected
         # ``run_subtask`` / ``run_subtasks`` tools. Pass ``tasks=TaskConfig(...)``
@@ -565,107 +530,10 @@ class Agent(Generic[TResult]):
         )
 
         # Assembly policies (empty by default; bare Agent has no harness).
-        self._policies: list[AssemblyPolicy] = list(assembly)
+        self._policies.extend(assembly)
         if self._policies:
             for w in AssemblerMiddleware.validate_order(self._policies):
                 logger.warning("Assembly policy ordering: %s", w)
-
-    def hitl_hook(self, func: HumanHook) -> HumanHook:
-        if self._hitl_hook is not None:
-            warnings.warn(
-                "You already set HITL hook, provided value overrides it",
-                category=RuntimeWarning,
-                stacklevel=2,
-            )
-
-        self._hitl_hook = wrap_hitl(func)
-        return func
-
-    @overload
-    def prompt(
-        self,
-        func: None = None,
-    ) -> Callable[[PromptHook], PromptHook]: ...
-
-    @overload
-    def prompt(
-        self,
-        func: PromptHook,
-    ) -> PromptHook: ...
-
-    def prompt(
-        self,
-        func: PromptHook | None = None,
-    ) -> PromptHook | Callable[[PromptHook], PromptHook]:
-        def wrapper(f: PromptHook) -> PromptHook:
-            self._dynamic_prompt.append(_wrap_prompt_hook(f))
-            return f
-
-        if func:
-            return wrapper(func)
-        return wrapper
-
-    @overload
-    def tool(
-        self,
-        function: Callable[..., Any],
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        schema: FunctionParameters | None = None,
-        sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> Tool: ...
-
-    @overload
-    def tool(
-        self,
-        function: None = None,
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        schema: FunctionParameters | None = None,
-        sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> Callable[[Callable[..., Any]], Tool]: ...
-
-    def add_middleware(self, m: MiddlewareFactory) -> "Agent[TResult]":
-        """Append middleware as the innermost wrapper in the chain.
-
-        The added middleware is called last on turn entry and first on turn exit,
-        executing closer to the LLM call than any middleware already registered.
-        """
-        self._middleware.append(m)
-        return self
-
-    def insert_middleware(self, m: MiddlewareFactory) -> "Agent[TResult]":
-        """Insert middleware as the outermost wrapper in the chain.
-
-        The inserted middleware is called first on turn entry and last on turn exit,
-        executing before all middleware already registered on the agent.
-        """
-        self._middleware.insert(0, m)
-        return self
-
-    def add_tool(self, t: Callable[..., Any] | Tool) -> "Agent[TResult]":
-        self.tools.append(FunctionTool.ensure_tool(t, provider=self.dependency_provider))
-        return self
-
-    def add_observer(self, observer: Observer) -> None:
-        """Register an observer (before calling ask())."""
-        self._observers.append(observer)
-
-    def add_policy(self, policy: AssemblyPolicy) -> "Agent[TResult]":
-        """Append an assembly policy to this agent's chain.
-
-        Policies run in order; a newly added policy runs after existing
-        ones. Construction-time ordering validation (warning on suspicious
-        sequences) only runs over policies passed via ``assembly=`` — late
-        additions skip the check, so callers should be confident in the
-        ordering they introduce.
-        """
-        self._policies.append(policy)
-        return self
 
     def task(
         self,
@@ -717,60 +585,6 @@ class Agent(Generic[TResult]):
             checkpoint_store=checkpoint_store,
             resume_from=resume_from,
         )
-
-    def tool(
-        self,
-        function: Callable[..., Any] | None = None,
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        schema: FunctionParameters | None = None,
-        sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> Tool | Callable[[Callable[..., Any]], Tool]:
-        def make_tool(f: Callable[..., Any]) -> Tool:
-            t = tool(
-                f,
-                name=name,
-                description=description,
-                schema=schema,
-                sync_to_thread=sync_to_thread,
-                middleware=middleware,
-            )
-            self.add_tool(t)
-            return t
-
-        if function:
-            return make_tool(function)
-
-        return make_tool
-
-    @overload
-    def observer(
-        self,
-        condition: ClassInfo | Condition | None,
-        callback: Callable[..., Any],
-    ) -> Callable[..., Any]: ...
-
-    @overload
-    def observer(
-        self,
-        condition: ClassInfo | Condition | None = None,
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
-
-    def observer(
-        self,
-        condition: ClassInfo | Condition | None = None,
-        callback: Callable[..., Any] | None = None,
-    ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
-        def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
-            obs = observer_factory(condition, func)
-            self._observers.append(obs)
-            return func
-
-        if callback is not None:
-            return wrapper(callback)
-        return wrapper
 
     @overload
     async def ask(
@@ -1235,7 +1049,7 @@ class Agent(Generic[TResult]):
                         ),
                     )
 
-                self.__tool_executor.register(
+                self._tool_executor.register(
                     stack,
                     context,
                     tools=all_tools,
@@ -1384,25 +1198,6 @@ def _drain_pending(context: Context) -> ModelRequest | None:
     return ModelRequest(parts)
 
 
-def _wrap_prompt_hook(
-    func: PromptHook,
-) -> Callable[[ModelRequest, Context], Awaitable[str]]:
-    call_model = build_model(func)
-
-    async def wrapper(event: ModelRequest, context: Context) -> str:
-        async with AsyncExitStack() as stack:
-            r = await call_model.asolve(
-                event,
-                stack=stack,
-                cache_dependencies={},
-                dependency_provider=context.dependency_provider,
-                **{CONTEXT_OPTION_NAME: context},
-            )
-        return r
-
-    return wrapper
-
-
 _RUN_SUBTASK_DESCRIPTION = (
     "Spawn an isolated subtask agent for self-contained focused work. "
     "The subtask runs with a fresh conversation history and inherits this "
@@ -1526,172 +1321,6 @@ def _make_knowledge_tool(store: KnowledgeStore) -> Tool:
             return f"Unknown action: {action}. Available: read, write, list, delete."
 
     return knowledge
-
-
-class Plugin:
-    def __init__(
-        self,
-        *,
-        prompt: PromptType | Iterable[PromptType] = (),
-        hitl_hook: HumanHook | None = None,
-        tools: Iterable[Callable[..., Any] | Tool] = (),
-        middleware: Iterable[MiddlewareFactory] = (),
-        observers: Iterable[Observer] = (),
-        dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
-    ) -> None:
-        self._tools = list(tools)
-        self._middleware = list(middleware)
-        self._observers = list(observers)
-        self._dependencies = dependencies or {}
-        self._variables = variables or {}
-        self._hitl_hook = hitl_hook
-
-        self._system_prompt: list[str] = []
-        self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
-
-        if isinstance(prompt, str) or callable(prompt):
-            prompt = [prompt]
-        for p in prompt:
-            if isinstance(p, str):
-                self._system_prompt.append(p)
-            else:
-                self._dynamic_prompt.append(_wrap_prompt_hook(p))
-
-    def register(self, agent: "Agent[Any]") -> None:
-        """Apply this plugin's contributions to an Agent instance."""
-        for t in self._tools:
-            agent.add_tool(t)
-
-        for m in self._middleware:
-            agent.add_middleware(m)
-
-        if self._hitl_hook is not None:
-            if agent._hitl_hook is not None:
-                warnings.warn(
-                    f"Agent '{agent.name}' already has a HITL hook; the plugin's hook will be ignored.",
-                    stacklevel=2,
-                )
-            else:
-                agent._hitl_hook = wrap_hitl(self._hitl_hook)
-
-        agent._agent_dependencies = self._dependencies | agent._agent_dependencies
-        agent._agent_variables.update(self._variables)
-
-        agent._observers.extend(self._observers)
-        agent._system_prompt.extend(self._system_prompt)
-        agent._dynamic_prompt.extend(self._dynamic_prompt)
-
-    def hitl_hook(self, func: HumanHook) -> HumanHook:
-        if self._hitl_hook is not None:
-            warnings.warn(
-                "You already set HITL hook, provided value overrides it",
-                category=RuntimeWarning,
-                stacklevel=2,
-            )
-        self._hitl_hook = func
-        return func
-
-    @overload
-    def prompt(
-        self,
-        func: PromptHook,
-    ) -> PromptHook: ...
-
-    @overload
-    def prompt(
-        self,
-        func: None = None,
-    ) -> Callable[[PromptHook], PromptHook]: ...
-
-    def prompt(
-        self,
-        func: PromptHook | None = None,
-    ) -> PromptHook | Callable[[PromptHook], PromptHook]:
-        def wrapper(f: PromptHook) -> PromptHook:
-            self._dynamic_prompt.append(_wrap_prompt_hook(f))
-            return f
-
-        if func:
-            return wrapper(func)
-        return wrapper
-
-    @overload
-    def tool(
-        self,
-        function: Callable[..., Any],
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        schema: FunctionParameters | None = None,
-        sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> FunctionTool: ...
-
-    @overload
-    def tool(
-        self,
-        function: None = None,
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        schema: FunctionParameters | None = None,
-        sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
-
-    def tool(
-        self,
-        function: Callable[..., Any] | None = None,
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        schema: FunctionParameters | None = None,
-        sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
-        def make_tool(f: Callable[..., Any]) -> FunctionTool:
-            t = tool(
-                f,
-                name=name,
-                description=description,
-                schema=schema,
-                sync_to_thread=sync_to_thread,
-                middleware=middleware,
-            )
-            self._tools.append(t)
-            return t
-
-        if function:
-            return make_tool(function)
-        return make_tool
-
-    @overload
-    def observer(
-        self,
-        condition: ClassInfo | Condition | None,
-        callback: Callable[..., Any],
-    ) -> Callable[..., Any]: ...
-
-    @overload
-    def observer(
-        self,
-        condition: ClassInfo | Condition | None = None,
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
-
-    def observer(
-        self,
-        condition: ClassInfo | Condition | None = None,
-        callback: Callable[..., Any] | None = None,
-    ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
-        def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
-            obs = observer_factory(condition, func)
-            self._observers.append(obs)
-            return func
-
-        if callback is not None:
-            return wrapper(callback)
-        return wrapper
 
 
 class _HaltCheckMiddleware(BaseMiddleware):
