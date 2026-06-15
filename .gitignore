@@ -169,6 +169,9 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# UV artifacts
+uv.lock
+
 logs/
 
 output/
