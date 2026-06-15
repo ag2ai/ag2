@@ -176,9 +176,10 @@ class BedrockClient(LLMClient):
         text_parts: list[str] = []
         calls: list[ToolCallEvent] = []
         for block in content_blocks:
-            if reasoning := block.get("reasoningContent"):
-                if reasoning_text := (reasoning.get("reasoningText") or {}).get("text"):
-                    await context.send(ModelReasoning(reasoning_text))
+            if (reasoning := block.get("reasoningContent")) and (
+                reasoning_text := (reasoning.get("reasoningText") or {}).get("text")
+            ):
+                await context.send(ModelReasoning(reasoning_text))
 
             if text := block.get("text"):
                 text_parts.append(text)
@@ -235,12 +236,12 @@ class BedrockClient(LLMClient):
                 if text := delta.get("text"):
                     full_content += text
                     await context.send(ModelMessageChunk(text))
-                if reasoning := delta.get("reasoningContent"):
-                    if reasoning_text := reasoning.get("text"):
-                        await context.send(ModelReasoning(reasoning_text))
-                if tool_use := delta.get("toolUse"):
-                    if (acc := tool_accs.get(block_delta["contentBlockIndex"])) is not None:
-                        acc["arguments"] += tool_use.get("input") or ""
+                if (reasoning := delta.get("reasoningContent")) and (reasoning_text := reasoning.get("text")):
+                    await context.send(ModelReasoning(reasoning_text))
+                if (tool_use := delta.get("toolUse")) and (
+                    acc := tool_accs.get(block_delta["contentBlockIndex"])
+                ) is not None:
+                    acc["arguments"] += tool_use.get("input") or ""
 
             elif block_stop := event.get("contentBlockStop"):
                 if (acc := tool_accs.pop(block_stop["contentBlockIndex"], None)) is not None:

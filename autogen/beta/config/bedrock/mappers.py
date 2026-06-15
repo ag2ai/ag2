@@ -229,9 +229,8 @@ def convert_messages(
             for r in message.results:
                 if r.parent_id:
                     resolved_tool_ids.add(r.parent_id)
-        elif isinstance(message, (ToolResultEvent, ToolErrorEvent)):
-            if message.parent_id:
-                resolved_tool_ids.add(message.parent_id)
+        elif isinstance(message, (ToolResultEvent, ToolErrorEvent)) and message.parent_id:
+            resolved_tool_ids.add(message.parent_id)
 
     # Pre-populate from wrappers so the loose-leaf fallback below doesn't
     # double-emit a toolResult that a later ToolResultsEvent also carries.
