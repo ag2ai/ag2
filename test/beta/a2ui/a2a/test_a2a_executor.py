@@ -64,7 +64,7 @@ def _make_executor(actions: tuple[A2UIAction, ...] = ()) -> A2UIAgentExecutor:
         name="ui_agent",
         config=TestConfig("ok"),
         validate_responses=False,
-        actions=actions,
+        tools=actions,
     )
     return A2UIAgentExecutor(agent)
 

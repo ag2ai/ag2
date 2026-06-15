@@ -19,7 +19,7 @@ _A2UI_RESPONSE = (
 
 
 def _agent(response: str = _A2UI_RESPONSE, *, validate: bool = True, actions=()) -> A2UIAgent:
-    return A2UIAgent(name="t", config=TestConfig(response), validate_responses=validate, actions=actions)
+    return A2UIAgent(name="t", config=TestConfig(response), validate_responses=validate, tools=actions)
 
 
 class TestSSEApp:

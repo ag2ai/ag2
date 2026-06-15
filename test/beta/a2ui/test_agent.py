@@ -122,7 +122,7 @@ class TestA2UIAgentActions:
     def test_event_action_in_prompt(self) -> None:
         agent = A2UIAgent(
             name="test_agent",
-            actions=[
+            tools=[
                 A2UIAction(
                     name="book_table",
                     tool_name="book_restaurant",
@@ -140,7 +140,7 @@ class TestA2UIAgentActions:
     def test_function_call_action_in_prompt(self) -> None:
         agent = A2UIAgent(
             name="test_agent",
-            actions=[
+            tools=[
                 A2UIAction(
                     name="openUrl",
                     action_type="functionCall",
@@ -158,7 +158,7 @@ class TestA2UIAgentActions:
     def test_mixed_actions_in_prompt(self) -> None:
         agent = A2UIAgent(
             name="test_agent",
-            actions=[
+            tools=[
                 A2UIAction(name="schedule", description="Schedule posts", example_context={"time": "2:00 PM"}),
                 A2UIAction(
                     name="openUrl",
@@ -179,7 +179,7 @@ class TestA2UIAgentActions:
             A2UIAction(name="save", description="Save data"),
             A2UIAction(name="openUrl", action_type="functionCall", description="Open URL"),
         ]
-        agent = A2UIAgent(name="test_agent", actions=actions)
+        agent = A2UIAgent(name="test_agent", tools=actions)
         save_action = agent.get_action("save")
         assert save_action is not None
         assert save_action.action_type == "event"
@@ -191,7 +191,7 @@ class TestA2UIAgentActions:
     def test_function_call_prompt_uses_call_not_name(self) -> None:
         agent = A2UIAgent(
             name="test_agent",
-            actions=[
+            tools=[
                 A2UIAction(
                     name="openUrl",
                     action_type="functionCall",

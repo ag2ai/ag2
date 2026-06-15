@@ -5,6 +5,7 @@
 from autogen.beta.exceptions import missing_optional_dependency
 
 try:
+    from .action_tool import A2UIActionTool, a2ui_action
     from .actions import A2UIAction
     from .agent import A2UIAgent
     from .events import A2UIMessageEvent
@@ -25,6 +26,8 @@ try:
     from .serialize import to_jsonl
 except ImportError as e:
     A2UIAction = missing_optional_dependency("A2UIAction", "a2ui", e)  # type: ignore[misc]
+    A2UIActionTool = missing_optional_dependency("A2UIActionTool", "a2ui", e)  # type: ignore[misc]
+    a2ui_action = missing_optional_dependency("a2ui_action", "a2ui", e)  # type: ignore[misc]
     A2UIAgent = missing_optional_dependency("A2UIAgent", "a2ui", e)  # type: ignore[misc]
     A2UIMessageEvent = missing_optional_dependency("A2UIMessageEvent", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingAction = missing_optional_dependency("A2UIIncomingAction", "a2ui", e)  # type: ignore[misc]
@@ -45,6 +48,7 @@ except ImportError as e:
 
 __all__ = (
     "A2UIAction",
+    "A2UIActionTool",
     "A2UIAgent",
     "A2UIIncomingAction",
     "A2UIIncomingError",
@@ -56,6 +60,7 @@ __all__ = (
     "A2UISchemaManager",
     "A2UIValidationMiddleware",
     "A2UIValidationResult",
+    "a2ui_action",
     "action_to_prompt",
     "error_to_prompt",
     "function_response_to_prompt",
