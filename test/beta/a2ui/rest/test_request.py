@@ -1,0 +1,169 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+import pytest
+
+from autogen.beta.a2ui import A2UIAction
+from autogen.beta.a2ui.rest import parse_request
+from autogen.beta.events import ModelRequest, ModelResponse
+
+
+def _no_actions(name: str) -> None:
+    return None
+
+
+class TestParseRequestShape:
+    def test_rejects_non_object_body(self) -> None:
+        with pytest.raises(ValueError, match="JSON object"):
+            parse_request("[1, 2, 3]", resolve_action=_no_actions)
+
+    def test_rejects_invalid_json(self) -> None:
+        with pytest.raises(ValueError, match="not valid JSON"):
+            parse_request("{not json", resolve_action=_no_actions)
+
+    def test_rejects_non_list_messages(self) -> None:
+        with pytest.raises(ValueError, match="'messages' must be a list"):
+            parse_request({"messages": {}}, resolve_action=_no_actions)
+
+    def test_rejects_non_dict_variables(self) -> None:
+        with pytest.raises(ValueError, match="'variables' must be an object"):
+            parse_request({"messages": [], "variables": []}, resolve_action=_no_actions)
+
+    def test_rejects_non_list_a2ui(self) -> None:
+        with pytest.raises(ValueError, match="'a2ui' must be a list"):
+            parse_request({"messages": [], "a2ui": {}}, resolve_action=_no_actions)
+
+    def test_rejects_unknown_role(self) -> None:
+        with pytest.raises(ValueError, match="unsupported message role"):
+            parse_request({"messages": [{"role": "ghost", "content": "x"}]}, resolve_action=_no_actions)
+
+    def test_rejects_non_string_content(self) -> None:
+        with pytest.raises(ValueError, match="must be a string"):
+            parse_request({"messages": [{"role": "user", "content": 5}]}, resolve_action=_no_actions)
+
+    def test_accepts_bytes_body(self) -> None:
+        req = parse_request(b'{"messages": [{"role": "user", "content": "hi"}]}', resolve_action=_no_actions)
+        assert [p.content for p in req.current_inputs] == ["hi"]
+
+
+class TestParseRequestMapping:
+    def test_trailing_user_run_is_current_turn(self) -> None:
+        req = parse_request(
+            {"messages": [{"role": "user", "content": "show a form"}]},
+            resolve_action=_no_actions,
+        )
+        assert req.history == []
+        assert [type(i).__name__ for i in req.current_inputs] == ["TextInput"]
+        assert req.current_inputs[0].content == "show a form"
+
+    def test_prior_turns_become_history(self) -> None:
+        req = parse_request(
+            {
+                "messages": [
+                    {"role": "user", "content": "first"},
+                    {"role": "assistant", "content": "answer"},
+                    {"role": "user", "content": "second"},
+                ]
+            },
+            resolve_action=_no_actions,
+        )
+        assert isinstance(req.history[0], ModelRequest)
+        assert isinstance(req.history[1], ModelResponse)
+        assert [i.content for i in req.current_inputs] == ["second"]
+
+    def test_system_and_developer_become_prompt(self) -> None:
+        req = parse_request(
+            {
+                "messages": [
+                    {"role": "system", "content": "be terse"},
+                    {"role": "developer", "content": "use v0.9"},
+                    {"role": "user", "content": "go"},
+                ]
+            },
+            resolve_action=_no_actions,
+        )
+        assert req.prompt == ["be terse", "use v0.9"]
+
+    def test_variables_passthrough(self) -> None:
+        req = parse_request(
+            {"messages": [], "variables": {"locale": "en"}},
+            resolve_action=_no_actions,
+        )
+        assert req.variables == {"locale": "en"}
+
+
+class TestParseRequestActions:
+    def test_registered_action_becomes_prompt(self) -> None:
+        actions = {"confirm": A2UIAction(name="confirm", tool_name="do_confirm", description="Confirm it")}
+        req = parse_request(
+            {
+                "messages": [],
+                "a2ui": [
+                    {
+                        "version": "v0.9",
+                        "action": {
+                            "name": "confirm",
+                            "surfaceId": "s1",
+                            "sourceComponentId": "btn",
+                            "timestamp": "2026-06-15T00:00:00Z",
+                            "context": {"id": 1},
+                        },
+                    }
+                ],
+            },
+            resolve_action=actions.get,
+        )
+        assert len(req.current_inputs) == 1
+        prompt = req.current_inputs[0].content
+        assert "confirm" in prompt
+        assert "do_confirm" in prompt
+
+    def test_unregistered_action_is_dropped(self) -> None:
+        req = parse_request(
+            {
+                "messages": [],
+                "a2ui": [
+                    {
+                        "version": "v0.9",
+                        "action": {"name": "ghost", "surfaceId": "", "sourceComponentId": "", "timestamp": ""},
+                    }
+                ],
+            },
+            resolve_action=_no_actions,
+        )
+        assert req.current_inputs == []
+
+    def test_error_envelope_becomes_corrective_prompt(self) -> None:
+        req = parse_request(
+            {
+                "messages": [],
+                "a2ui": [
+                    {
+                        "version": "v0.9",
+                        "error": {"code": "VALIDATION_FAILED", "surfaceId": "s1", "message": "bad", "path": "/x"},
+                    }
+                ],
+            },
+            resolve_action=_no_actions,
+        )
+        assert len(req.current_inputs) == 1
+        assert "error" in req.current_inputs[0].content.lower()
+        assert "VALIDATION_FAILED" in req.current_inputs[0].content
+
+    def test_action_appended_after_trailing_user_text(self) -> None:
+        actions = {"go": A2UIAction(name="go", description="Go")}
+        req = parse_request(
+            {
+                "messages": [{"role": "user", "content": "and also"}],
+                "a2ui": [
+                    {
+                        "version": "v0.9",
+                        "action": {"name": "go", "surfaceId": "", "sourceComponentId": "", "timestamp": ""},
+                    }
+                ],
+            },
+            resolve_action=actions.get,
+        )
+        assert [i.content for i in req.current_inputs][0] == "and also"
+        assert len(req.current_inputs) == 2

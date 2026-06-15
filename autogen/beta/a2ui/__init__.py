@@ -12,7 +12,10 @@ try:
         A2UIIncomingAction,
         A2UIIncomingError,
         A2UIIncomingParseResult,
+        action_to_prompt,
+        error_to_prompt,
         parse_incoming_message,
+        sanitize_for_prompt,
     )
     from .middleware import A2UIValidationMiddleware
     from .parser import A2UIParseResult, A2UIResponseParser, A2UIValidationResult
@@ -25,7 +28,10 @@ except ImportError as e:
     A2UIIncomingAction = missing_optional_dependency("A2UIIncomingAction", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingError = missing_optional_dependency("A2UIIncomingError", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingParseResult = missing_optional_dependency("A2UIIncomingParseResult", "a2ui", e)  # type: ignore[misc]
+    action_to_prompt = missing_optional_dependency("action_to_prompt", "a2ui", e)  # type: ignore[misc]
+    error_to_prompt = missing_optional_dependency("error_to_prompt", "a2ui", e)  # type: ignore[misc]
     parse_incoming_message = missing_optional_dependency("parse_incoming_message", "a2ui", e)  # type: ignore[misc]
+    sanitize_for_prompt = missing_optional_dependency("sanitize_for_prompt", "a2ui", e)  # type: ignore[misc]
     A2UIValidationMiddleware = missing_optional_dependency("A2UIValidationMiddleware", "a2ui", e)  # type: ignore[misc]
     A2UIParseResult = missing_optional_dependency("A2UIParseResult", "a2ui", e)  # type: ignore[misc]
     A2UIResponseParser = missing_optional_dependency("A2UIResponseParser", "a2ui", e)  # type: ignore[misc]
@@ -45,6 +51,9 @@ __all__ = (
     "A2UISchemaManager",
     "A2UIValidationMiddleware",
     "A2UIValidationResult",
+    "action_to_prompt",
+    "error_to_prompt",
     "parse_incoming_message",
+    "sanitize_for_prompt",
     "to_jsonl",
 )

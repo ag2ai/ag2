@@ -4,7 +4,6 @@
 
 """A2A executor that understands A2UI message splitting and user actions."""
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -26,8 +25,8 @@ from ..agent import A2UIAgent
 from ..constants import A2UI_MIME_TYPE
 from ..events import A2UIMessageEvent
 from ..incoming import (
-    A2UIIncomingAction,
-    A2UIIncomingError,
+    action_to_prompt,
+    error_to_prompt,
     parse_incoming_message,
 )
 from .extension import try_activate_a2ui_extension
@@ -117,7 +116,8 @@ class A2UIAgentExecutor(AgentExecutor):
             for envelope in envelopes:
                 result = parse_incoming_message(envelope)
                 if result.kind == "action" and result.action is not None:
-                    prompt = self._action_to_prompt(result.action)
+                    action_def = self._a2ui_agent.get_action(result.action.name)
+                    prompt = action_to_prompt(result.action, action_def)
                     if prompt is None:
                         logger.warning(
                             "Dropping A2UI action '%s' — no matching A2UIAction registration.",
@@ -127,7 +127,7 @@ class A2UIAgentExecutor(AgentExecutor):
                     new_parts.append(Part(text=prompt))
                     rewritten = True
                 elif result.kind == "error" and result.error is not None:
-                    new_parts.append(Part(text=self._error_to_prompt(result.error)))
+                    new_parts.append(Part(text=error_to_prompt(result.error)))
                     rewritten = True
                 else:
                     logger.debug("Skipping A2UI envelope of unknown kind: %s", result.parse_error)
@@ -135,46 +135,6 @@ class A2UIAgentExecutor(AgentExecutor):
         if rewritten:
             del msg.parts[:]
             msg.parts.extend(new_parts)
-
-    def _action_to_prompt(self, action: A2UIIncomingAction) -> str | None:
-        """Turn a parsed A2UI action into an LLM prompt.
-
-        Returns ``None`` when the action name is not registered on the
-        agent — caller drops the part instead of leaking raw action data.
-        """
-        if not action.name:
-            return None
-        action_def = self._a2ui_agent.get_action(action.name)
-        if action_def is None:
-            return None
-
-        ctx_json = json.dumps(action.context)
-        origin_bits: list[str] = []
-        if action.surface_id:
-            origin_bits.append(f"surface={action.surface_id}")
-        if action.source_component_id:
-            origin_bits.append(f"component={action.source_component_id}")
-        if action.timestamp:
-            origin_bits.append(f"at={action.timestamp}")
-        origin = f" ({', '.join(origin_bits)})" if origin_bits else ""
-
-        if action_def.tool_name:
-            return (
-                f"The user clicked the '{action.name}' button{origin}. "
-                f"Call the tool '{action_def.tool_name}' with arguments: {ctx_json}. "
-                "Do not respond with text only."
-            )
-        desc = f" {action_def.description}" if action_def.description else ""
-        return f"The user clicked the '{action.name}' button{origin}.{desc} Context: {ctx_json}"
-
-    def _error_to_prompt(self, err: A2UIIncomingError) -> str:
-        """Turn a client-reported A2UI error into a corrective LLM prompt."""
-        path_hint = err.path or "(unknown)"
-        return (
-            f"The client reported an A2UI error on surface '{err.surface_id}'. "
-            f"Code: {err.code or '(none)'}. Path: {path_hint}. Message: {err.message}. "
-            "Please regenerate the UI with this issue corrected."
-        )
 
     async def _run_one_turn(
         self,

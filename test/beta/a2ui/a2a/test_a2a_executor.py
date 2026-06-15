@@ -9,7 +9,6 @@ from a2a.types import Part
 from autogen.beta.a2ui import A2UIAction, A2UIAgent
 from autogen.beta.a2ui.a2a import create_a2ui_parts, get_a2ui_data, is_a2ui_part
 from autogen.beta.a2ui.a2a.executor import A2UIAgentExecutor, _extract_a2ui_envelopes
-from autogen.beta.a2ui.incoming import A2UIIncomingAction
 from autogen.beta.testing import TestConfig
 
 VERSION = "v0.9"
@@ -144,10 +143,18 @@ class TestActionToPrompt:
         assert "submit_form" in texts[0]
         assert "user@example.com" in texts[0]
 
-    def test_unregistered_action_returns_none(self) -> None:
+    def test_unregistered_action_is_not_synthesized(self) -> None:
         executor = _make_executor()  # no registered actions
-        incoming = A2UIIncomingAction(name="submit", surface_id="s1", source_component_id="btn", timestamp="t")
-        assert executor._action_to_prompt(incoming) is None
+        msg = MagicMock()
+        msg.parts = [create_a2ui_parts([ACTION_ENVELOPE])[0]]
+        ctx = MagicMock()
+        ctx.message = msg
+
+        executor._rewrite_incoming_a2ui_parts(ctx)
+
+        # No matching A2UIAction → the action is dropped, never turned into a
+        # text prompt (the original DataPart is left untouched).
+        assert [p.text for p in msg.parts if p.text] == []
 
     def test_error_envelope_synthesizes_corrective_prompt(self) -> None:
         executor = _make_executor()
