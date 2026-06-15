@@ -46,6 +46,8 @@ class A2UIValidationMiddleware(MiddlewareFactory):
     """
 
     def __init__(self, parser: A2UIResponseParser, max_retries: int = 1) -> None:
+        if max_retries < 0:
+            raise ValueError(f"max_retries must be >= 0, got {max_retries}")
         self._parser = parser
         self._max_retries = max_retries
 

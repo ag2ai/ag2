@@ -16,12 +16,21 @@ A2UI_JSON_CLOSE_TAG = "</a2ui-json>"
 A2UI_DEFAULT_VERSION: A2UIVersion = "v0.9"
 A2UI_DEFAULT_ACTIVITY_TYPE = "a2ui-surface"
 
-# Canonical default ("basic") catalog id per protocol version. These resolve on
-# a2ui.org and must match what renderers advertise in ``supportedCatalogIds``.
-# v0.9.1 is a backward-compatible patch over v0.9 and reuses v0.9's catalog.
+# Canonical default ("basic") catalog id per protocol version. This value is
+# stamped into ``createSurface`` messages and advertised in
+# ``supportedCatalogIds``; it MUST equal the ``$id`` of the catalog schema we
+# vendored (the parser builds component ``$ref``s as ``{catalog_id}#/...`` and
+# resolves them against the schema registry keyed by that ``$id``).
+#
+# v0.9.1 reuses v0.9's catalog id ON PURPOSE: the upstream v0.9.1 catalog file
+# (``specification/v0_9_1/catalogs/basic/catalog.json``) itself declares
+# ``"$id": ".../v0_9/catalogs/basic/catalog.json"``. The upstream v0.9.1
+# *extension-spec doc* example advertises a ``v0_9_1`` URL, but that conflicts
+# with the catalog file's own ``$id`` — following the doc would break ``$ref``
+# resolution here, so we mirror the authoritative ``$id`` (v0_9) instead.
 A2UI_DEFAULT_CATALOG_ID_BY_VERSION: dict[A2UIVersion, str] = {
     "v0.9": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
-    "v0.9.1": "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json",
+    "v0.9.1": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
     "v1.0": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
 }
 
