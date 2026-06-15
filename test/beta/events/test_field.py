@@ -27,6 +27,27 @@ class TestFieldBasics:
         obj = Event()
         assert obj.a == "1"
 
+    def test_event_with_falsy_value_field(self):
+        # A plain (non-Field) default that is falsy must still be applied;
+        # 0 / False / "" / () are real defaults, not "no default".
+        class Event(BaseEvent):
+            count: int = 0
+            flag: bool = False
+            label: str = ""
+            items: tuple = ()
+
+        obj = Event()
+        assert obj.count == 0
+        assert obj.flag is False
+        assert obj.label == ""
+        assert obj.items == ()
+
+    def test_falsy_value_field_is_serialized(self):
+        class Event(BaseEvent):
+            count: int = 0
+
+        assert Event().to_dict()["count"] == 0
+
     def test_event_with_default_field(self):
         class Event(BaseEvent):
             a: str = Field("1")
