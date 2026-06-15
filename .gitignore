@@ -170,6 +170,8 @@ dmypy.json
 cython_debug/
 
 # UV artifacts
+# TODO: remove this once we remove most pyproject.toml dependencies.
+# TODO: update dependabot to use "uv" package-ecosystem then.
 uv.lock
 
 logs/
