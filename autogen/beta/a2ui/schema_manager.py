@@ -12,7 +12,7 @@ from referencing.jsonschema import DRAFT202012
 
 from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue  # noqa: F401
 from .actions import A2UIAction
-from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
+from .constants import A2UI_DEFAULT_CATALOG_ID_BY_VERSION, A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 _VERSIONS_DIR = Path(__file__).parent
 
@@ -32,17 +32,17 @@ class _VersionConfigEntry(TypedDict):
 # enum to accept ``"v0.9.1"`` — hence its identifiers point at ``v0_9``.
 _VERSION_CONFIG: dict[A2UIVersion, _VersionConfigEntry] = {
     "v0.9": {
-        "default_catalog_id": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+        "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9"],
         "schema_base_uri": "https://a2ui.org/specification/v0_9/",
         "version_string": "v0.9",
     },
     "v0.9.1": {
-        "default_catalog_id": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+        "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9.1"],
         "schema_base_uri": "https://a2ui.org/specification/v0_9/",
         "version_string": "v0.9.1",
     },
     "v1.0": {
-        "default_catalog_id": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+        "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v1.0"],
         "schema_base_uri": "https://a2ui.org/specification/v1_0/",
         "version_string": "v1.0",
     },

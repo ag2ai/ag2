@@ -8,7 +8,7 @@ from typing import Literal
 from ._types import JsonValue
 
 
-@dataclass
+@dataclass(slots=True)
 class A2UIAction:
     """Defines an action that can be triggered by A2UI buttons.
 

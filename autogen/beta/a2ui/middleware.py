@@ -80,8 +80,6 @@ class _A2UIValidationMiddleware(BaseMiddleware):
         context: Context,
     ) -> ModelResponse:
         current_events: list[BaseEvent] = list(events)
-        last_parse_result: A2UIParseResult | None = None
-        response: ModelResponse | None = None
 
         for attempt in range(self._max_retries + 1):
             response = await call_next(current_events, context)
@@ -103,8 +101,6 @@ class _A2UIValidationMiddleware(BaseMiddleware):
                         await context.send(A2UIMessageEvent(op))
                     response.message = _to_prose_message(response.message, parse_result.text)
                 return response
-
-            last_parse_result = parse_result
 
             if attempt >= self._max_retries:
                 logger.warning(
@@ -130,13 +126,9 @@ class _A2UIValidationMiddleware(BaseMiddleware):
                 ModelRequest([TextInput(feedback)]),
             ]
 
-        # ``response`` is guaranteed to be set because the loop runs at least once.
-        # This branch only executes if the loop completes without an early return,
-        # which currently cannot happen (the final attempt always returns above).
-        assert response is not None
-        if last_parse_result is not None:
-            response.message = _to_prose_message(response.message, last_parse_result.text)
-        return response
+        # Unreachable: the loop runs at least once (``max_retries >= 0``) and its
+        # final attempt (``attempt >= self._max_retries``) always returns.
+        raise AssertionError("A2UI validation loop exited without returning a response")
 
     def _validate(self, response_text: str) -> "tuple[A2UIParseResult, list[str] | None]":
         """Parse and validate an A2UI response.

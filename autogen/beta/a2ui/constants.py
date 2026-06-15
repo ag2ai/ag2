@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from ._types import A2UIVersion
+
 A2UI_MIME_TYPE = "application/a2ui+json"
 
 # Official A2UI "Standard Prompt Tags" (a2ui-project/a2ui, agent_sdk_guide.md):
@@ -11,16 +13,40 @@ A2UI_MIME_TYPE = "application/a2ui+json"
 A2UI_JSON_OPEN_TAG = "<a2ui-json>"
 A2UI_JSON_CLOSE_TAG = "</a2ui-json>"
 
-A2UI_DEFAULT_VERSION = "v0.9"
+A2UI_DEFAULT_VERSION: A2UIVersion = "v0.9"
 A2UI_DEFAULT_ACTIVITY_TYPE = "a2ui-surface"
-A2UI_DEFAULT_CATALOG_ID = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
-A2UI_EXTENSION_URI = "https://a2ui.org/a2a-extension/a2ui/v0.9"
+
+# Canonical default ("basic") catalog id per protocol version. These resolve on
+# a2ui.org and must match what renderers advertise in ``supportedCatalogIds``.
+# v0.9.1 is a backward-compatible patch over v0.9 and reuses v0.9's catalog.
+A2UI_DEFAULT_CATALOG_ID_BY_VERSION: dict[A2UIVersion, str] = {
+    "v0.9": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+    "v0.9.1": "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json",
+    "v1.0": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+}
+
+# Canonical A2A extension URI per protocol version (a2ui-project/a2ui,
+# ``a2ui_extension_specification.md``; the v1.0 evolution guide bumps the
+# namespace from v0.9/v0.9.1 to v1.0). A client and server agree on A2UI by
+# matching this exact URI in the AgentCard ``capabilities.extensions``.
+A2UI_EXTENSION_URI_BY_VERSION: dict[A2UIVersion, str] = {
+    "v0.9": "https://a2ui.org/a2a-extension/a2ui/v0.9",
+    "v0.9.1": "https://a2ui.org/a2a-extension/a2ui/v0.9.1",
+    "v1.0": "https://a2ui.org/a2a-extension/a2ui/v1.0",
+}
+
+# Back-compat scalar aliases (default protocol version = v0.9). Prefer the
+# per-version mappings above when serving v0.9.1 / v1.0.
+A2UI_DEFAULT_CATALOG_ID = A2UI_DEFAULT_CATALOG_ID_BY_VERSION[A2UI_DEFAULT_VERSION]
+A2UI_EXTENSION_URI = A2UI_EXTENSION_URI_BY_VERSION[A2UI_DEFAULT_VERSION]
 
 __all__ = (
     "A2UI_DEFAULT_ACTIVITY_TYPE",
     "A2UI_DEFAULT_CATALOG_ID",
+    "A2UI_DEFAULT_CATALOG_ID_BY_VERSION",
     "A2UI_DEFAULT_VERSION",
     "A2UI_EXTENSION_URI",
+    "A2UI_EXTENSION_URI_BY_VERSION",
     "A2UI_JSON_CLOSE_TAG",
     "A2UI_JSON_OPEN_TAG",
     "A2UI_MIME_TYPE",

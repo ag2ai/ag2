@@ -4,11 +4,18 @@
 
 from typing import Any
 
+import pytest
 from google.protobuf.json_format import MessageToDict
 
+from autogen.beta.a2ui._types import A2UIVersion
 from autogen.beta.a2ui.a2a import get_a2ui_agent_extension
 from autogen.beta.a2ui.a2a.extension import try_activate_a2ui_extension
-from autogen.beta.a2ui.constants import A2UI_DEFAULT_CATALOG_ID, A2UI_EXTENSION_URI
+from autogen.beta.a2ui.constants import (
+    A2UI_DEFAULT_CATALOG_ID,
+    A2UI_DEFAULT_CATALOG_ID_BY_VERSION,
+    A2UI_EXTENSION_URI,
+    A2UI_EXTENSION_URI_BY_VERSION,
+)
 
 
 def _params(ext) -> dict:
@@ -57,6 +64,18 @@ class TestAgentExtension:
         ext = get_a2ui_agent_extension(accepts_inline_catalogs=False)
         assert "acceptsInlineCatalogs" not in _params(ext)
 
+    @pytest.mark.parametrize("version", ["v0.9", "v0.9.1", "v1.0"])
+    def test_per_version_uri_and_default_catalog(self, version: A2UIVersion) -> None:
+        ext = get_a2ui_agent_extension(version=version)
+        assert ext.uri == A2UI_EXTENSION_URI_BY_VERSION[version]
+        assert version in ext.description
+        assert _params(ext) == {"supportedCatalogIds": [A2UI_DEFAULT_CATALOG_ID_BY_VERSION[version]]}
+
+    def test_v1_0_uses_v1_namespace(self) -> None:
+        ext = get_a2ui_agent_extension(version="v1.0")
+        assert ext.uri == "https://a2ui.org/a2a-extension/a2ui/v1.0"
+        assert "v1_0" in _params(ext)["supportedCatalogIds"][0]
+
 
 class TestTryActivateExtension:
     def test_activates_when_client_requests_uri(self) -> None:
@@ -89,3 +108,17 @@ class TestTryActivateExtension:
             "https://example.com/other",
             A2UI_EXTENSION_URI,
         ]
+
+    @pytest.mark.parametrize("version", ["v0.9", "v0.9.1", "v1.0"])
+    def test_activates_matching_version_uri(self, version: A2UIVersion) -> None:
+        uri = A2UI_EXTENSION_URI_BY_VERSION[version]
+        ctx = _StubContext(requested_extensions=[uri])
+        assert try_activate_a2ui_extension(ctx, version=version) is True  # type: ignore[arg-type]
+        assert ctx.metadata is not None
+        assert ctx.metadata["activated_extensions"] == [uri]
+
+    def test_does_not_activate_on_version_mismatch(self) -> None:
+        # Client requested v0.9 but the agent serves v1.0 — no activation.
+        ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI_BY_VERSION["v0.9"]])
+        assert try_activate_a2ui_extension(ctx, version="v1.0") is False  # type: ignore[arg-type]
+        assert ctx.metadata is None

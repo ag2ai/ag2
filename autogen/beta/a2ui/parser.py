@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import jsonschema
+from referencing.exceptions import Unresolvable
 
 from ._types import A2UIVersion, JsonSchema, ServerToClientMessage
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
@@ -236,21 +237,17 @@ class A2UIResponseParser:
                     validator.validate(op)
                 else:
                     jsonschema.validate(instance=op, schema=self._schema)
-            except jsonschema.ValidationError:
+            except jsonschema.ValidationError as e:
                 comp_errors = self._drill_into_components(op)
                 if comp_errors:
                     errors.extend(f"Operation {i}: {ce}" for ce in comp_errors)
                 else:
-                    try:
-                        if validator is not None:
-                            validator.validate(op)
-                        else:
-                            jsonschema.validate(instance=op, schema=self._schema)
-                    except jsonschema.ValidationError as e2:
-                        errors.append(f"Operation {i}: {e2.message}")
-            except jsonschema.RefResolutionError as re:
+                    errors.append(f"Operation {i}: {e.message}")
+            except Unresolvable as re:
                 # A ref we cannot resolve means we could not validate this op —
                 # surface it instead of letting it escape as an unhandled crash.
+                # (``referencing.exceptions.Unresolvable`` replaces the deprecated
+                # ``jsonschema.RefResolutionError`` as of jsonschema 4.18.)
                 logger.warning("Schema ref resolution failed for operation %d: %s", i, re)
                 errors.append(f"Operation {i}: could not resolve schema reference ({re})")
             except Exception as exc:
@@ -315,10 +312,11 @@ class A2UIResponseParser:
                     jsonschema.validate(instance=comp, schema=ref_or_schema)
             except jsonschema.ValidationError as ce:
                 comp_errors.append(f"Component '{comp_id}' ({comp_type}): {ce.message}")
-            except jsonschema.RefResolutionError as re:
+            except Unresolvable as re:
                 # Do not swallow: a ref we cannot resolve means we could not
                 # validate the component, so surface it as an error instead of
                 # silently treating an unvalidated component as valid.
+                # (``Unresolvable`` replaces deprecated ``jsonschema.RefResolutionError``.)
                 logger.warning("Schema ref resolution failed for component '%s' (%s): %s", comp_id, comp_type, re)
                 comp_errors.append(f"Component '{comp_id}' ({comp_type}): could not resolve schema reference ({re})")
             except Exception as exc:

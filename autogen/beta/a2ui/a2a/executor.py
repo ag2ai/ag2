@@ -75,7 +75,7 @@ class A2UIAgentExecutor(AgentExecutor):
 
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
         if request_context.message is not None:
-            try_activate_a2ui_extension(request_context)
+            try_activate_a2ui_extension(request_context, version=self.protocol_version)
             self._rewrite_incoming_a2ui_parts(request_context)
         await super().execute(request_context, event_queue)
 
