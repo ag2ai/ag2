@@ -11,9 +11,11 @@ try:
     from .incoming import (
         A2UIIncomingAction,
         A2UIIncomingError,
+        A2UIIncomingFunctionResponse,
         A2UIIncomingParseResult,
         action_to_prompt,
         error_to_prompt,
+        function_response_to_prompt,
         parse_incoming_message,
         sanitize_for_prompt,
     )
@@ -27,9 +29,11 @@ except ImportError as e:
     A2UIMessageEvent = missing_optional_dependency("A2UIMessageEvent", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingAction = missing_optional_dependency("A2UIIncomingAction", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingError = missing_optional_dependency("A2UIIncomingError", "a2ui", e)  # type: ignore[misc]
+    A2UIIncomingFunctionResponse = missing_optional_dependency("A2UIIncomingFunctionResponse", "a2ui", e)  # type: ignore[misc]
     A2UIIncomingParseResult = missing_optional_dependency("A2UIIncomingParseResult", "a2ui", e)  # type: ignore[misc]
     action_to_prompt = missing_optional_dependency("action_to_prompt", "a2ui", e)  # type: ignore[misc]
     error_to_prompt = missing_optional_dependency("error_to_prompt", "a2ui", e)  # type: ignore[misc]
+    function_response_to_prompt = missing_optional_dependency("function_response_to_prompt", "a2ui", e)  # type: ignore[misc]
     parse_incoming_message = missing_optional_dependency("parse_incoming_message", "a2ui", e)  # type: ignore[misc]
     sanitize_for_prompt = missing_optional_dependency("sanitize_for_prompt", "a2ui", e)  # type: ignore[misc]
     A2UIValidationMiddleware = missing_optional_dependency("A2UIValidationMiddleware", "a2ui", e)  # type: ignore[misc]
@@ -44,6 +48,7 @@ __all__ = (
     "A2UIAgent",
     "A2UIIncomingAction",
     "A2UIIncomingError",
+    "A2UIIncomingFunctionResponse",
     "A2UIIncomingParseResult",
     "A2UIMessageEvent",
     "A2UIParseResult",
@@ -53,6 +58,7 @@ __all__ = (
     "A2UIValidationResult",
     "action_to_prompt",
     "error_to_prompt",
+    "function_response_to_prompt",
     "parse_incoming_message",
     "sanitize_for_prompt",
     "to_jsonl",

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -11,12 +12,17 @@ from ._types import JsonObject, JsonValue
 from .actions import A2UIAction
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True)
 class A2UIIncomingAction:
     """A client→server ``action`` envelope content.
 
-    Mirrors ``client_to_server.json#/properties/action``.
+    Mirrors ``client_to_server.json#/properties/action``. ``want_response`` /
+    ``action_id`` are v1.0 additions: when ``want_response`` is set the client
+    expects the server to reply with an ``actionResponse`` carrying the same
+    ``action_id``. Both default to the v0.9 behaviour (no response expected).
     """
 
     name: str
@@ -24,29 +30,49 @@ class A2UIIncomingAction:
     source_component_id: str
     timestamp: str
     context: dict[str, JsonValue] = field(default_factory=dict)
+    want_response: bool = False
+    action_id: str | None = None
 
 
 @dataclass(slots=True)
 class A2UIIncomingError:
     """A client→server ``error`` envelope content.
 
-    Mirrors ``client_to_server.json#/properties/error``. ``path`` is set
-    only for ``VALIDATION_FAILED`` errors per the spec.
+    Mirrors ``client_to_server.json#/properties/error``. ``path`` is set only
+    for ``VALIDATION_FAILED`` errors. ``function_call_id`` is the v1.0 generic
+    error arm: an error answering a server-initiated ``callFunction`` rather
+    than a surface (the two are mutually exclusive per spec).
     """
 
     code: str
     surface_id: str
     message: str
     path: str | None = None
+    function_call_id: str | None = None
+
+
+@dataclass(slots=True)
+class A2UIIncomingFunctionResponse:
+    """A client→server ``functionResponse`` envelope content (v1.0).
+
+    The client's successful reply to a server-initiated ``callFunction``.
+    Mirrors ``client_to_server.json#/properties/functionResponse``;
+    ``function_call_id`` is copied verbatim from the originating call.
+    """
+
+    function_call_id: str
+    call: str
+    value: JsonValue = None
 
 
 @dataclass(slots=True)
 class A2UIIncomingParseResult:
     """Result of parsing one client→server envelope."""
 
-    kind: Literal["action", "error", "unknown"]
+    kind: Literal["action", "error", "functionResponse", "unknown"]
     action: A2UIIncomingAction | None = None
     error: A2UIIncomingError | None = None
+    function_response: A2UIIncomingFunctionResponse | None = None
     raw: JsonObject | None = None
     parse_error: str | None = None
 
@@ -54,9 +80,13 @@ class A2UIIncomingParseResult:
 def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
     """Classify a single client→server A2UI envelope.
 
-    Accepts a dict shaped like ``{"version": "v0.9", "action": {...}}`` or
-    ``{"version": "v0.9", "error": {...}}`` and returns a typed result.
-    Does NOT validate the envelope against the JSON schema — use
+    Accepts a dict shaped like ``{"version": ..., "action": {...}}``,
+    ``{"version": ..., "functionResponse": {...}}``, or
+    ``{"version": ..., "error": {...}}`` and returns a typed result. Parsing is
+    structural and version-neutral — v1.0-only arms (``functionResponse``,
+    ``action.wantResponse``/``actionId``, ``error.functionCallId``) decode when
+    present and are simply absent for v0.9 clients. Does NOT validate the
+    envelope against the JSON schema — use
     ``A2UISchemaManager.client_to_server_schema`` for strict validation.
     """
     if not isinstance(data, dict):
@@ -64,6 +94,7 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
 
     action_obj = data.get("action")
     if isinstance(action_obj, dict):
+        raw_action_id = action_obj.get("actionId")
         return A2UIIncomingParseResult(
             kind="action",
             action=A2UIIncomingAction(
@@ -72,6 +103,20 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
                 source_component_id=str(action_obj.get("sourceComponentId", "")),
                 timestamp=str(action_obj.get("timestamp", "")),
                 context=dict(action_obj.get("context") or {}),
+                want_response=bool(action_obj.get("wantResponse", False)),
+                action_id=str(raw_action_id) if isinstance(raw_action_id, str) else None,
+            ),
+            raw=data,
+        )
+
+    function_response_obj = data.get("functionResponse")
+    if isinstance(function_response_obj, dict):
+        return A2UIIncomingParseResult(
+            kind="functionResponse",
+            function_response=A2UIIncomingFunctionResponse(
+                function_call_id=str(function_response_obj.get("functionCallId", "")),
+                call=str(function_response_obj.get("call", "")),
+                value=function_response_obj.get("value"),
             ),
             raw=data,
         )
@@ -79,6 +124,7 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
     error_obj = data.get("error")
     if isinstance(error_obj, dict):
         raw_path = error_obj.get("path")
+        raw_fc_id = error_obj.get("functionCallId")
         return A2UIIncomingParseResult(
             kind="error",
             error=A2UIIncomingError(
@@ -86,6 +132,7 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
                 surface_id=str(error_obj.get("surfaceId", "")),
                 message=str(error_obj.get("message", "")),
                 path=str(raw_path) if isinstance(raw_path, str) else None,
+                function_call_id=str(raw_fc_id) if isinstance(raw_fc_id, str) else None,
             ),
             raw=data,
         )
@@ -93,7 +140,7 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
     return A2UIIncomingParseResult(
         kind="unknown",
         raw=data,
-        parse_error="envelope has neither 'action' nor 'error' key",
+        parse_error="envelope has none of 'action', 'functionResponse', or 'error' keys",
     )
 
 
@@ -166,22 +213,54 @@ def action_to_prompt(action: A2UIIncomingAction, action_def: A2UIAction | None) 
         origin_bits.append(f"at={sanitize_for_prompt(action.timestamp)}")
     origin = f" ({', '.join(origin_bits)})" if origin_bits else ""
 
+    # v1.0: when the client expects an actionResponse, tell the LLM the
+    # correlation id so it can emit one inside its <a2ui-json> output.
+    response_hint = ""
+    if action.want_response and action.action_id:
+        action_id = sanitize_for_prompt(action.action_id)
+        response_hint = (
+            f" The UI is awaiting a response: emit an A2UI 'actionResponse' message with "
+            f"actionId '{action_id}' carrying the result (a 'value' on success, or an 'error')."
+        )
+    elif action.want_response:
+        # Malformed v1.0: wantResponse with no actionId. We cannot tell the LLM
+        # which id to correlate, so the actionResponse hint is suppressed and the
+        # client's pending response will never be satisfied — surface it.
+        logger.warning(
+            "A2UI action '%s' set wantResponse but provided no actionId; cannot instruct an actionResponse.",
+            action.name,
+        )
+
     if action_def.tool_name:
         return (
             f"The user clicked the '{name}' button{origin}. "
             f"Call the tool '{action_def.tool_name}' with arguments: {ctx_json}. "
-            "Do not respond with text only."
+            f"Do not respond with text only.{response_hint}"
         )
     desc = f" {action_def.description}" if action_def.description else ""
-    return f"The user clicked the '{name}' button{origin}.{desc} Context: {ctx_json}"
+    return f"The user clicked the '{name}' button{origin}.{desc} Context: {ctx_json}{response_hint}"
 
 
 def error_to_prompt(err: A2UIIncomingError) -> str:
-    """Rewrite a client-reported A2UI ``error`` as a corrective LLM instruction."""
-    path_hint = sanitize_for_prompt(err.path) if err.path else "(unknown)"
+    """Rewrite a client-reported A2UI ``error`` as a corrective LLM instruction.
+
+    Handles both error arms: a surface-scoped validation/render error, and the
+    v1.0 generic error answering a server-initiated ``callFunction`` (carrying
+    a ``functionCallId`` instead of a surface).
+    """
     code = sanitize_for_prompt(err.code) if err.code else "(none)"
-    surface = sanitize_for_prompt(err.surface_id)
     message = sanitize_for_prompt(err.message)
+
+    if err.function_call_id:
+        fc_id = sanitize_for_prompt(err.function_call_id)
+        return (
+            f"The client reported an A2UI error for function call '{fc_id}'. "
+            f"Code: {code}. Message: {message}. "
+            "Adjust your approach and continue without relying on that function's result."
+        )
+
+    path_hint = sanitize_for_prompt(err.path) if err.path else "(unknown)"
+    surface = sanitize_for_prompt(err.surface_id)
     return (
         f"The client reported an A2UI error on surface '{surface}'. "
         f"Code: {code}. Path: {path_hint}. Message: {message}. "
@@ -189,12 +268,33 @@ def error_to_prompt(err: A2UIIncomingError) -> str:
     )
 
 
+def function_response_to_prompt(fr: A2UIIncomingFunctionResponse) -> str:
+    """Rewrite a client ``functionResponse`` (v1.0) as a continuation instruction.
+
+    The client has executed a server-initiated ``callFunction`` and returned its
+    result. All client-supplied values pass through :func:`sanitize_for_prompt`.
+    """
+    call = sanitize_for_prompt(fr.call) if fr.call else "(unknown)"
+    fc_id = sanitize_for_prompt(fr.function_call_id) if fr.function_call_id else "(unknown)"
+    try:
+        value_json = sanitize_for_prompt(json.dumps(fr.value))
+    except (TypeError, ValueError):
+        logger.warning("functionResponse value for call '%s' is not JSON-serializable; using a placeholder.", fr.call)
+        value_json = "<non-serializable>"
+    return (
+        f"The client executed the '{call}' function call (id={fc_id}) and returned: {value_json}. "
+        "Use this result to continue."
+    )
+
+
 __all__ = (
     "A2UIIncomingAction",
     "A2UIIncomingError",
+    "A2UIIncomingFunctionResponse",
     "A2UIIncomingParseResult",
     "action_to_prompt",
     "error_to_prompt",
+    "function_response_to_prompt",
     "parse_incoming_message",
     "sanitize_for_prompt",
 )

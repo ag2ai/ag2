@@ -27,6 +27,7 @@ from ..events import A2UIMessageEvent
 from ..incoming import (
     action_to_prompt,
     error_to_prompt,
+    function_response_to_prompt,
     parse_incoming_message,
 )
 from .extension import try_activate_a2ui_extension
@@ -126,6 +127,14 @@ class A2UIAgentExecutor(AgentExecutor):
                         continue
                     new_parts.append(Part(text=prompt))
                     rewritten = True
+                elif result.kind == "functionResponse" and result.function_response is not None:
+                    if not result.function_response.function_call_id:
+                        logger.warning(
+                            "Dropping A2UI functionResponse — missing functionCallId, cannot correlate to a callFunction.",
+                        )
+                        continue
+                    new_parts.append(Part(text=function_response_to_prompt(result.function_response)))
+                    rewritten = True
                 elif result.kind == "error" and result.error is not None:
                     new_parts.append(Part(text=error_to_prompt(result.error)))
                     rewritten = True
@@ -167,7 +176,40 @@ class A2UIAgentExecutor(AgentExecutor):
             incoming_variables=parsed.context_update,
         )
 
+        prose_text = response.message.content if response.message else ""
+        agent_msg = self._build_a2ui_message(updater, prose_text or "", a2ui_messages, final_variables)
+
+        # v1.0: a server-initiated callFunction(wantResponse=true) pauses the
+        # task awaiting the client's functionResponse. Unlike client tool calls
+        # (streamed as artifacts during the turn), the callFunction DataPart only
+        # lives in the finalization message — so it must ride the input-required
+        # transition, otherwise the client never learns what function to run.
+        wants_client_response = any(
+            isinstance(m, dict) and "callFunction" in m and m.get("wantResponse") for m in a2ui_messages
+        )
         has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
+        if wants_client_response:
+            if has_pending or pending_client_calls:
+                # By construction these are mutually exclusive (the validation
+                # middleware skips A2UI parsing when the response carries tool
+                # calls), so reaching here means a malformed turn — surface it
+                # rather than silently dropping the pending tool-call state.
+                logger.warning(
+                    "callFunction(wantResponse) emitted alongside pending tool calls; "
+                    "pausing for the client function and not handling the pending tool calls this turn.",
+                )
+            await updater.requires_input(message=agent_msg)
+            await lifecycle_ctx.send(
+                task_state_to_status_update(
+                    TaskState.TASK_STATE_INPUT_REQUIRED,
+                    task_id=task_id,
+                    context_id=context_id,
+                    message=agent_msg,
+                    timestamp=datetime.now(tz=timezone.utc),
+                ),
+            )
+            return
+
         if has_pending or pending_client_calls:
             await updater.requires_input()
             await lifecycle_ctx.send(
@@ -180,9 +222,6 @@ class A2UIAgentExecutor(AgentExecutor):
             )
             return
 
-        prose_text = response.message.content if response.message else ""
-
-        agent_msg = self._build_a2ui_message(updater, prose_text or "", a2ui_messages, final_variables)
         await updater.complete(message=agent_msg)
         await lifecycle_ctx.send(
             task_state_to_status_update(
@@ -235,7 +274,8 @@ def _extract_a2ui_envelopes(part: Part) -> list[JsonObject]:
     - Legacy single dict: DataPart ``data`` is one envelope object.
     - Legacy wrapper:     DataPart ``data`` is ``{"messages": [envelope, ...]}``.
 
-    Returns only entries that carry an ``action`` or ``error`` payload.
+    Returns only entries that carry an ``action``, ``functionResponse``, or
+    ``error`` payload.
     """
     data = get_a2ui_data(part)
     if data is None:
@@ -251,7 +291,13 @@ def _extract_a2ui_envelopes(part: Part) -> list[JsonObject]:
         else:
             raw_entries.append(data)
 
-    return [e for e in raw_entries if isinstance(e.get("action"), dict) or isinstance(e.get("error"), dict)]
+    return [
+        e
+        for e in raw_entries
+        if isinstance(e.get("action"), dict)
+        or isinstance(e.get("functionResponse"), dict)
+        or isinstance(e.get("error"), dict)
+    ]
 
 
 # Re-export for callers that want to type-check against the protobuf Role.

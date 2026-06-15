@@ -2,13 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
-from a2a.types import Part
+import pytest
+from a2a.types import Message, Part, Role
 
+from autogen.beta.a2a.mappers import ParsedMessage
 from autogen.beta.a2ui import A2UIAction, A2UIAgent
 from autogen.beta.a2ui.a2a import create_a2ui_parts, get_a2ui_data, is_a2ui_part
 from autogen.beta.a2ui.a2a.executor import A2UIAgentExecutor, _extract_a2ui_envelopes
+from autogen.beta.context import ConversationContext
+from autogen.beta.events import TextInput
+from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
 VERSION = "v0.9"
@@ -36,6 +41,22 @@ ERROR_ENVELOPE = {
         "path": "/components/0",
     },
 }
+
+FUNCTION_RESPONSE_ENVELOPE = {
+    "version": "v1.0",
+    "functionResponse": {
+        "functionCallId": "fc-1",
+        "call": "openUrl",
+        "value": True,
+    },
+}
+
+# A server→client callFunction the LLM may emit inside <a2ui-json>. ``openUrl``
+# is a basic-catalog function, so this validates under v1.0.
+_CALL_FUNCTION_BLOCK = (
+    '[{"version":"v1.0","functionCallId":"fc-1","wantResponse":true,'
+    '"callFunction":{"call":"openUrl","args":{"url":"https://example.com"}}}]'
+)
 
 
 def _make_executor(actions: tuple[A2UIAction, ...] = ()) -> A2UIAgentExecutor:
@@ -70,6 +91,10 @@ class TestExtractA2UIEnvelopes:
     def test_decodes_error_envelope(self) -> None:
         [part] = create_a2ui_parts([ERROR_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [ERROR_ENVELOPE]
+
+    def test_decodes_function_response_envelope(self) -> None:
+        [part] = create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])
+        assert _extract_a2ui_envelopes(part) == [FUNCTION_RESPONSE_ENVELOPE]
 
 
 class TestBuildA2UIMessage:
@@ -169,3 +194,86 @@ class TestActionToPrompt:
         assert len(texts) == 1
         assert "VALIDATION_FAILED" in texts[0]
         assert "/components/0" in texts[0]
+
+    def test_function_response_synthesizes_continuation_prompt(self) -> None:
+        executor = _make_executor()
+        msg = MagicMock()
+        msg.parts = [create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])[0]]
+        ctx = MagicMock()
+        ctx.message = msg
+
+        executor._rewrite_incoming_a2ui_parts(ctx)
+
+        texts = [p.text for p in msg.parts if p.text]
+        assert len(texts) == 1
+        assert "openUrl" in texts[0]
+        assert "fc-1" in texts[0]
+
+
+@pytest.mark.asyncio
+class TestCallFunctionPause:
+    """A server callFunction(wantResponse=true) pauses the task awaiting the
+    client's functionResponse, delivering the callFunction DataPart on the
+    input-required transition instead of completing the task."""
+
+    @staticmethod
+    def _run_turn_collaborators(stream: MemoryStream) -> "tuple[MagicMock, Message, ConversationContext]":
+        agent_msg = Message(role=Role.ROLE_AGENT, parts=[Part(text="ui")], message_id="m1")
+        updater = MagicMock()
+        updater.requires_input = AsyncMock()
+        updater.complete = AsyncMock()
+        updater.new_agent_message = MagicMock(return_value=agent_msg)
+        lifecycle_ctx = ConversationContext(stream)
+        return updater, agent_msg, lifecycle_ctx
+
+    async def test_call_function_with_want_response_pauses(self) -> None:
+        agent = A2UIAgent(
+            name="ui_agent",
+            config=TestConfig(f"Opening the link.\n<a2ui-json>\n{_CALL_FUNCTION_BLOCK}\n</a2ui-json>"),
+            protocol_version="v1.0",
+            validate_responses=True,
+        )
+        executor = A2UIAgentExecutor(agent)
+        stream = MemoryStream()
+        updater, agent_msg, lifecycle_ctx = self._run_turn_collaborators(stream)
+
+        await executor._run_one_turn(
+            ParsedMessage(inputs=[TextInput("open the link")]),
+            updater,
+            stream,
+            lifecycle_ctx,
+            text_pieces=[],
+            pending_client_calls=[],
+            task_id="t1",
+            context_id="c1",
+        )
+
+        updater.requires_input.assert_awaited_once()
+        updater.complete.assert_not_awaited()
+        # The callFunction DataPart rides the input-required transition.
+        assert updater.requires_input.await_args.kwargs["message"] is agent_msg
+
+    async def test_no_call_function_completes_normally(self) -> None:
+        agent = A2UIAgent(
+            name="ui_agent",
+            config=TestConfig("Just a plain reply."),
+            protocol_version="v1.0",
+            validate_responses=True,
+        )
+        executor = A2UIAgentExecutor(agent)
+        stream = MemoryStream()
+        updater, _agent_msg, lifecycle_ctx = self._run_turn_collaborators(stream)
+
+        await executor._run_one_turn(
+            ParsedMessage(inputs=[TextInput("hi")]),
+            updater,
+            stream,
+            lifecycle_ctx,
+            text_pieces=[],
+            pending_client_calls=[],
+            task_id="t1",
+            context_id="c1",
+        )
+
+        updater.complete.assert_awaited_once()
+        updater.requires_input.assert_not_awaited()

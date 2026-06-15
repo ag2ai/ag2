@@ -30,7 +30,7 @@ from typing import Any
 from autogen.beta.events import BaseEvent, Input, ModelMessage, ModelRequest, ModelResponse, TextInput
 
 from ..actions import A2UIAction
-from ..incoming import action_to_prompt, error_to_prompt, parse_incoming_message
+from ..incoming import action_to_prompt, error_to_prompt, function_response_to_prompt, parse_incoming_message
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,13 @@ def _map_a2ui_envelopes(
     raw_a2ui: list[Any],
     resolve_action: Callable[[str], A2UIAction | None],
 ) -> list[Input]:
-    """Rewrite client→server ``action`` / ``error`` envelopes as prompt inputs."""
+    """Rewrite client→server ``action`` / ``functionResponse`` / ``error`` envelopes as prompt inputs.
+
+    The server is stateless, so a v1.0 ``functionResponse`` (the client's reply
+    to a prior server ``callFunction``) simply arrives as another envelope in
+    the next request and is rewritten to a continuation prompt — no pause/resume
+    bookkeeping is needed on this transport.
+    """
     inputs: list[Input] = []
     for envelope in raw_a2ui:
         result = parse_incoming_message(envelope)
@@ -174,6 +180,13 @@ def _map_a2ui_envelopes(
                 )
                 continue
             inputs.append(TextInput(prompt))
+        elif result.kind == "functionResponse" and result.function_response is not None:
+            if not result.function_response.function_call_id:
+                logger.warning(
+                    "Dropping A2UI functionResponse — missing functionCallId, cannot correlate to a callFunction.",
+                )
+                continue
+            inputs.append(TextInput(function_response_to_prompt(result.function_response)))
         elif result.kind == "error" and result.error is not None:
             inputs.append(TextInput(error_to_prompt(result.error)))
         else:

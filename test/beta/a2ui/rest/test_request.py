@@ -167,3 +167,35 @@ class TestParseRequestActions:
         )
         assert [i.content for i in req.current_inputs][0] == "and also"
         assert len(req.current_inputs) == 2
+
+    def test_function_response_envelope_becomes_continuation_prompt(self) -> None:
+        req = parse_request(
+            {
+                "messages": [],
+                "a2ui": [
+                    {
+                        "version": "v1.0",
+                        "functionResponse": {
+                            "functionCallId": "fc-1",
+                            "call": "getScreenResolution",
+                            "value": [1920, 1080],
+                        },
+                    }
+                ],
+            },
+            resolve_action=_no_actions,
+        )
+        assert len(req.current_inputs) == 1
+        content = req.current_inputs[0].content
+        assert "getScreenResolution" in content
+        assert "fc-1" in content
+
+    def test_function_response_without_call_id_is_dropped(self) -> None:
+        req = parse_request(
+            {
+                "messages": [],
+                "a2ui": [{"version": "v1.0", "functionResponse": {"call": "openUrl", "value": True}}],
+            },
+            resolve_action=_no_actions,
+        )
+        assert req.current_inputs == []
