@@ -695,3 +695,12 @@ height: 100%;
 border: 0;
 }
 /* User Story Page Ends */
+
+/* Reserve space for the sidebar scrollbar so classic (non-overlay) scrollbars
+   don't paint over the navigation/content. Only applies at the desktop
+   breakpoint where the sidebars are shown. */
+@media screen and (min-width: 76.25em) {
+    .md-sidebar__scrollwrap {
+        scrollbar-gutter: stable;
+    }
+}
