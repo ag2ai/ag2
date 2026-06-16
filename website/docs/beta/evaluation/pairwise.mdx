@@ -13,8 +13,8 @@ from autogen.beta.eval.scorers import pairwise_judge
 
 result = await run_pairwise(
     suite,
-    variant_a=build_v1,
-    variant_b=build_v2,
+    variant_a=agent_v1,
+    variant_b=agent_v2,
     comparators=[pairwise_judge(config, criterion="more helpful answer", key="quality")],
     store_dir="runs",
 )
@@ -45,8 +45,8 @@ from autogen.beta.eval.scorers import human_pairwise
 
 result = await run_pairwise(
     suite,
-    variant_a=build_v1,
-    variant_b=build_v2,
+    variant_a=agent_v1,
+    variant_b=agent_v2,
     comparators=[human_pairwise(key="quality")],   # prompts in the terminal, per task
     store_dir="runs",
 )

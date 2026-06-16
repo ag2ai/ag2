@@ -82,6 +82,13 @@ def greet(name: str) -> str:  # highlighted
 ```
 ````
 
+**Maintaining `hl_lines`** — these line numbers are easy to break:
+
+- **Line numbers are 1-indexed from the first code line** — the line immediately after the opening ```` ``` ```` fence is line `1`. The fence itself is not counted, and the count is independent of what `linenums="1"` starts the *displayed* numbering at.
+- **Recompute `hl_lines` whenever you edit a block.** Inserting or removing a line shifts every range below it, so an unrelated edit silently mis-highlights. After editing, re-count from the first code line and update the ranges.
+- **Highlight the lines that carry the point** — the construction, the call, the changed lines. Do not highlight blank lines, lone closing brackets, or unrelated imports; a range that includes them is a sign the numbers have drifted.
+- **Verify before committing.** Open the block, count to each highlighted line, and confirm it lands on what the surrounding prose says it does.
+
 ### Code Examples
 
 - Examples should be self-contained: a reader should be able to copy-paste and run them.

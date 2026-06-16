@@ -17,7 +17,7 @@ Every `run_agent()` writes a JSON file to `store_dir/<run_id>.json` before retur
   "created_at": "2026-05-11T14:23:00+00:00",
   "duration_ms": 5292,
   "suite": { "name": "dataset", "size": 5, "source": "eval/dataset.jsonl" },
-  "target": "weather_agent.agent:build_weather_agent",
+  "target": "autogen.beta.agent:Agent",
   "concurrency": 4,
   "tasks": [
     {
@@ -95,7 +95,7 @@ Then every iteration follows the same loop: **run → compare to the last → ac
 
 ```python linenums="1"
 result = await run_agent(
-    suite, agent=build_v1, scorers=SCORERS,
+    suite, agent=agent_v1, scorers=SCORERS,
     store_dir="runs/blog-writer", run_id="v1", label="first cut",
 )
 print(result.summary())
@@ -111,7 +111,7 @@ You tweak the prompt to always end with a call to action, and re-run against the
 from autogen.beta.eval import load_run
 
 current = await run_agent(
-    suite, agent=build_v2, scorers=SCORERS,
+    suite, agent=agent_v2, scorers=SCORERS,
     store_dir="runs/blog-writer", run_id="v2", label="add CTA",
 )
 print(current.diff(load_run("runs/blog-writer/v1.json")).summary())
@@ -127,7 +127,7 @@ Later you swap to a cheaper model and re-run:
 
 ```python linenums="1"
 current = await run_agent(
-    suite, agent=build_v3, scorers=SCORERS,
+    suite, agent=agent_v3, scorers=SCORERS,
     store_dir="runs/blog-writer", run_id="v3", label="cheaper model",
 )
 diff = current.diff(load_run("runs/blog-writer/v2.json"))
