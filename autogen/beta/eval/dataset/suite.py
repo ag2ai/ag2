@@ -34,12 +34,15 @@ class Suite:
 
     def __init__(
         self,
-        tasks: Sequence[Task],
+        msg: str | None = None,
+        tasks: Sequence[Task] = (),
         *,
-        name: str,
-        source: str,
+        name: str = "inline",
+        source: str = "inline",
     ) -> None:
         """Direct constructor — most callers should use :meth:`from_jsonl` or :meth:`from_list`."""
+        if msg:
+            tasks = [Task(inputs={"input": msg}), *tasks]
         self._tasks: tuple[Task, ...] = tuple(tasks)
         self._name = name
         self._source = source
@@ -62,7 +65,7 @@ class Suite:
         p = Path(path)
         items = _read_jsonl(p)
         tasks = _items_to_tasks(items, source=str(p))
-        return cls(tasks, name=p.stem, source=str(p))
+        return cls(tasks=tasks, name=p.stem, source=str(p))
 
     @classmethod
     def from_list(
@@ -84,7 +87,7 @@ class Suite:
             A Suite whose ``source`` is ``"inline"``.
         """
         tasks = _items_to_tasks(items, source="inline")
-        return cls(tasks, name=name, source="inline")
+        return cls(tasks=tasks, name=name, source="inline")
 
     @property
     def name(self) -> str:
@@ -145,8 +148,8 @@ def _items_to_tasks(items: Sequence[dict[str, Any]], *, source: str) -> tuple[Ta
         metadata = dict(item.get("metadata", {}))
         tasks.append(
             Task(
-                task_id=task_id,
                 inputs=inputs,
+                task_id=task_id,
                 reference_outputs=reference_outputs,
                 tags=tags,
                 metadata=metadata,

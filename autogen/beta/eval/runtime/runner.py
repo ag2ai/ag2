@@ -23,13 +23,10 @@ they still surface. Tasks run in parallel up to ``concurrency``, bounded by an
 """
 
 import asyncio
-import inspect
 import os
 import time
-import warnings
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import replace
-from functools import partial
 from typing import Any
 from uuid import uuid4
 
@@ -53,15 +50,18 @@ from ..sources._otel import readable_spans_to_trace
 from ..trace import Trace
 from .evaluate import _grade
 
-__all__ = ("run_agent", "run_pairwise")
+__all__ = (
+    "run_agent",
+    "run_pairwise",
+)
 
 
 async def run_agent(
-    suite: Suite | str | os.PathLike[str] | list[dict[str, Any]],
+    suite: str | Suite,
     *,
-    agent: Agent | Callable[..., Agent],
-    scorers: Iterable[Scorer],
-    store_dir: str | os.PathLike[str],
+    agent: Agent,
+    store_dir: str | os.PathLike[str] | None = None,
+    scorers: Iterable[Scorer] = (),
     model_config: ModelConfig | dict[str, ModelConfig] | None = None,
     repeats: int = 1,
     budgets: BudgetThresholds | None = None,
@@ -149,10 +149,7 @@ async def run_agent(
         function returns.
     """
     resolved_suite = _resolve_suite(suite)
-    scorer_list = tuple(scorers)
-    factory, accepts_config, target_path = _normalize_target(agent)
     tasks_to_run = _expand_repeats(resolved_suite, repeats)
-    suite_to_grade = Suite(tuple(tasks_to_run), name=resolved_suite.name, source=resolved_suite.source)
 
     # Resolve run_id up front so it can be stamped on the produced spans; caller keys win.
     resolved_run_id = run_id if run_id is not None else uuid4().hex
@@ -164,18 +161,20 @@ async def run_agent(
     }
 
     started = time.perf_counter()
+
     source = await _produce(
         tasks_to_run,
-        factory,
-        accepts_config=accepts_config,
+        agent,
         model_config=model_config,
         concurrency=concurrency,
         span_attributes=run_span_attributes,
         span_processors=span_processors,
     )
+
+    suite_to_grade = Suite(tuple(tasks_to_run), name=resolved_suite.name, source=resolved_suite.source)
     return await _grade(
         source,
-        scorers=scorer_list,
+        scorers=tuple(scorers),
         suite=suite_to_grade,
         store_dir=store_dir,
         budgets=budgets,
@@ -184,110 +183,18 @@ async def run_agent(
         label=label,
         stream=stream,
         variant=variant,
-        target_path=target_path,
+        target_path=f"{type(agent).__module__}:{type(agent).__qualname__}",
         started_at=started,
     )
 
 
-def _resolve_suite(
-    suite: Suite | str | os.PathLike[str] | list[dict[str, Any]],
-) -> Suite:
-    """Normalize the ``suite`` argument into a :class:`Suite` instance."""
-    if isinstance(suite, Suite):
-        return suite
-    if isinstance(suite, list):
-        return Suite.from_list(suite)
-    return Suite.from_jsonl(suite)
-
-
-def _factory_accepts_config(factory: Callable[..., Agent]) -> bool:
-    """Detect whether the factory takes a ``config`` parameter.
-
-    A bare factory like ``def build() -> Agent`` is supported — the
-    runner will call it with no args and skip injecting model_config.
-    """
-    try:
-        sig = inspect.signature(factory)
-    except (TypeError, ValueError):
-        return False
-    return "config" in sig.parameters
-
-
-def _factory_path(factory: Callable[..., Agent]) -> str:
-    """Return ``"<module>:<qualname>"`` for the factory, for the run JSON."""
-    module = getattr(factory, "__module__", "<unknown>")
-    qualname = getattr(factory, "__qualname__", getattr(factory, "__name__", "<unknown>"))
-    return f"{module}:{qualname}"
-
-
-def _return_instance(instance: Agent) -> Agent:
-    return instance
-
-
-def _normalize_target(
-    target: Agent | Callable[..., Agent],
-) -> tuple[Callable[..., Agent], bool, str]:
-    """Normalize ``target`` into ``(factory, accepts_config, provenance_path)``.
-
-    An :class:`Agent` instance is reused for every task. A callable is treated
-    as a factory built fresh per task and may accept a keyword-only ``config``
-    for per-task model injection.
-    """
-    if isinstance(target, Agent):
-        path = f"{type(target).__module__}:{type(target).__qualname__}"
-        return partial(_return_instance, target), False, path
-    if callable(target):
-        return target, _factory_accepts_config(target), _factory_path(target)
-    raise TypeError("target must be an Agent or a callable returning one")
-
-
-def _expand_repeats(suite: Suite, repeats: int) -> list[Task]:
-    """Expand each task into ``repeats`` runs with distinct ids (consistency sugar)."""
-    if repeats <= 1:
-        return list(suite)
-    return [replace(task, task_id=f"{task.task_id}#{i + 1}") for task in suite for i in range(repeats)]
-
-
-def _resolve_task_config(
-    task: Task,
-    model_config: ModelConfig | dict[str, ModelConfig] | None,
-) -> ModelConfig | None:
-    """Pick the right ``ModelConfig`` for a task from the ``model_config`` argument."""
-    if model_config is None:
-        return None
-    if isinstance(model_config, dict):
-        return model_config.get(task.task_id)
-    return model_config
-
-
-def _build_target(
-    factory: Callable[..., Agent],
-    *,
-    accepts_config: bool,
-    config: ModelConfig | None,
-) -> Agent:
-    """Call the user's factory, injecting ``config`` only when there is one to inject."""
-    if config is None:
-        # Nothing to inject — let the factory use its own default or a pre-bound
-        # config (e.g. a ``partial(build, config=...)`` produced by run_variants).
-        return factory()
-    if not accepts_config:
-        warnings.warn(
-            "target does not accept a 'config' parameter; model_config will be ignored for this run.",
-            category=RuntimeWarning,
-            stacklevel=3,
-        )
-        return factory()
-    return factory(config=config)
-
-
 async def run_pairwise(
-    suite: Suite | str | os.PathLike[str] | list[dict[str, Any]],
+    suite: str | Suite,
     *,
-    variant_a: Agent | Callable[..., Agent],
-    variant_b: Agent | Callable[..., Agent],
+    variant_a: Agent[Any],
+    variant_b: Agent[Any],
     comparators: Iterable[PairwiseComparator],
-    store_dir: str | os.PathLike[str],
+    store_dir: str | os.PathLike[str] | None = None,
     model_config: ModelConfig | dict[str, ModelConfig] | None = None,
     variant_a_name: str = "A",
     variant_b_name: str = "B",
@@ -310,14 +217,8 @@ async def run_pairwise(
     ``PairwiseCompleted`` lifecycle events as the comparison runs.
     """
     resolved_suite = _resolve_suite(suite)
-    factory_a, accepts_a, _ = _normalize_target(variant_a)
-    factory_b, accepts_b, _ = _normalize_target(variant_b)
-    source_a = await _produce(
-        resolved_suite, factory_a, accepts_config=accepts_a, model_config=model_config, concurrency=concurrency
-    )
-    source_b = await _produce(
-        resolved_suite, factory_b, accepts_config=accepts_b, model_config=model_config, concurrency=concurrency
-    )
+    source_a = await _produce(resolved_suite, variant_a, model_config=model_config, concurrency=concurrency)
+    source_b = await _produce(resolved_suite, variant_b, model_config=model_config, concurrency=concurrency)
     return await evaluate_pairwise(
         source_a,
         source_b,
@@ -335,9 +236,8 @@ async def run_pairwise(
 
 async def _produce(
     tasks: Iterable[Task],
-    factory: Callable[..., Agent],
+    agent: Agent[Any],
     *,
-    accepts_config: bool,
     model_config: ModelConfig | dict[str, ModelConfig] | None,
     concurrency: int,
     span_attributes: dict[str, str] | None = None,
@@ -357,8 +257,7 @@ async def _produce(
             _produce_one(
                 semaphore,
                 task,
-                factory,
-                accepts_config,
+                agent,
                 model_config,
                 span_attributes=span_attributes,
                 span_processors=span_processors,
@@ -373,8 +272,7 @@ async def _produce(
 async def _produce_one(
     semaphore: asyncio.Semaphore,
     task: Task,
-    factory: Callable[..., Agent],
-    accepts_config: bool,
+    agent: Agent,
     model_config: ModelConfig | dict[str, ModelConfig] | None,
     *,
     span_attributes: dict[str, str] | None = None,
@@ -392,24 +290,27 @@ async def _produce_one(
         stream = MemoryStream()
         exception: BaseException | None = None
         duration_ms = 0
+
+        telemetry = TelemetryMiddleware(
+            tracer_provider=provider,
+            agent_name=agent.name,
+            capture_content=True,
+            span_attributes=task_attributes,
+        )
+        started = time.perf_counter()
         try:
-            target = _build_target(factory, accepts_config=accepts_config, config=config)
+            await agent.ask(
+                task.inputs["input"],
+                stream=stream,
+                middleware=[telemetry],
+                # passed config overloads any original one
+                config=config,
+            )
         except Exception as exc:
             exception = exc
-        else:
-            telemetry = TelemetryMiddleware(
-                tracer_provider=provider,
-                agent_name=getattr(target, "name", "agent"),
-                capture_content=True,
-                span_attributes=task_attributes,
-            )
-            started = time.perf_counter()
-            try:
-                await target.ask(task.inputs["input"], stream=stream, middleware=[telemetry])
-            except Exception as exc:
-                exception = exc
-            finally:
-                duration_ms = int((time.perf_counter() - started) * 1000)
+        finally:
+            duration_ms = int((time.perf_counter() - started) * 1000)
+
         # run_agent()'s Trace is reconstructed from the emitted spans — the same span→Trace path
         # evaluate_traces() uses, so the two grade identically. Pre-span failures (factory raise, or
         # ask erroring before the agent span starts) emit no spans → fall back to the caught exception.
@@ -420,3 +321,29 @@ async def _produce_one(
         if trace.exception is None and exception is not None:
             trace = Trace(events=trace.events, exception=exception, duration_ms=duration_ms)
         return (TraceRef(trace_id=otel_trace_id, task_id=task.task_id), trace)
+
+
+def _resolve_suite(suite: str | Suite) -> Suite:
+    """Normalize the ``suite`` argument into a :class:`Suite` instance."""
+    if isinstance(suite, Suite):
+        return suite
+    return Suite(msg=suite)
+
+
+def _expand_repeats(suite: Suite, repeats: int) -> list[Task]:
+    """Expand each task into ``repeats`` runs with distinct ids (consistency sugar)."""
+    if repeats <= 1:
+        return list(suite)
+    return [replace(task, task_id=f"{task.task_id}#{i + 1}") for task in suite for i in range(repeats)]
+
+
+def _resolve_task_config(
+    task: Task,
+    model_config: ModelConfig | dict[str, ModelConfig] | None,
+) -> ModelConfig | None:
+    """Pick the right ``ModelConfig`` for a task from the ``model_config`` argument."""
+    if model_config is None:
+        return None
+    if isinstance(model_config, dict):
+        return model_config.get(task.task_id)
+    return model_config
