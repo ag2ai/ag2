@@ -4,12 +4,12 @@
 
 import logging
 
-from autogen.beta.a2ui import (
-    A2UIClientCapabilities,
+from autogen.beta.a2ui import A2UIClientCapabilities
+from autogen.beta.a2ui.capabilities import (
+    A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
     capabilities_to_prompt,
     parse_client_capabilities,
 )
-from autogen.beta.a2ui.capabilities import A2UI_CLIENT_CAPABILITIES_METADATA_KEY
 
 _AGENT_CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 

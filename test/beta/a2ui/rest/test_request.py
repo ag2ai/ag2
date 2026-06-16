@@ -4,7 +4,7 @@
 
 import pytest
 
-from autogen.beta.a2ui import A2UIAction, A2UIClientCapabilities
+from autogen.beta.a2ui import A2UIClientCapabilities, A2UIEventAction
 from autogen.beta.a2ui.rest import parse_request
 from autogen.beta.events import ModelRequest, ModelResponse
 
@@ -116,7 +116,7 @@ class TestParseRequestMapping:
 
 class TestParseRequestActions:
     def test_registered_action_becomes_prompt(self) -> None:
-        actions = {"confirm": A2UIAction(name="confirm", tool_name="do_confirm", description="Confirm it")}
+        actions = {"confirm": A2UIEventAction(name="confirm", tool_name="do_confirm", description="Confirm it")}
         req = parse_request(
             {
                 "messages": [],
@@ -173,7 +173,7 @@ class TestParseRequestActions:
         assert "VALIDATION_FAILED" in req.current_inputs[0].content
 
     def test_action_appended_after_trailing_user_text(self) -> None:
-        actions = {"go": A2UIAction(name="go", description="Go")}
+        actions = {"go": A2UIEventAction(name="go", description="Go")}
         req = parse_request(
             {
                 "messages": [{"role": "user", "content": "and also"}],

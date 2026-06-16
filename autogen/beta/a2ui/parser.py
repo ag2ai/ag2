@@ -107,6 +107,20 @@ def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | No
     return operations, None
 
 
+def _components_of(update_components: object) -> list[object]:
+    """Return the ``components`` list of an ``updateComponents`` value, defensively.
+
+    The LLM can emit a malformed ``updateComponents`` (e.g. a bare string) that
+    still passes the ``"updateComponents" in op`` membership check; calling
+    ``.get`` on a non-dict would raise ``AttributeError``. Returns ``[]`` for any
+    shape that is not ``{"components": [...]}``.
+    """
+    if not isinstance(update_components, dict):
+        return []
+    components = update_components.get("components", [])
+    return components if isinstance(components, list) else []
+
+
 class A2UIResponseParser:
     """Parses and validates A2UI messages from agent responses.
 
@@ -119,28 +133,16 @@ class A2UIResponseParser:
     def __init__(
         self,
         version_string: A2UIVersion,
-        open_tag: str = A2UI_JSON_OPEN_TAG,
-        close_tag: str = A2UI_JSON_CLOSE_TAG,
         server_to_client_schema: JsonSchema | None = None,
         schema_registry: "Registry | None" = None,
         component_schemas: dict[str, JsonSchema] | None = None,
         catalog_id: str | None = None,
     ) -> None:
-        self._open_tag = open_tag
-        self._close_tag = close_tag
         self._schema = server_to_client_schema
         self._registry = schema_registry
         self._version_string = version_string
         self._component_schemas = component_schemas or {}
         self._catalog_id = catalog_id
-
-    @property
-    def open_tag(self) -> str:
-        return self._open_tag
-
-    @property
-    def close_tag(self) -> str:
-        return self._close_tag
 
     @property
     def version_string(self) -> A2UIVersion:
@@ -153,7 +155,7 @@ class A2UIResponseParser:
         content is parsed as a JSON array/object or JSONL. A missing closing
         tag is tolerated — the block runs to the end of the response.
         """
-        open_idx = response.find(self._open_tag)
+        open_idx = response.find(A2UI_JSON_OPEN_TAG)
         if open_idx == -1:
             return A2UIParseResult(
                 text=response.strip(),
@@ -162,16 +164,16 @@ class A2UIResponseParser:
             )
 
         text_before = response[:open_idx]
-        after_open = response[open_idx + len(self._open_tag) :]
+        after_open = response[open_idx + len(A2UI_JSON_OPEN_TAG) :]
 
-        close_idx = after_open.find(self._close_tag)
+        close_idx = after_open.find(A2UI_JSON_CLOSE_TAG)
         if close_idx == -1:
             # Tolerate a missing closing tag: take everything to the end.
             json_part = after_open
             text_after = ""
         else:
             json_part = after_open[:close_idx]
-            text_after = after_open[close_idx + len(self._close_tag) :]
+            text_after = after_open[close_idx + len(A2UI_JSON_CLOSE_TAG) :]
 
         text = " ".join(part.strip() for part in (text_before, text_after) if part.strip())
         json_part = strip_markdown_fences(json_part)
@@ -261,7 +263,7 @@ class A2UIResponseParser:
             has_root = any(
                 isinstance(c, dict) and c.get("id") == "root"
                 for op in update_components_ops
-                for c in op.get("updateComponents", {}).get("components", [])
+                for c in _components_of(op.get("updateComponents"))
             )
             if not has_root:
                 errors.append(
@@ -281,8 +283,7 @@ class A2UIResponseParser:
         if "updateComponents" not in op or not self._component_schemas:
             return []
 
-        update_components = op.get("updateComponents")
-        components = update_components.get("components", []) if isinstance(update_components, dict) else []
+        components = _components_of(op.get("updateComponents"))
         if not components:
             return []
 

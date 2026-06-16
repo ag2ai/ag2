@@ -2,49 +2,34 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from ._types import JsonValue
 
 
-@dataclass(slots=True)
-class A2UIAction:
-    """Defines an action that can be triggered by A2UI buttons.
+@dataclass(slots=True, frozen=True)
+class A2UIEventAction:
+    """A **server** ``event`` action — dispatches a named event to the server.
 
-    Actions are registered on an ``A2UIAgent`` and define how button clicks
-    are handled. There are two action types matching the A2UI v0.9 spec:
-
-    - **event** (server action): Dispatches a named event to the server.
-      The ``name`` field matches the button's ``event.name``. Optionally
-      routed to a tool via ``tool_name``, or handled by the LLM.
-    - **functionCall** (client action): Executes a client-side function
-      (e.g., ``openUrl``) without server communication. The ``name`` field
-      is the function name and ``example_args`` shows the expected arguments.
+    The ``name`` matches the button's ``event.name``. The click is either routed
+    to a registered tool (``tool_name``) or handled by the LLM via ``description``.
 
     Args:
-        name: Action identifier. For ``"event"`` actions, this matches the
-            ``event.name`` in the button's action definition. For
-            ``"functionCall"`` actions, this is the client-side function name.
-        action_type: The action type — ``"event"`` for server actions or
-            ``"functionCall"`` for client-side actions. Default is ``"event"``.
-        tool_name: Name of a registered tool/function on the agent to call
-            when this action is triggered. Only applicable to ``"event"``
-            actions. If None, the action is passed to the LLM as a prompt
-            using the description.
-        description: Human-readable description of what this action does.
-            Injected into the system prompt so the LLM knows what actions
-            are available.
-        example_context: Example context dict for ``"event"`` actions, showing
-            what values the button should include in ``event.context``. For
-            tool-mapped actions, this should match the tool's parameter names.
-        example_args: Example args dict for ``"functionCall"`` actions, showing
-            what values the button should include in ``functionCall.args``.
+        name: Action identifier; matches the ``event.name`` in the button's
+            action definition.
+        tool_name: Name of a registered tool to call when this action fires.
+            If ``None``, the click is passed to the LLM as a prompt using
+            ``description``.
+        description: Human-readable description, injected into the system prompt
+            so the LLM knows the action exists.
+        example_context: Example ``event.context`` dict shown to the LLM. For
+            tool-mapped actions this should match the tool's parameter names.
 
     Example::
 
         # Server action routed to a tool
-        A2UIAction(
+        A2UIEventAction(
             name="schedule_2pm",
             tool_name="schedule_posts",
             description="Schedule all posts for 2:00 PM",
@@ -52,23 +37,56 @@ class A2UIAction:
         )
 
         # Server action handled by the LLM
-        A2UIAction(
+        A2UIEventAction(
             name="rewrite_previews",
             description="Regenerate all previews with a different creative angle",
         )
+    """
 
-        # Client-side action
-        A2UIAction(
+    name: str
+    tool_name: str | None = None
+    description: str = ""
+    example_context: dict[str, JsonValue] | None = None
+
+    # Discriminator as a fixed instance field (``init=False`` so callers can't
+    # set it). Unlike a ``ClassVar``, a ``Literal`` instance field lets type
+    # checkers narrow the union on ``action.action_type == "event"``, while the
+    # value stays pinned by the type so it can never disagree with the class.
+    action_type: Literal["event"] = field(default="event", init=False)
+
+
+@dataclass(slots=True, frozen=True)
+class A2UIFunctionCallAction:
+    """A **client** ``functionCall`` action — runs a client-side function.
+
+    Executes on the client without a server round-trip (e.g. ``openUrl``). The
+    ``name`` is the client function name and ``example_args`` shows the expected
+    arguments. There is no server tool body, so these are declared directly
+    rather than via :func:`a2ui_action`.
+
+    Args:
+        name: The client-side function name (e.g. ``"openUrl"``).
+        description: Human-readable description, injected into the system prompt.
+        example_args: Example ``functionCall.args`` dict shown to the LLM.
+
+    Example::
+
+        A2UIFunctionCallAction(
             name="openUrl",
-            action_type="functionCall",
             description="Open a URL in the user's browser",
             example_args={"url": "https://example.com"},
         )
     """
 
     name: str
-    action_type: Literal["event", "functionCall"] = "event"
-    tool_name: str | None = None
     description: str = ""
-    example_context: dict[str, JsonValue] | None = None
     example_args: dict[str, JsonValue] | None = None
+
+    action_type: Literal["functionCall"] = field(default="functionCall", init=False)
+
+
+# An A2UI action registered on an ``A2UIAgent``. A tagged union so the two modes
+# carry only their own fields (an event can't hold ``example_args``, a
+# functionCall can't hold ``tool_name``); branch with ``isinstance`` or the
+# ``action_type`` discriminator.
+A2UIAction = A2UIEventAction | A2UIFunctionCallAction

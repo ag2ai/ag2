@@ -5,24 +5,38 @@
 import json
 import logging
 import re
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ._types import JsonObject, JsonValue
-from .actions import A2UIAction
+from .actions import A2UIAction, A2UIEventAction
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
+class ActionResponseRequest:
+    """The v1.0 correlation handle when a client action awaits an ``actionResponse``.
+
+    Present only when the client set ``wantResponse`` **and** supplied an
+    ``actionId``. Making the id non-optional here is what keeps the illegal
+    "wants a response but gave no id to correlate it" state unrepresentable: an
+    :class:`A2UIIncomingAction` either carries a fully-formed request or ``None``.
+    """
+
+    action_id: str
+
+
+@dataclass(slots=True, frozen=True)
 class A2UIIncomingAction:
     """A client→server ``action`` envelope content.
 
-    Mirrors ``client_to_server.json#/properties/action``. ``want_response`` /
-    ``action_id`` are v1.0 additions: when ``want_response`` is set the client
-    expects the server to reply with an ``actionResponse`` carrying the same
-    ``action_id``. Both default to the v0.9 behaviour (no response expected).
+    Mirrors ``client_to_server.json#/properties/action``. ``response_request``
+    is the v1.0 addition: when set, the client expects the server to reply with
+    an ``actionResponse`` carrying the same ``action_id``. It is ``None`` for
+    v0.9 clients (no response expected).
     """
 
     name: str
@@ -30,25 +44,41 @@ class A2UIIncomingAction:
     source_component_id: str
     timestamp: str
     context: dict[str, JsonValue] = field(default_factory=dict)
-    want_response: bool = False
-    action_id: str | None = None
+    response_request: ActionResponseRequest | None = None
 
 
-@dataclass(slots=True)
-class A2UIIncomingError:
-    """A client→server ``error`` envelope content.
+@dataclass(slots=True, frozen=True)
+class A2UIIncomingSurfaceError:
+    """A client→server ``error`` reporting a surface validation/render failure.
 
-    Mirrors ``client_to_server.json#/properties/error``. ``path`` is set only
-    for ``VALIDATION_FAILED`` errors. ``function_call_id`` is the v1.0 generic
-    error arm: an error answering a server-initiated ``callFunction`` rather
-    than a surface (the two are mutually exclusive per spec).
+    Mirrors the surface arm of ``client_to_server.json#/properties/error``.
+    ``path`` (a JSON pointer) is set only for ``VALIDATION_FAILED`` errors.
     """
 
     code: str
     surface_id: str
     message: str
     path: str | None = None
-    function_call_id: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class A2UIIncomingFunctionError:
+    """A client→server ``error`` answering a server-initiated ``callFunction`` (v1.0).
+
+    The generic-error arm of ``client_to_server.json#/properties/error``: it
+    carries a ``function_call_id`` instead of a surface. Splitting this from
+    :class:`A2UIIncomingSurfaceError` makes the spec's "surface XOR functionCall"
+    rule structural — neither class can hold the other's correlation field.
+    """
+
+    code: str
+    function_call_id: str
+    message: str
+
+
+# A client→server ``error`` envelope. Tagged union over the two mutually
+# exclusive arms; branch with ``isinstance``.
+A2UIIncomingError = A2UIIncomingSurfaceError | A2UIIncomingFunctionError
 
 
 @dataclass(slots=True)
@@ -94,17 +124,31 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
 
     action_obj = data.get("action")
     if isinstance(action_obj, dict):
+        name = str(action_obj.get("name", ""))
         raw_action_id = action_obj.get("actionId")
+        action_id = raw_action_id if isinstance(raw_action_id, str) else None
+        response_request: ActionResponseRequest | None = None
+        if action_obj.get("wantResponse", False):
+            if action_id:
+                response_request = ActionResponseRequest(action_id=action_id)
+            else:
+                # Malformed v1.0: wantResponse with no actionId. Without an id we
+                # cannot correlate an actionResponse, so the request is dropped
+                # (and the client's pending response can never be satisfied) —
+                # surface it rather than fabricate a correlation handle.
+                logger.warning(
+                    "A2UI action %r set wantResponse but provided no actionId; cannot correlate an actionResponse.",
+                    name,
+                )
         return A2UIIncomingParseResult(
             kind="action",
             action=A2UIIncomingAction(
-                name=str(action_obj.get("name", "")),
+                name=name,
                 surface_id=str(action_obj.get("surfaceId", "")),
                 source_component_id=str(action_obj.get("sourceComponentId", "")),
                 timestamp=str(action_obj.get("timestamp", "")),
                 context=dict(action_obj.get("context") or {}),
-                want_response=bool(action_obj.get("wantResponse", False)),
-                action_id=str(raw_action_id) if isinstance(raw_action_id, str) else None,
+                response_request=response_request,
             ),
             raw=data,
         )
@@ -123,19 +167,22 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
 
     error_obj = data.get("error")
     if isinstance(error_obj, dict):
-        raw_path = error_obj.get("path")
+        code = str(error_obj.get("code", ""))
+        message = str(error_obj.get("message", ""))
         raw_fc_id = error_obj.get("functionCallId")
-        return A2UIIncomingParseResult(
-            kind="error",
-            error=A2UIIncomingError(
-                code=str(error_obj.get("code", "")),
+        error: A2UIIncomingError
+        if isinstance(raw_fc_id, str):
+            # functionCallId present → the generic (function) error arm.
+            error = A2UIIncomingFunctionError(code=code, function_call_id=raw_fc_id, message=message)
+        else:
+            raw_path = error_obj.get("path")
+            error = A2UIIncomingSurfaceError(
+                code=code,
                 surface_id=str(error_obj.get("surfaceId", "")),
-                message=str(error_obj.get("message", "")),
+                message=message,
                 path=str(raw_path) if isinstance(raw_path, str) else None,
-                function_call_id=str(raw_fc_id) if isinstance(raw_fc_id, str) else None,
-            ),
-            raw=data,
-        )
+            )
+        return A2UIIncomingParseResult(kind="error", error=error, raw=data)
 
     return A2UIIncomingParseResult(
         kind="unknown",
@@ -214,27 +261,26 @@ def action_to_prompt(action: A2UIIncomingAction, action_def: A2UIAction | None) 
     origin = f" ({', '.join(origin_bits)})" if origin_bits else ""
 
     # v1.0: when the client expects an actionResponse, tell the LLM the
-    # correlation id so it can emit one inside its <a2ui-json> output.
+    # correlation id so it can emit one inside its <a2ui-json> output. The
+    # malformed "wantResponse without actionId" case is already dropped (and
+    # warned) at parse time, so here a present ``response_request`` always
+    # carries a usable id.
     response_hint = ""
-    if action.want_response and action.action_id:
-        action_id = sanitize_for_prompt(action.action_id)
+    if action.response_request is not None:
+        action_id = sanitize_for_prompt(action.response_request.action_id)
         response_hint = (
             f" The UI is awaiting a response: emit an A2UI 'actionResponse' message with "
             f"actionId '{action_id}' carrying the result (a 'value' on success, or an 'error')."
         )
-    elif action.want_response:
-        # Malformed v1.0: wantResponse with no actionId. We cannot tell the LLM
-        # which id to correlate, so the actionResponse hint is suppressed and the
-        # client's pending response will never be satisfied — surface it.
-        logger.warning(
-            "A2UI action '%s' set wantResponse but provided no actionId; cannot instruct an actionResponse.",
-            action.name,
-        )
 
-    if action_def.tool_name:
+    # Only server ``event`` actions route to a tool; a ``functionCall`` action
+    # (client-side, no server body) has no ``tool_name`` and falls through to the
+    # generic description-based instruction.
+    tool_name = action_def.tool_name if isinstance(action_def, A2UIEventAction) else None
+    if tool_name:
         return (
             f"The user clicked the '{name}' button{origin}. "
-            f"Call the tool '{action_def.tool_name}' with arguments: {ctx_json}. "
+            f"Call the tool '{tool_name}' with arguments: {ctx_json}. "
             f"Do not respond with text only.{response_hint}"
         )
     desc = f" {action_def.description}" if action_def.description else ""
@@ -251,7 +297,7 @@ def error_to_prompt(err: A2UIIncomingError) -> str:
     code = sanitize_for_prompt(err.code) if err.code else "(none)"
     message = sanitize_for_prompt(err.message)
 
-    if err.function_call_id:
+    if isinstance(err, A2UIIncomingFunctionError):
         fc_id = sanitize_for_prompt(err.function_call_id)
         return (
             f"The client reported an A2UI error for function call '{fc_id}'. "
@@ -287,14 +333,55 @@ def function_response_to_prompt(fr: A2UIIncomingFunctionResponse) -> str:
     )
 
 
+def iter_incoming_prompts(
+    envelopes: Iterable[Any],
+    resolve_action: Callable[[str], A2UIAction | None],
+) -> Iterator[str]:
+    """Rewrite client→server A2UI envelopes into corrective prompt strings.
+
+    Shared by the A2A and REST transports so the (security-sensitive) envelope
+    classification + ``sanitize_for_prompt`` handling lives in one place; each
+    transport only wraps the yielded strings in its own input type
+    (``TextInput`` / ``Part(text=...)``). Envelopes that cannot be safely mapped
+    are dropped with a warning: an ``action`` with no matching registration, a
+    ``functionResponse`` missing its ``functionCallId``, or an unrecognized kind.
+    """
+    for envelope in envelopes:
+        result = parse_incoming_message(envelope)
+        if result.kind == "action" and result.action is not None:
+            prompt = action_to_prompt(result.action, resolve_action(result.action.name))
+            if prompt is None:
+                logger.warning(
+                    "Dropping A2UI action '%s' — no matching A2UIAction registration.",
+                    result.action.name,
+                )
+                continue
+            yield prompt
+        elif result.kind == "functionResponse" and result.function_response is not None:
+            if not result.function_response.function_call_id:
+                logger.warning(
+                    "Dropping A2UI functionResponse — missing functionCallId, cannot correlate to a callFunction.",
+                )
+                continue
+            yield function_response_to_prompt(result.function_response)
+        elif result.kind == "error" and result.error is not None:
+            yield error_to_prompt(result.error)
+        else:
+            logger.warning("Skipping A2UI envelope of unrecognized kind: %s", result.parse_error)
+
+
 __all__ = (
     "A2UIIncomingAction",
     "A2UIIncomingError",
+    "A2UIIncomingFunctionError",
     "A2UIIncomingFunctionResponse",
     "A2UIIncomingParseResult",
+    "A2UIIncomingSurfaceError",
+    "ActionResponseRequest",
     "action_to_prompt",
     "error_to_prompt",
     "function_response_to_prompt",
+    "iter_incoming_prompts",
     "parse_incoming_message",
     "sanitize_for_prompt",
 )

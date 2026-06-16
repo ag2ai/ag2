@@ -4,7 +4,7 @@
 
 import pytest
 
-from autogen.beta.a2ui import A2UIAction
+from autogen.beta.a2ui import A2UIEventAction, A2UIFunctionCallAction
 from autogen.beta.a2ui.parser import A2UIResponseParser
 from autogen.beta.a2ui.schema_manager import A2UISchemaManager
 
@@ -64,8 +64,11 @@ class TestA2UISchemaManager:
         assert manager.catalog_id == "https://mycompany.com/custom.json"
 
     def test_custom_catalog_without_id_raises(self) -> None:
+        # The custom catalog is loaded/validated lazily (construction is
+        # side-effect-free), so the error surfaces on first accessor use.
+        manager = A2UISchemaManager(custom_catalog={"components": {}})
         with pytest.raises(ValueError, match="Custom catalog must include"):
-            A2UISchemaManager(custom_catalog={"components": {}})
+            _ = manager.catalog_id
 
     def test_server_to_client_schema_structure(self) -> None:
         manager = A2UISchemaManager()
@@ -91,9 +94,9 @@ class TestA2UISchemaManager:
 
     def test_catalog_rules_loaded(self) -> None:
         manager = A2UISchemaManager()
-        rules = manager.catalog_rules
-        assert "REQUIRED PROPERTIES" in rules
-        assert "Text" in rules
+        prompt = manager.generate_prompt_section(include_schema=False, include_rules=True)
+        assert "REQUIRED PROPERTIES" in prompt
+        assert "Text" in prompt
 
     def test_get_component_schemas_includes_basic(self) -> None:
         manager = A2UISchemaManager()
@@ -219,7 +222,7 @@ class TestPromptSection:
         manager = A2UISchemaManager()
         prompt = manager.generate_prompt_section(
             actions=[
-                A2UIAction(
+                A2UIEventAction(
                     name="book_table",
                     tool_name="book_restaurant",
                     description="Book a table",
@@ -236,9 +239,8 @@ class TestPromptSection:
         manager = A2UISchemaManager()
         prompt = manager.generate_prompt_section(
             actions=[
-                A2UIAction(
+                A2UIFunctionCallAction(
                     name="openUrl",
-                    action_type="functionCall",
                     description="Open a URL",
                     example_args={"url": "https://example.com"},
                 ),
@@ -253,9 +255,8 @@ class TestPromptSection:
         manager = A2UISchemaManager()
         prompt = manager.generate_prompt_section(
             actions=[
-                A2UIAction(
+                A2UIFunctionCallAction(
                     name="openUrl",
-                    action_type="functionCall",
                     description="Open a URL",
                     example_args={"url": "https://example.com"},
                 ),

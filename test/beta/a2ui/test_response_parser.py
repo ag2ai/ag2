@@ -105,13 +105,6 @@ class TestA2UIResponseParser:
         assert result.has_a2ui is True
         assert len(result.operations) == 1
 
-    def test_parse_custom_tags(self) -> None:
-        parser = A2UIResponseParser(version_string="v0.9", open_tag="<<<UI>>>", close_tag="<<</UI>>>")
-        response = 'Text\n<<<UI>>>\n[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]\n<<</UI>>>'
-        result = parser.parse(response)
-        assert result.has_a2ui is True
-        assert len(result.operations) == 1
-
     def test_parse_multiple_operations(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
         response = (
@@ -194,6 +187,15 @@ class TestA2UIResponseParserValidation:
         assert result.errors
         assert len(result.errors) == 1
         assert "Operation 1" in result.errors[0]
+
+    def test_validate_non_dict_update_components_does_not_raise(self, parser_with_schema: A2UIResponseParser) -> None:
+        # An ``updateComponents`` whose value is not an object (e.g. a bare
+        # string) passes the membership check but must not crash the 'root'-node
+        # scan with an AttributeError — it is reported as invalid instead.
+        ops = [{"version": "v0.9", "updateComponents": "not-an-object"}]
+        result = parser_with_schema.validate(ops)
+        assert result.is_valid is False
+        assert result.errors
 
 
 class TestA2UIResponseParserV091Validation:

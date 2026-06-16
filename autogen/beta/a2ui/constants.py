@@ -14,7 +14,6 @@ A2UI_JSON_OPEN_TAG = "<a2ui-json>"
 A2UI_JSON_CLOSE_TAG = "</a2ui-json>"
 
 A2UI_DEFAULT_VERSION: A2UIVersion = "v0.9"
-A2UI_DEFAULT_ACTIVITY_TYPE = "a2ui-surface"
 
 # Canonical default ("basic") catalog id per protocol version. This value is
 # stamped into ``createSurface`` messages and advertised in
@@ -44,17 +43,9 @@ A2UI_EXTENSION_URI_BY_VERSION: dict[A2UIVersion, str] = {
     "v1.0": "https://a2ui.org/a2a-extension/a2ui/v1.0",
 }
 
-# Back-compat scalar aliases (default protocol version = v0.9). Prefer the
-# per-version mappings above when serving v0.9.1 / v1.0.
-A2UI_DEFAULT_CATALOG_ID = A2UI_DEFAULT_CATALOG_ID_BY_VERSION[A2UI_DEFAULT_VERSION]
-A2UI_EXTENSION_URI = A2UI_EXTENSION_URI_BY_VERSION[A2UI_DEFAULT_VERSION]
-
 __all__ = (
-    "A2UI_DEFAULT_ACTIVITY_TYPE",
-    "A2UI_DEFAULT_CATALOG_ID",
     "A2UI_DEFAULT_CATALOG_ID_BY_VERSION",
     "A2UI_DEFAULT_VERSION",
-    "A2UI_EXTENSION_URI",
     "A2UI_EXTENSION_URI_BY_VERSION",
     "A2UI_JSON_CLOSE_TAG",
     "A2UI_JSON_OPEN_TAG",

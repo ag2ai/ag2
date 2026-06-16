@@ -31,6 +31,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from ..agent import A2UIAgent
+from ..serialize import to_jsonl
 from .dispatch import A2UIFrame, A2UIProseFrame, stream_turn
 from .request import A2UIServerRequest, parse_request
 
@@ -113,13 +114,15 @@ async def _jsonl_frames(agent: A2UIAgent, parsed: A2UIServerRequest) -> AsyncIte
 def _encode_sse(frame: A2UIFrame) -> str:
     if isinstance(frame, A2UIProseFrame):
         return f"event: text\ndata: {json.dumps({'text': frame.text})}\n\n"
-    return f"data: {json.dumps(frame.message, separators=(',', ':'))}\n\n"
+    # One A2UI message per frame, serialized via the canonical JSONL serializer
+    # so the wire bytes stay identical across transports.
+    return f"data: {to_jsonl((frame.message,))}\n\n"
 
 
 def _encode_jsonl(frame: A2UIFrame) -> str:
     if isinstance(frame, A2UIProseFrame):
         return json.dumps({"text": frame.text}) + "\n"
-    return json.dumps(frame.message, separators=(",", ":")) + "\n"
+    return to_jsonl((frame.message,)) + "\n"
 
 
 __all__ = ("build_jsonl_app", "build_sse_app")

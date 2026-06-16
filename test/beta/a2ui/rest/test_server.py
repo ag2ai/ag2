@@ -6,7 +6,7 @@ import json
 
 from starlette.testclient import TestClient
 
-from autogen.beta.a2ui import A2UIAction, A2UIAgent
+from autogen.beta.a2ui import A2UIAgent, A2UIEventAction
 from autogen.beta.a2ui.rest import A2UIServer
 from autogen.beta.testing import TestConfig
 
@@ -88,7 +88,7 @@ class TestJSONLApp:
 
 class TestActionRoundTrip:
     def test_action_click_drives_a_turn(self) -> None:
-        action = A2UIAction(name="confirm", description="Confirm the booking")
+        action = A2UIEventAction(name="confirm", description="Confirm the booking")
         app = A2UIServer(_agent("Confirmed.", validate=False, actions=[action])).build_sse_app()
         client = TestClient(app)
 

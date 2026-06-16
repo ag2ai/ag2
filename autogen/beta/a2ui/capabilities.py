@@ -29,7 +29,6 @@ from .incoming import sanitize_for_prompt
 logger = logging.getLogger(__name__)
 
 A2UI_CLIENT_CAPABILITIES_METADATA_KEY = "a2uiClientCapabilities"
-A2UI_CLIENT_DATA_MODEL_METADATA_KEY = "a2uiClientDataModel"
 
 # Dependency key a caller may set on the direct ``agent.ask()`` path
 # (``dependencies={A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY: caps}``) to supply
@@ -53,13 +52,6 @@ class A2UIClientCapabilities:
 
     supported_catalog_ids: list[str] = field(default_factory=list)
     inline_catalogs: list[JsonObject] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class A2UIClientDataModel:
-    """Decoded ``a2uiClientDataModel`` payload."""
-
-    surfaces: dict[str, JsonObject] = field(default_factory=dict)
 
 
 def parse_client_capabilities(
@@ -89,30 +81,6 @@ def parse_client_capabilities(
         supported_catalog_ids=[str(x) for x in raw_ids] if isinstance(raw_ids, list) else [],
         inline_catalogs=[c for c in raw_inline if isinstance(c, dict)] if isinstance(raw_inline, list) else [],
     )
-
-
-def parse_client_data_model(
-    metadata: Mapping[str, Any] | None,
-    *,
-    version_key: A2UIVersion = _DEFAULT_VERSION_KEY,
-) -> A2UIClientDataModel | None:
-    """Decode ``metadata.a2uiClientDataModel``.
-
-    Returns ``None`` if the metadata is missing, malformed, or its declared
-    ``version`` does not match ``version_key``.
-    """
-    if not metadata:
-        return None
-    dm = metadata.get(A2UI_CLIENT_DATA_MODEL_METADATA_KEY)
-    if not isinstance(dm, dict):
-        return None
-    if dm.get("version") != version_key:
-        return None
-    raw_surfaces = dm.get("surfaces")
-    if not isinstance(raw_surfaces, dict):
-        return None
-    surfaces: dict[str, JsonObject] = {str(k): v for k, v in raw_surfaces.items() if isinstance(v, dict)}
-    return A2UIClientDataModel(surfaces=surfaces)
 
 
 def _summarize_inline_catalog(catalog: JsonObject) -> str | None:
@@ -198,10 +166,7 @@ def capabilities_to_prompt(caps: A2UIClientCapabilities | None, *, catalog_id: s
 __all__ = (
     "A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY",
     "A2UI_CLIENT_CAPABILITIES_METADATA_KEY",
-    "A2UI_CLIENT_DATA_MODEL_METADATA_KEY",
     "A2UIClientCapabilities",
-    "A2UIClientDataModel",
     "capabilities_to_prompt",
     "parse_client_capabilities",
-    "parse_client_data_model",
 )

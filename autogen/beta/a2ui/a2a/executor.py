@@ -12,7 +12,7 @@ from typing import Any
 from a2a.server.agent_execution import RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import Message, Part, Role, TaskState
+from a2a.types import Message, Part, TaskState
 
 from autogen.beta.a2a.executor import AgentExecutor
 from autogen.beta.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
@@ -28,14 +28,8 @@ from ..capabilities import (
     capabilities_to_prompt,
     parse_client_capabilities,
 )
-from ..constants import A2UI_MIME_TYPE
 from ..events import A2UIMessageEvent
-from ..incoming import (
-    action_to_prompt,
-    error_to_prompt,
-    function_response_to_prompt,
-    parse_incoming_message,
-)
+from ..incoming import iter_incoming_prompts
 from .extension import try_activate_a2ui_extension
 from .parts import create_a2ui_parts, get_a2ui_data
 
@@ -93,32 +87,9 @@ class A2UIAgentExecutor(AgentExecutor):
                 new_parts.append(part)
                 continue
 
-            for envelope in envelopes:
-                result = parse_incoming_message(envelope)
-                if result.kind == "action" and result.action is not None:
-                    action_def = self._a2ui_agent.get_action(result.action.name)
-                    prompt = action_to_prompt(result.action, action_def)
-                    if prompt is None:
-                        logger.warning(
-                            "Dropping A2UI action '%s' — no matching A2UIAction registration.",
-                            result.action.name,
-                        )
-                        continue
-                    new_parts.append(Part(text=prompt))
-                    rewritten = True
-                elif result.kind == "functionResponse" and result.function_response is not None:
-                    if not result.function_response.function_call_id:
-                        logger.warning(
-                            "Dropping A2UI functionResponse — missing functionCallId, cannot correlate to a callFunction.",
-                        )
-                        continue
-                    new_parts.append(Part(text=function_response_to_prompt(result.function_response)))
-                    rewritten = True
-                elif result.kind == "error" and result.error is not None:
-                    new_parts.append(Part(text=error_to_prompt(result.error)))
-                    rewritten = True
-                else:
-                    logger.debug("Skipping A2UI envelope of unknown kind: %s", result.parse_error)
+            for prompt in iter_incoming_prompts(envelopes, self._a2ui_agent.get_action):
+                new_parts.append(Part(text=prompt))
+                rewritten = True
 
         if rewritten:
             del msg.parts[:]
@@ -308,5 +279,4 @@ def _extract_a2ui_envelopes(part: Part) -> list[JsonObject]:
     ]
 
 
-# Re-export for callers that want to type-check against the protobuf Role.
-__all__ = ("A2UI_MIME_TYPE", "A2UIAgentExecutor", "Role")
+__all__ = ("A2UIAgentExecutor",)

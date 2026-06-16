@@ -15,7 +15,7 @@ from autogen.beta.events import (
 )
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
-from .events import A2UIMessageEvent
+from .events import A2UIMessageEvent, A2UIValidationFailedEvent
 from .parser import A2UIParseResult, A2UIResponseParser, A2UIValidationResult
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,11 @@ class _A2UIValidationMiddleware(BaseMiddleware):
                     "A2UI validation failed after %d attempt(s). Returning text-only response.",
                     attempt + 1,
                 )
+                # Emit a typed observability event before degrading. The A2UI
+                # spec has no server→client error frame, so the wire stays
+                # prose-only (graceful degradation); this event lets observers
+                # tell a failed UI apart from an intentional text reply.
+                await context.send(A2UIValidationFailedEvent(validation_errors, attempt + 1))
                 response.message = _to_prose_message(response.message, parse_result.text)
                 return response
 
@@ -123,8 +128,12 @@ class _A2UIValidationMiddleware(BaseMiddleware):
                 parse_result,
                 A2UIValidationResult(is_valid=False, errors=validation_errors),
             )
+            # Wrap the bad turn in a ModelResponse: provider mappers only render
+            # ModelResponse/ModelRequest/ToolResults events, so a bare
+            # ModelMessage would be silently dropped and the LLM would never see
+            # what it got wrong — defeating the corrective retry.
             current_events = current_events + [
-                ModelMessage(text),
+                ModelResponse(ModelMessage(text)),
                 ModelRequest([TextInput(feedback)]),
             ]
 

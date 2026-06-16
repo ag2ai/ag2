@@ -11,11 +11,13 @@ from autogen.beta.a2ui._types import A2UIVersion
 from autogen.beta.a2ui.a2a import get_a2ui_agent_extension
 from autogen.beta.a2ui.a2a.extension import try_activate_a2ui_extension
 from autogen.beta.a2ui.constants import (
-    A2UI_DEFAULT_CATALOG_ID,
     A2UI_DEFAULT_CATALOG_ID_BY_VERSION,
-    A2UI_EXTENSION_URI,
     A2UI_EXTENSION_URI_BY_VERSION,
 )
+
+# The default protocol version is v0.9; these handles keep the assertions terse.
+A2UI_DEFAULT_CATALOG_ID = A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9"]
+A2UI_EXTENSION_URI = A2UI_EXTENSION_URI_BY_VERSION["v0.9"]
 
 
 def _params(ext) -> dict:

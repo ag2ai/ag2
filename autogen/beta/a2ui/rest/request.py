@@ -33,7 +33,7 @@ from autogen.beta.events import BaseEvent, Input, ModelMessage, ModelRequest, Mo
 from .._types import A2UIVersion
 from ..actions import A2UIAction
 from ..capabilities import A2UIClientCapabilities, parse_client_capabilities
-from ..incoming import action_to_prompt, error_to_prompt, function_response_to_prompt, parse_incoming_message
+from ..incoming import iter_incoming_prompts
 
 logger = logging.getLogger(__name__)
 
@@ -181,31 +181,7 @@ def _map_a2ui_envelopes(
     the next request and is rewritten to a continuation prompt — no pause/resume
     bookkeeping is needed on this transport.
     """
-    inputs: list[Input] = []
-    for envelope in raw_a2ui:
-        result = parse_incoming_message(envelope)
-        if result.kind == "action" and result.action is not None:
-            action_def = resolve_action(result.action.name)
-            prompt = action_to_prompt(result.action, action_def)
-            if prompt is None:
-                logger.warning(
-                    "Dropping A2UI action '%s' — no matching A2UIAction registration.",
-                    result.action.name,
-                )
-                continue
-            inputs.append(TextInput(prompt))
-        elif result.kind == "functionResponse" and result.function_response is not None:
-            if not result.function_response.function_call_id:
-                logger.warning(
-                    "Dropping A2UI functionResponse — missing functionCallId, cannot correlate to a callFunction.",
-                )
-                continue
-            inputs.append(TextInput(function_response_to_prompt(result.function_response)))
-        elif result.kind == "error" and result.error is not None:
-            inputs.append(TextInput(error_to_prompt(result.error)))
-        else:
-            logger.debug("Skipping A2UI envelope of unknown kind: %s", result.parse_error)
-    return inputs
+    return [TextInput(prompt) for prompt in iter_incoming_prompts(raw_a2ui, resolve_action)]
 
 
 __all__ = ("A2UIServerRequest", "parse_request")

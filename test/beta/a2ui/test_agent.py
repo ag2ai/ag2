@@ -6,11 +6,12 @@ import pytest
 
 from autogen.beta import Agent
 from autogen.beta.a2ui import (
-    A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY,
-    A2UIAction,
     A2UIAgent,
     A2UIClientCapabilities,
+    A2UIEventAction,
+    A2UIFunctionCallAction,
 )
+from autogen.beta.a2ui.capabilities import A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY
 from autogen.beta.a2ui.middleware import A2UIValidationMiddleware
 from autogen.beta.testing import TestConfig
 
@@ -121,14 +122,14 @@ class TestA2UIAgentConstruction:
 
 class TestA2UIAgentActions:
     def test_action_type_defaults_to_event(self) -> None:
-        action = A2UIAction(name="test_action", description="Test")
+        action = A2UIEventAction(name="test_action", description="Test")
         assert action.action_type == "event"
 
     def test_event_action_in_prompt(self) -> None:
         agent = A2UIAgent(
             name="test_agent",
             tools=[
-                A2UIAction(
+                A2UIEventAction(
                     name="book_table",
                     tool_name="book_restaurant",
                     description="Book a table",
@@ -146,9 +147,8 @@ class TestA2UIAgentActions:
         agent = A2UIAgent(
             name="test_agent",
             tools=[
-                A2UIAction(
+                A2UIFunctionCallAction(
                     name="openUrl",
-                    action_type="functionCall",
                     description="Open a URL",
                     example_args={"url": "https://example.com"},
                 ),
@@ -164,10 +164,9 @@ class TestA2UIAgentActions:
         agent = A2UIAgent(
             name="test_agent",
             tools=[
-                A2UIAction(name="schedule", description="Schedule posts", example_context={"time": "2:00 PM"}),
-                A2UIAction(
+                A2UIEventAction(name="schedule", description="Schedule posts", example_context={"time": "2:00 PM"}),
+                A2UIFunctionCallAction(
                     name="openUrl",
-                    action_type="functionCall",
                     description="Open URL",
                     example_args={"url": "https://example.com"},
                 ),
@@ -181,8 +180,8 @@ class TestA2UIAgentActions:
 
     def test_get_action_both_types(self) -> None:
         actions = [
-            A2UIAction(name="save", description="Save data"),
-            A2UIAction(name="openUrl", action_type="functionCall", description="Open URL"),
+            A2UIEventAction(name="save", description="Save data"),
+            A2UIFunctionCallAction(name="openUrl", description="Open URL"),
         ]
         agent = A2UIAgent(name="test_agent", tools=actions)
         save_action = agent.get_action("save")
@@ -197,9 +196,8 @@ class TestA2UIAgentActions:
         agent = A2UIAgent(
             name="test_agent",
             tools=[
-                A2UIAction(
+                A2UIFunctionCallAction(
                     name="openUrl",
-                    action_type="functionCall",
                     description="Open a URL",
                     example_args={"url": "https://example.com"},
                 ),

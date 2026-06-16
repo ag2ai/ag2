@@ -13,7 +13,7 @@ from autogen.beta.tools.final import FunctionParameters, FunctionTool
 from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
 
 from ._types import JsonValue
-from .actions import A2UIAction
+from .actions import A2UIEventAction
 
 # JSON-schema ``type`` → placeholder shown to the LLM as the expected
 # ``event.context`` value. Used only when no explicit ``example_context`` is given.
@@ -70,10 +70,10 @@ class A2UIActionTool(FunctionTool):
 
     Produced by the :func:`a2ui_action` decorator. It behaves exactly like a
     normal tool — the agent can call it during a turn — but it additionally
-    carries an :class:`A2UIAction` (``action_type="event"``, ``tool_name`` set to
-    its own name) so that a button click in the rendered UI routes back to this
-    tool. Pass it in ``A2UIAgent(tools=[...])``; the agent registers both the
-    executable tool and its action.
+    carries an :class:`A2UIEventAction` (``tool_name`` set to its own name) so
+    that a button click in the rendered UI routes back to this tool. Pass it in
+    ``A2UIAgent(tools=[...])``; the agent registers both the executable tool and
+    its action.
     """
 
     __slots__ = ("action",)
@@ -85,7 +85,7 @@ class A2UIActionTool(FunctionTool):
         name: str,
         description: str,
         schema: FunctionParameters,
-        action: A2UIAction,
+        action: A2UIEventAction,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         super().__init__(model, name=name, description=description, schema=schema, middleware=middleware)
@@ -128,15 +128,14 @@ def a2ui_action(
     """Mark a tool function as a clickable A2UI button (a server ``event`` action).
 
     The decorated function becomes an :class:`A2UIActionTool` — a regular tool the
-    agent can call, plus an :class:`A2UIAction` (``action_type="event"``) whose
-    ``tool_name`` points back at the tool. When the LLM emits a button with
-    ``action.event.name`` matching this tool's name, a client click routes the
-    ``event.context`` back as the tool's arguments. Pass the result directly in
-    ``A2UIAgent(tools=[...])``.
+    agent can call, plus an :class:`A2UIEventAction` whose ``tool_name`` points
+    back at the tool. When the LLM emits a button with ``action.event.name``
+    matching this tool's name, a client click routes the ``event.context`` back
+    as the tool's arguments. Pass the result directly in ``A2UIAgent(tools=[...])``.
 
     Only ``event`` (server) actions are supported here: client-side ``functionCall``
     functions have no server body to decorate — declare those with
-    ``A2UIAction(action_type="functionCall", ...)`` instead.
+    ``A2UIFunctionCallAction(...)`` instead.
 
     Args:
         function: The tool function (when used as a bare ``@a2ui_action``).
@@ -163,9 +162,8 @@ def a2ui_action(
         action_description = description or f.__doc__ or ""
         param_schema = get_schema(call_model, exclude=(CONTEXT_OPTION_NAME,))
         ctx = example_context if example_context is not None else _derive_example_context(param_schema)
-        action = A2UIAction(
+        action = A2UIEventAction(
             name=action_name,
-            action_type="event",
             tool_name=action_name,
             description=action_description,
             example_context=ctx,

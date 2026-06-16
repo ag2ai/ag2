@@ -12,9 +12,10 @@ from a2a.types import Message, Part, Role
 
 from autogen.beta import Context
 from autogen.beta.a2a.mappers import ParsedMessage
-from autogen.beta.a2ui import A2UIAction, A2UIAgent
+from autogen.beta.a2ui import A2UIAgent, A2UIEventAction
 from autogen.beta.a2ui.a2a import create_a2ui_parts, get_a2ui_data, is_a2ui_part
 from autogen.beta.a2ui.a2a.executor import A2UIAgentExecutor, _extract_a2ui_envelopes
+from autogen.beta.a2ui.actions import A2UIAction
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, TextInput
@@ -159,7 +160,7 @@ class TestActionToPrompt:
     """Prompt synthesis from incoming client actions."""
 
     def test_tool_action_synthesizes_tool_call_prompt(self) -> None:
-        executor = _make_executor((A2UIAction("submit", tool_name="submit_form"),))
+        executor = _make_executor((A2UIEventAction("submit", tool_name="submit_form"),))
         msg = MagicMock()
         msg.parts = [create_a2ui_parts([ACTION_ENVELOPE])[0]]
         ctx = MagicMock()

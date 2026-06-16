@@ -4,9 +4,9 @@
 
 import json
 
-from autogen.beta.a2ui import to_jsonl
 from autogen.beta.a2ui.constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 from autogen.beta.a2ui.parser import A2UIResponseParser
+from autogen.beta.a2ui.serialize import to_jsonl
 
 SAMPLE_OPS = [
     {

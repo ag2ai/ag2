@@ -4,7 +4,14 @@
 
 import pytest
 
-from autogen.beta.a2ui import A2UIAction, A2UIActionTool, A2UIAgent, a2ui_action
+from autogen.beta.a2ui import (
+    A2UIAgent,
+    A2UIEventAction,
+    A2UIFunctionCallAction,
+    a2ui_action,
+)
+from autogen.beta.a2ui.action_tool import A2UIActionTool
+from autogen.beta.a2ui.actions import A2UIAction
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
@@ -92,15 +99,14 @@ class TestAgentActionCollection:
         assert "schedule" in prompt
 
     def test_collects_bare_action(self) -> None:
-        action = A2UIAction(name="rewrite", description="Regenerate previews")
+        action = A2UIEventAction(name="rewrite", description="Regenerate previews")
         agent = A2UIAgent(name="ui", tools=[action])
 
         assert agent.get_action("rewrite") is action
 
     def test_collects_function_call_declaration(self) -> None:
-        action = A2UIAction(
+        action = A2UIFunctionCallAction(
             name="openUrl",
-            action_type="functionCall",
             description="Open a URL",
             example_args={"url": "https://example.com"},
         )
@@ -118,7 +124,7 @@ class TestAgentActionCollection:
         def schedule(time: str) -> str:
             return time
 
-        bare = A2UIAction(name="rewrite", description="Regenerate")
+        bare = A2UIEventAction(name="rewrite", description="Regenerate")
 
         agent = A2UIAgent(name="ui", tools=[web_search, schedule, bare])
 
@@ -131,7 +137,7 @@ class TestAgentActionCollection:
         def first(x: str) -> str:
             return x
 
-        clash = A2UIAction(name="dup", description="clash")
+        clash = A2UIEventAction(name="dup", description="clash")
 
         with pytest.raises(ValueError, match="Duplicate A2UI action name 'dup'"):
             A2UIAgent(name="ui", tools=[first, clash])
@@ -140,7 +146,7 @@ class TestAgentActionCollection:
         # A bare A2UIAction is not a Tool; if it were forwarded to the base
         # Agent it would fail to register. Successful construction proves it is
         # filtered out of the executable tool list.
-        agent = A2UIAgent(name="ui", tools=[A2UIAction(name="rewrite")])
+        agent = A2UIAgent(name="ui", tools=[A2UIEventAction(name="rewrite")])
         assert agent.get_action("rewrite") is not None
 
 

@@ -11,7 +11,7 @@ from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue  # noqa: F401
-from .actions import A2UIAction
+from .actions import A2UIAction, A2UIEventAction, A2UIFunctionCallAction
 from .constants import A2UI_DEFAULT_CATALOG_ID_BY_VERSION, A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 _VERSIONS_DIR = Path(__file__).parent
@@ -80,7 +80,6 @@ class A2UISchemaManager:
         protocol_version: A2UIVersion = "v0.9",
         custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
         custom_catalog_rules: str | None = None,
-        spec_dir: "str | os.PathLike[str] | None" = None,
     ) -> None:
         """Initialize the schema manager.
 
@@ -92,7 +91,6 @@ class A2UISchemaManager:
                 Must include a ``$id`` field (used as the catalogId in A2UI messages).
             custom_catalog_rules: Plain-text rules for the custom catalog components,
                 appended to the basic catalog rules in the system prompt.
-            spec_dir: Override the spec file directory.
         """
         if protocol_version not in _SUPPORTED_VERSIONS:
             raise ValueError(
@@ -103,8 +101,24 @@ class A2UISchemaManager:
         self._protocol_version = protocol_version
 
         version_dir = protocol_version.replace(".", "_")
-        self._version_dir = (Path(spec_dir) / version_dir) if spec_dir else (_VERSIONS_DIR / version_dir)
+        self._version_dir = _VERSIONS_DIR / version_dir
         self._spec_dir = self._version_dir / "spec"
+
+        # Raw, unread inputs. All file I/O (vendored specs + custom catalog) is
+        # deferred to ``_ensure_loaded`` so construction stays side-effect-free
+        # per the project rule "no side effects in initialization methods". Note
+        # ``A2UIAgent`` still triggers the load during its own construction (it
+        # bakes the prompt/registry eagerly) — full agent laziness is out of
+        # scope; this keeps the schema manager itself pure.
+        self._custom_catalog_input = custom_catalog
+        self._custom_catalog_rules = custom_catalog_rules or ""
+
+        self._loaded = False
+
+    def _ensure_loaded(self) -> None:
+        """Load the vendored specs and the custom catalog on first use (idempotent)."""
+        if self._loaded:
+            return
 
         self._server_to_client = self._load_spec_json("server_to_client.json")
         self._client_to_server = self._load_spec_json("client_to_server.json")
@@ -116,8 +130,7 @@ class A2UISchemaManager:
         self._prompt_message_types = self._load_version_text("prompt_message_types.md")
 
         self._custom_catalog: JsonSchema | None = None
-        self._custom_catalog_rules = custom_catalog_rules or ""
-
+        custom_catalog = self._custom_catalog_input
         if custom_catalog is not None:
             if isinstance(custom_catalog, dict):
                 self._custom_catalog = custom_catalog
@@ -138,9 +151,17 @@ class A2UISchemaManager:
                     "This is used as the catalogId in A2UI createSurface messages. "
                     'Example: {"$id": "https://mycompany.com/my_catalog.json", ...}'
                 )
-            self._catalog_id: str = self._custom_catalog["$id"]
+            catalog_id = self._custom_catalog["$id"]
+            if not isinstance(catalog_id, str):
+                raise ValueError(
+                    f"Custom catalog '$id' must be a string, got {type(catalog_id).__name__!r}. "
+                    "It is used verbatim as the catalogId and as a schema-registry key."
+                )
+            self._catalog_id: str = catalog_id
         else:
-            self._catalog_id = str(_VERSION_CONFIG[protocol_version]["default_catalog_id"])
+            self._catalog_id = str(_VERSION_CONFIG[self._protocol_version]["default_catalog_id"])
+
+        self._loaded = True
 
     @property
     def protocol_version(self) -> A2UIVersion:
@@ -148,40 +169,33 @@ class A2UISchemaManager:
 
     @property
     def catalog_id(self) -> str:
+        self._ensure_loaded()
         return self._catalog_id
 
     @property
     def server_to_client_schema(self) -> JsonSchema:
+        self._ensure_loaded()
         return self._server_to_client
 
     @property
     def client_to_server_schema(self) -> JsonSchema:
+        self._ensure_loaded()
         return self._client_to_server
 
     @property
     def basic_catalog_schema(self) -> JsonSchema:
+        self._ensure_loaded()
         return self._basic_catalog
 
     @property
-    def custom_catalog_schema(self) -> JsonSchema | None:
-        return self._custom_catalog
-
-    @property
     def common_types_schema(self) -> JsonSchema:
+        self._ensure_loaded()
         return self._common_types
 
     @property
     def version_string(self) -> A2UIVersion:
         """The version string used in A2UI messages (e.g., 'v0.9')."""
         return _VERSION_CONFIG[self._protocol_version]["version_string"]
-
-    @property
-    def catalog_rules(self) -> str:
-        return self._catalog_rules
-
-    @property
-    def custom_catalog_rules(self) -> str:
-        return self._custom_catalog_rules
 
     def _get_active_catalog(self) -> JsonSchema:
         """Return the active catalog used as ``catalog.json`` in the registry.
@@ -193,6 +207,7 @@ class A2UISchemaManager:
         ones on key collision. ``anyComponent`` / ``anyFunction`` discriminator
         defs are rebuilt to cover the union.
         """
+        self._ensure_loaded()
         if self._custom_catalog is None:
             return self._basic_catalog
 
@@ -226,6 +241,7 @@ class A2UISchemaManager:
 
     def _get_all_components(self) -> JsonSchema:
         """Return all available components from both basic and custom catalogs."""
+        self._ensure_loaded()
         components: JsonSchema = {}
         components.update(self._basic_catalog.get("components", {}))
         if self._custom_catalog is not None:
@@ -234,6 +250,7 @@ class A2UISchemaManager:
 
     def get_component_schemas(self) -> dict[str, JsonSchema]:
         """Get resolved schemas for all components, keyed by component type name."""
+        self._ensure_loaded()
         schemas: dict[str, JsonSchema] = {}
         for catalog in [self._basic_catalog, self._custom_catalog]:
             if catalog is not None:
@@ -245,6 +262,7 @@ class A2UISchemaManager:
 
     def build_schema_registry(self) -> "Registry":
         """Build a jsonschema referencing Registry for cross-file $ref resolution."""
+        self._ensure_loaded()
         active_catalog = self._get_active_catalog()
         base = _VERSION_CONFIG[self._protocol_version]["schema_base_uri"]
         resources: list[tuple[str, Resource]] = [
@@ -313,6 +331,7 @@ class A2UISchemaManager:
 
     def _build_prompt_example(self) -> str:
         """Build the prompt example JSON string from the version-specific template."""
+        self._ensure_loaded()
         raw = json.dumps(self._prompt_example, separators=(",", ": "))
         return raw.replace("{catalog_id}", self._catalog_id)
 
@@ -323,6 +342,7 @@ class A2UISchemaManager:
         actions: list[A2UIAction] | None = None,
     ) -> str:
         """Generate the A2UI portion of the system prompt."""
+        self._ensure_loaded()
         v = self._protocol_version
         sections: list[str] = []
 
@@ -388,8 +408,8 @@ class A2UISchemaManager:
             action_lines = ["\n\n## Available Actions\n"]
             action_lines.append("The following actions can be triggered by buttons in the UI:\n")
 
-            event_actions = [a for a in actions if a.action_type == "event"]
-            func_actions = [a for a in actions if a.action_type == "functionCall"]
+            event_actions: list[A2UIEventAction] = [a for a in actions if isinstance(a, A2UIEventAction)]
+            func_actions: list[A2UIFunctionCallAction] = [a for a in actions if isinstance(a, A2UIFunctionCallAction)]
 
             if event_actions:
                 action_lines.append("### Server Events\n")

@@ -2,13 +2,48 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
+from typing import Any
+
 import pytest
 
-from autogen.beta.a2ui import A2UIAgent, A2UIMessageEvent
+from autogen.beta import Context
+from autogen.beta.a2ui import A2UIAgent, A2UIMessageEvent, A2UIValidationFailedEvent
 from autogen.beta.a2ui.middleware import _to_prose_message
-from autogen.beta.events import BaseEvent, ModelMessage
+from autogen.beta.config import LLMClient, ModelConfig
+from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
+
+
+class _RecordingClient(LLMClient):
+    """Wraps another client, snapshotting the full events list of each call."""
+
+    def __init__(self, inner: LLMClient, calls: list[list[BaseEvent]]) -> None:
+        self._inner = inner
+        self._calls = calls
+
+    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+        self._calls.append(list(messages))
+        return await self._inner(messages, context=context, **kwargs)
+
+
+class _RecordingConfig(ModelConfig):
+    """A ``ModelConfig`` that records every events list sent to the LLM."""
+
+    def __init__(self, inner: ModelConfig, calls: list[list[BaseEvent]]) -> None:
+        self._inner = inner
+        self._calls = calls
+
+    def copy(self) -> "_RecordingConfig":
+        return self
+
+    def create(self) -> _RecordingClient:
+        return _RecordingClient(self._inner.create(), self._calls)
+
+    def create_files_client(self) -> None:
+        return None
+
 
 VALID_RESPONSE = (
     "Here is your UI.\n<a2ui-json>\n"
@@ -122,6 +157,30 @@ class TestA2UIValidationMiddleware:
         # Event emitted only on the final successful attempt — never on retries.
         assert len(events) == 1
 
+    async def test_retry_feeds_bad_assistant_turn_back_to_llm(self) -> None:
+        # Regression: the retry must include the prior (invalid) assistant turn as
+        # a ModelResponse so the LLM can see what to fix. A bare ModelMessage is
+        # silently dropped by provider mappers, defeating the correction.
+        calls: list[list[BaseEvent]] = []
+        agent = A2UIAgent(
+            name="test_agent",
+            config=_RecordingConfig(TestConfig(INVALID_RESPONSE_MISSING_CATALOG, VALID_RESPONSE), calls),
+            validate_responses=True,
+            validation_retries=1,
+        )
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask("Show UI", stream=stream)
+
+        assert reply.body == "Here is your UI."
+        assert len(calls) == 2  # the turn was retried
+        retry_events = calls[1]
+        assert any(
+            isinstance(e, ModelResponse) and e.message is not None and "createSurface" in (e.message.content or "")
+            for e in retry_events
+        )
+
     async def test_retry_exhausted_returns_text_only(self) -> None:
         agent = A2UIAgent(
             name="test_agent",
@@ -141,6 +200,54 @@ class TestA2UIValidationMiddleware:
         # graceful degradation: prose only, no A2UI tag, no events.
         assert reply.body == "Here."
         assert events == []
+
+    async def test_retry_exhausted_emits_validation_failed_event(self) -> None:
+        # The wire degrades to prose, but an internal observability event is
+        # emitted so monitoring can tell a failed UI from an intentional text reply.
+        agent = A2UIAgent(
+            name="test_agent",
+            config=TestConfig(
+                INVALID_RESPONSE_MISSING_CATALOG,
+                INVALID_RESPONSE_MISSING_CATALOG,
+            ),
+            validate_responses=True,
+            validation_retries=1,
+        )
+        failures: list[A2UIValidationFailedEvent] = []
+        stream = MemoryStream()
+
+        @stream.subscribe
+        async def _record(event: BaseEvent) -> None:
+            if isinstance(event, A2UIValidationFailedEvent):
+                failures.append(event)
+
+        reply = await agent.ask("Show UI", stream=stream)
+
+        assert reply.body == "Here."
+        assert len(failures) == 1
+        # validation_retries=1 → 2 total attempts, and the errors are surfaced.
+        assert failures[0].attempts == 2
+        assert failures[0].errors
+
+    async def test_no_validation_failed_event_on_success(self) -> None:
+        agent = A2UIAgent(
+            name="test_agent",
+            config=TestConfig(INVALID_RESPONSE_MISSING_CATALOG, VALID_RESPONSE),
+            validate_responses=True,
+            validation_retries=1,
+        )
+        failures: list[A2UIValidationFailedEvent] = []
+        stream = MemoryStream()
+
+        @stream.subscribe
+        async def _record(event: BaseEvent) -> None:
+            if isinstance(event, A2UIValidationFailedEvent):
+                failures.append(event)
+
+        reply = await agent.ask("Show UI", stream=stream)
+
+        assert reply.body == "Here is your UI."
+        assert failures == []
 
     async def test_json_parse_error_triggers_retry(self) -> None:
         agent = A2UIAgent(
