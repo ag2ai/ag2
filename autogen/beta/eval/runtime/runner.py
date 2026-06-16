@@ -5,8 +5,8 @@
 """run_agent() — the eval runner.
 
 ``run_agent`` is *produce-then-grade*, and produces its trace **through OpenTelemetry** —
-the same substrate :func:`~autogen.beta.eval.evaluate_traces` grades. Per task it builds a
-fresh :class:`~autogen.beta.Agent`, runs it with a
+the same substrate :func:`~autogen.beta.eval.evaluate_traces` grades. Per task it runs the
+given :class:`~autogen.beta.Agent` with a
 :class:`~autogen.beta.middleware.builtin.telemetry.TelemetryMiddleware` exporting to an
 **in-memory** span exporter, then reconstructs the :class:`~autogen.beta.eval.Trace`
 from those spans via ``readable_spans_to_trace`` — exactly the span→Trace path the
@@ -16,10 +16,9 @@ the *same* reconstruction and the *same* grading core
 
 Because the trace is reconstructed from spans, ``run_agent`` inherits the OTEL path's
 fidelity (halt / tool-not-found are stream-only, so never spanned — see
-``sources/_spans.py``). Failures that emit no spans (a factory that raises, or an
-``ask`` that errors before the agent span starts) fall back to the caught exception so
-they still surface. Tasks run in parallel up to ``concurrency``, bounded by an
-:class:`asyncio.Semaphore`.
+``sources/_spans.py``). An ``ask`` that errors before the agent span starts emits no
+spans and falls back to the caught exception so it still surfaces. Tasks run in parallel
+up to ``concurrency``, bounded by an :class:`asyncio.Semaphore`.
 """
 
 import asyncio
@@ -75,38 +74,35 @@ async def run_agent(
 ) -> RunResult:
     """Run an evaluation suite end-to-end.
 
-    Each task gets a fresh :class:`~autogen.beta.Agent` built
-    from ``agent`` (an instance, reused, or a factory), run with a
+    The given :class:`~autogen.beta.Agent` is run once per task with a
     :class:`~autogen.beta.middleware.builtin.telemetry.TelemetryMiddleware` exporting to an
     in-memory span exporter; the :class:`~autogen.beta.eval.Trace` is then reconstructed
     from those spans (per-task duration timed around the ``ask``) — the same span→Trace
     path the trace-based sources use. Those traces are graded through the same core
-    :func:`~autogen.beta.eval.evaluate_traces` uses, and the run is persisted as
-    ``<store_dir>/<run_id>.json``.
+    :func:`~autogen.beta.eval.evaluate_traces` uses, and — when ``store_dir`` is set — the
+    run is persisted as ``<store_dir>/<run_id>.json``.
 
     Args:
-        suite: A :class:`Suite`, a JSONL path, or an inline list of dict
-            task records. Strings / paths are loaded via
-            :meth:`Suite.from_jsonl`; lists are loaded via
-            :meth:`Suite.from_list`.
-        agent: The agent to evaluate — either an :class:`~autogen.beta.Agent`
-            *instance*, reused for every task, or a *factory* callable that
-            builds a fresh :class:`~autogen.beta.Agent` per task. A factory may
-            take a keyword-only ``config`` parameter so the runner can inject
-            per-task or global model configs (use a factory, not an instance,
-            when you want per-task ``model_config``).
+        suite: A :class:`Suite`, or a bare ``str`` used as a single-prompt
+            suite. Build multi-task suites explicitly with
+            :meth:`Suite.from_list` (inline) or :meth:`Suite.from_jsonl`
+            (a file) and pass the result.
+        agent: The :class:`~autogen.beta.Agent` instance to evaluate, reused
+            for every task. Vary the model per task through ``model_config``,
+            which is forwarded to ``ask`` and overrides the agent's own config.
         scorers: Scorer instances (typically produced by ``@scorer``).
             Each is called once per task; the resulting feedback is
             recorded on the task's :class:`TaskResult`.
         store_dir: Directory under which the run JSON is persisted as
-            ``<store_dir>/<run_id>.json``. Required — evals are
-            comparison artifacts; a run that isn't persisted has no
-            shelf life. Use ``tmp_path`` in tests, a repo directory
-            for CI, or any path that fits your retention story.
-        model_config: ``None`` to let the factory pick (its default),
-            a single ``ModelConfig`` to use everywhere, or a
+            ``<store_dir>/<run_id>.json``. Optional — omit it to run without
+            persisting. Evals are comparison artifacts, so persist (``tmp_path``
+            in tests, a repo directory for CI, …) whenever a run should outlive
+            the call.
+        model_config: ``None`` to use the agent's own config, a single
+            ``ModelConfig`` to apply everywhere, or a
             ``dict[task_id, ModelConfig]`` for per-task configs (e.g.
-            one ``TestConfig`` cassette per task).
+            one ``TestConfig`` cassette per task). Passed to ``ask``, so it
+            overrides the agent's config for that task.
         repeats: Run each task this many times (default ``1``) — for
             measuring consistency. ``pass_rate`` / ``score_stats`` pool
             all runs; with ``repeats > 1`` each run gets a distinct
@@ -145,8 +141,8 @@ async def run_agent(
 
     Returns:
         A :class:`RunResult` containing per-task results and metadata.
-        The result has already been written to disk by the time this
-        function returns.
+        When ``store_dir`` is set, the result has already been written to
+        disk by the time this function returns.
     """
     resolved_suite = _resolve_suite(suite)
     tasks_to_run = _expand_repeats(resolved_suite, repeats)
@@ -243,7 +239,7 @@ async def _produce(
     span_attributes: dict[str, str] | None = None,
     span_processors: "Sequence[SpanProcessor] | None" = None,
 ) -> InMemoryTraceSource:
-    """Run ``factory``'s agent across ``tasks``, returning one Trace per task (in order)."""
+    """Run ``agent`` across ``tasks``, returning one Trace per task (in order)."""
     tasks = list(tasks)
     missing = [t.task_id for t in tasks if "input" not in t.inputs]
     if missing:
@@ -312,8 +308,8 @@ async def _produce_one(
             duration_ms = int((time.perf_counter() - started) * 1000)
 
         # run_agent()'s Trace is reconstructed from the emitted spans — the same span→Trace path
-        # evaluate_traces() uses, so the two grade identically. Pre-span failures (factory raise, or
-        # ask erroring before the agent span starts) emit no spans → fall back to the caught exception.
+        # evaluate_traces() uses, so the two grade identically. A pre-span failure (ask erroring
+        # before the agent span starts) emits no spans → fall back to the caught exception.
         spans = exporter.get_finished_spans()
         # Real root-span trace id, for deep-linking to an external backend; synthetic fallback if no spans.
         otel_trace_id = format(spans[0].context.trace_id, "032x") if spans else uuid4().hex
@@ -324,7 +320,13 @@ async def _produce_one(
 
 
 def _resolve_suite(suite: str | Suite) -> Suite:
-    """Normalize the ``suite`` argument into a :class:`Suite` instance."""
+    """Normalize the ``suite`` argument into a :class:`Suite` instance.
+
+    A :class:`Suite` passes through unchanged; a bare ``str`` becomes a
+    single-task suite whose one prompt is that string. Files and inline task
+    lists are constructed explicitly by the caller via :meth:`Suite.from_jsonl`
+    / :meth:`Suite.from_list`.
+    """
     if isinstance(suite, Suite):
         return suite
     return Suite([Task(inputs={"input": suite})])
