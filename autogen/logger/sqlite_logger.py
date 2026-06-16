@@ -96,7 +96,7 @@ class SqliteLogger(BaseLogger):
                     source_name TEXT,
                     request TEXT,
                     response TEXT,
-                    is_cached INEGER,
+                    is_cached INTEGER,
                     cost REAL,
                     start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     end_time DATETIME DEFAULT CURRENT_TIMESTAMP)

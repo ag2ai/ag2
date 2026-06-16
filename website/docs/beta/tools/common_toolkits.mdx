@@ -95,15 +95,93 @@ fs = FilesystemToolkit(base_path="/tmp/sandbox")
 
 ---
 
+## Skills
+
+Skills let an agent load specialized instructions on demand. They follow the [agentskills.io](https://agentskills.io){.external-link target="_blank"} convention: each skill is a directory containing a `SKILL.md` instructions file, an optional `scripts/` subdirectory of runnable `.py` / `.sh` files, and any number of bundled resource files (references, templates, data).
+
+AG2 ships two entry points:
+
+- **`SkillPlugin`** — the recommended way. It injects the skill catalog directly into the system prompt and wires up the activation tools, so the model knows what is available from the first turn.
+- **`SkillsToolkit`** — the lower-level building block. The same activation tools, plus an explicit `list_skills` tool, with no prompt injection. Reach for it when you want full control over how skills are surfaced.
+
+### Progressive disclosure
+
+Both entry points follow the same three-tier loading strategy, so the agent only pays the token cost of the detail it actually uses:
+
+| Tier | What's loaded | When |
+| :--- | :--- | :--- |
+| **1. Catalog** | Name + description + location, per skill | At startup (or via `list_skills`) |
+| **2. Instructions** | The full `SKILL.md` body | When the model calls `load_skill` |
+| **3. Resources** | Scripts and bundled files | When the instructions reference them (`read_skill_resource` / `run_skill_script`) |
+
+An agent with 20 installed skills doesn't load 20 full instruction sets upfront — only the ones a given conversation actually activates.
+
+---
+
+## SkillPlugin
+
+`SkillPlugin` is the recommended way to give an agent local skills. Instead of spending a `list_skills` tool round-trip, it injects the catalog into the system prompt at startup, so the model can decide which skill is relevant immediately.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import SkillPlugin
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    plugins=[SkillPlugin()],
+)
+```
+
+By default it scans `.agents/skills` relative to the current working directory. Pass a path or a `LocalRuntime` to point elsewhere:
+
+```python linenums="1"
+from autogen.beta.tools import SkillPlugin
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    plugins=[SkillPlugin("./my-skills")],
+)
+```
+
+### Activation flow
+
+1. **Startup** — the plugin discovers every skill and injects an `<available_skills>` block into the system prompt. Each entry lists the skill's `name`, `description`, and `location`:
+
+    ```xml
+    <available_skills>
+      <skill>
+        <name>pdf-processing</name>
+        <description>Extract PDF text, fill forms, merge files. Use when handling PDFs.</description>
+        <location>/home/user/.agents/skills/pdf-processing/SKILL.md</location>
+      </skill>
+    </available_skills>
+    ```
+
+2. **Load** — when a task matches a description, the model calls `load_skill(name)`. The `name` parameter is constrained to the discovered skills, so the model can't invent one. The tool returns the `SKILL.md` body wrapped in `<skill_content>`, along with the skill directory and a non-eager listing of bundled resources.
+
+3. **Use resources** — the model reads a listed resource with `read_skill_resource(name, resource)` or executes a script with `run_skill_script(name, script, args)` only when the instructions call for it.
+
+!!! note
+    When no skills are found, `SkillPlugin` contributes nothing — no catalog and no dead tools — so the model is never shown an empty skill list.
+
+!!! tip
+    `SkillPlugin` is a snapshot taken at construction time: the catalog and the activation tools always describe the same set of skills. Rebuild the agent (or the plugin) after installing new skills.
+
+---
+
 ## SkillsToolkit
 
-`SkillsToolkit` gives an agent access to locally installed skills following the [agentskills.io](https://agentskills.io){.external-link target="_blank"} convention. Each skill is a directory containing a `SKILL.md` instructions file and an optional `scripts/` subdirectory of runnable `.py` / `.sh` files.
+`SkillsToolkit` is the lower-level building block behind `SkillPlugin`. It exposes the same activation tools plus an explicit `list_skills` tool, but does **not** inject anything into the prompt — the model discovers skills by calling `list_skills` itself. Prefer [`SkillPlugin`](#skillplugin) unless you need that control.
 
-The toolkit uses a three-step progressive-disclosure pattern so the agent fetches only the detail it actually needs:
+The toolkit follows the progressive-disclosure pattern with four tools:
 
-1. **`list_skills`** — returns a lightweight catalog (name + description).
+1. **`list_skills`** — returns a lightweight catalog (name + description + location).
 2. **`load_skill`** — returns the full `SKILL.md` instructions for a specific skill on demand.
-3. **`run_skill_script`** — executes a script from the skill's `scripts/` directory.
+3. **`read_skill_resource`** — reads a bundled resource file from a skill's directory.
+4. **`run_skill_script`** — executes a script from the skill's `scripts/` directory.
 
 ```python linenums="1"
 from autogen.beta import Agent
@@ -165,8 +243,9 @@ Available tools:
 
 | Tool | Description |
 | :--- | :--- |
-| `list_skills` | Return a catalog of installed skills with name and short description |
+| `list_skills` | Return a catalog of installed skills with name, description, and location |
 | `load_skill` | Fetch the full `SKILL.md` content for a specific skill |
+| `read_skill_resource` | Read a bundled resource file from a skill's directory |
 | `run_skill_script` | Execute a `.py` or `.sh` script from a skill's `scripts/` directory |
 
 ---
@@ -298,92 +377,6 @@ All parameters accept a `Variable` for dynamic values resolved at execution time
 
 ---
 
-## ExaToolkit
-
-`ExaToolkit` gives an agent four related tools powered by the [Exa](https://exa.ai){.external-link target="_blank"} neural search engine: web search, find-similar, content retrieval, and AI-powered answers — all sharing a single client.
-
-!!! note
-    Requires the `exa` extra and an API key: `pip install ag2[exa]`
-
-```python linenums="1"
-import os
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import ExaToolkit
-
-agent = Agent(
-    "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[ExaToolkit(api_key=os.environ["EXA_API_KEY"])],
-)
-```
-
-If `api_key` is omitted, the Exa SDK reads `EXA_API_KEY` from the environment automatically.
-
-### Tools
-
-| Tool | Description |
-| :--- | :--- |
-| `exa_search` | Neural web search with filters (domains, dates, type, category) |
-| `exa_find_similar` | Find pages similar to a given URL |
-| `exa_get_contents` | Fetch full text content for specific URLs |
-| `exa_answer` | Get an AI-generated answer with citations |
-
-### Shared defaults
-
-`num_results` and `max_characters` on the constructor are applied to the default `exa_search` and `exa_find_similar` tools:
-
-```python linenums="1"
-toolkit = ExaToolkit(
-    api_key=...,
-    num_results=10,         # applies to search & find_similar
-    max_characters=2000,    # per-result text cap for search; None = metadata-only
-)
-```
-
-### Picking a subset of tools
-
-Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.find_similar()`, `toolkit.get_contents()`, `toolkit.answer()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
-
-```python linenums="1"
-toolkit = ExaToolkit(api_key=...)
-
-agent = Agent(
-    "researcher",
-    config=config,
-    tools=[toolkit.search(), toolkit.answer()],
-)
-```
-
-### Per-tool configuration
-
-Per-call parameters (filters, domains, dates, `num_results`, `max_characters`, etc.) live on the factory methods, not on the toolkit itself:
-
-```python linenums="1"
-toolkit = ExaToolkit(api_key=...)
-
-search_tool = toolkit.search(
-    num_results=5,
-    max_characters=2000,           # triggers search_and_contents for full text
-    search_type="neural",          # "neural" | "keyword" | "hybrid" | "auto" | "fast" | "deep"
-    category="research paper",     # e.g. "news", "github", "pdf", ...
-    include_domains=["arxiv.org"],
-    exclude_domains=["medium.com"],
-    start_published_date="2024-01-01",
-    end_published_date="2024-12-31",
-    use_autoprompt=True,
-    livecrawl="always",            # "never" | "fallback" | "always" | "preferred"
-)
-
-agent = Agent("researcher", config=config, tools=[search_tool, toolkit.answer()])
-```
-
-When `max_characters` is set, `exa_search` calls Exa's `search_and_contents` endpoint so each result carries `text`. When `max_characters` is `None`, only metadata is returned (cheaper and faster).
-
-All runtime parameters accept `Variable` for deferred context resolution.
-
----
-
 ## PerplexitySearchToolkit
 
 `PerplexitySearchToolkit` gives an agent two related tools powered by [Perplexity](https://www.perplexity.ai){.external-link target="_blank"}: raw web search via the Search API and LLM-grounded answers with citations via Sonar — sharing a single client.
@@ -456,8 +449,6 @@ answer_tool = toolkit.answer(
 
 agent = Agent("researcher", config=config, tools=[search_tool, answer_tool])
 ```
-
-All runtime parameters accept a `Variable` for deferred context resolution.
 
 ### HTTP and SDK options
 
@@ -562,56 +553,43 @@ tool = TavilySearchTool(
 
 ---
 
-## LocalShellTool
+## SandboxShellTool
 
-`LocalShellTool` gives an agent the ability to run shell commands in a local subprocess. By default it creates a temporary working directory that is cleaned up on process exit.
+`SandboxShellTool` gives an agent the ability to run shell commands inside an environment you choose. With no argument it uses a `LocalEnvironment` with a temporary working directory that is cleaned up on process exit. See the [Sandbox Shell page](/docs/beta/tools/local_shell) for the full guide.
 
 !!! warning
-    `LocalShellTool` executes arbitrary shell commands. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run.
+    A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run — or a `DockerEnvironment` / `DaytonaEnvironment` for real isolation.
 
 ```python linenums="1"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools import SandboxShellTool, LocalEnvironment
 
 agent = Agent(
     "engineer",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[LocalShellTool("/tmp/my_project")],
+    tools=[SandboxShellTool(LocalEnvironment("/tmp/my_project"))],
 )
 ```
 
-Passing a path string creates a `LocalShellEnvironment` in that directory. Passing nothing creates a temporary directory.
+The first argument is the environment; the backend (where commands run) is configured there. Passing nothing uses a temporary local directory.
 
 ### Restricting commands
 
-Use `LocalShellEnvironment` directly to control what the agent can run:
+Command policy lives on the tool:
 
 ```python linenums="1"
-from autogen.beta.tools import LocalShellTool
-from autogen.beta.tools.shell import LocalShellEnvironment
+from autogen.beta.tools import SandboxShellTool, LocalEnvironment
 
 # Allow only specific commands
-sh = LocalShellTool(LocalShellEnvironment(
-    path="/tmp/my_project",
-    allowed=["git", "python", "pip"],
-))
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), allowed=["git", "python", "pip"])
 
 # Block dangerous commands
-sh = LocalShellTool(LocalShellEnvironment(
-    path="/tmp/my_project",
-    blocked=["rm -rf", "curl", "wget"],
-))
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), blocked=["rm -rf", "curl", "wget"])
 
 # Read-only mode — agent can inspect but not modify
-sh = LocalShellTool(LocalShellEnvironment(
-    path="/tmp/my_project",
-    readonly=True,
-))
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), readonly=True)
 
 # Hide sensitive files from the agent
-sh = LocalShellTool(LocalShellEnvironment(
-    path="/tmp/my_project",
-    ignore=["**/.env", "*.key", "secrets/**"],
-))
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), ignore=["**/.env", "*.key", "secrets/**"])
 ```

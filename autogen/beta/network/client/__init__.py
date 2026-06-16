@@ -11,6 +11,7 @@ tenant process. The hub never imports anything from here.
 
 from .agent_client import AgentClient
 from .channel import Channel
+from .checkpoint import HubBackedCheckpointStore
 from .handlers import (
     default_handler,
     read_wal_until,
@@ -32,6 +33,7 @@ __all__ = (
     "ChannelInject",
     "ChannelStateInject",
     "ClientTask",
+    "HubBackedCheckpointStore",
     "HubClient",
     "HubInject",
     "HumanClient",

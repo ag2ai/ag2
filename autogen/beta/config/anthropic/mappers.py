@@ -154,7 +154,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         # Anthropic's bash tool is client-side — it ships a typed schema but the
         # application must execute the command itself and return a tool_result.
         # autogen/beta does not provide a default executor for this here.
-        # Use LocalShellTool (tools/shell/) instead, which runs commands via subprocess
+        # Use SandboxShellTool (tools/shell/) instead, which runs commands via subprocess
         # and works with any provider.
         raise UnsupportedToolError(t.type, "anthropic")
 

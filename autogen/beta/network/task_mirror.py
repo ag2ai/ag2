@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from autogen.beta.events import (
+    TaskCancelled,
     TaskCompleted,
     TaskExpired,
     TaskFailed,
@@ -50,10 +51,10 @@ class TaskMirror:
     ``agent_id``). Attach to a stream for the duration of a notify
     handler / Agent.ask call, then detach.
 
-    The mirror routes through a :class:`HubClient` so the same call
-    sites work for both in-process and any future cross-process
-    transport. Tests that hold a bare ``Hub`` can still pass it
-    directly via the legacy ``hub=`` keyword for convenience.
+    The mirror routes through a :class:`HubClient` so task-event
+    forwarding goes through the same surface as the rest of the client.
+    Tests that hold a bare ``Hub`` can still pass it directly via the
+    ``hub=`` keyword for convenience.
 
     Failures forwarding to the hub are swallowed — the mirror must
     never crash the agent's turn.
@@ -141,6 +142,7 @@ class TaskMirror:
             stream.where(TaskCompleted).subscribe(self._on_completed, sync_to_thread=False),
             stream.where(TaskFailed).subscribe(self._on_failed, sync_to_thread=False),
             stream.where(TaskExpired).subscribe(self._on_expired, sync_to_thread=False),
+            stream.where(TaskCancelled).subscribe(self._on_cancelled, sync_to_thread=False),
         ]
 
     def detach(self, stream: "Stream", sub_ids: list[object]) -> None:
@@ -246,26 +248,50 @@ class TaskMirror:
             await self._escalate(event.task_id, "expired", exc)
         await self._record_observation_if_tagged(event.task_id, TaskState.EXPIRED)
 
+    async def _on_cancelled(self, event: TaskCancelled) -> None:
+        try:
+            await self._update(
+                event.task_id,
+                state=TaskState.CANCELLED,
+                error=event.reason or None,
+            )
+        except NotFoundError:
+            pass
+        except Exception as exc:
+            await self._escalate(event.task_id, "cancelled", exc)
+        await self._record_observation_if_tagged(event.task_id, TaskState.CANCELLED)
+
     async def _record_observation_if_tagged(self, task_id: str, outcome: TaskState) -> None:
         """If the task's spec carried a ``capability`` tag, push the
         observation through so the owner's ``Resume.observed`` updates.
 
-        ``capability`` and ``started_at`` come from the in-process hub
-        cache (``_tasks``); both ``hub_client._hub`` and the legacy
-        ``hub`` arg provide the same in-process view.
+        Reads the task's ``capability`` + ``started_at`` from the
+        in-process hub cache when one is present (using the hub clock
+        for latency); cross-process it fetches the observed
+        ``TaskMetadata`` over the wire via ``HubClient.get_task`` and
+        uses the local clock. Either way the observation is pushed
+        through ``_record`` (hub-client-routed, so RPC cross-process).
         """
         if outcome not in TERMINAL_TASK_STATES:
             return
-        if self._hub is None:
-            return
-        task_meta = self._hub._tasks.get(task_id)
+        task_meta: TaskMetadata | None = None
+        now_iso: str | None = None
+        if self._hub is not None:
+            task_meta = self._hub._tasks.get(task_id)
+            now_iso = self._hub._clock()
+        elif self._hub_client is not None:
+            try:
+                task_meta = await self._hub_client.get_task(task_id)
+            except Exception:
+                task_meta = None
+            now_iso = datetime.now(timezone.utc).isoformat()
         if task_meta is None or task_meta.spec.capability is None:
             return
         latency_ms: int | None = None
-        if task_meta.started_at:
+        if task_meta.started_at and now_iso is not None:
             try:
                 started = datetime.fromisoformat(task_meta.started_at).timestamp()
-                now = datetime.fromisoformat(self._hub._clock()).timestamp()
+                now = datetime.fromisoformat(now_iso).timestamp()
                 latency_ms = int(max(0.0, now - started) * 1000)
             except Exception:
                 latency_ms = None

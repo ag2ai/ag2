@@ -10,7 +10,7 @@ slug: ag2-network-choreography-dial
 
 We've touched on the four built-in conversation shapes; now you need to make them survive contact with the real world.
 
-In the first post — [*One Coherent Agent Isn't Enough*](/docs/blog/2026/05/14/AG2-Action-Driven-Network) — you opened a channel, watched agents take turns, and saw the hub fold envelopes into a durable thread. That's the *shape*. This post is about the *dials* on top of that shape — the knobs that turn a loose multi-agent free-for-all into something you'd actually run when an agent goes quiet at 2am, a step needs to time out, or a sub-conversation has to stay off the main thread.
+In the first post — [*One Coherent Agent Isn't Enough*](/docs/blog/2026/05/14/AG2-Action-Driven-Network/) — you opened a channel, watched agents take turns, and saw the hub fold envelopes into a durable thread. That's the *shape*. This post is about the *dials* on top of that shape — the knobs that turn a loose multi-agent free-for-all into something you'd actually run when an agent goes quiet at 2am, a step needs to time out, or a sub-conversation has to stay off the main thread.
 
 <!-- more -->
 
@@ -18,9 +18,9 @@ If you haven't run the first post's examples yet, start there — every snippet 
 
 This is the second post in a four-part series introducing the AG2 Network:
 
-1. [**One Coherent Agent Isn't Enough**](/docs/blog/2026/05/14/AG2-Action-Driven-Network) — the action-driven multi-agent network, the key primitives, and the four conversation shapes.
+1. [**One Coherent Agent Isn't Enough**](/docs/blog/2026/05/14/AG2-Action-Driven-Network/) — the action-driven multi-agent network, the key primitives, and the four conversation shapes.
 2. **Choreography You Can Dial In** *(this post)* — setting expectations, audience addressing, deeper choreography patterns, and the orchestration cookbook.
-3. **What Survives, Survives Exactly** — the substrate: write-ahead log + fold + hub restart, plus identity (Passport / Resume / SKILL.md) and the audit log.
+3. [**What Survives, Survives Exactly**](/docs/blog/2026/05/16/AG2-Network-What-Survives/) — the substrate: write-ahead log + fold + hub restart, plus identity (Passport / Resume / SKILL.md) and the audit log.
 4. **Networks You Can Deploy** — federation across organizations (Visa), dynamic register / unregister, omni-modal streaming, and a full production-incident walk-through.
 
 In parallel, to build strong and capable agents, we're preparing a companion post, **The Agent Harness: An Agent Is More Than a Loop**, that zooms *inside* a single agent to make them long-running and knowledge-centric. Keep an eye out for that one (we'll update this when it's ready).
@@ -355,4 +355,4 @@ Every dial lands exactly once, in the right place, in the right order. The `EV_C
 
 Two dials, one primitive. Audience addressing governs *visibility* — who sees which envelope on which thread. `TransitionGraph` conditions govern *routing* — who speaks next based on what was said or what state was written. The built-in expectations govern *time* automatically: every adapter ships SLAs that fire without any configuration. All three are first-class envelopes on the WAL, which means everything you dial in survives a hub restart exactly as written.
 
-The next post in this series — **What Survives, Survives Exactly** — zooms into that WAL. You'll see how the hub re-derives every channel from scratch on restart, how identity (Passport / Resume / SKILL.md) and the audit log compose with the same fold model, and what "durable" really means for a multi-agent conversation.
+The next post in this series — [**What Survives, Survives Exactly**](/docs/blog/2026/05/16/AG2-Network-What-Survives/) — zooms into that WAL. You'll see how the hub re-derives every channel from scratch on restart, how identity (Passport / Resume / SKILL.md) and the audit log compose with the same fold model, and what "durable" really means for a multi-agent conversation.

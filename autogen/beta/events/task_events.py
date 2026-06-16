@@ -89,3 +89,16 @@ class TaskExpired(TaskEvent):
     receive it via the hub's TTL sweeper, mirrored back through
     ``AgentClient``.
     """
+
+
+class TaskCancelled(TaskEvent):
+    """Terminal event — owner explicitly cancelled the task.
+
+    Distinct from ``TaskFailed`` (work could not complete) and
+    ``TaskExpired`` (TTL elapsed). Carries an optional ``reason`` for
+    operational visibility — surfaced through the network mirror as
+    ``ag2.task.cancelled`` so peers subscribed to the task observe
+    the cancellation alongside the other terminal events.
+    """
+
+    reason: str = Field("")

@@ -349,13 +349,6 @@ def convert_messages(
                     else:
                         raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "openai-completions")
 
-                elif isinstance(inp, FileIdInput):
-                    raise UnsupportedInputError(
-                        "FileIdInput is not supported by OpenAI Chat Completions API. "
-                        "Use OpenAIResponsesConfig instead of OpenAIConfig to work with file uploads.",
-                        "openai-completions",
-                    )
-
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "openai-completions")
 
@@ -504,9 +497,7 @@ def normalize_usage(usage: CompletionUsage) -> Usage:
         completion_tokens=usage.completion_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.prompt_tokens_details.cached_tokens if usage.prompt_tokens_details else None,
-        cache_creation_input_tokens=usage.completion_tokens_details.reasoning_tokens
-        if usage.completion_tokens_details
-        else None,
+        thinking_tokens=usage.completion_tokens_details.reasoning_tokens if usage.completion_tokens_details else None,
     )
 
 
@@ -516,7 +507,7 @@ def normalize_responses_usage(usage: ResponseUsage) -> Usage:
         completion_tokens=usage.output_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
-        cache_creation_input_tokens=usage.output_tokens_details.reasoning_tokens,
+        thinking_tokens=usage.output_tokens_details.reasoning_tokens,
     )
 
 

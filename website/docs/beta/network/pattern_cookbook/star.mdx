@@ -23,31 +23,37 @@ talk to each other; everything routes through the hub.
   directly to the chosen spoke. No per-spoke graph rules are needed
   for the delegation edge — `#!python Handoff.target` is authoritative.
 * **WAL-gated synthesis.** The `#!python synthesise` tool reads the WAL
-  via `#!python HubInject` for each spoke's reply marker (e.g.
-  `#!python "[weather]:"`) and refuses with a brief `pending: ...` status
-  string until all required spokes have replied. The graph's
-  `#!python ToolCalled("synthesise")` rule terminates the workflow once
-  the gate opens; the display code reads the stored synthesis from
-  `#!python context_vars["synthesis"]` after close.
+  via `#!python HubInject` and checks for each spoke's reply by
+  sender identity (`#!python hub.name_for`). It refuses with a
+  `#!python "pending: ..."` string until all required spokes have replied,
+  then stores the synthesis via `#!python set_context` and returns
+  `#!python Finish(reason="answered")` to terminate the workflow.
+* **`#!python StayTarget` for hub.** The graph's hub transition uses
+  `#!python StayTarget` so that turns where `#!python synthesise` returns
+  `#!python "pending"` (and the hub writes a short text note) re-route back
+  to the hub rather than stalling on a silent round.
 
 ### Routing Mechanics
 
 * **Spokes return to hub.** `#!python FromSpeaker(<spoke>) → AgentTarget(hub)`
   rotates control back after each spoke replies.
-* **Sender prefixing.** Spoke replies in this demo are prefixed with
-  the spoke name in square brackets — e.g. `[weather]: Partly cloudy ...`.
-  The default `#!python WindowedSummary` projection drops sender identity
-  (each envelope becomes a plain user-role message), so an explicit
-  prefix lets the hub LLM attribute each reply correctly when
-  synthesising.
+* **Termination via `#!python Finish`.** When `#!python synthesise` has all
+  three spoke replies, it returns `#!python Finish(reason="answered")`. The
+  adapter reads `#!python Finish` from the `#!python ToolResultEvent` and
+  sets `#!python routing.kind = "finish"`, which `#!python fold` converts
+  directly into a channel close — no `#!python ToolCalled` graph rule needed.
+* **Sender-identity detection.** `#!python synthesise` identifies spoke
+  replies by calling `#!python hub.name_for(env.sender_id)` on each
+  `#!python EV_PACKET` in the WAL. This works regardless of the reply's
+  text format — no `#!python "[spoke]:"` prefix convention required.
 
 !!! note "Parallel-call defence"
-    Without mitigation, real Sonnet would emit `#!python ask_spoke`
-    for all three spokes plus `#!python synthesise` in a single round,
-    flooding the trace with parallel tool calls before the first
-    spoke even replies. The fix is at the model layer: set
-    Anthropic's `#!python tool_choice` knob via
-    `#!python AnthropicConfig.extra_body`:
+    Without mitigation, Sonnet may emit `#!python ask_spoke`
+    calls for multiple spokes in a single turn (the agent's
+    internal multi-round loop). The first `#!python Handoff` in the
+    event list always wins routing, so the correct spoke is
+    reached. Still, disabling parallel tool calls keeps the trace
+    clean and prevents redundant LLM calls:
 
     ```python
     AnthropicConfig(
@@ -56,16 +62,9 @@ talk to each other; everything routes through the hub.
     )
     ```
 
-    Sonnet now emits exactly one tool call per response. Each round
-    becomes a clean `ask_spoke → spoke reply → ask_spoke` sequence,
-    and `#!python synthesise` lands only when the hub genuinely
-    sees all three replies.
-
     OpenAI exposes the analogous `#!python parallel_tool_calls=False`
     as a typed field on `#!python OpenAIConfig`; Gemini's behaviour
-    is naturally serial. The technique — disable parallel tool calls
-    when a hub's protocol requires one tool per turn — is portable;
-    only the config knob is provider-specific.
+    is naturally serial.
 
 ## Agent Flow
 
@@ -79,13 +78,13 @@ sequenceDiagram
 
     User->>Hub: question
     Hub->>Weather: Handoff(target="weather")
-    Weather->>Hub: [weather]: Partly cloudy ...
+    Weather->>Hub: [weather reply]
     Hub->>Sports: Handoff(target="sports")
-    Sports->>Hub: [sports]: The Riverhawks ...
+    Sports->>Hub: [sports reply]
     Hub->>Finance: Handoff(target="finance")
-    Finance->>Hub: [finance]: S&P 500 closed ...
-    Hub->>Hub: synthesise reads WAL, set_context("synthesis", ...)
-    Note over Hub: ToolCalled("synthesise") → TerminateTarget("answered")
+    Finance->>Hub: [finance reply]
+    Hub->>Hub: synthesise reads WAL by sender identity, set_context("synthesis", ...)
+    Note over Hub: synthesise returns Finish(reason="answered") → channel closes
 ```
 
 ## Migrating from Classic to Beta?
@@ -94,7 +93,7 @@ sequenceDiagram
 |---|---|
 | Coordinator routes by inspecting `#!python ContextVariables` | Hub routes via a parameterised `#!python ask_spoke` tool returning `#!python Handoff(target=spoke)` |
 | Spoke replies carry `#!python ReplyResult.target=AgentTarget(coordinator)` | `#!python FromSpeaker(<spoke>) → AgentTarget(hub)` rule rotates control back |
-| Synthesis triggered by checking aggregated context | Synthesis triggered by an explicit `#!python synthesise` tool call; the tool reads the WAL via `#!python HubInject`, gates on required markers, and stores the result via `#!python set_context` |
+| Synthesis triggered by checking aggregated context | Synthesis triggered by an explicit `#!python synthesise` tool call; the tool reads the WAL via `#!python HubInject`, gates on required senders, stores the result via `#!python set_context`, and returns `#!python Finish` to close the workflow |
 
 ## Code
 
@@ -110,7 +109,8 @@ sequenceDiagram
 A hub agent fans out to specialist spokes via a parameterised
 ``ask_spoke(spoke, query)`` tool returning ``Handoff(target=spoke)``.
 A WAL-gated ``synthesise`` tool composes the final answer once all
-required spokes have replied.
+required spokes have replied, then returns ``Finish(reason="answered")``
+to terminate the workflow.
 """
 
 import asyncio
@@ -121,11 +121,14 @@ from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_PACKET,
     EV_CHANNEL_CLOSED,
+    EV_CONTEXT_SET,
+    EV_PACKET,
     EV_TEXT,
     WORKFLOW_TYPE,
     AgentTarget,
+    ChannelInject,
+    Finish,
     FromSpeaker,
     Handoff,
     Hub,
@@ -134,9 +137,8 @@ from autogen.beta.network import (
     LocalLink,
     Passport,
     Resume,
-    ChannelInject,
+    StayTarget,
     TerminateTarget,
-    ToolCalled,
     Transition,
     TransitionGraph,
 )
@@ -159,53 +161,47 @@ async def ask_spoke(spoke: str, query: str) -> Handoff:
     return Handoff(target=spoke, reason=query)
 
 
-async def synthesise(headline: str, channel: ChannelInject, hub: HubInject) -> str:
-    """Read each spoke's reply from the WAL, build a synthesis, store
-    it in context_vars['synthesis']. Refuses with a brief `pending: ...`
-    status until all three spokes have replied — this is what makes
-    the demo robust to parallel tool calls."""
+async def synthesise(headline: str, channel: ChannelInject, hub: HubInject) -> "Finish | str":
+    """Scan the WAL for spoke replies by sender identity, build synthesis.
+
+    Uses hub.name_for(sender_id) to identify each spoke — works
+    regardless of reply text format, no "[spoke]:" prefix required.
+    Returns Finish(reason="answered") once all three spokes have replied,
+    terminating the workflow. Returns "pending: ..." until then.
+    """
     if channel is None or hub is None:
         return "no channel or hub"
     print(f"  [tool] synthesise(headline={headline!r})")
 
-    # Spoke replies are EV_PACKET envelopes whose body starts with
-    # the spoke's name marker (e.g. "[weather]: ...").
     wal = await hub.read_wal(channel.channel_id)
     by_spoke: dict[str, str] = {}
     for env in wal:
-        if env.event_type == EV_PACKET:
-            text = env.event_data.get("body", "")
-        elif env.event_type == EV_TEXT:
-            text = env.event_data.get("text", "")
-        else:
+        if env.event_type != EV_PACKET:
             continue
-        if not (isinstance(text, str) and text.startswith("[") and "]:" in text):
+        body = env.event_data.get("body", "")
+        if not body:
             continue
-        marker = text.split("]:", 1)[0].lstrip("[").strip()
-        if marker in _REQUIRED_SPOKES:
-            by_spoke[marker] = text
+        name = hub.name_for(env.sender_id, default="")
+        if name in _REQUIRED_SPOKES:
+            by_spoke[name] = body
 
     missing = [s for s in _REQUIRED_SPOKES if s not in by_spoke]
     if missing:
-        # Terse, neutral status. Avoid wording that prompts the LLM
-        # to apologise or explain — that adds noise to the trace.
         return f"pending: {', '.join(missing)}"
 
-    # Build the synthesis in canonical order so the output is stable
-    # regardless of which order the spokes were polled.
     bullets: list[str] = [f"**{headline.strip() or 'Roundup'}**", ""]
     for spoke in _REQUIRED_SPOKES:
         bullets.append(f"- {by_spoke[spoke]}")
     synthesis = "\n".join(bullets)
 
     await set_context(channel, "synthesis", synthesis)
-    return "synthesis posted"
+    return Finish(reason="answered")
 
 
 async def main() -> None:
     # Hub config: disable parallel tool calls so Sonnet emits exactly
-    # one ask_spoke (or synthesise) per turn. Spokes use TestConfig so
-    # they don't need this.
+    # one ask_spoke (or synthesise) per LLM response. Spokes use
+    # TestConfig so they don't need this.
     hub_config = AnthropicConfig(
         model="claude-sonnet-4-6",
         extra_body={"tool_choice": {"type": "auto", "disable_parallel_tool_use": True}},
@@ -229,27 +225,25 @@ async def main() -> None:
             "\n"
             "* `ask_spoke(spoke, query)` — query ONE spoke by name "
             "(`weather`, `sports`, `finance`). Returns a Handoff. The "
-            "spoke's reply appears in your CONTEXT on a later turn, "
-            "prefixed `[weather]:` / `[sports]:` / `[finance]:`. The "
-            "tool's return value is just a routing token; ignore it "
-            "and wait for the prefixed reply on a future turn.\n"
+            "spoke's reply appears in your conversation on a later turn. "
+            "The tool's return value is just a routing token; ignore it "
+            "and wait for the spoke's reply on a future turn.\n"
             "* `synthesise(headline)` — call ONCE when all three "
-            "prefixed spoke replies are visible in your context. "
+            "spoke replies are visible in your conversation history. "
             "Builds the final synthesis from the WAL and ends the "
             "workflow.\n"
             "\n"
             "Protocol:\n"
-            "1. Call exactly ONE tool per turn. Do not write any "
-            "prose body alongside your tool call — output the tool "
-            "call only.\n"
-            "2. Each turn, scan your context for spoke prefixes. "
-            "Call `ask_spoke` for a spoke that has NOT yet replied.\n"
-            "3. Once all three prefixed replies are visible, call "
+            "1. Call exactly ONE tool per turn.\n"
+            "2. Each turn, check your conversation history for spoke "
+            "replies. Call `ask_spoke` for a spoke that has NOT yet "
+            "replied.\n"
+            "3. Once all three spoke replies are visible, call "
             "`synthesise` with a short headline like 'Daily Roundup'.\n"
             "\n"
-            "If `synthesise` is called early it returns a brief "
-            "`pending: ...` status — that is not an error, just "
-            "continue to the next turn and try the missing spoke."
+            "If `synthesise` returns `pending: ...` some spokes are "
+            "still missing — call `ask_spoke` for the first listed "
+            "missing spoke on your next turn."
         ),
         config=hub_config,
     )
@@ -284,17 +278,15 @@ async def main() -> None:
     graph = TransitionGraph(
         initial_speaker=user.agent_id,
         transitions=[
-            # Synthesis terminates first.
-            Transition(when=ToolCalled("synthesise"), then=TerminateTarget("answered")),
             # Spokes always return to hub.
             Transition(when=FromSpeaker(weather.agent_id), then=AgentTarget(central.agent_id)),
             Transition(when=FromSpeaker(sports.agent_id),  then=AgentTarget(central.agent_id)),
             Transition(when=FromSpeaker(finance.agent_id), then=AgentTarget(central.agent_id)),
-            # Routing FROM hub to a spoke is via Handoff returns from
-            # ask_spoke — the framework reads target from the Handoff
-            # and stamps it onto the packet, so no graph rules are
-            # needed for the per-spoke edges.
-            #
+            # Hub stays on text turns (synthesise returns "pending" and
+            # hub writes a short note). Prevents silent-round stalls.
+            # Handoff turns (ask_spoke) and Finish turns (synthesise done)
+            # bypass this rule via routing.target / routing.kind.
+            Transition(when=FromSpeaker(central.agent_id), then=StayTarget()),
             # User's question → hub.
             Transition(when=FromSpeaker(user.agent_id), then=AgentTarget(central.agent_id)),
         ],
@@ -322,16 +314,12 @@ async def main() -> None:
         "Also a quick word on the markets."
     )
 
-    # Wait for the workflow to terminate (any of the five close routes
-    # documented in /docs/beta/network/termination — this demo uses
-    # ToolCalled("synthesise") → TerminateTarget("answered")).
-    close_env = await user_hc.wait_for_channel_event(
+    close_env = await user.wait_for_channel_event(
         channel_id=channel.channel_id,
         predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=240.0,
     )
 
-    # Print the transcript from the WAL after close.
     for env in await hub_obj.read_wal(channel.channel_id):
         speaker = name_by_id.get(env.sender_id, env.sender_id[:8])
         if env.event_type == EV_TEXT:
@@ -341,6 +329,8 @@ async def main() -> None:
             if routing.get("kind") == "handoff":
                 line = f"[Handed off via {routing.get('tool', '')}] {routing.get('reason', '')}"
                 print(f"{speaker:>14}: {line.rstrip()}")
+            elif routing.get("kind") == "finish":
+                print(f"{speaker:>14}: [Finish] {routing.get('reason', '')}")
             body = env.event_data.get("body", "")
             if body:
                 print(f"{speaker:>14}: {body}")
@@ -348,8 +338,13 @@ async def main() -> None:
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
     print("\n--- final synthesis ---")
-    state = hub_obj._adapter_states[channel.channel_id]
-    print(state.context_vars.get("synthesis", "(no synthesis)"))
+    synthesis = "(no synthesis)"
+    for env in await hub_obj.read_wal(channel.channel_id):
+        if env.event_type == EV_CONTEXT_SET:
+            kv = env.event_data.get("set", {})
+            if "synthesis" in kv:
+                synthesis = kv["synthesis"]
+    print(synthesis)
 
     await user_hc.close()
     await hub_hc.close()
@@ -379,7 +374,7 @@ channel: 4f2e...
             hub: [Handed off via ask_spoke] Quick market summary
         finance: [finance]: S&P 500 closed up 0.4% on cooling inflation data ahead of next week's Fed meeting.
   [tool] synthesise(headline='Daily Roundup')
-            hub: [Handed off via synthesise]
+            hub: [Finish] answered
 
 closed: reason='answered'
 

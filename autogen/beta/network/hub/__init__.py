@@ -32,7 +32,7 @@ from .audit import (
     AuditLog,
     AuditSubscriber,
 )
-from .core import Hub
+from .core import Hub, PendingTurn
 from .expectations import (
     AcksWithinEvaluator,
     AuditHandler,
@@ -64,6 +64,7 @@ from .layout import (
     rule_path,
     runtime_path,
     skill_path,
+    task_checkpoint_path,
     task_events_path,
     task_metadata_path,
     tasks_root,
@@ -108,6 +109,7 @@ __all__ = (
     "HubTelemetryListener",
     "MaxSilenceEvaluator",
     "NotifyChannelHandler",
+    "PendingTurn",
     "ReplyWithinEvaluator",
     "RuleBasedArbiter",
     "Violation",
@@ -130,6 +132,7 @@ __all__ = (
     "rule_path",
     "runtime_path",
     "skill_path",
+    "task_checkpoint_path",
     "task_events_path",
     "task_metadata_path",
     "tasks_root",

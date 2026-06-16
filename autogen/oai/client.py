@@ -990,7 +990,7 @@ class OpenAIWrapper:
                 self._configure_openai_config_for_gemini(config, openai_config)
                 client = GeminiClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
-            elif api_type is not None and api_type.startswith("anthropic"):
+            elif api_type is not None and api_type.startswith("anthropic") and not api_type.startswith("anthropic_v2"):
                 if "api_key" not in config and "aws_region" in config:
                     self._configure_openai_config_for_bedrock(config, openai_config)
                 elif "api_key" not in config and "gcp_region" in config:
@@ -1024,14 +1024,25 @@ class OpenAIWrapper:
                     raise ImportError("Please install `ollama` and `fix-busted-json` to use the Ollama API.")
                 client = OllamaClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
-            elif api_type is not None and api_type.startswith("bedrock"):
+            elif api_type is not None and api_type.startswith("bedrock") and not api_type.startswith("bedrock_v2"):
                 self._configure_openai_config_for_bedrock(config, openai_config)
                 if bedrock_import_exception:
                     raise ImportError("Please install `boto3` to use the Amazon Bedrock API.")
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
+            elif api_type is not None and api_type.startswith("bedrock_v2"):
+                # Bedrock V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
+                self._configure_openai_config_for_bedrock(config, openai_config)
+                from autogen.llm_clients import BedrockV2Client as V2Client
+
+                client = V2Client(response_format=response_format, **openai_config)
+                self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("openai_v2"):
                 from autogen.llm_clients import OpenAICompletionsClient as V2Client
+
+                client = self._create_v2_client(V2Client, openai_config, response_format)
+            elif api_type is not None and api_type.startswith("anthropic_v2"):
+                from autogen.llm_clients import AnthropicV2Client as V2Client
 
                 client = self._create_v2_client(V2Client, openai_config, response_format)
             elif api_type is not None and api_type.startswith("responses_v2"):

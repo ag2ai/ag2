@@ -79,7 +79,7 @@ from .mappers import (
     payload_to_call,
 )
 from .transports import TransportName
-from .transports._http import make_a2a_client, make_httpx_client, select_transport
+from .transports._http import make_a2a_client, make_httpx_client, select_interface, validate_protocol_version
 
 if TYPE_CHECKING:
     import grpc.aio
@@ -278,7 +278,8 @@ class A2AClient(LLMClient):
             self._agent_card = await A2ACardResolver(
                 httpx_client=self._httpx_client, base_url=self._card_url
             ).get_agent_card()
-        transport = select_transport(self._agent_card, url=self._card_url, prefer=self._prefer)
+        iface, transport = select_interface(self._agent_card, url=self._card_url, prefer=self._prefer)
+        validate_protocol_version(iface, url=self._card_url, transport=transport)
         self._sdk_client = make_a2a_client(
             card=self._agent_card,
             httpx_client=self._httpx_client,
@@ -572,7 +573,8 @@ class A2AClient(LLMClient):
             state.accumulated_text += text_chunk
             state.pending_calls.extend(calls)
 
-        if a2a_event.last_chunk or not a2a_event.append:
+        # Dedup on last_chunk only; the append=False opening chunk of a stream is not yet complete.
+        if a2a_event.last_chunk:
             state.seen_artifact_ids.add(artifact.artifact_id)
 
     async def _handle_artifact_parts(

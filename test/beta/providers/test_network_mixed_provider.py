@@ -150,9 +150,11 @@ async def test_consulting_anthropic_initiator_openai_specialist() -> None:
 async def test_3way_discussion_one_per_provider() -> None:
     """Three agents (Anthropic, OpenAI, Gemini) take round-robin turns.
 
-    Each agent's ``say`` tool call is converted by *its* provider's
-    mapper, but the WAL sees a uniform ``EV_TEXT`` envelope. The
-    discussion adapter doesn't care which provider produced the turn.
+    Each agent contributes a plain-text reply produced by *its* provider,
+    but the WAL sees a uniform ``EV_TEXT`` envelope. The discussion adapter
+    doesn't care which provider produced the turn. Since #2886 the adapter
+    offers no ``say`` tool — each participant's reply is posted as the
+    round-end ``EV_TEXT``.
     """
     anth_key, oai_key, gemini_key = _require_all_keys()
     hub = await Hub.open(
@@ -174,9 +176,9 @@ async def test_3way_discussion_one_per_provider() -> None:
             name=name,
             prompt=(
                 f"You are {name}, a participant in a 3-way discussion on a "
-                "topic. When it is your turn, contribute exactly one short "
-                "opinion (one sentence) by calling say(content=<your "
-                "sentence>). Do not ask questions. Do not call any other tool."
+                "topic. When it is your turn, reply with exactly one short "
+                "opinion (one sentence) as plain text. Do not ask questions "
+                "and do not call any tools — just state your opinion."
             ),
             config=cfg,
         )

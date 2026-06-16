@@ -20,8 +20,10 @@ from autogen.beta.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolNotFoundEvent,
+    ToolResultsEvent,
 )
-from autogen.beta.exceptions import UnsupportedInputError
+from autogen.beta.exceptions import ToolNotFoundError, UnsupportedInputError
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -157,4 +159,16 @@ def test_multiple_text_inputs_with_images_attach_to_last() -> None:
     assert result == [
         {"role": "user", "content": "intro"},
         {"role": "user", "content": "look at this", "images": [b64]},
+    ]
+
+
+def test_hallucinated_tool_call_maps_with_error_text() -> None:
+    # Regression: a not-found tool call used to leave result=None and crash on r.result.parts.
+    call = ToolCallEvent(id="tc_1", name="ghost_tool")
+    event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
+
+    result = convert_messages([], [event], SerializerCls)
+
+    assert result == [
+        {"role": "tool", "content": "autogen.beta.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"}
     ]

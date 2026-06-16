@@ -71,18 +71,18 @@ reply = await agent.ask("Compare these two images.", image1, image2)
 
 Not all providers support all input types. The table below shows what each provider accepts:
 
-| Input Type | OpenAI | OpenAI Responses | Gemini | Anthropic |
-| :--- | :---: | :---: | :---: | :---: |
-| **Text** | Yes | Yes | Yes | Yes |
-| **Image (URL)** | Yes | Yes | Yes | Yes |
-| **Image (binary)** | Yes | Yes | Yes | Yes |
-| **Audio (URL)** | - | - | Yes | - |
-| **Audio (binary)** | Yes | - | Yes | - |
-| **Video (URL)** | - | - | Yes | - |
-| **Video (binary)** | - | - | Yes | - |
-| **Document (URL)** | - | Yes | Yes | Yes |
-| **Document (binary)** | - | - | Yes | Yes |
-| **File ID** | - | Yes | - | Yes |
+| Input Type | OpenAI | OpenAI Responses | Gemini | Anthropic | xAI | Bedrock |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Text** | Yes | Yes | Yes | Yes | Yes | Yes |
+| **Image (URL)** | Yes | Yes | Yes | Yes | Yes | - |
+| **Image (binary)** | Yes | Yes | Yes | Yes | Yes | Yes |
+| **Audio (URL)** | - | - | Yes | - | - | - |
+| **Audio (binary)** | Yes | - | Yes | - | - | - |
+| **Video (URL)** | - | - | Yes | - | - | - |
+| **Video (binary)** | - | - | Yes | - | - | Yes |
+| **Document (URL)** | - | Yes | Yes | Yes | Yes | - |
+| **Document (binary)** | - | - | Yes | Yes | Yes | Yes |
+| **File ID** | - | Yes | - | Yes | Yes | - |
 
 If you pass an unsupported input type to a provider, an `#!python UnsupportedInputError` is raised with a clear message indicating what is not supported and by which provider.
 
@@ -226,5 +226,99 @@ from autogen.beta.events import DocumentInput
 doc = DocumentInput(
     path="report.pdf",
     vendor_metadata={"cache_control": {"type": "ephemeral"}},
+)
+```
+
+### xAI
+
+xAI supports images (URL and binary), documents (URL and binary), and pre-uploaded file IDs. Audio and video are not currently supported — passing them raises `#!python UnsupportedInputError`.
+
+**File ID** — reference a file previously uploaded via the xAI Files API:
+
+```python linenums="1"
+from autogen.beta.events import ImageInput, DocumentInput
+
+image = ImageInput(file_id="file-abc123", filename="photo.jpg")
+doc = DocumentInput(file_id="file-xyz789", filename="report.pdf")
+```
+
+#### Vendor Metadata
+
+xAI reads `detail` for image quality control from two **different** attributes depending on the input source — `#!python vendor_metadata` for binary, `#!python metadata` for URL. Mixing them up means the value is silently ignored and xAI falls back to `"auto"`.
+
+**Binary image** — set `detail` via `#!python vendor_metadata`:
+
+```python linenums="1"
+from autogen.beta.events import BinaryInput, BinaryType
+
+image = BinaryInput(
+    raw_bytes,
+    media_type="image/png",
+    kind=BinaryType.IMAGE,
+    vendor_metadata={"detail": "low"},  # "low", "high", or "auto"
+)
+```
+
+**URL image** — set `detail` via `#!python metadata` (not `vendor_metadata`):
+
+```python linenums="1"
+from autogen.beta.events import UrlInput, BinaryType
+
+image = UrlInput(
+    "https://example.com/photo.jpg",
+    kind=BinaryType.IMAGE,
+    metadata={"detail": "low"},
+)
+```
+
+!!! note
+    The factory `#!python ImageInput(url=...)` does not forward `metadata`. To configure `detail` on a URL image, construct `#!python UrlInput` directly as shown above.
+
+**Document filename** — xAI requires a filename for binary documents. When sending raw bytes, either provide one via `#!python vendor_metadata={"filename": ...}`, or rely on the auto-derived fallback (`file.<subtype>` from the media type, e.g. `file.pdf` for `application/pdf`):
+
+```python linenums="1"
+from autogen.beta.events import BinaryInput, BinaryType
+
+doc = BinaryInput(
+    pdf_bytes,
+    media_type="application/pdf",
+    kind=BinaryType.DOCUMENT,
+    vendor_metadata={"filename": "Q4-report.pdf"},
+)
+```
+
+### Amazon Bedrock
+
+The Bedrock Converse API accepts **binary sources only** — images (JPEG, PNG, GIF, WebP), documents (PDF, CSV, DOC, DOCX, XLS, XLSX, HTML, TXT, Markdown), and video (MP4, WebM, MOV, MKV, and more; Amazon Nova models). URL inputs and file IDs raise `#!python UnsupportedInputError` — Bedrock has no Files API, so source data from a URL must be downloaded and passed as bytes:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import BedrockConfig
+from autogen.beta.events import DocumentInput, ImageInput
+
+agent = Agent(
+    "vision_agent",
+    "You describe images and summarize documents.",
+    config=BedrockConfig(model="us.amazon.nova-lite-v1:0", region_name="us-east-1"),
+)
+
+image = ImageInput(path="photo.jpg")
+doc = DocumentInput(data=pdf_bytes, media_type="application/pdf")
+reply = await agent.ask("Describe the image and summarize the document.", image, doc)
+```
+
+!!! note
+    Modality support also depends on the **model** behind the Converse API: Amazon Nova models accept images, documents, and video; many others (e.g. DeepSeek) are text-only and return a `ValidationException` from AWS for non-text blocks. The provider raises `#!python UnsupportedInputError` only for inputs the Converse API itself cannot carry.
+
+**Document name** — Converse requires a name for document blocks. It is taken from `#!python vendor_metadata={"filename": ...}` (set automatically when using `path=`), sanitized to the characters Converse allows (alphanumerics, single spaces, hyphens, parentheses, brackets), and falls back to `"document"` when absent:
+
+```python linenums="1"
+from autogen.beta.events import BinaryInput, BinaryType
+
+doc = BinaryInput(
+    pdf_bytes,
+    media_type="application/pdf",
+    kind=BinaryType.DOCUMENT,
+    vendor_metadata={"filename": "Q4 report.pdf"},
 )
 ```

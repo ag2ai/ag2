@@ -18,33 +18,36 @@ from .builtin import (
     UserLocation,
     WebFetchTool,
     WebSearchTool,
+    XSearchTool,
 )
 from .code import SandboxCodeTool
 from .final import Toolkit, tool
-from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchToolkit, TavilySearchTool
-from .shell import LocalShellTool
-from .skills import SkillSearchToolkit, SkillsToolkit
-from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
+from .sandbox import LocalEnvironment
+from .search import DuckDuckSearchTool, PerplexitySearchToolkit, TavilySearchTool
+from .shell import SandboxShellTool
+from .skills import SkillPlugin, SkillSearchToolkit, SkillsToolkit
+from .toolkits import FilesystemToolkit, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
 
 __all__ = (
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
     "DuckDuckSearchTool",
-    "ExaToolkit",
     "FilesystemToolkit",
     "ImageGenerationTool",
-    "LocalShellTool",
-    "MCPServer",
+    "LocalEnvironment",
     "MCPServerConfig",
     "MCPServerTool",
     "MCPStdioServerConfig",
+    "MCPToolkit",
     "MemoryTool",
     "NetworkPolicy",
     "PerplexitySearchToolkit",
     "SandboxCodeTool",
+    "SandboxShellTool",
     "ShellTool",
     "Skill",
+    "SkillPlugin",
     "SkillSearchToolkit",
     "SkillsTool",
     "SkillsToolkit",
@@ -54,5 +57,6 @@ __all__ = (
     "UserLocation",
     "WebFetchTool",
     "WebSearchTool",
+    "XSearchTool",
     "tool",
 )

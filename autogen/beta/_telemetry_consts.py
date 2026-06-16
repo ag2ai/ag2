@@ -10,7 +10,9 @@ boundaries:
 * the agent-side ``TelemetryMiddleware`` (``autogen.beta.middleware.builtin``),
 * the hub-side tracing (``autogen.beta.network.hub._envelope_tracing`` and
   ``...hub.telemetry``),
-* the network dispatch handler (``autogen.beta.network.client.handlers``).
+* the network dispatch handler (``autogen.beta.network.client.handlers``),
+* the eval trace reconstructor (``autogen.beta.eval.sources``), which reads
+  these keys back to rebuild a ``Trace`` from OpenTelemetry spans.
 
 This module imports **nothing** — importing it never pulls in OpenTelemetry.
 That is the whole point: the OTel-free network handler can read
@@ -102,5 +104,9 @@ ATTR_EXPECTATION_ON_VIOLATION = "ag2.expectation.on_violation"
 ATTR_EXPECTATION_VIOLATORS = "ag2.expectation.violators"
 ATTR_INBOX_PENDING = "ag2.inbox.pending"
 ATTR_INBOX_CAP = "ag2.inbox.cap"
+
+# ── Human-input capture ─────────────────────────────────────────────────────
+# Prompt/response text captured on ``human_input`` spans, read back by the
+# eval trace reconstructor to rebuild HITL turns.
 ATTR_HUMAN_INPUT_PROMPT = "ag2.human_input.prompt"
 ATTR_HUMAN_INPUT_RESPONSE = "ag2.human_input.response"
