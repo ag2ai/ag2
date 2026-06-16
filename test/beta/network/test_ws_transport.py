@@ -13,10 +13,13 @@ serialisation issue surfaces here rather than in production.
 import asyncio
 
 import pytest
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 
 from autogen.beta import Agent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
+    EV_TEXT,
     ApiKeyAuth,
     AuthBlock,
     AuthRegistry,
@@ -37,6 +40,33 @@ from autogen.beta.network import (
 )
 
 from ._helpers import ScriptedConfig, wait_for_text_count
+
+
+class _CapturingExporter(SpanExporter):
+    """Minimal in-memory span sink for asserting on emitted spans."""
+
+    def __init__(self) -> None:
+        self.spans: list[ReadableSpan] = []
+
+    def export(self, spans) -> SpanExportResult:
+        self.spans.extend(spans)
+        return SpanExportResult.SUCCESS
+
+    def shutdown(self) -> None:
+        self.spans.clear()
+
+
+async def _wait_for_notify(client, text: str, timeout: float = 2.0) -> NotifyFrame:
+    """Read frames until a ``NotifyFrame`` carrying ``text`` arrives."""
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        try:
+            frame = await asyncio.wait_for(_next_frame(client), 0.5)
+        except asyncio.TimeoutError:
+            break
+        if isinstance(frame, NotifyFrame) and frame.envelope.event_data.get("text") == text:
+            return frame
+    raise AssertionError(f"no NotifyFrame with text {text!r} arrived")
 
 
 def _agent(name: str) -> Agent:
@@ -314,4 +344,74 @@ class TestConnectionLifecycle:
             # Endpoint and agent binding both released on disconnect.
             assert welcome.endpoint_id not in hub._endpoints_by_id
             assert passport.agent_id not in hub._agent_to_endpoint
+        await hub.close()
+
+
+class TestTracePropagationOverWire:
+    @pytest.mark.asyncio
+    async def test_traceparent_survives_ws_dispatch(self) -> None:
+        """A substantive envelope's W3C traceparent — stamped by the hub's
+        envelope tracer before WAL — survives JSON frame encode/decode and
+        arrives intact on a participant connected over a real WebSocket, so a
+        cross-process consumer can continue the same trace.
+
+        Task/channel protocol events are deliberately untraced, so only a
+        substantive ``EV_TEXT`` send exercises propagation.
+        """
+        exporter = _CapturingExporter()
+        provider = TracerProvider()
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+        hub = await Hub.open(
+            MemoryKnowledgeStore(),
+            tracer_provider=provider,
+            ttl_sweep_interval=0,
+            expectation_sweep_interval=0,
+        )
+        alice_id, bob_id, channel = await _setup_active_channel(hub, channel_type="conversation")
+
+        async with serve_ws(hub, "127.0.0.1", 0) as server:
+            port = _bound_port(server)
+            bob_ws = WsLinkClient(f"ws://127.0.0.1:{port}")
+            try:
+                await bob_ws.open()
+                await bob_ws.send_frame(HelloFrame(name="bob"))
+                welcome = await _next_frame(bob_ws)
+                assert isinstance(welcome, WelcomeFrame)
+
+                # Alice posts a substantive text envelope; the hub stamps a
+                # traceparent onto it before WAL and dispatches it to bob,
+                # who is connected only over the WebSocket.
+                await hub.post_envelope(
+                    Envelope(
+                        channel_id=channel.channel_id,
+                        sender_id=alice_id,
+                        audience=[bob_id],
+                        event_type=EV_TEXT,
+                        event_data={"text": "traced over the wire"},
+                    )
+                )
+
+                notify = await _wait_for_notify(bob_ws, "traced over the wire")
+                assert notify.recipient_id == bob_id
+
+                # The traceparent survived the JSON wire hop intact.
+                wire_traceparent = notify.envelope.trace_id
+                assert wire_traceparent, "WS-delivered envelope lost its traceparent"
+                assert wire_traceparent.startswith("00-")
+
+                # WAL is the source of truth: persisted copy and WS-delivered
+                # copy carry the same traceparent.
+                wal = await hub.read_wal(channel.channel_id)
+                wal_text = [e for e in wal if e.event_type == EV_TEXT]
+                assert wal_text and wal_text[0].trace_id == wire_traceparent
+
+                # That traceparent belongs to the hub's network.envelope span,
+                # so a cross-process consumer joins the same trace.
+                envelope_spans = [s for s in exporter.spans if s.attributes.get("ag2.span.type") == "envelope"]
+                assert envelope_spans, "expected a network.envelope span"
+                span_trace_hex = format(envelope_spans[0].context.trace_id, "032x")
+                assert wire_traceparent.split("-")[1] == span_trace_hex
+            finally:
+                await bob_ws.close()
         await hub.close()
