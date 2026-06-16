@@ -141,7 +141,7 @@ class GeminiClient(LLMClient):
         response: types.GenerateContentResponse,
         context: "ConversationContext",
     ) -> ModelResponse:
-        model_msg: ModelMessage | None = None
+        full_content: str = ""
         calls: list[ToolCallEvent] = []
 
         for candidate in response.candidates or ():
@@ -151,8 +151,7 @@ class GeminiClient(LLMClient):
                     if part.thought and part.text:
                         await context.send(ModelReasoning(part.text))
                     elif part.text:
-                        model_msg = ModelMessage(part.text)
-                        await context.send(model_msg)
+                        full_content += part.text
                     elif part.function_call:
                         fc = part.function_call
                         calls.append(
@@ -185,6 +184,11 @@ class GeminiClient(LLMClient):
                 await context.send(
                     GeminiServerToolResultEvent.from_grounding(grounding, parent_id=gnd_call.id, name=name)
                 )
+
+        model_msg: ModelMessage | None = None
+        if full_content:
+            model_msg = ModelMessage(full_content)
+            await context.send(model_msg)
 
         usage = Usage()
         if response.usage_metadata:
