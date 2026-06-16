@@ -34,15 +34,12 @@ class Suite:
 
     def __init__(
         self,
-        msg: str | None = None,
         tasks: Sequence[Task] = (),
         *,
         name: str = "inline",
         source: str = "inline",
     ) -> None:
         """Direct constructor — most callers should use :meth:`from_jsonl` or :meth:`from_list`."""
-        if msg:
-            tasks = [Task(inputs={"input": msg}), *tasks]
         self._tasks: tuple[Task, ...] = tuple(tasks)
         self._name = name
         self._source = source

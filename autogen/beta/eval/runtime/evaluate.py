@@ -244,4 +244,4 @@ def _outputs_from_trace(trace: Trace) -> dict[str, Any]:
 def _suite_from_refs(refs: list[TraceRef]) -> Suite:
     """Synthesize a reference-free Suite (one task per trace) when none is supplied."""
     tasks = tuple(Task(task_id=ref.task_id or ref.trace_id, inputs={}, reference_outputs=None) for ref in refs)
-    return Suite(tasks, name="traces", source="trace-source")
+    return Suite(tasks=tasks, name="traces", source="trace-source")

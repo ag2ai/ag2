@@ -461,11 +461,12 @@ class Agent(PluginTarget, Generic[TResult]):
         self.config = config
         self._response_schema = ResponseSchema.ensure_schema(response_schema)
 
-        # Auto-injected tools (subtask toolkit, knowledge tool) live in
-        # ``self.tools`` alongside user tools, but must NOT be inherited by
-        # spawned subtasks — that would re-enable recursion (run_subtask) or
-        # leak the parent's knowledge tool. Track the bound instances so
-        # ``_spawn_subtask`` can exclude them by identity.
+        # Auto-injected tools (subtask toolkit, knowledge tool) live here,
+        # NOT in the public ``self.tools`` (which holds only user-supplied
+        # tools). They are chained into the tool set at execution time but
+        # kept out of ``self.tools`` so they are never inherited by spawned
+        # subtasks — that would re-enable recursion (run_subtask) or leak the
+        # parent's knowledge tool.
         self._additional_tools: list[Tool] = []
 
         # Task spawning. ``tasks=False`` (the default) means no auto-injected
@@ -501,8 +502,8 @@ class Agent(PluginTarget, Generic[TResult]):
             for w in AssemblerMiddleware.validate_order(self._policies):
                 logger.warning("Assembly policy ordering: %s", w)
 
-            self.add_middleware.append(_AssemblerMiddlewareFactory(self._policies))
-            self.add_middleware.append(_HaltCheckMiddlewareFactory())
+            self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
+            self.add_middleware(_HaltCheckMiddlewareFactory())
 
     def task(
         self,
@@ -669,12 +670,15 @@ class Agent(PluginTarget, Generic[TResult]):
     ) -> "AgentReply[Any, Any]":
         """Resume a turn from a recorded trajectory, driven by an arbitrary event.
 
-        ``resume`` accepts any ``BaseEvent`` as the ``trigger`` (such as a
-        ``ToolResultsEvent``) so a turn can be continued from any event.
+        ``events`` is the full trajectory to replay: all but the last event seed
+        the stream history, and the **last** event is used as the ``trigger``
+        (such as a ``ToolResultsEvent``) that re-enters the agent loop — so a
+        turn can be continued from any event.
 
-        The agent's conversation state is restored by replacing the stream's history
-        with ``history``. If ``stream`` is omitted a fresh ``MemoryStream`` is
-        created; if one is supplied, its existing history is replaced.
+        The agent's conversation state is restored by replacing the stream's
+        history with the seeded prefix. If ``stream`` is omitted a fresh
+        ``MemoryStream`` is created; if one is supplied, its existing history is
+        replaced.
         """
         stream = stream or MemoryStream()
         *history, trigger = events
@@ -914,7 +918,7 @@ class Agent(PluginTarget, Generic[TResult]):
                 )
 
                 async with _observer_lifecycle(
-                    chain(self._observers, additional_observers),
+                    tuple(chain(self._observers, additional_observers)),
                     stack,
                     context,
                 ):

@@ -561,19 +561,20 @@ class TestSubtaskOptOut:
         """A bare Agent has no subtask tools by default (``tasks=False``)."""
         agent = Agent("default")
 
-        assert _tool_names(agent.tools) == set()
+        # Auto-injected tools live in ``_additional_tools``, not ``agent.tools``.
+        assert _tool_names(agent._additional_tools) == set()
 
     async def test_explicit_disabled_actor_has_no_subtask_tools(self) -> None:
         """Explicit ``tasks=False`` also suppresses subtask tools."""
         agent = Agent("disabled", tasks=False)
 
-        assert _tool_names(agent.tools) == set()
+        assert _tool_names(agent._additional_tools) == set()
 
     async def test_taskconfig_actor_has_subtask_tools(self) -> None:
         """Passing ``tasks=TaskConfig(...)`` opts in to the auto-injected subtask tools."""
         agent = Agent("enabled", tasks=TaskConfig())
 
-        assert _tool_names(agent.tools) == {"run_subtask", "run_subtasks"}
+        assert _tool_names(agent._additional_tools) == {"run_subtask", "run_subtasks"}
 
 
 @pytest.mark.asyncio
@@ -851,7 +852,7 @@ def test_run_subtask_description_advertises_parallel_invocation() -> None:
     blocks in one assistant message rather than serializing them.
     """
     agent = Agent("any", tasks=TaskConfig())
-    [toolkit] = agent.tools
+    [toolkit] = agent._additional_tools
     [run_subtask, run_subtasks] = toolkit.tools
 
     desc = run_subtask.schema.function.description

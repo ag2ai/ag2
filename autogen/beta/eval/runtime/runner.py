@@ -171,7 +171,7 @@ async def run_agent(
         span_processors=span_processors,
     )
 
-    suite_to_grade = Suite(tuple(tasks_to_run), name=resolved_suite.name, source=resolved_suite.source)
+    suite_to_grade = Suite(tasks=tuple(tasks_to_run), name=resolved_suite.name, source=resolved_suite.source)
     return await _grade(
         source,
         scorers=tuple(scorers),
@@ -327,7 +327,7 @@ def _resolve_suite(suite: str | Suite) -> Suite:
     """Normalize the ``suite`` argument into a :class:`Suite` instance."""
     if isinstance(suite, Suite):
         return suite
-    return Suite(msg=suite)
+    return Suite([Task(inputs={"input": suite})])
 
 
 def _expand_repeats(suite: Suite, repeats: int) -> list[Task]:

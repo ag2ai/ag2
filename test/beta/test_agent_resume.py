@@ -45,7 +45,7 @@ class TestAgentResume:
         agent = Agent("retriever", config=TestConfig("Final answer grounded on the result."))
 
         trigger = ToolResultsEvent([ToolResultEvent.from_call(tc, "X is at file.cc:42")])
-        reply = await agent.resume(trigger, history=history)
+        reply = await agent.resume(*history, trigger)
 
         assert reply.body == "Final answer grounded on the result."
 
@@ -64,7 +64,7 @@ class TestAgentResume:
         agent = Agent("retriever", config=tracking)
 
         trigger = ToolResultsEvent([ToolResultEvent.from_call(tc, "evidence")])
-        await agent.resume(trigger, history=history)
+        await agent.resume(*history, trigger)
 
         # Exactly one LLM call; its last message is the tool-results trigger.
         tracking.mock.assert_called_once()
@@ -84,7 +84,7 @@ class TestAgentResume:
         agent = Agent("retriever", tools=[echo], config=TestConfig(next_call, "All done."))
 
         trigger = ToolResultsEvent([ToolResultEvent.from_call(tc, "first result")])
-        reply = await agent.resume(trigger, history=history)
+        reply = await agent.resume(*history, trigger)
 
         assert reply.body == "All done."
         events = list(await reply.context.stream.history.get_events())
@@ -103,7 +103,7 @@ class TestAgentResume:
         agent = Agent("retriever", config=TestConfig("answer"))
 
         trigger = ToolResultsEvent([ToolResultEvent.from_call(tc, "r")])
-        reply = await agent.resume(trigger, history=history, stream=stream)
+        reply = await agent.resume(*history, trigger, stream=stream)
 
         events = list(await reply.context.stream.history.get_events())
         texts = [p.content for e in events if isinstance(e, ModelRequest) for p in e.parts if isinstance(p, TextInput)]
