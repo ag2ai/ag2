@@ -61,6 +61,7 @@ from .types import (
     ModelReasoning,
     ModelResponse,
     Usage,
+    UsageEvent,
 )
 from .voice import (
     RecordedAudioEvent,
@@ -126,5 +127,6 @@ __all__ = (
     "UnknownEvent",
     "UrlInput",
     "Usage",
+    "UsageEvent",
     "VideoInput",
 )

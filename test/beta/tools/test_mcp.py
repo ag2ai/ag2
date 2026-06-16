@@ -26,7 +26,7 @@ from mcp.types import Tool as MCPTool
 from autogen.beta import Agent, Context
 from autogen.beta.events import BinaryInput, BinaryType, TextInput, ToolCallEvent, ToolResultEvent, UrlInput
 from autogen.beta.testing import TestConfig
-from autogen.beta.tools import MCPServer, MCPStdioServerConfig
+from autogen.beta.tools import MCPStdioServerConfig, MCPToolkit
 from autogen.beta.tools.toolkits.mcp_server import toolkit as _toolkit_module
 
 MCPSessionPatch = Callable[[list[MCPTool], dict[str, CallToolResult] | None], "_FakeMCPSession"]
@@ -72,7 +72,7 @@ async def test_tool_registered_from_http_mcp_server(
         )
     ])
 
-    toolkit = MCPServer("https://mcp.example.com")
+    toolkit = MCPToolkit("https://mcp.example.com")
     [schema] = list(await toolkit.schemas(context))
 
     assert schema.function.name == "test_tool_name"
@@ -100,7 +100,7 @@ async def test_tool_registered_from_stdio_mcp_server(
         )
     ])
 
-    toolkit = MCPServer(
+    toolkit = MCPToolkit(
         MCPStdioServerConfig(
             command="some-mcp-binary",
             args=["--flag"],
@@ -123,7 +123,7 @@ async def test_allowed_and_blocked_tools_are_filtered(
         MCPTool(name="drop_unlisted", description="", inputSchema={"type": "object"}),
     ])
 
-    toolkit = MCPServer(
+    toolkit = MCPToolkit(
         MCPStdioServerConfig(
             command="x",
             allowed_tools=["keep", "drop_blocked"],
@@ -148,7 +148,7 @@ async def test_mcp_tool_result_is_returned_to_agent(
 
     agent = Agent(
         name="test",
-        tools=[MCPServer(MCPStdioServerConfig(command="x"))],
+        tools=[MCPToolkit(MCPStdioServerConfig(command="x"))],
         config=TestConfig(
             ToolCallEvent(name="echo", arguments="{}"),
             "done",
@@ -212,7 +212,7 @@ async def test_extract_maps_content_blocks_to_typed_inputs(
         },
     )
 
-    mcp = MCPServer(MCPStdioServerConfig(command="x"))
+    mcp = MCPToolkit(MCPStdioServerConfig(command="x"))
     await mcp.schemas(context)
     proxy = next(t for t in mcp.tools if t.name == "multi")
 

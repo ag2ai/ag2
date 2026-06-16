@@ -338,9 +338,10 @@ async def test_handler_exception_does_not_crash_channel() -> None:
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hello bob")
 
-    # Yield so receive-loop dispatches the inbound and the default
-    # handler runs through agent.ask (which raises).
-    await asyncio.sleep(0.1)
+    for _ in range(200):
+        if listener.turn_failed:
+            break
+        await asyncio.sleep(0.01)
 
     assert listener.turn_failed, "expected on_turn_failed to fire"
     # Subsequent send still works — channel survived the crash.
@@ -592,7 +593,10 @@ async def test_widened_trap_catches_pre_ask_failures() -> None:
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hi bob")
-    await asyncio.sleep(0.1)
+    for _ in range(200):
+        if listener.turn_failed:
+            break
+        await asyncio.sleep(0.01)
 
     assert listener.turn_failed, "view.project crash should fire on_turn_failed"
     # Channel survives — subsequent send still works.

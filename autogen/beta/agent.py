@@ -48,7 +48,9 @@ from .events import (
     Input,
     ModelRequest,
     ModelResponse,
+    ToolCallsEvent,
     ToolResultsEvent,
+    UsageEvent,
 )
 from .events.conditions import Condition
 from .events.lifecycle import (
@@ -85,6 +87,7 @@ from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
 from .types import ClassInfo, Omittable, omit
+from .usage import UsageReport
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
@@ -237,6 +240,10 @@ class AgentReply(Generic[TResult, TAgent]):
     @property
     def history(self) -> History:
         return self.context.stream.history
+
+    async def usage(self) -> UsageReport:
+        """Token usage aggregated over the whole run (all events on this stream)."""
+        return UsageReport.from_events(await self.context.stream.history.get_events())
 
     @overload
     async def ask(
@@ -1141,6 +1148,19 @@ class Agent(Generic[TResult]):
 
                 messages = await context.stream.history.get_events()
                 result = await llm_call(messages, context)
+                # Emit usage at the point it is spent, decoupled from the
+                # response, so token accounting never depends on a response
+                # being produced. UsageReport reads these events alone.
+                if result.usage:
+                    await context.send(
+                        UsageEvent(
+                            result.usage,
+                            kind="model_call",
+                            model=result.model,
+                            provider=result.provider,
+                            finish_reason=result.finish_reason,
+                        )
+                    )
                 await context.send(result)
 
             with ExitStack() as stack:
@@ -1824,7 +1844,7 @@ class _AggregationMiddleware(BaseMiddleware):
         event: BaseEvent,
         context: Context,
     ) -> Any:
-        count_before = len(list(await context.stream.history.get_events()))
+        events_before = list(await context.stream.history.get_events())
 
         try:
             result = await call_next(event, context)
@@ -1844,7 +1864,11 @@ class _AggregationMiddleware(BaseMiddleware):
 
             if self._trigger.every_n_events > 0:
                 threshold = self._trigger.every_n_events
-                if count_after // threshold > count_before // threshold:
+                # Count conversational/work events only, not telemetry (e.g. UsageEvent).
+                _countable = (ModelRequest, ModelResponse, ToolCallsEvent, ToolResultsEvent)
+                n_before = sum(1 for e in events_before if isinstance(e, _countable))
+                n_after = sum(1 for e in events_after if isinstance(e, _countable))
+                if n_after // threshold > n_before // threshold:
                     should_aggregate = True
 
             if should_aggregate:

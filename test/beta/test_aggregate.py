@@ -24,6 +24,7 @@ from autogen.beta.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
+    Usage,
 )
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
@@ -325,6 +326,39 @@ class TestAggregationWiredOnAgent:
         await agent.ask("go")
 
         assert strategy.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_every_n_events_counts_work_events_not_telemetry(self) -> None:
+        """every_n_events must ignore telemetry (UsageEvent) on the stream.
+
+        A usage-carrying turn persists ModelRequest + UsageEvent + ModelResponse
+        (3 events) but only 2 are conversational. With every_n_events=3 the
+        crossings are at 3 and 6 -> asks 2 and 3 fire, not every ask.
+        """
+        store = MemoryKnowledgeStore()
+        strategy = _RecordingAggregate()
+        stream = MemoryStream()
+        completions: list[AggregationCompleted] = []
+        stream.where(AggregationCompleted).subscribe(lambda e: completions.append(e))
+
+        usage = Usage(prompt_tokens=5, completion_tokens=3, total_tokens=8)
+        agent = Agent(
+            "counter",
+            config=TestConfig(*(ModelResponse(ModelMessage("ok"), usage=usage) for _ in range(4))),
+            knowledge=KnowledgeConfig(
+                store=store,
+                aggregate=strategy,
+                aggregate_trigger=AggregateTrigger(every_n_events=3, on_end=False),
+            ),
+        )
+
+        r = await agent.ask("a", stream=stream)
+        r = await r.ask("b")
+        r = await r.ask("c")
+        await r.ask("d")
+
+        assert strategy.calls == 2
+        assert len(completions) == 2
 
     @pytest.mark.asyncio
     async def test_on_end_runs_even_when_turn_raises(self) -> None:

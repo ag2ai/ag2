@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context, MemoryStream, Variable, tool
+from autogen.beta import Agent, Context, MemoryStream, Usage, UsageReport, Variable, tool
 from autogen.beta import agent as actor_mod
 from autogen.beta.agent import TaskConfig
 from autogen.beta.events import (
@@ -21,6 +21,7 @@ from autogen.beta.events import (
     TaskStarted,
     ToolCallEvent,
     ToolCallsEvent,
+    UsageEvent,
 )
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools.subagents import run_task as run_task_mod
@@ -852,6 +853,77 @@ def test_run_subtask_description_advertises_parallel_invocation() -> None:
     assert "parallel" in desc.lower()
     # And ``run_subtasks`` advertises the bundled fan-out.
     assert "parallel" in run_subtasks.schema.function.description.lower()
+
+
+@pytest.mark.asyncio
+class TestSubtaskUsageRollup:
+    async def test_rollup_sums_all_model_calls(self) -> None:
+        """A tool-looping sub-agent rolls up usage from every model call.
+
+        The sub-agent makes two model calls (tool dispatch, then wrap-up). The
+        rollup carried back via ``TaskResult.usage`` / ``TaskCompleted.usage``
+        must be the sum of both — not just the final turn.
+        """
+
+        @tool
+        def noop() -> str:
+            """A tool that does nothing."""
+            return "ok"
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5),
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8),
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        result = await run_task(worker, "go", parent_context=parent_ctx)
+
+        assert result.completed is True
+        # Sum of both model calls (10+20 prompt, 5+8 completion).
+        assert result.usage == Usage(prompt_tokens=30, completion_tokens=13)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        completed = [e for e in events if isinstance(e, TaskCompleted)][0]
+        assert completed.usage == Usage(prompt_tokens=30, completion_tokens=13)
+
+    async def test_rollup_emits_subtask_usage_event_on_parent(self) -> None:
+        """The rollup reaches the parent as a single ``UsageEvent`` so the
+        parent's report accounts for the sub-task without seeing its per-call
+        events (which live on the sub-agent's private stream)."""
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8),
+                ),
+            ),
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert usage_events == [
+            UsageEvent(Usage(prompt_tokens=20, completion_tokens=8), kind="subtask"),
+        ]
+        assert usage_events[0].label == "worker"
+
+        report = UsageReport.from_events(events)
+        assert report.total == Usage(prompt_tokens=20, completion_tokens=8)
+        assert report.by_kind == {"subtask": Usage(prompt_tokens=20, completion_tokens=8)}
 
 
 class TestHitlPropagation:
