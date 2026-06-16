@@ -45,7 +45,8 @@ heavier (files, task lists) is constructed explicitly.
 
 > **Eval application:** `suite: Suite | str | Path | list[dict]` → `suite: str | Suite`.
 > Callers pass `Suite.from_list([...])` / `Suite.from_jsonl(path)`; a bare `str`
-> is one-prompt sugar.
+> is one-prompt sugar, which keeps the simplest run a one-liner:
+> `await run_agent("Hi, agent!", agent=agent)`.
 
 ### 2. Don't add a mechanism for behavior an existing seam already covers
 

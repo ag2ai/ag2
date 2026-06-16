@@ -82,6 +82,11 @@ async def run_agent(
     :func:`~autogen.beta.eval.evaluate_traces` uses, and — when ``store_dir`` is set — the
     run is persisted as ``<store_dir>/<run_id>.json``.
 
+    The simplest run is one prompt against one agent — no suite, scorers, or
+    store needed::
+
+        result = await run_agent("Hi, agent!", agent=agent)
+
     Args:
         suite: A :class:`Suite`, or a bare ``str`` used as a single-prompt
             suite. Build multi-task suites explicitly with
