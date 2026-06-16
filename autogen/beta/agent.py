@@ -19,7 +19,7 @@ import asyncio
 import json
 import logging
 import types
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 from contextlib import ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
@@ -63,7 +63,8 @@ from .events.lifecycle import (
 from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
-from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore, StoreBootstrap
+from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore
+from .knowledge.config import KnowledgeConfig
 from .middleware.base import (
     AgentTurn,
     BaseMiddleware,
@@ -94,47 +95,6 @@ logger = logging.getLogger(__name__)
 TResult = TypeVar313("TResult", default=str)
 TAgent = TypeVar313("TAgent", default=str)
 T2 = TypeVar("T2")
-
-
-@dataclass
-class KnowledgeConfig:
-    """Groups knowledge-related Agent parameters.
-
-    The ``store`` is registered into ``context.dependencies[KnowledgeStore]``
-    so policies (e.g. ``WorkingMemoryPolicy``, ``EpisodicMemoryPolicy``) can
-    read from it without an extra parameter. Everything else is a side
-    effect of attaching a store; each is opt-out via its flag below.
-
-    Attributes:
-        store: The backing knowledge store.
-        expose_tool: If True (default), the agent gets an auto-injected
-            ``knowledge`` action-group tool that lets the LLM call
-            ``read`` / ``write`` / ``list`` / ``delete`` on the store. Set
-            to False when policies are the only consumer of the store and
-            the LLM should not see it.
-        write_event_log: If True (default), the agent persists its stream
-            history to ``/log/{stream_id}.jsonl`` at the end of each
-            ``ask`` call. Set to False to keep the store free of stream
-            logs (useful when the store is purely user-facing memory).
-        compact, compact_trigger: Optional compaction strategy and its
-            firing rules.
-        aggregate, aggregate_trigger: Optional aggregation strategy and
-            its firing rules. Strategy failures emit ``AggregationFailed``
-            on the stream — subscribe to that event for observability.
-        bootstrap: Optional custom bootstrap. None falls back to
-            ``DefaultBootstrap(mention_tool=expose_tool)``, so the
-            generated SKILL.md text tells the LLM about the ``knowledge``
-            tool only when the tool is actually exposed.
-    """
-
-    store: KnowledgeStore
-    expose_tool: bool = True
-    write_event_log: bool = True
-    compact: CompactStrategy | None = None
-    compact_trigger: CompactTrigger | None = None
-    aggregate: AggregateStrategy | None = None
-    aggregate_trigger: AggregateTrigger | None = None
-    bootstrap: StoreBootstrap | None = None
 
 
 @dataclass
@@ -506,7 +466,7 @@ class Agent(PluginTarget, Generic[TResult]):
         # spawned subtasks — that would re-enable recursion (run_subtask) or
         # leak the parent's knowledge tool. Track the bound instances so
         # ``_spawn_subtask`` can exclude them by identity.
-        self._auto_tools: list[Tool] = []
+        self._additional_tools: list[Tool] = []
 
         # Task spawning. ``tasks=False`` (the default) means no auto-injected
         # ``run_subtask`` / ``run_subtasks`` tools. Pass ``tasks=TaskConfig(...)``
@@ -515,30 +475,34 @@ class Agent(PluginTarget, Generic[TResult]):
             self._task_config: TaskConfig | None = None
         else:
             self._task_config = tasks
-            self.add_tool(_build_subtask_toolkit(self))
-            self._auto_tools.append(self.tools[-1])
+            self._additional_tools.append(_build_subtask_toolkit(self))
 
         # Knowledge store + compaction/aggregation strategies
-        kc = knowledge
-        self._knowledge_store = kc.store if kc else None
-        self._knowledge_expose_tool = kc.expose_tool if kc else True
-        self._knowledge_write_event_log = kc.write_event_log if kc else True
-        self._bootstrap = kc.bootstrap if kc else None
-        self._bootstrap_done: bool = False
-        self._bootstrap_lock: asyncio.Lock | None = None
-        self._compact_strategy = kc.compact if kc else None
-        self._compact_trigger = kc.compact_trigger if kc and kc.compact_trigger else CompactTrigger()
-        self._aggregate_strategy = kc.aggregate if kc else None
-        self._aggregate_trigger = kc.aggregate_trigger if kc and kc.aggregate_trigger else AggregateTrigger()
-        if self._knowledge_store and self._knowledge_expose_tool:
-            self.add_tool(_make_knowledge_tool(self._knowledge_store))
-            self._auto_tools.append(self.tools[-1])
+        if knowledge:
+            self._agent_dependencies[KnowledgeStore] = knowledge.store
+            self._knowledge_context = _KnowledgeContext(knowledge, self.name)
+
+            if knowledge.expose_tool:
+                self._additional_tools.append(_make_knowledge_tool(knowledge.store))
+
+            if knowledge.compact:
+                self.add_middleware(_CompactionMiddlewareFactory(self.name, knowledge))
+
+            if (trigger := knowledge.aggregate_trigger) and (
+                trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end
+            ):
+                self.add_middleware(_AggregationMiddlewareFactory(self.name, knowledge))
+        else:
+            self._knowledge_context = _FakeKnowledgeContext()
 
         # Assembly policies (empty by default; bare Agent has no harness).
         self._policies.extend(assembly)
         if self._policies:
             for w in AssemblerMiddleware.validate_order(self._policies):
                 logger.warning("Assembly policy ordering: %s", w)
+
+            self.add_middleware.append(_AssemblerMiddlewareFactory(self._policies))
+            self.add_middleware.append(_HaltCheckMiddlewareFactory())
 
     def task(
         self,
@@ -691,9 +655,7 @@ class Agent(PluginTarget, Generic[TResult]):
 
     async def resume(
         self,
-        trigger: BaseEvent,
-        *,
-        history: Iterable[BaseEvent] = (),
+        *events: BaseEvent,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
@@ -715,7 +677,8 @@ class Agent(PluginTarget, Generic[TResult]):
         created; if one is supplied, its existing history is replaced.
         """
         stream = stream or MemoryStream()
-        await stream.history.replace(list(history))
+        *history, trigger = events
+        await stream.history.replace(history)
 
         context = self.__build_context(
             stream,
@@ -794,41 +757,6 @@ class Agent(PluginTarget, Generic[TResult]):
             response_schema=response_schema,
         )
 
-    async def _spawn_subtask(self, task: str, ctx: Context) -> str:
-        """Spawn a subtask Agent and delegate via ``run_task``.
-
-        The subtask inherits the parent's user-supplied tools (filtered by
-        ``TaskConfig.include_tools`` / ``exclude_tools``) plus
-        ``TaskConfig.extra_tools``. It is constructed with ``tasks=False``
-        (the default) so the child has **no** ``run_subtask`` tools —
-        recursive delegation is impossible by construction. ``run_task``
-        emits the ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed``
-        lifecycle events and handles dependency/variable copy and HITL
-        bridging.
-        """
-        tc = self._task_config
-        if tc is None:
-            return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
-
-        # Inherit only the parent's user-supplied tools — never the
-        # auto-injected subtask toolkit or knowledge tool (excluded by
-        # identity), so the child can't recurse or see parent-only tooling.
-        user_tools = [t for t in self.tools if not any(t is a for a in self._auto_tools)]
-        inherited = _filter_subtask_tools(user_tools, tc.include_tools, tc.exclude_tools)
-
-        bare = Agent(
-            name=f"subtask-{uuid4().hex[:8]}",
-            prompt=tc.prompt,
-            config=tc.config or self.config,
-            tools=[*inherited, *tc.extra_tools],
-            tasks=False,
-        )
-
-        result = await _run_task(bare, task, parent_context=ctx)
-        if not result.completed:
-            return f"Error: {result.error}"
-        return result.result or ""
-
     async def _execute(
         self,
         event: BaseEvent,
@@ -882,72 +810,14 @@ class Agent(PluginTarget, Generic[TResult]):
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
     ) -> "AgentReply[Any, Any]":
-        additional_observers = list(additional_observers)
-
-        # Bootstrap the knowledge store on first use, guarded by an asyncio
-        # lock so concurrent asks on the same Agent can't double-bootstrap.
-        # The lock is created lazily so Agent can be instantiated outside an
-        # event loop (asyncio.Lock binds to the running loop on first use).
-        if self._knowledge_store and not self._bootstrap_done:
-            if self._bootstrap_lock is None:
-                self._bootstrap_lock = asyncio.Lock()
-
-            async with self._bootstrap_lock:
-                if not self._bootstrap_done:
-                    if not await self._knowledge_store.exists("/.initialized"):
-                        await self._knowledge_store.write("/.initialized", self.name)
-                        bootstrap = self._bootstrap or DefaultBootstrap(mention_tool=self._knowledge_expose_tool)
-                        await bootstrap.bootstrap(self._knowledge_store, self.name)
-                    self._bootstrap_done = True
-
-        if self._knowledge_store:
-            context.dependencies[KnowledgeStore] = self._knowledge_store
-
-        all_observers = list(chain(self._observers, additional_observers))
-
-        # Build harness middleware chain. Assembler + halt-check only wire in
-        # when the user has provided assembly policies; compaction and
-        # aggregation middleware have independent gates.
-        harness_middleware: list[MiddlewareFactory] = []
-
-        if self._policies:
-            harness_middleware.append(_AssemblerMiddlewareFactory(self._policies))
-            harness_middleware.append(_HaltCheckMiddlewareFactory())
-
-        if self._compact_strategy:
-            harness_middleware.append(
-                _CompactionMiddlewareFactory(
-                    self.name,
-                    self._compact_strategy,
-                    self._knowledge_store,
-                    self._compact_trigger,
-                )
-            )
-
-        if self._aggregate_strategy and self._knowledge_store:
-            trigger = self._aggregate_trigger
-            if trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end:
-                harness_middleware.append(
-                    _AggregationMiddlewareFactory(
-                        self.name,
-                        self._aggregate_strategy,
-                        self._knowledge_store,
-                        trigger,
-                    )
-                )
-
-        try:
+        async with self._knowledge_context.enter(context):
             if response_schema is omit:
                 final_schema = self._response_schema
             else:
                 final_schema = ResponseSchema.ensure_schema(response_schema)
 
-            all_tools: list[Tool] = list(
-                chain(
-                    self.tools,
-                    additional_tools,
-                )
-            )
+            # collect actual tools
+            all_tools: tuple[Tool, ...] = tuple(chain(self.tools, self._additional_tools, additional_tools))
 
             all_schemas: list[ToolSchema] = []
             known_tools: set[str] = set()
@@ -961,6 +831,7 @@ class Agent(PluginTarget, Generic[TResult]):
                     else:
                         known_tools.add(schema.type)
 
+            # instantiate middlewares
             middleware_instances: list[BaseMiddleware] = []
             agent_turn: AgentTurn = _execute_turn
             llm_call: LLMCall = partial(
@@ -970,21 +841,14 @@ class Agent(PluginTarget, Generic[TResult]):
                 serializer=self._serializer,
             )
 
-            for m in reversed(
-                list(
-                    chain(
-                        self._middleware,
-                        harness_middleware,
-                        additional_middleware,
-                    )
-                )
-            ):
+            for m in reversed(tuple(chain(self._middleware, additional_middleware))):
                 mw = m(event, context)
                 middleware_instances.append(mw)
 
                 agent_turn = partial(mw.on_turn, agent_turn)
                 llm_call = partial(mw.on_llm_call, llm_call)
 
+            # construct LLM callback
             async def _call_client(event: BaseEvent, context: Context) -> None:
                 # Skip the LLM trigger when re-entered with a request we
                 # injected ourselves a few lines below. Identity is carried by
@@ -1049,7 +913,11 @@ class Agent(PluginTarget, Generic[TResult]):
                     middleware=middleware_instances,
                 )
 
-                async with _observer_lifecycle(all_observers, stack, context):
+                async with _observer_lifecycle(
+                    chain(self._observers, additional_observers),
+                    stack,
+                    context,
+                ):
                     message = await agent_turn(event, context)
                     return AgentReply(
                         message,
@@ -1060,21 +928,39 @@ class Agent(PluginTarget, Generic[TResult]):
                         response_schema=final_schema,
                     )
 
-        finally:
-            if self._knowledge_store and self._knowledge_write_event_log:
-                try:
-                    events = list(await context.stream.history.get_events())
-                    await EventLogWriter(self._knowledge_store).persist(context.stream.id, events)
-                except Exception as exc:
-                    logger.exception("Event log persistence failed for %s", self.name)
-                    with suppress(Exception):
-                        await context.send(
-                            EventLogFailed(
-                                agent=self.name,
-                                error_type=type(exc).__name__,
-                                error=str(exc),
-                            )
-                        )
+    async def _spawn_subtask(self, task: str, ctx: Context) -> str:
+        """Spawn a subtask Agent and delegate via ``run_task``.
+
+        The subtask inherits the parent's user-supplied tools (filtered by
+        ``TaskConfig.include_tools`` / ``exclude_tools``) plus
+        ``TaskConfig.extra_tools``. It is constructed with ``tasks=False``
+        (the default) so the child has **no** ``run_subtask`` tools —
+        recursive delegation is impossible by construction. ``run_task``
+        emits the ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed``
+        lifecycle events and handles dependency/variable copy and HITL
+        bridging.
+        """
+        tc = self._task_config
+        if tc is None:
+            return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
+
+        # Inherit only the parent's user-supplied tools — never the
+        # auto-injected subtask toolkit or knowledge tool (excluded by
+        # identity), so the child can't recurse or see parent-only tooling.
+        inherited = _filter_subtask_tools(self.tools, tc.include_tools, tc.exclude_tools)
+
+        bare = Agent(
+            name=f"subtask-{uuid4().hex[:8]}",
+            prompt=tc.prompt,
+            config=tc.config or self.config,
+            tools=[*inherited, *tc.extra_tools],
+            tasks=False,
+        )
+
+        result = await _run_task(bare, task, parent_context=ctx)
+        if not result.completed:
+            return f"Error: {result.error}"
+        return result.result or ""
 
     def __build_context(
         self,
@@ -1114,6 +1000,60 @@ class Agent(PluginTarget, Generic[TResult]):
         from .conversable import ConversableAdapter
 
         return ConversableAdapter(self)
+
+
+class _KnowledgeContext:
+    def __init__(
+        self,
+        config: "KnowledgeConfig",
+        agent_name: str,
+    ) -> None:
+        self.config = config
+        self._agent_name = agent_name
+
+        self.__lock: asyncio.Lock | None = None
+        self.__bootstrapped = None
+
+    @asynccontextmanager
+    async def enter(self, context: "Context") -> AsyncIterator[None]:
+        store = self.config.store
+
+        if not self.__bootstrapped:
+            if self.__lock is None:
+                self.__lock = asyncio.Lock()
+
+            async with self.__lock:
+                if not self.__bootstrapped:
+                    if not await store.exists("/.initialized"):
+                        await store.write("/.initialized", self._agent_name)
+                        bootstrap = self.config.bootstrap or DefaultBootstrap(mention_tool=self.config.expose_tool)
+                        await bootstrap.bootstrap(store, self._agent_name)
+
+                    self.__bootstrapped = True
+
+        yield None
+
+        if self.config.write_event_log:
+            try:
+                events = list(await context.stream.history.get_events())
+                await EventLogWriter(store).persist(context.stream.id, events)
+
+            except Exception as exc:
+                logger.exception("Event log persistence failed for %s", self._agent_name)
+                with suppress(Exception):
+                    await context.send(
+                        EventLogFailed(
+                            agent=self._agent_name,
+                            error_type=type(exc).__name__,
+                            error=str(exc),
+                        )
+                    )
+
+
+class _FakeKnowledgeContext:
+    @asynccontextmanager
+    async def enter(self, context: "Context") -> AsyncIterator[None]:
+        yield
 
 
 async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
@@ -1175,7 +1115,7 @@ def _drain_pending(context: Context) -> ModelRequest | None:
 
 @asynccontextmanager
 async def _observer_lifecycle(
-    observers: list[Observer],
+    observers: Sequence[Observer],
     stack: ExitStack,
     context: Context,
 ) -> AsyncIterator[None]:
@@ -1189,8 +1129,6 @@ async def _observer_lifecycle(
     """
     for obs in observers:
         obs.register(stack, context)
-
-    for obs in observers:
         await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
 
     try:
@@ -1386,7 +1324,7 @@ class _HaltCheckMiddlewareFactory:
 class _AssemblerMiddlewareFactory:
     """Factory for AssemblerMiddleware."""
 
-    def __init__(self, policies: list[AssemblyPolicy]) -> None:
+    def __init__(self, policies: Iterable[AssemblyPolicy]) -> None:
         self._policies = policies
 
     def __call__(self, event: BaseEvent, context: Context) -> AssemblerMiddleware:
@@ -1484,26 +1422,18 @@ class _CompactionMiddleware(BaseMiddleware):
 class _CompactionMiddlewareFactory:
     """Factory for _CompactionMiddleware."""
 
-    def __init__(
-        self,
-        actor_name: str,
-        strategy: CompactStrategy,
-        store: KnowledgeStore | None,
-        trigger: CompactTrigger,
-    ) -> None:
+    def __init__(self, actor_name: str, config: KnowledgeConfig) -> None:
         self._actor_name = actor_name
-        self._strategy = strategy
-        self._store = store
-        self._trigger = trigger
+        self.config = config
 
     def __call__(self, event: BaseEvent, context: Context) -> _CompactionMiddleware:
         return _CompactionMiddleware(
             event,
             context,
             actor_name=self._actor_name,
-            strategy=self._strategy,
-            store=self._store,
-            trigger=self._trigger,
+            strategy=self.config.compact,
+            store=self.config.store,
+            trigger=self.config.compact_trigger,
         )
 
 
@@ -1612,17 +1542,11 @@ class _AggregationMiddleware(BaseMiddleware):
 class _AggregationMiddlewareFactory:
     """Factory for _AggregationMiddleware."""
 
-    def __init__(
-        self,
-        actor_name: str,
-        strategy: AggregateStrategy,
-        store: KnowledgeStore,
-        trigger: AggregateTrigger,
-    ) -> None:
+    def __init__(self, actor_name: str, config: "KnowledgeConfig") -> None:
         self._actor_name = actor_name
-        self._strategy = strategy
-        self._store = store
-        self._trigger = trigger
+        self._strategy = config.aggregate
+        self._store = config.store
+        self._trigger = config.aggregate_trigger
 
     def __call__(self, event: BaseEvent, context: Context) -> _AggregationMiddleware:
         return _AggregationMiddleware(

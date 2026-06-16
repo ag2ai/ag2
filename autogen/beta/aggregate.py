@@ -17,13 +17,11 @@ from typing import Protocol, runtime_checkable
 
 from fast_depends.pydantic import PydanticSerializer
 
-from autogen.beta.annotations import Context
-from autogen.beta.config import ModelConfig
-from autogen.beta.context import ConversationContext
-from autogen.beta.events import BaseEvent, ModelRequest, UsageEvent
-from autogen.beta.stream import MemoryStream
-
+from .annotations import Context
+from .config import ModelConfig
+from .events import BaseEvent, ModelRequest, UsageEvent
 from .knowledge import CONVERSATIONS_PREFIX, WORKING_MEMORY_PATH, KnowledgeStore
+from .stream import MemoryStream
 
 
 @runtime_checkable
@@ -98,7 +96,7 @@ class ConversationSummaryAggregate:
         ])
         response = await client(
             [prompt_event],
-            ConversationContext(MemoryStream()),
+            Context(MemoryStream()),
             tools=[],
             response_schema=None,
             serializer=self._serializer,
@@ -194,7 +192,7 @@ class WorkingMemoryAggregate:
         )
         response = await client(
             [ModelRequest.ensure_request([prompt])],
-            ConversationContext(MemoryStream()),
+            Context(MemoryStream()),
             tools=[],
             response_schema=None,
             serializer=self._serializer,
