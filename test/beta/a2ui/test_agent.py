@@ -29,7 +29,7 @@ class TestA2UIAgentConstruction:
 
     def test_system_message_contains_a2ui(self) -> None:
         agent = A2UIAgent(name="test_agent")
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         assert "A2UI" in prompt
         assert "v0.9" in prompt
         assert "<a2ui-json>" in prompt
@@ -56,7 +56,7 @@ class TestA2UIAgentConstruction:
             custom_catalog={"$id": "https://mycompany.com/custom.json", "components": {}},
         )
         assert agent.catalog_id == "https://mycompany.com/custom.json"
-        assert "mycompany.com/custom.json" in "\n".join(agent._system_prompt)
+        assert "mycompany.com/custom.json" in agent.a2ui_prompt_section
 
     def test_custom_catalog_without_id_raises(self) -> None:
         with pytest.raises(ValueError, match="Custom catalog must include"):
@@ -64,19 +64,19 @@ class TestA2UIAgentConstruction:
 
     def test_prompt_uses_official_tags(self) -> None:
         agent = A2UIAgent(name="test_agent")
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         # The official A2UI "Standard Prompt Tags" wrap the UI JSON block.
         assert "<a2ui-json>" in prompt
         assert "</a2ui-json>" in prompt
 
     def test_exclude_schema_from_prompt(self) -> None:
         agent = A2UIAgent(name="test_agent", include_schema_in_prompt=False)
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         assert "A2UI Message Schema" not in prompt
 
     def test_exclude_rules_from_prompt(self) -> None:
         agent = A2UIAgent(name="test_agent", include_rules_in_prompt=False)
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         assert "Component Rules" not in prompt
 
     def test_schema_manager_accessible(self) -> None:
@@ -137,7 +137,7 @@ class TestA2UIAgentActions:
                 ),
             ],
         )
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         assert "Server Events" in prompt
         assert "book_table" in prompt
         assert '"event"' in prompt
@@ -154,7 +154,7 @@ class TestA2UIAgentActions:
                 ),
             ],
         )
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         assert "Client Functions" in prompt
         assert "openUrl" in prompt
         assert '"functionCall"' in prompt
@@ -172,7 +172,7 @@ class TestA2UIAgentActions:
                 ),
             ],
         )
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         assert "Server Events" in prompt
         assert "Client Functions" in prompt
         assert "schedule" in prompt
@@ -203,7 +203,7 @@ class TestA2UIAgentActions:
                 ),
             ],
         )
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         assert '"call":' in prompt or '"call": ' in prompt
         assert '"returnType"' in prompt
 

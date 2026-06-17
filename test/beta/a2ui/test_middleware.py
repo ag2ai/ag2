@@ -99,8 +99,15 @@ class TestA2UIValidationMiddleware:
         # Durable response keeps only the conversational prose.
         assert reply.body == "Here is your UI."
         # The A2UI message is carried out-of-band as a typed event.
-        assert len(events) == 1
-        assert events[0].message["createSurface"]["surfaceId"] == "s1"
+        assert [e.message for e in events] == [
+            {
+                "version": "v0.9",
+                "createSurface": {
+                    "surfaceId": "s1",
+                    "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+                },
+            }
+        ]
 
     async def test_jsonl_inside_tag_emits_one_event_per_message(self) -> None:
         agent = A2UIAgent(

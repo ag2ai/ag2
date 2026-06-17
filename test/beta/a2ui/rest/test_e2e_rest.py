@@ -75,94 +75,91 @@ class TestE2EJsonl:
 
 
 @pytest.mark.asyncio
-class TestE2ESse:
-    async def test_single_turn_streams_text_message_done(self) -> None:
-        agent = A2UIAgent(name="ui", config=TestConfig(_A2UI_RESPONSE))
-        app = A2UIServer(agent).build_sse_app()
+async def test_sse_single_turn_streams_text_message_done() -> None:
+    agent = A2UIAgent(name="ui", config=TestConfig(_A2UI_RESPONSE))
+    app = A2UIServer(agent).build_sse_app()
 
-        async with _client(app) as client:
-            resp = await client.post("/a2ui", json={"messages": [{"role": "user", "content": "show ui"}]})
+    async with _client(app) as client:
+        resp = await client.post("/a2ui", json={"messages": [{"role": "user", "content": "show ui"}]})
 
-        assert resp.status_code == 200
-        assert resp.headers["content-type"].startswith("text/event-stream")
-        body = resp.text
-        assert "event: text" in body
-        assert '"text": "Here is your UI."' in body
-        assert '"createSurface"' in body
-        assert "event: done" in body
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/event-stream")
+    body = resp.text
+    assert "event: text" in body
+    assert '"text": "Here is your UI."' in body
+    assert '"createSurface"' in body
+    assert "event: done" in body
 
 
 @pytest.mark.asyncio
-class TestE2EActionRoundTrip:
-    async def test_client_click_executes_server_tool(self) -> None:
-        clicked: list[str] = []
+async def test_action_round_trip_client_click_executes_server_tool() -> None:
+    clicked: list[str] = []
 
-        @a2ui_action(description="Schedule all posts for the given time")
-        def schedule_posts(time: str) -> str:
-            clicked.append(time)
-            return f"scheduled {time}"
+    @a2ui_action(description="Schedule all posts for the given time")
+    def schedule_posts(time: str) -> str:
+        clicked.append(time)
+        return f"scheduled {time}"
 
-        # The click envelope is rewritten into a prompt; the mocked LLM then
-        # calls the registered tool, and answers with prose once it returns.
-        agent = A2UIAgent(
-            name="ui",
-            validate_responses=False,
-            tools=[schedule_posts],
-            config=TestConfig(
-                ToolCallEvent(name="schedule_posts", arguments='{"time": "2:00 PM"}'),
-                "All set.",
-            ),
+    # The click envelope is rewritten into a prompt; the mocked LLM then
+    # calls the registered tool, and answers with prose once it returns.
+    agent = A2UIAgent(
+        name="ui",
+        validate_responses=False,
+        tools=[schedule_posts],
+        config=TestConfig(
+            ToolCallEvent(name="schedule_posts", arguments='{"time": "2:00 PM"}'),
+            "All set.",
+        ),
+    )
+    app = A2UIServer(agent).build_jsonl_app()
+
+    async with _client(app) as client:
+        resp = await client.post(
+            "/a2ui",
+            json={
+                "messages": [],
+                "a2ui": [
+                    {
+                        "version": "v0.9",
+                        "action": {
+                            "name": "schedule_posts",
+                            "surfaceId": "s1",
+                            "sourceComponentId": "btn",
+                            "timestamp": "2026-06-15T00:00:00Z",
+                            "context": {"time": "2:00 PM"},
+                        },
+                    }
+                ],
+            },
         )
-        app = A2UIServer(agent).build_jsonl_app()
 
-        async with _client(app) as client:
-            resp = await client.post(
-                "/a2ui",
-                json={
-                    "messages": [],
-                    "a2ui": [
-                        {
-                            "version": "v0.9",
-                            "action": {
-                                "name": "schedule_posts",
-                                "surfaceId": "s1",
-                                "sourceComponentId": "btn",
-                                "timestamp": "2026-06-15T00:00:00Z",
-                                "context": {"time": "2:00 PM"},
-                            },
-                        }
-                    ],
-                },
-            )
-
-        assert resp.status_code == 200
-        assert clicked == ["2:00 PM"]
-        lines = [json.loads(line) for line in resp.text.splitlines() if line]
-        assert lines == [{"text": "All set."}]
+    assert resp.status_code == 200
+    assert clicked == ["2:00 PM"]
+    lines = [json.loads(line) for line in resp.text.splitlines() if line]
+    assert lines == [{"text": "All set."}]
 
 
 @pytest.mark.asyncio
-class TestE2EStateless:
-    async def test_client_resends_history_each_turn(self) -> None:
-        # The server keeps no state: the client must resend the full
-        # conversation, so the trailing user message is the current turn and
-        # the prior assistant turn lands in history.
-        tracking = TrackingConfig(TestConfig("ack"))
-        agent = A2UIAgent(name="ui", config=tracking, validate_responses=False)
-        app = A2UIServer(agent).build_jsonl_app()
+async def test_stateless_client_resends_history_each_turn() -> None:
+    # The server keeps no state: the client must resend the full
+    # conversation, so the trailing user message is the current turn and
+    # the prior assistant turn lands in history.
+    tracking = TrackingConfig(TestConfig("ack"))
+    agent = A2UIAgent(name="ui", config=tracking, validate_responses=False)
+    app = A2UIServer(agent).build_jsonl_app()
 
-        async with _client(app) as client:
-            resp = await client.post(
-                "/a2ui",
-                json={
-                    "messages": [
-                        {"role": "user", "content": "first"},
-                        {"role": "assistant", "content": "ack"},
-                        {"role": "user", "content": "second"},
-                    ]
-                },
-            )
+    async with _client(app) as client:
+        resp = await client.post(
+            "/a2ui",
+            json={
+                "messages": [
+                    {"role": "user", "content": "first"},
+                    {"role": "assistant", "content": "ack"},
+                    {"role": "user", "content": "second"},
+                ]
+            },
+        )
 
-        assert resp.status_code == 200
-        assert [json.loads(line) for line in resp.text.splitlines() if line] == [{"text": "ack"}]
-        tracking.mock.assert_called_with(ModelRequest([TextInput("second")]))
+    assert resp.status_code == 200
+    assert [json.loads(line) for line in resp.text.splitlines() if line] == [{"text": "ack"}]
+    tracking.mock.assert_called_with(ModelRequest([TextInput("second")]))

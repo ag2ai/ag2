@@ -33,8 +33,15 @@ class TestA2UIResponseParser:
         result = parser.parse(response)
         assert result.text == "Here is your UI."
         assert result.has_a2ui is True
-        assert len(result.operations) == 1
-        assert result.operations[0]["createSurface"]["surfaceId"] == "s1"
+        assert result.operations == [
+            {
+                "version": "v0.9",
+                "createSurface": {
+                    "surfaceId": "s1",
+                    "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+                },
+            }
+        ]
         assert result.parse_error is None
 
     def test_parse_single_object(self) -> None:

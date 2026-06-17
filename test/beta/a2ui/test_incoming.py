@@ -152,6 +152,11 @@ class TestParseIncomingUnknown:
         assert isinstance(result, A2UIIncomingUnknownResult)
         assert result.parse_error
 
+    def test_non_dict_input(self) -> None:
+        result = parse_incoming_message(["not", "a", "dict"])
+        assert isinstance(result, A2UIIncomingUnknownResult)
+        assert result.parse_error
+
 
 class TestActionToPrompt:
     def test_want_response_injects_action_id(self) -> None:
@@ -218,8 +223,3 @@ class TestFunctionResponseToPrompt:
         fr = A2UIIncomingFunctionResponse(function_call_id="fc-1", call="x", value=object())  # type: ignore[arg-type]
         prompt = function_response_to_prompt(fr)
         assert "<non-serializable>" in prompt
-
-    def test_non_dict_input(self) -> None:
-        result = parse_incoming_message(["not", "a", "dict"])
-        assert isinstance(result, A2UIIncomingUnknownResult)
-        assert result.parse_error

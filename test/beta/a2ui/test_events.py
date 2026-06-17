@@ -20,9 +20,3 @@ class TestA2UIMessageEvent:
         }
         event = A2UIMessageEvent(message)
         assert event.message == message
-
-    def test_reexported_from_package(self) -> None:
-        import autogen.beta.a2ui as a2ui
-
-        assert "A2UIMessageEvent" in a2ui.__all__
-        assert a2ui.A2UIMessageEvent is A2UIMessageEvent

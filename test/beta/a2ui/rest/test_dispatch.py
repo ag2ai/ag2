@@ -66,10 +66,10 @@ class TestStreamTurn:
 
         frames = [f async for f in stream_turn(agent, req)]
 
-        assert frames[0] == A2UIProseFrame("Here is your UI.")
-        assert isinstance(frames[1], A2UIMessageFrame)
-        assert frames[1].message["createSurface"]["surfaceId"] == "s1"
-        assert len(frames) == 2
+        assert frames == [
+            A2UIProseFrame("Here is your UI."),
+            A2UIMessageFrame({"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": _CATALOG}}),
+        ]
 
     async def test_missing_config_raises(self) -> None:
         agent = A2UIAgent(name="t", validate_responses=False)

@@ -4,6 +4,7 @@
 
 import json
 
+from dirty_equals import IsPartialDict
 from starlette.testclient import TestClient
 
 from autogen.beta.a2ui import A2UIAgent, A2UIEventAction
@@ -75,7 +76,7 @@ class TestJSONLApp:
         assert resp.headers["content-type"].startswith("application/x-ndjson")
         lines = [json.loads(line) for line in resp.text.splitlines() if line]
         assert lines[0] == {"text": "Here is your UI."}
-        assert lines[1]["createSurface"]["surfaceId"] == "s1"
+        assert lines[1] == IsPartialDict({"createSurface": IsPartialDict({"surfaceId": "s1"})})
 
     def test_malformed_body_returns_400(self) -> None:
         app = A2UIServer(_agent()).build_jsonl_app()
@@ -86,30 +87,29 @@ class TestJSONLApp:
         assert resp.status_code == 400
 
 
-class TestActionRoundTrip:
-    def test_action_click_drives_a_turn(self) -> None:
-        action = A2UIEventAction(name="confirm", description="Confirm the booking")
-        app = A2UIServer(_agent("Confirmed.", validate=False, actions=[action])).build_sse_app()
-        client = TestClient(app)
+def test_action_click_drives_a_turn() -> None:
+    action = A2UIEventAction(name="confirm", description="Confirm the booking")
+    app = A2UIServer(_agent("Confirmed.", validate=False, actions=[action])).build_sse_app()
+    client = TestClient(app)
 
-        resp = client.post(
-            "/a2ui",
-            json={
-                "messages": [],
-                "a2ui": [
-                    {
-                        "version": "v0.9",
-                        "action": {
-                            "name": "confirm",
-                            "surfaceId": "s1",
-                            "sourceComponentId": "btn",
-                            "timestamp": "2026-06-15T00:00:00Z",
-                            "context": {},
-                        },
-                    }
-                ],
-            },
-        )
+    resp = client.post(
+        "/a2ui",
+        json={
+            "messages": [],
+            "a2ui": [
+                {
+                    "version": "v0.9",
+                    "action": {
+                        "name": "confirm",
+                        "surfaceId": "s1",
+                        "sourceComponentId": "btn",
+                        "timestamp": "2026-06-15T00:00:00Z",
+                        "context": {},
+                    },
+                }
+            ],
+        },
+    )
 
-        assert resp.status_code == 200
-        assert '"text": "Confirmed."' in resp.text
+    assert resp.status_code == 200
+    assert '"text": "Confirmed."' in resp.text

@@ -94,7 +94,7 @@ class TestAgentActionCollection:
         assert collected.action_type == "event"
         assert collected.tool_name == "schedule"
 
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         assert "Server Events" in prompt
         assert "schedule" in prompt
 
@@ -112,7 +112,7 @@ class TestAgentActionCollection:
         )
         agent = A2UIAgent(name="ui", tools=[action])
 
-        prompt = "\n".join(agent._system_prompt)
+        prompt = agent.a2ui_prompt_section
         assert "Client Functions" in prompt
         assert "openUrl" in prompt
 
@@ -151,25 +151,24 @@ class TestAgentActionCollection:
 
 
 @pytest.mark.asyncio
-class TestActionToolExecution:
-    async def test_decorated_tool_is_callable_by_agent(self) -> None:
-        calls: list[str] = []
+async def test_decorated_tool_is_callable_by_agent() -> None:
+    calls: list[str] = []
 
-        @a2ui_action(description="Schedule posts")
-        def schedule(time: str) -> str:
-            calls.append(time)
-            return f"scheduled {time}"
+    @a2ui_action(description="Schedule posts")
+    def schedule(time: str) -> str:
+        calls.append(time)
+        return f"scheduled {time}"
 
-        agent = A2UIAgent(
-            name="ui",
-            validate_responses=False,
-            tools=[schedule],
-            config=TestConfig(
-                ToolCallEvent(name="schedule", arguments='{"time": "2pm"}'),
-                "done",
-            ),
-        )
+    agent = A2UIAgent(
+        name="ui",
+        validate_responses=False,
+        tools=[schedule],
+        config=TestConfig(
+            ToolCallEvent(name="schedule", arguments='{"time": "2pm"}'),
+            "done",
+        ),
+    )
 
-        await agent.ask("schedule for 2pm")
+    await agent.ask("schedule for 2pm")
 
-        assert calls == ["2pm"]
+    assert calls == ["2pm"]
