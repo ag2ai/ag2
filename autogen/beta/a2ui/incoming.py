@@ -7,9 +7,11 @@ import logging
 import re
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any
 
-from ._types import JsonObject, JsonValue
+from typing_extensions import assert_never
+
+from ._types import JsonValue
 from .actions import A2UIAction, A2UIEventAction
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
@@ -81,7 +83,7 @@ class A2UIIncomingFunctionError:
 A2UIIncomingError = A2UIIncomingSurfaceError | A2UIIncomingFunctionError
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class A2UIIncomingFunctionResponse:
     """A client→server ``functionResponse`` envelope content (v1.0).
 
@@ -95,16 +97,41 @@ class A2UIIncomingFunctionResponse:
     value: JsonValue = None
 
 
-@dataclass(slots=True)
-class A2UIIncomingParseResult:
-    """Result of parsing one client→server envelope."""
+@dataclass(slots=True, frozen=True)
+class A2UIIncomingActionResult:
+    """A successfully parsed client→server ``action`` envelope."""
 
-    kind: Literal["action", "error", "functionResponse", "unknown"]
-    action: A2UIIncomingAction | None = None
-    error: A2UIIncomingError | None = None
-    function_response: A2UIIncomingFunctionResponse | None = None
-    raw: JsonObject | None = None
-    parse_error: str | None = None
+    action: A2UIIncomingAction
+
+
+@dataclass(slots=True, frozen=True)
+class A2UIIncomingErrorResult:
+    """A successfully parsed client→server ``error`` envelope."""
+
+    error: A2UIIncomingError
+
+
+@dataclass(slots=True, frozen=True)
+class A2UIIncomingFunctionResponseResult:
+    """A successfully parsed client→server ``functionResponse`` envelope (v1.0)."""
+
+    function_response: A2UIIncomingFunctionResponse
+
+
+@dataclass(slots=True, frozen=True)
+class A2UIIncomingUnknownResult:
+    """An envelope that could not be classified; ``parse_error`` says why."""
+
+    parse_error: str
+
+
+# Result of parsing one client→server envelope. A discriminated union over the
+# four mutually exclusive outcomes — each arm carries only its own payload, so
+# the old "kind says action but action is None" states are unrepresentable.
+# Branch with ``isinstance`` (mirrors the ``A2UIIncomingError`` union above).
+A2UIIncomingParseResult = (
+    A2UIIncomingActionResult | A2UIIncomingErrorResult | A2UIIncomingFunctionResponseResult | A2UIIncomingUnknownResult
+)
 
 
 def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
@@ -120,7 +147,7 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
     ``A2UISchemaManager.client_to_server_schema`` for strict validation.
     """
     if not isinstance(data, dict):
-        return A2UIIncomingParseResult(kind="unknown", parse_error="envelope is not a JSON object")
+        return A2UIIncomingUnknownResult(parse_error="envelope is not a JSON object")
 
     action_obj = data.get("action")
     if isinstance(action_obj, dict):
@@ -140,8 +167,7 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
                     "A2UI action %r set wantResponse but provided no actionId; cannot correlate an actionResponse.",
                     name,
                 )
-        return A2UIIncomingParseResult(
-            kind="action",
+        return A2UIIncomingActionResult(
             action=A2UIIncomingAction(
                 name=name,
                 surface_id=str(action_obj.get("surfaceId", "")),
@@ -150,19 +176,16 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
                 context=dict(action_obj.get("context") or {}),
                 response_request=response_request,
             ),
-            raw=data,
         )
 
     function_response_obj = data.get("functionResponse")
     if isinstance(function_response_obj, dict):
-        return A2UIIncomingParseResult(
-            kind="functionResponse",
+        return A2UIIncomingFunctionResponseResult(
             function_response=A2UIIncomingFunctionResponse(
                 function_call_id=str(function_response_obj.get("functionCallId", "")),
                 call=str(function_response_obj.get("call", "")),
                 value=function_response_obj.get("value"),
             ),
-            raw=data,
         )
 
     error_obj = data.get("error")
@@ -182,11 +205,9 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
                 message=message,
                 path=str(raw_path) if isinstance(raw_path, str) else None,
             )
-        return A2UIIncomingParseResult(kind="error", error=error, raw=data)
+        return A2UIIncomingErrorResult(error=error)
 
-    return A2UIIncomingParseResult(
-        kind="unknown",
-        raw=data,
+    return A2UIIncomingUnknownResult(
         parse_error="envelope has none of 'action', 'functionResponse', or 'error' keys",
     )
 
@@ -348,7 +369,7 @@ def iter_incoming_prompts(
     """
     for envelope in envelopes:
         result = parse_incoming_message(envelope)
-        if result.kind == "action" and result.action is not None:
+        if isinstance(result, A2UIIncomingActionResult):
             prompt = action_to_prompt(result.action, resolve_action(result.action.name))
             if prompt is None:
                 logger.warning(
@@ -357,26 +378,32 @@ def iter_incoming_prompts(
                 )
                 continue
             yield prompt
-        elif result.kind == "functionResponse" and result.function_response is not None:
+        elif isinstance(result, A2UIIncomingFunctionResponseResult):
             if not result.function_response.function_call_id:
                 logger.warning(
                     "Dropping A2UI functionResponse — missing functionCallId, cannot correlate to a callFunction.",
                 )
                 continue
             yield function_response_to_prompt(result.function_response)
-        elif result.kind == "error" and result.error is not None:
+        elif isinstance(result, A2UIIncomingErrorResult):
             yield error_to_prompt(result.error)
-        else:
+        elif isinstance(result, A2UIIncomingUnknownResult):
             logger.warning("Skipping A2UI envelope of unrecognized kind: %s", result.parse_error)
+        else:
+            assert_never(result)
 
 
 __all__ = (
     "A2UIIncomingAction",
+    "A2UIIncomingActionResult",
     "A2UIIncomingError",
+    "A2UIIncomingErrorResult",
     "A2UIIncomingFunctionError",
     "A2UIIncomingFunctionResponse",
+    "A2UIIncomingFunctionResponseResult",
     "A2UIIncomingParseResult",
     "A2UIIncomingSurfaceError",
+    "A2UIIncomingUnknownResult",
     "ActionResponseRequest",
     "action_to_prompt",
     "error_to_prompt",

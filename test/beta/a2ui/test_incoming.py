@@ -5,9 +5,13 @@
 from autogen.beta.a2ui import A2UIEventAction
 from autogen.beta.a2ui.incoming import (
     A2UIIncomingAction,
+    A2UIIncomingActionResult,
+    A2UIIncomingErrorResult,
     A2UIIncomingFunctionError,
     A2UIIncomingFunctionResponse,
+    A2UIIncomingFunctionResponseResult,
     A2UIIncomingSurfaceError,
+    A2UIIncomingUnknownResult,
     ActionResponseRequest,
     action_to_prompt,
     error_to_prompt,
@@ -28,7 +32,7 @@ class TestParseIncomingAction:
                 "context": {"email": "a@b.c"},
             },
         })
-        assert result.kind == "action"
+        assert isinstance(result, A2UIIncomingActionResult)
         assert result.action == A2UIIncomingAction(
             name="submit",
             surface_id="s1",
@@ -36,12 +40,10 @@ class TestParseIncomingAction:
             timestamp="2026-05-18T12:00:00Z",
             context={"email": "a@b.c"},
         )
-        assert result.error is None
-        assert result.parse_error is None
 
     def test_missing_fields_default_to_empty(self) -> None:
         result = parse_incoming_message({"action": {"name": "click"}})
-        assert result.kind == "action"
+        assert isinstance(result, A2UIIncomingActionResult)
         assert result.action == A2UIIncomingAction(
             name="click",
             surface_id="",
@@ -52,7 +54,7 @@ class TestParseIncomingAction:
 
     def test_v0_9_action_has_no_response_request(self) -> None:
         result = parse_incoming_message({"action": {"name": "click"}})
-        assert result.action is not None
+        assert isinstance(result, A2UIIncomingActionResult)
         assert result.action.response_request is None
 
     def test_v1_0_action_with_want_response(self) -> None:
@@ -68,8 +70,7 @@ class TestParseIncomingAction:
                 "actionId": "act-1",
             },
         })
-        assert result.kind == "action"
-        assert result.action is not None
+        assert isinstance(result, A2UIIncomingActionResult)
         assert result.action.response_request == ActionResponseRequest(action_id="act-1")
 
     def test_want_response_without_action_id_drops_request(self) -> None:
@@ -78,7 +79,7 @@ class TestParseIncomingAction:
         result = parse_incoming_message({
             "action": {"name": "click", "wantResponse": True},
         })
-        assert result.action is not None
+        assert isinstance(result, A2UIIncomingActionResult)
         assert result.action.response_request is None
 
 
@@ -92,21 +93,18 @@ class TestParseIncomingFunctionResponse:
                 "value": [1920, 1080],
             },
         })
-        assert result.kind == "functionResponse"
+        assert isinstance(result, A2UIIncomingFunctionResponseResult)
         assert result.function_response == A2UIIncomingFunctionResponse(
             function_call_id="fc-1",
             call="getScreenResolution",
             value=[1920, 1080],
         )
-        assert result.action is None
-        assert result.error is None
 
     def test_function_response_missing_value_defaults_none(self) -> None:
         result = parse_incoming_message({
             "functionResponse": {"functionCallId": "fc-2", "call": "ping"},
         })
-        assert result.kind == "functionResponse"
-        assert result.function_response is not None
+        assert isinstance(result, A2UIIncomingFunctionResponseResult)
         assert result.function_response.value is None
 
 
@@ -121,7 +119,7 @@ class TestParseIncomingError:
                 "message": "Expected string, got null.",
             },
         })
-        assert result.kind == "error"
+        assert isinstance(result, A2UIIncomingErrorResult)
         assert result.error == A2UIIncomingSurfaceError(
             code="VALIDATION_FAILED",
             surface_id="s1",
@@ -133,7 +131,7 @@ class TestParseIncomingError:
         result = parse_incoming_message({
             "error": {"code": "RUNTIME_ERROR", "surfaceId": "s1", "message": "Oops"},
         })
-        assert result.kind == "error"
+        assert isinstance(result, A2UIIncomingErrorResult)
         assert isinstance(result.error, A2UIIncomingSurfaceError)
         assert result.error.code == "RUNTIME_ERROR"
         assert result.error.path is None
@@ -143,18 +141,16 @@ class TestParseIncomingError:
             "version": "v1.0",
             "error": {"code": "TIMEOUT", "message": "function timed out", "functionCallId": "fc-9"},
         })
-        assert result.kind == "error"
-        assert result.error is not None
+        assert isinstance(result, A2UIIncomingErrorResult)
+        assert isinstance(result.error, A2UIIncomingFunctionError)
         assert result.error.function_call_id == "fc-9"
 
 
 class TestParseIncomingUnknown:
     def test_neither_action_nor_error(self) -> None:
         result = parse_incoming_message({"version": "v0.9", "foo": "bar"})
-        assert result.kind == "unknown"
-        assert result.parse_error is not None
-        assert result.action is None
-        assert result.error is None
+        assert isinstance(result, A2UIIncomingUnknownResult)
+        assert result.parse_error
 
 
 class TestActionToPrompt:
@@ -225,5 +221,5 @@ class TestFunctionResponseToPrompt:
 
     def test_non_dict_input(self) -> None:
         result = parse_incoming_message(["not", "a", "dict"])
-        assert result.kind == "unknown"
-        assert result.parse_error is not None
+        assert isinstance(result, A2UIIncomingUnknownResult)
+        assert result.parse_error
