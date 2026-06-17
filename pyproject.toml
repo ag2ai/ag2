@@ -406,6 +406,7 @@ optionals = [
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
+    "ag2[bedrock]",
     "ag2[gemini]",
     "ag2[ollama]",
     "ag2[dashscope]",

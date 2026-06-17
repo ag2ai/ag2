@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import google.auth
 import google.genai as genai
+import httpx
 from fast_depends.library.serializer import SerializerProto
 from google.genai import types
 from google.oauth2 import service_account
@@ -63,6 +64,7 @@ class GeminiClient(LLMClient):
         credentials: google.auth.credentials.Credentials | str | None = None,
         project: str | None = None,
         location: str | None = None,
+        http_client: httpx.AsyncClient | None = None,
         streaming: bool = False,
         create_config: CreateConfig | None = None,
         cached_content: str | None = None,
@@ -73,8 +75,14 @@ class GeminiClient(LLMClient):
                 credentials,
                 scopes=["https://www.googleapis.com/auth/cloud-platform"],
             )
+        http_options = types.HttpOptions(httpx_async_client=http_client) if http_client is not None else None
         self._client = genai.Client(
-            vertexai=vertexai, api_key=api_key, credentials=credentials, project=project, location=location
+            vertexai=vertexai,
+            api_key=api_key,
+            credentials=credentials,
+            project=project,
+            location=location,
+            http_options=http_options,
         )
         self._model_name = model
         self._streaming = streaming
@@ -133,7 +141,7 @@ class GeminiClient(LLMClient):
         response: types.GenerateContentResponse,
         context: "ConversationContext",
     ) -> ModelResponse:
-        model_msg: ModelMessage | None = None
+        full_content: str = ""
         calls: list[ToolCallEvent] = []
 
         for candidate in response.candidates or ():
@@ -143,8 +151,7 @@ class GeminiClient(LLMClient):
                     if part.thought and part.text:
                         await context.send(ModelReasoning(part.text))
                     elif part.text:
-                        model_msg = ModelMessage(part.text)
-                        await context.send(model_msg)
+                        full_content += part.text
                     elif part.function_call:
                         fc = part.function_call
                         calls.append(
@@ -177,6 +184,11 @@ class GeminiClient(LLMClient):
                 await context.send(
                     GeminiServerToolResultEvent.from_grounding(grounding, parent_id=gnd_call.id, name=name)
                 )
+
+        model_msg: ModelMessage | None = None
+        if full_content:
+            model_msg = ModelMessage(full_content)
+            await context.send(model_msg)
 
         usage = Usage()
         if response.usage_metadata:
