@@ -37,7 +37,7 @@ class TestEventWatch:
         assert watch.is_armed
 
         event = ToolCallEvent(name="search", arguments="{}")
-        await stream.send(event, ctx)
+        await ctx.send(event)
         assert len(received) == 1
         assert received[0] is event
 
@@ -53,7 +53,7 @@ class TestEventWatch:
         watch = EventWatch(ToolCallEvent)
         watch.arm(stream, callback)
 
-        await stream.send(ModelMessage(content="hello"), ctx)
+        await ctx.send(ModelMessage(content="hello"))
         assert len(received) == 0
 
     @pytest.mark.asyncio
@@ -68,8 +68,8 @@ class TestEventWatch:
         watch = EventWatch(ToolCallEvent.name == "search")
         watch.arm(stream, callback)
 
-        await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
-        await stream.send(ToolCallEvent(name="other", arguments="{}"), ctx)
+        await ctx.send(ToolCallEvent(name="search", arguments="{}"))
+        await ctx.send(ToolCallEvent(name="other", arguments="{}"))
         assert len(received) == 1
 
     @pytest.mark.asyncio
@@ -86,7 +86,7 @@ class TestEventWatch:
         watch.disarm()
         assert not watch.is_armed
 
-        await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
+        await ctx.send(ToolCallEvent(name="search", arguments="{}"))
         assert len(received) == 0
 
 
@@ -104,7 +104,7 @@ class TestCadenceWatch:
         watch.arm(stream, callback)
 
         for i in range(5):
-            await stream.send(ToolCallEvent(name=f"t{i}", arguments="{}"), ctx)
+            await ctx.send(ToolCallEvent(name=f"t{i}", arguments="{}"))
 
         # 5 events, batch size 3 -> 1 batch of 3, 2 remaining
         assert len(batches) == 1
@@ -123,7 +123,7 @@ class TestCadenceWatch:
         watch.arm(stream, callback)
 
         for i in range(4):
-            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+            await ctx.send(ModelMessage(content=f"m{i}"))
 
         assert len(batches) == 2
 
@@ -139,7 +139,7 @@ class TestCadenceWatch:
         watch = CadenceWatch(n=5)
         watch.arm(stream, callback)
 
-        await stream.send(ModelMessage(content="m1"), ctx)
+        await ctx.send(ModelMessage(content="m1"))
         watch.disarm()
         assert len(batches) == 0
 
@@ -155,8 +155,8 @@ class TestCadenceWatch:
         watch = CadenceWatch(max_wait=0.1, condition=ToolCallEvent)
         watch.arm(stream, callback)
 
-        await stream.send(ToolCallEvent(name="t1", arguments="{}"), ctx)
-        await stream.send(ToolCallEvent(name="t2", arguments="{}"), ctx)
+        await ctx.send(ToolCallEvent(name="t1", arguments="{}"))
+        await ctx.send(ToolCallEvent(name="t2", arguments="{}"))
 
         await asyncio.sleep(0.2)
 
@@ -175,8 +175,8 @@ class TestCadenceWatch:
         watch = CadenceWatch(n=2, max_wait=1.0)
         watch.arm(stream, callback)
 
-        await stream.send(ModelMessage(content="m1"), ctx)
-        await stream.send(ModelMessage(content="m2"), ctx)
+        await ctx.send(ModelMessage(content="m1"))
+        await ctx.send(ModelMessage(content="m2"))
 
         # Count trigger fires immediately; no need to wait for timeout
         assert len(batches) == 1
@@ -194,7 +194,7 @@ class TestCadenceWatch:
         watch = CadenceWatch(n=10, max_wait=0.1)
         watch.arm(stream, callback)
 
-        await stream.send(ModelMessage(content="m1"), ctx)
+        await ctx.send(ModelMessage(content="m1"))
         await asyncio.sleep(0.2)
 
         assert len(batches) == 1
@@ -225,8 +225,8 @@ class TestCadenceWatch:
         watch.arm(stream, callback)
 
         # Count trigger fires
-        await stream.send(ModelMessage(content="m1"), ctx)
-        await stream.send(ModelMessage(content="m2"), ctx)
+        await ctx.send(ModelMessage(content="m1"))
+        await ctx.send(ModelMessage(content="m2"))
         assert len(batches) == 1
 
         # Wait past max_wait; cancelled timer must not fire a phantom batch
@@ -246,12 +246,12 @@ class TestCadenceWatch:
         watch.arm(stream, callback)
 
         # Count-trigger the first batch
-        await stream.send(ModelMessage(content="m1"), ctx)
-        await stream.send(ModelMessage(content="m2"), ctx)
+        await ctx.send(ModelMessage(content="m1"))
+        await ctx.send(ModelMessage(content="m2"))
         assert len(batches) == 1
 
         # A single follow-up event should start a fresh timer and flush on timeout
-        await stream.send(ModelMessage(content="m3"), ctx)
+        await ctx.send(ModelMessage(content="m3"))
         await asyncio.sleep(0.2)
 
         assert len(batches) == 2
@@ -274,20 +274,20 @@ class TestCadenceWatch:
 
         # Wave 1: count-trigger fires batch 1 (callback now awaiting).
         for i in range(1, 6):
-            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+            await ctx.send(ModelMessage(content=f"m{i}"))
 
         # Wave 2: while batch 1's callback is in flight, queue 3 events.
         # max_wait elapses, _wait_and_fire fires batch 2 (also slow).
         await asyncio.sleep(0.01)
         for i in range(6, 9):
-            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+            await ctx.send(ModelMessage(content=f"m{i}"))
         await asyncio.sleep(max_wait + 0.02)
 
         # Wave 3: lands while batch 2's callback is awaiting. Pre-fix, the
         # max_wait timer task is alive (in callback) so no fresh timer is
         # scheduled and these events sit in the buffer forever.
         for i in range(9, 12):
-            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+            await ctx.send(ModelMessage(content=f"m{i}"))
 
         # Wait for all in-flight callbacks plus one more max_wait cycle.
         await asyncio.sleep(2 * callback_sleep + max_wait + 0.1)
@@ -307,14 +307,14 @@ class TestCadenceWatch:
         watch.arm(stream, callback)
 
         # Timer-trigger the first batch with a single event
-        await stream.send(ModelMessage(content="m1"), ctx)
+        await ctx.send(ModelMessage(content="m1"))
         await asyncio.sleep(0.2)
         assert len(batches) == 1
         assert len(batches[0]) == 1
 
         # Count trigger must still work on the next batch
         for i in range(3):
-            await stream.send(ModelMessage(content=f"x{i}"), ctx)
+            await ctx.send(ModelMessage(content=f"x{i}"))
 
         assert len(batches) == 2
         assert len(batches[1]) == 3
@@ -408,11 +408,11 @@ class TestAllOf:
         w.arm(stream, callback)
 
         # Fire only one — should not trigger
-        await stream.send(ToolCallEvent(name="t", arguments="{}"), ctx)
+        await ctx.send(ToolCallEvent(name="t", arguments="{}"))
         assert len(received) == 0
 
         # Fire the other — now both have fired
-        await stream.send(ModelMessage(content="m"), ctx)
+        await ctx.send(ModelMessage(content="m"))
         assert len(received) == 1
 
     @pytest.mark.asyncio
@@ -434,8 +434,8 @@ class TestAllOf:
         tool_event = ToolCallEvent(name="search", arguments="{}")
         msg_event = ModelMessage(content="hello")
 
-        await stream.send(tool_event, ctx)
-        await stream.send(msg_event, ctx)
+        await ctx.send(tool_event)
+        await ctx.send(msg_event)
 
         assert len(received) == 1
         combined = received[0]
@@ -460,13 +460,13 @@ class TestAllOf:
         w.arm(stream, callback)
 
         # First cycle
-        await stream.send(ToolCallEvent(name="t", arguments="{}"), ctx)
-        await stream.send(ModelMessage(content="m"), ctx)
+        await ctx.send(ToolCallEvent(name="t", arguments="{}"))
+        await ctx.send(ModelMessage(content="m"))
         assert len(received) == 1
 
         # Second cycle
-        await stream.send(ToolCallEvent(name="t2", arguments="{}"), ctx)
-        await stream.send(ModelMessage(content="m2"), ctx)
+        await ctx.send(ToolCallEvent(name="t2", arguments="{}"))
+        await ctx.send(ModelMessage(content="m2"))
         assert len(received) == 2
 
 
@@ -486,10 +486,10 @@ class TestAnyOf:
         )
         w.arm(stream, callback)
 
-        await stream.send(ToolCallEvent(name="t", arguments="{}"), ctx)
+        await ctx.send(ToolCallEvent(name="t", arguments="{}"))
         assert len(received) == 1
 
-        await stream.send(ModelMessage(content="m"), ctx)
+        await ctx.send(ModelMessage(content="m"))
         assert len(received) == 2
 
 
@@ -510,15 +510,15 @@ class TestSequence:
         w.arm(stream, callback)
 
         # Wrong order — message first, then tool call → should not fire
-        await stream.send(ModelMessage(content="m"), ctx)
+        await ctx.send(ModelMessage(content="m"))
         assert len(received) == 0
 
         # Right order — tool call (matches first watch)
-        await stream.send(ToolCallEvent(name="t", arguments="{}"), ctx)
+        await ctx.send(ToolCallEvent(name="t", arguments="{}"))
         assert len(received) == 0  # Only first step done
 
         # Second step — message
-        await stream.send(ModelMessage(content="m2"), ctx)
+        await ctx.send(ModelMessage(content="m2"))
         assert len(received) == 1  # Sequence complete
 
     @pytest.mark.asyncio
@@ -537,13 +537,13 @@ class TestSequence:
         w.arm(stream, callback)
 
         # Complete first sequence
-        await stream.send(ToolCallEvent(name="t1", arguments="{}"), ctx)
-        await stream.send(ModelMessage(content="m1"), ctx)
+        await ctx.send(ToolCallEvent(name="t1", arguments="{}"))
+        await ctx.send(ModelMessage(content="m1"))
         assert len(received) == 1
 
         # Complete second sequence
-        await stream.send(ToolCallEvent(name="t2", arguments="{}"), ctx)
-        await stream.send(ModelMessage(content="m2"), ctx)
+        await ctx.send(ToolCallEvent(name="t2", arguments="{}"))
+        await ctx.send(ModelMessage(content="m2"))
         assert len(received) == 2
 
 

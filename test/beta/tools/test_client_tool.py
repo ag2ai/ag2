@@ -51,7 +51,7 @@ async def test_client_tool_register_execute_sends_to_stream(client_tool: ClientT
     with ExitStack() as stack:
         client_tool.register(stack, context)
         call = ToolCallEvent(name="my_client_tool", arguments="{}")
-        await stream.send(call, context)
+        await context.send(call)
 
     events = await stream.history.get_events()
 
@@ -76,7 +76,7 @@ async def test_client_tool_register_with_middleware(client_tool: ClientTool) -> 
         client_tool.register(stack, context, middleware=[TagMiddleware()])
 
         call = ToolCallEvent(name="my_client_tool", arguments="{}")
-        await stream.send(call, context)
+        await context.send(call)
 
     events = await stream.history.get_events()
 
