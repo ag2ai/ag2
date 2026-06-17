@@ -67,7 +67,7 @@ Both built-ins are importable from `#!python autogen.beta.aggregate` and both ta
 
 Writes a timestamped summary of the conversation to `/memory/conversations/`. The companion to [`EpisodicMemoryPolicy`](/docs/beta/advanced/assembly#episodicmemorypolicy), which reads from that directory.
 
-```python linenums="1" hl_lines="8-11"
+```python linenums="1" hl_lines="6 9"
 from autogen.beta.aggregate import ConversationSummaryAggregate
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
@@ -107,7 +107,7 @@ Unlike `ConversationSummaryAggregate`, this one is destructive toward its own pr
 
 The default prompt is journal-style: *preserve facts that are still relevant, drop outdated content*. For other memory shapes — procedural memory (what tactics worked), reflection (what to do differently next time), or task-state memory — pass a `prompt=` template with `{existing}` and `{events}` placeholders:
 
-```python linenums="1" hl_lines="3-8"
+```python linenums="1" hl_lines="3-7"
 strategy = WorkingMemoryAggregate(
     config=OpenAIConfig(model="gpt-5-mini"),
     prompt=(
@@ -144,7 +144,7 @@ The path constants (`WORKING_MEMORY_PATH`, `CONVERSATIONS_PREFIX`) are defined i
 
 Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/agent_harness#knowledge-knowledgeconfig). The Agent wires a `_AggregationMiddleware` that fires `aggregate()` automatically according to the trigger.
 
-```python linenums="1" hl_lines="11-15"
+```python linenums="1" hl_lines="11-14"
 from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.aggregate import AggregateTrigger, ConversationSummaryAggregate
 from autogen.beta.config import OpenAIConfig

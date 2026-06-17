@@ -29,7 +29,7 @@ You can request human input directly from within a tool using the `Context` obje
 
 Here is an example of a tool that asks for human confirmation:
 
-```python linenums="1" hl_lines="6-9"
+```python linenums="1" hl_lines="6-8"
 from autogen.beta import Context, Agent, tool
 
 @tool
@@ -64,7 +64,7 @@ A **HITL** hook is a callback function that consumes a `HumanInputRequest` event
 
 You can register a HITL hook by passing it as the `hitl_hook` argument when initializing the `Agent`.
 
-```python linenums="1" hl_lines="4-11 15"
+```python linenums="1" hl_lines="4 15"
 from autogen.beta import Agent
 from autogen.beta.events import HumanInputRequest, HumanMessage
 

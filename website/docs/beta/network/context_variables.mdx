@@ -131,7 +131,7 @@ async def increment_counter(channel: ChannelInject, state: ChannelStateInject) -
 If `#!python ContextEquals` isn't enough, write a custom `#!python TransitionCondition`
 and register it. The Protocol is just two attributes:
 
-```python linenums="1" hl_lines="3 5 10"
+```python linenums="1" hl_lines="11 13-15 17"
 from typing import ClassVar
 from dataclasses import dataclass
 from autogen.beta.network import register_condition

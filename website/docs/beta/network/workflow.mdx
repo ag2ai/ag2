@@ -131,7 +131,7 @@ graph = TransitionGraph.sequence([
 
 ## Custom Graphs
 
-```python linenums="1" hl_lines="3 4 5 7 12"
+```python linenums="1" hl_lines="5 6 9 10 13"
 graph = TransitionGraph(
     initial_speaker=triage.agent_id,
     transitions=[
@@ -157,7 +157,7 @@ For dynamic routing (target depends on runtime state), a tool can return a typed
 
 For each `#!python ToolCalled(name) → AgentTarget(agent)` transition, attach an `#!python @tool`-decorated function with that exact name and have it return a typed `#!python Handoff(target=agent.agent_id)`:
 
-```python linenums="1" hl_lines="1 2 3"
+```python linenums="1" hl_lines="1 2 4"
 @triage.tool
 async def transfer_to_eng(reason: str = "") -> Handoff:
     """Transfer the conversation to the engineering specialist."""
@@ -170,7 +170,7 @@ The workflow adapter consumes the `#!python Handoff` from the agent's local-stre
 
 A tool can also end the channel cleanly by returning a typed `#!python Finish(summary="...", reason="...")`. The framework reads it from the agent's `#!python ToolResultEvent` and closes the channel — same effect as a `#!python TerminateTarget` rule firing, but the decision is made by the tool at runtime rather than by a static graph transition:
 
-```python linenums="1" hl_lines="1 2 3"
+```python linenums="1" hl_lines="1 2 4"
 @coord.tool
 async def finish(summary: str) -> Finish:
     """Wrap up — no further handoffs needed."""
@@ -208,7 +208,7 @@ The state is read on every fold of a substantive envelope (text or handoff). So 
 
 The 1-bit case: a tool sets a boolean, the transition routes on it. This is the modern `#!python is_termination_msg` analogue, but generalised to "is some condition met."
 
-```python linenums="1" hl_lines="2 3 4 5 11"
+```python linenums="1" hl_lines="5 7"
 graph = TransitionGraph(
     initial_speaker=intake.agent_id,
     transitions=[
@@ -229,7 +229,7 @@ Triage's tool flips `#!python urgent=True` when the ticket warrants paging. The 
 
 Three or more buckets, one `#!python ContextEquals` per branch. Order matters: lower-priority transitions are checked first, and ties resolve in *insertion order*. Put the more specific rules first so they win:
 
-```python linenums="1" hl_lines="3 4 5 6"
+```python linenums="1" hl_lines="4-6"
 graph = TransitionGraph(
     initial_speaker=triage.agent_id,
     transitions=[
@@ -314,7 +314,7 @@ register_condition(ContextThreshold)
 
 ## Opening a Workflow Channel
 
-```python linenums="1" hl_lines="6 7 8 9 10"
+```python linenums="1" hl_lines="6-9"
 graph = TransitionGraph.round_robin(
     participants=[alice.agent_id, bob.agent_id, carol.agent_id],
     max_turns=6,

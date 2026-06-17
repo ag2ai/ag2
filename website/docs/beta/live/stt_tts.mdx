@@ -25,7 +25,7 @@ The recorder produces a `VoiceInput` containing 16-bit PCM bytes plus the sample
 
 `OpenAITranscriber` implements the `STTConfig` protocol and exposes a `.pipe(agent)` method that wraps an `Agent` in a `VoicePipeline`. Calling `pipeline.ask(voice)` transcribes the audio and forwards the text to the agent's normal `ask()` flow.
 
-```python linenums="1" hl_lines="14 18-19"
+```python linenums="1" hl_lines="13 18"
 import asyncio
 
 from autogen.beta import Agent, config
@@ -75,7 +75,7 @@ pipeline = OpenAITranslationTranscriber("whisper-1").pipe(agent)
 
 `TTSObserver` is an observer that listens to `ModelMessageChunk` events as the agent streams its response, batches them into sentence-sized chunks, calls a TTS provider, and emits `SynthesizedAudioEvent`s onto the stream. A `SoundDevicePlayer` attached to the same stream then plays them.
 
-```python linenums="1" hl_lines="6-13 16-18"
+```python linenums="1" hl_lines="10-11 16-18"
 import asyncio
 
 from autogen.beta import Agent, config
@@ -120,7 +120,7 @@ config = OpenAITTSConfig(
 
 The full round-trip — voice in, voice out — is just both halves wired up at once: pipe the agent through the transcriber, attach a `TTSObserver`, and share a stream with the player.
 
-```python linenums="1" hl_lines="16-17 22-23 25 28 31-32 36"
+```python linenums="1" hl_lines="16-17 22 25 28"
 import asyncio
 
 from autogen.beta import Agent, config

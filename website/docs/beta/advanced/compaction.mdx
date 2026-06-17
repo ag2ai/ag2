@@ -65,7 +65,7 @@ Both built-ins are importable from `#!python autogen.beta.compact`.
 
 Keeps the last N events, drops the rest. Zero LLM cost. Suitable when old context has diminishing value and recency is what matters.
 
-```python linenums="1" hl_lines="6 9"
+```python linenums="1" hl_lines="5 7"
 from autogen.beta.compact import TailWindowCompact
 from autogen.beta.knowledge import MemoryKnowledgeStore
 
@@ -83,7 +83,7 @@ Passing a `KnowledgeStore` is optional. If provided, dropped events are persiste
 
 Summarizes the dropped portion via one LLM call, inserts a `CompactionSummary` event at the head of retained history. Use when you want to keep some sense of the old conversation instead of just forgetting it.
 
-```python linenums="1" hl_lines="8-12"
+```python linenums="1" hl_lines="6-8 11"
 from autogen.beta.compact import SummarizeCompact
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
@@ -122,7 +122,7 @@ summary = CompactionSummary(
 
 Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/agent_harness#knowledge-knowledgeconfig). The Agent wires a `_CompactionMiddleware` that fires the strategy automatically after each turn when the trigger threshold is crossed.
 
-```python linenums="1" hl_lines="10-14"
+```python linenums="1" hl_lines="10-13"
 from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
 from autogen.beta.config import OpenAIConfig

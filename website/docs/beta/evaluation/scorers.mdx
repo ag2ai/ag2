@@ -9,7 +9,7 @@ A scorer is a function that grades one agent run and produces a structured feedb
 
 Decorate a function with `#!python @scorer`. The framework calls it once per task; the return value becomes feedback.
 
-```python linenums="1" hl_lines="1 4"
+```python linenums="1" hl_lines="4-6"
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.eval import scorer
 
@@ -128,7 +128,7 @@ Six ship under `autogen.beta.eval.scorers`. Four are simple, deterministic check
 
 Each is a *factory* — calling it returns a `Scorer`. Drop them straight into the `scorers=` list:
 
-```python linenums="1" hl_lines="8-13"
+```python linenums="1" hl_lines="8-12"
 from autogen.beta.eval.scorers import (
     final_answer_matches,
     no_tool_errors,

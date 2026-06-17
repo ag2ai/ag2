@@ -77,7 +77,7 @@ await channel.send("Hi bob, what's a good first ML concept to learn?")
 
 Both default handlers run `#!python Agent.ask` on every inbound `#!python EV_TEXT`, so the conversation auto-drives. Two ways to halt:
 
-```python linenums="1" hl_lines="6 8"
+```python linenums="1" hl_lines="7 12-13"
 # Cap by message count, then explicit close.
 async def wait_for_text_count(hub, channel_id, expected, *, timeout=120.0):
     import asyncio

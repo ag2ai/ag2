@@ -57,7 +57,7 @@ Typing **y** lets the tool run. Any other input denies it — the agent receives
 
 Override the `message` parameter to tailor the approval prompt:
 
-```python linenums="1" hl_lines="2-5"
+```python linenums="1" hl_lines="2-4"
 @tool(
     middleware=[approval_required(
         message="⚠️ The agent wants to run `{tool_name}` with {tool_arguments}. Allow? (y/n)",

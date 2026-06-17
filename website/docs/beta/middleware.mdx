@@ -147,7 +147,7 @@ Use `on_human_input()` when you want to:
 
 To make middleware apply to every turn for an agent, pass it through the `middleware` argument when constructing the agent.
 
-```python linenums="1" hl_lines="3 10-11"
+```python linenums="1" hl_lines="9-11"
 from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.middleware import LoggingMiddleware, RetryMiddleware

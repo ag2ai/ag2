@@ -85,7 +85,7 @@ The same agent can mix client-side and server-side tools — server tools execut
 
 A remote A2A agent plugs into a local `#!python Agent` like any other delegate via `#!python Agent.as_tool()`. The local LLM decides when to delegate; the wrapper exposes a `#!python task_<name>` tool that takes an `objective` (and optional `context`).
 
-```python linenums="1" hl_lines="13"
+```python linenums="1" hl_lines="14"
 from autogen.beta import Agent
 from autogen.beta.a2a import A2AConfig
 from autogen.beta.config import AnthropicConfig
