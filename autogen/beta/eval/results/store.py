@@ -218,7 +218,7 @@ def load_run(path: str | os.PathLike[str]) -> "RunResult":
 
     suite_doc = doc.get("suite", {})
     suite = Suite(
-        tuple(tr.task for tr in task_results),
+        tasks=tuple(tr.task for tr in task_results),
         name=suite_doc.get("name", "loaded"),
         source=suite_doc.get("source", str(path)),
     )

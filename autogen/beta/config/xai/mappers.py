@@ -33,6 +33,7 @@ from xai_sdk.chat import (
 )
 from xai_sdk.proto import usage_pb2
 
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -302,6 +303,10 @@ def convert_messages(
         elif isinstance(message, ModelRequest):
             contents: list[chat_pb2.Content] = [_content_from_input(p, serializer) for p in message.parts]
             result.append(user(*contents))
+
+        elif isinstance(message, CompactionSummary):
+            # Surface the summary as a user turn so it stays visible and gives a valid opening turn
+            result.append(user(f"[Summary of earlier conversation]\n{message.summary}"))
 
     return result, responses
 

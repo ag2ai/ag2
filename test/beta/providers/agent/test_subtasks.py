@@ -175,7 +175,7 @@ async def test_subtask_cannot_recurse(provider_config) -> None:
     assert captured_subtasks, "subtask must have been spawned"
     child = captured_subtasks[0]
     assert child._task_config is None
-    assert child._build_subtask_tools() == []
+    assert not child.tools
 
 
 async def test_persistent_stream_shares_history(provider_config) -> None:

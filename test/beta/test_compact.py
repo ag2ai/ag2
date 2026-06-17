@@ -17,6 +17,11 @@ from autogen.beta.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolResult,
+    ToolResultEvent,
+    ToolResultsEvent,
 )
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
@@ -63,6 +68,62 @@ class TestTailWindowCompact:
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 3
+
+
+def _cycle(cid: str, name: str = "t") -> tuple[ModelResponse, ToolResultsEvent]:
+    """A (ModelResponse tool call, ToolResultsEvent) pair linked by id."""
+    call = ToolCallEvent(id=cid, name=name, arguments="{}")
+    mr = ModelResponse(tool_calls=ToolCallsEvent(calls=[call]))
+    res = ToolResultsEvent(results=[ToolResultEvent(parent_id=cid, name=name, result=ToolResult("ok"))])
+    return mr, res
+
+
+@pytest.mark.asyncio
+class TestTailWindowToolCycleBoundary:
+    """A tool-call/result cycle must never be split across the compaction
+    boundary — a retained orphan result would crash strict providers."""
+
+    async def test_split_cycle_compacts_whole(self) -> None:
+        mr, res = _cycle("c1")
+        events = [
+            ModelRequest([TextInput("u0")]),
+            mr,
+            res,
+            ModelRequest([TextInput("u1")]),
+            ModelResponse(ModelMessage("done")),
+        ]
+        # target=3 would cut between the call and its result
+        result = await TailWindowCompact(target=3).compact(events, Context(stream=MemoryStream()), None)
+        assert result == [events[3], events[4]]
+
+    async def test_clean_cycle_boundary_kept(self) -> None:
+        mr, res = _cycle("c1")
+        events = [ModelRequest([TextInput("u0")]), mr, res]
+        result = await TailWindowCompact(target=2).compact(events, Context(stream=MemoryStream()), None)
+        assert result == [mr, res]
+
+    async def test_split_second_of_chained_cycles(self) -> None:
+        mr1, res1 = _cycle("c1")
+        mr2, res2 = _cycle("c2")
+        events = [mr1, res1, mr2, res2, ModelResponse(ModelMessage("end"))]
+        # target=2 would cut between the second call and its result
+        result = await TailWindowCompact(target=2).compact(events, Context(stream=MemoryStream()), None)
+        assert result == [events[4]]
+
+    async def test_split_cycle_persisted_whole(self) -> None:
+        store = MemoryKnowledgeStore()
+        mr, res = _cycle("c1")
+        events = [
+            ModelRequest([TextInput("u0")]),
+            mr,
+            res,
+            ModelRequest([TextInput("u1")]),
+            ModelResponse(ModelMessage("done")),
+        ]
+        result = await TailWindowCompact(target=3).compact(events, Context(stream=MemoryStream()), store)
+        assert mr not in result and res not in result
+        entries = await store.list("/log/")
+        assert [e for e in entries if "dropped" in e]
 
 
 class TestCompactionSummary:

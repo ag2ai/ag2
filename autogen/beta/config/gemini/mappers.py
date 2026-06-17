@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from fast_depends.library.serializer import SerializerProto
 from google.genai import types
 
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -296,6 +297,11 @@ def convert_messages(
 
             if parts:
                 result.append(types.Content(role="user", parts=parts))
+
+        elif isinstance(message, CompactionSummary):
+            # Surface the summary as a user turn so it stays visible and gives a valid opening turn
+            summary = types.Part.from_text(text=f"[Summary of earlier conversation]\n{message.summary}")
+            result.append(types.Content(role="user", parts=[summary]))
 
     return result
 

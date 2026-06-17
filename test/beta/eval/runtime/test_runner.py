@@ -79,7 +79,7 @@ async def test_runs_one_task_and_captures_events(tmp_path: Path) -> None:
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather, city_argument_correct],
         store_dir=tmp_path,
         model_config={"t-tokyo": _cassette("Tokyo")},
@@ -109,7 +109,7 @@ async def test_runs_multiple_tasks_concurrently(tmp_path: Path) -> None:
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather, city_argument_correct],
         store_dir=tmp_path,
         model_config={
@@ -134,7 +134,7 @@ async def test_global_model_config_applied_to_every_task(tmp_path: Path) -> None
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config=_cassette("London"),
@@ -146,17 +146,20 @@ async def test_global_model_config_applied_to_every_task(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
-async def test_target_factory_exception_is_captured_not_raised(tmp_path: Path) -> None:
-    """A factory that explodes during construction does not abort the run."""
+async def test_agent_ask_exception_is_captured_not_raised(tmp_path: Path) -> None:
+    """An agent whose ``ask`` explodes does not abort the run — the error is captured on the trace."""
 
-    def broken_factory(*, config: object = None) -> Agent:
-        raise RuntimeError("factory exploded")
+    class ExplodingAgent:
+        name = "exploding"
+
+        async def ask(self, *args: object, **kwargs: object) -> object:
+            raise RuntimeError("ask exploded")
 
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}])
 
     result = await run_agent(
         suite,
-        agent=broken_factory,
+        agent=ExplodingAgent(),  # type: ignore[arg-type]
         scorers=[called_get_weather],
         store_dir=tmp_path,
         concurrency=1,
@@ -170,37 +173,6 @@ async def test_target_factory_exception_is_captured_not_raised(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_factory_without_config_parameter_works_with_warning(tmp_path: Path) -> None:
-    """A factory without a ``config`` parameter is supported (with a warning)."""
-
-    @scorer
-    def constant() -> bool:
-        return True
-
-    def bare_factory() -> Agent:
-        return Agent(
-            "bare",
-            config=_cassette("Anywhere"),
-            tools=[get_weather],
-        )
-
-    suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Anywhere?"}}])
-
-    with pytest.warns(RuntimeWarning, match="does not accept a 'config' parameter"):
-        result = await run_agent(
-            suite,
-            agent=bare_factory,
-            scorers=[constant],
-            store_dir=tmp_path,
-            model_config=_cassette("Anywhere"),  # would normally be injected; ignored here
-            concurrency=1,
-        )
-
-    [task_result] = result.tasks
-    assert task_result.feedback == (Feedback(key="constant", score=True),)
-
-
-@pytest.mark.asyncio
 async def test_missing_input_key_raises(tmp_path: Path) -> None:
     """A task whose inputs lack 'input' fails fast — run_agent grades inputs['input']."""
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"question": "Tokyo?"}}])
@@ -208,7 +180,7 @@ async def test_missing_input_key_raises(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=r"no 'input' key"):
         await run_agent(
             suite,
-            agent=_build_weather_agent,
+            agent=_build_weather_agent(),
             scorers=[called_get_weather],
             store_dir=tmp_path,
             model_config=_cassette("Tokyo"),
@@ -223,7 +195,7 @@ async def test_explicit_empty_input_is_allowed(tmp_path: Path) -> None:
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config=_cassette("Tokyo"),
@@ -238,7 +210,7 @@ async def test_run_id_is_generated_unless_provided(tmp_path: Path) -> None:
 
     auto = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -246,7 +218,7 @@ async def test_run_id_is_generated_unless_provided(tmp_path: Path) -> None:
     )
     explicit = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -266,7 +238,7 @@ async def test_run_persists_to_store_dir(tmp_path: Path) -> None:
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -286,7 +258,7 @@ async def test_budget_violation_recorded_not_aborted(tmp_path: Path) -> None:
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -309,7 +281,7 @@ async def test_inline_list_dataset_is_loaded(tmp_path: Path) -> None:
 
     result = await run_agent(
         items,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -333,14 +305,12 @@ async def test_user_middleware_and_observers_still_fire(tmp_path: Path) -> None:
 
     user_observer = observer_factory(callback=record, sync_to_thread=False)
 
-    def factory(*, config: object = None) -> Agent:
-        return Agent(
-            "weather",
-            prompt="Use get_weather.",
-            config=config,
-            tools=[get_weather],
-            observers=[user_observer],
-        )
+    agent = Agent(
+        "weather",
+        prompt="Use get_weather.",
+        tools=[get_weather],
+        observers=[user_observer],
+    )
 
     suite = Suite.from_list([
         {"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}},
@@ -348,7 +318,7 @@ async def test_user_middleware_and_observers_still_fire(tmp_path: Path) -> None:
 
     result = await run_agent(
         suite,
-        agent=factory,
+        agent=agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -368,7 +338,7 @@ async def test_run_duration_is_recorded(tmp_path: Path) -> None:
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -382,7 +352,7 @@ async def test_run_duration_is_recorded(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_reply_ask_continuations_are_captured(tmp_path: Path) -> None:
-    """A factory that drives ``reply.ask`` internally still has all events captured.
+    """An agent that drives ``reply.ask`` internally still has all events captured.
 
     EventCapture subscribes directly to the stream (not via ``sub_scope``),
     so its subscription survives the ``agent.ask`` → ``reply.ask`` transition
@@ -409,17 +379,15 @@ async def test_reply_ask_continuations_are_captured(tmp_path: Path) -> None:
             reply = await self._agent.ask(prompt, **kwargs)
             return await reply.ask("And how warm is it?")
 
-    def factory(*, config: object = None) -> Agent:
-        inner = Agent("weather", config=config, tools=[get_weather])
-        return TwoTurnWeather(inner)  # type: ignore[return-value]
+    agent = TwoTurnWeather(Agent("weather", tools=[get_weather]))
 
     @scorer
     def saw_at_least_two_model_responses(trace: Trace) -> bool:
         return len(trace.events_of(ModelResponse)) >= 2
 
     result = await run_agent(
-        [{"task_id": "t1", "inputs": {"input": "Tokyo weather?"}}],
-        agent=factory,
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo weather?"}}]),
+        agent=agent,  # type: ignore[arg-type]
         scorers=[saw_at_least_two_model_responses],
         model_config={"t1": cassette},
         store_dir=tmp_path,
@@ -433,26 +401,29 @@ async def test_reply_ask_continuations_are_captured(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_store_dir_is_required(tmp_path: Path) -> None:
-    """Calling run_agent() without store_dir is a TypeError — the kwarg is mandatory."""
+async def test_store_dir_is_optional(tmp_path: Path) -> None:
+    """Omitting store_dir runs the eval without persisting a run JSON."""
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "?"}}])
 
-    with pytest.raises(TypeError, match="store_dir"):
-        await run_agent(  # type: ignore[call-arg]
-            suite,
-            agent=_build_weather_agent,
-            scorers=[called_get_weather],
-            model_config={"t1": _cassette("Tokyo")},
-        )
+    result = await run_agent(
+        suite,
+        agent=_build_weather_agent(),
+        scorers=[called_get_weather],
+        model_config={"t1": _cassette("Tokyo")},
+    )
+
+    assert len(result.tasks) == 1
+    # Nothing was written — no run JSON exists under tmp_path.
+    assert list(tmp_path.glob("*.json")) == []
 
 
 @pytest.mark.asyncio
 async def test_run_accepts_an_agent_instance(tmp_path: Path) -> None:
-    """``agent=`` accepts a prebuilt Agent instance, not just a factory."""
+    """``agent=`` accepts a prebuilt Agent instance."""
     agent = Agent("weather", config=_cassette("Tokyo"), tools=[get_weather])
 
     result = await run_agent(
-        [{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}],
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}]),
         agent=agent,
         scorers=[called_get_weather, city_argument_correct],
         store_dir=tmp_path,
@@ -470,8 +441,8 @@ async def test_run_accepts_an_agent_instance(tmp_path: Path) -> None:
 async def test_repeats_runs_each_task_n_times(tmp_path: Path) -> None:
     """``repeats=N`` runs each task N times (distinct ids) and pools the pass-rate."""
     result = await run_agent(
-        [{"task_id": "tokyo", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}],
-        agent=_build_weather_agent,
+        Suite.from_list([{"task_id": "tokyo", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}]),
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config=_cassette("Tokyo"),  # one config, applied to every repeat
@@ -488,8 +459,8 @@ async def test_repeats_runs_each_task_n_times(tmp_path: Path) -> None:
 async def test_label_is_recorded_and_serialized(tmp_path: Path) -> None:
     """A user-defined ``label`` is carried on the result and persisted to the run JSON."""
     result = await run_agent(
-        [{"task_id": "t1", "inputs": {"input": "Tokyo?"}}],
-        agent=_build_weather_agent,
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}}]),
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -504,8 +475,8 @@ async def test_label_is_recorded_and_serialized(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_label_defaults_to_none(tmp_path: Path) -> None:
     result = await run_agent(
-        [{"task_id": "t1", "inputs": {"input": "Tokyo?"}}],
-        agent=_build_weather_agent,
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}}]),
+        agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
         model_config={"t1": _cassette("Tokyo")},
@@ -547,8 +518,8 @@ class TestTelemetryInjection:
         """every emitted span carries caller attrs + auto-seeded eval ids (task_id per task)."""
         captured = InMemorySpanExporter()
         await run_agent(
-            [{"task_id": "t-tokyo", "inputs": {"input": "Tokyo?"}}],
-            agent=_build_weather_agent,
+            Suite.from_list([{"task_id": "t-tokyo", "inputs": {"input": "Tokyo?"}}]),
+            agent=_build_weather_agent(),
             scorers=[called_get_weather],
             store_dir=tmp_path,
             model_config={"t-tokyo": _cassette("Tokyo")},
@@ -574,8 +545,8 @@ class TestTelemetryInjection:
         """A caller-supplied ag2.eval.run_id overrides the auto-seeded one."""
         captured = InMemorySpanExporter()
         await run_agent(
-            [{"task_id": "t1", "inputs": {"input": "Tokyo?"}}],
-            agent=_build_weather_agent,
+            Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}}]),
+            agent=_build_weather_agent(),
             scorers=[called_get_weather],
             store_dir=tmp_path,
             model_config={"t1": _cassette("Tokyo")},
@@ -588,12 +559,14 @@ class TestTelemetryInjection:
 
     async def test_injected_processor_is_additive_grading_unchanged(self, tmp_path: Path) -> None:
         """the capturing processor sees the spans, and grading is identical with/without it."""
-        suite = [{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}]
+        suite = Suite.from_list([
+            {"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}
+        ])
         scorers = [called_get_weather, city_argument_correct]
 
         baseline = await run_agent(
             suite,
-            agent=_build_weather_agent,
+            agent=_build_weather_agent(),
             scorers=scorers,
             store_dir=tmp_path,
             model_config={"t1": _cassette("Tokyo")},
@@ -603,7 +576,7 @@ class TestTelemetryInjection:
         captured = InMemorySpanExporter()
         injected = await run_agent(
             suite,
-            agent=_build_weather_agent,
+            agent=_build_weather_agent(),
             scorers=scorers,
             store_dir=tmp_path,
             model_config={"t1": _cassette("Tokyo")},
@@ -619,8 +592,8 @@ class TestTelemetryInjection:
         """TaskResult.trace_ref.trace_id equals the real OTEL trace id of the emitted spans."""
         captured = InMemorySpanExporter()
         result = await run_agent(
-            [{"task_id": "t1", "inputs": {"input": "Tokyo?"}}],
-            agent=_build_weather_agent,
+            Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}}]),
+            agent=_build_weather_agent(),
             scorers=[called_get_weather],
             store_dir=tmp_path,
             model_config={"t1": _cassette("Tokyo")},
@@ -650,8 +623,8 @@ class TestTelemetryInjection:
     async def test_no_extra_args_is_unchanged(self, tmp_path: Path) -> None:
         """a no-arg run still grades identically (trace_ref present, eval ids self-seeded)."""
         result = await run_agent(
-            [{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}],
-            agent=_build_weather_agent,
+            Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}]),
+            agent=_build_weather_agent(),
             scorers=[called_get_weather, city_argument_correct],
             store_dir=tmp_path,
             model_config={"t1": _cassette("Tokyo")},
