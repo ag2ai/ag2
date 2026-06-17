@@ -9,7 +9,7 @@ sidebarTitle: Prompt Management
 
 Agents can be initialized with a static system prompt. You can provide a single string or a list of strings:
 
-```python linenums="1" hl_lines="6 12-14"
+```python linenums="1" hl_lines="6 12-15"
 from autogen.beta import Agent
 
 # Single string prompt
@@ -38,7 +38,7 @@ Dynamic prompt functions support the same powerful execution context capabilitie
 
 Dynamic prompts are evaluated only once at the beginning of the conversation, and their results are appended to the static prompts and reused for subsequent turns.
 
-```python linenums="1" hl_lines="5-10"
+```python linenums="1" hl_lines="5-11"
 from autogen.beta import Agent, Context
 
 agent = Agent("assistant")

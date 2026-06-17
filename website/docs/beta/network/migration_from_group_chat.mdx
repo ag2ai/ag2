@@ -44,7 +44,7 @@ alice.initiate_chat(manager, message="Topic: should every dev learn Rust?")
 
 **Beta network:**
 
-```python linenums="1" hl_lines="6-8 11-14 16"
+```python linenums="1" hl_lines="6-9 11-16"
 from autogen.beta.network import (
     Hub, HubClient, LocalLink, Passport, Resume,
     TransitionGraph,
@@ -125,7 +125,7 @@ groupchat = GroupChat(agents=[triage, security_reviewer, general_responder])
 
 **Beta network:**
 
-```python linenums="1" hl_lines="6-26"
+```python linenums="1" hl_lines="6-27"
 from autogen.beta.network import (
     AgentTarget, Always, FromSpeaker, RevertToInitiatorTarget,
     TerminateTarget, ToolCalled, Transition, TransitionGraph,

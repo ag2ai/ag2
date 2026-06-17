@@ -34,7 +34,7 @@ The rest of these docs cover each piece in depth. Read the quick-start below fir
 
 The simplest plausible eval. Two tasks, one custom scorer, one prebuilt.
 
-```python linenums="1" hl_lines="11-15 23-26 30-32 36-43"
+```python linenums="1" hl_lines="11-16 23-27 30-32 36-44"
 import asyncio
 from pathlib import Path
 
@@ -107,7 +107,7 @@ That's the whole framework in 30 lines. Everything else in these docs is variati
 
 You don't want your eval suite to depend on a live LLM in pre-merge CI — too slow, too expensive, too flaky. The framework uses [TestConfig](/docs/beta/testing/) cassettes to mock the model deterministically:
 
-```python linenums="1" hl_lines="3-5 12"
+```python linenums="1" hl_lines="3-6 12"
 from autogen.beta.testing import TestConfig
 
 cassettes = {

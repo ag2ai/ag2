@@ -224,7 +224,7 @@ config = VertexAIConfig(
   </Tab>
 
   <Tab title="Pre-built Credentials object">
-```python linenums="1" hl_lines="4-5 12"
+```python linenums="1" hl_lines="4-6 12"
 import google.auth
 from autogen.beta.config import VertexAIConfig
 
@@ -376,7 +376,7 @@ In many use cases, you may want to separate the logic of defining your agent (to
 
 You can accomplish this by passing the configuration to the `.ask()` method when interacting with the agent. This is especially useful for applications like web servers where the user might bring their own API key or choose a different model on the fly.
 
-```python linenums="1" hl_lines="15-17"
+```python linenums="1" hl_lines="15-18"
 from autogen.agent import Agent
 from autogen.beta.config import OpenAIConfig
 

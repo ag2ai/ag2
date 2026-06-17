@@ -91,7 +91,8 @@ def greet(name: str) -> str:  # highlighted
 - **No double blank lines in the block.** Two or more consecutive blanks are collapsed at render time (see the warning above), which shifts every highlight below them. Confirm the block has only single blank-line separators before trusting any `hl_lines`.
 - **Line numbers are 1-indexed from the first code line** — the line immediately after the opening ```` ``` ```` fence is line `1`. The fence itself is not counted, and the count is independent of what `linenums="1"` starts the *displayed* numbering at.
 - **Recompute `hl_lines` whenever you edit a block.** Inserting or removing a line shifts every range below it, so an unrelated edit silently mis-highlights. After editing, re-count from the first code line and update the ranges.
-- **Highlight the lines that carry the point** — the construction, the call, the changed lines. Do not highlight blank lines, lone closing brackets, or unrelated imports; a range that includes them is a sign the numbers have drifted.
+- **Highlight the lines that carry the point** — the construction, the call, the changed lines. Do not highlight blank lines or unrelated imports; a range that includes them is a sign the numbers have drifted.
+- **Keep brackets balanced.** A highlight group must not open a bracket it doesn't close. If a highlighted line opens a multi-line `(`/`[`/`{`, either extend the range through its matching closing line (highlight the whole construct, closing bracket included) **or** highlight only the lines *inside* the brackets (excluding both the opener and the closer). A range that ends on a dangling open bracket — or a lone closing bracket with no matching open in the same group — renders as a visually unbalanced block.
 - **Verify before committing.** Open the block, count to each highlighted line, and confirm it lands on what the surrounding prose says it does.
 
 ### Code Examples

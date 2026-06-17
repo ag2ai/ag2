@@ -137,7 +137,7 @@ except ValueError as exc:
 
 Subscribe directly on the bound stream to capture every lifecycle event in order.
 
-```python linenums="1" hl_lines="6 7 8"
+```python linenums="1" hl_lines="6-9"
 from autogen.beta.events import TaskCompleted, TaskProgress, TaskStarted
 
 stream = MemoryStream()

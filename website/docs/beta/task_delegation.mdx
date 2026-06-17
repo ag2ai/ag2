@@ -96,7 +96,7 @@ coordinator = Agent(
 
 An agent can delegate to itself to break complex work into independent sub-tasks. Each sub-task runs as a fresh copy of the agent with its own stream and history.
 
-```python linenums="1" hl_lines="12-15"
+```python linenums="1" hl_lines="12-17"
 analyst = Agent(
     "analyst",
     prompt=(

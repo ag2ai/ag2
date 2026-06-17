@@ -130,7 +130,7 @@ def math_op(a: int, b: int) -> int:
 
 Under the hood, arguments are serialized and validated using [Pydantic](https://docs.pydantic.dev/latest/){.external-link target="_blank"} schemas. This means you can use standard `pydantic.Field` annotations to deeply customize individual schema parameters, providing the LLM with strict guidelines on what values are acceptable.
 
-```python linenums="1" hl_lines="8-12 17-20"
+```python linenums="1" hl_lines="8-13 17-21"
 from typing import Annotated
 from pydantic import Field
 
@@ -162,7 +162,7 @@ def set_temperature(
 
 A complete example combining custom tool properties and strict parameter validation looks like this:
 
-```python linenums="1" hl_lines="6 7 12-16 21-24"
+```python linenums="1" hl_lines="6-7 12-17 21-25"
 from typing import Annotated
 from pydantic import Field
 from autogen.beta import tool

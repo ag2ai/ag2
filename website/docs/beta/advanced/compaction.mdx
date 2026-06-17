@@ -83,7 +83,7 @@ Passing a `KnowledgeStore` is optional. If provided, dropped events are persiste
 
 Summarizes the dropped portion via one LLM call, inserts a `CompactionSummary` event at the head of retained history. Use when you want to keep some sense of the old conversation instead of just forgetting it.
 
-```python linenums="1" hl_lines="6-8 11"
+```python linenums="1" hl_lines="6-9 11"
 from autogen.beta.compact import SummarizeCompact
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
@@ -122,7 +122,7 @@ summary = CompactionSummary(
 
 Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/agent_harness#knowledge-knowledgeconfig). The Agent wires a `_CompactionMiddleware` that fires the strategy automatically after each turn when the trigger threshold is crossed.
 
-```python linenums="1" hl_lines="10-13"
+```python linenums="1" hl_lines="10-14"
 from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
 from autogen.beta.config import OpenAIConfig

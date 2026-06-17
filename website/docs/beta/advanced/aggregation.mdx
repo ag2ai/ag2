@@ -107,7 +107,7 @@ Unlike `ConversationSummaryAggregate`, this one is destructive toward its own pr
 
 The default prompt is journal-style: *preserve facts that are still relevant, drop outdated content*. For other memory shapes — procedural memory (what tactics worked), reflection (what to do differently next time), or task-state memory — pass a `prompt=` template with `{existing}` and `{events}` placeholders:
 
-```python linenums="1" hl_lines="3-7"
+```python linenums="1" hl_lines="3-8"
 strategy = WorkingMemoryAggregate(
     config=OpenAIConfig(model="gpt-5-mini"),
     prompt=(
@@ -144,7 +144,7 @@ The path constants (`WORKING_MEMORY_PATH`, `CONVERSATIONS_PREFIX`) are defined i
 
 Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/agent_harness#knowledge-knowledgeconfig). The Agent wires a `_AggregationMiddleware` that fires `aggregate()` automatically according to the trigger.
 
-```python linenums="1" hl_lines="11-14"
+```python linenums="1" hl_lines="11-15"
 from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.aggregate import AggregateTrigger, ConversationSummaryAggregate
 from autogen.beta.config import OpenAIConfig
