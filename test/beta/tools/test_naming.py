@@ -138,7 +138,8 @@ def test_empty_args() -> None:
             "description": "Tool description.",
             "name": "my_tool",
             "parameters": {
-                "type": "null",
+                "type": "object",
+                "properties": {},
             },
         },
         "type": "function",
