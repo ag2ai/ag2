@@ -6,7 +6,7 @@
 
 The REST/SSE adapter speaks a minimal, dependency-free JSON contract (no
 ``ag-ui`` / ``a2a-sdk`` types) so any client that can POST JSON can drive an
-:class:`~autogen.beta.a2ui.A2UIAgent`::
+A2UI agent served via :class:`~autogen.beta.a2ui.rest.A2UIServer`::
 
     {
       "messages":  [{"role": "user", "content": "show a booking form"}],
@@ -31,9 +31,9 @@ from typing import Any
 from autogen.beta.events import BaseEvent, Input, ModelMessage, ModelRequest, ModelResponse, TextInput
 
 from .._types import A2UIVersion
-from ..actions import A2UIAction
+from ..actions import A2UIEventAction
 from ..capabilities import A2UIClientCapabilities, parse_client_capabilities
-from ..incoming import iter_incoming_prompts
+from ..incoming import A2UIIncomingParseResult, iter_incoming_prompts, parse_incoming_interactions
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,8 @@ class A2UIServerRequest:
     messages; ``history`` carries the prior conversation turns.
     ``client_capabilities`` carries the decoded ``a2uiClientCapabilities``, if
     present, so the dispatcher can fold catalog negotiation into the prompt.
+    ``client_interactions`` carries the typed client→server envelopes so the
+    dispatcher can surface each as an ``A2UIClientEvent`` on the turn's stream.
     """
 
     current_inputs: list[Input] = field(default_factory=list)
@@ -60,22 +62,23 @@ class A2UIServerRequest:
     prompt: list[str] = field(default_factory=list)
     variables: dict[str, Any] = field(default_factory=dict)
     client_capabilities: A2UIClientCapabilities | None = None
+    client_interactions: list[A2UIIncomingParseResult] = field(default_factory=list)
 
 
 def parse_request(
     body: bytes | str | dict[str, Any],
     *,
-    resolve_action: Callable[[str], A2UIAction | None],
+    resolve_action: Callable[[str], A2UIEventAction | None],
     version_key: A2UIVersion = "v0.9",
 ) -> A2UIServerRequest:
     """Parse a raw request body into an :class:`A2UIServerRequest`.
 
     Args:
         body: The raw JSON request body (bytes/str) or an already-decoded dict.
-        resolve_action: Looks up a registered :class:`A2UIAction` by name (e.g.
-            ``agent.get_action``). Used to rewrite incoming ``action`` envelopes;
-            an unregistered action is dropped with a warning rather than leaking
-            raw client data into the prompt.
+        resolve_action: Looks up a tool-backed action by name (e.g.
+            ``runtime.get_action``). A matched action routes the click to its
+            tool; an unmatched click is rewritten generically so the LLM can
+            react to the button it rendered.
         version_key: The protocol version under which to read
             ``a2uiClientCapabilities`` (the client nests it under its version,
             e.g. ``"v1.0"``). Defaults to ``"v0.9"``; callers serving a non-v0.9
@@ -116,6 +119,7 @@ def parse_request(
         prompt=prompt,
         variables=dict(raw_variables),
         client_capabilities=parse_client_capabilities(data, version_key=version_key),
+        client_interactions=parse_incoming_interactions(raw_a2ui),
     )
 
 
@@ -172,7 +176,7 @@ def _map_messages(raw_messages: list[Any]) -> tuple[list[str], list[BaseEvent], 
 
 def _map_a2ui_envelopes(
     raw_a2ui: list[Any],
-    resolve_action: Callable[[str], A2UIAction | None],
+    resolve_action: Callable[[str], A2UIEventAction | None],
 ) -> list[Input]:
     """Rewrite client→server ``action`` / ``functionResponse`` / ``error`` envelopes as prompt inputs.
 

@@ -4,7 +4,8 @@
 
 import pytest
 
-from autogen.beta.a2ui import A2UIClientCapabilities, A2UIEventAction
+from autogen.beta.a2ui import A2UIClientCapabilities
+from autogen.beta.a2ui.actions import A2UIEventAction
 from autogen.beta.a2ui.rest import parse_request
 from autogen.beta.events import ModelRequest, ModelResponse
 
@@ -140,7 +141,9 @@ class TestParseRequestActions:
         assert "confirm" in prompt
         assert "do_confirm" in prompt
 
-    def test_unregistered_action_is_dropped(self) -> None:
+    def test_unregistered_action_becomes_generic_prompt(self) -> None:
+        # An unmatched click no longer drops: buttons are rendered dynamically by
+        # the LLM, so the click is rewritten generically and the LLM continues.
         req = parse_request(
             {
                 "messages": [],
@@ -153,7 +156,8 @@ class TestParseRequestActions:
             },
             resolve_action=_no_actions,
         )
-        assert req.current_inputs == []
+        assert len(req.current_inputs) == 1
+        assert "ghost" in req.current_inputs[0].content
 
     def test_error_envelope_becomes_corrective_prompt(self) -> None:
         req = parse_request(

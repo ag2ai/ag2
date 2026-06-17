@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -24,6 +24,7 @@ from autogen.beta.events import (
     TextInput,
     ToolResultsEvent,
 )
+from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final.client_tool import ClientTool
 from autogen.beta.tools.final.function_tool import FunctionToolSchema
@@ -326,6 +327,7 @@ class AgentExecutor(A2AAgentExecutorBase):
         *,
         incoming_variables: dict[str, Any],
         extra_prompt: Sequence[str] = (),
+        additional_middleware: Iterable[MiddlewareFactory] = (),
     ) -> tuple[ModelResponse, dict[str, Any]]:
         agent = self._agent
         if agent.config is None:
@@ -344,10 +346,13 @@ class AgentExecutor(A2AAgentExecutorBase):
         # ``_execute`` is private but is the only entry point that accepts
         # a non-``ModelRequest`` initial event (``ToolResultsEvent`` for
         # continuation turns). See the class-level docstring for context.
+        # ``additional_middleware`` lets a subclass (e.g. the A2UI executor)
+        # inject per-turn middleware onto a plain agent without baking it in.
         reply = await agent._execute(
             initial_event,
             context=ctx,
             client=client,
             additional_tools=client_tools,
+            additional_middleware=additional_middleware,
         )
         return reply.response, dict(ctx.variables)

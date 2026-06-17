@@ -4,14 +4,11 @@
 
 import pytest
 
-from autogen.beta.a2ui import (
-    A2UIAgent,
-    A2UIEventAction,
-    A2UIFunctionCallAction,
-    a2ui_action,
-)
+from autogen.beta import Agent
+from autogen.beta.a2ui import a2ui_action
+from autogen.beta.a2ui._runtime import _A2UIRuntime
 from autogen.beta.a2ui.action_tool import A2UIActionTool
-from autogen.beta.a2ui.actions import A2UIAction
+from autogen.beta.a2ui.actions import A2UIEventAction
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
@@ -26,7 +23,7 @@ class TestDecorator:
         assert isinstance(schedule_posts, A2UIActionTool)
         assert schedule_posts.name == "schedule_posts"
         action = schedule_posts.action
-        assert isinstance(action, A2UIAction)
+        assert isinstance(action, A2UIEventAction)
         assert action.name == "schedule_posts"
         assert action.action_type == "event"
         assert action.tool_name == "schedule_posts"
@@ -81,42 +78,24 @@ class TestDecorator:
         assert refresh.action.example_context == {}
 
 
-class TestAgentActionCollection:
+class TestRuntimeActionCollection:
     def test_collects_action_from_decorated_tool(self) -> None:
         @a2ui_action(description="Schedule posts")
         def schedule(time: str) -> str:
             return time
 
-        agent = A2UIAgent(name="ui", tools=[schedule])
+        rt = _A2UIRuntime(Agent(name="ui", tools=[schedule]))
 
-        collected = agent.get_action("schedule")
+        collected = rt.get_action("schedule")
         assert collected is not None
         assert collected.action_type == "event"
         assert collected.tool_name == "schedule"
 
-        prompt = agent.a2ui_prompt_section
+        prompt = rt.system_prompt_section
         assert "Server Events" in prompt
         assert "schedule" in prompt
 
-    def test_collects_bare_action(self) -> None:
-        action = A2UIEventAction(name="rewrite", description="Regenerate previews")
-        agent = A2UIAgent(name="ui", tools=[action])
-
-        assert agent.get_action("rewrite") is action
-
-    def test_collects_function_call_declaration(self) -> None:
-        action = A2UIFunctionCallAction(
-            name="openUrl",
-            description="Open a URL",
-            example_args={"url": "https://example.com"},
-        )
-        agent = A2UIAgent(name="ui", tools=[action])
-
-        prompt = agent.a2ui_prompt_section
-        assert "Client Functions" in prompt
-        assert "openUrl" in prompt
-
-    def test_mixed_tools_and_actions(self) -> None:
+    def test_only_action_tools_are_collected(self) -> None:
         def web_search(query: str) -> str:
             return query
 
@@ -124,30 +103,13 @@ class TestAgentActionCollection:
         def schedule(time: str) -> str:
             return time
 
-        bare = A2UIEventAction(name="rewrite", description="Regenerate")
+        # Plain tools (web_search) are not clickable buttons; only @a2ui_action
+        # tools contribute an A2UIEventAction.
+        rt = _A2UIRuntime(Agent(name="ui", tools=[web_search, schedule]))
 
-        agent = A2UIAgent(name="ui", tools=[web_search, schedule, bare])
-
-        assert {a.name for a in agent.actions} == {"schedule", "rewrite"}
-        assert agent.get_action("schedule") is not None
-        assert agent.get_action("rewrite") is not None
-
-    def test_duplicate_action_name_raises(self) -> None:
-        @a2ui_action(name="dup")
-        def first(x: str) -> str:
-            return x
-
-        clash = A2UIEventAction(name="dup", description="clash")
-
-        with pytest.raises(ValueError, match="Duplicate A2UI action name 'dup'"):
-            A2UIAgent(name="ui", tools=[first, clash])
-
-    def test_bare_action_is_not_forwarded_as_executable_tool(self) -> None:
-        # A bare A2UIAction is not a Tool; if it were forwarded to the base
-        # Agent it would fail to register. Successful construction proves it is
-        # filtered out of the executable tool list.
-        agent = A2UIAgent(name="ui", tools=[A2UIEventAction(name="rewrite")])
-        assert agent.get_action("rewrite") is not None
+        assert {a.name for a in rt.actions} == {"schedule"}
+        assert rt.get_action("schedule") is not None
+        assert rt.get_action("web_search") is None
 
 
 @pytest.mark.asyncio
@@ -159,9 +121,8 @@ async def test_decorated_tool_is_callable_by_agent() -> None:
         calls.append(time)
         return f"scheduled {time}"
 
-    agent = A2UIAgent(
+    agent = Agent(
         name="ui",
-        validate_responses=False,
         tools=[schedule],
         config=TestConfig(
             ToolCallEvent(name="schedule", arguments='{"time": "2pm"}'),

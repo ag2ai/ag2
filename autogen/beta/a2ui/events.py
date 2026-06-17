@@ -17,6 +17,7 @@ persisted to durable history (the conversational prose is kept as a
 from autogen.beta.events import BaseEvent, Field
 
 from ._types import ServerToClientMessage
+from .incoming import A2UIIncomingParseResult
 
 
 class A2UIValidationFailedEvent(BaseEvent):
@@ -63,4 +64,29 @@ class A2UIMessageEvent(BaseEvent):
     message: ServerToClientMessage = Field(kw_only=False)
 
 
-__all__ = ("A2UIMessageEvent", "A2UIValidationFailedEvent")
+class A2UIClientEvent(BaseEvent):
+    """A single client→server A2UI interaction received from the renderer.
+
+    Emitted on the turn's stream when a transport receives a client→server
+    envelope — an ``action`` (a click on a server ``event`` button), a v1.0
+    ``functionResponse`` (the client's reply to a server-initiated
+    ``callFunction``), or an ``error``. Symmetric to :class:`A2UIMessageEvent`
+    (server→client): it lets server-side observers react to / log client
+    interactions, in addition to the envelope being rewritten into the LLM's
+    prompt for the turn.
+
+    Per the A2UI spec a purely client-side ``functionCall`` action (e.g.
+    ``openUrl``) runs on the renderer with **no** network round-trip, so it
+    produces no envelope and therefore no event here.
+
+    Emitted from a per-turn middleware (so it fires inside the turn, where the
+    agent's observers are subscribed). Transient: derived from the request, not
+    persisted to durable history.
+    """
+
+    __transient__ = True
+
+    interaction: A2UIIncomingParseResult = Field(kw_only=False)
+
+
+__all__ = ("A2UIClientEvent", "A2UIMessageEvent", "A2UIValidationFailedEvent")

@@ -25,7 +25,7 @@ from autogen.beta import Agent, Context
 from autogen.beta.a2a import A2AConfig, A2AServer
 from autogen.beta.a2a.events import A2ATaskStatusUpdate
 from autogen.beta.a2a.testing import make_test_client_factory
-from autogen.beta.a2ui import A2UIAgent
+from autogen.beta.a2ui._types import A2UIVersion
 from autogen.beta.a2ui.a2a import get_a2ui_data, is_a2ui_part
 from autogen.beta.a2ui.a2a.executor import A2UIAgentExecutor
 from autogen.beta.config import LLMClient, ModelConfig
@@ -133,14 +133,27 @@ class MetadataInterceptor(ClientCallInterceptor):
 
 
 def client_for(
-    agent: A2UIAgent,
+    agent: Agent,
     *,
     streaming: bool = False,
     interceptors: Sequence[ClientCallInterceptor] = (),
     hitl_hook: Any = None,
+    protocol_version: A2UIVersion = "v0.9",
+    validate_responses: bool = True,
 ) -> Agent:
-    """A client Agent talking to ``agent`` via the A2UI executor over in-process HTTP."""
-    a2a_server = A2AServer(agent, executor=A2UIAgentExecutor(agent))
+    """A client Agent talking to ``agent`` via the A2UI executor over in-process HTTP.
+
+    ``agent`` is a plain ``autogen.beta.Agent``; A2UI config (protocol version,
+    validation) now lives on the :class:`A2UIAgentExecutor` rather than on the
+    (removed) ``A2UIAgent`` subclass. Clickable buttons come from the agent's
+    ``@a2ui_action`` tools (``Agent(tools=[...])``).
+    """
+    executor = A2UIAgentExecutor(
+        agent,
+        protocol_version=protocol_version,
+        validate_responses=validate_responses,
+    )
+    a2a_server = A2AServer(agent, executor=executor)
     factory = make_test_client_factory(a2a_server, url="http://test")
     kwargs: dict[str, Any] = {}
     if hitl_hook is not None:

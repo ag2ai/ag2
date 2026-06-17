@@ -4,7 +4,7 @@
 
 import pytest
 
-from autogen.beta.a2ui import A2UIEventAction, A2UIFunctionCallAction
+from autogen.beta.a2ui.actions import A2UIEventAction
 from autogen.beta.a2ui.parser import A2UIResponseParser
 from autogen.beta.a2ui.schema_manager import A2UISchemaManager
 
@@ -234,33 +234,3 @@ class TestPromptSection:
         assert "book_table" in prompt
         assert '"event"' in prompt
         assert "Client Functions" not in prompt
-
-    def test_function_call_action_in_prompt(self) -> None:
-        manager = A2UISchemaManager()
-        prompt = manager.generate_prompt_section(
-            actions=[
-                A2UIFunctionCallAction(
-                    name="openUrl",
-                    description="Open a URL",
-                    example_args={"url": "https://example.com"},
-                ),
-            ],
-        )
-        assert "Client Functions" in prompt
-        assert "openUrl" in prompt
-        assert '"functionCall"' in prompt
-        assert "Server Events" not in prompt
-
-    def test_function_call_prompt_uses_call_not_name(self) -> None:
-        manager = A2UISchemaManager()
-        prompt = manager.generate_prompt_section(
-            actions=[
-                A2UIFunctionCallAction(
-                    name="openUrl",
-                    description="Open a URL",
-                    example_args={"url": "https://example.com"},
-                ),
-            ],
-        )
-        assert '"call":' in prompt or '"call": ' in prompt
-        assert '"returnType"' in prompt

@@ -30,7 +30,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
-from ..agent import A2UIAgent
+from autogen.beta.agent import Agent
+
+from .._runtime import _A2UIRuntime
 from ..serialize import to_jsonl
 from .dispatch import A2UIFrame, A2UIProseFrame, stream_turn
 from .request import A2UIServerRequest, parse_request
@@ -41,19 +43,19 @@ _SSE_MEDIA_TYPE = "text/event-stream"
 _JSONL_MEDIA_TYPE = "application/x-ndjson"
 
 
-def build_sse_app(agent: A2UIAgent, *, path: str = "/a2ui") -> Starlette:
+def build_sse_app(agent: Agent, runtime: _A2UIRuntime, *, path: str = "/a2ui") -> Starlette:
     """Build a Starlette app that streams the turn as Server-Sent Events."""
-    endpoint = functools.partial(_sse_endpoint, agent)
+    endpoint = functools.partial(_sse_endpoint, agent, runtime)
     return Starlette(routes=[Route(path, endpoint, methods=["POST"])])
 
 
-def build_jsonl_app(agent: A2UIAgent, *, path: str = "/a2ui") -> Starlette:
+def build_jsonl_app(agent: Agent, runtime: _A2UIRuntime, *, path: str = "/a2ui") -> Starlette:
     """Build a Starlette app that streams the turn as canonical A2UI NDJSON."""
-    endpoint = functools.partial(_jsonl_endpoint, agent)
+    endpoint = functools.partial(_jsonl_endpoint, agent, runtime)
     return Starlette(routes=[Route(path, endpoint, methods=["POST"])])
 
 
-async def _read_request(agent: A2UIAgent, request: Request) -> "A2UIServerRequest | Response":
+async def _read_request(runtime: _A2UIRuntime, request: Request) -> "A2UIServerRequest | Response":
     """Read+parse the body, or return a 400 ``Response`` on failure.
 
     Body reading can fail independently of parsing — e.g. ``ClientDisconnect``
@@ -67,33 +69,33 @@ async def _read_request(agent: A2UIAgent, request: Request) -> "A2UIServerReques
     try:
         return parse_request(
             body,
-            resolve_action=agent.get_action,
-            version_key=agent.schema_manager.version_string,
+            resolve_action=runtime.get_action,
+            version_key=runtime.version_string,
         )
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
-async def _sse_endpoint(agent: A2UIAgent, request: Request) -> Response:
-    parsed = await _read_request(agent, request)
+async def _sse_endpoint(agent: Agent, runtime: _A2UIRuntime, request: Request) -> Response:
+    parsed = await _read_request(runtime, request)
     if isinstance(parsed, Response):
         return parsed
-    return StreamingResponse(_sse_frames(agent, parsed), media_type=_SSE_MEDIA_TYPE)
+    return StreamingResponse(_sse_frames(agent, runtime, parsed), media_type=_SSE_MEDIA_TYPE)
 
 
-async def _jsonl_endpoint(agent: A2UIAgent, request: Request) -> Response:
-    parsed = await _read_request(agent, request)
+async def _jsonl_endpoint(agent: Agent, runtime: _A2UIRuntime, request: Request) -> Response:
+    parsed = await _read_request(runtime, request)
     if isinstance(parsed, Response):
         return parsed
-    return StreamingResponse(_jsonl_frames(agent, parsed), media_type=_JSONL_MEDIA_TYPE)
+    return StreamingResponse(_jsonl_frames(agent, runtime, parsed), media_type=_JSONL_MEDIA_TYPE)
 
 
-async def _sse_frames(agent: A2UIAgent, parsed: A2UIServerRequest) -> AsyncIterator[str]:
+async def _sse_frames(agent: Agent, runtime: _A2UIRuntime, parsed: A2UIServerRequest) -> AsyncIterator[str]:
     # The turn runs lazily as the response streams, so a mid-turn failure can't
     # change the already-sent 200 status. Surface it as an ``event: error`` frame
     # and log it, rather than tearing down the connection silently.
     try:
-        async for frame in stream_turn(agent, parsed):
+        async for frame in stream_turn(agent, runtime, parsed):
             yield _encode_sse(frame)
     except Exception as e:
         logger.exception("A2UI SSE turn failed")
@@ -102,9 +104,9 @@ async def _sse_frames(agent: A2UIAgent, parsed: A2UIServerRequest) -> AsyncItera
         yield "event: done\ndata: {}\n\n"
 
 
-async def _jsonl_frames(agent: A2UIAgent, parsed: A2UIServerRequest) -> AsyncIterator[str]:
+async def _jsonl_frames(agent: Agent, runtime: _A2UIRuntime, parsed: A2UIServerRequest) -> AsyncIterator[str]:
     try:
-        async for frame in stream_turn(agent, parsed):
+        async for frame in stream_turn(agent, runtime, parsed):
             yield _encode_jsonl(frame)
     except Exception as e:
         logger.exception("A2UI NDJSON turn failed")

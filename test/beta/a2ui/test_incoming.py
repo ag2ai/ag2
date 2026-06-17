@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.a2ui import A2UIEventAction
+from autogen.beta.a2ui.actions import A2UIEventAction
 from autogen.beta.a2ui.incoming import (
     A2UIIncomingAction,
     A2UIIncomingActionResult,

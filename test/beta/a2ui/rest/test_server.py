@@ -7,7 +7,8 @@ import json
 from dirty_equals import IsPartialDict
 from starlette.testclient import TestClient
 
-from autogen.beta.a2ui import A2UIAgent, A2UIEventAction
+from autogen.beta import Agent
+from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui.rest import A2UIServer
 from autogen.beta.testing import TestConfig
 
@@ -19,13 +20,14 @@ _A2UI_RESPONSE = (
 )
 
 
-def _agent(response: str = _A2UI_RESPONSE, *, validate: bool = True, actions=()) -> A2UIAgent:
-    return A2UIAgent(name="t", config=TestConfig(response), validate_responses=validate, tools=actions)
+def _server(response: str = _A2UI_RESPONSE, *, validate: bool = True, tools=()) -> A2UIServer:
+    agent = Agent(name="t", config=TestConfig(response), tools=list(tools))
+    return A2UIServer(agent, validate_responses=validate)
 
 
 class TestSSEApp:
     def test_streams_prose_and_message(self) -> None:
-        app = A2UIServer(_agent()).build_sse_app()
+        app = _server().build_sse_app()
         client = TestClient(app)
 
         resp = client.post("/a2ui", json={"messages": [{"role": "user", "content": "show ui"}]})
@@ -39,7 +41,7 @@ class TestSSEApp:
         assert "event: done" in body
 
     def test_plain_text_no_message_frame(self) -> None:
-        app = A2UIServer(_agent("Just text.", validate=False)).build_sse_app()
+        app = _server("Just text.", validate=False).build_sse_app()
         client = TestClient(app)
 
         resp = client.post("/a2ui", json={"messages": [{"role": "user", "content": "hi"}]})
@@ -49,7 +51,7 @@ class TestSSEApp:
         assert "createSurface" not in resp.text
 
     def test_malformed_body_returns_400(self) -> None:
-        app = A2UIServer(_agent()).build_sse_app()
+        app = _server().build_sse_app()
         client = TestClient(app)
 
         resp = client.post("/a2ui", content=b"{not json")
@@ -58,7 +60,7 @@ class TestSSEApp:
         assert "error" in resp.json()
 
     def test_custom_path(self) -> None:
-        app = A2UIServer(_agent("hi", validate=False)).build_sse_app(path="/custom")
+        app = _server("hi", validate=False).build_sse_app(path="/custom")
         client = TestClient(app)
 
         assert client.post("/custom", json={"messages": []}).status_code == 200
@@ -67,7 +69,7 @@ class TestSSEApp:
 
 class TestJSONLApp:
     def test_streams_ndjson_lines(self) -> None:
-        app = A2UIServer(_agent()).build_jsonl_app()
+        app = _server().build_jsonl_app()
         client = TestClient(app)
 
         resp = client.post("/a2ui", json={"messages": [{"role": "user", "content": "show ui"}]})
@@ -79,7 +81,7 @@ class TestJSONLApp:
         assert lines[1] == IsPartialDict({"createSurface": IsPartialDict({"surfaceId": "s1"})})
 
     def test_malformed_body_returns_400(self) -> None:
-        app = A2UIServer(_agent()).build_jsonl_app()
+        app = _server().build_jsonl_app()
         client = TestClient(app)
 
         resp = client.post("/a2ui", content=b"not json")
@@ -88,8 +90,11 @@ class TestJSONLApp:
 
 
 def test_action_click_drives_a_turn() -> None:
-    action = A2UIEventAction(name="confirm", description="Confirm the booking")
-    app = A2UIServer(_agent("Confirmed.", validate=False, actions=[action])).build_sse_app()
+    @a2ui_action(description="Confirm the booking")
+    def confirm() -> str:
+        return "ok"
+
+    app = _server("Confirmed.", validate=False, tools=[confirm]).build_sse_app()
     client = TestClient(app)
 
     resp = client.post(

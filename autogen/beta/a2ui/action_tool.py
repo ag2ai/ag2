@@ -72,7 +72,7 @@ class A2UIActionTool(FunctionTool):
     normal tool — the agent can call it during a turn — but it additionally
     carries an :class:`A2UIEventAction` (``tool_name`` set to its own name) so
     that a button click in the rendered UI routes back to this tool. Pass it in
-    ``A2UIAgent(tools=[...])``; the agent registers both the executable tool and
+    ``Agent(tools=[...])``; the transport discovers both the executable tool and
     its action.
     """
 
@@ -131,11 +131,13 @@ def a2ui_action(
     agent can call, plus an :class:`A2UIEventAction` whose ``tool_name`` points
     back at the tool. When the LLM emits a button with ``action.event.name``
     matching this tool's name, a client click routes the ``event.context`` back
-    as the tool's arguments. Pass the result directly in ``A2UIAgent(tools=[...])``.
+    as the tool's arguments. Pass the result directly in ``Agent(tools=[...])``.
 
-    Only ``event`` (server) actions are supported here: client-side ``functionCall``
-    functions have no server body to decorate — declare those with
-    ``A2UIFunctionCallAction(...)`` instead.
+    Only server ``event`` actions are produced here — a clickable button backed
+    by a server tool. Purely client-side ``functionCall`` buttons (e.g.
+    ``openUrl``) run on the renderer with no server round-trip, so they are not
+    declared on the server; the LLM learns them from the catalog and the client's
+    advertised capabilities.
 
     Args:
         function: The tool function (when used as a bare ``@a2ui_action``).
@@ -153,7 +155,7 @@ def a2ui_action(
         def schedule_posts(time: str) -> str: ...
 
 
-        agent = A2UIAgent(tools=[schedule_posts])
+        agent = Agent(tools=[schedule_posts])
     """
 
     def make(f: Callable[..., Any]) -> A2UIActionTool:

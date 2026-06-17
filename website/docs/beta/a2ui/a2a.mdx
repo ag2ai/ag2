@@ -3,7 +3,7 @@ title: Serving A2UI over A2A
 sidebarTitle: A2A Transport
 ---
 
-A2UI's wire is transport-agnostic, so the same validated messages an `#!python A2UIAgent` emits can ride an [A2A](/docs/beta/a2a/) exchange instead of the built-in [REST adapter](/docs/beta/a2ui/server). The `#!python autogen.beta.a2ui.a2a` submodule plugs an `#!python A2UIAgent` into a standard `#!python A2AServer` and carries each turn's A2UI messages as a canonical A2A `#!python DataPart`.
+A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](/docs/beta/a2a/) exchange instead of the built-in [REST adapter](/docs/beta/a2ui/server). The `#!python autogen.beta.a2ui.a2a` submodule wraps a plain `#!python autogen.beta.Agent` in an `#!python A2UIAgentExecutor`, plugs it into a standard `#!python A2AServer`, and carries each turn's A2UI messages as a canonical A2A `#!python DataPart`.
 
 !!! note
     This page assumes familiarity with the [A2A server](/docs/beta/a2a/server). The A2UI integration is a drop-in `#!python executor` for the same `#!python A2AServer` — everything you know about cards, transports, and tasks still applies.
@@ -23,7 +23,7 @@ The executor splits each completed turn into a text `#!python Part` (the convers
 
 ```python linenums="1"
 from autogen.beta.a2ui.a2a import (
-    A2UIAgentExecutor,        # the A2A executor for an A2UIAgent
+    A2UIAgentExecutor,        # the A2A executor wrapping a plain Agent
     get_a2ui_agent_extension, # build the AgentExtension for the card
     create_a2ui_parts,        # wrap A2UI messages into A2A Parts
     get_a2ui_data,            # decode an A2UI DataPart's payload
@@ -33,33 +33,35 @@ from autogen.beta.a2ui.a2a import (
 
 ## Minimal Server
 
-Wire an `#!python A2UIAgent` into `#!python A2AServer` by passing `#!python executor=A2UIAgentExecutor(agent)`, and advertise A2UI support on the card with a `#!python card_modifier` that appends the extension:
+Wrap a plain `#!python Agent` in `#!python A2UIAgentExecutor` (with the same flat A2UI kwargs as `#!python A2UIServer`), pass it to `#!python A2AServer` via `#!python executor=`, and advertise A2UI support on the card with a `#!python card_modifier` that appends the extension:
 
-```python linenums="1" hl_lines="17 18 24 25"
+```python linenums="1" hl_lines="18 20 21 27"
 import uvicorn
 from a2a.types import AgentCard
 
+from autogen.beta import Agent
 from autogen.beta.a2a import A2AServer
-from autogen.beta.a2ui import A2UIAgent
 from autogen.beta.a2ui.a2a import A2UIAgentExecutor, get_a2ui_agent_extension
 from autogen.beta.config import AnthropicConfig
 
 
 def build_app():
-    agent = A2UIAgent(
+    agent = Agent(
         name="ui_agent",
         config=AnthropicConfig(model="claude-sonnet-4-6"),
+        # tools=[...] — @a2ui_action tools become clickable buttons
     )
+    executor = A2UIAgentExecutor(agent, protocol_version="v0.9")
 
     async def advertise_a2ui(card: AgentCard) -> AgentCard:
         card.capabilities.extensions.append(
-            get_a2ui_agent_extension(version=agent.protocol_version)
+            get_a2ui_agent_extension(version=executor.protocol_version)
         )
         return card
 
     server = A2AServer(
         agent,
-        executor=A2UIAgentExecutor(agent),
+        executor=executor,
         card_modifier=advertise_a2ui,
     )
     return server.build_jsonrpc(url="http://127.0.0.1:8000")

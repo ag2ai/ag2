@@ -24,8 +24,9 @@ import json
 import pytest
 from a2a.types import Part, TaskState
 
+from autogen.beta import Agent
 from autogen.beta.a2a.extension import EXTRA_PARTS_DEPENDENCY_KEY
-from autogen.beta.a2ui import A2UIAgent, A2UIEventAction, a2ui_action
+from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui.a2a import create_a2ui_parts
 from autogen.beta.a2ui.a2a.executor import _extract_a2ui_envelopes
 from autogen.beta.events import ToolCallEvent
@@ -115,7 +116,7 @@ class TestFinalizationMessage:
 
     async def test_splits_prose_and_a2ui_datapart(self) -> None:
         response = f"Here is your UI.\n<a2ui-json>\n[{json.dumps(CREATE_SURFACE_MSG)}]\n</a2ui-json>"
-        agent = A2UIAgent(name="ui_agent", config=TestConfig(response), validate_responses=True)
+        agent = Agent(name="ui_agent", config=TestConfig(response))
         client = client_for(agent, streaming=True)
         stream = MemoryStream()
         payloads, _states = subscribe_task_stream(stream)
@@ -127,7 +128,7 @@ class TestFinalizationMessage:
 
     async def test_a2ui_only_without_prose(self) -> None:
         response = f"<a2ui-json>\n[{json.dumps(DELETE_SURFACE_MSG)}]\n</a2ui-json>"
-        agent = A2UIAgent(name="ui_agent", config=TestConfig(response), validate_responses=True)
+        agent = Agent(name="ui_agent", config=TestConfig(response))
         client = client_for(agent, streaming=True)
         stream = MemoryStream()
         payloads, _states = subscribe_task_stream(stream)
@@ -137,8 +138,8 @@ class TestFinalizationMessage:
         assert payloads == [[DELETE_SURFACE_MSG]]
 
     async def test_plain_text_has_no_a2ui_datapart(self) -> None:
-        agent = A2UIAgent(name="ui_agent", config=TestConfig("Just text."), validate_responses=False)
-        client = client_for(agent, streaming=True)
+        agent = Agent(name="ui_agent", config=TestConfig("Just text."))
+        client = client_for(agent, streaming=True, validate_responses=False)
         stream = MemoryStream()
         payloads, _states = subscribe_task_stream(stream)
 
@@ -160,13 +161,12 @@ class TestIncomingActionRewrite:
             clicked.append(email)
             return "done"
 
-        agent = A2UIAgent(
+        agent = Agent(
             name="ui_agent",
-            validate_responses=False,
             tools=[submit],
             config=TestConfig(ToolCallEvent(name="submit", arguments='{"email": "user@example.com"}'), "All set."),
         )
-        client = client_for(agent)
+        client = client_for(agent, validate_responses=False)
 
         reply = await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
@@ -175,40 +175,43 @@ class TestIncomingActionRewrite:
 
     async def test_action_context_reaches_the_model(self) -> None:
         config = CapturingConfig()
-        agent = A2UIAgent(
-            name="ui_agent",
-            config=config,
-            validate_responses=False,
-            tools=[A2UIEventAction("submit", tool_name="submit_form")],
-        )
-        client = client_for(agent)
+
+        @a2ui_action(description="Submit the form")
+        def submit(email: str) -> str:
+            return email
+
+        # The ACTION_ENVELOPE clicks the "submit" button, which maps to this tool.
+        agent = Agent(name="ui_agent", config=config, tools=[submit])
+        client = client_for(agent, validate_responses=False)
 
         await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
         synthesized = synthesized_text(config.messages[-1])
-        assert "submit_form" in synthesized
+        assert "submit" in synthesized
         assert "user@example.com" in synthesized
 
-    async def test_unregistered_action_is_not_synthesized(self) -> None:
+    async def test_unregistered_action_becomes_generic_prompt(self) -> None:
         config = CapturingConfig()
-        agent = A2UIAgent(name="ui_agent", config=config, validate_responses=False)  # no actions registered
-        client = client_for(agent)
+        agent = Agent(name="ui_agent", config=config)  # no tool-backed buttons
+        client = client_for(agent, validate_responses=False)
 
         await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
-        # No matching A2UIAction → the action is dropped, never synthesized into the
-        # turn: neither the "clicked" phrasing nor the envelope's context survives.
+        # No matching tool → the click is rewritten generically (not dropped):
+        # the button name and its context still reach the model so the LLM can
+        # react to the button it itself rendered.
         synthesized = synthesized_text(config.messages[-1])
-        assert "clicked" not in synthesized
-        assert "user@example.com" not in synthesized
+        assert "clicked" in synthesized
+        assert "submit" in synthesized
+        assert "user@example.com" in synthesized
 
 
 @pytest.mark.asyncio
 class TestIncomingErrorRewrite:
     async def test_error_envelope_becomes_corrective_prompt(self) -> None:
         config = CapturingConfig()
-        agent = A2UIAgent(name="ui_agent", config=config, validate_responses=False)
-        client = client_for(agent)
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, validate_responses=False)
 
         await client.ask("retry", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ERROR_ENVELOPE])})
 
@@ -221,8 +224,8 @@ class TestIncomingErrorRewrite:
 class TestIncomingFunctionResponse:
     async def test_function_response_becomes_continuation_prompt(self) -> None:
         config = CapturingConfig()
-        agent = A2UIAgent(name="ui_agent", config=config, protocol_version="v1.0", validate_responses=False)
-        client = client_for(agent)
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, protocol_version="v1.0", validate_responses=False)
 
         await client.ask(
             "continue", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])}
@@ -246,13 +249,8 @@ class TestCallFunctionPause:
             hitl_prompts.append("called")
             return FUNCTION_RESULT_MARK
 
-        agent = A2UIAgent(
-            name="ui_agent",
-            config=CallFunctionThenComplete(_CALL_FUNCTION_BLOCK),
-            protocol_version="v1.0",
-            validate_responses=True,
-        )
-        client = client_for(agent, streaming=True, hitl_hook=hitl_hook)
+        agent = Agent(name="ui_agent", config=CallFunctionThenComplete(_CALL_FUNCTION_BLOCK))
+        client = client_for(agent, streaming=True, hitl_hook=hitl_hook, protocol_version="v1.0")
         stream = MemoryStream()
         payloads, states = subscribe_task_stream(stream)
 
@@ -266,10 +264,8 @@ class TestCallFunctionPause:
         assert any(payload and "callFunction" in payload[0] for payload in payloads)
 
     async def test_no_call_function_completes_normally(self) -> None:
-        agent = A2UIAgent(
-            name="ui_agent", config=TestConfig("Just a plain reply."), protocol_version="v1.0", validate_responses=True
-        )
-        client = client_for(agent, streaming=True)
+        agent = Agent(name="ui_agent", config=TestConfig("Just a plain reply."))
+        client = client_for(agent, streaming=True, protocol_version="v1.0")
         stream = MemoryStream()
         _payloads, states = subscribe_task_stream(stream)
 
@@ -286,9 +282,9 @@ class TestCapabilitiesNegotiation:
 
     async def test_client_caps_injected_into_prompt(self) -> None:
         config = CapturingConfig()
-        agent = A2UIAgent(name="ui_agent", config=config, validate_responses=False)
+        agent = Agent(name="ui_agent", config=config)
         caps = {"a2uiClientCapabilities": {VERSION: {"supportedCatalogIds": ["https://other.example/c.json"]}}}
-        client = client_for(agent, interceptors=[MetadataInterceptor(caps)])
+        client = client_for(agent, interceptors=[MetadataInterceptor(caps)], validate_responses=False)
 
         await client.ask("hi")
 
@@ -298,8 +294,8 @@ class TestCapabilitiesNegotiation:
 
     async def test_no_caps_no_negotiation_prompt(self) -> None:
         config = CapturingConfig()
-        agent = A2UIAgent(name="ui_agent", config=config, validate_responses=False)
-        client = client_for(agent)
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, validate_responses=False)
 
         await client.ask("hi")
 

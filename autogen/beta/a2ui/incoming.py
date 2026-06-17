@@ -12,7 +12,7 @@ from typing import Any
 from typing_extensions import assert_never
 
 from ._types import JsonValue
-from .actions import A2UIAction, A2UIEventAction
+from .actions import A2UIEventAction
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 logger = logging.getLogger(__name__)
@@ -256,18 +256,20 @@ def sanitize_for_prompt(text: str) -> str:
     return cleaned
 
 
-def action_to_prompt(action: A2UIIncomingAction, action_def: A2UIAction | None) -> str | None:
+def action_to_prompt(action: A2UIIncomingAction, action_def: A2UIEventAction | None) -> str | None:
     """Rewrite a client A2UI ``action`` as an LLM instruction.
 
-    ``action_def`` is the matching :class:`A2UIAction` the caller resolved from
-    the agent's registry (e.g. ``agent.get_action(action.name)``). Returns
-    ``None`` when the action cannot be safely mapped — no name, or no matching
-    registration — so callers drop the part instead of leaking raw, unvetted
-    client data into the prompt. All interpolated client values pass through
-    :func:`sanitize_for_prompt`; the registered action's own fields
-    (``tool_name``/``description``) are developer-provided and trusted.
+    ``action_def`` is the tool-backed action the caller resolved from the agent's
+    tools (e.g. ``runtime.get_action(action.name)``), or ``None`` when the clicked
+    button does not map to a server tool. A matched action routes the click to its
+    tool; an unmatched click is rewritten generically so the LLM can continue the
+    conversation — buttons are rendered dynamically by the LLM, so there is no
+    static registry to validate against. Returns ``None`` only for a nameless
+    (malformed) action. All client-supplied values pass through
+    :func:`sanitize_for_prompt`; the action's own fields (``tool_name``) are
+    developer-provided and trusted.
     """
-    if not action.name or action_def is None:
+    if not action.name:
         return None
 
     name = sanitize_for_prompt(action.name)
@@ -294,17 +296,17 @@ def action_to_prompt(action: A2UIIncomingAction, action_def: A2UIAction | None) 
             f"actionId '{action_id}' carrying the result (a 'value' on success, or an 'error')."
         )
 
-    # Only server ``event`` actions route to a tool; a ``functionCall`` action
-    # (client-side, no server body) has no ``tool_name`` and falls through to the
-    # generic description-based instruction.
-    tool_name = action_def.tool_name if isinstance(action_def, A2UIEventAction) else None
+    # A matched tool-backed action routes the click to its tool; an unmatched
+    # click (action_def is None) falls through to a generic instruction so the
+    # LLM can react to the button it itself rendered.
+    tool_name = action_def.tool_name if action_def is not None else None
     if tool_name:
         return (
             f"The user clicked the '{name}' button{origin}. "
             f"Call the tool '{tool_name}' with arguments: {ctx_json}. "
             f"Do not respond with text only.{response_hint}"
         )
-    desc = f" {action_def.description}" if action_def.description else ""
+    desc = f" {action_def.description}" if action_def is not None and action_def.description else ""
     return f"The user clicked the '{name}' button{origin}.{desc} Context: {ctx_json}{response_hint}"
 
 
@@ -354,9 +356,27 @@ def function_response_to_prompt(fr: A2UIIncomingFunctionResponse) -> str:
     )
 
 
+def parse_incoming_interactions(envelopes: Iterable[Any]) -> list[A2UIIncomingParseResult]:
+    """Parse client→server envelopes into typed results, dropping unclassifiable ones.
+
+    Used by the transports to surface each incoming interaction as an
+    :class:`~autogen.beta.a2ui.A2UIClientEvent`. Unlike :func:`iter_incoming_prompts`
+    (which rewrites envelopes into prompt strings), this keeps the structured
+    result — ``action`` / ``functionResponse`` / ``error`` — for observers.
+    ``unknown`` (unclassifiable) envelopes are skipped.
+    """
+    results: list[A2UIIncomingParseResult] = []
+    for envelope in envelopes:
+        result = parse_incoming_message(envelope)
+        if isinstance(result, A2UIIncomingUnknownResult):
+            continue
+        results.append(result)
+    return results
+
+
 def iter_incoming_prompts(
     envelopes: Iterable[Any],
-    resolve_action: Callable[[str], A2UIAction | None],
+    resolve_action: Callable[[str], A2UIEventAction | None],
 ) -> Iterator[str]:
     """Rewrite client→server A2UI envelopes into corrective prompt strings.
 
@@ -364,18 +384,15 @@ def iter_incoming_prompts(
     classification + ``sanitize_for_prompt`` handling lives in one place; each
     transport only wraps the yielded strings in its own input type
     (``TextInput`` / ``Part(text=...)``). Envelopes that cannot be safely mapped
-    are dropped with a warning: an ``action`` with no matching registration, a
-    ``functionResponse`` missing its ``functionCallId``, or an unrecognized kind.
+    are dropped with a warning: a nameless ``action``, a ``functionResponse``
+    missing its ``functionCallId``, or an unrecognized kind.
     """
     for envelope in envelopes:
         result = parse_incoming_message(envelope)
         if isinstance(result, A2UIIncomingActionResult):
             prompt = action_to_prompt(result.action, resolve_action(result.action.name))
             if prompt is None:
-                logger.warning(
-                    "Dropping A2UI action '%s' — no matching A2UIAction registration.",
-                    result.action.name,
-                )
+                logger.warning("Dropping A2UI action with no name.")
                 continue
             yield prompt
         elif isinstance(result, A2UIIncomingFunctionResponseResult):
@@ -409,6 +426,7 @@ __all__ = (
     "error_to_prompt",
     "function_response_to_prompt",
     "iter_incoming_prompts",
+    "parse_incoming_interactions",
     "parse_incoming_message",
     "sanitize_for_prompt",
 )

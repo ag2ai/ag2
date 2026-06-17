@@ -4,36 +4,36 @@
 
 """Public A2UI surface.
 
-Only the broadly-reusable, user-facing types live here: the agent, the action
-declarations (and the ``@a2ui_action`` decorator), client capabilities, and the
-stream events. Advanced/internal pieces — the parser, schema manager, validation
-middleware, inbound-wire parse types, and the prompt-synthesis helpers — are
-imported directly from their submodules (e.g. ``autogen.beta.a2ui.incoming``,
-``autogen.beta.a2ui.parser``) when needed.
+A2UI is a transport over a plain ``autogen.beta.Agent`` (mirroring A2A / AG-UI):
+the agent stays a normal ``Agent`` and A2UI behaviour is applied by a transport
+wrapper — :class:`~autogen.beta.a2ui.rest.A2UIServer` (REST/SSE) or
+:class:`~autogen.beta.a2ui.a2a.A2UIAgentExecutor` (A2A) — configured with flat
+A2UI kwargs.
+
+Only the broadly-reusable, user-facing surface lives here: the ``@a2ui_action``
+decorator (clickable buttons, passed to ``Agent(tools=[...])``), client
+capabilities, and the stream events. Advanced/internal pieces — the parser,
+schema manager, validation middleware, inbound-wire parse types, and
+prompt-synthesis helpers — are imported directly from their submodules (e.g.
+``autogen.beta.a2ui.incoming``) when needed.
 """
 
 from autogen.beta.exceptions import missing_optional_dependency
 
 try:
     from .action_tool import a2ui_action
-    from .actions import A2UIEventAction, A2UIFunctionCallAction
-    from .agent import A2UIAgent
     from .capabilities import A2UIClientCapabilities
-    from .events import A2UIMessageEvent, A2UIValidationFailedEvent
+    from .events import A2UIClientEvent, A2UIMessageEvent, A2UIValidationFailedEvent
 except ImportError as e:
-    A2UIAgent = missing_optional_dependency("A2UIAgent", "a2ui", e)  # type: ignore[misc]
     a2ui_action = missing_optional_dependency("a2ui_action", "a2ui", e)  # type: ignore[misc]
-    A2UIEventAction = missing_optional_dependency("A2UIEventAction", "a2ui", e)  # type: ignore[misc]
-    A2UIFunctionCallAction = missing_optional_dependency("A2UIFunctionCallAction", "a2ui", e)  # type: ignore[misc]
     A2UIClientCapabilities = missing_optional_dependency("A2UIClientCapabilities", "a2ui", e)  # type: ignore[misc]
+    A2UIClientEvent = missing_optional_dependency("A2UIClientEvent", "a2ui", e)  # type: ignore[misc]
     A2UIMessageEvent = missing_optional_dependency("A2UIMessageEvent", "a2ui", e)  # type: ignore[misc]
     A2UIValidationFailedEvent = missing_optional_dependency("A2UIValidationFailedEvent", "a2ui", e)  # type: ignore[misc]
 
 __all__ = (
-    "A2UIAgent",
     "A2UIClientCapabilities",
-    "A2UIEventAction",
-    "A2UIFunctionCallAction",
+    "A2UIClientEvent",
     "A2UIMessageEvent",
     "A2UIValidationFailedEvent",
     "a2ui_action",

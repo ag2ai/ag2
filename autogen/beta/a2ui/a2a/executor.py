@@ -4,7 +4,9 @@
 
 """A2A executor that understands A2UI message splitting and user actions."""
 
+import contextvars
 import logging
+import os
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
@@ -17,23 +19,33 @@ from a2a.types import Message, Part, TaskState
 from autogen.beta.a2a.executor import AgentExecutor
 from autogen.beta.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
 from autogen.beta.a2a.mappers import ParsedMessage, struct_to_dict, task_state_to_status_update
+from autogen.beta.agent import Agent
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import BaseEvent, ClientToolCallEvent
 from autogen.beta.stream import MemoryStream
 
-from .._types import A2UIVersion, JsonObject, ServerToClientMessage
-from ..agent import A2UIAgent
+from .._runtime import _A2UIRuntime
+from .._types import A2UIVersion, JsonObject, JsonSchema, ServerToClientMessage
 from ..capabilities import (
     A2UIClientCapabilities,
-    capabilities_to_prompt,
     parse_client_capabilities,
 )
 from ..events import A2UIMessageEvent
-from ..incoming import iter_incoming_prompts
+from ..incoming import A2UIIncomingParseResult, iter_incoming_prompts, parse_incoming_interactions
+from ..middleware import A2UIInboundMiddleware
 from .extension import try_activate_a2ui_extension
 from .parts import create_a2ui_parts, get_a2ui_data
 
 logger = logging.getLogger(__name__)
+
+# Per-request carrier for the client→server interactions parsed in ``execute``
+# (where the raw A2UI DataParts are available, before they are rewritten to
+# text) so ``_run_one_turn`` can surface them as A2UIClientEvents. A ContextVar
+# keeps this coroutine-local — the executor instance is shared across requests,
+# so a plain attribute would race between concurrent turns.
+_INCOMING_INTERACTIONS: "contextvars.ContextVar[tuple[A2UIIncomingParseResult, ...]]" = contextvars.ContextVar(
+    "a2ui_incoming_interactions", default=()
+)
 
 
 class A2UIAgentExecutor(AgentExecutor):
@@ -59,35 +71,75 @@ class A2UIAgentExecutor(AgentExecutor):
        the collected message list.
     """
 
-    def __init__(self, agent: A2UIAgent) -> None:
+    def __init__(
+        self,
+        agent: Agent,
+        *,
+        protocol_version: A2UIVersion = "v0.9",
+        custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
+        custom_catalog_rules: str | None = None,
+        include_schema_in_prompt: bool = True,
+        include_rules_in_prompt: bool = True,
+        validate_responses: bool = True,
+        validation_retries: int = 1,
+        system_message: str | None = None,
+    ) -> None:
+        """Wrap a plain ``Agent`` as an A2UI-aware A2A executor.
+
+        Takes the same flat A2UI kwargs as :class:`A2UIServer`. Clickable buttons
+        (``@a2ui_action``) come from ``agent.tools``.
+        """
         super().__init__(agent)
-        self._a2ui_agent = agent
+        self._runtime = _A2UIRuntime(
+            agent,
+            protocol_version=protocol_version,
+            custom_catalog=custom_catalog,
+            custom_catalog_rules=custom_catalog_rules,
+            include_schema_in_prompt=include_schema_in_prompt,
+            include_rules_in_prompt=include_rules_in_prompt,
+            validate_responses=validate_responses,
+            validation_retries=validation_retries,
+            system_message=system_message,
+        )
 
     @property
     def protocol_version(self) -> A2UIVersion:
-        return self._a2ui_agent.protocol_version
+        return self._runtime.protocol_version
 
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        token: contextvars.Token[tuple[A2UIIncomingParseResult, ...]] | None = None
         if request_context.message is not None:
             try_activate_a2ui_extension(request_context, version=self.protocol_version)
-            self._rewrite_incoming_a2ui_parts(request_context)
-        await super().execute(request_context, event_queue)
+            interactions = self._rewrite_incoming_a2ui_parts(request_context)
+            token = _INCOMING_INTERACTIONS.set(tuple(interactions))
+        try:
+            await super().execute(request_context, event_queue)
+        finally:
+            if token is not None:
+                _INCOMING_INTERACTIONS.reset(token)
 
-    def _rewrite_incoming_a2ui_parts(self, request_context: RequestContext) -> None:
-        """Replace A2UI DataParts (``action``/``error``) with synthesized text prompts."""
+    def _rewrite_incoming_a2ui_parts(self, request_context: RequestContext) -> list[A2UIIncomingParseResult]:
+        """Replace A2UI DataParts (``action``/``error``) with synthesized text prompts.
+
+        Returns the typed client→server interactions parsed from those DataParts
+        so ``_run_one_turn`` can surface them as ``A2UIClientEvent``s (the parts
+        themselves are rewritten to text here, so they must be captured now).
+        """
         msg = request_context.message
         if msg is None:
-            return
+            return []
 
         new_parts: list[Part] = []
         rewritten = False
+        all_envelopes: list[JsonObject] = []
         for part in msg.parts:
             envelopes = _extract_a2ui_envelopes(part)
             if not envelopes:
                 new_parts.append(part)
                 continue
 
-            for prompt in iter_incoming_prompts(envelopes, self._a2ui_agent.get_action):
+            all_envelopes.extend(envelopes)
+            for prompt in iter_incoming_prompts(envelopes, self._runtime.get_action):
                 new_parts.append(Part(text=prompt))
                 rewritten = True
 
@@ -95,19 +147,24 @@ class A2UIAgentExecutor(AgentExecutor):
             del msg.parts[:]
             msg.parts.extend(new_parts)
 
-    def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
-        """Fold negotiated client capabilities into the turn's system prompt.
+        return parse_incoming_interactions(all_envelopes)
 
-        Reads ``a2uiClientCapabilities`` straight off the incoming message
-        metadata and renders it as a per-turn prompt fragment so the LLM only
-        targets components the client can render. Returns nothing when the
-        client advertised no usable capabilities.
+    def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
+        """Apply the A2UI prompt to the plain agent and fold in client capabilities.
+
+        The agent is a plain ``Agent`` with no A2UI prompt baked in, so the
+        runtime's system-prompt section is prepended here. Negotiated
+        ``a2uiClientCapabilities`` (read off the incoming message metadata) are
+        appended as a per-turn fragment so the LLM only targets components the
+        client can render.
         """
+        prompts: list[str] = [self._runtime.system_prompt_section]
         caps = self._client_capabilities(request_context)
-        if caps is None:
-            return ()
-        fragment = capabilities_to_prompt(caps, catalog_id=self._a2ui_agent.catalog_id)
-        return (fragment,) if fragment else ()
+        if caps is not None:
+            fragment = self._runtime.capabilities_prompt(caps)
+            if fragment:
+                prompts.append(fragment)
+        return tuple(prompts)
 
     def _client_capabilities(self, request_context: RequestContext) -> "A2UIClientCapabilities | None":
         """Decode ``a2uiClientCapabilities`` from the request message metadata.
@@ -119,7 +176,7 @@ class A2UIAgentExecutor(AgentExecutor):
         msg = request_context.message
         if msg is None or not msg.metadata:
             return None
-        version_key = self._a2ui_agent.schema_manager.version_string
+        version_key = self._runtime.version_string
         return parse_client_capabilities(struct_to_dict(msg.metadata), version_key=version_key)
 
     async def _run_one_turn(
@@ -147,12 +204,21 @@ class A2UIAgentExecutor(AgentExecutor):
             if isinstance(event, A2UIMessageEvent):
                 a2ui_messages.append(event.message)
 
+        # Surface each incoming client→server interaction (captured in execute,
+        # before the A2UI DataParts were rewritten to text) as an A2UIClientEvent
+        # on the turn's stream, alongside the validation middleware.
+        extra_middleware = list(self._runtime.middleware_factories())
+        interactions = _INCOMING_INTERACTIONS.get()
+        if interactions:
+            extra_middleware.append(A2UIInboundMiddleware(interactions))
+
         response, final_variables = await self._dispatch_to_agent(
             initial_event,
             stream,
             client_tools,
             incoming_variables=parsed.context_update,
             extra_prompt=extra_prompt,
+            additional_middleware=extra_middleware,
         )
 
         prose_text = response.message.content if response.message else ""

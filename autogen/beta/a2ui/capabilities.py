@@ -30,11 +30,6 @@ logger = logging.getLogger(__name__)
 
 A2UI_CLIENT_CAPABILITIES_METADATA_KEY = "a2uiClientCapabilities"
 
-# Dependency key a caller may set on the direct ``agent.ask()`` path
-# (``dependencies={A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY: caps}``) to supply
-# negotiated client capabilities; :class:`A2UIAgent`'s prompt hook reads it.
-A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY = "a2ui_client_capabilities"
-
 # Default wire-shape version key for the nested capability/data-model objects
 # (the client wraps them under their protocol version, e.g. ``{"v0.9": {...}}``).
 # Callers serving a v0.9.1 / v1.0 agent pass their version via ``version_key``.
@@ -164,7 +159,6 @@ def capabilities_to_prompt(caps: A2UIClientCapabilities | None, *, catalog_id: s
 
 
 __all__ = (
-    "A2UI_CLIENT_CAPABILITIES_DEPENDENCY_KEY",
     "A2UI_CLIENT_CAPABILITIES_METADATA_KEY",
     "A2UIClientCapabilities",
     "capabilities_to_prompt",

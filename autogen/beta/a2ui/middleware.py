@@ -13,9 +13,10 @@ from autogen.beta.events import (
     ModelResponse,
     TextInput,
 )
-from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
+from autogen.beta.middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
 
-from .events import A2UIMessageEvent, A2UIValidationFailedEvent
+from .events import A2UIClientEvent, A2UIMessageEvent, A2UIValidationFailedEvent
+from .incoming import A2UIIncomingParseResult
 from .parser import A2UIParseResult, A2UIResponseParser, A2UIValidationResult
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,43 @@ def _to_prose_message(original: ModelMessage | None, text: str) -> ModelMessage:
     """
     metadata = dict(original.metadata) if original is not None and original.metadata else {}
     return ModelMessage(text, metadata=metadata)
+
+
+class A2UIInboundMiddleware(MiddlewareFactory):
+    """Factory that emits one :class:`A2UIClientEvent` per incoming interaction.
+
+    Built per-request with the client→server interactions parsed from the
+    request (button clicks, v1.0 ``functionResponse``s, client errors). The
+    per-turn instance emits them on the stream at the start of the turn — inside
+    the turn, where the agent's observers are subscribed — so server-side code
+    can react to client interactions, mirroring how :class:`A2UIMessageEvent`
+    surfaces server→client messages. The envelopes are still rewritten into the
+    turn's prompt separately; this is an observability seam, not the prompt path.
+    """
+
+    def __init__(self, interactions: Sequence[A2UIIncomingParseResult]) -> None:
+        self._interactions = tuple(interactions)
+
+    def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
+        return _A2UIInboundMiddleware(event, context, self._interactions)
+
+
+class _A2UIInboundMiddleware(BaseMiddleware):
+    """The per-turn instance used by :class:`A2UIInboundMiddleware`."""
+
+    def __init__(
+        self,
+        event: BaseEvent,
+        context: Context,
+        interactions: Sequence[A2UIIncomingParseResult],
+    ) -> None:
+        super().__init__(event, context)
+        self._interactions = interactions
+
+    async def on_turn(self, call_next: AgentTurn, event: BaseEvent, context: Context) -> ModelResponse:
+        for interaction in self._interactions:
+            await context.send(A2UIClientEvent(interaction))
+        return await call_next(event, context)
 
 
 class A2UIValidationMiddleware(MiddlewareFactory):

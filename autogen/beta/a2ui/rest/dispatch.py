@@ -21,14 +21,15 @@ for progressive (A.2) emission later.
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
+from autogen.beta.agent import Agent
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import BaseEvent, ModelRequest, TextInput
 from autogen.beta.stream import MemoryStream
 
+from .._runtime import _A2UIRuntime
 from .._types import ServerToClientMessage
-from ..agent import A2UIAgent
-from ..capabilities import capabilities_to_prompt
 from ..events import A2UIMessageEvent
+from ..middleware import A2UIInboundMiddleware
 from .request import A2UIServerRequest
 
 
@@ -49,11 +50,13 @@ class A2UIMessageFrame:
 A2UIFrame = A2UIProseFrame | A2UIMessageFrame
 
 
-async def stream_turn(agent: A2UIAgent, request: A2UIServerRequest) -> AsyncIterator[A2UIFrame]:
+async def stream_turn(agent: Agent, runtime: _A2UIRuntime, request: A2UIServerRequest) -> AsyncIterator[A2UIFrame]:
     """Execute one turn and yield its prose then A2UI message frames.
 
     Args:
-        agent: The A2UI agent to run. Must have ``config`` set.
+        agent: The plain ``Agent`` to run. Must have ``config`` set.
+        runtime: The A2UI runtime supplying the prompt section, validation
+            middleware, and catalog/capabilities helpers.
         request: The parsed turn (history, current inputs, prompt, variables).
 
     Yields:
@@ -64,7 +67,7 @@ async def stream_turn(agent: A2UIAgent, request: A2UIServerRequest) -> AsyncIter
         RuntimeError: If the agent has no ``config`` to create an LLM client.
     """
     if agent.config is None:
-        raise RuntimeError("A2UIAgent.config is not set; cannot serve over REST")
+        raise RuntimeError("Agent.config is not set; cannot serve over REST")
     client = agent.config.create()
 
     stream = MemoryStream()
@@ -81,11 +84,12 @@ async def stream_turn(agent: A2UIAgent, request: A2UIServerRequest) -> AsyncIter
         if isinstance(event, A2UIMessageEvent):
             a2ui_messages.append(event.message)
 
-    # Fold negotiated client capabilities into this turn's prompt so the LLM
-    # only targets components the client can render (transport-neutral seam,
-    # mirroring the A2A executor's ``_extra_system_prompt``).
-    caps_prompt = capabilities_to_prompt(request.client_capabilities, catalog_id=agent.catalog_id)
-    extra_prompt = [caps_prompt] if caps_prompt else []
+    # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
+    # prompt section, fold in negotiated client capabilities so the LLM only
+    # targets components the client can render, and inject the validation
+    # middleware that emits the A2UIMessageEvents collected above.
+    caps_prompt = runtime.capabilities_prompt(request.client_capabilities)
+    extra_prompt = [runtime.system_prompt_section, *([caps_prompt] if caps_prompt else [])]
 
     merged_variables = {**dict(agent._agent_variables), **request.variables}
     ctx = ConversationContext(
@@ -96,8 +100,20 @@ async def stream_turn(agent: A2UIAgent, request: A2UIServerRequest) -> AsyncIter
         dependency_provider=agent.dependency_provider,
     )
 
+    # Surface each incoming client→server interaction as an A2UIClientEvent on
+    # the turn's stream (alongside the validation middleware), so observers see
+    # client clicks/responses — not just the LLM via the rewritten prompt.
+    extra_middleware = list(runtime.middleware_factories())
+    if request.client_interactions:
+        extra_middleware.append(A2UIInboundMiddleware(request.client_interactions))
+
     initial_event: BaseEvent = ModelRequest(request.current_inputs or [TextInput("")])
-    reply = await agent._execute(initial_event, context=ctx, client=client)
+    reply = await agent._execute(
+        initial_event,
+        context=ctx,
+        client=client,
+        additional_middleware=extra_middleware,
+    )
 
     response = reply.response
     prose = response.message.content if response.message else ""

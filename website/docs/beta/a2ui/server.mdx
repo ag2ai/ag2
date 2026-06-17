@@ -3,7 +3,7 @@ title: Serving A2UI over HTTP
 sidebarTitle: Server
 ---
 
-`#!python A2UIServer` wraps an `#!python A2UIAgent` and produces a ready-to-serve [Starlette](https://www.starlette.io){.external-link target="_blank"} ASGI app that speaks **canonical A2UI** over HTTP. It mirrors `#!python autogen.beta.a2a.A2AServer`: hold the agent, call a `#!python build_*` method to get an app, and bring your own `#!python uvicorn` (or any ASGI server) to run it.
+`#!python A2UIServer` wraps a plain `#!python autogen.beta.Agent` and produces a ready-to-serve [Starlette](https://www.starlette.io){.external-link target="_blank"} ASGI app that speaks **canonical A2UI** over HTTP. It mirrors `#!python autogen.beta.a2a.A2AServer`: hold the agent, configure A2UI with flat kwargs, call a `#!python build_*` method to get an app, and bring your own `#!python uvicorn` (or any ASGI server) to run it.
 
 A2UI's wire is transport-agnostic, so two encodings of the same validated messages are offered:
 
@@ -18,17 +18,17 @@ A2UI's wire is transport-agnostic, so two encodings of the same validated messag
 ```python linenums="1"
 import uvicorn
 
-from autogen.beta.a2ui import A2UIAgent
+from autogen.beta import Agent
 from autogen.beta.a2ui.rest import A2UIServer
 from autogen.beta.config import AnthropicConfig
 
 
 def build_app():
-    agent = A2UIAgent(
+    agent = Agent(
         name="ui_agent",
         config=AnthropicConfig(model="claude-sonnet-4-6"),
     )
-    return A2UIServer(agent).build_jsonl_app()  # POST /a2ui  →  A2UI NDJSON
+    return A2UIServer(agent, protocol_version="v0.9").build_jsonl_app()  # POST /a2ui  →  A2UI NDJSON
 
 
 app = build_app()

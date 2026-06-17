@@ -11,7 +11,7 @@ from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue  # noqa: F401
-from .actions import A2UIAction, A2UIEventAction, A2UIFunctionCallAction
+from .actions import A2UIEventAction
 from .constants import A2UI_DEFAULT_CATALOG_ID_BY_VERSION, A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 _VERSIONS_DIR = Path(__file__).parent
@@ -107,8 +107,8 @@ class A2UISchemaManager:
         # Raw, unread inputs. All file I/O (vendored specs + custom catalog) is
         # deferred to ``_ensure_loaded`` so construction stays side-effect-free
         # per the project rule "no side effects in initialization methods". Note
-        # ``A2UIAgent`` still triggers the load during its own construction (it
-        # bakes the prompt/registry eagerly) — full agent laziness is out of
+        # ``_A2UIRuntime`` still triggers the load during its own construction
+        # (it bakes the prompt/registry eagerly) — full laziness is out of
         # scope; this keeps the schema manager itself pure.
         self._custom_catalog_input = custom_catalog
         self._custom_catalog_rules = custom_catalog_rules or ""
@@ -339,7 +339,7 @@ class A2UISchemaManager:
         self,
         include_schema: bool = True,
         include_rules: bool = True,
-        actions: list[A2UIAction] | None = None,
+        actions: list[A2UIEventAction] | None = None,
     ) -> str:
         """Generate the A2UI portion of the system prompt."""
         self._ensure_loaded()
@@ -408,42 +408,20 @@ class A2UISchemaManager:
             action_lines = ["\n\n## Available Actions\n"]
             action_lines.append("The following actions can be triggered by buttons in the UI:\n")
 
-            event_actions: list[A2UIEventAction] = [a for a in actions if isinstance(a, A2UIEventAction)]
-            func_actions: list[A2UIFunctionCallAction] = [a for a in actions if isinstance(a, A2UIFunctionCallAction)]
-
-            if event_actions:
-                action_lines.append("### Server Events\n")
-                for a in event_actions:
-                    desc = f": {a.description}" if a.description else ""
-                    action_lines.append(f"- `{a.name}`{desc}")
-                    if a.example_context:
-                        action_lines.append(f"  Context: {json.dumps(a.example_context)}")
-                action_lines.append(
-                    "\nTo create a button that triggers a server event:\n"
-                    "```json\n"
-                    '{"id": "action_btn", "component": "Button", "child": "action_btn_text", '
-                    '"action": {"event": {"name": "<action_name>", "context": {...}}}},\n'
-                    '{"id": "action_btn_text", "component": "Text", "text": "Button Label"}\n'
-                    "```"
-                )
-
-            if func_actions:
-                action_lines.append("\n### Client Functions\n")
-                action_lines.append(
-                    "Client functions execute on the client without a server round-trip. "
-                    "Use the **exact** function name, argument structure, and returnType shown below. "
-                    "Do not add extra properties.\n"
-                )
-                for a in func_actions:
-                    desc = f": {a.description}" if a.description else ""
-                    example_args = json.dumps(a.example_args) if a.example_args else "{}"
-                    action_lines.append(f"- **`{a.name}`**{desc}")
-                    action_lines.append(
-                        f"  ```json\n"
-                        f'  {{"id": "action_btn", "component": "Button", "child": "action_btn_text", '
-                        f'"action": {{"functionCall": {{"call": "{a.name}", "args": {example_args}, "returnType": "void"}}}}}}\n'
-                        f"  ```"
-                    )
+            action_lines.append("### Server Events\n")
+            for a in actions:
+                desc = f": {a.description}" if a.description else ""
+                action_lines.append(f"- `{a.name}`{desc}")
+                if a.example_context:
+                    action_lines.append(f"  Context: {json.dumps(a.example_context)}")
+            action_lines.append(
+                "\nTo create a button that triggers a server event:\n"
+                "```json\n"
+                '{"id": "action_btn", "component": "Button", "child": "action_btn_text", '
+                '"action": {"event": {"name": "<action_name>", "context": {...}}}},\n'
+                '{"id": "action_btn_text", "component": "Text", "text": "Button Label"}\n'
+                "```"
+            )
 
             sections.append("\n".join(action_lines))
 

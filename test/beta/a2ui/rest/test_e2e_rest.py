@@ -19,7 +19,8 @@ import httpx
 import pytest
 from dirty_equals import IsPartialDict
 
-from autogen.beta.a2ui import A2UIAgent, a2ui_action
+from autogen.beta import Agent
+from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui.rest import A2UIServer
 from autogen.beta.events import ModelRequest, TextInput, ToolCallEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
@@ -40,7 +41,7 @@ def _client(app: Any) -> httpx.AsyncClient:
 @pytest.mark.asyncio
 class TestE2EJsonl:
     async def test_single_turn_streams_prose_then_surface(self) -> None:
-        agent = A2UIAgent(name="ui", config=TestConfig(_A2UI_RESPONSE))
+        agent = Agent(name="ui", config=TestConfig(_A2UI_RESPONSE))
         app = A2UIServer(agent).build_jsonl_app()
 
         async with _client(app) as client:
@@ -53,8 +54,8 @@ class TestE2EJsonl:
         assert lines[1] == IsPartialDict({"createSurface": {"surfaceId": "s1", "catalogId": _CATALOG}})
 
     async def test_plain_text_emits_no_surface_frame(self) -> None:
-        agent = A2UIAgent(name="ui", config=TestConfig("Just text."), validate_responses=False)
-        app = A2UIServer(agent).build_jsonl_app()
+        agent = Agent(name="ui", config=TestConfig("Just text."))
+        app = A2UIServer(agent, validate_responses=False).build_jsonl_app()
 
         async with _client(app) as client:
             resp = await client.post("/a2ui", json={"messages": [{"role": "user", "content": "hi"}]})
@@ -64,7 +65,7 @@ class TestE2EJsonl:
         assert lines == [{"text": "Just text."}]
 
     async def test_malformed_body_returns_400(self) -> None:
-        agent = A2UIAgent(name="ui", config=TestConfig(_A2UI_RESPONSE))
+        agent = Agent(name="ui", config=TestConfig(_A2UI_RESPONSE))
         app = A2UIServer(agent).build_jsonl_app()
 
         async with _client(app) as client:
@@ -76,7 +77,7 @@ class TestE2EJsonl:
 
 @pytest.mark.asyncio
 async def test_sse_single_turn_streams_text_message_done() -> None:
-    agent = A2UIAgent(name="ui", config=TestConfig(_A2UI_RESPONSE))
+    agent = Agent(name="ui", config=TestConfig(_A2UI_RESPONSE))
     app = A2UIServer(agent).build_sse_app()
 
     async with _client(app) as client:
@@ -102,16 +103,15 @@ async def test_action_round_trip_client_click_executes_server_tool() -> None:
 
     # The click envelope is rewritten into a prompt; the mocked LLM then
     # calls the registered tool, and answers with prose once it returns.
-    agent = A2UIAgent(
+    agent = Agent(
         name="ui",
-        validate_responses=False,
         tools=[schedule_posts],
         config=TestConfig(
             ToolCallEvent(name="schedule_posts", arguments='{"time": "2:00 PM"}'),
             "All set.",
         ),
     )
-    app = A2UIServer(agent).build_jsonl_app()
+    app = A2UIServer(agent, validate_responses=False).build_jsonl_app()
 
     async with _client(app) as client:
         resp = await client.post(
@@ -145,8 +145,8 @@ async def test_stateless_client_resends_history_each_turn() -> None:
     # conversation, so the trailing user message is the current turn and
     # the prior assistant turn lands in history.
     tracking = TrackingConfig(TestConfig("ack"))
-    agent = A2UIAgent(name="ui", config=tracking, validate_responses=False)
-    app = A2UIServer(agent).build_jsonl_app()
+    agent = Agent(name="ui", config=tracking)
+    app = A2UIServer(agent, validate_responses=False).build_jsonl_app()
 
     async with _client(app) as client:
         resp = await client.post(

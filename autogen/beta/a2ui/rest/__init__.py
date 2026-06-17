@@ -4,7 +4,8 @@
 
 """Transport-neutral REST/SSE adapter for A2UI.
 
-Serves an :class:`~autogen.beta.a2ui.A2UIAgent` as canonical A2UI over HTTP.
+Serves a plain :class:`~autogen.beta.Agent` (via :class:`A2UIServer`) as canonical
+A2UI over HTTP.
 Depends only on Starlette (declared as an additional dependency, not a pyproject
 extra); a missing install surfaces as a clear hint instead of an opaque
 ``ImportError``. Imported from ``autogen.beta.a2ui.rest`` (kept out of the
