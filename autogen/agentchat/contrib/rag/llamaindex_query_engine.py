@@ -8,7 +8,6 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
@@ -32,7 +31,6 @@ logger = logging.getLogger(__name__)
 
 
 @require_optional_import("llama_index", "rag")
-@export_module("autogen.agentchat.contrib.rag")
 class LlamaIndexQueryEngine:
     """This engine leverages LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
     to natural language queries. It use any LlamaIndex [vector store](https://docs.llamaindex.ai/en/stable/module_guides/storing/vector_stores/).

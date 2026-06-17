@@ -54,7 +54,7 @@ class LLaVAAgent(MultimodalConversableAgent):
         system_message (str): system message for the ChatCompletion inference.
             Please override this attribute if you want to reprogram the agent.
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
+            `ConversableAgent`.
         """
         warnings.warn(
             "LLaVAAgent is deprecated and will be removed in v0.14. "

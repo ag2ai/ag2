@@ -7,7 +7,6 @@ import threading
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
-from ...doc_utils import export_module
 from ...events.agent_events import ErrorEvent, RunCompletionEvent
 from ...io.base import IOStream
 from ...io.run_response import (
@@ -40,7 +39,6 @@ __all__ = [
 ]
 
 
-@export_module("autogen")
 def initiate_group_chat(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,
@@ -125,7 +123,6 @@ def initiate_group_chat(
     return chat_result, context_variables, manager.last_speaker
 
 
-@export_module("autogen.agentchat")
 async def a_initiate_group_chat(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,
@@ -210,7 +207,6 @@ async def a_initiate_group_chat(
     return chat_result, context_variables, manager.last_speaker
 
 
-@export_module("autogen.agentchat")
 def run_group_chat(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,
@@ -283,7 +279,6 @@ def run_group_chat(
     return response
 
 
-@export_module("autogen.agentchat")
 async def a_run_group_chat(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,
@@ -355,7 +350,6 @@ async def a_run_group_chat(
     return response
 
 
-@export_module("autogen.agentchat")
 def run_group_chat_iter(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,
@@ -422,7 +416,6 @@ def run_group_chat_iter(
     )
 
 
-@export_module("autogen.agentchat")
 def a_run_group_chat_iter(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,

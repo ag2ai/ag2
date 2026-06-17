@@ -181,7 +181,7 @@ class MathUserProxyAgent(UserProxyAgent):
                 when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
         max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
-        **kwargs (dict): other kwargs in [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent#userproxyagent).
+        **kwargs (dict): other kwargs in `UserProxyAgent`.
         """
         warnings.warn(
             "MathUserProxyAgent is deprecated and will be removed in v0.14. "

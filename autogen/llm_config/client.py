@@ -7,10 +7,7 @@
 from collections.abc import Sequence
 from typing import Any, Protocol
 
-from ..doc_utils import export_module
 
-
-@export_module("autogen")
 class ModelClient(Protocol):
     """A client class must implement the following methods:
     - create must return a response object that implements the ModelClientResponseProtocol

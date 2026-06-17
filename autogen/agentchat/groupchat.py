@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ..code_utils import content_str
-from ..doc_utils import export_module
 from ..events.agent_events import (
     ClearAgentsHistoryEvent,
     GroupChatResumeEvent,
@@ -46,7 +45,6 @@ SELECT_SPEAKER_PROMPT_TEMPLATE = (
 
 
 @dataclass
-@export_module("autogen")
 class GroupChat:
     """(In preview) A group chat class that contains the following data fields:
 
@@ -1180,7 +1178,6 @@ class GroupChat:
         return None
 
 
-@export_module("autogen")
 class GroupChatManager(ConversableAgent):
     """(In preview) A chat manager agent that can manage a group chat of multiple agents."""
 

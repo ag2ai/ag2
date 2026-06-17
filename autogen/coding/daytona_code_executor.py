@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 from pydantic import Field
 
-from ..doc_utils import export_module
 from .base import CodeBlock, CodeExtractor, CodeResult
 from .markdown_code_extractor import MarkdownCodeExtractor
 
@@ -49,7 +48,6 @@ except ImportError:
     DaytonaTimeoutError = None  # type: ignore[assignment,misc]
 
 
-@export_module("autogen.coding")
 @dataclass
 class DaytonaSandboxResources:
     """Resource limits for a Daytona sandbox.
@@ -69,14 +67,12 @@ class DaytonaSandboxResources:
     disk: int | None = None
 
 
-@export_module("autogen.coding")
 class DaytonaCodeResult(CodeResult):
     """A code result class for Daytona executor."""
 
     sandbox_id: str | None = Field(default=None, description="The Daytona sandbox ID for this result.")
 
 
-@export_module("autogen.coding")
 class DaytonaCodeExecutor:
     """A code executor that runs code blocks inside a Daytona sandbox.
 

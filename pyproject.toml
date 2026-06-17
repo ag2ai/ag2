@@ -344,7 +344,6 @@ docs = [
     "ag2[watchdog]",                   # Watchdog is exposed in the public API by the optional `autogen.beta.knowledge` module
     "ag2[tavily,ddgs,perplexity]",     # Search tools are exposed by optional beta search modules
     "mkdocs-material==9.6.19",
-    "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
@@ -357,7 +356,6 @@ docs = [
     "mkdocs-redirects==1.2.2",                          # required for handling redirects natively
     "pillow",                                           # required for mkdocs-glightbo
     "cairosvg",                                         # required for mkdocs-glightbo
-    "pdoc3==0.11.6",
     "jinja2==3.1.6",
     "pyyaml==6.0.2",
     "termcolor==3.1.0",

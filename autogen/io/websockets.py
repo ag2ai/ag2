@@ -13,7 +13,6 @@ from functools import partial
 from time import sleep
 from typing import Any, Protocol
 
-from ..doc_utils import export_module
 from ..events.base_event import BaseEvent
 from ..events.print_event import PrintEvent
 from ..import_utils import optional_import_block, require_optional_import
@@ -80,7 +79,6 @@ class WebSocketServer(Protocol):
 
 
 @require_optional_import("websockets", "websockets")
-@export_module("autogen.io")
 class IOWebsockets(IOStream):
     """A websocket input/output stream."""
 

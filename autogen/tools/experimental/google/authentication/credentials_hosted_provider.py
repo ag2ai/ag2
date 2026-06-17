@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from .....doc_utils import export_module
 from .....import_utils import optional_import_block
 from .credentials_provider import GoogleCredentialsProvider
 
@@ -14,7 +13,6 @@ with optional_import_block():
 __all__ = ["GoogleCredenentialsHostedProvider"]
 
 
-@export_module("autogen.tools.experimental.google.authentication")
 class GoogleCredenentialsHostedProvider(GoogleCredentialsProvider):
     def __init__(
         self,

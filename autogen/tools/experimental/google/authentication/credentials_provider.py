@@ -5,7 +5,6 @@
 
 from typing import Optional, Protocol, runtime_checkable
 
-from .....doc_utils import export_module
 from .....import_utils import optional_import_block
 
 with optional_import_block():
@@ -16,7 +15,6 @@ __all__ = ["GoogleCredentialsProvider"]
 
 
 @runtime_checkable
-@export_module("autogen.tools.experimental.google.authentication")
 class GoogleCredentialsProvider(Protocol):
     """A protocol for Google credentials provider."""
 

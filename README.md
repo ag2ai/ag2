@@ -148,7 +148,7 @@ We have several agent concepts in AG2 to help you build your AI agents. We intro
 
 ### Conversable agent
 
-The [ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent) is the fundamental building block of AG2, designed to enable seamless communication between AI entities. This core agent type handles message exchange and response generation, serving as the base class for all agents in the framework.
+The `ConversableAgent` is the fundamental building block of AG2, designed to enable seamless communication between AI entities. This core agent type handles message exchange and response generation, serving as the base class for all agents in the framework.
 
 Let's begin with a simple example where two agents collaborate:
 - A **coder agent** that writes Python code.

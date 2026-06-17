@@ -11,7 +11,6 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....llm_config import LLMConfig
 from ... import Tool
@@ -23,7 +22,6 @@ with optional_import_block():
 
 
 @require_optional_import("openai>=2.30.0", "openai")
-@export_module("autogen.tools.experimental")
 class WebSearchPreviewTool(Tool):
     """WebSearchPreviewTool is a tool that uses OpenAI's web_search_preview tool to perform a search."""
 

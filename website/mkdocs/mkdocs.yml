@@ -88,29 +88,6 @@ plugins:
       include_dir: includes
       include_yaml:
         - people: data/people.yml
-  - mkdocstrings:                # Generate References
-      default_handler: python
-      handlers:
-        python:
-          inventories:
-          - https://docs.python.org/3/objects.inv
-          options:
-            filters:
-            - '!^_'
-            show_root_heading: true
-            show_if_no_docstring: true
-            inherited_members: true
-            members_order: source
-            separate_signature: true
-            unwrap_annotated: true
-            merge_init_into_class: true
-            docstring_section_style: spacy
-            signature_crossrefs: true
-            show_symbol_type_heading: true
-            show_symbol_type_toc: true
-            # show_docstring_attributes: false
-            # show_signature_annotations: true
-            # load_external_modules: true
   - git-revision-date-localized: # show page edition date
       enabled: !ENV [CI, false]
       type: timeago
@@ -132,9 +109,6 @@ plugins:
   - blog:
       blog_dir: docs/blog
       blog_toc: true
-
-hooks:
-  - create_api_docs.py
 
 markdown_extensions:
   - toc:

@@ -17,7 +17,6 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 from typing_extensions import Self
 
-from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
 from .base import JupyterConnectionInfo
 
@@ -26,7 +25,6 @@ with optional_import_block():
     from websocket import WebSocket
 
 
-@export_module("autogen.coding.jupyter")
 class JupyterClient:
     def __init__(self, connection_info: JupyterConnectionInfo):
         """(Experimental) A client for communicating with a Jupyter gateway server.

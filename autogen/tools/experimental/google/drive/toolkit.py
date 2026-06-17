@@ -5,7 +5,6 @@
 from pathlib import Path
 from typing import Annotated, Literal
 
-from .....doc_utils import export_module
 from .....import_utils import optional_import_block
 from .... import Toolkit, tool
 from ..model import GoogleFileInfo
@@ -21,7 +20,6 @@ __all__ = [
 ]
 
 
-@export_module("autogen.tools.experimental.google.drive")
 class GoogleDriveToolkit(Toolkit, GoogleToolkitProtocol):
     """A tool map for Google Drive."""
 

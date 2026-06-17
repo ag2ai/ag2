@@ -18,7 +18,6 @@ from autogen.agentchat.group.guardrails import Guardrail, GuardrailResult
 from ....agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ....cache import AbstractCache
 from ....code_utils import content_str
-from ....doc_utils import export_module
 from ....fast_depends.utils import asyncify
 from ... import Agent, ChatResult, ConversableAgent, LLMAgent
 from ...utils import consolidate_chat_info, gather_usage_summary
@@ -508,7 +507,6 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         self._realtime_agent.callbacks.on_observers_ready = on_observers_ready
 
 
-@export_module("autogen.agentchat.realtime.experimental")
 def register_swarm(
     *,
     realtime_agent: "RealtimeAgent",

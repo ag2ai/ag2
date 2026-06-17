@@ -7,7 +7,6 @@ from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....interop import LiteLLmConfigFactory
 from ....llm_config import LLMConfig
@@ -23,7 +22,6 @@ __all__ = ["Crawl4AITool"]
 
 
 @require_optional_import(["crawl4ai"], "crawl4ai")
-@export_module("autogen.tools.experimental")
 class Crawl4AITool(Tool):
     """Crawl a website and extract information using the crawl4ai library."""
 

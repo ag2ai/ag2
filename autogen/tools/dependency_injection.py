@@ -11,7 +11,6 @@ from functools import wraps
 from typing import TYPE_CHECKING, Any, TypeVar, get_type_hints
 
 from ..agentchat import Agent
-from ..doc_utils import export_module
 from ..fast_depends import Depends as FastDepends
 from ..fast_depends import inject
 from ..fast_depends.dependencies import model
@@ -32,7 +31,6 @@ __all__ = [
 ]
 
 
-@export_module("autogen.tools")
 class BaseContext(ABC):
     """Base class for context classes.
 
@@ -43,7 +41,6 @@ class BaseContext(ABC):
     pass
 
 
-@export_module("autogen.tools")
 class ChatContext(BaseContext):
     """ChatContext class that extends BaseContext.
 
@@ -88,7 +85,6 @@ def on(x: T) -> Callable[[], T]:
     return inner
 
 
-@export_module("autogen.tools")
 def Depends(x: Any) -> Any:  # noqa: N802
     """Creates a dependency for injection based on the provided context or type.
 

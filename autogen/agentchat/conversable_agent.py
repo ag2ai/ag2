@@ -40,7 +40,6 @@ from ..code_utils import (
 )
 from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
-from ..doc_utils import export_module
 from ..events.agent_events import (
     ClearConversableAgentHistoryEvent,
     ClearConversableAgentHistoryWarningEvent,
@@ -126,7 +125,6 @@ def _coerce_summary_to_str(value: Any) -> str:
 
 
 @dataclass
-@export_module("autogen")
 class UpdateSystemMessage:
     """Update the agent's system message before they reply
 
@@ -158,7 +156,6 @@ class UpdateSystemMessage:
             raise ValueError("The update function must be either a string or a callable")
 
 
-@export_module("autogen")
 class ConversableAgent(LLMAgent):
     """(In preview) A class for generic conversable agents which can be configured as assistant or user proxy.
 
@@ -237,7 +234,7 @@ class ConversableAgent(LLMAgent):
             - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
                 If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)\n
         8) llm_config (LLMConfig or dict or False or None): llm inference configuration.\n
-            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)\n
+            Please refer to `OpenAIWrapper.create`\n
             for available options.\n
             When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.\n
             To disable llm-based auto reply, set to False.\n
@@ -1132,7 +1129,7 @@ class ConversableAgent(LLMAgent):
                 - role (str): the role of the message, any role that is not "function"
                     will be modified to "assistant".
                 - context (dict): the context of the message, which will be passed to
-                    [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
+                    `OpenAIWrapper.create`.
                     For example, one agent can send a message A as:
         ```python
         {
@@ -1180,7 +1177,7 @@ class ConversableAgent(LLMAgent):
                 - role (str): the role of the message, any role that is not "function"
                     will be modified to "assistant".
                 - context (dict): the context of the message, which will be passed to
-                    [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
+                    `OpenAIWrapper.create`.
                     For example, one agent can send a message A as:
         ```python
         {
@@ -1252,7 +1249,7 @@ class ConversableAgent(LLMAgent):
                     This field is only needed to distinguish between "function" or "assistant"/"user".
                 5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name.
                 6. "context" (dict): the context of the message, which will be passed to
-                    [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
+                    `OpenAIWrapper.create`.
             sender: sender of an Agent instance.
             request_reply (bool or None): whether a reply is requested from the sender.
                 If None, the value is determined by `self.reply_at_receive[sender]`.
@@ -1289,7 +1286,7 @@ class ConversableAgent(LLMAgent):
                     This field is only needed to distinguish between "function" or "assistant"/"user".
                 5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name.
                 6. "context" (dict): the context of the message, which will be passed to
-                    [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
+                    `OpenAIWrapper.create`.
             sender: sender of an Agent instance.
             request_reply (bool or None): whether a reply is requested from the sender.
                 If None, the value is determined by `self.reply_at_receive[sender]`.
@@ -4609,7 +4606,6 @@ class ConversableAgent(LLMAgent):
         return None
 
 
-@export_module("autogen")
 def register_function(
     f: Callable[..., Any],
     *,

@@ -5,13 +5,11 @@
 from typing import Any
 
 from .... import ConversableAgent
-from ....doc_utils import export_module
 from ....tools.contrib import TimeTool
 
 __all__ = ["TimeToolAgent"]
 
 
-@export_module("autogen.agents.contrib")  # API Reference: autogen > agents > contrib > TimeToolAgent
 class TimeToolAgent(ConversableAgent):
     """A simple agent that returns the current time using tools
 

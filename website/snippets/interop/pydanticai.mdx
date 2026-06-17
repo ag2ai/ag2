@@ -15,8 +15,8 @@ Import necessary modules and tools.
 - [BaseModel](https://docs.pydantic.dev/latest/api/base_model/): Used to define data structures for tool inputs and outputs.
 - [RunContext](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.RunContext): Provides context during the execution of tools.
 - [PydanticAITool](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.Tool): Represents a tool in the PydanticAI framework.
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) and [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent): Agents that facilitate communication in the AG2 framework.
-- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability): This module acts as a bridge, making it easier to integrate PydanticAI tools with AG2’s architecture.
+- `AssistantAgent` and `UserProxyAgent`: Agents that facilitate communication in the AG2 framework.
+- `Interoperability`: This module acts as a bridge, making it easier to integrate PydanticAI tools with AG2’s architecture.
 
 ```python
 import os
@@ -34,8 +34,8 @@ from autogen.interop import Interoperability
 
 Configure the agents for the interaction.
 - `config_list` defines the LLM configurations, including the model and API key.
-- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
 
 ```python
 llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]})
@@ -57,7 +57,7 @@ To integrate a PydanticAI tool into AG2:
 - First, define a `Player` model using [BaseModel](https://docs.pydantic.dev/latest/api/base_model/) to structure the input data.
 - Use [RunContext](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.RunContext) to inject dependencies (like the `Player` instance) securely into the tool.
 - The `get_player` function defines the tool’s functionality, retrieving injected data through `ctx.deps`.
-- Then, convert the tool into an AG2-compatible format with [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability).
+- Then, convert the tool into an AG2-compatible format with `Interoperability`.
 - Register the tool for execution and interaction with both the `user_proxy` and `chatbot`.
 
 ```python
@@ -87,7 +87,7 @@ ag2_tool.register_for_llm(chatbot)
 ```
 
 ### Initiating the chat
-Now that everything is set up, you can initiate a chat between the [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) and the [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent):
+Now that everything is set up, you can initiate a chat between the `UserProxyAgent` and the `AssistantAgent`:
 
 - The `user_proxy` sends a message to the `chatbot`.
 - The user requests player information, and includes "goal keeper" as additional context.

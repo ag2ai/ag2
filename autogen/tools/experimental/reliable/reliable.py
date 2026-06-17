@@ -25,7 +25,6 @@ from ....agentchat.conversable_agent import ConversableAgent
 from ....agentchat.group import AgentTarget, ReplyResult, TerminateTarget
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.patterns import DefaultPattern
-from ....doc_utils import export_module
 from ....fast_depends.utils import is_coroutine_callable
 from ....llm_config import LLMConfig
 from ....tools.dependency_injection import Field as AG2Field
@@ -513,7 +512,6 @@ def reliable_function_wrapper(
     return wrapper_func
 
 
-@export_module("autogen.tools.experimental")
 class ReliableToolError(Exception):
     """Custom exception for errors during ReliableTool execution."""
 
@@ -522,7 +520,6 @@ class ReliableToolError(Exception):
         self.final_context = final_context
 
 
-@export_module("autogen.tools.experimental")
 class ReliableTool(Tool):
     INTERNAL_TOOL_NAME_PREFIX = "execute_"
 

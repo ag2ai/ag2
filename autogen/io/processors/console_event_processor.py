@@ -5,7 +5,6 @@ import asyncio
 import getpass
 from typing import TYPE_CHECKING
 
-from ...doc_utils import export_module
 from ...events.agent_events import InputRequestEvent
 from ...events.base_event import BaseEvent
 
@@ -14,7 +13,6 @@ if TYPE_CHECKING:
     from .base import AsyncEventProcessorProtocol, EventProcessorProtocol
 
 
-@export_module("autogen.io")
 class ConsoleEventProcessor:
     def process(self, response: "RunResponseProtocol") -> None:
         for event in response.events:
@@ -32,7 +30,6 @@ class ConsoleEventProcessor:
             event.print()
 
 
-@export_module("autogen.io")
 class AsyncConsoleEventProcessor:
     async def process(self, response: "AsyncRunResponseProtocol") -> None:
         async for event in response.events:

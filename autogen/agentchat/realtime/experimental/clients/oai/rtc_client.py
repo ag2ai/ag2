@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 
 from autogen.import_utils import optional_import_block, require_optional_import
 
-from ......doc_utils import export_module
 from ......llm_config import LLMConfig
 from ...realtime_events import RealtimeEvent
 from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
@@ -30,7 +29,6 @@ global_logger = getLogger(__name__)
 
 @register_realtime_client()
 @require_optional_import("httpx", "openai-realtime", except_for="get_factory")
-@export_module("autogen.agentchat.realtime.experimental.clients.oai")
 class OpenAIRealtimeWebRTCClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API that uses WebRTC protocol."""
 

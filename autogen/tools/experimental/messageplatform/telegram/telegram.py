@@ -5,7 +5,6 @@
 from datetime import datetime
 from typing import Annotated, Any, Union
 
-from .....doc_utils import export_module
 from .....import_utils import optional_import_block, require_optional_import
 from .... import Tool
 from ....dependency_injection import Depends, on
@@ -20,7 +19,6 @@ MAX_MESSAGE_LENGTH = 4096
 
 
 @require_optional_import(["telethon", "telethon.tl.types"], "commsagent-telegram")
-@export_module("autogen.tools.experimental")
 class BaseTelegramTool:
     """Base class for Telegram tools containing shared functionality."""
 
@@ -87,7 +85,6 @@ class BaseTelegramTool:
 
 
 @require_optional_import(["telethon"], "commsagent-telegram")
-@export_module("autogen.tools.experimental")
 class TelegramSendTool(BaseTelegramTool, Tool):
     """Sends a message to a Telegram channel, group, or user."""
 
@@ -157,7 +154,6 @@ class TelegramSendTool(BaseTelegramTool, Tool):
 
 
 @require_optional_import(["telethon"], "commsagent-telegram")
-@export_module("autogen.tools.experimental")
 class TelegramRetrieveTool(BaseTelegramTool, Tool):
     """Retrieves messages from a Telegram channel."""
 

@@ -11,7 +11,6 @@ from typing import Any, TypeVar
 from anyio import create_task_group, lowlevel
 from typing_extensions import deprecated
 
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ....tools import Tool
 from .clients.realtime_client import RealtimeClientProtocol, get_client
@@ -32,7 +31,6 @@ class RealtimeAgentCallbacks:
 
 
 @deprecated("RealtimeAgent is deprecated and will be removed in v0.14. It relies on deprecated realtime API endpoints.")
-@export_module("autogen.agentchat.realtime.experimental")
 class RealtimeAgent:
     """(Deprecated) Agent for real-time voice interactions.
 

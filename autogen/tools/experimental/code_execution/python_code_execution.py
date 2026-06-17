@@ -9,7 +9,6 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
-from ....doc_utils import export_module
 from ....environments import WorkingDirectory
 from ....environments.python_environment import PythonEnvironment
 from ... import Tool
@@ -17,7 +16,6 @@ from ... import Tool
 __all__ = ["PythonCodeExecutionTool"]
 
 
-@export_module("autogen.tools.experimental")
 class PythonCodeExecutionTool(Tool):
     """Executes Python code in a given environment and returns the result."""
 

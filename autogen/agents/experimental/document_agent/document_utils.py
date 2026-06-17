@@ -10,7 +10,6 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from .url_utils import ExtensionToFormat, InputFormat, URLAnalyzer, validate_url
 
@@ -323,7 +322,6 @@ def list_files(directory: Path | str) -> list[Path]:
     return [f for f in path.rglob("*") if f.is_file()]
 
 
-@export_module("autogen.agents.experimental.document_agent")
 def handle_input(input_path: Path | str, output_dir: Path | str = "./output") -> list[Path]:
     """Process the input string and return the appropriate file paths"""
     output_dir = preprocess_path(str_or_path=output_dir, is_dir=True, mk_path=True)
@@ -348,7 +346,6 @@ def handle_input(input_path: Path | str, output_dir: Path | str = "./output") ->
         raise ValueError("The input provided is neither a URL, directory, nor a file path.")
 
 
-@export_module("autogen.agents.experimental.document_agent")
 def preprocess_path(str_or_path: Path | str, mk_path: bool = False, is_file: bool = False, is_dir: bool = True) -> Path:
     """Preprocess the path for file operations.
 

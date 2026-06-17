@@ -17,7 +17,6 @@ from termcolor import colored
 
 from .... import AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ....code_utils import CODE_BLOCK_PATTERN
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 
 __all__ = ["AgentBuilder"]
@@ -49,7 +48,6 @@ def _retrieve_json(text):
     return code_blocks[0]
 
 
-@export_module("autogen.agentchat.contrib.captainagent")
 class AgentBuilder:
     """AgentBuilder can help user build an automatic task solving process powered by multi-agent system.
     Specifically, our building pipeline includes initialize and build.

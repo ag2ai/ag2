@@ -7,7 +7,6 @@ import sys
 import warnings
 from typing import Any
 
-from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
 from ...tools import Tool
 from ..registry import register_interoperable_class
@@ -24,7 +23,6 @@ with optional_import_block():
 
 
 @register_interoperable_class("crewai")
-@export_module("autogen.interop")
 class CrewAIInteroperability:
     """A class implementing the `Interoperable` protocol for converting CrewAI tools
     to a general `Tool` format.

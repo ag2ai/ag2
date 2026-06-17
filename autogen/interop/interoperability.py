@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from typing import Any
 
-from ..doc_utils import export_module
 from ..tools import Tool
 from .interoperable import Interoperable
 from .registry import InteroperableRegistry
@@ -11,7 +10,6 @@ from .registry import InteroperableRegistry
 __all__ = ["Interoperable"]
 
 
-@export_module("autogen.interop")
 class Interoperability:
     """A class to handle interoperability between different tool types.
 

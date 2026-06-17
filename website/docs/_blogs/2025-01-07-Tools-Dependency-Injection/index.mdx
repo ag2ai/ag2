@@ -47,8 +47,8 @@ as `autogen` and `ag2` are aliases for the same PyPI package.
 
 The functionality demonstrated in this guide is located in the [`autogen.tools.dependency_injection`](/docs/use-cases/notebooks/notebooks/agentchat_tools_dependency_injection) module. This module provides key components for dependency injection:
 
-- [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext): abstract base class used to define and encapsulate data contexts, such as user account information, which can then be injected into functions or agents securely.
-- [`Depends`](/docs/api-reference/autogen/tools/Depends#depends): a function used to declare and inject dependencies, either from a context (like [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext)) or a function, ensuring sensitive data is provided securely without direct exposure.
+- `BaseContext`: abstract base class used to define and encapsulate data contexts, such as user account information, which can then be injected into functions or agents securely.
+- `Depends`: a function used to declare and inject dependencies, either from a context (like `BaseContext`) or a function, ensuring sensitive data is provided securely without direct exposure.
 
 ```python
 import os
@@ -62,7 +62,7 @@ from autogen.tools.dependency_injection import BaseContext, Depends
 ```
 
 ## Define a BaseContext Class
-We start by defining a [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext) class for accounts. This will act as the base structure for dependency injection. By using this approach, sensitive information like usernames and passwords is never exposed to the LLM.
+We start by defining a `BaseContext` class for accounts. This will act as the base structure for dependency injection. By using this approach, sensitive information like usernames and passwords is never exposed to the LLM.
 
 ```python
 class Account(BaseContext, BaseModel):
@@ -103,8 +103,8 @@ Dependency injection simplifies passing data to a function. Here, we'll inject a
 Configure the agents for the interaction.
 
 - `LLMConfig` defines the LLM configurations, including the model and API key.
-- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
 
 
 ```python
@@ -179,15 +179,15 @@ Your balance is 200 USD.
 
 ## Injecting Parameters Without BaseContext
 
-Sometimes, you might not want to use [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext). Here's how to inject simple parameters directly.
+Sometimes, you might not want to use `BaseContext`. Here's how to inject simple parameters directly.
 
 ### Agent Configuration
 
 Configure the agents for the interaction.
 
 - `LLMConfig` defines the LLM configurations, including the model and API key.
-- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
 
 ```python
 llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})

@@ -6,7 +6,6 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from .....doc_utils import export_module
 from .....import_utils import optional_import_block, require_optional_import
 from .... import Tool
 from ....dependency_injection import Depends, on
@@ -21,7 +20,6 @@ MAX_BATCH_RETRIEVE_MESSAGES = 100  # Discord's max per request
 
 
 @require_optional_import(["discord"], "commsagent-discord")
-@export_module("autogen.tools.experimental")
 class DiscordSendTool(Tool):
     """Sends a message to a Discord channel."""
 
@@ -117,7 +115,6 @@ class DiscordSendTool(Tool):
 
 
 @require_optional_import(["discord"], "commsagent-discord")
-@export_module("autogen.tools.experimental")
 class DiscordRetrieveTool(Tool):
     """Retrieves messages from a Discord channel."""
 

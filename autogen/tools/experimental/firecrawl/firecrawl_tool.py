@@ -7,7 +7,6 @@ import os
 import warnings
 from typing import Annotated, Any
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....llm_config import LLMConfig
 from ... import Depends, Tool
@@ -557,7 +556,6 @@ def _firecrawl_deep_research(
         }
 
 
-@export_module("autogen.tools.experimental")
 class FirecrawlTool(Tool):
     """FirecrawlTool is a tool that uses the Firecrawl API to scrape, crawl, map, search, and research websites.
 

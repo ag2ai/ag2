@@ -9,7 +9,6 @@ import time
 from pathlib import Path
 from typing import Annotated
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from .document_utils import handle_input
 
@@ -29,7 +28,6 @@ logger.setLevel(logging.DEBUG)
 
 
 @require_optional_import(["docling"], "rag")
-@export_module("autogen.agents.experimental.document_agent")
 def docling_parse_docs(  # type: ignore[no-any-unimported]
     input_file_path: Annotated[Path | str, "Path to the input file or directory"],
     output_dir_path: Annotated[Path | str | None, "Path to the output directory"] = None,

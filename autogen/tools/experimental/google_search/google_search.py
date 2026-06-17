@@ -6,7 +6,6 @@
 import logging
 from typing import Annotated, Any
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ... import Depends, Tool
 from ...dependency_injection import on
@@ -42,7 +41,6 @@ def _google_search(
     ]
 
 
-@export_module("autogen.tools.experimental")
 class GoogleSearchTool(Tool):
     """GoogleSearchTool is a tool that uses the Google Search API to perform a search."""
 
