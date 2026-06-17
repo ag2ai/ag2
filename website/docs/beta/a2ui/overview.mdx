@@ -52,7 +52,7 @@ The agent validates every A2UI message against the chosen **catalog** schema (wi
 - `#!python "v1.0"` — adds the `#!python callFunction` / `#!python functionResponse` / `#!python actionResponse` round-trip for richer client→server interaction.
 
 !!! note
-    A2UI's wire is **transport-agnostic**. The same validated messages serialize identically whether served over the built-in REST/SSE adapter, embedded in an A2A `#!python DataPart`, or carried by AG-UI events.
+    A2UI's wire is **transport-agnostic**. The same validated messages serialize identically whether served over the built-in [REST/SSE adapter](/docs/beta/a2ui/server), embedded in an [A2A `#!python DataPart`](/docs/beta/a2ui/a2a), or carried by AG-UI events.
 
 ## Public API
 
@@ -114,4 +114,6 @@ asyncio.run(main())
 ## Reading Order
 
 1. [Server](/docs/beta/a2ui/server) — serve an `#!python A2UIAgent` over HTTP (SSE / NDJSON) and drive it from a client.
-2. [Actions](/docs/beta/a2ui/actions) — clickable buttons: server `#!python event` actions (tool-backed or LLM-handled) and client `#!python functionCall` actions, plus the click → next-turn round-trip.
+2. [A2A Transport](/docs/beta/a2ui/a2a) — serve the same agent over A2A, carrying A2UI messages as canonical `#!python DataPart`s.
+3. [Actions](/docs/beta/a2ui/actions) — clickable buttons: server `#!python event` actions (tool-backed or LLM-handled) and client `#!python functionCall` actions, plus the click → next-turn round-trip.
+4. [Catalogs & Capabilities](/docs/beta/a2ui/capabilities) — the component schema the agent validates against, custom catalogs, and client capability negotiation.

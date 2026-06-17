@@ -70,7 +70,7 @@ class A2UIAgent(Agent):
             config=AnthropicConfig(...),
             tools=[submit_form],
             validate_responses=True,
-            validation_retries=2,
+            validation_retries=1,
         )
         result = await agent.ask("show me a booking form")
     """
