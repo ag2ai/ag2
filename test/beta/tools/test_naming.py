@@ -146,6 +146,24 @@ def test_empty_args() -> None:
     }
 
 
+def test_explicit_schema_is_preserved() -> None:
+    explicit = {"type": "object", "properties": {"x": {"type": "string"}}, "required": ["x"]}
+
+    @tool(schema=explicit)
+    def my_tool() -> str:
+        """Tool description."""
+        return ""
+
+    assert asdict(my_tool.schema) == {
+        "function": {
+            "description": "Tool description.",
+            "name": "my_tool",
+            "parameters": explicit,
+        },
+        "type": "function",
+    }
+
+
 @pytest.mark.xfail()
 def test_create_dynamic_options() -> None:
     @tool
