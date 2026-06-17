@@ -7,6 +7,7 @@
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, is_dataclass
 from typing import Any
+from uuid import uuid4
 
 from pydantic import BaseModel
 
@@ -38,8 +39,9 @@ class Task:
             run JSON so scorers and reports can consume it.
     """
 
-    task_id: str
     inputs: dict[str, Any]
+
+    task_id: str = field(default_factory=lambda: str(uuid4()))
     reference_outputs: dict[str, Any] | None = None
     tags: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)

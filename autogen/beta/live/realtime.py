@@ -2,25 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, suppress
-from typing import Any, Protocol, overload
+from typing import Any, Protocol
 
-from fast_depends import Provider
 from fast_depends.library.serializer import SerializerProto
-from fast_depends.pydantic import PydanticSerializer
 
-from autogen.beta.agent import HumanHook, Plugin, PromptHook, PromptType, _wrap_prompt_hook, wrap_hitl
+from autogen.beta.agent import HumanHook, Plugin, PluginTarget, PromptType, wrap_hitl
 from autogen.beta.context import ConversationContext, Stream
 from autogen.beta.events import HumanInputRequest, ModelRequest, ObserverCompleted, ObserverStarted
-from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.middleware.base import BaseMiddleware, MiddlewareFactory
 from autogen.beta.observers import Observer
 from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.executor import ToolExecutor
-from autogen.beta.tools.final import FunctionParameters, FunctionTool, FunctionToolSchema
-from autogen.beta.tools.final import tool as _tool
+from autogen.beta.tools.final import FunctionTool, FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 from autogen.beta.usage import UsageReport
@@ -50,7 +44,7 @@ class RealtimeConfig(Protocol):
     ) -> AbstractAsyncContextManager[None]: ...
 
 
-class LiveAgent:
+class LiveAgent(PluginTarget):
     """Realtime STT agent. Open a session via `agent.run()`.
 
     If `stream` is omitted, owns a fresh `MemoryStream`; otherwise binds to
@@ -84,149 +78,19 @@ class LiveAgent:
         # assembly
         stream: Stream | None = None,
     ) -> None:
-        self.name = name
-
+        self._init_target(
+            name,
+            prompt=prompt,
+            hitl_hook=hitl_hook,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
+            dependencies=dependencies,
+            variables=variables,
+            plugins=plugins,
+        )
         self._config = config
         self._stream = stream
-
-        self._agent_dependencies: dict[Any, Any] = dependencies or {}
-        self._agent_variables: dict[Any, Any] = variables or {}
-        self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
-
-        self._dependency_provider = Provider()
-        self._tools: list[Tool] = []
-        for t in tools:
-            self.add_tool(t)
-
-        self._middleware: list[MiddlewareFactory] = list(middleware)
-
-        self._observers: list[Observer] = []
-        for obs in observers:
-            self.add_observer(obs)
-
-        self._serializer: SerializerProto = PydanticSerializer(
-            pydantic_config={"arbitrary_types_allowed": True},
-            use_fastdepends_errors=False,
-        )
-        self._tool_executor = ToolExecutor(self._serializer)
-
-        self._system_prompt: list[str] = []
-        self._dynamic_prompt: list[Callable[[ModelRequest, ConversationContext], Awaitable[str]]] = []
-
-        if isinstance(prompt, str) or callable(prompt):
-            prompt = [prompt]
-        for p in prompt:
-            if isinstance(p, str):
-                self._system_prompt.append(p)
-            else:
-                self._dynamic_prompt.append(_wrap_prompt_hook(p))
-
-        for plg in plugins:
-            plg.register(self)  # type: ignore[arg-type]
-
-    def hitl_hook(self, func: HumanHook) -> HumanHook:
-        if self._hitl_hook is not None:
-            warnings.warn(
-                "You already set HITL hook, provided value overrides it",
-                category=RuntimeWarning,
-                stacklevel=2,
-            )
-
-        self._hitl_hook = wrap_hitl(func)
-        return func
-
-    @overload
-    def prompt(
-        self,
-        func: None = None,
-    ) -> Callable[[PromptHook], PromptHook]: ...
-
-    @overload
-    def prompt(
-        self,
-        func: PromptHook,
-    ) -> PromptHook: ...
-
-    def prompt(
-        self,
-        func: PromptHook | None = None,
-    ) -> PromptHook | Callable[[PromptHook], PromptHook]:
-        def wrapper(f: PromptHook) -> PromptHook:
-            self._dynamic_prompt.append(_wrap_prompt_hook(f))
-            return f
-
-        if func:
-            return wrapper(func)
-        return wrapper
-
-    @overload
-    def tool(
-        self,
-        function: Callable[..., Any],
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        schema: FunctionParameters | None = None,
-        sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> Tool: ...
-
-    @overload
-    def tool(
-        self,
-        function: None = None,
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        schema: FunctionParameters | None = None,
-        sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> Callable[[Callable[..., Any]], Tool]: ...
-
-    def tool(
-        self,
-        function: Callable[..., Any] | None = None,
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        schema: FunctionParameters | None = None,
-        sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddleware] = (),
-    ) -> Tool | Callable[[Callable[..., Any]], Tool]:
-        def make_tool(f: Callable[..., Any]) -> Tool:
-            t = _tool(
-                f,
-                name=name,
-                description=description,
-                schema=schema,
-                sync_to_thread=sync_to_thread,
-                middleware=middleware,
-            )
-            self.add_tool(t)
-            return t
-
-        if function:
-            return make_tool(function)
-
-        return make_tool
-
-    def add_tool(self, t: Callable[..., Any] | Tool) -> "LiveAgent":
-        self._tools.append(FunctionTool.ensure_tool(t, provider=self._dependency_provider))
-        return self
-
-    def add_middleware(self, m: MiddlewareFactory) -> "LiveAgent":
-        """Append middleware as the innermost wrapper in the chain."""
-        self._middleware.append(m)
-        return self
-
-    def insert_middleware(self, m: MiddlewareFactory) -> "LiveAgent":
-        """Insert middleware as the outermost wrapper in the chain."""
-        self._middleware.insert(0, m)
-        return self
-
-    def add_observer(self, observer: Observer) -> None:
-        """Register an observer (before calling run())."""
-        self._observers.append(observer)
 
     @staticmethod
     async def usage_report(context: ConversationContext) -> UsageReport:
@@ -251,7 +115,7 @@ class LiveAgent:
 
         context = ConversationContext(
             stream=stream,
-            dependency_provider=self._dependency_provider,
+            dependency_provider=self.dependency_provider,
             dependencies=self._agent_dependencies | (dependencies or {}),
             variables=self._agent_variables | (variables or {}),
         )
@@ -259,8 +123,8 @@ class LiveAgent:
         active_config = config if config is not None else self._config
         active_hitl = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
 
-        all_tools: list[Tool] = self._tools + [
-            FunctionTool.ensure_tool(t, provider=self._dependency_provider) for t in tools
+        all_tools: list[Tool] = self.tools + [
+            FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools
         ]
         all_observers: list[Observer] = self._observers + list(observers)
 

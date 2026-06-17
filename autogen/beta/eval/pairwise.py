@@ -280,7 +280,7 @@ async def evaluate_pairwise(
     source_b: TraceSource,
     *,
     comparators: Iterable[PairwiseComparator],
-    store_dir: str | os.PathLike[str],
+    store_dir: str | os.PathLike[str] | None,
     variant_a: str = "A",
     variant_b: str = "B",
     suite: Suite | None = None,
@@ -318,17 +318,17 @@ async def evaluate_pairwise(
     created_at = datetime.now(timezone.utc).isoformat()
     started = time.perf_counter()
 
-    eval_ctx = ConversationContext(stream=stream) if stream is not None else None
     if stream is not None:
-        await stream.send(
+        eval_ctx = ConversationContext(stream=stream)
+        await eval_ctx.send(
             PairwiseStarted(
                 run_id=actual_run_id, label=label, variant_a=variant_a, variant_b=variant_b, total=len(pairs)
             ),
-            eval_ctx,
         )
-    on_case = (
-        partial(_publish_pairwise_compared, stream, eval_ctx, actual_run_id, label) if stream is not None else None
-    )
+        on_case = partial(_publish_pairwise_compared, eval_ctx, actual_run_id, label)
+
+    else:
+        eval_ctx, on_case = None, None
 
     case_lists = await asyncio.gather(
         *(
@@ -351,9 +351,12 @@ async def evaluate_pairwise(
         label=label,
         store_dir=store_dir,
     )
-    result.save()
-    if stream is not None:
-        await stream.send(PairwiseCompleted(run_id=actual_run_id, label=label, result=result), eval_ctx)
+    if store_dir:
+        result.save()
+
+    if eval_ctx is not None:
+        await eval_ctx.send(PairwiseCompleted(run_id=actual_run_id, label=label, result=result))
+
     return result
 
 
@@ -398,16 +401,13 @@ async def _evaluate_pair(
 
 
 async def _publish_pairwise_compared(
-    stream: Stream,
     ctx: ConversationContext,
     run_id: str,
     label: str | None,
     case: PairwiseCase,
 ) -> None:
     """Publish a :class:`PairwiseCompared` event when one comparator finishes one pair."""
-    await stream.send(
-        PairwiseCompared(run_id=run_id, label=label, task_id=case.task_id, key=case.key, winner=case.winner), ctx
-    )
+    await ctx.send(PairwiseCompared(run_id=run_id, label=label, task_id=case.task_id, key=case.key, winner=case.winner))
 
 
 def _pos_to_ab(preferred: str, first: str, second: str) -> str:

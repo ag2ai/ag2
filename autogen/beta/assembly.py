@@ -10,7 +10,7 @@ transforms (prompts, events) before each LLM call.
 Policies compose left-to-right: each sees the output of the previous.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Protocol, runtime_checkable
 
 from autogen.beta.context import ConversationContext as Context
@@ -64,7 +64,7 @@ class AssemblerMiddleware(BaseMiddleware):
         event: BaseEvent,
         context: Context,
         *,
-        policies: list[AssemblyPolicy],
+        policies: Iterable[AssemblyPolicy],
     ) -> None:
         super().__init__(event, context)
         self._policies = policies

@@ -443,7 +443,7 @@ class HubClient:
         self._clients[passport.agent_id] = client
 
         if attach_plugin:
-            NetworkPlugin(client).register(agent)
+            agent._apply_plugin(NetworkPlugin(client))
 
         return client
 
@@ -538,7 +538,7 @@ class HubClient:
         )
         self._clients[existing_agent_id] = client
         if attach_plugin:
-            NetworkPlugin(client).register(agent)
+            agent._apply_plugin(NetworkPlugin(client))
         return client
 
     async def _attach_remote(
@@ -582,7 +582,7 @@ class HubClient:
         )
         self._clients[existing_agent_id] = client
         if attach_plugin:
-            NetworkPlugin(client).register(agent)
+            agent._apply_plugin(NetworkPlugin(client))
 
         # Reconnect handshake — binds this endpoint to the identity and
         # replays unacked notifies past the high-water mark.

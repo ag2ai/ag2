@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("opentelemetry.sdk")
 
 from autogen.beta import Agent
-from autogen.beta.eval import Variants, console_reporter, run_agent, run_pairwise, run_variants, scorer
+from autogen.beta.eval import Suite, Variants, console_reporter, run_agent, run_pairwise, run_variants, scorer
 from autogen.beta.eval.pairwise import PairwiseOutcome
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
@@ -45,7 +45,7 @@ async def test_run_publishes_lifecycle_events(tmp_path) -> None:
     stream, seen = _collector()
 
     await run_agent(
-        [{"task_id": "t1", "inputs": {"input": "hi"}}],
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}]),
         agent=Agent("a", config=TestConfig("ok")),
         scorers=[_ok],
         store_dir=tmp_path,
@@ -61,13 +61,13 @@ async def test_run_publishes_lifecycle_events(tmp_path) -> None:
 @pytest.mark.asyncio()
 async def test_run_variants_publishes_variant_events(tmp_path) -> None:
     stream, seen = _collector()
-    variants = Variants.from_targets({
-        "a": lambda: Agent("a", config=TestConfig("hi a")),
-        "b": lambda: Agent("b", config=TestConfig("hi b")),
+    variants = Variants({
+        "a": Agent("a", config=TestConfig("hi a")),
+        "b": Agent("b", config=TestConfig("hi b")),
     })
 
     await run_variants(
-        [{"task_id": "t1", "inputs": {"input": "hi"}}],
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}]),
         variants=variants,
         scorers=[_ok],
         store_dir=tmp_path,
@@ -89,13 +89,13 @@ async def test_run_variants_tags_task_evaluated_with_variant(tmp_path) -> None:
             tagged.append((event.task_id, event.variant))
 
     stream.subscribe(collect, sync_to_thread=False)
-    variants = Variants.from_targets({
-        "a": lambda: Agent("a", config=TestConfig("hi a")),
-        "b": lambda: Agent("b", config=TestConfig("hi b")),
+    variants = Variants({
+        "a": Agent("a", config=TestConfig("hi a")),
+        "b": Agent("b", config=TestConfig("hi b")),
     })
 
     await run_variants(
-        [{"task_id": "t1", "inputs": {"input": "hi"}}],
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}]),
         variants=variants,
         scorers=[_ok],
         store_dir=tmp_path,
@@ -111,9 +111,9 @@ async def test_run_pairwise_publishes_lifecycle_events(tmp_path) -> None:
     stream, seen = _collector()
 
     await run_pairwise(
-        [{"task_id": "t1", "inputs": {"input": "hi"}}],
-        variant_a=lambda: Agent("a", config=TestConfig("from a")),
-        variant_b=lambda: Agent("b", config=TestConfig("from b")),
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}]),
+        variant_a=Agent("a", config=TestConfig("from a")),
+        variant_b=Agent("b", config=TestConfig("from b")),
         comparators=[_PickB()],
         store_dir=tmp_path,
         stream=stream,
@@ -132,7 +132,7 @@ async def test_console_reporter_prints_progress(tmp_path, capsys) -> None:
     stream.subscribe(console_reporter, sync_to_thread=False)
 
     await run_agent(
-        [{"task_id": "t1", "inputs": {"input": "hi"}}],
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}]),
         agent=Agent("a", config=TestConfig("ok")),
         scorers=[_ok],
         store_dir=tmp_path,
@@ -151,9 +151,9 @@ async def test_console_reporter_prints_pairwise_progress(tmp_path, capsys) -> No
     stream.subscribe(console_reporter, sync_to_thread=False)
 
     await run_pairwise(
-        [{"task_id": "t1", "inputs": {"input": "hi"}}],
-        variant_a=lambda: Agent("a", config=TestConfig("from a")),
-        variant_b=lambda: Agent("b", config=TestConfig("from b")),
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}]),
+        variant_a=Agent("a", config=TestConfig("from a")),
+        variant_b=Agent("b", config=TestConfig("from b")),
         comparators=[_PickB()],
         store_dir=tmp_path,
         stream=stream,

@@ -99,7 +99,7 @@ async def _grade(
     *,
     scorers: tuple[Scorer, ...],
     suite: Suite | None,
-    store_dir: str | os.PathLike[str],
+    store_dir: str | os.PathLike[str] | None,
     budgets: BudgetThresholds | None,
     concurrency: int,
     run_id: str | None,
@@ -127,19 +127,18 @@ async def _grade(
     actual_run_id = run_id if run_id is not None else uuid4().hex
     created_at = datetime.now(timezone.utc).isoformat()
 
-    eval_stream = stream
-    eval_ctx = ConversationContext(stream=eval_stream) if eval_stream is not None else None
-    if eval_stream is not None:
-        await eval_stream.send(
+    if stream is not None:
+        eval_ctx = ConversationContext(stream=stream) if stream is not None else None
+
+        await eval_ctx.send(
             EvalStarted(run_id=actual_run_id, label=label, suite=resolved_suite.name, total=len(refs)),
-            eval_ctx,
         )
 
-    on_result = (
-        partial(_publish_task_evaluated, eval_stream, eval_ctx, actual_run_id, label, variant)
-        if eval_stream is not None
-        else None
-    )
+        on_result = partial(_publish_task_evaluated, eval_ctx, actual_run_id, label, variant)
+
+    else:
+        eval_ctx, on_result = None, None
+
     coros = [
         _evaluate_ref(
             semaphore, source, ref, scorers=scorers, tasks_by_id=tasks_by_id, budgets=budgets, on_result=on_result
@@ -160,11 +159,13 @@ async def _grade(
         label=label,
         store_dir=store_dir,
     )
-    saved_path = result.save()
-    logger.info("Run %s saved to %s", actual_run_id, saved_path)
 
-    if eval_stream is not None:
-        await eval_stream.send(EvalCompleted(run_id=actual_run_id, label=label, result=result), eval_ctx)
+    if store_dir:
+        saved_path = result.save()
+        logger.info("Run %s saved to %s", actual_run_id, saved_path)
+
+    if eval_ctx is not None:
+        await eval_ctx.send(EvalCompleted(run_id=actual_run_id, label=label, result=result))
 
     return result
 
@@ -208,7 +209,6 @@ async def _evaluate_ref(
 
 
 async def _publish_task_evaluated(
-    stream: Stream,
     ctx: ConversationContext,
     run_id: str,
     label: str | None,
@@ -217,9 +217,8 @@ async def _publish_task_evaluated(
     result: TaskResult,
 ) -> None:
     """Publish a :class:`TaskEvaluated` event when one trace finishes scoring."""
-    await stream.send(
+    await ctx.send(
         TaskEvaluated(run_id=run_id, label=label, task_id=task.task_id, feedback=result.feedback, variant=variant),
-        ctx,
     )
 
 
@@ -245,4 +244,4 @@ def _outputs_from_trace(trace: Trace) -> dict[str, Any]:
 def _suite_from_refs(refs: list[TraceRef]) -> Suite:
     """Synthesize a reference-free Suite (one task per trace) when none is supplied."""
     tasks = tuple(Task(task_id=ref.task_id or ref.trace_id, inputs={}, reference_outputs=None) for ref in refs)
-    return Suite(tasks, name="traces", source="trace-source")
+    return Suite(tasks=tasks, name="traces", source="trace-source")

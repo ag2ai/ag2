@@ -1,9 +1,3 @@
-.agents
-.claude
-.codegraph
-.rtk
-skills-lock.json
-
 .docusaurus/
 node_modules/
 .vite/
@@ -13,6 +7,20 @@ node_modules/
 .vscode/
 .idea/
 .DS_Store
+
+# Agents
+.agents
+.cursor
+.claude
+.vercel
+
+.codegraph
+.rtk
+
+skills-lock.json
+.mcp.json
+
+/CLAUDE.md
 
 # Log files
 *.log
@@ -162,6 +170,8 @@ dmypy.json
 cython_debug/
 
 # UV artifacts
+# TODO: remove this once we remove most pyproject.toml dependencies.
+# TODO: update dependabot to use "uv" package-ecosystem then.
 uv.lock
 
 logs/
@@ -211,8 +221,3 @@ notebook/mcp/wikipedia_articles/
 notebook/mcp/arxiv_papers/
 
 remote-examples
-
-*CLAUDE.md:
-.cursor/
-.claude/
-.vercel/

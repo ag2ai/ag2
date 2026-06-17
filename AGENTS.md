@@ -9,7 +9,14 @@ Before opening a PR, read and follow `.github/AI_POLICY.md`.
 - Include validation and testing information in the PR body.
 - Be prepared to explain and revise the contribution in response to reviewer questions.
 
-## Common rules
+## Architecture Decision Records (ADR)
+
+Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, sequentially numbered (`0001-*.md`, `0002-*.md`, …) with `status` / `date` frontmatter and a short Context / Decision / Consequences body.
+
+- **Consult them before changing established public API or architecture.** They explain *why* something is the way it is — e.g. `0003-eval-run-api-takes-agent-instances.md` records that the eval `run_*` API takes prebuilt `Agent` instances (not factories) and explicitly-built `Suite`s. If a change contradicts an ADR, supersede it rather than silently reverting the code.
+- **Add one when a decision qualifies**: it is hard to reverse, surprising without context (a reader would assume the opposite), and the result of a real trade-off. Scan `docs/adr/` for the highest number and increment. Keep it short — recording *that* a decision was made and *why* is the value.
+
+## Code Style Guidelines
 
 - Do not use `from __future__ import annotations`.
 - Do not use global variables or top-level side-effect function calls unless the user explicitly allows it.
