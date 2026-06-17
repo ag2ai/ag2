@@ -17,11 +17,9 @@ from autogen.beta.a2a import A2AServer, build_card
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.tools import tool
 
-
 @tool(description="Add two integers and return the sum as a string.")
 async def calc_add(a: int, b: int) -> str:
     return f"{a + b}"
-
 
 async def main() -> None:
     agent = Agent(
@@ -34,7 +32,6 @@ async def main() -> None:
     asgi = server.build_jsonrpc(url="http://127.0.0.1:8000", card=card)
 
     await uvicorn.Server(uvicorn.Config(asgi, host="127.0.0.1", port=8000)).serve()
-
 
 ```
 

@@ -77,9 +77,8 @@ The reason string flows on `#!python EV_CHANNEL_CLOSED.event_data["reason"]` —
 
 The LLM itself decides. Define a tool that injects the active `#!python Channel` and calls `#!python close(...)`.
 
-```python linenums="1" hl_lines="1 5 6 7"
+```python linenums="1" hl_lines="1 5-7"
 from autogen.beta.network.client.inject import ChannelInject
-
 
 async def end_conversation(reason: str, channel: ChannelInject) -> str:
     """Close the active discussion. The reason flows on EV_CHANNEL_CLOSED."""
@@ -87,7 +86,6 @@ async def end_conversation(reason: str, channel: ChannelInject) -> str:
         return "no active channel"
     await channel.close(reason=f"agent_close:{reason}")
     return f"closed: {reason}"
-
 
 alice_agent.tool(end_conversation)
 bob_agent.tool(end_conversation)
@@ -107,7 +105,7 @@ The default notify handler stamps the active `#!python Channel` into `#!python c
 
 Subclass the adapter, watch every accepted envelope for a sentinel, return `#!python CLOSING`. Closest analogue to classic `#!python is_termination_msg`.
 
-```python linenums="1" hl_lines="9 10 11 12 13 14 15"
+```python linenums="1" hl_lines="9-15"
 class TerminatingConversationAdapter(ConversationAdapter):
     """Auto-closes when an EV_TEXT body contains the configured keyword."""
 
@@ -125,7 +123,6 @@ class TerminatingConversationAdapter(ConversationAdapter):
                 auto_close_reason=f"terminate_keyword:{self.keyword}",
             )
         return super().on_accepted(metadata, envelope, state)
-
 
 hub.register_adapter(TerminatingConversationAdapter(keyword="TERMINATE"))
 ```

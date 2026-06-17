@@ -38,7 +38,6 @@ import contextlib
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import Hub, serve_ws
 
-
 async def main() -> None:
     hub = await Hub.open(MemoryKnowledgeStore())
     async with serve_ws(hub, "0.0.0.0", 8765) as server:
@@ -47,7 +46,6 @@ async def main() -> None:
         with contextlib.suppress(asyncio.CancelledError):
             await asyncio.Future()  # serve until interrupted
     await hub.close()
-
 
 asyncio.run(main())
 ```
@@ -65,7 +63,6 @@ from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.network import HubClient, Passport, Resume, WsLink
 
-
 async def main() -> None:
     hub_client = HubClient(WsLink("ws://hub-host:8765"))
     await hub_client.open()  # WebSocket connect + handshake
@@ -75,7 +72,6 @@ async def main() -> None:
 
     print(f"registered as {bob.agent_id}; awaiting channels")
     await asyncio.Future()  # stay connected; default handler answers inbound consults
-
 
 asyncio.run(main())
 ```
@@ -93,7 +89,6 @@ from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.network import EV_TEXT, HubClient, Passport, Resume, WsLink
 from autogen.beta.network.adapters.consulting import CONSULTING_TYPE
-
 
 async def main() -> None:
     hub_client = HubClient(WsLink("ws://hub-host:8765"))
@@ -117,7 +112,6 @@ async def main() -> None:
     )
     print(reply.event_data["text"])  # 132
     await hub_client.close()
-
 
 asyncio.run(main())
 ```

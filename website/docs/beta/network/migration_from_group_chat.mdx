@@ -187,7 +187,6 @@ from autogen.beta.network import (
     Envelope, TransitionDecision, TransitionTarget, register_target,
 )
 
-
 @dataclass(slots=True)
 class TopicRouter(TransitionTarget):
     name: ClassVar[str] = "topic_router"
@@ -199,7 +198,6 @@ class TopicRouter(TransitionTarget):
         if "security" in text:
             return TransitionDecision(next_speaker=self.security_id)
         return TransitionDecision(next_speaker=self.general_id)
-
 
 register_target(TopicRouter)
 

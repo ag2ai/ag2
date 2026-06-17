@@ -215,10 +215,9 @@ AssemblerMiddleware.validate_order(policies)  # returns [] — good order
 
 Any object with a `name` and an `async apply(...)` method satisfies the protocol. Use it for domain-specific injection (project docs, RAG hits, on-call runbooks) or custom filtering:
 
-```python linenums="1" hl_lines="7 9 15"
+```python linenums="1" hl_lines="7 12 18"
 from autogen.beta import Context
 from autogen.beta.events import BaseEvent
-
 
 class RunbookPolicy:
     """Inject the on-call runbook as system context."""

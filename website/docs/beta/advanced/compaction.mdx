@@ -27,7 +27,6 @@ from autogen.beta import Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.knowledge import KnowledgeStore
 
-
 class CompactStrategy(Protocol):
     async def compact(
         self,
@@ -181,7 +180,6 @@ Any object with an `async compact(events, ctx, store)` method satisfies the prot
 ```python linenums="1"
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
 from autogen.beta.knowledge import KnowledgeStore
-
 
 class DropOldToolEvents:
     """Keep conversation events; drop tool events older than the last K."""

@@ -33,7 +33,6 @@ agent = Agent(
 stream = AGUIStream(agent)
 app = FastAPI()
 
-
 @app.post("/chat")
 async def run_agent(
     message: RunAgentInput,
@@ -93,12 +92,10 @@ Example backend tool:
 from autogen.beta import Agent, tool
 from autogen.beta.config import OpenAIConfig
 
-
 @tool
 def calculate_sum(a: int, b: int) -> int:
     """Adds two numbers and returns the result."""
     return a + b
-
 
 agent = Agent(
     name="calculator",

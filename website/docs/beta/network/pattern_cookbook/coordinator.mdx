@@ -40,7 +40,6 @@ async def handoff(to: Literal["researcher", "critic", "cost_analyst", "operator"
     """Hand off the conversation to a participant by name."""
     return ToolResult(Handoff(target=to, reason=reason), final=True)
 
-
 async def finish(summary: str = "") -> ToolResult:
     """End the conversation cleanly with a brief summary."""
     return ToolResult(Finish(summary=summary), final=True)
@@ -178,16 +177,13 @@ from autogen.beta.testing import TestConfig
 
 load_dotenv()
 
-
 async def handoff(to: Literal["researcher", "critic", "cost_analyst", "operator"], reason: str = "") -> ToolResult:
     """Hand off the conversation to a specialist by name."""
     return ToolResult(Handoff(target=to, reason=reason), final=True)
 
-
 async def finish(summary: str = "") -> ToolResult:
     """End the conversation with a summary recommendation."""
     return ToolResult(Finish(summary=summary), final=True)
-
 
 async def main() -> None:
     config = AnthropicConfig(
@@ -367,7 +363,6 @@ async def main() -> None:
     await cost_hc.close()
     await operator_hc.close()
     await hub_obj.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -231,7 +231,6 @@ def issue_tracker(
     context.variables["issue_count"] = issue_count
     return f"Issue tracked. Total issues: {issue_count}"
 
-
 local_agent = ConversableAgent(
     "local_agent",
     llm_config=LLMConfig({"model": "gpt-4o"}),
