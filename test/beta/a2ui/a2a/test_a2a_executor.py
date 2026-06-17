@@ -4,11 +4,12 @@
 
 from collections.abc import Sequence
 from types import SimpleNamespace
-from typing import Any, Self
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from a2a.types import Message, Part, Role
+from typing_extensions import Self
 
 from autogen.beta import Context
 from autogen.beta.a2a.mappers import ParsedMessage

@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
-from typing import Any, Self
+from typing import Any
 
 import pytest
+from typing_extensions import Self
 
 from autogen.beta import Context
 from autogen.beta.a2ui import A2UIAgent, A2UIClientCapabilities

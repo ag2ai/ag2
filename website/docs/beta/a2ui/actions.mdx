@@ -1,0 +1,120 @@
+---
+title: A2UI Actions & Round-Trips
+sidebarTitle: Actions
+---
+
+A2UI **actions** are the clickable parts of a UI — buttons that, when pressed, drive the next turn. An `#!python A2UIAgent` declares its actions inline via `#!python tools=[...]`, alongside any regular tools. There are three kinds, and the agent partitions them automatically:
+
+| Kind | Declare with | Runs | Use for |
+|---|---|---|---|
+| Tool-backed server action | `#!python @a2ui_action` | A server tool, on click | A button that does real work (schedule, book, query) |
+| Bare server action | `#!python A2UIEventAction(...)` | The LLM, on click | A button whose handling is "just continue the conversation" |
+| Client function action | `#!python A2UIFunctionCallAction(...)` | The client, no server round-trip | A button that opens a URL, copies text, etc. |
+
+## Tool-Backed Buttons (`@a2ui_action`)
+
+Decorate a tool function with `#!python @a2ui_action`. It becomes both a normal tool the agent can call **and** a server `#!python event` action whose name routes a click back to that tool:
+
+```python linenums="1" hl_lines="6 7 8 9"
+from autogen.beta.a2ui import A2UIAgent, a2ui_action
+from autogen.beta.config import AnthropicConfig
+
+
+@a2ui_action(description="Schedule all posts for the given time")
+def schedule_posts(time: str) -> str:
+    # ... do the work ...
+    return f"scheduled all posts for {time}"
+
+
+agent = A2UIAgent(
+    name="ui_agent",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[schedule_posts],
+)
+```
+
+When the LLM renders a button whose `#!python action.event.name` is `#!python "schedule_posts"`, a click sends the button's `#!python event.context` back as the tool's arguments. The decorator derives an example context from the function's parameter schema (here `#!python {"time": "<string>"}`) and injects it into the system prompt so the LLM emits the right keys; pass `#!python example_context=` to override it.
+
+## LLM-Handled Buttons (`A2UIEventAction`)
+
+When a click should just steer the conversation — no tool body — declare a bare `#!python A2UIEventAction`. Its `#!python description` tells the LLM the action exists; on click the agent rewrites it into a prompt and the LLM responds:
+
+```python linenums="1"
+from autogen.beta.a2ui import A2UIAgent, A2UIEventAction
+
+agent = A2UIAgent(
+    name="ui_agent",
+    tools=[
+        A2UIEventAction(
+            name="rewrite_previews",
+            description="Regenerate all previews with a different creative angle",
+        ),
+    ],
+)
+```
+
+## Client-Side Functions (`A2UIFunctionCallAction`)
+
+Some actions run entirely on the client — opening a URL, copying to the clipboard — with no server round-trip. Declare them with `#!python A2UIFunctionCallAction`; there is no tool body to decorate:
+
+```python linenums="1"
+from autogen.beta.a2ui import A2UIAgent, A2UIFunctionCallAction
+
+agent = A2UIAgent(
+    name="ui_agent",
+    protocol_version="v1.0",
+    tools=[
+        A2UIFunctionCallAction(
+            name="openUrl",
+            description="Open a URL in the user's browser",
+            example_args={"url": "https://example.com"},
+        ),
+    ],
+)
+```
+
+## The Click Round-Trip
+
+The server is stateless, so a click is just another request. The client posts the conversation plus an `#!python a2ui` envelope describing what was pressed; the agent rewrites it into the current turn:
+
+```python linenums="1" hl_lines="4-15"
+import httpx
+
+body = {
+    "messages": [],  # plus any prior conversation
+    "a2ui": [
+        {
+            "version": "v0.9",
+            "action": {
+                "name": "schedule_posts",
+                "surfaceId": "s1",
+                "sourceComponentId": "schedule_btn",
+                "timestamp": "2026-06-17T12:00:00Z",
+                "context": {"time": "2:00 PM"},
+            },
+        }
+    ],
+}
+
+async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
+    resp = await client.post("/a2ui", json=body)
+```
+
+For a tool-backed action, the click resolves to the registered tool and runs it; for a bare action, the LLM continues the conversation. An envelope naming an **unregistered** action is dropped with a warning rather than leaking raw client data into the prompt.
+
+!!! note "v1.0 round-trip"
+    With `#!python protocol_version="v1.0"`, a client's reply to a server `#!python callFunction` arrives as a `#!python functionResponse` envelope in the next request and is rewritten to a continuation prompt — the stateless transport needs no pause/resume bookkeeping. The same applies to `#!python actionResponse`.
+
+## Observing Validation Failures
+
+A2UI has no server→client error message, so when the model can't produce schema-valid UI within `#!python validation_retries + 1` attempts, the agent **gracefully degrades** to prose and emits no `#!python A2UIMessageEvent`. To tell "couldn't build UI" apart from "intentionally answered with text", subscribe to `#!python A2UIValidationFailedEvent` on the stream:
+
+```python linenums="1"
+from autogen.beta.a2ui import A2UIValidationFailedEvent
+
+
+@stream.subscribe
+async def on_validation_failed(event):
+    if isinstance(event, A2UIValidationFailedEvent):
+        log.warning("A2UI validation failed after %d attempts: %s", event.attempts, event.errors)
+```

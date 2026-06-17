@@ -1,0 +1,117 @@
+---
+title: A2UI Protocol Overview
+sidebarTitle: Overview
+---
+
+The `#!python autogen.beta.a2ui` module lets an AG2 `#!python Agent` produce **rich, interactive user interfaces** — cards, forms, lists, buttons — instead of plain text, using the [A2UI protocol](https://a2ui.org){.external-link target="_blank"}. The LLM emits conversational prose plus a validated A2UI message block; AG2 surfaces each message as a typed event and serializes it to A2UI's transport-agnostic wire format, so any A2UI-capable client can render it.
+
+## When To Use A2UI
+
+Reach for A2UI when a text answer isn't enough and the user needs to **see and act on** something:
+
+- A booking or settings **form** the user fills in and submits.
+- A **list** of results with per-item actions (approve, schedule, open).
+- A **card** summarising data with clickable buttons that drive the next turn.
+
+If you only need a conversational reply, use a plain `#!python autogen.beta.Agent`. A2UI is additive: an `#!python A2UIAgent` still answers in prose when a UI wouldn't help.
+
+## Mental Model
+
+```
+   ┌────────────────────────────┐                       ┌─────────────────────────┐
+   │ A2UIAgent                  │   server→client        │ A2UI client             │
+   │  prose + <a2ui-json> block │   createSurface /       │  renders surfaces       │
+   │  ── validate vs catalog ── │   updateComponents …    │  & components           │
+   │  emits A2UIMessageEvent     │ ────────────────────▶  │                         │
+   │                            │                         │  user clicks a button   │
+   │  action → tool / prompt    │   client→server         │                         │
+   │  ◀──────────────────────── │   action / functionResp │ ◀──────────────────────│
+   └────────────────────────────┘   (the next request)    └─────────────────────────┘
+```
+
+The agent validates every A2UI message against the chosen **catalog** schema (with retry-on-error), so malformed UI never reaches the client — on repeated failure it gracefully degrades to prose. A button click travels back as a client→server `#!python action` (or v1.0 `#!python functionResponse`) envelope, which the agent rewrites into the next turn.
+
+## Core Concepts
+
+| Concept | Lives in | Purpose |
+|---|---|---|
+| `#!python A2UIAgent` | `#!python autogen.beta.a2ui` | An `#!python Agent` that emits validated A2UI output |
+| `#!python a2ui_action` | `#!python autogen.beta.a2ui` | Decorator turning a tool function into a clickable button (server `#!python event` action) |
+| `#!python A2UIEventAction` | `#!python autogen.beta.a2ui` | A bare server `#!python event` action with no tool body (handled by the LLM) |
+| `#!python A2UIFunctionCallAction` | `#!python autogen.beta.a2ui` | A client-side `#!python functionCall` action (e.g. `#!python openUrl`), runs without a server round-trip |
+| `#!python A2UIMessageEvent` | `#!python autogen.beta.a2ui` | One validated A2UI server→client message on the stream — the event seam every transport consumes |
+| `#!python A2UIValidationFailedEvent` | `#!python autogen.beta.a2ui` | Observability signal that validation exhausted its retries and the turn degraded to prose |
+| `#!python A2UIClientCapabilities` | `#!python autogen.beta.a2ui` | Catalog negotiation — tells the agent which catalogs/components the client can render |
+| `#!python A2UIServer` | `#!python autogen.beta.a2ui.rest` | Serves an `#!python A2UIAgent` over HTTP as canonical A2UI (SSE or NDJSON) |
+
+## Protocol Versions
+
+`#!python A2UIAgent` supports three protocol versions via `#!python protocol_version=`:
+
+- `#!python "v0.9"` (default) and `#!python "v0.9.1"` — server→client surfaces and components, plus server `#!python event` actions.
+- `#!python "v1.0"` — adds the `#!python callFunction` / `#!python functionResponse` / `#!python actionResponse` round-trip for richer client→server interaction.
+
+!!! note
+    A2UI's wire is **transport-agnostic**. The same validated messages serialize identically whether served over the built-in REST/SSE adapter, embedded in an A2A `#!python DataPart`, or carried by AG-UI events.
+
+## Public API
+
+The broadly-reusable surface is re-exported from `#!python autogen.beta.a2ui`:
+
+```python linenums="1"
+from autogen.beta.a2ui import (
+    A2UIAgent,
+    a2ui_action,
+    A2UIEventAction,
+    A2UIFunctionCallAction,
+    A2UIClientCapabilities,
+    A2UIMessageEvent,
+    A2UIValidationFailedEvent,
+)
+```
+
+The HTTP adapter lives in its own submodule (it depends on Starlette, kept out of the core import):
+
+```python linenums="1"
+from autogen.beta.a2ui.rest import A2UIServer
+```
+
+## Quickstart
+
+Run an `#!python A2UIAgent` in-process and collect the A2UI messages it emits:
+
+```python linenums="1"
+import asyncio
+
+from autogen.beta.a2ui import A2UIAgent, A2UIMessageEvent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.stream import MemoryStream
+
+
+async def main() -> None:
+    agent = A2UIAgent(
+        name="ui_agent",
+        config=AnthropicConfig(model="claude-sonnet-4-6"),
+    )
+
+    stream = MemoryStream()
+    messages: list[dict] = []
+
+    @stream.subscribe
+    async def collect(event):
+        if isinstance(event, A2UIMessageEvent):
+            messages.append(event.message)
+
+    reply = await agent.ask("Show me a booking form for a dinner reservation", stream=stream)
+
+    print(await reply.content())  # conversational prose
+    print(messages)               # validated A2UI messages (createSurface, ...)
+
+
+asyncio.run(main())
+```
+
+## Reading Order
+
+1. [Server](/docs/beta/a2ui/server) — serve an `#!python A2UIAgent` over HTTP (SSE / NDJSON) and drive it from a client.
+2. [Actions](/docs/beta/a2ui/actions) — clickable buttons: server `#!python event` actions (tool-backed or LLM-handled) and client `#!python functionCall` actions, plus the click → next-turn round-trip.
