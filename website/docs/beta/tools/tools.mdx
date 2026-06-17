@@ -82,7 +82,6 @@ def fetch_data_sync(url: str) -> str:
     import requests
     return requests.get(url).text
 
-
 # This native asynchronous tool runs directly in the main event loop
 @tool
 async def fetch_data_async(url: str) -> str:
@@ -163,7 +162,7 @@ def set_temperature(
 
 A complete example combining custom tool properties and strict parameter validation looks like this:
 
-```python linenums="1" hl_lines="6 7 12-17 21-25"
+```python linenums="1" hl_lines="6-7 12-17 21-25"
 from typing import Annotated
 from pydantic import Field
 from autogen.beta import tool
@@ -349,7 +348,6 @@ def get_exchange_rate(currency: str) -> ToolResult:
         DataInput({"currency": currency, "rate": 1.23, "base": "USD"}),
         final=True,
     )
-
 
 agent = Agent(name="SupportBot", tools=[handoff_to_human])
 

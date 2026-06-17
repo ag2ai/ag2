@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Any, TypeVar
 
-from ...doc_utils import export_module
 from ...llm_config import LLMConfig
 from ...oai import get_first_llm_config
 
@@ -67,7 +66,6 @@ def is_crawl4ai_v05_or_higher() -> bool:
         return False
 
 
-@export_module("autogen.interop")
 class LiteLLmConfigFactory(ABC):
     _factories: set["LiteLLmConfigFactory"] = set()
 

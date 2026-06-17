@@ -17,11 +17,9 @@ from autogen.beta.a2a import A2AServer, build_card
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.tools import tool
 
-
 @tool(description="Add two integers and return the sum as a string.")
 async def calc_add(a: int, b: int) -> str:
     return f"{a + b}"
-
 
 async def main() -> None:
     agent = Agent(
@@ -34,7 +32,6 @@ async def main() -> None:
     asgi = server.build_jsonrpc(url="http://127.0.0.1:8000", card=card)
 
     await uvicorn.Server(uvicorn.Config(asgi, host="127.0.0.1", port=8000)).serve()
-
 
 ```
 
@@ -61,7 +58,7 @@ After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.we
 
 Tools attached to the wrapped `#!python Agent` execute on the server, just as they would for a local agent. The remote LLM picks them up automatically.
 
-```python linenums="1" hl_lines="11-14"
+```python linenums="1" hl_lines="10-13"
 from autogen.beta import Agent
 from autogen.beta.a2a import A2AServer
 from autogen.beta.config import AnthropicConfig
@@ -130,7 +127,7 @@ await grpc_server.wait_for_termination()
 
 The same `#!python A2AServer` instance can back any combination of transports. Build a single multi-transport `#!python AgentCard` and call each `#!python build_*` against it — they share one task store.
 
-```python linenums="1" hl_lines="3-9"
+```python linenums="1" hl_lines="7-9 12-14"
 from a2a.server.tasks import InMemoryPushNotificationConfigStore
 
 server = A2AServer(agent, push_config_store=InMemoryPushNotificationConfigStore())
@@ -174,7 +171,7 @@ await asyncio.gather(
 
 `#!python autogen.beta.a2a.security` ships factories for every A2A-recognised scheme. Each factory returns a typed `#!python Scheme` object that carries its card-level binding name. Pass them to `#!python require(...)` to build `#!python Requirement` entries; `#!python build_card` auto-derives the card's `#!python security_schemes` from the schemes referenced in `#!python security=` — no duplicate declarations.
 
-```python linenums="1" hl_lines="3 7-8 12-15"
+```python linenums="1" hl_lines="8-9 14"
 from autogen.beta.a2a import A2AServer, build_card
 from autogen.beta.a2a.security import (
     bearer_scheme,
@@ -257,7 +254,7 @@ require(custom)
 
 A2A doesn't define server-side middleware. Attach CORS, auth or tracing directly to the returned transport object:
 
-```python linenums="1" hl_lines="3"
+```python linenums="1" hl_lines="4"
 from starlette.middleware.cors import CORSMiddleware
 
 asgi = server.build_jsonrpc(url="http://127.0.0.1:8000")

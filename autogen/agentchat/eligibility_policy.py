@@ -8,13 +8,10 @@ import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from ..doc_utils import export_module
-
 if TYPE_CHECKING:
     from autogen.agentchat.agent import Agent
 
 
-@export_module("autogen")
 @dataclass(frozen=True)
 class SelectionContext:
     """Minimal context passed to AgentEligibilityPolicy.is_eligible().
@@ -65,7 +62,6 @@ class SelectionContext:
         object.__setattr__(self, "participants", tuple(self.participants))
 
 
-@export_module("autogen")
 @runtime_checkable
 class AgentEligibilityPolicy(Protocol):
     """Protocol for runtime eligibility filters in GroupChat speaker selection.
@@ -113,7 +109,6 @@ class AgentEligibilityPolicy(Protocol):
 _UNAVAILABLE_PREFIX = "[UNAVAILABLE] "
 
 
-@export_module("autogen")
 class AgentDescriptionGuard:
     """Manages soft-signal description mutation for LLM-based speaker selection.
 

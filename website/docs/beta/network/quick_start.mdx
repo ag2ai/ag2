@@ -21,7 +21,6 @@ from autogen.beta.network import (
     Resume,
 )
 
-
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
 
@@ -70,7 +69,6 @@ async def main() -> None:
     await alice_hc.close()
     await bob_hc.close()
     await hub.close()
-
 
 asyncio.run(main())
 ```

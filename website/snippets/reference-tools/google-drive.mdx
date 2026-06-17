@@ -37,7 +37,7 @@ Configure authentication to allow AG2 to access Google Drive:
 
 - `client_secret_file`: The path to the client secret file, which you can download from the Google Cloud Console. This file contains the necessary credentials to authenticate the user with Google services.
 - `token_file`: The path to a file that will store the access token. After the first run of the script, this token will be saved and used for subsequent authentications, avoiding the need for repeated login processes.
-- `provider` ([`GoogleCredentialsLocalProvider`](/docs/api-reference/autogen/tools/experimental/google/authentication/GoogleCredentialsLocalProvider)): The provider is responsible for managing the authentication process.
+- `provider` (`GoogleCredentialsLocalProvider`): The provider is responsible for managing the authentication process.
 - `credentials`: This variable stores the credentials object, which will be used by the system to authenticate the user and gain access to their Google Drive resources.
 
 > **Note:** The first execution opens a Google Authentication page in your browser.
@@ -173,7 +173,7 @@ TERMINATE
 ```
 
 ## Custom GoogleDriveToolkit
-You can easily customize the predefined [`GoogleDriveToolkit`](/docs/api-reference/autogen/tools/experimental/google/drive/GoogleDriveToolkit) based on your specific requirements. By subclassing [`GoogleDriveToolkit`](/docs/api-reference/autogen/tools/experimental/google/drive/GoogleDriveToolkit), you can modify the toolset available to your agent.
+You can easily customize the predefined `GoogleDriveToolkit` based on your specific requirements. By subclassing `GoogleDriveToolkit`, you can modify the toolset available to your agent.
 
 For example:
 - **Add custom tools**: You can introduce new tools, like `list_docs`, to specifically retrieve document files from a folder.

@@ -113,7 +113,6 @@ Safety defaults are deliberately strict:
 from autogen.beta.tools import SandboxCodeTool
 from autogen.beta.tools.code import CodeEnvironment, CodeLanguage, CodeRunResult
 
-
 class MyEnvironment(CodeEnvironment):
     @property
     def supported_languages(self) -> tuple[CodeLanguage, ...]:
@@ -123,7 +122,6 @@ class MyEnvironment(CodeEnvironment):
         # ship code to wherever you run it; return stdout + exit code
         ...
         return CodeRunResult(output="...", exit_code=0)
-
 
 sandbox = SandboxCodeTool(MyEnvironment())
 ```

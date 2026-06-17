@@ -44,7 +44,7 @@ alice.initiate_chat(manager, message="Topic: should every dev learn Rust?")
 
 **Beta network:**
 
-```python linenums="1" hl_lines="6 7 8 9 11 12 13 14 15"
+```python linenums="1" hl_lines="6-9 11-16"
 from autogen.beta.network import (
     Hub, HubClient, LocalLink, Passport, Resume,
     TransitionGraph,
@@ -125,7 +125,7 @@ groupchat = GroupChat(agents=[triage, security_reviewer, general_responder])
 
 **Beta network:**
 
-```python linenums="1" hl_lines="2 3 4 5 6 7 8 9 10 11 12 13 14 15"
+```python linenums="1" hl_lines="6-27"
 from autogen.beta.network import (
     AgentTarget, Always, FromSpeaker, RevertToInitiatorTarget,
     TerminateTarget, ToolCalled, Transition, TransitionGraph,
@@ -187,7 +187,6 @@ from autogen.beta.network import (
     Envelope, TransitionDecision, TransitionTarget, register_target,
 )
 
-
 @dataclass(slots=True)
 class TopicRouter(TransitionTarget):
     name: ClassVar[str] = "topic_router"
@@ -199,7 +198,6 @@ class TopicRouter(TransitionTarget):
         if "security" in text:
             return TransitionDecision(next_speaker=self.security_id)
         return TransitionDecision(next_speaker=self.general_id)
-
 
 register_target(TopicRouter)
 

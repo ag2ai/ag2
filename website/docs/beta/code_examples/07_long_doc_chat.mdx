@@ -57,7 +57,6 @@ from autogen.beta.policies import (
 )
 from autogen.beta.stream import MemoryStream
 
-
 def section(title: str) -> None:
     print(f"\n── {title} ───")
 
@@ -69,7 +68,6 @@ QUESTIONS = [
     "Remember the word 'quartz'.",
     "Name the three most recent words I asked you to remember.",
 ]
-
 
 async def main() -> None:
     config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
@@ -113,7 +111,6 @@ async def main() -> None:
     print(f"Compactions fired during run: {len(compactions)}")
     for c in compactions:
         print(f"  - {c.strategy}: {c.events_before} → {c.events_after} events")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

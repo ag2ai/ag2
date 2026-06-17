@@ -2,9 +2,9 @@
 title: Chat workflow
 ---
 
-API Reference: [initiate_chat](/docs/api-reference/autogen/ConversableAgent#initiate-chat)
+API Reference: `initiate_chat`
 
-`initiate_chat` is the typical method of starting a conversation in AG2. You can call this directly, as shown in the code below, and it is also the mechanism that sits within ConversableAgent's [run](/docs/api-reference/autogen/ConversableAgent#run) method.
+`initiate_chat` is the typical method of starting a conversation in AG2. You can call this directly, as shown in the code below, and it is also the mechanism that sits within ConversableAgent's `run` method.
 
 ```python
 from autogen import ConversableAgent, LLMConfig
@@ -21,7 +21,7 @@ agent_a.initiate_chat(
     )
 ```
 
-Let's have a look at the flow of [ConversableAgent.initiate_chat](/docs/api-reference/autogen/ConversableAgent#initiate-chat) and then break it down.
+Let's have a look at the flow of `ConversableAgent.initiate_chat` and then break it down.
 
 ![initiate_chat](./assets/initiate-chat.png)
 
@@ -35,7 +35,7 @@ Breakdown of the **first turn**:
 
 4. Append the message to our messages list.
 
-5. Now we're on `agent-B` receiving the message (API Reference: [receive](/docs/api-reference/autogen/ConversableAgent#receive)).
+5. Now we're on `agent-B` receiving the message (API Reference: `receive`).
 
 6. The agent generates a reply given the message(s) received. This is a critical step in the process, see [Generating a reply](/docs/contributor-guide/how-ag2-works/generate-reply) for an in-depth look at this step.
 
@@ -73,7 +73,7 @@ Controlled using `initiate_chat`'s `summary_method` argument, this is typically 
 - The last message (`summary_method` = "last_msg")
 - An LLM generated summary of the messages using the *senders* LLM configuration (`summary_method` = "reflection_with_llm")
 
-Finally, a [ChatResult](/docs/api-reference/autogen/ChatResult) object is returned. This object contains:
+Finally, a `ChatResult` object is returned. This object contains:
 
 - The chat history (the messages list)
 - The summary generated above
@@ -82,4 +82,4 @@ Finally, a [ChatResult](/docs/api-reference/autogen/ChatResult) object is return
 
 ### GroupChat
 
-[initiate_chat](/docs/api-reference/autogen/ConversableAgent#initiate-chat) can be used to start a group chat by having the GroupChat's GroupChatManager agent as the recipient parameter.
+`initiate_chat` can be used to start a group chat by having the GroupChat's GroupChatManager agent as the recipient parameter.

@@ -16,7 +16,6 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_serializer
 
-from ...doc_utils import export_module
 from ...events.agent_events import ErrorEvent, RunCompletionEvent
 from ...io.base import IOStream
 from ...io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
@@ -53,7 +52,6 @@ __all__ = [
 __TOOL_EXECUTOR_NAME__ = "_Swarm_Tool_Executor"
 
 
-@export_module("autogen")
 class AfterWorkOption(Enum):
     TERMINATE = "TERMINATE"
     REVERT_TO_USER = "REVERT_TO_USER"
@@ -62,7 +60,6 @@ class AfterWorkOption(Enum):
 
 
 @dataclass
-@export_module("autogen")
 class AfterWork:  # noqa: N801
     """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff.
 
@@ -111,7 +108,6 @@ class AFTER_WORK(AfterWork):  # noqa: N801
 
 
 @dataclass
-@export_module("autogen")
 class OnCondition:  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats.
 
@@ -173,7 +169,6 @@ class ON_CONDITION(OnCondition):  # noqa: N801
 
 
 @dataclass
-@export_module("autogen")
 class OnContextCondition:  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats using context variables and the ContextExpression class.
 
@@ -865,7 +860,6 @@ def make_remove_function(tool_msgs_to_remove: list[str]) -> Callable[[list[dict[
     return partial(remove_messages, tool_msgs_to_remove=tool_msgs_to_remove)
 
 
-@export_module("autogen")
 def initiate_swarm_chat(
     initial_agent: ConversableAgent,
     messages: list[dict[str, Any]] | str,
@@ -976,7 +970,6 @@ def initiate_swarm_chat(
     return chat_result, context_variables, manager.last_speaker  # type: ignore[return-value]
 
 
-@export_module("autogen")
 def run_swarm(
     initial_agent: ConversableAgent,
     messages: list[dict[str, Any]] | str,
@@ -1041,7 +1034,6 @@ def run_swarm(
     return response
 
 
-@export_module("autogen")
 async def a_initiate_swarm_chat(
     initial_agent: ConversableAgent,
     messages: list[dict[str, Any]] | str,
@@ -1139,7 +1131,6 @@ async def a_initiate_swarm_chat(
     return chat_result, context_variables, manager.last_speaker  # type: ignore[return-value]
 
 
-@export_module("autogen")
 async def a_run_swarm(
     initial_agent: ConversableAgent,
     messages: list[dict[str, Any]] | str,
@@ -1192,7 +1183,6 @@ async def a_run_swarm(
     return response
 
 
-@export_module("autogen")
 class SwarmResult(BaseModel):
     """Encapsulates the possible return values for a swarm agent function."""
 
@@ -1228,7 +1218,6 @@ def _set_to_tool_execution(agent: ConversableAgent) -> None:
     agent.register_reply([Agent, None], _generate_swarm_tool_reply)
 
 
-@export_module("autogen")
 def register_hand_off(
     agent: ConversableAgent,
     hand_to: list[OnCondition | OnContextCondition | AfterWork] | OnCondition | OnContextCondition | AfterWork,

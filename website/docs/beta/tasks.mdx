@@ -102,7 +102,7 @@ Returns an unentered `#!python Task`. Use as `#!python async with agent.task(...
 
 ## Bound Context vs. Standalone
 
-```python linenums="1" hl_lines="3 6"
+```python linenums="1" hl_lines="4 6"
 from autogen.beta.context import ConversationContext
 from autogen.beta.stream import MemoryStream
 
@@ -124,7 +124,7 @@ The `#!python async with` block has these guarantees:
 - **Exception inside the block** -> auto `#!python fail(exc)`, then the exception propagates.
 - **Already terminal at exit time** -> nothing further happens.
 
-```python linenums="1" hl_lines="4"
+```python linenums="1" hl_lines="3 5"
 try:
     async with agent.task("flaky") as task:
         raise ValueError("boom")
@@ -137,7 +137,7 @@ except ValueError as exc:
 
 Subscribe directly on the bound stream to capture every lifecycle event in order.
 
-```python linenums="1" hl_lines="6 7 8"
+```python linenums="1" hl_lines="6-9"
 from autogen.beta.events import TaskCompleted, TaskProgress, TaskStarted
 
 stream = MemoryStream()
@@ -172,7 +172,7 @@ async with agent.task("work", context=ctx) as task:
 
 `#!python TaskInject` is a fast_depends-resolvable annotation that injects the active Task into any function the dependency-injection machinery resolves — most usefully a `#!python @tool` body.
 
-```python linenums="1" hl_lines="1 5"
+```python linenums="1" hl_lines="2 5"
 from autogen.beta import tool
 from autogen.beta.task import TaskInject
 
@@ -192,7 +192,7 @@ Setting `#!python ttl_seconds=N` populates `#!python metadata.expires_at` but **
 
 For self-contained TTL behaviour, wire up a sweeper in your application:
 
-```python linenums="1" hl_lines="6 7"
+```python linenums="1" hl_lines="3 4"
 async def sweep(task: Task, deadline: datetime) -> None:
     while task.state == TaskState.RUNNING:
         if datetime.now(timezone.utc) >= deadline:

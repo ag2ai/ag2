@@ -41,7 +41,7 @@ These protocols ensure the patient receives the right care at the right time. In
 
 ## Core Handoff Concepts
 
-Each agent in AG2 has a `handoffs` attribute that manages transitions from that agent. The **handoffs attribute is an instance of the [`Handoffs`](/docs/api-reference/autogen/agentchat/group/handoffs/Handoffs/) class**, which provides methods for defining when and where control should pass:
+Each agent in AG2 has a `handoffs` attribute that manages transitions from that agent. The **handoffs attribute is an instance of the `Handoffs` class**, which provides methods for defining when and where control should pass:
 
 ```python
 # Access an agent's handoffs
@@ -52,17 +52,17 @@ my_agent.handoffs
 
 When defining a handoff, you specify a transition target - the destination where control should go. AG2 provides several types of transition targets:
 
-- [`AgentNameTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AgentNameTarget): Transfer control to an agent by name
-- [`AgentTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AgentTarget): Transfer control to a specific agent instance
-- [`FunctionTarget`](/docs/api-reference/autogen/agentchat/group/targets/function_target/FunctionTarget): Transfer control to a custom function that can run logic before determining the next transition
-- [`AskUserTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AskUserTarget): Ask the user to select the next speaker
-- [`NestedChatTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/NestedChatTarget): Target that represents a nested chat configuration
-- [`GroupManagerTarget`](/docs/api-reference/autogen/agentchat/group/targets/group_manager_target/GroupManagerTarget): Transfer control to the group manager who will select the next speaker
-- [`GroupChatTarget`](/docs/api-reference/autogen/agentchat/group/GroupChatTarget): Transfer control to another group chat (essentially a nested group chat)
-- [`RandomAgentTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/RandomAgentTarget): Randomly select from a list of agents
-- [`RevertToUserTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/RevertToUserTarget): Return control to the user agent
-- [`StayTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/StayTarget): Keep control with the current agent
-- [`TerminateTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/TerminateTarget): End the conversation
+- `AgentNameTarget`: Transfer control to an agent by name
+- `AgentTarget`: Transfer control to a specific agent instance
+- `FunctionTarget`: Transfer control to a custom function that can run logic before determining the next transition
+- `AskUserTarget`: Ask the user to select the next speaker
+- `NestedChatTarget`: Target that represents a nested chat configuration
+- `GroupManagerTarget`: Transfer control to the group manager who will select the next speaker
+- `GroupChatTarget`: Transfer control to another group chat (essentially a nested group chat)
+- `RandomAgentTarget`: Randomly select from a list of agents
+- `RevertToUserTarget`: Return control to the user agent
+- `StayTarget`: Keep control with the current agent
+- `TerminateTarget`: End the conversation
 
 Here's how you might use transition targets:
 
@@ -89,7 +89,7 @@ The function receives:
 - The shared `ContextVariables`
 - Optionally extra arguments
 
-It can perform any custom logic, and then returns a [`FunctionTargetResult`](/docs/api-reference/autogen/agentchat/group/targets/function_target/FunctionTargetResult) that specifies the next transition target and includes a message for the next agent.
+It can perform any custom logic, and then returns a `FunctionTargetResult` that specifies the next transition target and includes a message for the next agent.
 
 Some common use cases for `FunctionTarget` include:
 
@@ -109,7 +109,7 @@ Refer to this [example](https://github.com/ag2ai/ag2/blob/main/notebook/agentcha
 
 ### ReplyResults and Transitions
 
-Each tool function can return a [`ReplyResult`](/docs/api-reference/autogen/agentchat/group/reply_result/ReplyResult) that specifies a transition target:
+Each tool function can return a `ReplyResult` that specifies a transition target:
 
 ```python hl_lines="4"
 def my_tool_function(param: str, context_variables: ContextVariables) -> ReplyResult:

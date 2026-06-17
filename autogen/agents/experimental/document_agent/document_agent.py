@@ -21,7 +21,6 @@ from ....agentchat.group.on_context_condition import OnContextCondition
 from ....agentchat.group.patterns.pattern import DefaultPattern
 from ....agentchat.group.reply_result import ReplyResult
 from ....agentchat.group.targets.transition_target import AgentNameTarget, AgentTarget, StayTarget, TerminateTarget
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ....oai.client import OpenAIWrapper
 from .chroma_query_engine import VectorChromaQueryEngine
@@ -143,7 +142,6 @@ class DocumentTriageAgent(ConversableAgent):
         )
 
 
-@export_module("autogen.agents.experimental")
 class DocAgent(ConversableAgent):
     """The DocAgent is responsible for ingest and querying documents.
 

@@ -24,7 +24,6 @@ from autogen.oai.oai_models.chat_completion import ChatCompletionExtended
 
 from ..cache import Cache
 from ..code_utils import content_str
-from ..doc_utils import export_module
 from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
@@ -757,7 +756,6 @@ class OpenAIClient:
         }
 
 
-@export_module("autogen")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
 
@@ -796,7 +794,7 @@ class OpenAIWrapper:
 
         Args:
             config_list: a list of config dicts to override the base_config.
-                They can contain additional kwargs as allowed in the [create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) method. E.g.,
+                They can contain additional kwargs as allowed in the `create` method. E.g.,
 
                 ```python
                     config_list = [

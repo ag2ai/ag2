@@ -7,7 +7,6 @@ import json
 from logging import Logger
 from typing import TYPE_CHECKING
 
-from .....doc_utils import export_module
 from ..realtime_events import AudioDelta, RealtimeEvent, SpeechStarted
 from ..realtime_observer import RealtimeObserver
 
@@ -28,7 +27,6 @@ LOG_EVENT_TYPES = [
 SHOW_TIMING_MATH = False
 
 
-@export_module("autogen.agentchat.realtime.experimental")
 class TwilioAudioAdapter(RealtimeObserver):
     """Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa."""
 

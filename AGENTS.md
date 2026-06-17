@@ -8,6 +8,7 @@ Before opening a PR, read and follow `.github/AI_POLICY.md`.
 - Ensure the PR description explains the real problem or use case and accurately reflects the diff.
 - Include validation and testing information in the PR body.
 - Be prepared to explain and revise the contribution in response to reviewer questions.
+- Write the PR description using `.github/PULL_REQUEST_TEMPLATE.md`. Keep its section headings (`## Why are these changes needed?`, `## Related issue number`, `## Checks`, `## AI assistance`), fill each one in, and only check a checklist box once it is actually true.
 
 ## Architecture Decision Records (ADR)
 

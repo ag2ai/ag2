@@ -9,7 +9,6 @@ from typing import Any
 
 from .... import ConversableAgent
 from ....agentchat.agent import Agent
-from ....doc_utils import export_module
 from .a2a_helpers import A2UI_DEFAULT_DELIMITER
 from .actions import A2UIAction
 from .response_parser import A2UIParseResult, A2UIResponseParser, A2UIValidationResult
@@ -20,7 +19,6 @@ __all__ = ["A2UIAgent"]
 logger = logging.getLogger(__name__)
 
 
-@export_module("autogen.agents.experimental")
 class A2UIAgent(ConversableAgent):
     """An AG2 agent that produces A2UI rich UI output.
 

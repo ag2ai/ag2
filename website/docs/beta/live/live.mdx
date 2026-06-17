@@ -49,7 +49,6 @@ agent = Agent(
     observers=[TTSObserver(config=OpenAITTSConfig(model="gpt-4o-mini-tts"))],
 )
 
-
 async def main() -> None:
     pipeline = OpenAITranscriber("gpt-4o-mini-transcribe").pipe(agent)
 
@@ -57,7 +56,6 @@ async def main() -> None:
         voice = SoundDeviceRecorder().record(duration=3)
         reply = await pipeline.ask(voice, stream=player.stream)
         print(reply.body)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -84,7 +82,6 @@ agent = LiveAgent(
     ),
 )
 
-
 async def main() -> None:
     async with (
         agent.run() as context,
@@ -93,7 +90,6 @@ async def main() -> None:
     ):
         print("Starting...")
         await asyncio.Future()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

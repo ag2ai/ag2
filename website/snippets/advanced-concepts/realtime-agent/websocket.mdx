@@ -1,5 +1,5 @@
 ## **How It Works**
-At its core, the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) leverages [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) to handle real-time audio streaming. This means your browser becomes the communication bridge, sending audio packets to a server where a [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) agent processes them.
+At its core, the `**`WebSocketAudioAdapter`**` leverages [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) to handle real-time audio streaming. This means your browser becomes the communication bridge, sending audio packets to a server where a `**`RealtimeAgent`**` agent processes them.
 
 Here’s a quick overview of its components and how they fit together:
 
@@ -14,11 +14,11 @@ Here’s a quick overview of its components and how they fit together:
 
 3. **Powered by Realtime Agents**:
 
-   - The audio adapter integrates with an AI-powered [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent), allowing the agent to process audio inputs and respond intelligently.
+   - The audio adapter integrates with an AI-powered `**`RealtimeAgent`**`, allowing the agent to process audio inputs and respond intelligently.
 
 ## **Key Features**
 ### **1. Simplified Setup**
-Unlike [**`TwilioAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/TwilioAudioAdapter#twilioaudioadapter), the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) requires no phone numbers, no telephony configuration, and no external accounts. It's a plug-and-play solution.
+Unlike `**`TwilioAudioAdapter`**`, the `**`WebSocketAudioAdapter`**` requires no phone numbers, no telephony configuration, and no external accounts. It's a plug-and-play solution.
 
 ### **2. Real-Time Performance**
 By streaming audio over [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/), the adapter ensures low latency, making conversations feel natural and seamless.
@@ -30,7 +30,7 @@ Everything happens within the user's browser, meaning no additional software is 
 Whether you're building a chatbot, a voice assistant, or an interactive application, the adapter can integrate easily with existing frameworks and AI systems.
 
 ## **Example: Build a Voice-Enabled Weather Bot**
-Let’s walk through a practical example where we use the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) to create a voice-enabled weather bot.
+Let’s walk through a practical example where we use the `**`WebSocketAudioAdapter`**` to create a voice-enabled weather bot.
 You can find the full example [here](https://github.com/ag2ai/realtime-agent-over-websockets/tree/main).
 
 To run the demo example, follow these steps:
@@ -79,7 +79,7 @@ INFO:     Uvicorn running on http://0.0.0.0:5050 (Press CTRL+C to quit)
 ```
 
 ### Ready to Chat? 🚀
-Now you can simply open **`http://localhost:5050/start-chat`** in your browser, and dive into an interactive conversation with the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent)! 🎤✨
+Now you can simply open **`http://localhost:5050/start-chat`** in your browser, and dive into an interactive conversation with the `**`RealtimeAgent`**`! 🎤✨
 
 ![Realtime agent chat](/snippets/advanced-concepts/realtime-agent/img/websocket_chat.png)
 
@@ -144,7 +144,7 @@ async def handle_media_stream(websocket: WebSocket) -> None:
     logger = getLogger("uvicorn.error")
 ```
 3. **Set Up the `WebSocketAudioAdapter`**
-   The [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) bridges the client’s audio stream with the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent). It streams audio data over [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) in real time, ensuring seamless communication between the browser and the agent.
+   The `**`WebSocketAudioAdapter`**` bridges the client’s audio stream with the `**`RealtimeAgent`**`. It streams audio data over [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) in real time, ensuring seamless communication between the browser and the agent.
 
 ```python
     audio_adapter = WebSocketAudioAdapter(websocket, logger=logger)
@@ -156,7 +156,7 @@ async def handle_media_stream(websocket: WebSocket) -> None:
    - **Name**: The agent identity, here called `"Weather Bot"`.
    - **System Message**: System message for the agent.
    - **Language Model Configuration**: Defined by `realtime_llm_config` for LLM settings.
-   - **Audio Adapter**: Connects the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) for handling audio.
+   - **Audio Adapter**: Connects the `**`WebSocketAudioAdapter`**` for handling audio.
    - **Logger**: Logs the agent's activities for better observability.
 
 ```python

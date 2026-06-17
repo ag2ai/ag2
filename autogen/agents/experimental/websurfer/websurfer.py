@@ -5,7 +5,6 @@
 from typing import Any, Literal
 
 from .... import ConversableAgent
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ....tools import Tool
 from ....tools.experimental import (
@@ -21,7 +20,6 @@ from ....tools.experimental import (
 __all__ = ["WebSurferAgent"]
 
 
-@export_module("autogen.agents.experimental")
 class WebSurferAgent(ConversableAgent):
     """An agent that uses web tools to interact with the web."""
 

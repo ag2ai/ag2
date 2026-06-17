@@ -30,8 +30,8 @@ pip install wikipedia
 Now, let’s import the necessary modules and tools.
 
 - [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) and [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html) are the tools for querying Wikipedia.
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) and [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) are the agents for interaction within AG2.
-- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability) is what helps connect LangChain tools with AG2.
+- `AssistantAgent` and `UserProxyAgent` are the agents for interaction within AG2.
+- `Interoperability` is what helps connect LangChain tools with AG2.
 
 ```python
 import os
@@ -47,8 +47,8 @@ from autogen.interop import Interoperability
 
 Let’s set up the agents for interaction.
 - `config_list`  is where you define the LLM configuration, like the model and API key.
-- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
 
 ```python
 llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]})
@@ -65,7 +65,7 @@ Here’s where we connect everything.
 
 - First, we set up [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html), which fetches the top Wikipedia result (with a character limit).
 - Then, we use [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) to perform Wikipedia queries.
-- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability) helps convert the LangChain tool to AG2’s format.
+- `Interoperability` helps convert the LangChain tool to AG2’s format.
 - Finally, we register the tool for use with both the `user_proxy` and `chatbot`.
 
 ```python

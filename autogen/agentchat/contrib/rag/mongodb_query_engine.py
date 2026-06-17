@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 from autogen.agentchat.contrib.vectordb.base import VectorDBFactory
 from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
-from autogen.doc_utils import export_module
 from autogen.import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
@@ -36,7 +35,6 @@ logger = logging.getLogger(__name__)
 
 
 @require_optional_import(["pymongo", "llama_index", "sentence_transformers"], "rag")
-@export_module("autogen.agentchat.contrib.rag")
 class MongoDBQueryEngine:
     """A query engine backed by MongoDB Atlas that supports document insertion and querying.
 

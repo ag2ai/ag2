@@ -34,7 +34,7 @@ The rest of these docs cover each piece in depth. Read the quick-start below fir
 
 The simplest plausible eval. Two tasks, one custom scorer, one prebuilt.
 
-```python linenums="1" hl_lines="12-17 24-28 31-33 37-45"
+```python linenums="1" hl_lines="11-16 23-27 30-32 36-44"
 import asyncio
 from pathlib import Path
 
@@ -43,7 +43,6 @@ from autogen.beta.config import GeminiConfig
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.eval import Suite, run_agent, scorer
 from autogen.beta.eval.scorers import tool_called
-
 
 # 1. Dataset — inline tasks (or Suite.from_jsonl("tasks.jsonl"))
 dataset = Suite.from_list([

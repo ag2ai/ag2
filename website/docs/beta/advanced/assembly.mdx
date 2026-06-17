@@ -46,7 +46,7 @@ A policy receives the current `prompts` and `events`, returns modified copies. P
 
 Pass your policy list via the `assembly=` keyword when constructing an Agent. The Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain automatically.
 
-```python linenums="1" hl_lines="10-14"
+```python linenums="1" hl_lines="12-16"
 from autogen.beta import Agent
 from autogen.beta.policies import (
     AlertPolicy,
@@ -89,7 +89,7 @@ The rule: **injection before reduction**. If a reducer runs first, the injection
 
 `AssemblerMiddleware.validate_order()` catches known bad orderings and returns a list of warnings:
 
-```python linenums="1" hl_lines="6-9"
+```python linenums="1" hl_lines="5 8"
 from autogen.beta.assembly import AssemblerMiddleware
 from autogen.beta.policies import AlertPolicy, SlidingWindowPolicy
 
@@ -159,7 +159,7 @@ Takes no arguments. Dedup state lives on the instance — give each Agent its ow
 
 Reads `/memory/working.md` from the [KnowledgeStore](/docs/beta/advanced/knowledge_store) and injects it into the prompt. Working memory is the agent's persistent state — written between conversations by an aggregation strategy and read on every turn.
 
-```python linenums="1" hl_lines="7-12"
+```python linenums="1" hl_lines="6 11 12"
 from autogen.beta.assembly import AssemblerMiddleware
 from autogen.beta.policies import WorkingMemoryPolicy
 from autogen.beta.knowledge import KnowledgeStore, MemoryKnowledgeStore
@@ -193,7 +193,7 @@ Also requires a `KnowledgeStore` in `#!python context.dependencies`; a no-op oth
 
 Typical production ordering — injections first, then `AlertPolicy`, then reduce:
 
-```python linenums="1" hl_lines="8-14"
+```python linenums="1" hl_lines="9-14"
 from autogen.beta.assembly import AssemblerMiddleware
 from autogen.beta.policies import (
     AlertPolicy,
@@ -215,10 +215,9 @@ AssemblerMiddleware.validate_order(policies)  # returns [] — good order
 
 Any object with a `name` and an `async apply(...)` method satisfies the protocol. Use it for domain-specific injection (project docs, RAG hits, on-call runbooks) or custom filtering:
 
-```python linenums="1" hl_lines="7 9 15"
+```python linenums="1" hl_lines="7 12-18"
 from autogen.beta import Context
 from autogen.beta.events import BaseEvent
-
 
 class RunbookPolicy:
     """Inject the on-call runbook as system context."""

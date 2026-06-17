@@ -6,11 +6,11 @@ title: Overview
 !!! warning "Deprecated"
     `RealtimeAgent` is deprecated as of v0.12 and will be removed in v0.14. It relies on deprecated realtime API endpoints. This documentation and associated notebooks will also be removed in v0.14.
 
-As conversational AI evolves, real-time voice interactions are becoming essential in domains like customer support, healthcare, and virtual assistance. AG2 expands its capabilities by introducing [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent), a powerful agent which enables seamless real-time communication through multiple adapters.
+As conversational AI evolves, real-time voice interactions are becoming essential in domains like customer support, healthcare, and virtual assistance. AG2 expands its capabilities by introducing `**`RealtimeAgent`**`, a powerful agent which enables seamless real-time communication through multiple adapters.
 
 ## How RealtimeAgent Works
 
-[**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) acts as the central component for handling voice-based interactions. It integrates with various adapters, allowing developers to choose the best communication channel for their applications. The agent supports:
+`**`RealtimeAgent`**` acts as the central component for handling voice-based interactions. It integrates with various adapters, allowing developers to choose the best communication channel for their applications. The agent supports:
 
 - **Real-Time Voice Interactions**: Enables natural and immediate conversations with users.
 - **Swarm Integration**: Delegates complex tasks to AG2 Swarm teams during live interactions.
@@ -19,7 +19,7 @@ As conversational AI evolves, real-time voice interactions are becoming essentia
 ## Available Communication Methods for RealtimeAgent
 
 ### 1. WebSocket Audio Adapter
-For web-based applications, [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) eliminates the need for external telephony services, offering:
+For web-based applications, `**`WebSocketAudioAdapter`**` eliminates the need for external telephony services, offering:
 
 - **Direct Browser Integration**: Streams real-time audio via WebSockets.
 - **Faster Setup**: Avoids Twilio’s complex configuration and account verification.
@@ -37,7 +37,7 @@ For high-quality, peer-to-peer audio streaming, [**`WebRTC`**](https://webrtc.or
 🔗 [Explore the Walk-through](/docs/user-guide/advanced-concepts/realtime-agent/webrtc)
 
 ### 3. Twilio Audio Adapter
-AG2’s [**`TwilioAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/TwilioAudioAdapter#twilioaudioadapter) connects [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) to Twilio’s telephony services, allowing seamless voice call handling with:
+AG2’s `**`TwilioAudioAdapter`**` connects `**`RealtimeAgent`**` to Twilio’s telephony services, allowing seamless voice call handling with:
 
 - **Telephony Support**: Direct integration with phone networks via Twilio.
 - **Scalability**: Supports enterprise-level deployments for customer service applications.

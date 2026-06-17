@@ -1,10 +1,10 @@
 ### Installation
 
 <Warning>
-[`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is built on top of [`Browser Use`](https://github.com/browser-use/browser-use), which requires **Python 3.11 or higher**.
+`DeepResearchTool` is built on top of [`Browser Use`](https://github.com/browser-use/browser-use), which requires **Python 3.11 or higher**.
 </Warning>
 
-To get started with the [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool), follow these steps:
+To get started with the `DeepResearchTool`, follow these steps:
 
 1. Install AG2 with the `browser-use` extra:
     ```bash
@@ -54,8 +54,8 @@ nest_asyncio.apply()
 Configure the agents for the interaction.
 
 - `config_list` defines the LLM configurations, including the model and API key.
-- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
 
 ```python
 llm_config = LLMConfig(config_list={
@@ -71,7 +71,7 @@ assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 
 ### DeepResearchTool Configuration
 
-Once the [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is created, it needs to be registered to the agents.
+Once the `DeepResearchTool` is created, it needs to be registered to the agents.
 
 ```python
 deep_research_tool = DeepResearchTool(llm_config=llm_config)

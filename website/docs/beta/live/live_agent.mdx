@@ -9,7 +9,7 @@ sidebarTitle: "LiveAgent"
 
 A `LiveAgent` holds a `RealtimeConfig` and is opened via `agent.run()`, which yields a `ConversationContext`. Peers (player, recorder, observers) share that context so they all read from and write to the same event stream.
 
-```python linenums="1" hl_lines="10-17 20-26"
+```python linenums="1" hl_lines="10-17 21-23"
 import asyncio
 
 from autogen.beta.live import (

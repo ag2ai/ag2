@@ -9,7 +9,6 @@ import warnings
 from typing import Any, Literal, Optional
 
 from .... import Agent, AssistantAgent, UserProxyAgent
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block
 from ....llm_config import LLMConfig
 
@@ -81,7 +80,6 @@ Option 4: <Thinking 4>
 EXECUTOR_MESSAGE = "Please provide an answer for the last step in the thinking trajectory, to advance the thinking process. Keep your answers as concise as possible. Never suggest the next step."
 
 
-@export_module("autogen.agents.experimental")
 class ThinkNode:
     def __init__(self, content: str, parent: Optional["ThinkNode"] = None) -> None:
         """A node in a tree structure representing a step in the reasoning process.
@@ -338,7 +336,6 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
     return preference_pairs
 
 
-@export_module("autogen.agents.experimental")
 class ReasoningAgent(AssistantAgent):
     def __init__(
         self,

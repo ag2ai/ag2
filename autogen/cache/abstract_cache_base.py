@@ -9,10 +9,7 @@ from typing import Any, Protocol
 
 from typing_extensions import Self
 
-from ..doc_utils import export_module
 
-
-@export_module("autogen.cache")
 class AbstractCache(Protocol):
     """This protocol defines the basic interface for cache operations.
     Implementing classes should provide concrete implementations for

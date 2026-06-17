@@ -94,11 +94,9 @@ One check is rarely enough. A scorer is just a function that asks **one** questi
 from autogen.beta.eval import scorer
 from autogen.beta.eval.scorers import no_tool_errors, token_budget
 
-
 @scorer
 def answered_briefly(outputs) -> bool:
     return len(outputs["body"]) < 100      # outputs["body"] is the final answer text
-
 
 scorers = [
     final_answer_matches(field="answer", matcher="contains"),

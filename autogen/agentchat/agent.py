@@ -6,8 +6,6 @@
 # SPDX-License-Identifier: MIT
 from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, runtime_checkable
 
-from ..doc_utils import export_module
-
 __all__ = ["Agent", "LLMAgent", "LLMMessageType"]
 
 Tool = TypeVar("Tool")
@@ -18,7 +16,6 @@ DEFAULT_SUMMARY_METHOD = "last_msg"
 
 
 @runtime_checkable
-@export_module("autogen")
 class Agent(Protocol):
     """(In preview) A protocol for Agent.
 
@@ -154,7 +151,6 @@ class Agent(Protocol):
 
 
 @runtime_checkable
-@export_module("autogen")
 class LLMAgent(Agent, Protocol):
     """(In preview) A protocol for an LLM agent."""
 

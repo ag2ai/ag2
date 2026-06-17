@@ -10,7 +10,6 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field
 
 from ....agentchat import ConversableAgent
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ... import Depends, Tool
 from ...dependency_injection import on
@@ -124,7 +123,6 @@ def _make_confirm_answer(prefix: str) -> Callable[..., str]:
     return confirm_answer
 
 
-@export_module("autogen.tools.experimental")
 class DeepResearchTool(Tool):
     """A tool that delegates a web research task to the subteams of agents."""
 

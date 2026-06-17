@@ -5,7 +5,6 @@
 
 from pydantic import BaseModel
 
-from ...doc_utils import export_module
 from .available_condition import AvailableCondition
 from .llm_condition import LLMCondition
 from .targets.transition_target import TransitionTarget
@@ -15,7 +14,6 @@ __all__ = [
 ]
 
 
-@export_module("autogen")
 class OnCondition(BaseModel):  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats.\n
     \n

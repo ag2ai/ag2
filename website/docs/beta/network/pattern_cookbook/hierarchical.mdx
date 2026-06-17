@@ -124,7 +124,6 @@ from autogen.beta.testing import TestConfig
 
 load_dotenv()
 
-
 async def delegate_researcher(reason: str) -> Handoff:
     """Send the work to the research specialist. The returned
     Handoff carries the target name; the framework resolves it
@@ -133,14 +132,12 @@ async def delegate_researcher(reason: str) -> Handoff:
     print(f"  [tool] delegate_researcher({reason!r})")
     return Handoff(target="researcher", reason=reason)
 
-
 async def delegate_writer(reason: str) -> Handoff:
     """Send the work to the writing specialist. Writer's reply is
     the terminal step — the graph closes the workflow on
     FromSpeaker(writer)."""
     print(f"  [tool] delegate_writer({reason!r})")
     return Handoff(target="writer", reason=reason)
-
 
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
@@ -271,7 +268,6 @@ async def main() -> None:
     await researcher_hc.close()
     await writer_hc.close()
     await hub.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

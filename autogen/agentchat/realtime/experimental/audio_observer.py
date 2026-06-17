@@ -4,7 +4,6 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from ....doc_utils import export_module
 from .realtime_events import InputAudioBufferDelta, RealtimeEvent
 from .realtime_observer import RealtimeObserver
 
@@ -12,7 +11,6 @@ if TYPE_CHECKING:
     from logging import Logger
 
 
-@export_module("autogen.agentchat.realtime.experimental")
 class AudioObserver(RealtimeObserver):
     """Observer for user voice input"""
 

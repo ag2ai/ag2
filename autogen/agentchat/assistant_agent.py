@@ -7,13 +7,11 @@
 from collections.abc import Callable
 from typing import Any, Literal
 
-from ..doc_utils import export_module
 from ..llm_config import LLMConfig
 from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent
 
 
-@export_module("autogen")
 class AssistantAgent(ConversableAgent):
     """(In preview) Assistant agent, designed to solve a task with LLM.
 
@@ -56,7 +54,7 @@ Reply "TERMINATE" in the end when everything is done.
         - system_message (str): system message for the ChatCompletion inference. \n
             Please override this attribute if you want to reprogram the agent.
         - llm_config (dict or False or None): llm inference configuration. \n
-            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) \n
+            Please refer to `OpenAIWrapper.create` \n
             for available options. \n
         - is_termination_msg (function): a function that takes a message in the form of a dictionary
             and returns a boolean value indicating if this received message is a termination message.
@@ -65,7 +63,7 @@ Reply "TERMINATE" in the end when everything is done.
             default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
             The limit only plays a role when human_input_mode is not "ALWAYS". \n
         - **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent). \n
+            `ConversableAgent`. \n
         """
         super().__init__(
             name,

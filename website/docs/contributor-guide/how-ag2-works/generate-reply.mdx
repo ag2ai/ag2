@@ -2,29 +2,29 @@
 title: Generating a reply
 ---
 
-API Reference: [ConversableAgent.generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply)
+API Reference: `ConversableAgent.generate_reply`
 
 A critical part to any AG2 workflow is an agent's reply. Their reply is what ends up in the messages list for evaluation by the next agent(s).
 
-If you are creating a new agent and want to control what they generate (their *reply*), then understanding ConversableAgent's [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) method is important.
+If you are creating a new agent and want to control what they generate (their *reply*), then understanding ConversableAgent's `generate_reply` method is important.
 
-Let's look at how the standard ConversableAgent's [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) method works.
+Let's look at how the standard ConversableAgent's `generate_reply` method works.
 
 ![generate_reply](./assets/generate-reply-updated.png)
 
-### Breakdown of [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply):
+### Breakdown of `generate_reply`:
 
-1. [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) is a ConversableAgent's primary function for getting its reply. It is called on the first turn of [initiate_chat](/docs/api-reference/autogen/ConversableAgent#initiate-chat) and then when messages are received by an agent (API Reference: [receive](/docs/api-reference/autogen/ConversableAgent#receive)). In a GroupChat, it's called by the GroupChatManager in their [run_chat](/docs/api-reference/autogen/GroupChatManager#run-chat) method.
+1. `generate_reply` is a ConversableAgent's primary function for getting its reply. It is called on the first turn of `initiate_chat` and then when messages are received by an agent (API Reference: `receive`). In a GroupChat, it's called by the GroupChatManager in their `run_chat` method.
 
 2. Three hooks are evaluated, in the order shown, to update agent and message state in preparation for the upcoming reply functions. These hooks are functions and you will find out more in the [Hooks](/docs/contributor-guide/how-ag2-works/hooks) section.
 
-3. The final step is the evaluation of the reply functions, these are done in order and the default functions are shown. Setting your own reply functions using ConversableAgent's [register_reply](/docs/api-reference/autogen/ConversableAgent#register-reply) method.
+3. The final step is the evaluation of the reply functions, these are done in order and the default functions are shown. Setting your own reply functions using ConversableAgent's `register_reply` method.
 
     - Check Termination and Human Reply
 
         - Before replying, the agent will check if we meet any termination conditions. It's important to understand that termination occurs on the following agent, so if you are expecting an agent to include a keyword like `TERMINATE` in their text, the following agent's `is_termination_msg` condition should evaluate for that keyword.
         - The maximum consecutive auto-reply limit for an agent and this will cause a termination.
-        - If it is to terminate but the agent's human input mode is `ALWAYS` or `TERMINATE` ([ConversableAgent.human_input_mode](/docs/api-reference/autogen/ConversableAgent#conversableagent)), it will prompt the user for input where they can continue the conversation or terminate by typing `exit`.
+        - If it is to terminate but the agent's human input mode is `ALWAYS` or `TERMINATE` (`ConversableAgent.human_input_mode`), it will prompt the user for input where they can continue the conversation or terminate by typing `exit`.
         - If the termination condition is met and the user doesn't continue the conversation, no further reply functions will be evaluated and the result will be returned.
 
     - Generate Function Call Reply
@@ -49,7 +49,7 @@ Let's look at how the standard ConversableAgent's [generate_reply](/docs/api-ref
 
     - If no reply is generated
 
-        - If none of the reply functions generate a final result, the agent's [`ConversableAgent.default_auto_reply`](/docs/api-reference/autogen/ConversableAgent#conversableagent) value will be returned. The default for this property is an empty string and this denotes no reply.
+        - If none of the reply functions generate a final result, the agent's `ConversableAgent.default_auto_reply` value will be returned. The default for this property is an empty string and this denotes no reply.
 
 4. **Process Message Before Send Hook**
 
@@ -65,7 +65,7 @@ Let's look at how the standard ConversableAgent's [generate_reply](/docs/api-ref
 
 If you are creating a new type of agent, it's useful to create a reply function that triggers your agent's internal workflow and returns the result back into the conversation.
 
-ConversableAgent's [register_reply](/docs/api-reference/autogen/ConversableAgent#register-reply) method is used to register a function as a reply function on the agent.
+ConversableAgent's `register_reply` method is used to register a function as a reply function on the agent.
 
 As the reply functions are evaluated in a specific order, if you want your reply function to be triggered first you can make sure it's the last one to be added (reply functions registered later will be checked earlier by default) or you can remove all other reply functions when you register yours, ensuring your one will be the only one called.
 

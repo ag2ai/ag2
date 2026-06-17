@@ -11,7 +11,6 @@ from typing import Annotated, Any
 
 import requests
 
-from autogen.doc_utils import export_module
 from autogen.tools import Tool
 
 logger = logging.getLogger(__name__)
@@ -95,7 +94,6 @@ def _searxng_search(
     return formatted_results
 
 
-@export_module("autogen.tools.experimental")
 class SearxngSearchTool(Tool):
     """SearxngSearchTool is a tool that uses SearxNG to perform a search.
 

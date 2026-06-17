@@ -14,14 +14,12 @@ from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.patterns.pattern import Pattern
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
-from autogen.doc_utils import export_module
 from autogen.opentelemetry.consts import SpanType
 from autogen.opentelemetry.setup import get_tracer
 
 from .agent import instrument_agent
 
 
-@export_module("autogen.opentelemetry")
 def instrument_pattern(pattern: Pattern, *, tracer_provider: TracerProvider) -> Pattern:
     """Instrument a Pattern with OpenTelemetry tracing.
 

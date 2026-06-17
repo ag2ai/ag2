@@ -130,7 +130,6 @@ from autogen.beta.testing import TestConfig
 
 load_dotenv()
 
-
 async def escalate_to_tier2(reason: str) -> Handoff:
     """Escalate to the tier-2 specialist. The returned Handoff
     carries the target's Passport.name; the framework resolves
@@ -138,12 +137,10 @@ async def escalate_to_tier2(reason: str) -> Handoff:
     print(f"  [tool] escalate_to_tier2({reason!r})")
     return Handoff(target="tier2", reason=reason)
 
-
 async def escalate_to_senior(reason: str) -> Handoff:
     """Escalate to senior support."""
     print(f"  [tool] escalate_to_senior({reason!r})")
     return Handoff(target="senior", reason=reason)
-
 
 async def resolve(answer: str, channel: ChannelInject) -> str:
     """Resolve the request. Stores the answer in
@@ -154,7 +151,6 @@ async def resolve(answer: str, channel: ChannelInject) -> str:
     print(f"  [tool] resolve({answer[:60]!r}…)")
     await set_context(channel, "resolution", answer)
     return "resolved"
-
 
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
@@ -294,7 +290,6 @@ async def main() -> None:
     await tier2_hc.close()
     await senior_hc.close()
     await hub_obj.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

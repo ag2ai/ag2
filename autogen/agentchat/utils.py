@@ -7,7 +7,6 @@
 import re
 from typing import Any
 
-from ..doc_utils import export_module
 from .agent import Agent
 
 
@@ -33,7 +32,6 @@ def consolidate_chat_info(
             )
 
 
-@export_module("autogen")
 def gather_usage_summary(agents: list[Agent]) -> dict[str, dict[str, Any]]:
     r"""Gather usage summary from all agents.
 

@@ -2,7 +2,7 @@
 title: Telegram Tools
 ---
 
-If you want to add the ability for your agents to send and/or retrieve messages for your Telegram channel/group/bot [`TelegramSendTool`](/docs/api-reference/autogen/tools/experimental/TelegramSendTool) and [`TelegramRetrieveTool`](/docs/api-reference/autogen/tools/experimental/TelegramRetrieveTool) are easy to add.
+If you want to add the ability for your agents to send and/or retrieve messages for your Telegram channel/group/bot `TelegramSendTool` and `TelegramRetrieveTool` are easy to add.
 
 <Tip>
 If you haven't had a chance to read about how AG2's Communication Platform agents and tools work, read the [overview](/docs/user-guide/reference-agents/communication-platforms/overview) first.
@@ -18,10 +18,10 @@ pip install ag2[openai,commsagent-telegram]
 
 ### Capabilities
 
-[`TelegramSendTool`](/docs/api-reference/autogen/tools/experimental/TelegramSendTool) can:
+`TelegramSendTool` can:
 - Construct and send a message to the configured channel. If a message is longer than the platforms permitted message length, they will split the message into multiple messages.
 
-[`TelegramRetrieveTool`](/docs/api-reference/autogen/tools/experimental/TelegramRetrieveTool) can:
+`TelegramRetrieveTool` can:
 - Retrieve the latest X messages from a channel.
 - Retrieve messages since a given date.
 - Retrieve messages since a given message ID.

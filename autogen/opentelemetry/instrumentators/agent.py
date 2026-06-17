@@ -7,7 +7,6 @@ from functools import partial
 from opentelemetry.sdk.trace import TracerProvider
 
 from autogen.agentchat import Agent
-from autogen.doc_utils import export_module
 from autogen.opentelemetry.setup import get_tracer
 
 from .agent_instrumentators import (
@@ -25,7 +24,6 @@ from .agent_instrumentators import (
 )
 
 
-@export_module("autogen.opentelemetry")
 def instrument_agent(agent: Agent, *, tracer_provider: TracerProvider) -> Agent:
     """Instrument an agent with OpenTelemetry tracing.
 

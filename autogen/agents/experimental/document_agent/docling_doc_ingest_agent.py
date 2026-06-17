@@ -11,7 +11,6 @@ from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.reply_result import ReplyResult
 from ....agentchat.group.targets.transition_target import AgentNameTarget
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ..document_agent.parser_utils import docling_parse_docs
 from .chroma_query_engine import VectorChromaQueryEngine
@@ -28,7 +27,6 @@ You are an expert in parsing and understanding text. You can use {DOCLING_PARSE_
 """
 
 
-@export_module("autogen.agents.experimental")
 class DoclingDocIngestAgent(ConversableAgent):
     """A DoclingDocIngestAgent is a swarm agent that ingests documents using the docling_parse_docs tool."""
 

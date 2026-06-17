@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any
 
-from ......doc_utils import export_module
 from ......import_utils import optional_import_block, require_optional_import
 from ......llm_config import LLMConfig
 from ...realtime_events import RealtimeEvent
@@ -29,7 +28,6 @@ global_logger = getLogger(__name__)
 
 @register_realtime_client()
 @require_optional_import("openai>=2.30.0", "openai-realtime", except_for=["get_factory", "__init__"])
-@export_module("autogen.agentchat.realtime.experimental.clients")
 class OpenAIRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API."""
 
