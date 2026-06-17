@@ -2,16 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""First-class A2UI events for the agent stream.
-
-A2UI messages are surfaced as :class:`A2UIMessageEvent` — one event per whole
-A2UI server→client message — so every transport adapter (A2A, REST/SSE, AG-UI)
-consumes a single, typed event seam instead of re-parsing the LLM's text.
-
-The events are transient: they are derived from the model response and are not
-persisted to durable history (the conversational prose is kept as a
-``ModelMessage`` instead). See ``middleware.py`` for emission and
-``a2a/executor.py`` for consumption.
+"""First-class A2UI events for the agent stream: each A2UI server→client message
+is surfaced as one :class:`A2UIMessageEvent` for transport adapters to consume.
+The events are transient and not persisted to durable history.
 """
 
 from autogen.beta.events import BaseEvent, Field

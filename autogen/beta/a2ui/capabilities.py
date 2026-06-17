@@ -2,20 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Transport-neutral A2UI client capability negotiation.
-
-A2UI clients advertise their rendering capabilities — the component/function
-catalogs they support (``supportedCatalogIds``) and, optionally, inline catalog
-definitions (``inlineCatalogs``) — per the ``client_capabilities.json`` schema.
-Over A2A these ride in the A2A message ``metadata``; over REST they ride in the
-request body. Either way the wire shape is identical, so the decode + prompt
-helpers live here, free of any transport dependency.
-
-The decoded :class:`A2UIClientCapabilities` is folded into the agent's system
-prompt for the turn via :func:`capabilities_to_prompt`, so the LLM only targets
-components the client can actually render. Negotiation is advisory (``inform +
-warn``): a catalog mismatch is logged and surfaced to the LLM but never blocks
-output — the A2UI spec frames capabilities as a hint, not a contract.
+"""Transport-neutral A2UI client capability negotiation: decode the client's
+advertised catalogs into :class:`A2UIClientCapabilities` and fold them into the
+turn's system prompt via :func:`capabilities_to_prompt`. Advisory only — a
+mismatch is logged and surfaced to the LLM but never blocks output.
 """
 
 import logging
@@ -79,11 +69,7 @@ def parse_client_capabilities(
 
 
 def _summarize_inline_catalog(catalog: JsonObject) -> str | None:
-    """One-line summary of an inline catalog's components/functions for the prompt.
-
-    Returns ``None`` when the catalog declares neither components nor functions.
-    All client-supplied names pass through :func:`sanitize_for_prompt`.
-    """
+    """One-line summary of an inline catalog's components/functions, or ``None`` if it has neither."""
     components = catalog.get("components")
     functions = catalog.get("functions")
     comp_names = sorted(components.keys()) if isinstance(components, dict) else []

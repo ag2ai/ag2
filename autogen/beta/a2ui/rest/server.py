@@ -18,24 +18,11 @@ if TYPE_CHECKING:
 class A2UIServer:
     """Serve a plain :class:`~autogen.beta.Agent` over HTTP as canonical A2UI.
 
-    A transport-neutral REST/SSE adapter that depends only on Starlette (no
-    ``ag-ui`` / ``a2a-sdk``). It mirrors ``autogen.beta.a2a.A2AServer`` and
-    ``autogen.beta.ag_ui.AGUIStream``: hold a normal ``Agent`` and configure
-    A2UI with flat kwargs, then call a ``build_*`` method for a ready-to-serve
-    Starlette ASGI app. Bring your own ``uvicorn`` (or any ASGI server).
-
-    Clickable buttons (``@a2ui_action``) live on the agent's tool list and are
-    discovered automatically — there is nothing extra to register here.
-
-    The server is **stateless** — clients send the full conversation on every
-    request (see :func:`autogen.beta.a2ui.rest.parse_request` for the JSON body
-    contract). Each turn runs on a fresh stream; the A2UI messages the validation
-    middleware emits are streamed out as the canonical wire format.
-
-    A2UI's wire is transport-agnostic, so two encodings are offered:
-
-    - :meth:`build_sse_app` — Server-Sent Events (``text/event-stream``).
-    - :meth:`build_jsonl_app` — canonical A2UI NDJSON (``application/x-ndjson``).
+    Hold a normal ``Agent``, configure A2UI with flat kwargs, then call a
+    ``build_*`` method for a ready-to-serve Starlette ASGI app (bring your own
+    ASGI server). The server is stateless — clients send the full conversation
+    each turn. Two wire encodings: :meth:`build_sse_app` (SSE) and
+    :meth:`build_jsonl_app` (NDJSON).
 
     Example::
 

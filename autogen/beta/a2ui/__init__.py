@@ -2,20 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Public A2UI surface.
-
-A2UI is a transport over a plain ``autogen.beta.Agent`` (mirroring A2A / AG-UI):
-the agent stays a normal ``Agent`` and A2UI behaviour is applied by a transport
-wrapper — :class:`~autogen.beta.a2ui.rest.A2UIServer` (REST/SSE) or
-:class:`~autogen.beta.a2ui.a2a.A2UIAgentExecutor` (A2A) — configured with flat
-A2UI kwargs.
-
-Only the broadly-reusable, user-facing surface lives here: the ``@a2ui_action``
-decorator (clickable buttons, passed to ``Agent(tools=[...])``), client
-capabilities, and the stream events. Advanced/internal pieces — the parser,
-schema manager, validation middleware, inbound-wire parse types, and
-prompt-synthesis helpers — are imported directly from their submodules (e.g.
-``autogen.beta.a2ui.incoming``) when needed.
+"""Public A2UI surface: the ``@a2ui_action`` decorator, client capabilities,
+and stream events. Serve an agent over A2UI via the transport wrappers in the
+``rest`` and ``a2a`` submodules.
 """
 
 from autogen.beta.exceptions import missing_optional_dependency

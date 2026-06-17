@@ -23,14 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def _to_prose_message(original: ModelMessage | None, text: str) -> ModelMessage:
-    """Rebuild a prose-only ``ModelMessage`` while preserving original metadata.
-
-    A2UI content is carried out-of-band as :class:`A2UIMessageEvent`s, so the
-    durable ``ModelMessage`` keeps only the conversational text. This is also
-    the graceful-degradation path. Rebuilding the message naively would drop
-    any ``metadata`` the provider attached (e.g. tracing/usage hints), so it
-    is carried over here.
-    """
+    """Rebuild a prose-only ``ModelMessage`` (A2UI content out-of-band), preserving metadata."""
     metadata = dict(original.metadata) if original is not None and original.metadata else {}
     return ModelMessage(text, metadata=metadata)
 
@@ -180,12 +173,7 @@ class _A2UIValidationMiddleware(BaseMiddleware):
         raise AssertionError("A2UI validation loop exited without returning a response")
 
     def _validate(self, response_text: str) -> "tuple[A2UIParseResult, list[str] | None]":
-        """Parse and validate an A2UI response.
-
-        Returns ``(parse_result, errors)`` — ``errors=None`` means valid (or
-        no A2UI content at all). ``errors=[..]`` means the response had A2UI
-        content that failed validation or JSON parsing.
-        """
+        """Parse and validate an A2UI response; ``errors=None`` means valid (or no A2UI content)."""
         parse_result = self._parser.parse(response_text)
         if not parse_result.has_a2ui:
             return parse_result, None

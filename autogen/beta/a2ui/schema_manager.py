@@ -18,8 +18,6 @@ _VERSIONS_DIR = Path(__file__).parent
 
 
 class _VersionConfigEntry(TypedDict):
-    """Per-version identifiers used to load specs and stamp wire messages."""
-
     default_catalog_id: str
     schema_base_uri: str
     version_string: A2UIVersion
@@ -52,27 +50,11 @@ _SUPPORTED_VERSIONS = tuple(_VERSION_CONFIG.keys())
 
 
 class A2UISchemaManager:
-    """Manages A2UI schema loading and system prompt generation.
+    """Loads vendored A2UI schemas for a protocol version and builds the
+    system-prompt section that instructs an LLM to emit valid A2UI output.
 
-    Loads the vendored JSON schemas for a given protocol version and generates
-    system prompt sections that instruct an LLM to produce valid A2UI output.
-
-    Supports custom catalogs that extend the basic catalog with additional
-    components. Custom catalogs are loaded alongside the basic catalog and
-    both are included in the system prompt.
-
-    One directory per supported version (``v0_9/``, ``v0_9_1/``, ``v1_0/``),
-    each with the same layout (shown for ``v0_9/``)::
-
-        v0_9/
-        ├── prompt_example.json     # Our prompt example (version-specific)
-        ├── prompt_message_types.md # Message type examples to help the LLM (version-specific)
-        └── spec/                   # Vendored as-is from a2ui-project/a2ui
-            ├── server_to_client.json
-            ├── basic_catalog.json
-            ├── common_types.json
-            ├── basic_catalog_rules.txt
-            └── ...
+    A custom catalog (file path or dict) extends the basic catalog; its
+    components are merged into the schema registry and listed in the prompt.
     """
 
     def __init__(

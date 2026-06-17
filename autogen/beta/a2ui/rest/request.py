@@ -2,24 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Parse the transport-neutral A2UI server request body.
-
-The REST/SSE adapter speaks a minimal, dependency-free JSON contract (no
-``ag-ui`` / ``a2a-sdk`` types) so any client that can POST JSON can drive an
-A2UI agent served via :class:`~autogen.beta.a2ui.rest.A2UIServer`::
-
-    {
-      "messages":  [{"role": "user", "content": "show a booking form"}],
-      "variables": {"locale": "en"},
-      "a2ui":      [{"version": "v0.9", "action": {"name": "confirm", ...}}],
-      "a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": [...]}}
-    }
-
-The server is **stateless**: the client sends the full conversation each turn.
-Prior messages become history; the trailing run of ``user`` messages plus any
-client→server ``a2ui`` envelopes (button clicks / errors) become the current
-turn — the latter rewritten to corrective prompts via the shared
-``action_to_prompt`` / ``error_to_prompt`` helpers.
+"""Parse the transport-neutral A2UI server request body — a minimal JSON
+contract (``messages``, ``variables``, ``a2ui``, ``a2uiClientCapabilities``).
+The server is stateless: the client sends the full conversation each turn.
 """
 
 import json

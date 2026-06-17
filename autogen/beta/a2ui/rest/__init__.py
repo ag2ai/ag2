@@ -2,14 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Transport-neutral REST/SSE adapter for A2UI.
-
-Serves a plain :class:`~autogen.beta.Agent` (via :class:`A2UIServer`) as canonical
-A2UI over HTTP.
-Depends only on Starlette (declared as an additional dependency, not a pyproject
-extra); a missing install surfaces as a clear hint instead of an opaque
-``ImportError``. Imported from ``autogen.beta.a2ui.rest`` (kept out of the
-top-level ``autogen.beta.a2ui`` so the core package never pulls in Starlette).
+"""Transport-neutral REST/SSE adapter for A2UI: serve a plain
+:class:`~autogen.beta.Agent` over HTTP via :class:`A2UIServer`. Depends only on
+Starlette; a missing install surfaces as a clear hint.
 """
 
 from autogen.beta.exceptions import missing_additional_dependency

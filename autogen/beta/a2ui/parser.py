@@ -59,18 +59,7 @@ def strip_markdown_fences(text: str) -> str:
 
 
 def _parse_json_block(json_part: str) -> "tuple[list[ServerToClientMessage], str | None]":
-    """Parse the content of an ``<a2ui-json>`` block into A2UI messages.
-
-    Supports both shapes the A2UI ecosystem uses inside the tag:
-
-    - a JSON **array** (or single object) — the form the official prompt
-      examples instruct the LLM to emit;
-    - **JSONL** — one JSON object per line, the canonical A2UI wire format.
-
-    Returns ``(operations, parse_error)``; ``parse_error`` is ``None`` on
-    success. A whole-block parse is attempted first; only if that fails is the
-    block re-parsed line-by-line as JSONL.
-    """
+    """Parse an ``<a2ui-json>`` block (JSON array/object, or JSONL) into A2UI messages."""
     try:
         parsed = json.loads(json_part)
     except json.JSONDecodeError as whole_error:
@@ -89,7 +78,6 @@ def _parse_json_block(json_part: str) -> "tuple[list[ServerToClientMessage], str
 
 
 def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | None]":
-    """Parse a JSONL block (one JSON value per line) into A2UI messages."""
     operations: list[ServerToClientMessage] = []
     for line in json_part.splitlines():
         line = line.strip()
@@ -108,13 +96,7 @@ def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | No
 
 
 def _components_of(update_components: object) -> list[object]:
-    """Return the ``components`` list of an ``updateComponents`` value, defensively.
-
-    The LLM can emit a malformed ``updateComponents`` (e.g. a bare string) that
-    still passes the ``"updateComponents" in op`` membership check; calling
-    ``.get`` on a non-dict would raise ``AttributeError``. Returns ``[]`` for any
-    shape that is not ``{"components": [...]}``.
-    """
+    """Return the ``components`` list of an ``updateComponents`` value, or ``[]`` if malformed."""
     if not isinstance(update_components, dict):
         return []
     components = update_components.get("components", [])

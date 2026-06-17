@@ -2,20 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Run one A2UI agent turn and stream the result as transport-neutral frames.
-
-This is the shared core under the REST/SSE adapter: it builds a fresh per-turn
-``MemoryStream`` (the server is stateless), dispatches into the agent the same
-way :class:`autogen.beta.a2a.AgentExecutor` does, and collects the
-:class:`~autogen.beta.a2ui.A2UIMessageEvent`s the validation middleware emits —
-the Phase A *event seam* — rather than re-parsing the model's text.
-
-It yields :class:`A2UIProseFrame` (the conversational text) followed by one
-:class:`A2UIMessageFrame` per A2UI message. Because Phase A emits per *whole*
-message on the final, validated response (level A.1), the frames are produced
-after the turn completes — this is not yet token-level streaming. The async
-generator shape keeps the wire encoders (SSE / NDJSON) uniform and leaves room
-for progressive (A.2) emission later.
+"""Run one A2UI agent turn on a fresh per-turn stream and yield it as
+transport-neutral frames: one :class:`A2UIProseFrame` (conversational text)
+followed by one :class:`A2UIMessageFrame` per A2UI message. Shared core under
+the SSE / NDJSON wire encoders.
 """
 
 from collections.abc import AsyncIterator

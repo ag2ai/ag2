@@ -2,19 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Internal A2UI runtime shared by the transports.
-
-This is the private carrier for everything A2UI-specific that used to live on
-the (now removed) ``A2UIAgent`` subclass: the schema manager, the response
-parser, the collected action declarations, the system-prompt section, and the
-validation middleware factory. Both the REST adapter (:class:`A2UIServer`) and
-the A2A executor (:class:`A2UIAgentExecutor`) build one from their flat kwargs
-and apply it to a **plain** ``autogen.beta.Agent`` per turn — prompt section and
-validation middleware are injected at dispatch, while executable tools already
-live on the agent (``Agent(tools=[...])``).
-
-It is deliberately not exported: callers configure A2UI through the transport
-wrappers, not by constructing this object.
+"""Internal A2UI runtime shared by the transports: holds the schema manager,
+response parser, action declarations, system-prompt section, and validation
+middleware factory built from a transport's flat A2UI kwargs. Not exported.
 """
 
 import os

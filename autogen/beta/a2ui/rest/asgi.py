@@ -2,22 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Starlette ASGI apps that serve canonical A2UI over HTTP.
-
-Two wire encodings share one core (:func:`stream_turn`):
-
-- **SSE** (``text/event-stream``): the conversational prose arrives as an
-  ``event: text`` frame, each A2UI message as a default (unnamed) ``data:``
-  frame, and the turn closes with ``event: done``. Suited to browser
-  ``EventSource`` clients and reconnection.
-- **NDJSON** (``application/x-ndjson``): A2UI JSON Lines — an optional leading
-  prose ``{"text": ...}`` line (AG2 framing, not itself an A2UI message),
-  followed by canonical A2UI messages, one per line. The stream ends at EOF; a
-  failed turn emits a final ``{"error": ...}`` line. Suited to generic A2UI
-  clients that consume the native JSONL wire.
-
-Importing this module requires Starlette; ``rest/__init__.py`` turns a missing
-install into a clear ``missing_additional_dependency`` hint.
+"""Starlette ASGI apps that serve canonical A2UI over HTTP in two wire encodings
+sharing one core: SSE (``text/event-stream``) and NDJSON
+(``application/x-ndjson``). Importing this module requires Starlette.
 """
 
 import functools

@@ -2,18 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Canonical A2UI wire serialization.
-
-The A2UI core represents a server→client exchange as a list of typed
-messages (``list[ServerToClientMessage]``). The canonical A2UI wire format
-is **JSON Lines (JSONL)**: one JSON message per line, streaming-friendly and
-easy for LLMs to generate incrementally.
-
-:func:`to_jsonl` is a pure function with no transport dependencies — transport
-adapters (A2A DataParts, AG-UI events, REST/SSE) build on top of it. The
-agent's delimiter-based parser (``text + delimiter + JSON array``) is an AG2
-convenience for extracting both conversational text and UI from a single LLM
-response; it is *not* part of the A2UI wire format.
+"""Canonical A2UI wire serialization: :func:`to_jsonl` renders a list of
+server→client messages as JSON Lines (one JSON message per line). Pure, with no
+transport dependencies; transport adapters build on top of it.
 """
 
 import json

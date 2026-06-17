@@ -2,11 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""A2A transport helpers for A2UI v0.9.
-
-Requires both ``ag2[a2ui]`` (parser/agent) and ``ag2[a2a]`` (a2a-sdk).
-"""
-
 from autogen.beta.exceptions import missing_additional_dependency
 
 try:

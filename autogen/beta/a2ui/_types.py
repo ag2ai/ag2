@@ -7,15 +7,12 @@ from typing import Literal, TypeAlias, TypedDict
 JsonScalar: TypeAlias = str | int | float | bool | None
 JsonValue: TypeAlias = "JsonScalar | list[JsonValue] | dict[str, JsonValue]"
 JsonObject: TypeAlias = dict[str, "JsonValue"]
-"""A JSON-shaped dict: keys are strings, values are any JSON value."""
 
 JsonSchema: TypeAlias = dict[str, "JsonValue"]
-"""A JSON Schema document. Same shape as ``JsonObject``; named distinctly
-so call sites express intent (schema vs. arbitrary data)."""
+"""A JSON Schema document; named distinctly from ``JsonObject`` to express intent."""
 
 A2UIVersion: TypeAlias = Literal["v0.9", "v0.9.1", "v1.0"]
-"""Supported A2UI protocol versions. ``v0.9.1`` is a backward-compatible patch
-over ``v0.9``; ``callFunction`` / ``actionResponse`` are valid only for ``v1.0``."""
+"""Supported A2UI protocol versions. ``callFunction`` / ``actionResponse`` are ``v1.0``-only."""
 
 
 class CreateSurfaceContent(TypedDict, total=False):

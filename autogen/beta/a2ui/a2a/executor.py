@@ -311,17 +311,7 @@ class A2UIAgentExecutor(AgentExecutor):
 
 
 def _extract_a2ui_envelopes(part: Part) -> list[JsonObject]:
-    """Return zero or more A2UI envelope dicts from an A2A ``Part``.
-
-    Supports three on-the-wire shapes:
-
-    - Canonical A2A v1.0: DataPart ``data`` is a JSON list of envelopes.
-    - Legacy single dict: DataPart ``data`` is one envelope object.
-    - Legacy wrapper:     DataPart ``data`` is ``{"messages": [envelope, ...]}``.
-
-    Returns only entries that carry an ``action``, ``functionResponse``, or
-    ``error`` payload.
-    """
+    """Return the A2UI envelope dicts (carrying ``action``/``functionResponse``/``error``) from an A2A ``Part``."""
     data = get_a2ui_data(part)
     if data is None:
         return []
