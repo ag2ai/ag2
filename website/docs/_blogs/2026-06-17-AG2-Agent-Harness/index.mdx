@@ -61,9 +61,13 @@ for event in await reply.history.get_events():
 
 The stream emits events in the order they occurred: `ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `HumanInputRequest`, `HumanMessage`. **Observers** (covered below) and **assembly** both read from the same stream.
 
+> **Try it live:** open the **Agent Ask** demo in the [AG2 Playground](https://playground.ag2.ai/) — start a turn with `Agent.ask()`, continue it with `AgentReply.ask()`, and watch each event stream in token by token.
+
 ## AssemblyPolicy — surviving context pressure
 
 Assembly is what happens before the LLM call. An `AssemblyPolicy` reads the event stream and produces the list of messages the LLM actually sees. The default policy replays every message from the stream. You override it — and add `Compact` and `Aggregate` strategies — when the conversation grows longer than the model's context window.
+
+> **Try it live:** open the **Context Lens** demo in the [AG2 Playground](https://playground.ag2.ai/) — toggle `ConversationPolicy` / `SlidingWindowPolicy` / `TokenBudgetPolicy` and watch the LLM's view diverge from the raw stream in real time.
 
 ### Compaction: drop history, keep the gist
 
@@ -88,6 +92,8 @@ agent = Agent(
 ```
 
 Once the stream passes 40 events, compaction fires: the history is trimmed to the last 10 events and the dropped span is written to the store's log, so nothing is lost. When you want the gist *kept in context* rather than just archived, swap in `SummarizeCompact(target=10, config=...)` — it spends one LLM call to replace the dropped span with a single `CompactionSummary` event at the head of the history, so the summary is part of the durable record.
+
+> **Try it live:** open the **Compaction Cycle** demo in the [AG2 Playground](https://playground.ag2.ai/) — run `TailWindowCompact` and `SummarizeCompact` over the same conversation side by side; watch the trigger fire, events drop, and the synthesised summary appear.
 
 ### Aggregation: accumulate knowledge across turns
 
@@ -114,6 +120,8 @@ agent = Agent(
 ```
 
 Every 5 turns the aggregator runs, extracts key facts from the conversation, and writes them to `/memory/working.md` in the `KnowledgeStore`. On the next turn the `WorkingMemoryPolicy` in the `assembly=[...]` chain reads that file and prepends the working memory to the context window — so the agent "remembers" facts across compaction boundaries, and across process restarts when the store is persistent.
+
+> **Try it live:** open the **Working Memory** demo in the [AG2 Playground](https://playground.ag2.ai/) — `WorkingMemoryAggregate` writes `/memory/working.md` after every turn; a brand-new Agent in session 2 gets it injected by `WorkingMemoryPolicy` and remembers.
 
 ## Middleware — four call sites
 
@@ -186,6 +194,8 @@ AG2 ships `TelemetryMiddleware` (OpenTelemetry traces, spans, LLM semantic attri
 
 See the [middleware docs](/docs/beta/middleware) for the full reference.
 
+> **Try it live:** open the **Middleware Stack** demo in the [AG2 Playground](https://playground.ag2.ai/) — watch `LoggingMiddleware`, `RetryMiddleware`, and `HistoryLimiter` wrap a Beta Agent as a retry recovers from a fault and history is trimmed before the model call.
+
 ## Tools — @tool, Toolkit, subagent delegation
 
 Tools are the primary way agents extend their capabilities. The `@tool` decorator converts a plain function into a provider-neutral schema that works across LLM provider:
@@ -210,6 +220,8 @@ agent = Agent(
 
 reply = await agent.ask("What's the weather in Tokyo?")
 ```
+
+> **Try it live:** open the **Ask the Web** demo in the [AG2 Playground](https://playground.ag2.ai/) — a single Beta Agent uses Tavily search and fetch to answer with inline citations and live source cards, streamed over the AG-UI protocol.
 
 ### Toolkit — group related tools
 
@@ -269,6 +281,8 @@ orchestrator = Agent(
 ```
 
 `as_tool` exposes the researcher as a callable named `task_researcher`; when the orchestrator invokes it, the subagent runs in isolation and its reply is injected back as the tool result — no manual `asyncio.gather` or result wiring needed. When you'd rather the framework inject the delegation tools for you, construct the agent with `tasks=TaskConfig(...)` to gain `run_subtask` / `run_subtasks(parallel=True)` automatically.
+
+> **Try it live:** open the **Parallel Research** demo in the [AG2 Playground](https://playground.ag2.ai/) — a lead Beta agent fans out to three specialist subagents running in parallel, with live per-researcher progress lanes and a synthesised cited report.
 
 ## Observers — read-only window onto events
 
@@ -407,6 +421,8 @@ agent = Agent(
 
 Files saved to knowledge via `FilesAPI` (photos, docs, audio) are addressed by path and survive the same store swap — a file uploaded via `MemoryKnowledgeStore` in tests and `SqliteKnowledgeStore` in production is the same API call.
 
+> **Try it live:** the **Working Memory** demo in the [AG2 Playground](https://playground.ag2.ai/) shows the persistence payoff end to end — what one session writes to the store, a brand-new Agent in the next session reads back.
+
 ## Putting it together
 
 A minimal production-ready agent with token monitoring, loop detection, compaction, and persistent memory:
@@ -474,4 +490,6 @@ asyncio.run(main())
 
 Each component is pluggable and independently testable — the observers don't affect compaction, compaction doesn't affect aggregation, and replacing `SqliteKnowledgeStore` with `MemoryKnowledgeStore` makes any test hermetic.
 
-*Coming soon — a hands-on follow-up that builds a safe, long-running document-and-web research agent on this harness, end to end.*
+## What's next?
+
+Start building your own agent - AG2's Agent harness provides the components for you to build robust and long-running agents. Reach out to the friendly community and maintainers on [Discord](https://discord.gg/pAbnFJrkgZ) if you need help.
