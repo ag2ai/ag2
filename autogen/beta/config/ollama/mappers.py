@@ -9,6 +9,7 @@ from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -90,6 +91,10 @@ def convert_messages(
                     result[-1]["images"] = images
                 else:
                     result.append({"role": "user", "content": "", "images": images})
+
+        elif isinstance(message, CompactionSummary):
+            # Surface the summary as a user turn so it stays visible and gives a valid opening turn
+            result.append({"role": "user", "content": f"[Summary of earlier conversation]\n{message.summary}"})
 
         elif isinstance(message, ModelResponse):
             msg: dict[str, Any] = {

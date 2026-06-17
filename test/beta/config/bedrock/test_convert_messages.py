@@ -6,6 +6,7 @@ import pytest
 from fast_depends.use import SerializerCls
 
 from autogen.beta import ToolResult
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.config.bedrock.mappers import convert_messages
 from autogen.beta.events import (
     BinaryInput,
@@ -335,3 +336,13 @@ class TestOrphanFiltering:
             "role": "user",
             "content": [{"toolResult": {"toolUseId": "tc_1", "content": [{"text": "ok"}]}}],
         }
+
+
+def test_compaction_summary_renders_as_user_turn() -> None:
+    summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
+
+    result = convert_messages([summary], SerializerCls)
+
+    assert result == [
+        {"role": "user", "content": [{"text": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]}
+    ]
