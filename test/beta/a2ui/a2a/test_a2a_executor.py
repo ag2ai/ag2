@@ -2,31 +2,51 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
-from types import SimpleNamespace
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+"""A2UI ⇄ A2A behaviour, exercised end to end through a real client→server round-trip.
+
+These tests drive the public surface only: a client :class:`~autogen.beta.Agent`
+talks to an :class:`A2AServer` wired with an :class:`A2UIAgentExecutor` over an
+in-process httpx ``ASGITransport`` (the same harness the ``test/beta/a2a`` E2E
+suite uses). Incoming A2UI envelopes ride the outgoing message via the
+``EXTRA_PARTS`` dependency hatch; outgoing A2UI DataParts and task-state
+transitions are observed off the client's event stream.
+
+The server LLM is mocked. Two doubles appear, both mirroring the sanctioned
+pattern in ``test/beta/a2a/_helpers.py`` (``RecordingConfig``): ``TestConfig``
+for canned responses, and a local capturing config for the cases where the
+assertion is about *what the executor fed the model* — the resolved system
+prompt (capability negotiation) or the synthesized user turn (incoming-envelope
+rewrites) — neither of which ``TrackingConfig`` (last message only) exposes.
+"""
+
+import json
 
 import pytest
-from a2a.types import Message, Part, Role
-from typing_extensions import Self
+from a2a.types import Part, TaskState
 
-from autogen.beta import Context
-from autogen.beta.a2a.mappers import ParsedMessage
-from autogen.beta.a2ui import A2UIAgent, A2UIEventAction
-from autogen.beta.a2ui.a2a import create_a2ui_parts, get_a2ui_data, is_a2ui_part
-from autogen.beta.a2ui.a2a.executor import A2UIAgentExecutor, _extract_a2ui_envelopes
-from autogen.beta.a2ui.actions import A2UIAction
-from autogen.beta.config import LLMClient, ModelConfig
-from autogen.beta.context import ConversationContext
-from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, TextInput
+from autogen.beta.a2a.extension import EXTRA_PARTS_DEPENDENCY_KEY
+from autogen.beta.a2ui import A2UIAgent, A2UIEventAction, a2ui_action
+from autogen.beta.a2ui.a2a import create_a2ui_parts
+from autogen.beta.a2ui.a2a.executor import _extract_a2ui_envelopes
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
+
+from ._helpers import (
+    FUNCTION_RESULT_MARK,
+    CallFunctionThenComplete,
+    CapturingConfig,
+    MetadataInterceptor,
+    client_for,
+    subscribe_task_stream,
+    synthesized_text,
+)
 
 VERSION = "v0.9"
 CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 
 DELETE_SURFACE_MSG = {"version": VERSION, "deleteSurface": {"surfaceId": "s1"}}
+CREATE_SURFACE_MSG = {"version": VERSION, "createSurface": {"surfaceId": "s1", "catalogId": CATALOG}}
 
 ACTION_ENVELOPE = {
     "version": VERSION,
@@ -51,11 +71,7 @@ ERROR_ENVELOPE = {
 
 FUNCTION_RESPONSE_ENVELOPE = {
     "version": "v1.0",
-    "functionResponse": {
-        "functionCallId": "fc-1",
-        "call": "openUrl",
-        "value": True,
-    },
+    "functionResponse": {"functionCallId": "fc-1", "call": "openUrl", "value": True},
 }
 
 # A server→client callFunction the LLM may emit inside <a2ui-json>. ``openUrl``
@@ -64,16 +80,6 @@ _CALL_FUNCTION_BLOCK = (
     '[{"version":"v1.0","functionCallId":"fc-1","wantResponse":true,'
     '"callFunction":{"call":"openUrl","args":{"url":"https://example.com"}}}]'
 )
-
-
-def _make_executor(actions: tuple[A2UIAction, ...] = ()) -> A2UIAgentExecutor:
-    agent = A2UIAgent(
-        name="ui_agent",
-        config=TestConfig("ok"),
-        validate_responses=False,
-        tools=actions,
-    )
-    return A2UIAgentExecutor(agent)
 
 
 class TestExtractA2UIEnvelopes:
@@ -91,8 +97,7 @@ class TestExtractA2UIEnvelopes:
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
     def test_filters_entries_without_action_or_error(self) -> None:
-        surface_only = {"version": VERSION, "createSurface": {"surfaceId": "s1", "catalogId": CATALOG}}
-        [part] = create_a2ui_parts([surface_only, ACTION_ENVELOPE])
+        [part] = create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
     def test_decodes_error_envelope(self) -> None:
@@ -104,265 +109,198 @@ class TestExtractA2UIEnvelopes:
         assert _extract_a2ui_envelopes(part) == [FUNCTION_RESPONSE_ENVELOPE]
 
 
-class TestBuildA2UIMessage:
-    """Splitting the completed turn into prose text + canonical A2UI DataPart.
+@pytest.mark.asyncio
+class TestFinalizationMessage:
+    """The completed turn splits into conversational prose plus a canonical A2UI DataPart."""
 
-    The A2UI messages arrive as a collected list (gathered from the stream's
-    A2UIMessageEvents), and the prose is already stripped by the middleware.
-    """
+    async def test_splits_prose_and_a2ui_datapart(self) -> None:
+        response = f"Here is your UI.\n<a2ui-json>\n[{json.dumps(CREATE_SURFACE_MSG)}]\n</a2ui-json>"
+        agent = A2UIAgent(name="ui_agent", config=TestConfig(response), validate_responses=True)
+        client = client_for(agent, streaming=True)
+        stream = MemoryStream()
+        payloads, _states = subscribe_task_stream(stream)
 
-    def test_splits_text_and_a2ui_datapart(self) -> None:
-        executor = _make_executor()
-        updater = MagicMock()
-        executor._build_a2ui_message(updater, "Here is your UI.", [DELETE_SURFACE_MSG], {})
+        reply = await client.ask("show me a form", stream=stream)
 
-        parts = updater.new_agent_message.call_args.kwargs["parts"]
-        assert len(parts) == 2
-        assert parts[0].text == "Here is your UI."
-        assert is_a2ui_part(parts[1])
-        assert get_a2ui_data(parts[1]) == [DELETE_SURFACE_MSG]
+        assert reply.response.content == "Here is your UI."
+        assert payloads == [[CREATE_SURFACE_MSG]]
 
-    def test_a2ui_only_without_prose(self) -> None:
-        executor = _make_executor()
-        updater = MagicMock()
-        executor._build_a2ui_message(updater, "", [DELETE_SURFACE_MSG], {})
+    async def test_a2ui_only_without_prose(self) -> None:
+        response = f"<a2ui-json>\n[{json.dumps(DELETE_SURFACE_MSG)}]\n</a2ui-json>"
+        agent = A2UIAgent(name="ui_agent", config=TestConfig(response), validate_responses=True)
+        client = client_for(agent, streaming=True)
+        stream = MemoryStream()
+        payloads, _states = subscribe_task_stream(stream)
 
-        parts = updater.new_agent_message.call_args.kwargs["parts"]
-        assert len(parts) == 1
-        assert is_a2ui_part(parts[0])
-        assert get_a2ui_data(parts[0]) == [DELETE_SURFACE_MSG]
+        await client.ask("clear it", stream=stream)
 
-    def test_plain_text_single_part(self) -> None:
-        executor = _make_executor()
-        updater = MagicMock()
-        executor._build_a2ui_message(updater, "Just text.", [], {})
+        assert payloads == [[DELETE_SURFACE_MSG]]
 
-        parts = updater.new_agent_message.call_args.kwargs["parts"]
-        assert len(parts) == 1
-        assert parts[0].text == "Just text."
+    async def test_plain_text_has_no_a2ui_datapart(self) -> None:
+        agent = A2UIAgent(name="ui_agent", config=TestConfig("Just text."), validate_responses=False)
+        client = client_for(agent, streaming=True)
+        stream = MemoryStream()
+        payloads, _states = subscribe_task_stream(stream)
 
-    def test_returns_none_when_no_parts_and_no_variables(self) -> None:
-        executor = _make_executor()
-        updater = MagicMock()
-        assert executor._build_a2ui_message(updater, "", [], {}) is None
-        updater.new_agent_message.assert_not_called()
+        reply = await client.ask("hi", stream=stream)
 
-    def test_context_update_variables_go_to_metadata(self) -> None:
-        executor = _make_executor()
-        updater = MagicMock()
-        executor._build_a2ui_message(updater, "Just text.", [], {"count": 3})
-
-        metadata = updater.new_agent_message.call_args.kwargs["metadata"]
-        assert metadata is not None
-        assert any(v == {"count": 3} for v in metadata.values())
+        assert reply.response.content == "Just text."
+        assert payloads == []
 
 
-class TestActionToPrompt:
-    """Prompt synthesis from incoming client actions."""
+@pytest.mark.asyncio
+class TestIncomingActionRewrite:
+    """An incoming A2UI ``action`` envelope is rewritten into the agent's turn."""
 
-    def test_tool_action_synthesizes_tool_call_prompt(self) -> None:
-        executor = _make_executor((A2UIEventAction("submit", tool_name="submit_form"),))
-        msg = MagicMock()
-        msg.parts = [create_a2ui_parts([ACTION_ENVELOPE])[0]]
-        ctx = MagicMock()
-        ctx.message = msg
+    async def test_action_click_executes_registered_tool(self) -> None:
+        clicked: list[str] = []
 
-        executor._rewrite_incoming_a2ui_parts(ctx)
+        @a2ui_action(description="Schedule all posts for the given time")
+        def submit(email: str) -> str:
+            clicked.append(email)
+            return "done"
 
-        texts = [p.text for p in msg.parts if p.text]
-        assert len(texts) == 1
-        assert "submit" in texts[0]
-        assert "submit_form" in texts[0]
-        assert "user@example.com" in texts[0]
+        agent = A2UIAgent(
+            name="ui_agent",
+            validate_responses=False,
+            tools=[submit],
+            config=TestConfig(ToolCallEvent(name="submit", arguments='{"email": "user@example.com"}'), "All set."),
+        )
+        client = client_for(agent)
 
-    def test_unregistered_action_is_not_synthesized(self) -> None:
-        executor = _make_executor()  # no registered actions
-        msg = MagicMock()
-        msg.parts = [create_a2ui_parts([ACTION_ENVELOPE])[0]]
-        ctx = MagicMock()
-        ctx.message = msg
+        reply = await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
-        executor._rewrite_incoming_a2ui_parts(ctx)
+        assert clicked == ["user@example.com"]
+        assert reply.response.content == "All set."
 
-        # No matching A2UIAction → the action is dropped, never turned into a
-        # text prompt (the original DataPart is left untouched).
-        assert [p.text for p in msg.parts if p.text] == []
+    async def test_action_context_reaches_the_model(self) -> None:
+        config = CapturingConfig()
+        agent = A2UIAgent(
+            name="ui_agent",
+            config=config,
+            validate_responses=False,
+            tools=[A2UIEventAction("submit", tool_name="submit_form")],
+        )
+        client = client_for(agent)
 
-    def test_error_envelope_synthesizes_corrective_prompt(self) -> None:
-        executor = _make_executor()
-        msg = MagicMock()
-        msg.parts = [create_a2ui_parts([ERROR_ENVELOPE])[0]]
-        ctx = MagicMock()
-        ctx.message = msg
+        await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
-        executor._rewrite_incoming_a2ui_parts(ctx)
+        synthesized = synthesized_text(config.messages[-1])
+        assert "submit_form" in synthesized
+        assert "user@example.com" in synthesized
 
-        texts = [p.text for p in msg.parts if p.text]
-        assert len(texts) == 1
-        assert "VALIDATION_FAILED" in texts[0]
-        assert "/components/0" in texts[0]
+    async def test_unregistered_action_is_not_synthesized(self) -> None:
+        config = CapturingConfig()
+        agent = A2UIAgent(name="ui_agent", config=config, validate_responses=False)  # no actions registered
+        client = client_for(agent)
 
-    def test_function_response_synthesizes_continuation_prompt(self) -> None:
-        executor = _make_executor()
-        msg = MagicMock()
-        msg.parts = [create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])[0]]
-        ctx = MagicMock()
-        ctx.message = msg
+        await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
-        executor._rewrite_incoming_a2ui_parts(ctx)
+        # No matching A2UIAction → the action is dropped, never synthesized into the
+        # turn: neither the "clicked" phrasing nor the envelope's context survives.
+        synthesized = synthesized_text(config.messages[-1])
+        assert "clicked" not in synthesized
+        assert "user@example.com" not in synthesized
 
-        texts = [p.text for p in msg.parts if p.text]
-        assert len(texts) == 1
-        assert "openUrl" in texts[0]
-        assert "fc-1" in texts[0]
+
+@pytest.mark.asyncio
+class TestIncomingErrorRewrite:
+    async def test_error_envelope_becomes_corrective_prompt(self) -> None:
+        config = CapturingConfig()
+        agent = A2UIAgent(name="ui_agent", config=config, validate_responses=False)
+        client = client_for(agent)
+
+        await client.ask("retry", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ERROR_ENVELOPE])})
+
+        synthesized = synthesized_text(config.messages[-1])
+        assert "VALIDATION_FAILED" in synthesized
+        assert "/components/0" in synthesized
+
+
+@pytest.mark.asyncio
+class TestIncomingFunctionResponse:
+    async def test_function_response_becomes_continuation_prompt(self) -> None:
+        config = CapturingConfig()
+        agent = A2UIAgent(name="ui_agent", config=config, protocol_version="v1.0", validate_responses=False)
+        client = client_for(agent)
+
+        await client.ask(
+            "continue", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])}
+        )
+
+        synthesized = synthesized_text(config.messages[-1])
+        assert "openUrl" in synthesized
+        assert "fc-1" in synthesized
 
 
 @pytest.mark.asyncio
 class TestCallFunctionPause:
-    """A server callFunction(wantResponse=true) pauses the task awaiting the
-    client's functionResponse, delivering the callFunction DataPart on the
-    input-required transition instead of completing the task."""
-
-    @staticmethod
-    def _run_turn_collaborators(stream: MemoryStream) -> "tuple[MagicMock, Message, ConversationContext]":
-        agent_msg = Message(role=Role.ROLE_AGENT, parts=[Part(text="ui")], message_id="m1")
-        updater = MagicMock()
-        updater.requires_input = AsyncMock()
-        updater.complete = AsyncMock()
-        updater.new_agent_message = MagicMock(return_value=agent_msg)
-        lifecycle_ctx = ConversationContext(stream)
-        return updater, agent_msg, lifecycle_ctx
+    """A v1.0 ``callFunction(wantResponse=true)`` pauses the task awaiting the
+    client's ``functionResponse`` instead of completing it, delivering the
+    ``callFunction`` DataPart on the input-required transition."""
 
     async def test_call_function_with_want_response_pauses(self) -> None:
+        hitl_prompts: list[str] = []
+
+        async def hitl_hook() -> str:
+            hitl_prompts.append("called")
+            return FUNCTION_RESULT_MARK
+
         agent = A2UIAgent(
             name="ui_agent",
-            config=TestConfig(f"Opening the link.\n<a2ui-json>\n{_CALL_FUNCTION_BLOCK}\n</a2ui-json>"),
+            config=CallFunctionThenComplete(_CALL_FUNCTION_BLOCK),
             protocol_version="v1.0",
             validate_responses=True,
         )
-        executor = A2UIAgentExecutor(agent)
+        client = client_for(agent, streaming=True, hitl_hook=hitl_hook)
         stream = MemoryStream()
-        updater, agent_msg, lifecycle_ctx = self._run_turn_collaborators(stream)
+        payloads, states = subscribe_task_stream(stream)
 
-        await executor._run_one_turn(
-            ParsedMessage(inputs=[TextInput("open the link")]),
-            updater,
-            stream,
-            lifecycle_ctx,
-            text_pieces=[],
-            pending_client_calls=[],
-            task_id="t1",
-            context_id="c1",
-        )
+        await client.ask("open the link", stream=stream)
 
-        updater.requires_input.assert_awaited_once()
-        updater.complete.assert_not_awaited()
-        # The callFunction DataPart rides the input-required transition.
-        assert updater.requires_input.await_args.kwargs["message"] is agent_msg
+        # The task paused for input rather than completing on the first turn, and
+        # that pause surfaced to the client as an input request.
+        assert TaskState.TASK_STATE_INPUT_REQUIRED in states
+        assert hitl_prompts == ["called"]
+        # The callFunction DataPart rode the input-required transition.
+        assert any(payload and "callFunction" in payload[0] for payload in payloads)
 
     async def test_no_call_function_completes_normally(self) -> None:
         agent = A2UIAgent(
-            name="ui_agent",
-            config=TestConfig("Just a plain reply."),
-            protocol_version="v1.0",
-            validate_responses=True,
+            name="ui_agent", config=TestConfig("Just a plain reply."), protocol_version="v1.0", validate_responses=True
         )
-        executor = A2UIAgentExecutor(agent)
+        client = client_for(agent, streaming=True)
         stream = MemoryStream()
-        updater, _agent_msg, lifecycle_ctx = self._run_turn_collaborators(stream)
+        _payloads, states = subscribe_task_stream(stream)
 
-        await executor._run_one_turn(
-            ParsedMessage(inputs=[TextInput("hi")]),
-            updater,
-            stream,
-            lifecycle_ctx,
-            text_pieces=[],
-            pending_client_calls=[],
-            task_id="t1",
-            context_id="c1",
-        )
+        reply = await client.ask("hi", stream=stream)
 
-        updater.complete.assert_awaited_once()
-        updater.requires_input.assert_not_awaited()
+        assert reply.response.content == "Just a plain reply."
+        assert TaskState.TASK_STATE_COMPLETED in states
+        assert TaskState.TASK_STATE_INPUT_REQUIRED not in states
 
 
-class _PromptCaptureConfig(ModelConfig):
-    """Records the resolved ``context.prompt`` the agent sends to the model."""
-
-    def __init__(self) -> None:
-        self.prompts: list[list[str]] = []
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "_PromptCaptureClient":
-        return _PromptCaptureClient(self.prompts)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class _PromptCaptureClient(LLMClient):
-    def __init__(self, sink: list[list[str]]) -> None:
-        self._sink = sink
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self._sink.append(list(context.prompt))
-        return ModelResponse(ModelMessage("ok"))
-
-
+@pytest.mark.asyncio
 class TestCapabilitiesNegotiation:
-    @staticmethod
-    def _message_with_caps(supported: list[str]) -> Message:
-        return Message(
-            role=Role.ROLE_USER,
-            parts=[Part(text="hi")],
-            message_id="m1",
-            metadata={"a2uiClientCapabilities": {VERSION: {"supportedCatalogIds": supported}}},
-        )
+    """Client capabilities advertised in message metadata fold into the turn's system prompt."""
 
-    def test_extra_system_prompt_from_message_caps(self) -> None:
-        executor = _make_executor()
-        rc = SimpleNamespace(message=self._message_with_caps(["https://other.example/c.json"]))
-
-        fragment = executor._extra_system_prompt(rc)
-
-        assert len(fragment) == 1
-        assert "## A2UI Client Capabilities" in fragment[0]
-        assert "did NOT list" in fragment[0]  # agent catalog absent from client's list
-
-    def test_extra_system_prompt_empty_without_message(self) -> None:
-        executor = _make_executor()
-        assert executor._extra_system_prompt(SimpleNamespace(message=None)) == ()
-
-    def test_extra_system_prompt_empty_without_caps(self) -> None:
-        executor = _make_executor()
-        msg = Message(role=Role.ROLE_USER, parts=[Part(text="hi")], message_id="m1")
-        assert executor._extra_system_prompt(SimpleNamespace(message=msg)) == ()
-
-    @pytest.mark.asyncio
-    async def test_extra_prompt_reaches_the_model(self) -> None:
-        config = _PromptCaptureConfig()
+    async def test_client_caps_injected_into_prompt(self) -> None:
+        config = CapturingConfig()
         agent = A2UIAgent(name="ui_agent", config=config, validate_responses=False)
-        executor = A2UIAgentExecutor(agent)
-        stream = MemoryStream()
-        lifecycle_ctx = ConversationContext(stream)
-        updater = MagicMock()
-        updater.complete = AsyncMock()
-        updater.new_agent_message = MagicMock(
-            return_value=Message(role=Role.ROLE_AGENT, parts=[Part(text="ok")], message_id="m1")
-        )
+        caps = {"a2uiClientCapabilities": {VERSION: {"supportedCatalogIds": ["https://other.example/c.json"]}}}
+        client = client_for(agent, interceptors=[MetadataInterceptor(caps)])
 
-        await executor._run_one_turn(
-            ParsedMessage(inputs=[TextInput("hi")]),
-            updater,
-            stream,
-            lifecycle_ctx,
-            text_pieces=[],
-            pending_client_calls=[],
-            task_id="t1",
-            context_id="c1",
-            extra_prompt=["INJECTED-CAPS-FRAGMENT"],
-        )
+        await client.ask("hi")
 
-        assert "INJECTED-CAPS-FRAGMENT" in "\n".join(config.prompts[0])
+        prompt = "\n".join(config.prompts[-1])
+        assert "## A2UI Client Capabilities" in prompt
+        assert "did NOT list" in prompt  # agent catalog absent from client's advertised list
+
+    async def test_no_caps_no_negotiation_prompt(self) -> None:
+        config = CapturingConfig()
+        agent = A2UIAgent(name="ui_agent", config=config, validate_responses=False)
+        client = client_for(agent)
+
+        await client.ask("hi")
+
+        assert "## A2UI Client Capabilities" not in "\n".join(config.prompts[-1])
