@@ -1,0 +1,110 @@
+We are excited to unveil [`DeepResearchAgent`](/docs/api-reference/autogen/agents/experimental/DeepResearchAgent), a powerful autonomous research capability within our **AG2** framework. Inspired by [OpenAI's Deep Research](https://openai.com/index/introducing-deep-research), our agent is designed to tackle complex, multi-step research tasks efficiently, synthesizing insights from diverse online sources.
+
+With [`DeepResearchAgent`](/docs/api-reference/autogen/agents/experimental/DeepResearchAgent), we take a significant step toward the future of autonomous knowledge synthesis—freeing up valuable time and enabling deeper, data-driven decision-making
+
+## Installation
+
+<Warning>
+[`DeepResearchAgent`](/docs/api-reference/autogen/agents/experimental/DeepResearchAgent) is built on top of [`Browser Use`](https://github.com/browser-use/browser-use), which requires **Python 3.11 or higher**.
+</Warning>
+
+To get started with the [`DeepResearchAgent`](/docs/api-reference/autogen/agents/experimental/DeepResearchAgent) agent, follow these steps:
+
+1. Install AG2 with the `browser-use` extra:
+    ```bash
+    pip install -U ag2[openai,browser-use]
+    ```
+    <Tip>
+    If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[openai,browser-use]
+    ```
+    or
+    ```bash
+    pip install -U ag2[openai,browser-use]
+    ```
+    as `autogen` and `ag2` are aliases for the same PyPI package.
+    </Tip>
+2. Set up Playwright:
+
+    ```bash
+    # Installs Playwright and browsers for all OS
+    playwright install
+    # Additional command, mandatory for Linux only
+    playwright install-deps
+    ```
+
+3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
+    ```bash
+    pip install nest_asyncio
+    ```
+
+You're all set! Now you can start solving complex tasks.
+
+## Imports
+
+```python
+import os
+import nest_asyncio
+
+from autogen.agents.experimental import DeepResearchAgent
+
+nest_asyncio.apply()
+```
+
+## Starting the Conversation
+
+This code initializes [`DeepResearchAgent`](/docs/api-reference/autogen/agents/experimental/DeepResearchAgent) and asks it to find out `What was the impact of DeepSeek on stock prices and why?` using `GPT-4o`.
+
+<Tip>
+We recommend using `gpt-5`
+
+Models like `gpt-5-nano` often don’t perform well enough for complex tasks.
+</Tip>
+
+```python
+from autogen import LLMConfig
+
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5",
+    "api_key": os.environ["OPENAI_API_KEY"]
+})
+
+agent = DeepResearchAgent(name="DeepResearchAgent", llm_config=llm_config)
+
+message = "What was the impact of DeepSeek on stock prices and why?"
+
+result = agent.run(
+    message=message,
+    tools=agent.tools,
+    max_turns=2,
+    user_input=False,
+    summary_method="reflection_with_llm",
+)
+result.process()
+print(result.summary)
+```
+
+The agent will break down the initial task into smaller, manageable subtasks and tackle them sequentially. Once all subtasks are completed, a final summary will be generated, for example:
+
+```console
+The investigation into the impact of DeepSeek on stock prices reveals several key insights:
+
+1. **DeepSeek's Role and Functionality:**
+ - DeepSeek is a renowned Chinese AI company, known for its cutting-edge, open-source language models that compete with those of major U.S. tech giants. The models offer significant advancements in reasoning and optimization of tasks requiring logical inference and problem-solving, utilizing methods such as "Chain of Thought" and reinforcement learning.
+
+2. **Impact on Stock Prices:**
+ - The introduction and application of DeepSeek have led to significant repercussions in stock markets. The tech industry experienced a selloff, notably impacting companies like Nvidia, with stock valuations decreasing markedly—from 50 times to 36 times estimated earnings. Major indexes, including Nasdaq and S&P 500, faced declines of 3.1% and 1.5%, respectively.
+
+3. **Factors behind the Changes in Stock Prices:**
+ - The shifts in stock prices are attributed to several factors:
+ - **Technological Advancements:** DeepSeek's technological breakthroughs have triggered notable market changes.
+ - **Impact on Major Tech Companies:** There have been significant market-cap losses for companies like Nvidia due to concerns about competition from DeepSeek.
+ - **Market Volatility:** Concerns over Chinese AI enhancements have induced market-wide volatility.
+ - **Investment Opportunities:** DeepSeek's advancements have sparked interest in investing in undervalued Chinese AI stocks, indicating potential growth areas.
+ - **Financial Market Reactions:** The rapid changes induced by DeepSeek's developments have caused noticeable financial market fluctuations, particularly affecting Wall Street.
+
+Overall, DeepSeek's emergence has profoundly influenced stock prices by fostering both immediate market anxiety and potential long-term investment opportunities.
+Reasoning: The answer comprehensively covers the impact of DeepSeek on stock prices and the reasons behind these changes. It is well-structured, providing a clear understanding of DeepSeek's functions, its effects on the stock market, and the underlying factors contributing to these effects. Each aspect of the investigation aligns with the subquestions previously addressed, ensuring completeness and coherence. Thus, this summary effectively communicates the investigation's findings.
+```

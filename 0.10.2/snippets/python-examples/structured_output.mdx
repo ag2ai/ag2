@@ -1,0 +1,49 @@
+```python
+import json
+
+from pydantic import BaseModel
+
+from autogen import ConversableAgent, LLMConfig
+
+# 1. Define our lesson plan structure, a lesson with a number of objectives
+class LearningObjective(BaseModel):
+    title: str
+    description: str
+
+class LessonPlan(BaseModel):
+    title: str
+    learning_objectives: list[LearningObjective]
+    script: str
+
+# 2. Add our lesson plan structure to the LLM configuration
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "response_format": LessonPlan,
+})
+
+# 3. The agent's system message doesn't need any formatting instructions
+system_message = """You are a classroom lesson agent.
+Given a topic, write a lesson plan for a fourth grade class.
+"""
+
+my_agent = ConversableAgent(
+    name="lesson_agent",
+    system_message=system_message,
+    llm_config=llm_config,
+)
+
+# 4. Chat directly with our agent
+response = my_agent.run(
+    message="Let's learn about the solar system!",
+    user_input=True,
+    max_turns=1,
+)
+
+# 5. Iterate through the chat automatically with console output
+response.process()
+
+# 6. Get and print our lesson plan
+lesson_plan_json = json.loads(response.messages[-1]["content"])
+print(json.dumps(lesson_plan_json, indent=2))
+```

@@ -1,0 +1,30 @@
+???+ info
+
+    **Why Two Steps: `run()` and `process()`**
+
+    You might wonder why we need to call both `run()` and `process()` to get results.
+
+    **👉 Here’s what’s happening:**
+
+    When you call `run()`, it doesn’t immediately give you the final output.
+    Instead, it returns an iterator, a special object that holds a stream of events, messages, and metadata.
+
+    **👉 Why? Because flexibility matters.**
+
+    The workflow steps won’t actually start running until you iterate over this iterator.
+    This design gives you full control and makes it easy to build things like:
+
+    - Custom UIs
+    - Real-time dashboards
+    - Interactive apps where you control how and when each event is handled
+
+    **👉 Okay — so what does `process()` do?**
+
+    `process()` is a built-in helper method that takes care of iterating through those events for you.
+    It simulates a chat-like console experience — printing messages, handling user inputs, and making it feel like a live conversation.
+
+    **👉 In short:**
+
+    Use `run()` and iterate over the events yourself when you want full control over the workflow’s events and how they are processed. **👉 Learn more** about the `run()` method [here](/docs/use-cases/notebooks/notebooks/run_and_event_processing/) →
+
+    Use `process()` along with `run()` when you just want a quick, ready-to-go chat experience in the console.

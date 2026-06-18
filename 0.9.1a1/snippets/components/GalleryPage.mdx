@@ -1,0 +1,168 @@
+export const GalleryPage = ({
+  galleryItems,
+  allowDefaultImage = true,
+  target = "_blank",
+}) => {
+
+  const getTagsFromURL = () => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const tags = searchParams.get("tags");
+    return tags ? tags.split(",") : [];
+  };
+
+  let selectedTags = getTagsFromURL();
+  const defaultImageIfNoImage = allowDefaultImage ?? true;
+  const allTags = [...new Set(galleryItems.flatMap((item) => item.tags))];
+
+   const handleCardClick = (e, targetLink) => {
+    if (!e.target.closest('a')) {
+      if (target === '_blank') {
+        window.open(targetLink, '_blank');
+      } else {
+        window.location.href = targetLink;
+      }
+    }
+  };
+
+  const updateURL = (tags) => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (tags.length > 0) {
+      searchParams.set("tags", tags.join(","));
+    } else {
+      searchParams.delete("tags");
+    }
+    const searchParamsString = searchParams.toString();
+    const newURL = searchParamsString ? `${window.location.pathname}?${searchParamsString}` : window.location.pathname;
+    window.history.pushState({}, '', newURL);
+  };
+
+  window.addEventListener('popstate', () => {
+    selectedTags = getTagsFromURL();
+    filterItems();
+
+    const select = document.querySelector('.tag-filter');
+    if (select && window.jQuery) {
+      $(select).val(selectedTags).trigger('chosen:updated');
+    }
+  });
+
+  const handleGalleryTagChange = (event) => {
+    handleTagChange(event.detail);
+  };
+
+  document.removeEventListener('gallery:tagChange', handleGalleryTagChange);
+  document.addEventListener('gallery:tagChange', handleGalleryTagChange);
+
+  const imageFunc = (item) => {
+    const image = (
+      <img
+        alt={item.title}
+        noZoom
+        src={
+          item.image
+            ? item.image.includes("http")
+              ? item.image
+              : `https://mintlify.s3.us-west-1.amazonaws.com/ag2ai/static/img/gallery/${item.image}`
+            : `https://mintlify.s3.us-west-1.amazonaws.com/ag2ai/static/img/gallery/default.png`
+        }
+        style={{
+          height: 150,
+          width: "fit-content",
+          margin: "auto",
+        }}
+      />
+    );
+    const imageToUse = item.image
+      ? image
+      : defaultImageIfNoImage
+      ? image
+      : null;
+    return imageToUse;
+  };
+
+  const handleTagChange = (tags) => {
+    selectedTags = tags;
+    updateURL(tags);
+    filterItems();
+  };
+
+  const filterItems = () => {
+        const cards = document.querySelectorAll('.examples-gallery-container .card');
+        cards.forEach(card => {
+            const cardTags = Array.from(card.querySelectorAll('.tag')).map(tag => tag.textContent);
+            if (selectedTags.length === 0 || selectedTags.some(tag => cardTags.includes(tag))) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    };
+
+  const TagsView = ({ tags }) => (
+    <div className="tags-container">
+      {tags?.map((tag, index) => (
+        <span
+          className="tag"
+          key={index}
+          onClick={(evt) => {
+            if (!selectedTags.includes(tag)) {
+              handleTagChange([...selectedTags, tag]);
+
+              const select = document.querySelector('.tag-filter');
+              if (select && window.jQuery) {
+                $(select).val([...selectedTags, tag]).trigger('chosen:updated');
+              }
+            }
+            evt.preventDefault();
+            evt.stopPropagation();
+            return false;
+          }}
+        >
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+
+  const badges = (item) => {
+    if (!item.source) {
+      return null;
+    }
+    const colab_href = `https://colab.research.google.com/github/ag2ai/ag2/blob/main/${item.source}`;
+    const github_href = `https://github.com/ag2ai/ag2/blob/main/${item.source}`;
+    return (<span class="badges">
+      <a style={{marginRight: '5px'}}href={colab_href} target="_parent"><img noZoom src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+      <a href={github_href} target="_parent"><img noZoom alt="Static Badge" src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"/></a>
+      </span>
+    );
+  }
+
+  return (
+    <div className="examples-gallery-container">
+      <select
+        multiple
+        className="tag-filter"
+        data-placeholder="Filter by tags"
+      >
+        {allTags.map(tag => (
+          <option key={tag} value={tag}>
+            {tag}
+          </option>
+        ))}
+      </select>
+      <CardGroup cols={3}>
+        {galleryItems.map((item, index) => (
+          <Card key={index}>
+            <div className="card-container" onClick={(e) => handleCardClick(e, item.link)}>
+              {imageFunc(item)}
+              <h5 className="card-title">{item.title}</h5>
+              {badges(item)}
+              <p className="card-description">{item.description || item.title}</p>
+              <TagsView tags={item.tags} />
+            </div>
+          </Card>
+        ))}
+      </CardGroup>
+    </div>
+  );
+};

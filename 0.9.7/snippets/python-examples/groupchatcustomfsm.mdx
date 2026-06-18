@@ -1,0 +1,108 @@
+```python
+import random
+
+from autogen import ConversableAgent, GroupChat, GroupChatManager
+
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
+
+def get_agent_by_name(agents, name) -> ConversableAgent:
+    for agent in agents:
+        if agent.name == name:
+            return agent
+
+
+# Create an empty directed graph
+agents = []
+speaker_transitions_dict = {}
+secret_values = {}
+
+# Outer loop for prefixes 'A', 'B', 'C'
+for prefix in ["A", "B", "C"]:
+    # Add 3 nodes with each prefix to the graph using a for loop
+    for i in range(3):
+        node_id = f"{prefix}{i}"
+        secret_value = random.randint(1, 5)  # Generate a random secret value
+        secret_values[node_id] = secret_value
+
+        # Create an ConversableAgent for each node (assuming ConversableAgent is a defined class)
+        agents.append(
+            ConversableAgent(
+                name=node_id,
+                system_message=f"""Your name is {node_id}.
+                    Do not respond as the speaker named in the NEXT tag if your name is not in the NEXT tag. Instead, suggest a relevant team leader to handle the mis-tag, with the NEXT: tag.
+
+                    You have {secret_value} chocolates.
+
+                    The list of players are [A0, A1, A2, B0, B1, B2, C0, C1, C2].
+
+                    Your first character of your name is your team, and your second character denotes that you are a team leader if it is 0.
+                    CONSTRAINTS: Team members can only talk within the team, whilst team leader can talk to team leaders of other teams but not team members of other teams.
+
+                    You can use NEXT: to suggest the next speaker. You have to respect the CONSTRAINTS, and can only suggest one player from the list of players, i.e., do not suggest A3 because A3 is not from the list of players.
+                    Team leaders must make sure that they know the sum of the individual chocolate count of all three players in their own team, i.e., A0 is responsible for team A only.
+
+                    Keep track of the player's tally using a JSON format so that others can check the total tally. Use
+                    A0:?, A1:?, A2:?,
+                    B0:?, B1:?, B2:?,
+                    C0:?, C1:?, C2:?
+
+                    If you are the team leader, you should aggregate your team's total chocolate count to cooperate.
+                    Once the team leader know their team's tally, they can suggest another team leader for them to find their team tally, because we need all three team tallys to succeed.
+                    Use NEXT: to suggest the next speaker, e.g., NEXT: A0.
+
+                    Once we have the total tally from all nine players, sum up all three teams' tally, then terminate the discussion using DONE!.
+
+                    """,
+                llm_config=config_list,
+            )
+        )
+        speaker_transitions_dict[agents[-1]] = []
+
+    # Add edges between nodes with the same prefix using a nested for loop
+    for source_node in range(3):
+        source_id = f"{prefix}{source_node}"
+        for target_node in range(3):
+            target_id = f"{prefix}{target_node}"
+            if source_node != target_node:  # To avoid self-loops
+                speaker_transitions_dict[get_agent_by_name(agents, source_id)].append(
+                    get_agent_by_name(agents, name=target_id)
+                )
+
+
+# Adding edges between teams
+speaker_transitions_dict[get_agent_by_name(agents, "A0")].append(get_agent_by_name(agents, name="B0"))
+speaker_transitions_dict[get_agent_by_name(agents, "A0")].append(get_agent_by_name(agents, name="C0"))
+speaker_transitions_dict[get_agent_by_name(agents, "B0")].append(get_agent_by_name(agents, name="A0"))
+speaker_transitions_dict[get_agent_by_name(agents, "B0")].append(get_agent_by_name(agents, name="C0"))
+speaker_transitions_dict[get_agent_by_name(agents, "C0")].append(get_agent_by_name(agents, name="A0"))
+speaker_transitions_dict[get_agent_by_name(agents, "C0")].append(get_agent_by_name(agents, name="B0"))
+
+
+group_chat = GroupChat(
+    agents=agents,
+    messages=[],
+    max_round=20,
+    allowed_or_disallowed_speaker_transitions=speaker_transitions_dict,
+    speaker_transitions_type="allowed",
+)
+
+
+# The GroupChatManager will terminate the chat when DONE! is received
+manager = GroupChatManager(
+    groupchat=group_chat,
+    llm_config=config_list,
+    code_execution_config=False,
+    is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper(),
+)
+
+
+# Initiates the chat with Alice
+agents[0].initiate_chat(
+    manager,
+    message="""
+                        There are 9 players in this game, split equally into Teams A, B, C. Therefore each team has 3 players, including the team leader.
+                        The task is to find out the sum of chocolate count from all nine players. I will now start with my team.
+                        NEXT: A1""",
+)
+```

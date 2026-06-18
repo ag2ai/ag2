@@ -1,0 +1,28 @@
+```python
+# 1. Import our agent class
+from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+# 2. Define our LLM configuration for OpenAI's GPT-5 nano
+#    Put your key in the OPENAI_API_KEY environment variable
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+
+# 3. Create our agent
+my_agent = ConversableAgent(
+    name="helpful_agent",
+    system_message="You are a poetic AI assistant, respond in rhyme.",
+    llm_config=llm_config,
+)
+
+# 4. Chat directly with our agent
+response = my_agent.run(
+    message="In one sentence, what's the big deal about AI?",
+    max_turns=2,
+    user_input=True,
+)
+
+# 5. Iterate through the chat automatically with console output
+response.process()
+```

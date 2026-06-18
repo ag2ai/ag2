@@ -1,0 +1,391 @@
+### Installation
+
+To integrate `Crawl4AI` with AG2, follow these steps:
+
+1. Install AG2 with the `crawl4ai` extra:
+    ```bash
+    pip install ag2[openai,crawl4ai]
+    ```
+    <Tip>
+    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[openai,crawl4ai]
+    ```
+    or
+    ```bash
+    pip install -U pyautogen[openai,crawl4ai]
+    ```
+    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+    </Tip>
+2. Set up Playwright:
+
+    ```bash
+    # Installs Playwright and browsers for all OS
+    playwright install
+    # Additional command, mandatory for Linux only
+    playwright install-deps
+    ```
+3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
+    ```bash
+    pip install nest_asyncio
+    ```
+
+Once installed, you're ready to start using the browsing features in AG2.
+
+### Imports
+
+```python
+import os
+
+import nest_asyncio
+from pydantic import BaseModel
+
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from autogen.tools.experimental import Crawl4AITool
+
+nest_asyncio.apply()
+```
+
+### Agent Configuration
+
+Configure the agents for the interaction.
+
+- `config_list` defines the LLM configurations, including the model and API key.
+- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+
+<Tip>
+[`Crawl4AI`](https://github.com/unclecode/crawl4ai) is built on top of [LiteLLM](https://github.com/BerriAI/litellm) and supports the same models as LiteLLM.
+
+We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. However, as of this writing, `DeepSeek` is encountering some issues.
+</Tip>
+
+```python
+config_list = [{"}]
+
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+
+user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+with llm_config:
+    assistant = AssistantAgent(name="assistant")
+```
+
+### Web Browsing with `Crawl4AI`
+
+[`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) offers three integration modes:
+1. **Basic Web Scraping (No LLM):**
+```python
+crawlai_tool = Crawl4AITool()
+```
+
+2. **Web Scraping with LLM Processing:**
+```python
+crawlai_tool = Crawl4AITool(llm_config=llm_config)
+```
+
+3. **LLM Processing with Schema for Structured Data:**
+```python
+class Blog(BaseModel):
+    title: str
+    url: str
+
+
+crawlai_tool = Crawl4AITool(llm_config=llm_config, extraction_model=Blog)
+```
+
+We'll proceed with the most advanced option: **LLM Processing with Structured Data Schema.**
+
+After creating the tool instance, register the agents:
+```python
+crawlai_tool.register_for_execution(user_proxy)
+crawlai_tool.register_for_llm(assistant)
+```
+
+### Initiate Chat
+
+
+```python
+message = "Extract all blog posts from https://docs.ag2.ai/docs/blog"
+result = user_proxy.initiate_chat(
+    recipient=assistant,
+    message=message,
+    max_turns=2,
+)
+```
+
+```console
+user_proxy (to assistant):
+
+Extract all blog posts from https://docs.ag2.ai/docs/blog
+
+--------------------------------------------------------------------------------
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+assistant (to user_proxy):
+
+***** Suggested tool call (call_R1DUz9LKPxE3t0wiy94OotAR): crawl4ai *****
+Arguments:
+{"url":"https://docs.ag2.ai/docs/blog","instruction":"Extract all blog posts including titles, dates, and links."}
+*************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION crawl4ai...
+Call ID: call_R1DUz9LKPxE3t0wiy94OotAR
+Input arguments: {'url': 'https://docs.ag2.ai/docs/blog', 'instruction': 'Extract all blog posts including titles, dates, and links.'}
+[INIT].... → Crawl4AI 0.4.247
+[FETCH]... ↓ https://docs.ag2.ai/docs/blog... | Status: True | Time: 8.28s
+[SCRAPE].. ◆ Processed https://docs.ag2.ai/docs/blog... | Time: 23ms
+12:16:26 - LiteLLM:INFO: utils.py:2825 -
+LiteLLM completion() model= gpt-4o-mini; provider = openai
+INFO:LiteLLM:
+LiteLLM completion() model= gpt-4o-mini; provider = openai
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+12:17:04 - LiteLLM:INFO: utils.py:1030 - Wrapper: Completed Call, calling success_handler
+INFO:LiteLLM:Wrapper: Completed Call, calling success_handler
+[EXTRACT]. ■ Completed for https://docs.ag2.ai/docs/blog... | Time: 38.029349499964155s
+[COMPLETE] ● https://docs.ag2.ai/docs/blog... | Status: True | Total: 46.34s
+user_proxy (to assistant):
+
+***** Response from calling tool (call_R1DUz9LKPxE3t0wiy94OotAR) *****
+[
+    {
+        "title": "RealtimeAgent with Gemini API",
+        "url": "https://docs.ag2.ai/docs/blog/2025-01-29-RealtimeAgent-with-gemini/index",
+        "error": false
+    },
+    {
+        "title": "Tools with ChatContext Dependency Injection",
+        "url": "https://docs.ag2.ai/docs/blog/2025-01-22-Tools-ChatContext-Dependency-Injection/index",
+        "error": false
+    },
+    {
+        "title": "Streaming input and output using WebSockets",
+        "url": "https://docs.ag2.ai/docs/blog/2025-01-10-WebSockets/index",
+        "error": false
+    },
+    {
+        "title": "Real-Time Voice Interactions over WebRTC",
+        "url": "https://docs.ag2.ai/docs/blog/2025-01-09-RealtimeAgent-over-WebRTC/index",
+        "error": false
+    },
+    {
+        "title": "Real-Time Voice Interactions with the WebSocket Audio Adapter",
+        "url": "https://docs.ag2.ai/docs/blog/2025-01-08-RealtimeAgent-over-websocket/index",
+        "error": false
+    },
+    {
+        "title": "Tools Dependency Injection",
+        "url": "https://docs.ag2.ai/docs/blog/2025-01-07-Tools-Dependency-Injection/index",
+        "error": false
+    },
+    {
+        "title": "Cross-Framework LLM Tool Integration with AG2",
+        "url": "https://docs.ag2.ai/docs/blog/2024-12-20-Tools-interoperability/index",
+        "error": false
+    },
+    {
+        "title": "ReasoningAgent Update - Beam Search, MCTS, and LATS for LLM Reasoning",
+        "url": "https://docs.ag2.ai/docs/blog/2024-12-20-Reasoning-Update/index",
+        "error": false
+    },
+    {
+        "title": "Introducing RealtimeAgent Capabilities in AG2",
+        "url": "https://docs.ag2.ai/docs/blog/2024-12-20-RealtimeAgent/index",
+        "error": false
+    },
+    {
+        "title": "Knowledgeable Agents with FalkorDB Graph RAG",
+        "url": "https://docs.ag2.ai/docs/blog/2024-12-06-FalkorDB-Structured/index",
+        "error": false
+    },
+    {
+        "title": "ReasoningAgent - Tree of Thoughts with Beam Search in AG2",
+        "url": "https://docs.ag2.ai/docs/blog/2024-12-02-ReasoningAgent2/index",
+        "error": false
+    },
+    {
+        "title": "Agentic testing for prompt leakage security",
+        "url": "https://docs.ag2.ai/docs/blog/2024-11-27-Prompt-Leakage-Probing/index",
+        "error": false
+    },
+    {
+        "title": "Building Swarm-based agents with AG2",
+        "url": "https://docs.ag2.ai/docs/blog/2024-11-17-Swarm/index",
+        "error": false
+    },
+    {
+        "title": "Introducing CaptainAgent for Adaptive Team Building",
+        "url": "https://docs.ag2.ai/docs/blog/2024-11-15-CaptainAgent/index",
+        "error": false
+    },
+    {
+        "title": "Unlocking the Power of Agentic Workflows at Nexla with Autogen",
+        "url": "https://docs.ag2.ai/docs/blog/2024-10-23-NOVA/index",
+        "error": false
+    },
+    {
+        "title": "AgentOps, the Best Tool for AutoGen Agent Observability",
+        "url": "https://docs.ag2.ai/docs/blog/2024-07-25-AgentOps/index",
+        "error": false
+    },
+    {
+        "title": "Enhanced Support for Non-OpenAI Models",
+        "url": "https://docs.ag2.ai/docs/blog/2024-06-24-AltModels-Classes/index",
+        "error": false
+    },
+    {
+        "title": "AgentEval: A Developer Tool to Assess Utility of LLM-powered Applications",
+        "url": "https://docs.ag2.ai/docs/blog/2024-06-21-AgentEval/index",
+        "error": false
+    },
+    {
+        "title": "Agents in AutoGen",
+        "url": "https://docs.ag2.ai/docs/blog/2024-05-24-Agent/index",
+        "error": false
+    },
+    {
+        "title": "AutoDefense - Defend against jailbreak attacks with AutoGen",
+        "url": "https://docs.ag2.ai/docs/blog/2024-03-11-AutoDefense/index",
+        "error": false
+    },
+    {
+        "title": "What's New in AutoGen?",
+        "url": "https://docs.ag2.ai/docs/blog/2024-03-03-AutoGen-Update/index",
+        "error": false
+    },
+    {
+        "title": "StateFlow - Build State-Driven Workflows with Customized Speaker Selection in GroupChat",
+        "url": "https://docs.ag2.ai/docs/blog/2024-02-29-StateFlow/index",
+        "error": false
+    },
+    {
+        "title": "FSM Group Chat -- User-specified agent transitions",
+        "url": "https://docs.ag2.ai/docs/blog/2024-02-11-FSM-GroupChat/index",
+        "error": false
+    },
+    {
+        "title": "Anny: Assisting AutoGen Devs Via AutoGen",
+        "url": "https://docs.ag2.ai/docs/blog/2024-02-02-AutoAnny/index",
+        "error": false
+    },
+    {
+        "title": "AutoGen with Custom Models: Empowering Users to Use Their Own Inference Mechanism",
+        "url": "https://docs.ag2.ai/docs/blog/2024/01/26/Custom-Models/",
+        "error": false
+    },
+    {
+        "title": "AutoGenBench -- A Tool for Measuring and Evaluating AutoGen Agents",
+        "url": "https://docs.ag2.ai/docs/blog/2024-01-25-AutoGenBench/index",
+        "error": false
+    },
+    {
+        "title": "Code execution is now by default inside docker container",
+        "url": "https://docs.ag2.ai/docs/blog/2024-01-23-Code-execution-in-docker/index",
+        "error": false
+    },
+    {
+        "title": "All About Agent Descriptions",
+        "url": "https://docs.ag2.ai/docs/blog/2023/12/29/AgentDescriptions/",
+        "error": false
+    },
+    {
+        "title": "AgentOptimizer - An Agentic Way to Train Your LLM Agent",
+        "url": "https://docs.ag2.ai/docs/blog/2023-12-23-AgentOptimizer/index",
+        "error": false
+    },
+    {
+        "title": "AutoGen Studio: Interactively Explore Multi-Agent Workflows",
+        "url": "https://docs.ag2.ai/docs/blog/2023-12-01-AutoGenStudio/index",
+        "error": false
+    },
+    {
+        "title": "Agent AutoBuild - Automatically Building Multi-agent Systems",
+        "url": "https://docs.ag2.ai/docs/blog/2023-11-26-Agent-AutoBuild/index",
+        "error": false
+    },
+    {
+        "title": "How to Assess Utility of LLM-powered Applications?",
+        "url": "https://docs.ag2.ai/docs/blog/2023-11-20-AgentEval/index",
+        "error": false
+    },
+    {
+        "title": "AutoGen Meets GPTs",
+        "url": "https://docs.ag2.ai/docs/blog/2023-11-13-OAI-assistants/index",
+        "error": false
+    },
+    {
+        "title": "EcoAssistant - Using LLM Assistants More Accurately and Affordably",
+        "url": "https://docs.ag2.ai/docs/blog/2023-11-09-EcoAssistant/index",
+        "error": false
+    },
+    {
+        "title": "Multimodal with GPT-4V and LLaVA",
+        "url": "https://docs.ag2.ai/docs/blog/2023-11-06-LMM-Agent/index",
+        "error": false
+    },
+    {
+        "title": "AutoGen's Teachable Agents",
+        "url": "https://docs.ag2.ai/docs/blog/2023-10-26-TeachableAgent/index",
+        "error": false
+    },
+    {
+        "title": "Retrieval-Augmented Generation (RAG) Applications with AutoGen",
+        "url": "https://docs.ag2.ai/docs/blog/2023-10-18-RetrieveChat/index",
+        "error": false
+    },
+    {
+        "title": "Use AutoGen for Local LLMs",
+        "url": "https://docs.ag2.ai/docs/blog/2023-07-14-Local-LLMs/index",
+        "error": false
+    },
+    {
+        "title": "MathChat - An Conversational Framework to Solve Math Problems",
+        "url": "https://docs.ag2.ai/docs/blog/2023-06-28-MathChat/index",
+        "error": false
+    },
+    {
+        "title": "Achieve More, Pay Less - Use GPT-4 Smartly",
+        "url": "https://docs.ag2.ai/docs/blog/2023-05-18-GPT-adaptive-humaneval/index",
+        "error": false
+    },
+    {
+        "title": "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH",
+        "url": "https://docs.ag2.ai/docs/blog/2023/04/21/LLM-tuning-math/",
+        "error": false
+    }
+]
+**********************************************************************
+
+--------------------------------------------------------------------------------
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+assistant (to user_proxy):
+
+I have extracted all the blog posts from the specified URL. Below is the list of titles along with their corresponding links:
+
+1. [RealtimeAgent with Gemini API](https://docs.ag2.ai/docs/blog/2025-01-29-RealtimeAgent-with-gemini/index)
+2. [Tools with ChatContext Dependency Injection](https://docs.ag2.ai/docs/blog/2025-01-22-Tools-ChatContext-Dependency-Injection/index)
+3. [Streaming input and output using WebSockets](https://docs.ag2.ai/docs/blog/2025-01-10-WebSockets/index)
+4. [Real-Time Voice Interactions over WebRTC](https://docs.ag2.ai/docs/blog/2025-01-09-RealtimeAgent-over-WebRTC/index)
+5. [Real-Time Voice Interactions with the WebSocket Audio Adapter](https://docs.ag2.ai/docs/blog/2025-01-08-RealtimeAgent-over-websocket/index)
+6. [Tools Dependency Injection](https://docs.ag2.ai/docs/blog/2025-01-07-Tools-Dependency-Injection/index)
+7. [Cross-Framework LLM Tool Integration with AG2](https://docs.ag2.ai/docs/blog/2024-12-20-Tools-interoperability/index)
+8. [ReasoningAgent Update - Beam Search, MCTS, and LATS for LLM Reasoning](https://docs.ag2.ai/docs/blog/2024-12-20-Reasoning-Update/index)
+9. [Introducing RealtimeAgent Capabilities in AG2](https://docs.ag2.ai/docs/blog/2024-12-20-RealtimeAgent/index)
+10. [Knowledgeable Agents with FalkorDB Graph RAG](https://docs.ag2.ai/docs/blog/2024-12-06-FalkorDB-Structured/index)
+11. [ReasoningAgent - Tree of Thoughts with Beam Search in AG2](https://docs.ag2.ai/docs/blog/2024-12-02-ReasoningAgent2/index)
+12. [Agentic testing for prompt leakage security](https://docs.ag2.ai/docs/blog/2024-11-27-Prompt-Leakage-Probing/index)
+13. [Building Swarm-based agents with AG2](https://docs.ag2.ai/docs/blog/2024-11-17-Swarm/index)
+14. [Introducing CaptainAgent for Adaptive Team Building](https://docs.ag2.ai/docs/blog/2024-11-15-CaptainAgent/index)
+15. [Unlocking the Power of Agentic Workflows at Nexla with Autogen](https://docs.ag2.ai/docs/blog/2024-10-23-NOVA/index)
+16. [AgentOps, the Best Tool for AutoGen Agent Observability](https://docs.ag2.ai/docs/blog/2024-07-25-AgentOps/index)
+17. [Enhanced Support for Non-OpenAI Models](https://docs.ag2.ai/docs/blog/2024-06-24-AltModels-Classes/index)
+18. [AgentEval: A Developer Tool to Assess Utility of LLM-powered Applications](https://docs.ag2.ai/docs/blog/2024-06-21-AgentEval/index)
+19. [Agents in AutoGen](https://docs.ag2.ai/docs/blog/2024-05-24-Agent/index)
+20. [AutoDefense - Defend against jailbreak attacks with AutoGen](https://docs.ag2.ai/docs/blog/2024-03-11-AutoDefense/index)
+21. [What's New in AutoGen?](https://docs.ag2.ai/docs/blog/2024-03-03-AutoGen-Update/index)
+...
+
+TERMINATE
+
+--------------------------------------------------------------------------------
+```

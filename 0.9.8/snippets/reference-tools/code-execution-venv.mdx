@@ -1,0 +1,56 @@
+```python
+from autogen import ConversableAgent, LLMConfig, register_function
+
+# Import the environment, working directory, and code execution tool
+from autogen.environments import VenvPythonEnvironment, WorkingDirectory
+from autogen.tools.experimental import PythonCodeExecutionTool
+
+# Create a new virtual environment using a Python version
+# Change this to match a version you have installed
+venv = VenvPythonEnvironment(python_version="3.11")
+
+# Create a temporary directory
+working_dir = WorkingDirectory.create_tmp()
+
+# Create our code execution tool
+python_executor = PythonCodeExecutionTool(
+    working_directory=working_dir,
+    python_environment=venv,
+)
+
+with LLMConfig(model="gpt-4o", api_type="openai"):
+
+    # code_runner has the code execution tool available to execute
+    code_runner = ConversableAgent(
+        name="code_runner",
+        system_message="You are a code executor agent, when you don't execute code write the message 'TERMINATE' by itself.",
+        human_input_mode="NEVER",
+    )
+
+    # question_agent has the code execution tool available to its LLM
+    question_agent = ConversableAgent(
+        name="question_agent",
+        system_message=("You are a developer AI agent. "
+            "Send all your code suggestions to the python_executor tool where it will be executed and result returned to you. "
+            "Keep refining the code until it works."
+        ),
+    )
+
+# Register the python execution tool with the agents
+register_function(
+    python_executor,
+    caller=question_agent,
+    executor=code_runner,
+    description="Run Python code",
+)
+
+result = code_runner.initiate_chat(
+    recipient=question_agent,
+    message=("Write a Python program to write a poem to a file. "
+             "Follow up with another program to read the poem from the file and print it."
+    ),
+    max_turns=5,
+)
+
+print(f"Result: {result.summary}")
+```

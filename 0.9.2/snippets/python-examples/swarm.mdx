@@ -1,0 +1,118 @@
+```python
+from autogen import (
+    AfterWork,
+    OnCondition,
+    AfterWorkOption,
+    ConversableAgent,
+    SwarmResult,
+    initiate_swarm_chat,
+    register_hand_off,
+    LLMConfig,
+)
+
+llm_config = LLMConfig(api_type="openai", model="gpt-4o", cache_seed=None)
+
+# 1. Context
+shared_context = {
+    "lesson_plans": [],
+    "lesson_reviews": [],
+    # Will be decremented, resulting in 0 (aka False) when no reviews are left
+    "reviews_left": 2,
+}
+
+
+# 2. Functions
+def record_plan(lesson_plan: str, context_variables: dict) -> SwarmResult:
+    """Record the lesson plan"""
+    context_variables["lesson_plans"].append(lesson_plan)
+
+    # Returning the updated context so the shared context can be updated
+    return SwarmResult(context_variables=context_variables)
+
+
+def record_review(lesson_review: str, context_variables: dict) -> SwarmResult:
+    """After a review has been made, increment the count of reviews"""
+    context_variables["lesson_reviews"].append(lesson_review)
+    context_variables["reviews_left"] -= 1
+
+    # Controlling the flow to the next agent from a tool call
+    return SwarmResult(
+        agent=teacher if context_variables["reviews_left"] < 0 else lesson_planner, context_variables=context_variables
+    )
+
+
+planner_message = """You are a classroom lesson planner.
+Given a topic, write a lesson plan for a fourth grade class.
+If you are given revision feedback, update your lesson plan and record it.
+Use the following format:
+<title>Lesson plan title</title>
+<learning_objectives>Key learning objectives</learning_objectives>
+<script>How to introduce the topic to the kids</script>
+"""
+
+reviewer_message = """You are a classroom lesson reviewer.
+You compare the lesson plan to the fourth grade curriculum
+and provide a maximum of 3 recommended changes for each review.
+Always provide feedback for the current lesson plan.
+"""
+
+teacher_message = """You are a classroom teacher.
+You decide topics for lessons and work with a lesson planner.
+and reviewer to create and finalise lesson plans.
+"""
+
+# 3. Our agents now have tools to use (functions above)
+with llm_config:
+    lesson_planner = ConversableAgent(name="planner_agent", system_message=planner_message, functions=[record_plan])
+
+    lesson_reviewer = ConversableAgent(name="reviewer_agent", system_message=reviewer_message, functions=[record_review])
+
+    teacher = ConversableAgent(name="teacher_agent", system_message=teacher_message)
+
+# 4. Transitions using hand-offs
+
+# Lesson planner will create a plan and hand off to the reviewer if we're still
+# allowing reviews. After that's done, transition to the teacher.
+register_hand_off(lesson_planner,
+    [
+        OnCondition(
+            target=lesson_reviewer,
+            condition="After creating/updating and recording the plan, it must be reviewed.",
+            available="reviews_left",
+        ),
+        AfterWork(agent=teacher),
+    ]
+)
+
+# Lesson reviewer will review the plan and return control to the planner if there's
+# no plan to review, otherwise it will provide a review and
+register_hand_off(lesson_reviewer,
+    [
+        OnCondition(
+            target=lesson_planner, condition="After new feedback has been made and recorded, the plan must be updated."
+        ),
+        AfterWork(agent=teacher),
+    ]
+)
+
+# Teacher works with the lesson planner to create a plan. When control returns to them and
+# a plan exists, they'll end the swarm.
+register_hand_off(teacher,
+    [
+        OnCondition(target=lesson_planner, condition="Create a lesson plan.", available="reviews_left"),
+        AfterWork(AfterWorkOption.TERMINATE),
+    ]
+)
+
+# 5. Run the Swarm which returns the chat and updated context variables
+chat_result, context_variables, last_agent = initiate_swarm_chat(
+    initial_agent=teacher,
+    agents=[lesson_planner, lesson_reviewer, teacher],
+    messages="Today, let's introduce our kids to the solar system.",
+    context_variables=shared_context,
+)
+
+print(f"Number of reviews: {len(context_variables['lesson_reviews'])}")
+print(f"Reviews remaining: {context_variables['reviews_left']}")
+print(f"Final Lesson Plan:\n{context_variables['lesson_plans'][-1]}")
+```
