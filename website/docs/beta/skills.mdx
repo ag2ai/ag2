@@ -255,7 +255,7 @@ Grouping is associative: passing loose `MemorySkill`s, wrapping each in its own 
 
 `SkillSearchToolkit` extends `SkillsToolkit` with three tools for discovering and installing skills from the [skills.sh](https://skills.sh){.external-link target="_blank"} registry. It uses the GitHub Tarball API directly — no Node.js required.
 
-```python linenums="1"
+```python linenums="1" hl_lines="10"
 import asyncio
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
@@ -295,7 +295,7 @@ export GITHUB_TOKEN=ghp_...
 
 You can also pass the token (and other settings) directly via `SkillsClientConfig`:
 
-```python linenums="1"
+```python linenums="1" hl_lines="6-9"
 from autogen.beta.tools import SkillSearchToolkit
 from autogen.beta.tools.skills import LocalRuntime, SkillsClientConfig
 
