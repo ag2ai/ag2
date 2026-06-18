@@ -53,8 +53,9 @@ class TestScripts:
     async def test_load_skill_embeds_parameters_schema(self) -> None:
         skill = MemorySkill(name="conv", description="d", instructions="Use convert.")
 
-        @skill.script(description="Multiply value by factor")
+        @skill.script
         def convert(value: float, factor: float) -> str:
+            """Multiply value by factor."""
             return str(value * factor)
 
         tracking = TrackingConfig(TestConfig(_call("load_skill", name="conv"), "done"))
@@ -64,7 +65,8 @@ class TestScripts:
 
         content = _tool_result(tracking)
         assert "<scripts>" in content
-        assert '<script name="convert"' in content
+        # name comes from the function, description from the docstring (no explicit args)
+        assert '<script name="convert" description="Multiply value by factor.">' in content
         assert "<parameters_schema>" in content
         assert "factor" in content
 
@@ -129,6 +131,46 @@ class TestScripts:
 
         with pytest.raises(TypeError, match="requires named arguments"):
             await agent.ask("hi")
+
+
+@pytest.mark.asyncio
+class TestNamingDefaults:
+    async def test_name_from_function_and_description_from_docstring(self) -> None:
+        skill = MemorySkill(name="s", description="d", instructions="body")
+
+        @skill.resource
+        def roster() -> str:
+            """The current team roster."""
+            return "Alice"
+
+        @skill.script
+        def analyze(text: str) -> str:
+            """Analyze the given text."""
+            return text
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        content = _tool_result(tracking)
+        assert "<file>roster</file>" in content  # resource name defaults to the function name
+        assert '<script name="analyze" description="Analyze the given text.">' in content
+
+    async def test_explicit_name_and_description_override(self) -> None:
+        skill = MemorySkill(name="s", description="d", instructions="body")
+
+        @skill.script(name="run", description="custom")
+        def analyze(text: str) -> str:
+            """ignored docstring"""
+            return text
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        assert '<script name="run" description="custom">' in _tool_result(tracking)
 
 
 @pytest.mark.asyncio

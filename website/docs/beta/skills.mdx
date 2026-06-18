@@ -196,7 +196,7 @@ from autogen.beta.tools.skills import MemorySkill
 unit_converter = MemorySkill(
     name="unit-converter",
     description="Convert between common units. Use when asked to convert miles, kilometers, pounds, or kilograms.",
-    instructions="Use the convert script, passing the value and a factor from the conversion-table resource.",
+    instructions="Use the convert script, passing the value and a factor from the conversion_table resource.",
 )
 
 @unit_converter.resource
@@ -204,8 +204,9 @@ def conversion_table() -> str:
     """Multiplication factors for common conversions."""
     return "miles->km: 1.60934\npounds->kg: 0.453592"
 
-@unit_converter.script(description="Multiply a value by a conversion factor.")
+@unit_converter.script
 def convert(value: float, factor: float) -> str:
+    """Multiply a value by a conversion factor."""
     return str(round(value * factor, 4))
 
 agent = Agent(
@@ -219,7 +220,7 @@ Pass a `MemorySkill` straight to `SkillPlugin` (or `SkillsToolkit`) — it is wr
 
 ### Resources and scripts as callables
 
-The `@skill.resource` and `@skill.script` decorators register Python callables (sync or async):
+The `@skill.resource` and `@skill.script` decorators register Python callables (sync or async). By default the **function name** becomes the resource/script name and the **docstring** becomes its description — pass `name=` or `description=` only to override:
 
 - A **resource** callable runs every time it is read, so it can return live data — current config, a roster, a database lookup — rather than a static file.
 - A **script** callable runs **in-process**: no subprocess, no `scripts/` directory. Its parameter JSON-schema is generated from the signature and disclosed inside the loaded skill content, so the model calls `run_skill_script` with named arguments (`{"value": 10, "factor": 2}`) matching that schema. Arguments are validated and coerced exactly as a regular tool's are.
