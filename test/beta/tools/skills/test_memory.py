@@ -168,7 +168,7 @@ class TestDependencyInjection:
         skill = MemorySkill(name="s", description="d")
 
         @skill.script
-        def greet(value: int, who: str = Variable("who")) -> str:
+        def greet(value: int, who: Annotated[str, Variable("who")]) -> str:
             return f"{who}:{value}"
 
         tracking = TrackingConfig(
@@ -198,7 +198,7 @@ class TestDependencyInjection:
         skill = MemorySkill(name="s", description="d")
 
         @skill.resource
-        def where(region: str = Variable("region")) -> str:
+        def where(region: Annotated[str, Variable("region")]) -> str:
             return region
 
         tracking = TrackingConfig(TestConfig(_call("read_skill_resource", name="s", resource="where"), "done"))
