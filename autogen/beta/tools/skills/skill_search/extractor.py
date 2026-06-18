@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from autogen.beta.exceptions import SkillInstallError
-from autogen.beta.tools.skills.local_skills.loader import SkillLoader, parse_frontmatter
+from autogen.beta.tools.skills.runtime.local.loader import SkillLoader, parse_frontmatter
 from autogen.beta.tools.skills.skill_types import SkillMetadata
 
 _EXCLUDE_NAMES = frozenset({".git", ".env", "__pycache__", ".DS_Store", "node_modules"})
@@ -64,7 +64,7 @@ def extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
 
     Supports multiple monorepo layouts (with or without a ``skills/`` subdir),
     fuzzy matching by SKILL.md ``name`` frontmatter, and standalone repos.
-    Returns validated :class:`~autogen.beta.tools.local_skills.loader.SkillMetadata`
+    Returns validated :class:`~autogen.beta.tools.skills.skill_types.SkillMetadata`
     for the extracted skill.
 
     Raises:

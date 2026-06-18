@@ -62,7 +62,7 @@ class SkillsToolkit(Toolkit):
     def __init__(
         self,
         *runtimes: SkillRuntime | str | os.PathLike[str],
-        name: str = "local_skills_toolkit",
+        name: str = "skills_toolkit",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self._runtimes: tuple[SkillRuntime, ...] = (

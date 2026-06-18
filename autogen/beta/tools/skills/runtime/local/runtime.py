@@ -14,10 +14,10 @@ from pathlib import Path
 from autogen.beta.tools.sandbox import Sandbox, SandboxFactory
 from autogen.beta.tools.sandbox.adapter import ShellAdapter
 from autogen.beta.tools.sandbox.local import LocalSandbox
-from autogen.beta.tools.skills.local_skills.loader import SkillLoader, strip_frontmatter
 from autogen.beta.tools.skills.skill_types import Skill
 
-from .protocol import SkillRuntime
+from ..protocol import SkillRuntime
+from .loader import SkillLoader, strip_frontmatter
 
 # Max characters returned from a single resource read before truncation.
 _RESOURCE_READ_CAP = 100_000

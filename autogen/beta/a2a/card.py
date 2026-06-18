@@ -16,7 +16,7 @@ from a2a.types import (
 from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
 
 from autogen.beta.agent import Agent
-from autogen.beta.tools.skills.local_skills import SkillsToolkit
+from autogen.beta.tools.skills.toolkit import SkillsToolkit
 
 from .extension import EXTENSION_URI
 from .security import Requirement, Scheme

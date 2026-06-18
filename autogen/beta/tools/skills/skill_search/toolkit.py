@@ -12,8 +12,8 @@ from autogen.beta.exceptions import SkillDownloadError, SkillInstallError
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.skills.local_skills import SkillsToolkit
 from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
+from autogen.beta.tools.skills.toolkit import SkillsToolkit
 
 from .client import SkillsClient
 from .config import SkillsClientConfig

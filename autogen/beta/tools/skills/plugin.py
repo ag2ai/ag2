@@ -8,9 +8,9 @@ from xml.sax.saxutils import escape
 
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.plugin import Plugin
-from autogen.beta.tools.skills.local_skills.toolkit import SkillsToolkit
 from autogen.beta.tools.skills.runtime import SkillRuntime
 from autogen.beta.tools.skills.skill_types import Skill
+from autogen.beta.tools.skills.toolkit import SkillsToolkit
 
 
 def SkillPlugin(  # noqa: N802
