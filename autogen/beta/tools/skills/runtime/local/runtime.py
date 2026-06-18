@@ -171,9 +171,14 @@ class LocalRuntime(SkillRuntime):
 
     @classmethod
     def ensure_runtime(cls, runtime: SkillRuntime | str | os.PathLike[str]) -> SkillRuntime:
-        if isinstance(runtime, SkillRuntime):
-            return runtime
-        return cls(dir=runtime)
+        # Test for a path, not ``isinstance(runtime, SkillRuntime)``: SkillRuntime
+        # is a ``runtime_checkable`` Protocol, and on Python <=3.11 that isinstance
+        # check calls every member — including the ``lock_dir`` property, whose
+        # getter raises on read-only runtimes like ``MemoryRuntime``. Anything that
+        # is not a path is already a runtime.
+        if isinstance(runtime, (str, os.PathLike)):
+            return cls(dir=runtime)
+        return runtime
 
     def ensure_storage(self) -> None:
         self._install_dir.mkdir(parents=True, exist_ok=True)
