@@ -175,7 +175,7 @@ class TestSkillsAutoDiscovery:
         agent = Agent(
             "agent-x",
             config=TestConfig("ok"),
-            tools=[SkillsToolkit(runtime=LocalRuntime(str(local_skills_dir)))],
+            tools=[SkillsToolkit(LocalRuntime(str(local_skills_dir)))],
         )
 
         card = build_card(agent, url="http://test")
@@ -189,7 +189,7 @@ class TestSkillsAutoDiscovery:
         agent = Agent(
             "agent-x",
             config=TestConfig("ok"),
-            tools=[SkillsToolkit(runtime=LocalRuntime(str(local_skills_dir)))],
+            tools=[SkillsToolkit(LocalRuntime(str(local_skills_dir)))],
         )
         override = [AgentSkill(id="override", name="override", description="custom")]
 
@@ -210,7 +210,7 @@ class TestSkillsAutoDiscovery:
         agent = Agent(
             "agent-x",
             config=TestConfig("ok"),
-            tools=[SkillsToolkit(runtime=LocalRuntime(str(tmp_path)))],
+            tools=[SkillsToolkit(LocalRuntime(str(tmp_path)))],
         )
 
         card = build_card(agent, url="http://test")

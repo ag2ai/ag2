@@ -175,10 +175,10 @@ def _resolve_skills(
         return list(explicit)
 
     auto = [
-        AgentSkill(id=meta.name, name=meta.name, description=meta.description or meta.name)
+        AgentSkill(id=skill.name, name=skill.name, description=skill.metadata.description or skill.name)
         for tool in agent.tools
         if isinstance(tool, SkillsToolkit)
-        for meta in tool.runtime.discover()
+        for skill in tool.merged_skills()
     ]
     if auto:
         return auto

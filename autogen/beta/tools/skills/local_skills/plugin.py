@@ -4,22 +4,19 @@
 
 import os
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
 from xml.sax.saxutils import escape
 
 from autogen.beta.middleware import ToolMiddleware
+from autogen.beta.plugin import Plugin
 from autogen.beta.tools.skills.local_skills.toolkit import SkillsToolkit
 from autogen.beta.tools.skills.runtime import SkillRuntime
-
-if TYPE_CHECKING:
-    from autogen.beta.agent import Plugin
+from autogen.beta.tools.skills.skill_types import Skill
 
 
 def SkillPlugin(  # noqa: N802
-    runtime: SkillRuntime | str | os.PathLike[str] | None = None,
-    *,
+    *runtimes: SkillRuntime | str | os.PathLike[str],
     middleware: Iterable[ToolMiddleware] = (),
-) -> "Plugin":
+) -> Plugin:
     """Skills-spec ``Plugin`` that auto-loads skill metadata into the prompt.
 
     Follows the ``agentskills.io`` progressive-disclosure pattern, but instead
@@ -32,13 +29,25 @@ def SkillPlugin(  # noqa: N802
     2. ``read_skill_resource(name, resource)`` — read a bundled resource file.
     3. ``run_skill_script(name, script, args)`` — execute a skill script.
 
-    The catalog and the activation tools are a **construction-time snapshot**:
-    the tools constrain ``name`` to the set of skills present when the plugin is
-    built, and the catalog lists exactly that set — the two never drift apart.
-    When no skills are found, the plugin contributes nothing (no catalog, no
-    tools) so the model is not shown dead tools.
+    Accepts **one or more** runtimes (a path is wrapped in a
+    :class:`LocalRuntime`), composing them so global and project skills can be
+    served at once, each with its own execution/storage config::
 
-    Default runtime scans ``./.agents/skills`` and ``~/.agents/skills``::
+        SkillPlugin(LocalRuntime("~/.agents/skills"), LocalRuntime(".agents/skills"))
+
+    On a name clash the **last** runtime wins (project overrides global), applied
+    uniformly to the catalog, the activation tools, and routing.
+
+    The catalog and the activation tools are a **construction-time snapshot**:
+    the tools constrain ``name`` to the merged set of skills present when the
+    plugin is built, and the catalog lists exactly that set — the two never drift
+    apart. When no skills are found, the plugin contributes nothing (no catalog,
+    no tools). The activation tools are **gated on capability**:
+    ``read_skill_resource`` is registered only when some skill has resources, and
+    ``run_skill_script`` only when some skill has scripts — so the model is never
+    shown a dead tool.
+
+    Default runtime scans ``./.agents/skills``::
 
         agent = Agent("a", config=config, plugins=[SkillPlugin()])
 
@@ -47,16 +56,12 @@ def SkillPlugin(  # noqa: N802
         agent = Agent("a", config=config, plugins=[SkillPlugin("./skills")])
 
     Args:
-        runtime: A :class:`SkillRuntime`, or a path to a skills directory.
-            ``None`` uses the default :class:`LocalRuntime`.
+        runtimes: Zero or more :class:`SkillRuntime` instances or paths to skill
+            directories. Empty uses the default :class:`LocalRuntime`.
         middleware: Tool middleware applied to the skill tools.
     """
-    # prevent circular import
-    # TODO: refactor it after moving some parts to "internal" package
-    from autogen.beta.agent import Plugin
-
-    toolkit = SkillsToolkit(runtime, middleware=middleware)
-    skills = toolkit.discover_skills()
+    toolkit = SkillsToolkit(*runtimes, middleware=middleware)
+    skills = toolkit.merged_skills()
 
     if not skills:
         # No skills: omit the catalog and register no dead tools (spec Step 3).
@@ -70,26 +75,28 @@ def SkillPlugin(  # noqa: N802
         f"<available_skills>\n{catalog}\n</available_skills>"
     )
 
-    return Plugin(
-        tools=(
-            toolkit.load_skill(),
-            toolkit.read_skill_resource(),
-            toolkit.run_skill_script(),
-        ),
-        prompt=prompt,
-    )
+    # Gate the activation tools on capability: only register a tool when at least
+    # one skill can actually use it, so the model never sees a dead tool.
+    tools = [toolkit.load_skill()]
+    if any(s.resources for s in skills):
+        tools.append(toolkit.read_skill_resource())
+    if any(s.scripts for s in skills):
+        tools.append(toolkit.run_skill_script())
+
+    return Plugin(tools=tuple(tools), prompt=prompt)
 
 
-def _skill_xml(skill: dict[str, str]) -> str:
+def _skill_xml(skill: Skill) -> str:
     """Render one catalog entry as a ``<skill>`` XML element.
 
     Values are XML-escaped so a description containing ``&``/``<``/``>`` cannot
     break the surrounding ``<available_skills>`` block.
     """
+    location = escape(skill.location) if skill.location else ""
     return (
         "  <skill>\n"
-        f"    <name>{escape(skill['name'])}</name>\n"
-        f"    <description>{escape(skill['description'])}</description>\n"
-        f"    <location>{escape(skill['location'])}</location>\n"
+        f"    <name>{escape(skill.name)}</name>\n"
+        f"    <description>{escape(skill.metadata.description)}</description>\n"
+        f"    <location>{location}</location>\n"
         "  </skill>"
     )

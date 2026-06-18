@@ -3,22 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-import shlex
-import stat
-from collections.abc import Iterable
-from pathlib import Path
+from collections.abc import Iterable, Sequence
 from typing import Annotated, Literal
 
 from pydantic import Field
 
+from autogen.beta.exceptions import SkillNotFoundError
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.skills.local_skills.loader import strip_frontmatter
 from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
-
-_RESOURCE_CAP = 50
-_RESOURCE_READ_CAP = 100_000
+from autogen.beta.tools.skills.skill_types import Skill
 
 
 class SkillsToolkit(Toolkit):
@@ -27,24 +22,30 @@ class SkillsToolkit(Toolkit):
     Packs the progressive-disclosure pattern as a single toolkit so any
     provider can ship local skills without extra wiring:
 
-    1. ``list_skills()`` — lightweight catalog (name + description).
+    1. ``list_skills()`` — lightweight catalog (name + description + location).
     2. ``load_skill(name)`` — full ``SKILL.md`` instructions on demand.
-    3. ``read_skill_resource(name, resource)`` — read a bundled resource
-       file (the ones listed in ``<skill_resources>``) on demand.
-    4. ``run_skill_script(name, script, args)`` — execute a script from
-       the skill's ``scripts/`` directory.
+    3. ``read_skill_resource(name, resource)`` — read a bundled resource file
+       (the ones listed in ``<skill_resources>``) on demand.
+    4. ``run_skill_script(name, script, args)`` — execute a script from the
+       skill's ``scripts/`` directory.
 
-    Default runtime scans ``./.agents/skills`` and ``~/.agents/skills``::
+    Accepts **one or more** runtimes; a path is wrapped in a
+    :class:`LocalRuntime`. Each tool routes by **last-to-first chain
+    delegation**: the runtimes are tried from last to first, falling through to
+    the next only on :class:`~autogen.beta.exceptions.SkillNotFoundError`, so the
+    last runtime shadows earlier ones on a name clash (project overrides global).
+
+    Default runtime scans ``./.agents/skills``::
 
         SkillsToolkit()
 
     Custom install directory::
 
-        SkillsToolkit(runtime=LocalRuntime("./skills"))
+        SkillsToolkit(LocalRuntime("./skills"))
 
-    Extra read-only search paths::
+    Global + project, each with its own config::
 
-        SkillsToolkit(runtime=LocalRuntime("./skills", extra_paths=["./shared-skills"]))
+        SkillsToolkit(LocalRuntime("~/.agents/skills"), LocalRuntime(".agents/skills"))
 
     Pick individual tools instead of the full toolkit::
 
@@ -56,19 +57,17 @@ class SkillsToolkit(Toolkit):
         )
     """
 
-    __slots__ = ("_runtime",)
+    __slots__ = ("_runtimes",)
 
     def __init__(
         self,
-        runtime: SkillRuntime | str | os.PathLike[str] | None = None,
-        *,
+        *runtimes: SkillRuntime | str | os.PathLike[str],
         name: str = "local_skills_toolkit",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        if runtime is not None:
-            self._runtime: SkillRuntime = LocalRuntime.ensure_runtime(runtime)
-        else:
-            self._runtime = LocalRuntime()
+        self._runtimes: tuple[SkillRuntime, ...] = (
+            tuple(LocalRuntime.ensure_runtime(r) for r in runtimes) if runtimes else (LocalRuntime(),)
+        )
 
         super().__init__(
             self.list_skills(),
@@ -80,29 +79,37 @@ class SkillsToolkit(Toolkit):
         )
 
     @property
-    def runtime(self) -> SkillRuntime:
-        """The underlying ``SkillRuntime`` used to discover and load skills."""
-        return self._runtime
+    def runtimes(self) -> tuple[SkillRuntime, ...]:
+        """The runtimes this toolkit composes, in declaration order."""
+        return self._runtimes
+
+    def merged_skills(self) -> list[Skill]:
+        """Skills across all runtimes, deduped by name (last runtime wins)."""
+        merged: dict[str, Skill] = {}
+        for runtime in self._runtimes:
+            for skill in runtime.skills:
+                merged[skill.name] = skill
+        return sorted(merged.values(), key=lambda s: s.name)
 
     def discover_skills(self) -> list[dict[str, str]]:
         return [
             {
-                "name": m.name,
-                "description": m.description,
-                "location": str(m.path / "SKILL.md"),
+                "name": s.name,
+                "description": s.metadata.description,
+                "location": s.location or "",
             }
-            for m in self._runtime.discover()
+            for s in self.merged_skills()
         ]
 
     def _name_annotation(self, description: str) -> object:
         """Build the ``name`` parameter annotation.
 
         Constrains ``name`` to a :class:`~typing.Literal` enum of the skills
-        discovered at construction time so the model cannot pass an unknown
+        discovered at schema-build time so the model cannot pass an unknown
         skill name. Falls back to ``str`` when no skills are present (a
         ``Literal`` cannot be empty).
         """
-        names = [s["name"] for s in self.discover_skills()]
+        names = [s.name for s in self.merged_skills()]
         base: object = Literal[tuple(names)] if names else str  # type: ignore[valid-type]
         return Annotated[base, Field(description=description)]
 
@@ -130,12 +137,7 @@ class SkillsToolkit(Toolkit):
 
         @tool(name=name, description=description, middleware=middleware)
         def _load_skill(name: name_type) -> str:  # type: ignore[valid-type]
-            # Body only: strip the YAML frontmatter (name/description already
-            # surfaced via the catalog) before wrapping, per the agentskills.io
-            # client guide.
-            body = strip_frontmatter(self._runtime.load(name))
-            skill_dir = self._runtime.get_path(name)
-            return _wrap_skill_content(name, body, skill_dir, _list_resources(skill_dir))
+            return _route_read(self._runtimes, name)
 
         return _load_skill
 
@@ -159,15 +161,7 @@ class SkillsToolkit(Toolkit):
                 Field(description="Resource path relative to the skill directory, for example references/guide.md."),
             ],
         ) -> str:
-            skill_dir = self._runtime.get_path(name)
-            resolved = (skill_dir / resource).resolve()
-            # Reject path traversal: the target must stay inside the skill dir.
-            if not resolved.is_file() or not resolved.is_relative_to(skill_dir.resolve()):
-                raise FileNotFoundError(f"resource {resource!r} not found in {skill_dir}")
-            text = resolved.read_text(encoding="utf-8", errors="replace")
-            if len(text) > _RESOURCE_READ_CAP:
-                return text[:_RESOURCE_READ_CAP] + "\n<!-- resource truncated -->"
-            return text
+            return _route_read_resource(self._runtimes, name, resource)
 
         return _read_skill_resource
 
@@ -192,74 +186,33 @@ class SkillsToolkit(Toolkit):
                 Field(description="Optional script arguments passed as positional parameters."),
             ] = None,
         ) -> str:
-            skill_dir = self._runtime.get_path(name)
-            scripts_dir = skill_dir / "scripts"
-            resolved_script = (scripts_dir / script).resolve()
-            if not resolved_script.is_file() or not resolved_script.is_relative_to(scripts_dir.resolve()):
-                raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
-
-            first_line = resolved_script.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
-            has_shebang = first_line.startswith("#!")
-
-            if has_shebang:
-                resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-                command = [f"./{resolved_script.name}"]
-            elif resolved_script.suffix.lower() == ".py":
-                command = ["python3", f"./{resolved_script.name}"]
-            elif resolved_script.suffix.lower() == ".sh":
-                command = ["sh", f"./{resolved_script.name}"]
-            else:
-                resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-                command = [f"./{resolved_script.name}"]
-
-            if args:
-                command.extend(args)
-
-            # async + await env.run(...) so the command runs in the agent's own
-            # event loop. A sync path would drive remote backends via a throwaway
-            # asyncio.run() per call (a fresh loop each time), breaking clients
-            # bound to the first loop (e.g. Daytona's httpx keep-alive pool).
-            env = self._runtime.shell(scripts_dir)
-            return await env.run(shlex.join(command))
+            return await _route_execute(self._runtimes, name, script, args)
 
         return _run_skill_script
 
 
-def _list_resources(skill_dir: Path, *, cap: int = _RESOURCE_CAP) -> tuple[list[str], bool]:
-    """List bundled resource files (relative paths), excluding ``SKILL.md``.
-
-    Returns ``(paths, truncated)``. Does not read file contents — the model
-    loads them on demand once it sees the skill instructions.
-    """
-    if not skill_dir.is_dir():
-        return [], False
-    rels: list[str] = []
-    truncated = False
-    for p in sorted(skill_dir.rglob("*")):
-        if not p.is_file() or p.name == "SKILL.md":
+def _route_read(runtimes: Sequence[SkillRuntime], name: str) -> str:
+    for runtime in reversed(runtimes):
+        try:
+            return runtime.read(name)
+        except SkillNotFoundError:
             continue
-        if len(rels) >= cap:
-            truncated = True
-            break
-        rels.append(p.relative_to(skill_dir).as_posix())
-    return rels, truncated
+    raise SkillNotFoundError(f"Skill {name!r} not found in any runtime")
 
 
-def _wrap_skill_content(name: str, body: str, skill_dir: Path, resources: tuple[list[str], bool]) -> str:
-    """Wrap a SKILL.md body with identifying tags, base path, and a resource list."""
-    files, truncated = resources
-    lines = [
-        f'<skill_content name="{name}">',
-        body.strip(),
-        "",
-        f"Skill directory: {skill_dir}",
-        "Relative paths in this skill are relative to the skill directory.",
-    ]
-    if files:
-        lines.append("<skill_resources>")
-        lines.extend(f"  <file>{f}</file>" for f in files)
-        if truncated:
-            lines.append("  <!-- resource list truncated -->")
-        lines.append("</skill_resources>")
-    lines.append("</skill_content>")
-    return "\n".join(lines)
+def _route_read_resource(runtimes: Sequence[SkillRuntime], name: str, resource: str) -> str:
+    for runtime in reversed(runtimes):
+        try:
+            return runtime.read_resource(name, resource)
+        except SkillNotFoundError:
+            continue
+    raise SkillNotFoundError(f"Skill {name!r} not found in any runtime")
+
+
+async def _route_execute(runtimes: Sequence[SkillRuntime], name: str, script: str, args: Sequence[str] | None) -> str:
+    for runtime in reversed(runtimes):
+        try:
+            return await runtime.execute(name, script, args)
+        except SkillNotFoundError:
+            continue
+    raise SkillNotFoundError(f"Skill {name!r} not found in any runtime")

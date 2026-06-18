@@ -72,8 +72,6 @@ def _make_meta(tmp_path: Path, name: str = "vercel-react-best-practices") -> Ski
     return SkillMetadata(
         name=name,
         description="React and Next.js performance optimization guidelines",
-        path=skill_dir,
-        has_scripts=False,
         version="1.0.0",
     )
 
@@ -103,7 +101,6 @@ def test_extract_skill_standalone(tmp_path: Path) -> None:
     meta = extract_skill(tar_path, "", dest)
 
     assert meta.name == "last30days"
-    assert meta.has_scripts is True
     assert (dest / "last30days" / "SKILL.md").exists()
     assert (dest / "last30days" / "scripts" / "last30days.py").exists()
 

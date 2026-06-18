@@ -2,22 +2,31 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from autogen.beta.tools.sandbox.adapter import ShellAdapter
-from autogen.beta.tools.skills.skill_types import SkillMetadata
+from autogen.beta.tools.skills.skill_types import Skill
 
 
 @runtime_checkable
 class SkillRuntime(Protocol):
-    """Unified runtime: storage, discovery, and execution of skills.
+    """Unified runtime: storage, discovery, and IO (read + execute) of skills.
 
     A runtime is responsible for three concerns:
 
     1. **Storage** — where skills are installed (``install``, ``remove``).
-    2. **Discovery** — scanning for installed skills (``discover``, ``load``, ``invalidate``).
-    3. **Execution** — providing a shell environment to run scripts (``shell``).
+    2. **Discovery** — the skills it owns (``skills``, ``invalidate``).
+    3. **IO** — reading and executing those skills (``read``, ``read_resource``,
+       ``execute``). The runtime owns *how* its content is reached, so a
+       filesystem runtime reads from disk and an in-memory one from RAM. A
+       :class:`~autogen.beta.tools.skills.skill_types.Skill` is a pure descriptor
+       and never performs IO itself.
+
+    The read/execute methods raise
+    :class:`~autogen.beta.exceptions.SkillNotFoundError` when *this* runtime does
+    not own the named skill — the signal the toolkit's multi-runtime chain uses
+    to fall through to the next runtime.
 
     :class:`LocalRuntime` is the default implementation.
     """
@@ -37,19 +46,34 @@ class SkillRuntime(Protocol):
         """
         ...
 
-    def discover(self) -> list[SkillMetadata]:
-        """Return metadata for all installed skills."""
+    @property
+    def skills(self) -> list[Skill]:
+        """Return descriptors for all skills this runtime owns."""
         ...
 
-    def load(self, name: str) -> str:
-        """Return the full ``SKILL.md`` text for *name*."""
-        ...
-
-    def get_path(self, name: str) -> Path:
-        """Return the directory path of a skill by name.
+    def read(self, name: str) -> str:
+        """Return the model-ready content for skill *name* (wrapped SKILL.md).
 
         Raises:
-            KeyError: if no skill with that name is found.
+            SkillNotFoundError: if this runtime does not own *name*.
+        """
+        ...
+
+    def read_resource(self, name: str, resource: str) -> str:
+        """Return the content of a bundled resource of skill *name*.
+
+        Raises:
+            SkillNotFoundError: if this runtime does not own *name*.
+            FileNotFoundError:  if *name* has no such resource.
+        """
+        ...
+
+    async def execute(self, name: str, script: str, args: Sequence[str] | None = None) -> str:
+        """Run a script of skill *name* and return its output.
+
+        Raises:
+            SkillNotFoundError: if this runtime does not own *name*.
+            FileNotFoundError:  if *name* has no such script.
         """
         ...
 
@@ -80,16 +104,5 @@ class SkillRuntime(Protocol):
         Raises:
             ValueError:      If *name* would resolve outside the install directory.
             FileNotFoundError: If no skill with *name* is installed.
-        """
-        ...
-
-    def shell(self, scripts_dir: Path) -> ShellAdapter:
-        """Return a :class:`~autogen.beta.tools.sandbox.ShellAdapter` for *scripts_dir*.
-
-        Args:
-            scripts_dir: Absolute path to the skill's ``scripts/`` directory.
-                         Callers resolve this path via the discovery loader so
-                         that both install-dir and extra-path skills are handled
-                         uniformly.
         """
         ...

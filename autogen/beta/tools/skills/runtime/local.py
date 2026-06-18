@@ -4,7 +4,9 @@
 
 import atexit
 import os
+import shlex
 import shutil
+import stat
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,10 +14,13 @@ from pathlib import Path
 from autogen.beta.tools.sandbox import Sandbox, SandboxFactory
 from autogen.beta.tools.sandbox.adapter import ShellAdapter
 from autogen.beta.tools.sandbox.local import LocalSandbox
-from autogen.beta.tools.skills.local_skills.loader import SkillLoader
-from autogen.beta.tools.skills.skill_types import SkillMetadata
+from autogen.beta.tools.skills.local_skills.loader import SkillLoader, strip_frontmatter
+from autogen.beta.tools.skills.skill_types import Skill
 
 from .protocol import SkillRuntime
+
+# Max characters returned from a single resource read before truncation.
+_RESOURCE_READ_CAP = 100_000
 
 
 @dataclass
@@ -85,8 +90,54 @@ class LocalRuntime(SkillRuntime):
     def lock_dir(self) -> Path:
         return self._install_dir
 
-    def discover(self) -> list[SkillMetadata]:
+    @property
+    def skills(self) -> list[Skill]:
         return self._loader.discover()
+
+    def read(self, name: str) -> str:
+        """Return the model-ready content for *name* (wrapped SKILL.md body).
+
+        Raises ``SkillNotFoundError`` (via the loader) when *name* is unknown.
+        """
+        skill = self._loader.get_skill(name)
+        skill_dir = self._loader.get_path(name)
+        # Body only: the frontmatter is already surfaced via the catalog.
+        body = strip_frontmatter(self._loader.load(name))
+        return _wrap_skill_content(name, body, skill_dir, skill)
+
+    def read_resource(self, name: str, resource: str) -> str:
+        """Read a bundled resource by its descriptor name (list-based lookup).
+
+        The model can only address a resource that discovery actually listed, so
+        path traversal is structurally impossible — no separate guard needed.
+        """
+        skill = self._loader.get_skill(name)
+        if resource not in {r.name for r in skill.resources}:
+            skill_dir = self._loader.get_path(name)
+            raise FileNotFoundError(f"resource {resource!r} not found in {skill_dir}")
+        resolved = self._loader.get_path(name) / resource
+        text = resolved.read_text(encoding="utf-8", errors="replace")
+        if len(text) > _RESOURCE_READ_CAP:
+            return text[:_RESOURCE_READ_CAP] + "\n<!-- resource truncated -->"
+        return text
+
+    async def execute(self, name: str, script: str, args: Sequence[str] | None = None) -> str:
+        """Run a script of *name* and return its output (list-based lookup)."""
+        skill = self._loader.get_skill(name)
+        if script not in {s.name for s in skill.scripts}:
+            scripts_dir = self._loader.get_path(name) / "scripts"
+            raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
+        scripts_dir = self._loader.get_path(name) / "scripts"
+        resolved_script = scripts_dir / script
+        command = _script_command(resolved_script)
+        if args:
+            command.extend(args)
+        # async + await env.run(...) so the command runs in the agent's own
+        # event loop. A sync path would drive remote backends via a throwaway
+        # asyncio.run() per call (a fresh loop each time), breaking clients
+        # bound to the first loop (e.g. Daytona's httpx keep-alive pool).
+        env = self.shell(scripts_dir)
+        return await env.run(shlex.join(command))
 
     def load(self, name: str) -> str:
         return self._loader.load(name)
@@ -141,3 +192,40 @@ class LocalRuntime(SkillRuntime):
             blocked=self.blocked or None,
             timeout=self.timeout,
         )
+
+
+def _script_command(resolved_script: Path) -> list[str]:
+    """Build the argv to run *resolved_script* from its own directory.
+
+    A shebang takes precedence; otherwise ``.py``/``.sh`` map to their
+    interpreters, and anything else is made executable and run directly.
+    """
+    first_line = resolved_script.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
+    if first_line.startswith("#!"):
+        resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        return [f"./{resolved_script.name}"]
+    if resolved_script.suffix.lower() == ".py":
+        return ["python3", f"./{resolved_script.name}"]
+    if resolved_script.suffix.lower() == ".sh":
+        return ["sh", f"./{resolved_script.name}"]
+    resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return [f"./{resolved_script.name}"]
+
+
+def _wrap_skill_content(name: str, body: str, skill_dir: Path, skill: Skill) -> str:
+    """Wrap a SKILL.md body with identifying tags, base path, and resource list."""
+    lines = [
+        f'<skill_content name="{name}">',
+        body.strip(),
+        "",
+        f"Skill directory: {skill_dir}",
+        "Relative paths in this skill are relative to the skill directory.",
+    ]
+    if skill.resources:
+        lines.append("<skill_resources>")
+        lines.extend(f"  <file>{r.name}</file>" for r in skill.resources)
+        if skill.resources_truncated:
+            lines.append("  <!-- resource list truncated -->")
+        lines.append("</skill_resources>")
+    lines.append("</skill_content>")
+    return "\n".join(lines)

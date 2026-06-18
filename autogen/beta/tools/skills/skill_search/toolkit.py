@@ -13,7 +13,7 @@ from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 from autogen.beta.tools.skills.local_skills import SkillsToolkit
-from autogen.beta.tools.skills.runtime import SkillRuntime
+from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
 
 from .client import SkillsClient
 from .config import SkillsClientConfig
@@ -74,7 +74,7 @@ class SkillSearchToolkit(SkillsToolkit):
         agent = Agent("a", config=config, tools=[skills.search_skills(), skills.install_skill()])
     """
 
-    __slots__ = ("_client", "_lock")
+    __slots__ = ("_client", "_lock", "_runtime")
 
     def __init__(
         self,
@@ -84,14 +84,18 @@ class SkillSearchToolkit(SkillsToolkit):
         name: str = "skill_search_toolkit",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
+        # Search/install/remove target a single runtime, so resolve it here and
+        # hand that same instance to the multi-runtime base toolkit.
+        resolved = LocalRuntime() if runtime is None else LocalRuntime.ensure_runtime(runtime)
         super().__init__(
-            runtime,
+            resolved,
             name=name,
             middleware=middleware,
         )
 
+        self._runtime = resolved
         self._client = SkillsClient(client)
-        self._lock = SkillsLock(self.runtime.lock_dir / "skills-lock.json")
+        self._lock = SkillsLock(self._runtime.lock_dir / "skills-lock.json")
 
         for t in (
             self.search_skills(),

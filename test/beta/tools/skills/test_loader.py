@@ -53,13 +53,13 @@ def test_loader_discover_metadata(skill_tree: Path) -> None:
 
     skills = {s.name: s for s in loader.discover()}
 
-    assert skills["react-best-practices"].description == "Best practices for React development"
-    assert skills["react-best-practices"].version == "1.2.0"
-    assert skills["react-best-practices"].has_scripts is True
+    assert skills["react-best-practices"].metadata.description == "Best practices for React development"
+    assert skills["react-best-practices"].metadata.version == "1.2.0"
+    assert [s.name for s in skills["react-best-practices"].scripts] == ["scaffold.py"]
 
-    assert skills["markdown-guide"].description == "Guide for writing Markdown"
-    assert skills["markdown-guide"].version is None
-    assert skills["markdown-guide"].has_scripts is False
+    assert skills["markdown-guide"].metadata.description == "Guide for writing Markdown"
+    assert skills["markdown-guide"].metadata.version is None
+    assert skills["markdown-guide"].scripts == ()
 
 
 def test_loader_priority(tmp_path: Path) -> None:
@@ -75,7 +75,7 @@ def test_loader_priority(tmp_path: Path) -> None:
     loader = SkillLoader(tmp_path / "project", tmp_path / "user")
     [meta] = loader.discover()
 
-    assert meta.description == "from project"
+    assert meta.metadata.description == "from project"
 
 
 def test_loader_nonexistent_path(tmp_path: Path) -> None:
@@ -163,7 +163,7 @@ def test_loader_collision_warns_and_first_wins(tmp_path: Path, caplog: pytest.Lo
     with caplog.at_level("WARNING"):
         [meta] = loader.discover()
 
-    assert meta.description == "from project"
+    assert meta.metadata.description == "from project"
     assert "shadowed" in caplog.text
 
 

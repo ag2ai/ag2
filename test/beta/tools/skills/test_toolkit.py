@@ -20,9 +20,66 @@ from autogen.beta.tools.sandbox.local import LocalSandbox
 from autogen.beta.tools.skills import LocalRuntime
 
 
+def _write_script_skill(base: Path, name: str, script_body: str | None = None) -> Path:
+    """Write a skill with an optional ``scripts/go.sh`` and return *base*."""
+    skill_dir = base / name
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {name}\n---\n# {name}\n")
+    if script_body is not None:
+        (skill_dir / "scripts").mkdir()
+        (skill_dir / "scripts" / "go.sh").write_text(script_body)
+    return base
+
+
+@pytest.mark.asyncio
+async def test_run_script_routes_to_last_runtime(tmp_path: Path, context: Context) -> None:
+    # On a name clash, execution routes to the last runtime (project > global).
+    glob = _write_script_skill(tmp_path / "global", "dup", "echo GLOBAL\n")
+    proj = _write_script_skill(tmp_path / "project", "dup", "echo PROJECT\n")
+    run_tool = SkillsToolkit(LocalRuntime(dir=glob), LocalRuntime(dir=proj)).run_skill_script()
+
+    args = json.dumps({"name": "dup", "script": "go.sh"})
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    assert "PROJECT" in result.result.parts[0].content
+    assert "GLOBAL" not in result.result.parts[0].content
+
+
+@pytest.mark.asyncio
+async def test_run_script_falls_through_on_skill_not_found(tmp_path: Path, context: Context) -> None:
+    # The last runtime does not own the skill (SkillNotFoundError), so the chain
+    # falls through to the global runtime that does.
+    glob = _write_script_skill(tmp_path / "global", "only-global", "echo HELLO\n")
+    proj = tmp_path / "project"
+    proj.mkdir()
+    run_tool = SkillsToolkit(LocalRuntime(dir=glob), LocalRuntime(dir=proj)).run_skill_script()
+
+    args = json.dumps({"name": "only-global", "script": "go.sh"})
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    assert "HELLO" in result.result.parts[0].content
+
+
+@pytest.mark.asyncio
+async def test_missing_script_in_owning_runtime_does_not_fall_through(tmp_path: Path, context: Context) -> None:
+    # The last runtime OWNS the skill but lacks the script: that is a genuine
+    # error, not SkillNotFoundError, so the chain must NOT fall through and run
+    # the global runtime's same-named script.
+    glob = _write_script_skill(tmp_path / "global", "dup", "echo GLOBAL\n")
+    proj = _write_script_skill(tmp_path / "project", "dup", script_body=None)  # owns dup, no scripts
+    run_tool = SkillsToolkit(LocalRuntime(dir=glob), LocalRuntime(dir=proj)).run_skill_script()
+
+    args = json.dumps({"name": "dup", "script": "go.sh"})
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert isinstance(result, ToolErrorEvent)
+
+
 @pytest.mark.asyncio
 async def test_tool_exposes_all_functions(skill_tree: Path, context: Context) -> None:
-    tool = SkillsToolkit(runtime=skill_tree)
+    tool = SkillsToolkit(skill_tree)
 
     schemas = await tool.schemas(context)
 
@@ -93,7 +150,9 @@ async def test_load_skill_wraps_content_with_resources(skill_tree: Path, context
     assert '<skill_content name="react-best-practices">' in content
     assert "React Best Practices" in content
     assert f"Skill directory: {skill_tree / 'react-best-practices'}" in content
-    assert "<file>scripts/scaffold.py</file>" in content
+    assert "<file>references/guide.md</file>" in content
+    # Scripts are not resources: scripts/ is excluded from the resource listing.
+    assert "<file>scripts/scaffold.py</file>" not in content
     # Body only: the YAML frontmatter is stripped before wrapping (spec Step 4).
     assert "description: Best practices for React development" not in content
     assert "version: 1.2.0" not in content
@@ -105,11 +164,11 @@ async def test_read_skill_resource_returns_content(skill_tree: Path, context: Co
     # skill directory (the files listed in <skill_resources>).
     read_tool = SkillsToolkit(LocalRuntime(dir=skill_tree)).read_skill_resource()
 
-    args = json.dumps({"name": "react-best-practices", "resource": "scripts/scaffold.py"})
+    args = json.dumps({"name": "react-best-practices", "resource": "references/guide.md"})
     result = await read_tool(ToolCallEvent(name="read_skill_resource", arguments=args), context)
 
     assert not isinstance(result, ToolErrorEvent)
-    assert 'print("scaffold")' in result.result.parts[0].content
+    assert "Detailed React guidance." in result.result.parts[0].content
 
 
 @pytest.mark.asyncio
@@ -170,7 +229,7 @@ async def test_run_skill_script_runs_in_event_loop_with_remote_backend(skill_tre
     # and raises "active event loop" for a non-local factory.
     factory = _RemoteFactory()
     runtime = LocalRuntime(dir=skill_tree, sandbox=factory)
-    run_tool = SkillsToolkit(runtime=runtime).run_skill_script()
+    run_tool = SkillsToolkit(runtime).run_skill_script()
 
     event = ToolCallEvent(
         name="run_skill_script",
