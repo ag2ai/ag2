@@ -4,15 +4,17 @@
 
 import os
 from collections.abc import Iterable, Sequence
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
+from autogen.beta.annotations import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.exceptions import SkillNotFoundError
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
+from autogen.beta.tools.skills.runtime import LocalRuntime, MemoryRuntime, MemorySkill, SkillRuntime
 from autogen.beta.tools.skills.skill_types import Skill
 
 
@@ -61,12 +63,12 @@ class SkillsToolkit(Toolkit):
 
     def __init__(
         self,
-        *runtimes: SkillRuntime | str | os.PathLike[str],
+        *runtimes: SkillRuntime | str | os.PathLike[str] | MemorySkill,
         name: str = "skills_toolkit",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self._runtimes: tuple[SkillRuntime, ...] = (
-            tuple(LocalRuntime.ensure_runtime(r) for r in runtimes) if runtimes else (LocalRuntime(),)
+            tuple(_ensure_runtime(r) for r in runtimes) if runtimes else (LocalRuntime(),)
         )
 
         super().__init__(
@@ -154,14 +156,15 @@ class SkillsToolkit(Toolkit):
         name_type = self._name_annotation("Skill name returned by list_skills.")
 
         @tool(name=name, description=description, middleware=middleware)
-        def _read_skill_resource(
+        async def _read_skill_resource(
             name: name_type,  # type: ignore[valid-type]
             resource: Annotated[
                 str,
                 Field(description="Resource path relative to the skill directory, for example references/guide.md."),
             ],
+            ctx: Context,  # injected; absent from the tool schema
         ) -> str:
-            return _route_read_resource(self._runtimes, name, resource)
+            return await _route_read_resource(self._runtimes, name, resource, ctx)
 
         return _read_skill_resource
 
@@ -177,16 +180,24 @@ class SkillsToolkit(Toolkit):
         @tool(name=name, description=description, middleware=middleware)
         async def _run_skill_script(
             name: name_type,  # type: ignore[valid-type]
+            ctx: Context,
             script: Annotated[
                 str,
-                Field(description="Script filename inside scripts/, for example scaffold.py or build.sh."),
+                Field(description="Script name, for example scaffold.py, build.sh, or an in-process script."),
             ],
             args: Annotated[
-                list[str] | None,
-                Field(description="Optional script arguments passed as positional parameters."),
+                dict[str, Any] | list[str] | None,
+                Field(
+                    description=(
+                        "Script arguments. Use an object of named arguments for in-process scripts "
+                        '(for example {"value": 10, "factor": 2}), matching the script\'s '
+                        "<parameters_schema> shown in the loaded skill. Use an array of strings for "
+                        'file-based scripts\' positional CLI arguments (for example ["input.docx"]).'
+                    )
+                ),
             ] = None,
         ) -> str:
-            return await _route_execute(self._runtimes, name, script, args)
+            return await _route_execute(self._runtimes, name, script, ctx, args)
 
         return _run_skill_script
 
@@ -200,19 +211,42 @@ def _route_read(runtimes: Sequence[SkillRuntime], name: str) -> str:
     raise SkillNotFoundError(f"Skill {name!r} not found in any runtime")
 
 
-def _route_read_resource(runtimes: Sequence[SkillRuntime], name: str, resource: str) -> str:
+async def _route_read_resource(
+    runtimes: Sequence[SkillRuntime],
+    name: str,
+    resource: str,
+    context: ConversationContext,
+) -> str:
     for runtime in reversed(runtimes):
         try:
-            return runtime.read_resource(name, resource)
+            return await runtime.read_resource(name, resource, context)
         except SkillNotFoundError:
             continue
     raise SkillNotFoundError(f"Skill {name!r} not found in any runtime")
 
 
-async def _route_execute(runtimes: Sequence[SkillRuntime], name: str, script: str, args: Sequence[str] | None) -> str:
+async def _route_execute(
+    runtimes: Sequence[SkillRuntime],
+    name: str,
+    script: str,
+    context: ConversationContext,
+    args: dict[str, Any] | Sequence[str] | None,
+) -> str:
     for runtime in reversed(runtimes):
         try:
-            return await runtime.execute(name, script, args)
+            return await runtime.execute(name, script, context, args)
         except SkillNotFoundError:
             continue
     raise SkillNotFoundError(f"Skill {name!r} not found in any runtime")
+
+
+def _ensure_runtime(runtime: SkillRuntime | str | os.PathLike[str] | MemorySkill) -> SkillRuntime:
+    """Coerce a toolkit argument into a runtime.
+
+    A loose :class:`MemorySkill` is wrapped in its own single-skill
+    :class:`MemoryRuntime` at its declared position, so the existing
+    last-to-first chain governs precedence with no special-casing.
+    """
+    if isinstance(runtime, MemorySkill):
+        return MemoryRuntime(runtime)
+    return LocalRuntime.ensure_runtime(runtime)

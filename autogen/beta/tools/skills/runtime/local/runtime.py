@@ -10,6 +10,10 @@ import stat
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from autogen.beta.context import ConversationContext
 
 from autogen.beta.tools.sandbox import Sandbox, SandboxFactory
 from autogen.beta.tools.sandbox.adapter import ShellAdapter
@@ -105,8 +109,11 @@ class LocalRuntime(SkillRuntime):
         body = strip_frontmatter(self._loader.load(name))
         return _wrap_skill_content(name, body, skill_dir, skill)
 
-    def read_resource(self, name: str, resource: str) -> str:
+    async def read_resource(self, name: str, resource: str, context: "ConversationContext") -> str:
         """Read a bundled resource by its descriptor name (list-based lookup).
+
+        *context* is part of the runtime protocol (used by callable-backed runtimes
+        for dependency injection); a filesystem read ignores it.
 
         The model can only address a resource that discovery actually listed, so
         path traversal is structurally impossible — no separate guard needed.
@@ -121,8 +128,22 @@ class LocalRuntime(SkillRuntime):
             return text[:_RESOURCE_READ_CAP] + "\n<!-- resource truncated -->"
         return text
 
-    async def execute(self, name: str, script: str, args: Sequence[str] | None = None) -> str:
-        """Run a script of *name* and return its output (list-based lookup)."""
+    async def execute(
+        self,
+        name: str,
+        script: str,
+        context: "ConversationContext",
+        args: dict[str, Any] | Sequence[str] | None = None,
+    ) -> str:
+        """Run a script of *name* and return its output (list-based lookup).
+
+        *context* is part of the runtime protocol; a subprocess script ignores it.
+        """
+        if isinstance(args, dict):
+            raise TypeError(
+                f"file-based script {script!r} requires positional string arguments (an array); "
+                "named arguments (an object) are only supported for in-process scripts"
+            )
         skill = self._loader.get_skill(name)
         if script not in {s.name for s in skill.scripts}:
             scripts_dir = self._loader.get_path(name) / "scripts"

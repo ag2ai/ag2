@@ -57,8 +57,18 @@ stay on the uniform `execute` path; nothing leaves the runtime protocol.**
 - **`Script` gains `parameters_schema: dict | None`.** `None` = file/CLI script
   (LocalRuntime); populated = in-process (MemoryRuntime). It stays inert *data* —
   the callable lives on the `MemorySkill`/`MemoryRuntime`, never on the
-  descriptor. Schema is generated from the `@skill.script` signature via the
-  existing `build_model` + `get_schema` machinery.
+  descriptor.
+- **An in-process script (and resource) is wrapped in a `FunctionTool`.** That
+  one object supplies both the parameter JSON Schema *and* the invocation path:
+  execution goes through the tool's `CallModel.asolve`, so arguments are
+  FastDepends serialized and validated exactly as a regular tool's are. The
+  schema is not a separate code path that could drift from how the script runs.
+- **`execute` and `read_resource` thread the live `Context`.** Both protocol
+  methods take a **required** `context` argument (positioned before the optional
+  `args`); `MemoryRuntime` passes it to `asolve` as `__ctx__`, so a script or
+  resource callable can use `Context` / `Variable` / `Inject` dependency injection
+  just like a tool. `LocalRuntime` accepts and ignores it (subprocess scripts and
+  file reads don't need it).
 - **Schema is disclosed in `load_skill` content**, not the tool list.
   `MemoryRuntime.read` appends a `<scripts>` block carrying each script's
   `<parameters_schema>`. Argument validation happens runtime-side.
@@ -78,10 +88,19 @@ stay on the uniform `execute` path; nothing leaves the runtime protocol.**
 
 - **The provider never validates script args against the per-script schema.**
   `run_skill_script.args` is a generic `object`; the model fills it by reading the
-  embedded `<parameters_schema>`, and the **runtime** validates. We accept weaker
-  provider-side enforcement in exchange for one tool, no dynamic tool reveal, and
-  no protocol growth. Choosing native per-script tools (option 1) would invert
-  this trade-off.
+  embedded `<parameters_schema>`, and the **runtime** validates via FastDepends
+  (the wrapping `FunctionTool`). We accept weaker provider-side enforcement in
+  exchange for one tool, no dynamic tool reveal, and no protocol growth. Choosing
+  native per-script tools (option 1) would invert this trade-off.
+
+- **The agent's dependency provider reaches scripts via the `Context`, not
+  `set_provider`.** `Agent.__build_context` sets `context.dependency_provider` to
+  the agent's provider, and `MemoryRuntime` forwards it to `asolve`. So a script's
+  `Depends(...)` resolves (and `provider.override(...)` applies) with no separate
+  `set_provider` wiring on the runtime — the toolkit isn't registered as a tool,
+  so propagating `set_provider` into its runtimes would be dead machinery. The
+  one path it wouldn't cover — a hand-wired toolkit whose `Context` carries no
+  provider — is not a real usage shape.
 
 - **A `MemorySkill`'s scripts populate `Skill.scripts`** (unlike an early draft
   that kept them off it). They must, so the `run_skill_script` capability gate

@@ -4,9 +4,12 @@
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from autogen.beta.tools.skills.skill_types import Skill
+
+if TYPE_CHECKING:
+    from autogen.beta.context import ConversationContext
 
 
 @runtime_checkable
@@ -59,8 +62,14 @@ class SkillRuntime(Protocol):
         """
         ...
 
-    def read_resource(self, name: str, resource: str) -> str:
-        """Return the content of a bundled resource of skill *name*.
+    async def read_resource(self, name: str, resource: str, context: "ConversationContext") -> str:
+        """Return the content of a resource of skill *name*.
+
+        Async because a runtime may produce the content by running a callable
+        (``MemoryRuntime``), not just reading a file (``LocalRuntime``). *context*
+        is the live conversation context; a runtime that runs a callable uses it
+        for dependency injection (``Context`` / ``Variable`` / ``Inject``), while a
+        filesystem runtime ignores it.
 
         Raises:
             SkillNotFoundError: if this runtime does not own *name*.
@@ -68,8 +77,21 @@ class SkillRuntime(Protocol):
         """
         ...
 
-    async def execute(self, name: str, script: str, args: Sequence[str] | None = None) -> str:
+    async def execute(
+        self,
+        name: str,
+        script: str,
+        context: "ConversationContext",
+        args: dict[str, Any] | Sequence[str] | None = None,
+    ) -> str:
         """Run a script of skill *name* and return its output.
+
+        *args* is a CLI-style positional ``Sequence[str]`` for file-backed scripts
+        (``LocalRuntime``) or a named-argument ``dict`` for in-process scripts
+        (``MemoryRuntime``). A runtime rejects the form it does not support with a
+        ``TypeError``. *context* is the live conversation context, used for
+        dependency injection by runtimes that invoke a callable; a filesystem
+        runtime ignores it.
 
         Raises:
             SkillNotFoundError: if this runtime does not own *name*.

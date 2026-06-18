@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -23,13 +24,22 @@ class SkillMetadata:
 
 @dataclass(slots=True)
 class Script:
-    """An executable file under a skill's ``scripts/`` directory.
+    """A runnable unit of a skill — a descriptor only; running it is the
+    runtime's job (``runtime.execute``).
 
-    A descriptor only — running it is the runtime's job (``runtime.execute``).
-    ``name`` is the path relative to ``scripts/`` (e.g. ``build.sh``).
+    Two forms, distinguished by ``parameters_schema``:
+
+    - **File-backed** (``LocalRuntime``): ``name`` is the path relative to
+      ``scripts/`` (e.g. ``build.sh``) and ``parameters_schema`` is ``None`` —
+      the script takes positional string arguments.
+    - **In-process** (``MemoryRuntime``): ``name`` is the script identifier and
+      ``parameters_schema`` is the JSON Schema for its named arguments, generated
+      from the underlying callable's signature and disclosed inside the loaded
+      skill content.
     """
 
     name: str
+    parameters_schema: dict[str, Any] | None = field(default=None)
 
 
 @dataclass(slots=True)

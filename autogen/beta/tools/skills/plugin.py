@@ -8,13 +8,13 @@ from xml.sax.saxutils import escape
 
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.plugin import Plugin
-from autogen.beta.tools.skills.runtime import SkillRuntime
+from autogen.beta.tools.skills.runtime import MemorySkill, SkillRuntime
 from autogen.beta.tools.skills.skill_types import Skill
 from autogen.beta.tools.skills.toolkit import SkillsToolkit
 
 
 def SkillPlugin(  # noqa: N802
-    *runtimes: SkillRuntime | str | os.PathLike[str],
+    *runtimes: SkillRuntime | str | os.PathLike[str] | MemorySkill,
     middleware: Iterable[ToolMiddleware] = (),
 ) -> Plugin:
     """Skills-spec ``Plugin`` that auto-loads skill metadata into the prompt.
