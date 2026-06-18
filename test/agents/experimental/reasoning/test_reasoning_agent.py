@@ -495,6 +495,31 @@ def test_rate_batch_nodes_invalid_response(mock_credentials: Credentials) -> Non
         assert rewards == [0.0, 0.0]
 
 
+def test_rate_node_caches_zero_value(mock_credentials: Credentials) -> None:
+    """A node already graded to 0.0 (e.g. the worst rating of 1) must hit the
+    rating cache and not call the grader again.
+
+    The cache sentinel is `rating_details`; keying the early return on
+    `value > 0` skipped the cache for any legitimately zero-valued node and
+    re-invoked the grader.
+    """
+    node = ThinkNode(content="The capital of France is Paris.")
+    # State of a node that was already graded with the worst rating (1 -> 0.0).
+    node.rating_details = "Rating: 1 - requires a survey, not executable."
+    node.value = 0.0
+
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+        )
+
+        reward = agent.rate_node(node)
+
+    assert reward == 0.0
+    mock_oai_reply.assert_not_called()
+
+
 def test_execute_node_with_cached_output(mock_credentials: Credentials, think_node: ThinkNode) -> None:
     """
     Test that execute_node returns the cached output if it exists.

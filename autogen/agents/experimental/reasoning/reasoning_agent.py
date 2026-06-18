@@ -586,7 +586,7 @@ Final Answer:
         Returns:
             float: Normalized score between 0 and 1 indicating trajectory quality
         """
-        if node.value > 0 and node.rating_details:
+        if node.rating_details:
             # we already calculated the rating for the node
             return node.value
 
@@ -760,7 +760,7 @@ Rating: <rating>
         rewards = []
         # Get rewards and assign rating details to corresponding nodes
         for node, rating, details in zip(nodes, ratings, options_with_ratings):
-            if node.value > 0 and node.rating_details:
+            if node.rating_details:
                 # we already calculated the rating for the node
                 rewards.append(node.value)
                 continue
