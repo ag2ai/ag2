@@ -232,8 +232,16 @@ async def test_install_skill_records_hash(tmp_path: Path) -> None:
     lock_path = install_dir / "skills-lock.json"
     assert lock_path.exists()
     lock_data = json.loads(lock_path.read_text())
-    assert lock_data["skills"]["vercel-react-best-practices"]["computedHash"] == "abc123hash"
-    assert lock_data["skills"]["vercel-react-best-practices"]["source"] == "vercel-labs/agent-skills"
+    assert lock_data == {
+        "version": 1,
+        "skills": {
+            "vercel-react-best-practices": {
+                "source": "vercel-labs/agent-skills",
+                "sourceType": "github",
+                "computedHash": "abc123hash",
+            }
+        },
+    }
 
 
 @pytest.mark.asyncio
@@ -329,9 +337,16 @@ def test_lock_record_and_read(tmp_path: Path) -> None:
     lock.record("my-skill", "owner/repo", "abc123")
 
     data = lock.read()
-    assert data["version"] == 1
-    assert data["skills"]["my-skill"]["computedHash"] == "abc123"
-    assert data["skills"]["my-skill"]["source"] == "owner/repo"
+    assert data == {
+        "version": 1,
+        "skills": {
+            "my-skill": {
+                "source": "owner/repo",
+                "sourceType": "github",
+                "computedHash": "abc123",
+            }
+        },
+    }
 
 
 def test_lock_remove(tmp_path: Path) -> None:
