@@ -62,7 +62,9 @@ class MemorySkill:
     def resource(self, func: Callable[P, T]) -> Callable[P, T]: ...
 
     @overload
-    def resource(self, func: None = None, *, name: str | None = None, description: str | None = None) -> Callable[[Callable[P, T]], Callable[P, T]]: ...
+    def resource(
+        self, func: None = None, *, name: str | None = None, description: str | None = None
+    ) -> Callable[[Callable[P, T]], Callable[P, T]]: ...
 
     def resource(
         self,
