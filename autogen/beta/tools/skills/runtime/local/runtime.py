@@ -12,9 +12,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
-    from autogen.beta.context import ConversationContext
-
 from autogen.beta.tools.sandbox import Sandbox, SandboxFactory
 from autogen.beta.tools.sandbox.adapter import ShellAdapter
 from autogen.beta.tools.sandbox.local import LocalSandbox
@@ -22,6 +19,9 @@ from autogen.beta.tools.skills.skill_types import Skill
 
 from ..protocol import SkillRuntime
 from .loader import SkillLoader, strip_frontmatter
+
+if TYPE_CHECKING:
+    from autogen.beta.context import ConversationContext
 
 # Max characters returned from a single resource read before truncation.
 _RESOURCE_READ_CAP = 100_000
