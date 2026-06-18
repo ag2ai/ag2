@@ -17,9 +17,12 @@ under `scripts/`. Read on demand via `read_skill_resource` (e.g. `references/`,
 `assets/`). Distinct from a Script.
 
 **Script**:
-An executable file under a skill's `scripts/` directory. Run on demand via
-`run_skill_script`. Disjoint from a Resource — a file is one or the other, never
-both.
+A runnable unit of a skill, run on demand via `run_skill_script`. Two forms: a
+**file** under a skill's `scripts/` directory (LocalRuntime; invoked with
+positional string args), or an **in-process callable** (MemoryRuntime; invoked
+with named args). Disjoint from a Resource. An in-process Script carries a
+JSON-schema for its parameters, disclosed inside the loaded skill content (not as
+a separate tool).
 
 **Runtime**:
 The backend that owns a set of skills — it discovers them (`runtime.skills`) and
@@ -28,6 +31,14 @@ backs skills with the filesystem; a `MemoryRuntime` backs them with RAM. Skills,
 Scripts, and Resources are inert descriptors; the Runtime does the reading and
 running.
 _Avoid_: store, source, provider (for this concept).
+
+**MemorySkill**:
+A Skill defined inline in code rather than discovered on disk — it carries its
+instructions, Resources, and Scripts as in-memory values instead of files. Owned
+by a `MemoryRuntime`. A MemorySkill's Scripts are in-process callables (not
+`scripts/` files) run through the same `run_skill_script` tool; their parameter
+JSON-schema is disclosed inside the loaded skill content.
+_Avoid_: code skill, inline skill (informal).
 
 **Shadowing**:
 When the same skill name exists in more than one Runtime, the **last** Runtime
