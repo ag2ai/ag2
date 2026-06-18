@@ -179,17 +179,24 @@ def tool(
             call_model,
             name=name or f.__name__,
             description=description or f.__doc__ or "",
-            schema=schema
-            or get_schema(
-                call_model,
-                exclude=(CONTEXT_OPTION_NAME,),
-            ),
+            schema=_normalize_parameters(schema, call_model),
             middleware=middleware,
         )
 
     if function:
         return make_tool(function)
     return make_tool
+
+
+def _normalize_parameters(schema: FunctionParameters | None, call_model: CallModel) -> FunctionParameters:
+    if schema is not None:
+        return schema
+    # A no-arg callable yields {"type": "null"}, invalid as a JSON Schema object for tool
+    # `parameters` for some LLM providers.
+    generated = get_schema(call_model, exclude=(CONTEXT_OPTION_NAME,))
+    if generated.get("type") != "object":
+        return {"type": "object", "properties": {}}
+    return generated
 
 
 def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":
