@@ -2,7 +2,7 @@
 title: "Skills"
 ---
 
-Skills let an agent load specialized instructions on demand instead of carrying every capability in its system prompt. They follow the [agentskills.io](https://agentskills.io){.external-link target="_blank"} convention: each skill is a directory that an agent discovers, reads, and runs only when a task actually calls for it.
+Skills let an agent load specialized instructions on demand instead of carrying every capability in its system prompt. They follow the [agentskills.io](https://agentskills.io){.external-link target="_blank"} convention: each skill is a directory that an agent discovers, reads, and runs only when a task actually calls for it. Skills can also be [defined inline in code](#code-defined-skills) when a directory on disk isn't a good fit.
 
 AG2 ships three entry points, from highest-level to lowest:
 
@@ -182,6 +182,74 @@ When the same skill name exists in more than one runtime, the **last runtime win
 
 !!! note
     Because each runtime can carry its own execution and storage settings (sandbox, timeout, install directory), composition lets global skills run one way and project skills another — something a single runtime can't express.
+
+## Code-defined skills
+
+Not every skill needs to live on disk. A `MemorySkill` defines a skill **inline in code** — its instructions, resources, and scripts are Python values rather than files. It's backed by an in-memory runtime (`MemoryRuntime`) instead of `LocalRuntime`, but the agent activates it through the same progressive-disclosure flow.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import SkillPlugin
+from autogen.beta.tools.skills import MemorySkill
+
+unit_converter = MemorySkill(
+    name="unit-converter",
+    description="Convert between common units. Use when asked to convert miles, kilometers, pounds, or kilograms.",
+    instructions="Use the convert script, passing the value and a factor from the conversion-table resource.",
+)
+
+@unit_converter.resource
+def conversion_table() -> str:
+    """Multiplication factors for common conversions."""
+    return "miles->km: 1.60934\npounds->kg: 0.453592"
+
+@unit_converter.script(description="Multiply a value by a conversion factor.")
+def convert(value: float, factor: float) -> str:
+    return str(round(value * factor, 4))
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    plugins=[SkillPlugin(unit_converter)],
+)
+```
+
+Pass a `MemorySkill` straight to `SkillPlugin` (or `SkillsToolkit`) — it is wrapped in a `MemoryRuntime` automatically and appears in the catalog alongside any file-based skills.
+
+### Resources and scripts as callables
+
+The `@skill.resource` and `@skill.script` decorators register Python callables (sync or async):
+
+- A **resource** callable runs every time it is read, so it can return live data — current config, a roster, a database lookup — rather than a static file.
+- A **script** callable runs **in-process**: no subprocess, no `scripts/` directory. Its parameter JSON-schema is generated from the signature and disclosed inside the loaded skill content, so the model calls `run_skill_script` with named arguments (`{"value": 10, "factor": 2}`) matching that schema. Arguments are validated and coerced exactly as a regular tool's are.
+
+Both forms support dependency injection — a callable can declare `Context`, `Variable`, or `Inject` parameters and they resolve from the live run context, just like a tool:
+
+```python linenums="1"
+from typing import Annotated
+from autogen.beta import Variable
+from autogen.beta.tools.skills import MemorySkill
+
+project = MemorySkill(name="project-info", description="Project status and configuration.")
+
+@project.resource
+def environment(region: Annotated[str, Variable("region")]) -> str:
+    return f"Region: {region}"
+```
+
+### Composing with file-based skills
+
+A `MemorySkill` composes with paths and runtimes like any other source — declaration order decides precedence, and the last source wins on a name clash:
+
+```python linenums="1"
+plugins=[SkillPlugin(".agents/skills", unit_converter, project)]
+```
+
+Grouping is associative: passing loose `MemorySkill`s, wrapping each in its own `MemoryRuntime`, or grouping several into one `MemoryRuntime(...)` all behave identically.
+
+!!! note
+    `MemoryRuntime` is read-only — its skills are defined in code, so it cannot be an install target for `SkillSearchToolkit`.
 
 ## SkillSearchToolkit
 
