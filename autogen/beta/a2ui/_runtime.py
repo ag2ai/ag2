@@ -8,12 +8,11 @@ middleware factory built from a transport's flat A2UI kwargs. Not exported.
 """
 
 import os
+from collections.abc import Sequence
 
-from autogen.beta.agent import Agent
 from autogen.beta.middleware.base import MiddlewareFactory
 
 from ._types import A2UIVersion, JsonSchema
-from .action_tool import A2UIActionTool
 from .actions import A2UIEventAction
 from .capabilities import A2UIClientCapabilities, capabilities_to_prompt
 from .middleware import A2UIValidationMiddleware
@@ -31,16 +30,17 @@ DEFAULT_SYSTEM_MESSAGE = (
 class _A2UIRuntime:
     """Carries A2UI configuration and per-turn injection for a plain ``Agent``.
 
-    Built once per transport wrapper from its A2UI kwargs. Exposes the read-only
-    bits the transports need (``protocol_version``, ``catalog_id``,
-    ``version_string``, ``get_action``), the prompt section to prepend, the
-    validation middleware factories to inject, and a capabilities-prompt helper.
+    Built once per :class:`A2UIServer` from its A2UI kwargs and the declared
+    ``actions``. Exposes the read-only bits the transports need
+    (``protocol_version``, ``catalog_id``, ``version_string``, ``get_action``),
+    the prompt section to prepend, the validation middleware factories to inject,
+    and a capabilities-prompt helper.
     """
 
     def __init__(
         self,
-        agent: Agent,
         *,
+        actions: Sequence[A2UIEventAction] = (),
         protocol_version: A2UIVersion = "v0.9",
         custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
         custom_catalog_rules: str | None = None,
@@ -63,9 +63,9 @@ class _A2UIRuntime:
             component_schemas=(self.schema_manager.get_component_schemas() if validate_responses else None),
             catalog_id=(self.schema_manager.catalog_id if validate_responses else None),
         )
-        # Clickable buttons are tool-backed (@a2ui_action) and ride on the
-        # agent's tool list; discover them there.
-        self.actions: tuple[A2UIEventAction, ...] = _collect_actions(agent)
+        # Clickable buttons are declared on ``A2UIServer(actions=[...])``; the
+        # server passes their action declarations here for prompt + click routing.
+        self.actions: tuple[A2UIEventAction, ...] = tuple(actions)
 
         prompt_section = self.schema_manager.generate_prompt_section(
             include_schema=include_schema_in_prompt,
@@ -108,13 +108,3 @@ class _A2UIRuntime:
     def capabilities_prompt(self, caps: A2UIClientCapabilities | None) -> str:
         """Render negotiated client capabilities as a per-turn prompt fragment."""
         return capabilities_to_prompt(caps, catalog_id=self.catalog_id)
-
-
-def _collect_actions(agent: Agent) -> tuple[A2UIEventAction, ...]:
-    """Collect A2UI action declarations for the prompt and click routing.
-
-    Tool-backed buttons are discovered from ``agent.tools`` — each
-    :class:`A2UIActionTool` carries its own ``event`` action. Tool names are
-    already unique on the agent, so no extra de-duplication is needed.
-    """
-    return tuple(tool.action for tool in agent.tools if isinstance(tool, A2UIActionTool))

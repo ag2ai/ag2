@@ -79,7 +79,7 @@ def _build(
 ) -> "tuple[Agent, _A2UIRuntime]":
     """Build a plain Agent plus its A2UI runtime (the new home of validation)."""
     agent = Agent(name="test_agent", config=config)
-    rt = _A2UIRuntime(agent, validate_responses=validate_responses, validation_retries=validation_retries)
+    rt = _A2UIRuntime(validate_responses=validate_responses, validation_retries=validation_retries)
     return agent, rt
 
 

@@ -54,7 +54,7 @@ _A2UI_RESPONSE = (
 def _agent_and_runtime(config: Any = None, *, validate_responses: bool = True) -> "tuple[Agent, _A2UIRuntime]":
     """Build a plain Agent plus its A2UI runtime (the dispatch path's two inputs)."""
     agent = Agent(name="t", config=config)
-    rt = _A2UIRuntime(agent, validate_responses=validate_responses)
+    rt = _A2UIRuntime(validate_responses=validate_responses)
     return agent, rt
 
 

@@ -8,13 +8,14 @@ followed by one :class:`A2UIMessageFrame` per A2UI message. Shared core under
 the SSE / NDJSON wire encoders.
 """
 
-from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from collections.abc import AsyncIterator, Iterable
+from dataclasses import dataclass, field
 
 from autogen.beta.agent import Agent
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import BaseEvent, ModelRequest, TextInput
 from autogen.beta.stream import MemoryStream
+from autogen.beta.tools.tool import Tool
 
 from .._runtime import _A2UIRuntime
 from .._types import ServerToClientMessage
@@ -40,7 +41,13 @@ class A2UIMessageFrame:
 A2UIFrame = A2UIProseFrame | A2UIMessageFrame
 
 
-async def stream_turn(agent: Agent, runtime: _A2UIRuntime, request: A2UIServerRequest) -> AsyncIterator[A2UIFrame]:
+async def stream_turn(
+    agent: Agent,
+    runtime: _A2UIRuntime,
+    request: A2UIServerRequest,
+    *,
+    additional_tools: Iterable[Tool] = (),
+) -> AsyncIterator[A2UIFrame]:
     """Execute one turn and yield its prose then A2UI message frames.
 
     Args:
@@ -48,6 +55,9 @@ async def stream_turn(agent: Agent, runtime: _A2UIRuntime, request: A2UIServerRe
         runtime: The A2UI runtime supplying the prompt section, validation
             middleware, and catalog/capabilities helpers.
         request: The parsed turn (history, current inputs, prompt, variables).
+        additional_tools: Clickable A2UI actions to expose for this turn only
+            (the ``A2UIActionTool``s passed to ``A2UIServer(actions=[...])``).
+            The agent itself stays plain — the tools ride along just for the turn.
 
     Yields:
         An :class:`A2UIProseFrame` first (only when there is prose), then an
@@ -102,6 +112,7 @@ async def stream_turn(agent: Agent, runtime: _A2UIRuntime, request: A2UIServerRe
         initial_event,
         context=ctx,
         client=client,
+        additional_tools=additional_tools,
         additional_middleware=extra_middleware,
     )
 
@@ -111,6 +122,25 @@ async def stream_turn(agent: Agent, runtime: _A2UIRuntime, request: A2UIServerRe
         yield A2UIProseFrame(prose)
     for message in a2ui_messages:
         yield A2UIMessageFrame(message)
+
+
+@dataclass(slots=True)
+class _A2UITurnCore:
+    """Transport-neutral turn engine shared by every transport.
+
+    Bundles the plain ``Agent``, the configured ``_A2UIRuntime``, and the
+    clickable ``actions`` (``A2UIActionTool``s) so a transport can run one turn
+    via :meth:`run_turn` without knowing how A2UI is wired. The actions are
+    injected per-turn as ``additional_tools`` — the agent stays plain.
+    """
+
+    agent: Agent
+    runtime: _A2UIRuntime
+    action_tools: tuple[Tool, ...] = field(default_factory=tuple)
+
+    def run_turn(self, request: A2UIServerRequest) -> AsyncIterator[A2UIFrame]:
+        """Run one turn and yield its prose then A2UI message frames."""
+        return stream_turn(self.agent, self.runtime, request, additional_tools=self.action_tools)
 
 
 __all__ = ("A2UIFrame", "A2UIMessageFrame", "A2UIProseFrame", "stream_turn")

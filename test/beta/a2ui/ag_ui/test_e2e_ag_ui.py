@@ -2,13 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""End-to-end A2UI-over-AG-UI turns through :class:`A2UIAGUIServer`.
+"""End-to-end A2UI-over-AG-UI turns through ``A2UIServer(transport=AgUiTransport())``.
 
 The agent's validated A2UI messages must reach the wire as a single AG-UI
 ``ActivitySnapshotEvent`` with ``activity_type="a2ui-surface"`` and the
 operations under ``content["a2ui_operations"]`` — the exact contract
 CopilotKit's ``@copilotkit/a2ui-renderer`` consumes. The LLM is mocked with
-``TestConfig`` so the turn is deterministic.
+``TestConfig`` so the turn is deterministic. Turns are driven over a real
+in-process HTTP transport (``httpx`` + ``ASGITransport``) since the server is
+itself the ASGI app.
 """
 
 import json
@@ -21,7 +23,8 @@ from dirty_equals import IsPartialDict
 
 from autogen.beta import Agent
 from autogen.beta.a2ui import a2ui_action
-from autogen.beta.a2ui.ag_ui import A2UIAGUIServer
+from autogen.beta.a2ui.rest import A2UIServer
+from autogen.beta.a2ui.transports import AgUiTransport
 from autogen.beta.events import ModelRequest, TextInput, ToolCallEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
 
@@ -67,11 +70,18 @@ def _click_input(name: str, context: dict[str, Any], *, messages: list[dict[str,
     )
 
 
-async def _dispatch_events(server: A2UIAGUIServer, incoming: RunAgentInput) -> list[dict[str, Any]]:
-    """Drive a turn and decode the SSE-encoded AG-UI events into dicts."""
+def _client(app: Any) -> httpx.AsyncClient:
+    """An async HTTP client bound to ``app`` over an in-process ASGI transport."""
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a2ui.test")
+
+
+async def _dispatch_events(server: A2UIServer, incoming: RunAgentInput) -> list[dict[str, Any]]:
+    """Drive a turn over HTTP and decode the SSE-encoded AG-UI events into dicts."""
     events: list[dict[str, Any]] = []
-    async for chunk in server.dispatch(incoming):
-        for line in chunk.splitlines():
+    async with _client(server) as client:
+        resp = await client.post("/", json=incoming.model_dump(by_alias=True))
+        assert resp.status_code == 200
+        for line in resp.text.splitlines():
             if line.startswith("data: "):
                 events.append(json.loads(line[len("data: ") :]))
     return events
@@ -79,7 +89,7 @@ async def _dispatch_events(server: A2UIAGUIServer, incoming: RunAgentInput) -> l
 
 @pytest.mark.asyncio
 async def test_single_turn_emits_text_then_activity_snapshot() -> None:
-    server = A2UIAGUIServer(Agent(name="ui", config=TestConfig(_A2UI_RESPONSE)))
+    server = A2UIServer(Agent(name="ui", config=TestConfig(_A2UI_RESPONSE)), transport=AgUiTransport())
 
     events = await _dispatch_events(server, _run_input("show ui"))
 
@@ -103,7 +113,11 @@ async def test_single_turn_emits_text_then_activity_snapshot() -> None:
 
 @pytest.mark.asyncio
 async def test_plain_text_emits_no_activity_snapshot() -> None:
-    server = A2UIAGUIServer(Agent(name="ui", config=TestConfig("Just text.")), validate_responses=False)
+    server = A2UIServer(
+        Agent(name="ui", config=TestConfig("Just text.")),
+        transport=AgUiTransport(),
+        validate_responses=False,
+    )
 
     events = await _dispatch_events(server, _run_input("hi"))
 
@@ -113,11 +127,10 @@ async def test_plain_text_emits_no_activity_snapshot() -> None:
 
 
 @pytest.mark.asyncio
-async def test_build_app_serves_turn_over_http() -> None:
-    server = A2UIAGUIServer(Agent(name="ui", config=TestConfig(_A2UI_RESPONSE)))
-    app = server.build_app()
+async def test_server_serves_turn_over_http() -> None:
+    server = A2UIServer(Agent(name="ui", config=TestConfig(_A2UI_RESPONSE)), transport=AgUiTransport())
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a2ui.test") as client:
+    async with _client(server) as client:
         resp = await client.post("/", json=_run_input("show ui").model_dump(by_alias=True))
 
     assert resp.status_code == 200
@@ -128,10 +141,11 @@ async def test_build_app_serves_turn_over_http() -> None:
 
 
 @pytest.mark.asyncio
-async def test_button_click_in_forwarded_props_executes_server_tool() -> None:
+async def test_button_click_in_forwarded_props_executes_server_action() -> None:
     # CopilotKit relays a click as forwardedProps.a2uiAction and re-runs the
     # agent (no new chat message). The click is rewritten into the turn; the
-    # mocked LLM then calls the @a2ui_action tool and answers once it returns.
+    # mocked LLM then calls the @a2ui_action (injected for the turn) and answers
+    # once it returns. The agent stays plain — the action lives on the server.
     clicked: list[str] = []
 
     @a2ui_action(description="Schedule all posts for the given time")
@@ -141,10 +155,9 @@ async def test_button_click_in_forwarded_props_executes_server_tool() -> None:
 
     agent = Agent(
         name="ui",
-        tools=[schedule_posts],
         config=TestConfig(ToolCallEvent(name="schedule_posts", arguments='{"time": "2:00 PM"}'), "All set."),
     )
-    server = A2UIAGUIServer(agent, validate_responses=False)
+    server = A2UIServer(agent, actions=[schedule_posts], transport=AgUiTransport(), validate_responses=False)
 
     events = await _dispatch_events(server, _click_input("schedule_posts", {"time": "2:00 PM"}))
 
@@ -162,7 +175,12 @@ async def test_click_is_rewritten_into_the_llm_turn() -> None:
         return f"scheduled {time}"
 
     tracking = TrackingConfig(TestConfig("ok"))
-    server = A2UIAGUIServer(Agent(name="ui", tools=[schedule_posts], config=tracking), validate_responses=False)
+    server = A2UIServer(
+        Agent(name="ui", config=tracking),
+        actions=[schedule_posts],
+        transport=AgUiTransport(),
+        validate_responses=False,
+    )
 
     await _dispatch_events(server, _click_input("schedule_posts", {"time": "2:00 PM"}))
 
@@ -175,10 +193,9 @@ async def test_click_is_rewritten_into_the_llm_turn() -> None:
 
 @pytest.mark.asyncio
 async def test_invalid_body_returns_400() -> None:
-    server = A2UIAGUIServer(Agent(name="ui", config=TestConfig(_A2UI_RESPONSE)))
-    app = server.build_app()
+    server = A2UIServer(Agent(name="ui", config=TestConfig(_A2UI_RESPONSE)), transport=AgUiTransport())
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a2ui.test") as client:
+    async with _client(server) as client:
         resp = await client.post("/", content=b"{not json")
 
     assert resp.status_code == 400

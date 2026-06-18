@@ -92,6 +92,17 @@ class A2UIActionTool(FunctionTool):
         self.action = action
 
 
+def collect_action_declarations(tools: Iterable[object]) -> tuple[A2UIEventAction, ...]:
+    """Pull the :class:`A2UIEventAction` declaration out of each clickable tool.
+
+    Filters ``tools`` to :class:`A2UIActionTool`s and returns their ``action``s
+    (for the system prompt + click routing). Non-action tools are ignored, so a
+    mixed ``agent.tools`` list or a pure ``A2UIServer(actions=[...])`` list both
+    work.
+    """
+    return tuple(tool.action for tool in tools if isinstance(tool, A2UIActionTool))
+
+
 @overload
 def a2ui_action(
     function: Callable[..., Any],
@@ -187,4 +198,5 @@ def a2ui_action(
 __all__ = (
     "A2UIActionTool",
     "a2ui_action",
+    "collect_action_declarations",
 )

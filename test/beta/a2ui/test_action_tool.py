@@ -7,7 +7,7 @@ import pytest
 from autogen.beta import Agent
 from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui._runtime import _A2UIRuntime
-from autogen.beta.a2ui.action_tool import A2UIActionTool
+from autogen.beta.a2ui.action_tool import A2UIActionTool, collect_action_declarations
 from autogen.beta.a2ui.actions import A2UIEventAction
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
@@ -84,7 +84,7 @@ class TestRuntimeActionCollection:
         def schedule(time: str) -> str:
             return time
 
-        rt = _A2UIRuntime(Agent(name="ui", tools=[schedule]))
+        rt = _A2UIRuntime(actions=collect_action_declarations([schedule]))
 
         collected = rt.get_action("schedule")
         assert collected is not None
@@ -105,7 +105,7 @@ class TestRuntimeActionCollection:
 
         # Plain tools (web_search) are not clickable buttons; only @a2ui_action
         # tools contribute an A2UIEventAction.
-        rt = _A2UIRuntime(Agent(name="ui", tools=[web_search, schedule]))
+        rt = _A2UIRuntime(actions=collect_action_declarations([web_search, schedule]))
 
         assert {a.name for a in rt.actions} == {"schedule"}
         assert rt.get_action("schedule") is not None

@@ -26,6 +26,7 @@ from autogen.beta.stream import MemoryStream
 
 from .._runtime import _A2UIRuntime
 from .._types import A2UIVersion, JsonObject, JsonSchema, ServerToClientMessage
+from ..action_tool import collect_action_declarations
 from ..capabilities import (
     A2UIClientCapabilities,
     parse_client_capabilities,
@@ -91,7 +92,7 @@ class A2UIAgentExecutor(AgentExecutor):
         """
         super().__init__(agent)
         self._runtime = _A2UIRuntime(
-            agent,
+            actions=collect_action_declarations(agent.tools),
             protocol_version=protocol_version,
             custom_catalog=custom_catalog,
             custom_catalog_rules=custom_catalog_rules,

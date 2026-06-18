@@ -3,48 +3,58 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
+
+from starlette.applications import Starlette
 
 from autogen.beta.agent import Agent
 
 from .._runtime import _A2UIRuntime
 from .._types import A2UIVersion, JsonSchema
-from .asgi import build_jsonl_app, build_sse_app
+from ..action_tool import A2UIActionTool, collect_action_declarations
+from ..transports.base import A2UITransport
+from .dispatch import _A2UITurnCore
 
 if TYPE_CHECKING:
-    from starlette.applications import Starlette
+    from starlette.types import Receive, Scope, Send
 
 
 class A2UIServer:
-    """Serve a plain :class:`~autogen.beta.Agent` over HTTP as canonical A2UI.
+    """Serve a plain :class:`~autogen.beta.Agent` over A2UI as an ASGI app.
 
-    Hold a normal ``Agent``, configure A2UI with flat kwargs, then call a
-    ``build_*`` method for a ready-to-serve Starlette ASGI app (bring your own
-    ASGI server). The server is stateless — clients send the full conversation
-    each turn. Two wire encodings: :meth:`build_sse_app` (SSE) and
-    :meth:`build_jsonl_app` (NDJSON).
+    Hold a normal ``Agent``, declare any clickable ``actions``, pick exactly one
+    ``transport`` (the deployment's wire encoding), and configure A2UI with flat
+    kwargs. The instance **is** the ASGI app — run it directly with
+    ``uvicorn mymodule:server``, mount it (``Mount("/x", app=server)``), or drive
+    it with ``TestClient(server)``. The server is stateless — clients send the
+    full conversation each turn.
 
     Example::
 
         from autogen.beta import Agent
         from autogen.beta.a2ui import a2ui_action
         from autogen.beta.a2ui.rest import A2UIServer
+        from autogen.beta.a2ui.transports import AgUiTransport
 
 
         @a2ui_action(description="Schedule all posts for the given time")
         def schedule_posts(time: str) -> str: ...
 
 
-        agent = Agent(name="ui", config=..., tools=[schedule_posts])
-        app = A2UIServer(agent, protocol_version="v0.9").build_sse_app()
+        agent = Agent(name="ui", config=...)  # plain agent, no A2UI tools
+        server = A2UIServer(agent, actions=[schedule_posts], transport=AgUiTransport())
+        # uvicorn mymodule:server
     """
 
-    __slots__ = ("_agent", "_runtime")
+    __slots__ = ("_agent", "_core", "_runtime", "_starlette", "_transport")
 
     def __init__(
         self,
         agent: Agent,
         *,
+        transport: A2UITransport,
+        actions: Sequence[A2UIActionTool] = (),
         protocol_version: A2UIVersion = "v0.9",
         custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
         custom_catalog_rules: str | None = None,
@@ -57,8 +67,13 @@ class A2UIServer:
         """Wrap ``agent`` and configure A2UI.
 
         Args:
-            agent: A plain ``autogen.beta.Agent``. ``@a2ui_action`` tools passed
-                to ``Agent(tools=[...])`` are discovered as clickable buttons.
+            agent: A plain ``autogen.beta.Agent`` (no A2UI tools needed).
+            transport: The single wire transport for this deployment (e.g.
+                ``AgUiTransport()`` or ``RestTransport(encoding="sse")``).
+                Required — one deployment serves one frontend over one transport.
+            actions: Clickable A2UI buttons (``@a2ui_action`` tools). Declared
+                here, not on the agent; they are injected per-turn so the agent
+                stays plain and reusable across deployments.
             protocol_version: A2UI protocol version: "v0.9" (default), "v0.9.1", or "v1.0".
             custom_catalog: A custom catalog extending the basic catalog (path or
                 dict). Must include a ``$id`` used as the catalogId.
@@ -74,8 +89,10 @@ class A2UIServer:
                 default A2UI system message.
         """
         self._agent = agent
+        self._transport = transport
+        action_tools = tuple(actions)
         self._runtime = _A2UIRuntime(
-            agent,
+            actions=collect_action_declarations(action_tools),
             protocol_version=protocol_version,
             custom_catalog=custom_catalog,
             custom_catalog_rules=custom_catalog_rules,
@@ -85,18 +102,18 @@ class A2UIServer:
             validation_retries=validation_retries,
             system_message=system_message,
         )
+        self._core = _A2UITurnCore(agent, self._runtime, action_tools)
+        # The instance IS the app (no ``.app``/``build_app()``): build the
+        # Starlette app once from the transport's routes and delegate to it.
+        self._starlette = Starlette(routes=transport.routes(self._core))
 
     @property
     def agent(self) -> Agent:
         return self._agent
 
-    def build_sse_app(self, *, path: str = "/a2ui") -> "Starlette":
-        """Starlette ASGI app serving the turn as SSE at ``path`` (POST)."""
-        return build_sse_app(self._agent, self._runtime, path=path)
-
-    def build_jsonl_app(self, *, path: str = "/a2ui") -> "Starlette":
-        """Starlette ASGI app serving the turn as A2UI NDJSON at ``path`` (POST)."""
-        return build_jsonl_app(self._agent, self._runtime, path=path)
+    async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
+        """ASGI entrypoint — delegate to the transport-built Starlette app."""
+        await self._starlette(scope, receive, send)
 
 
 __all__ = ("A2UIServer",)

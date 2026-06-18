@@ -10,6 +10,7 @@ from starlette.testclient import TestClient
 from autogen.beta import Agent
 from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui.rest import A2UIServer
+from autogen.beta.a2ui.transports import RestTransport
 from autogen.beta.testing import TestConfig
 
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
@@ -20,15 +21,25 @@ _A2UI_RESPONSE = (
 )
 
 
-def _server(response: str = _A2UI_RESPONSE, *, validate: bool = True, tools=()) -> A2UIServer:
-    agent = Agent(name="t", config=TestConfig(response), tools=list(tools))
-    return A2UIServer(agent, validate_responses=validate)
+def _server(
+    response: str = _A2UI_RESPONSE,
+    *,
+    validate: bool = True,
+    actions=(),
+    transport: RestTransport | None = None,
+) -> A2UIServer:
+    agent = Agent(name="t", config=TestConfig(response))
+    return A2UIServer(
+        agent,
+        transport=transport or RestTransport(encoding="sse"),
+        actions=list(actions),
+        validate_responses=validate,
+    )
 
 
 class TestSSEApp:
     def test_streams_prose_and_message(self) -> None:
-        app = _server().build_sse_app()
-        client = TestClient(app)
+        client = TestClient(_server())
 
         resp = client.post("/a2ui", json={"messages": [{"role": "user", "content": "show ui"}]})
 
@@ -41,8 +52,7 @@ class TestSSEApp:
         assert "event: done" in body
 
     def test_plain_text_no_message_frame(self) -> None:
-        app = _server("Just text.", validate=False).build_sse_app()
-        client = TestClient(app)
+        client = TestClient(_server("Just text.", validate=False))
 
         resp = client.post("/a2ui", json={"messages": [{"role": "user", "content": "hi"}]})
 
@@ -51,8 +61,7 @@ class TestSSEApp:
         assert "createSurface" not in resp.text
 
     def test_malformed_body_returns_400(self) -> None:
-        app = _server().build_sse_app()
-        client = TestClient(app)
+        client = TestClient(_server())
 
         resp = client.post("/a2ui", content=b"{not json")
 
@@ -60,8 +69,7 @@ class TestSSEApp:
         assert "error" in resp.json()
 
     def test_custom_path(self) -> None:
-        app = _server("hi", validate=False).build_sse_app(path="/custom")
-        client = TestClient(app)
+        client = TestClient(_server("hi", validate=False, transport=RestTransport(path="/custom")))
 
         assert client.post("/custom", json={"messages": []}).status_code == 200
         assert client.post("/a2ui", json={"messages": []}).status_code == 404
@@ -69,8 +77,7 @@ class TestSSEApp:
 
 class TestJSONLApp:
     def test_streams_ndjson_lines(self) -> None:
-        app = _server().build_jsonl_app()
-        client = TestClient(app)
+        client = TestClient(_server(transport=RestTransport(encoding="jsonl")))
 
         resp = client.post("/a2ui", json={"messages": [{"role": "user", "content": "show ui"}]})
 
@@ -81,8 +88,7 @@ class TestJSONLApp:
         assert lines[1] == IsPartialDict({"createSurface": IsPartialDict({"surfaceId": "s1"})})
 
     def test_malformed_body_returns_400(self) -> None:
-        app = _server().build_jsonl_app()
-        client = TestClient(app)
+        client = TestClient(_server(transport=RestTransport(encoding="jsonl")))
 
         resp = client.post("/a2ui", content=b"not json")
 
@@ -94,8 +100,7 @@ def test_action_click_drives_a_turn() -> None:
     def confirm() -> str:
         return "ok"
 
-    app = _server("Confirmed.", validate=False, tools=[confirm]).build_sse_app()
-    client = TestClient(app)
+    client = TestClient(_server("Confirmed.", validate=False, actions=[confirm]))
 
     resp = client.post(
         "/a2ui",
