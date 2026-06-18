@@ -58,13 +58,19 @@ class MemorySkill:
         self._resources: dict[str, _MemoryResource] = {}
         self._scripts: dict[str, _MemoryScript] = {}
 
+    @overload
+    def resource(self, func: Callable[P, T]) -> Callable[P, T]: ...
+
+    @overload
+    def resource(self, func: None = None, *, name: str | None = None, description: str | None = None) -> Callable[[Callable[P, T]], Callable[P, T]]: ...
+
     def resource(
         self,
-        func: Callable[..., Any] | None = None,
+        func: Callable[P, T] | None = None,
         *,
         name: str | None = None,
         description: str | None = None,
-    ) -> Any:
+    ) -> Callable[P, T] | Callable[[Callable[P, T]], Callable[P, T]]:
         """Register a callable as a Resource of this skill.
 
         Usable bare (``@skill.resource``) or with arguments
@@ -72,7 +78,7 @@ class MemorySkill:
         docstring supply the defaults. Returns the original function unchanged.
         """
 
-        def register(f: Callable[..., Any]) -> Callable[..., Any]:
+        def register(f: Callable[P, T]) -> Callable[P, T]:
             rname = name or f.__name__
             desc = description or f.__doc__ or ""
             self._resources[rname] = _MemoryResource(rname, desc, tool(f, name=rname, description=desc))

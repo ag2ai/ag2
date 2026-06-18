@@ -50,7 +50,7 @@ An agent with 20 installed skills doesn't load 20 full instruction sets upfront 
 
 `SkillPlugin` is the recommended way to give an agent local skills. Instead of spending a `list_skills` tool round-trip, it injects the catalog into the system prompt at startup, so the model can decide which skill is relevant immediately.
 
-```python linenums="1"
+```python linenums="1" hl_lines="8"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.tools import SkillPlugin
@@ -103,7 +103,7 @@ So an agent whose skills are pure instructions never sees a `run_skill_script` t
 
 `SkillsToolkit` is the lower-level building block behind `SkillPlugin`. It exposes the same activation tools plus an explicit `list_skills` tool, but does **not** inject anything into the prompt — the model discovers skills by calling `list_skills` itself. Prefer [`SkillPlugin`](#skillplugin) unless you need that control.
 
-```python linenums="1"
+```python linenums="1" hl_lines="8"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.tools import SkillsToolkit
@@ -126,7 +126,7 @@ It exposes four tools:
 
 Every tool is also available as a method, so you can hand-pick a subset:
 
-```python linenums="1"
+```python linenums="1" hl_lines="6"
 skills = SkillsToolkit()
 
 agent = Agent(
@@ -140,7 +140,7 @@ agent = Agent(
 
 A **runtime** owns where skills live and how their scripts run — it discovers skills, reads their content, and executes their scripts. `LocalRuntime` is the default: it backs skills with the filesystem and runs scripts in a local subprocess (or a sandbox you supply). Pass one to a toolkit or plugin as a path string or an explicit `LocalRuntime`:
 
-```python linenums="1"
+```python linenums="1" hl_lines="4 6"
 from autogen.beta.tools import SkillsToolkit
 from autogen.beta.tools.skills import LocalRuntime
 
@@ -151,7 +151,7 @@ skills = SkillsToolkit("./my-skills")
 
 `LocalRuntime` takes the install directory plus optional execution and discovery settings. `extra_paths` adds read-only directories that are scanned for skills but never written to — installed skills always go to the primary `dir`:
 
-```python linenums="1"
+```python linenums="1" hl_lines="4-6"
 skills = SkillsToolkit(
     LocalRuntime(
         "./my-skills",
@@ -166,7 +166,7 @@ skills = SkillsToolkit(
 
 `SkillPlugin` and `SkillsToolkit` both accept **more than one runtime**, so you can serve skills from several locations at once — each with its own configuration. A common pattern is a read-only global library plus a writable project directory:
 
-```python linenums="1"
+```python linenums="1" hl_lines="6-7"
 from autogen.beta.tools import SkillPlugin
 from autogen.beta.tools.skills import LocalRuntime
 
@@ -187,11 +187,10 @@ When the same skill name exists in more than one runtime, the **last runtime win
 
 Not every skill needs to live on disk. A `MemorySkill` defines a skill **inline in code** — its instructions, resources, and scripts are Python values rather than files. It's backed by an in-memory runtime (`MemoryRuntime`) instead of `LocalRuntime`, but the agent activates it through the same progressive-disclosure flow.
 
-```python linenums="1"
+```python linenums="1" hl_lines="11 16 24"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import SkillPlugin
-from autogen.beta.tools.skills import MemorySkill
+from autogen.beta.tools import SkillPlugin, MemorySkill
 
 unit_converter = MemorySkill(
     name="unit-converter",
@@ -227,10 +226,10 @@ The `@skill.resource` and `@skill.script` decorators register Python callables (
 
 Both forms support dependency injection — a callable can declare `Context`, `Variable`, or `Inject` parameters and they resolve from the live run context, just like a tool:
 
-```python linenums="1"
+```python linenums="1" hl_lines="8"
 from typing import Annotated
 from autogen.beta import Variable
-from autogen.beta.tools.skills import MemorySkill
+from autogen.beta.tools import MemorySkill
 
 project = MemorySkill(name="project-info", description="Project status and configuration.")
 
@@ -266,7 +265,7 @@ agent = Agent(
     "coder",
     "You are a helpful coding assistant. Use skills to extend your capabilities.",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[SkillSearchToolkit()],
+    tools=[SkillSearchToolkit()],  # adds search_skills, install_skill, remove_skill
 )
 
 async def main() -> None:
