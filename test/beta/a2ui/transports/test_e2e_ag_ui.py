@@ -22,8 +22,7 @@ from ag_ui.core import RunAgentInput
 from dirty_equals import IsPartialDict
 
 from autogen.beta import Agent
-from autogen.beta.a2ui import a2ui_action
-from autogen.beta.a2ui.rest import A2UIServer
+from autogen.beta.a2ui import A2UIServer, a2ui_action
 from autogen.beta.a2ui.transports import AgUiTransport
 from autogen.beta.events import ModelRequest, TextInput, ToolCallEvent
 from autogen.beta.testing import TestConfig, TrackingConfig

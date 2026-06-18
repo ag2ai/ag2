@@ -6,7 +6,7 @@ import pytest
 
 from autogen.beta.a2ui import A2UIClientCapabilities
 from autogen.beta.a2ui.actions import A2UIEventAction
-from autogen.beta.a2ui.rest import parse_request
+from autogen.beta.a2ui.request import parse_request
 from autogen.beta.events import ModelRequest, ModelResponse
 
 

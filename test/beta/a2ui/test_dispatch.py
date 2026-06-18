@@ -11,7 +11,8 @@ from typing_extensions import Self
 from autogen.beta import Agent, Context
 from autogen.beta.a2ui import A2UIClientCapabilities
 from autogen.beta.a2ui._runtime import _A2UIRuntime
-from autogen.beta.a2ui.rest import A2UIMessageFrame, A2UIProseFrame, parse_request, stream_turn
+from autogen.beta.a2ui.dispatch import A2UIMessageFrame, A2UIProseFrame, stream_turn
+from autogen.beta.a2ui.request import parse_request
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse
 from autogen.beta.testing import TestConfig

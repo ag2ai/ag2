@@ -10,11 +10,11 @@ from starlette.applications import Starlette
 
 from autogen.beta.agent import Agent
 
-from .._runtime import _A2UIRuntime
-from .._types import A2UIVersion, JsonSchema
-from ..action_tool import A2UIActionTool, collect_action_declarations
-from ..transports.base import A2UITransport
+from ._runtime import _A2UIRuntime
+from ._types import A2UIVersion, JsonSchema
+from .action_tool import A2UIActionTool, collect_action_declarations
 from .dispatch import _A2UITurnCore
+from .transports.base import A2UITransport
 
 if TYPE_CHECKING:
     from starlette.types import Receive, Scope, Send
@@ -33,8 +33,7 @@ class A2UIServer:
     Example::
 
         from autogen.beta import Agent
-        from autogen.beta.a2ui import a2ui_action
-        from autogen.beta.a2ui.rest import A2UIServer
+        from autogen.beta.a2ui import A2UIServer, a2ui_action
         from autogen.beta.a2ui.transports import AgUiTransport
 
 

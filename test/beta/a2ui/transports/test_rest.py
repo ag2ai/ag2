@@ -8,8 +8,7 @@ from dirty_equals import IsPartialDict
 from starlette.testclient import TestClient
 
 from autogen.beta import Agent
-from autogen.beta.a2ui import a2ui_action
-from autogen.beta.a2ui.rest import A2UIServer
+from autogen.beta.a2ui import A2UIServer, a2ui_action
 from autogen.beta.a2ui.transports import RestTransport
 from autogen.beta.testing import TestConfig
 

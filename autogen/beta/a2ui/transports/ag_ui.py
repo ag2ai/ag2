@@ -40,12 +40,12 @@ from starlette.routing import Route
 from autogen.beta.ag_ui.stream import AGStreamInput, map_agui_messages_to_events
 from autogen.beta.events import TextInput
 
+from ..dispatch import A2UIMessageFrame, A2UIProseFrame
 from ..incoming import iter_incoming_prompts, parse_incoming_interactions
-from ..rest.dispatch import A2UIMessageFrame, A2UIProseFrame
-from ..rest.request import A2UIServerRequest
+from ..request import A2UIServerRequest
 
 if TYPE_CHECKING:
-    from ..rest.dispatch import _A2UITurnCore
+    from ..dispatch import _A2UITurnCore
 
 logger = logging.getLogger(__name__)
 

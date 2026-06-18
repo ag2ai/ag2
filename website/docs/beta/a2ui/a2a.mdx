@@ -33,39 +33,34 @@ from autogen.beta.a2ui.a2a import (
 
 ## Minimal Server
 
-Wrap a plain `#!python Agent` in `#!python A2UIAgentExecutor` (with the same flat A2UI kwargs as `#!python A2UIServer`), pass it to `#!python A2AServer` via `#!python executor=`, and advertise A2UI support on the card with a `#!python card_modifier` that appends the extension:
+Wrap a plain `#!python Agent` in `#!python A2UIAgentExecutor` (with the same flat A2UI kwargs as `#!python A2UIServer`, including `#!python actions=` for clickable buttons), pass it to `#!python A2AServer` via `#!python executor=`, and advertise A2UI support on the card with a `#!python card_modifier` that appends the extension:
 
-```python linenums="1" hl_lines="18 20 21 27"
+```python linenums="1" hl_lines="10-12 18"
 import uvicorn
 from a2a.types import AgentCard
 
 from autogen.beta import Agent
 from autogen.beta.a2a import A2AServer
+from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui.a2a import A2UIAgentExecutor, get_a2ui_agent_extension
 from autogen.beta.config import AnthropicConfig
 
+@a2ui_action(description="Book the selected dinner reservation")
+def book_table(time: str) -> str:
+    return f"booked a table for {time}"
 
 def build_app():
-    agent = Agent(
-        name="ui_agent",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
-        # tools=[...] — @a2ui_action tools become clickable buttons
-    )
-    executor = A2UIAgentExecutor(agent, protocol_version="v0.9")
+    agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+    # Buttons are declared on the executor via actions=, just like A2UIServer —
+    # the agent stays plain.
+    executor = A2UIAgentExecutor(agent, actions=[book_table], protocol_version="v0.9")
 
     async def advertise_a2ui(card: AgentCard) -> AgentCard:
-        card.capabilities.extensions.append(
-            get_a2ui_agent_extension(version=executor.protocol_version)
-        )
+        card.capabilities.extensions.append(get_a2ui_agent_extension(version=executor.protocol_version))
         return card
 
-    server = A2AServer(
-        agent,
-        executor=executor,
-        card_modifier=advertise_a2ui,
-    )
+    server = A2AServer(agent, executor=executor, card_modifier=advertise_a2ui)
     return server.build_jsonrpc(url="http://127.0.0.1:8000")
-
 
 app = build_app()
 

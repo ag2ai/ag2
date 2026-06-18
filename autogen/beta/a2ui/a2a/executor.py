@@ -26,7 +26,7 @@ from autogen.beta.stream import MemoryStream
 
 from .._runtime import _A2UIRuntime
 from .._types import A2UIVersion, JsonObject, JsonSchema, ServerToClientMessage
-from ..action_tool import collect_action_declarations
+from ..action_tool import A2UIActionTool, collect_action_declarations
 from ..capabilities import (
     A2UIClientCapabilities,
     parse_client_capabilities,
@@ -76,6 +76,7 @@ class A2UIAgentExecutor(AgentExecutor):
         self,
         agent: Agent,
         *,
+        actions: Sequence[A2UIActionTool] = (),
         protocol_version: A2UIVersion = "v0.9",
         custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
         custom_catalog_rules: str | None = None,
@@ -88,11 +89,14 @@ class A2UIAgentExecutor(AgentExecutor):
         """Wrap a plain ``Agent`` as an A2UI-aware A2A executor.
 
         Takes the same flat A2UI kwargs as :class:`A2UIServer`. Clickable buttons
-        (``@a2ui_action``) come from ``agent.tools``.
+        (``@a2ui_action`` tools) are declared via ``actions`` — not on the agent;
+        they are injected per-turn so the agent stays plain and reusable across
+        deployments.
         """
         super().__init__(agent)
+        self._action_tools = tuple(actions)
         self._runtime = _A2UIRuntime(
-            actions=collect_action_declarations(agent.tools),
+            actions=collect_action_declarations(self._action_tools),
             protocol_version=protocol_version,
             custom_catalog=custom_catalog,
             custom_catalog_rules=custom_catalog_rules,
@@ -192,7 +196,9 @@ class A2UIAgentExecutor(AgentExecutor):
         context_id: str,
         extra_prompt: Sequence[str] = (),
     ) -> None:
-        client_tools = [self._make_client_tool(s) for s in parsed.tool_schemas]
+        # The clickable @a2ui_action tools are injected per-turn (the agent stays
+        # plain), alongside any client-side tool schemas the request carried.
+        client_tools = [*self._action_tools, *(self._make_client_tool(s) for s in parsed.tool_schemas)]
         initial_event = self._build_initial_event(parsed)
 
         # The validation middleware emits one A2UIMessageEvent per validated

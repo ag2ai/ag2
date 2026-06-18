@@ -5,10 +5,10 @@
 """The :class:`A2UITransport` protocol: a deployment's single wire encoding.
 
 A transport owns its HTTP route(s), parses the incoming envelope, runs one turn
-through the shared :class:`~autogen.beta.a2ui.rest.dispatch._A2UITurnCore`, and
+through the shared :class:`~autogen.beta.a2ui.dispatch._A2UITurnCore`, and
 encodes the outgoing frames in its own wire format. One :class:`A2UIServer` ==
-one transport (see ``tmp/plans/a2ui-server-api.md``); mixing transports in one
-process is an anti-pattern — run N instances behind a reverse-proxy instead.
+one transport; mixing transports in one process is an anti-pattern — run N
+instances behind a reverse-proxy instead.
 """
 
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from starlette.routing import Route
 
-    from ..rest.dispatch import _A2UITurnCore
+    from ..dispatch import _A2UITurnCore
 
 
 @runtime_checkable

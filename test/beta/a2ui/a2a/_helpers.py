@@ -140,16 +140,18 @@ def client_for(
     hitl_hook: Any = None,
     protocol_version: A2UIVersion = "v0.9",
     validate_responses: bool = True,
+    actions: Sequence[Any] = (),
 ) -> Agent:
     """A client Agent talking to ``agent`` via the A2UI executor over in-process HTTP.
 
     ``agent`` is a plain ``autogen.beta.Agent``; A2UI config (protocol version,
-    validation) now lives on the :class:`A2UIAgentExecutor` rather than on the
-    (removed) ``A2UIAgent`` subclass. Clickable buttons come from the agent's
-    ``@a2ui_action`` tools (``Agent(tools=[...])``).
+    validation) lives on the :class:`A2UIAgentExecutor`. Clickable buttons
+    (``@a2ui_action`` tools) are declared via ``actions=`` on the executor — the
+    same way they are on :class:`A2UIServer` — so the agent stays plain.
     """
     executor = A2UIAgentExecutor(
         agent,
+        actions=actions,
         protocol_version=protocol_version,
         validate_responses=validate_responses,
     )

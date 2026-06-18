@@ -38,12 +38,12 @@ The transport applies A2UI behaviour to the plain agent per turn (prompt + valid
 | Concept | Lives in | Purpose |
 |---|---|---|
 | `#!python Agent` | `#!python autogen.beta` | A plain agent — wrap it in an A2UI transport to emit validated A2UI output |
-| `#!python a2ui_action` | `#!python autogen.beta.a2ui` | Decorator turning a tool function into a clickable button (server `#!python event` action). Passed to `#!python Agent(tools=[...])` |
+| `#!python a2ui_action` | `#!python autogen.beta.a2ui` | Decorator turning a tool function into a clickable button (server `#!python event` action). Declared on the transport via `#!python actions=[...]` |
 | `#!python A2UIMessageEvent` | `#!python autogen.beta.a2ui` | One validated A2UI server→client message on the stream — the event seam every transport consumes |
 | `#!python A2UIClientEvent` | `#!python autogen.beta.a2ui` | One client→server interaction received from the renderer (click / `#!python functionResponse` / error) — the inbound observability seam |
 | `#!python A2UIValidationFailedEvent` | `#!python autogen.beta.a2ui` | Observability signal that validation exhausted its retries and the turn degraded to prose |
 | `#!python A2UIClientCapabilities` | `#!python autogen.beta.a2ui` | Catalog negotiation — tells the agent which catalogs/components the client can render |
-| `#!python A2UIServer` | `#!python autogen.beta.a2ui.rest` | Wraps a plain `#!python Agent` and serves it over HTTP as canonical A2UI (SSE or NDJSON) |
+| `#!python A2UIServer` | `#!python autogen.beta.a2ui` | Wraps a plain `#!python Agent` into an ASGI app and serves it over HTTP, using a `#!python transport=` for the wire encoding (REST/SSE or AG-UI) |
 | `#!python A2UIAgentExecutor` | `#!python autogen.beta.a2ui.a2a` | Wraps a plain `#!python Agent` for the A2A transport, carrying A2UI as `#!python DataPart`s |
 
 ## Protocol Versions
@@ -70,38 +70,38 @@ from autogen.beta.a2ui import (
 )
 ```
 
-The agent itself is a plain `#!python autogen.beta.Agent`. The transports live in their own submodules (each kept out of the core import so the package never pulls in Starlette / the a2a-sdk):
+The agent itself is a plain `#!python autogen.beta.Agent`. The HTTP server picks its wire encoding from a `#!python transport=`, and the A2A executor lives in its own submodule (kept out of the core import so the package never pulls in the a2a-sdk):
 
 ```python linenums="1"
-from autogen.beta.a2ui.rest import A2UIServer       # REST / SSE
-from autogen.beta.a2ui.a2a import A2UIAgentExecutor  # A2A
+from autogen.beta.a2ui import A2UIServer                       # HTTP server (ASGI app)
+from autogen.beta.a2ui.transports import RestTransport, AgUiTransport
+from autogen.beta.a2ui.a2a import A2UIAgentExecutor            # A2A
 ```
 
 ## Quickstart
 
-Build a plain `#!python Agent` with a clickable action, then serve it as canonical A2UI over HTTP:
+Build a plain `#!python Agent`, then wrap it in an `#!python A2UIServer` — the server **is** the ASGI app, the wire encoding comes from `#!python transport=`, and clickable buttons are declared via `#!python actions=` (the agent stays plain):
 
-```python linenums="1"
+```python linenums="1" hl_lines="16 17 18"
 import uvicorn
 
 from autogen.beta import Agent
-from autogen.beta.a2ui import a2ui_action
-from autogen.beta.a2ui.rest import A2UIServer
+from autogen.beta.a2ui import A2UIServer, a2ui_action
+from autogen.beta.a2ui.transports import RestTransport
 from autogen.beta.config import AnthropicConfig
-
 
 @a2ui_action(description="Book the selected dinner reservation")
 def book_table(time: str, party_size: int) -> str:
     return f"booked a table for {party_size} at {time}"
 
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
 
-agent = Agent(
-    name="ui_agent",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[book_table],  # clickable buttons live on the agent, like any tool
+app = A2UIServer(
+    agent,
+    transport=RestTransport(encoding="jsonl"),  # POST /a2ui  →  A2UI NDJSON
+    actions=[book_table],
+    protocol_version="v0.9",
 )
-
-app = A2UIServer(agent, protocol_version="v0.9").build_jsonl_app()  # POST /a2ui
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

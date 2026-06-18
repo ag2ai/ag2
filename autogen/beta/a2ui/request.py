@@ -15,10 +15,10 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, Input, ModelMessage, ModelRequest, ModelResponse, TextInput
 
-from .._types import A2UIVersion
-from ..actions import A2UIEventAction
-from ..capabilities import A2UIClientCapabilities, parse_client_capabilities
-from ..incoming import A2UIIncomingParseResult, iter_incoming_prompts, parse_incoming_interactions
+from ._types import A2UIVersion
+from .actions import A2UIEventAction
+from .capabilities import A2UIClientCapabilities, parse_client_capabilities
+from .incoming import A2UIIncomingParseResult, iter_incoming_prompts, parse_incoming_interactions
 
 logger = logging.getLogger(__name__)
 

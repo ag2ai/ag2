@@ -19,12 +19,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
-from ..rest.dispatch import A2UIFrame, A2UIProseFrame
-from ..rest.request import A2UIServerRequest, parse_request
+from ..dispatch import A2UIFrame, A2UIProseFrame
+from ..request import A2UIServerRequest, parse_request
 from ..serialize import to_jsonl
 
 if TYPE_CHECKING:
-    from ..rest.dispatch import _A2UITurnCore
+    from ..dispatch import _A2UITurnCore
 
 logger = logging.getLogger(__name__)
 

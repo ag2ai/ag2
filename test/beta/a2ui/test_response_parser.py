@@ -397,36 +397,35 @@ class TestPerComponentValidation:
         assert any("txt1" in e for e in result.errors)
 
 
-class TestPerComponentValidationWithoutCatalogId:
-    def test_per_component_validation_works_without_catalog_id(self) -> None:
-        manager = A2UISchemaManager()
-        parser = A2UIResponseParser(
-            version_string="v0.9",
-            server_to_client_schema=manager.server_to_client_schema,
-            schema_registry=manager.build_schema_registry(),
-            component_schemas=manager.get_component_schemas(),
-            # catalog_id intentionally omitted — should still drill into components.
-        )
-        ops = [
-            {
-                "version": "v0.9",
-                "updateComponents": {
-                    "surfaceId": "s1",
-                    "components": [
-                        {"id": "root", "component": "Column", "children": ["btn1"]},
-                        {
-                            "id": "btn1",
-                            "component": "Button",
-                            "text": "Bad — Button has no child",
-                            "action": {"event": {"name": "click"}},
-                        },
-                    ],
-                },
-            }
-        ]
-        result = parser.validate(ops)
-        assert result.is_valid is False
-        assert any("btn1" in e and "Button" in e for e in result.errors)
+def test_per_component_validation_works_without_catalog_id() -> None:
+    manager = A2UISchemaManager()
+    parser = A2UIResponseParser(
+        version_string="v0.9",
+        server_to_client_schema=manager.server_to_client_schema,
+        schema_registry=manager.build_schema_registry(),
+        component_schemas=manager.get_component_schemas(),
+        # catalog_id intentionally omitted — should still drill into components.
+    )
+    ops = [
+        {
+            "version": "v0.9",
+            "updateComponents": {
+                "surfaceId": "s1",
+                "components": [
+                    {"id": "root", "component": "Column", "children": ["btn1"]},
+                    {
+                        "id": "btn1",
+                        "component": "Button",
+                        "text": "Bad — Button has no child",
+                        "action": {"event": {"name": "click"}},
+                    },
+                ],
+            },
+        }
+    ]
+    result = parser.validate(ops)
+    assert result.is_valid is False
+    assert any("btn1" in e and "Button" in e for e in result.errors)
 
 
 class TestFormatValidationError:

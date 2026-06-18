@@ -3,34 +3,31 @@ title: A2UI Actions & Round-Trips
 sidebarTitle: Actions
 ---
 
-A2UI **actions** are the clickable parts of a UI — buttons that, when pressed, drive the next turn. With A2UI a clickable button is just a **tool on the agent**: decorate a function with `#!python @a2ui_action` and pass it to `#!python Agent(tools=[...])`. The transport discovers it, advertises it to the LLM, and routes a click back to it.
+A2UI **actions** are the clickable parts of a UI — buttons that, when pressed, drive the next turn. A clickable button is an `#!python @a2ui_action` tool you **declare on the transport** via `#!python actions=[...]` — the agent stays a plain `#!python Agent`. The transport injects the tool for the turn, advertises the button to the LLM, and routes a click back to it.
 
 ## Tool-Backed Buttons (`@a2ui_action`)
 
-Decorate a tool function with `#!python @a2ui_action`. It becomes both a normal tool the agent can call **and** a server `#!python event` action whose name routes a click back to that tool:
+Decorate a tool function with `#!python @a2ui_action`, then declare it on the server with `#!python actions=`. It becomes both a tool the agent can call **and** a server `#!python event` action whose name routes a click back to that tool:
 
-```python linenums="1" hl_lines="5 6 7 8 13"
+```python linenums="1" hl_lines="6-9 13"
 from autogen.beta import Agent
-from autogen.beta.a2ui import a2ui_action
+from autogen.beta.a2ui import A2UIServer, a2ui_action
+from autogen.beta.a2ui.transports import RestTransport
 from autogen.beta.config import AnthropicConfig
-
 
 @a2ui_action(description="Schedule all posts for the given time")
 def schedule_posts(time: str) -> str:
     # ... do the work ...
     return f"scheduled all posts for {time}"
 
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
 
-agent = Agent(
-    name="ui_agent",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[schedule_posts],
-)
+app = A2UIServer(agent, transport=RestTransport(encoding="jsonl"), actions=[schedule_posts])
 ```
 
 When the LLM renders a button whose `#!python action.event.name` is `#!python "schedule_posts"`, a click sends the button's `#!python event.context` back as the tool's arguments. The decorator derives an example context from the function's parameter schema (here `#!python {"time": "<string>"}`) and injects it into the system prompt so the LLM emits the right keys; pass `#!python example_context=` to override it.
 
-That is the whole registration story: **a button is a tool**. There is no separate action list to maintain on the transport.
+Declaring the button on the transport — not on the agent — keeps the `#!python Agent` plain and reusable across deployments. The same `#!python actions=[...]` is accepted by `#!python A2UIAgentExecutor` for the [A2A transport](/docs/beta/a2ui/a2a), so a button is declared the same way wherever the agent is served.
 
 ## Other Kinds of Buttons
 
@@ -80,7 +77,6 @@ Each client→server interaction the server receives — a button `#!python acti
 ```python linenums="1"
 from autogen.beta.a2ui import A2UIClientEvent
 
-
 @stream.subscribe
 async def on_client_event(event):
     if isinstance(event, A2UIClientEvent):
@@ -96,7 +92,6 @@ A2UI has no server→client error message, so when the model can't produce schem
 
 ```python linenums="1"
 from autogen.beta.a2ui import A2UIValidationFailedEvent
-
 
 @stream.subscribe
 async def on_validation_failed(event):

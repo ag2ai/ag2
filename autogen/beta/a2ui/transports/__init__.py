@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""A2UI wire transports for :class:`~autogen.beta.a2ui.rest.A2UIServer`.
+"""A2UI wire transports for :class:`~autogen.beta.a2ui.A2UIServer`.
 
 One :class:`A2UITransport` == one deployment's wire encoding. :class:`RestTransport`
 (SSE/NDJSON) needs Starlette; :class:`AgUiTransport` (CopilotKit's AG-UI renderer)

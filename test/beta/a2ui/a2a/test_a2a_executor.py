@@ -163,10 +163,9 @@ class TestIncomingActionRewrite:
 
         agent = Agent(
             name="ui_agent",
-            tools=[submit],
             config=TestConfig(ToolCallEvent(name="submit", arguments='{"email": "user@example.com"}'), "All set."),
         )
-        client = client_for(agent, validate_responses=False)
+        client = client_for(agent, actions=[submit], validate_responses=False)
 
         reply = await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
@@ -181,8 +180,8 @@ class TestIncomingActionRewrite:
             return email
 
         # The ACTION_ENVELOPE clicks the "submit" button, which maps to this tool.
-        agent = Agent(name="ui_agent", config=config, tools=[submit])
-        client = client_for(agent, validate_responses=False)
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, actions=[submit], validate_responses=False)
 
         await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
@@ -207,33 +206,31 @@ class TestIncomingActionRewrite:
 
 
 @pytest.mark.asyncio
-class TestIncomingErrorRewrite:
-    async def test_error_envelope_becomes_corrective_prompt(self) -> None:
-        config = CapturingConfig()
-        agent = Agent(name="ui_agent", config=config)
-        client = client_for(agent, validate_responses=False)
+async def test_incoming_error_envelope_becomes_corrective_prompt() -> None:
+    config = CapturingConfig()
+    agent = Agent(name="ui_agent", config=config)
+    client = client_for(agent, validate_responses=False)
 
-        await client.ask("retry", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ERROR_ENVELOPE])})
+    await client.ask("retry", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ERROR_ENVELOPE])})
 
-        synthesized = synthesized_text(config.messages[-1])
-        assert "VALIDATION_FAILED" in synthesized
-        assert "/components/0" in synthesized
+    synthesized = synthesized_text(config.messages[-1])
+    assert "VALIDATION_FAILED" in synthesized
+    assert "/components/0" in synthesized
 
 
 @pytest.mark.asyncio
-class TestIncomingFunctionResponse:
-    async def test_function_response_becomes_continuation_prompt(self) -> None:
-        config = CapturingConfig()
-        agent = Agent(name="ui_agent", config=config)
-        client = client_for(agent, protocol_version="v1.0", validate_responses=False)
+async def test_incoming_function_response_becomes_continuation_prompt() -> None:
+    config = CapturingConfig()
+    agent = Agent(name="ui_agent", config=config)
+    client = client_for(agent, protocol_version="v1.0", validate_responses=False)
 
-        await client.ask(
-            "continue", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])}
-        )
+    await client.ask(
+        "continue", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])}
+    )
 
-        synthesized = synthesized_text(config.messages[-1])
-        assert "openUrl" in synthesized
-        assert "fc-1" in synthesized
+    synthesized = synthesized_text(config.messages[-1])
+    assert "openUrl" in synthesized
+    assert "fc-1" in synthesized
 
 
 @pytest.mark.asyncio
