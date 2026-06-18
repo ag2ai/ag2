@@ -11,16 +11,11 @@ These JSON schemas are vendored **as-is** from the upstream A2UI project.
 
 ## Local adaptations
 
-- **Renamed on disk:** `catalogs/basic/catalog.json` → `basic_catalog.json`
-  (to match this module's per-version layout). The nine JSON schema files are
-  **byte-faithful** to the pinned commit — `$id`, `catalogId`, and all `$ref`s
-  are unchanged.
-- **`basic_catalog_rules.txt` — locally extended.** Upstream ships only the
-  5-line "REQUIRED PROPERTIES" block (true at the pinned commit *and* at `main`
-  HEAD). This file appends AG2-authored prompting rules — ACTION FORMAT,
-  COMPONENT REFERENCES, and stricter Button/Card `child` requirements — to
-  steer LLM output. This is the **one** intentional content deviation here;
-  do not overwrite it by re-vendoring.
+Only the catalog file is renamed on disk (`catalogs/basic/catalog.json` →
+`basic_catalog.json`) to match this module's per-version layout. The nine JSON
+schema files and `basic_catalog_rules.txt` (from `catalogs/basic/rules.txt`)
+are **byte-faithful** to the pinned commit — `$id`, `catalogId`, and all
+`$ref`s are unchanged.
 
 ## Relationship to v0.9.1 / v1.0
 
