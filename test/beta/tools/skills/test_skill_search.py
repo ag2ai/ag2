@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from autogen.beta import Context
+from autogen.beta.events import ToolCallEvent, ToolErrorEvent
 from autogen.beta.exceptions import InvalidSkillError, SkillInstallError
 from autogen.beta.tools.skills import LocalRuntime, SkillSearchToolkit
 from autogen.beta.tools.skills.skill_search.client import SkillsClient
@@ -376,6 +377,52 @@ async def test_toolkit_exposes_all_tools(tmp_path: Path, context: Context) -> No
         "read_skill_resource",
         "run_skill_script",
     }
+
+
+@pytest.mark.asyncio
+async def test_load_skill_name_not_pinned_to_construction_time_skills(tmp_path: Path, context: Context) -> None:
+    # SkillSearchToolkit installs skills at runtime, so the activation tools must
+    # accept ANY skill name. Pinning `name` to a Literal of the skills present at
+    # construction would reject a freshly installed skill.
+    skill_dir = tmp_path / "skills" / "existing-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: existing-skill\ndescription: x\n---\n# x\n")
+
+    toolkit = SkillSearchToolkit(LocalRuntime(dir=tmp_path / "skills"))
+
+    [schema] = await toolkit.load_skill().schemas(context)
+
+    name_prop = schema.function.parameters["properties"]["name"]  # type: ignore[union-attr]
+    assert name_prop["type"] == "string"
+    # No pinning: neither a Literal enum (2+ skills) nor a const (1 skill).
+    assert "enum" not in name_prop
+    assert "const" not in name_prop
+
+
+@pytest.mark.asyncio
+async def test_load_skill_accepts_skill_installed_after_construction(tmp_path: Path, context: Context) -> None:
+    # The end-to-end payoff: a skill that appears after the toolkit is built (as
+    # install_skill would do) is loadable — its name is not rejected by a pinned
+    # `name` constraint baked in at construction.
+    skills_dir = tmp_path / "skills"
+    a = skills_dir / "skill-a"
+    a.mkdir(parents=True)
+    (a / "SKILL.md").write_text("---\nname: skill-a\ndescription: a\n---\n# A\n")
+
+    toolkit = SkillSearchToolkit(LocalRuntime(dir=skills_dir))
+    load_tool = toolkit.load_skill()
+
+    # Simulate install_skill: a new skill lands in the runtime, cache invalidated.
+    b = skills_dir / "skill-b"
+    b.mkdir()
+    (b / "SKILL.md").write_text("---\nname: skill-b\ndescription: b\n---\n# Skill B body\n")
+    toolkit.runtimes[0].invalidate()
+
+    event = ToolCallEvent(name="load_skill", arguments=json.dumps({"name": "skill-b"}))
+    result = await load_tool(event, context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    assert "Skill B body" in result.result.parts[0].content
 
 
 @pytest.mark.asyncio

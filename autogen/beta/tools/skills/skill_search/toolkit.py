@@ -104,6 +104,13 @@ class SkillSearchToolkit(SkillsToolkit):
         ):
             self._add_tool(t)
 
+    def _name_annotation(self, description: str) -> object:
+        # This toolkit installs skills at runtime, so the activation tools must
+        # accept ANY skill name. The base toolkit pins `name` to a Literal of the
+        # skills discovered at construction time, which would reject a freshly
+        # installed one — so override that to an unconstrained string.
+        return Annotated[str, Field(description=description)]
+
     def search_skills(
         self,
         *,
