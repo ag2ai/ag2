@@ -133,6 +133,9 @@ async def test_server_serves_turn_over_http() -> None:
         resp = await client.post("/", json=_run_input("show ui").model_dump(by_alias=True))
 
     assert resp.status_code == 200
+    # The stream is SSE — the response must advertise the encoder's content type,
+    # not Starlette's text/plain default.
+    assert resp.headers["content-type"].startswith("text/event-stream")
     body = resp.text
     assert '"activityType":"a2ui-surface"' in body
     assert '"a2ui_operations"' in body

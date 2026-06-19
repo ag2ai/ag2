@@ -82,8 +82,8 @@ async def _endpoint(core: "_A2UITurnCore", request: Request) -> Response:
     except Exception:  # noqa: BLE001 - bad/short body or disconnect → 400, not 500
         return Response('{"error": "invalid AG-UI RunAgentInput body"}', status_code=400, media_type="application/json")
 
-    accept = request.headers.get("accept")
-    return StreamingResponse(_dispatch(core, incoming, accept=accept))
+    encoder = EventEncoder(accept=request.headers.get("accept"))
+    return StreamingResponse(_dispatch(core, incoming, encoder=encoder), media_type=encoder.get_content_type())
 
 
 def _click_envelopes(forwarded_props: object) -> list[dict[str, Any]]:
@@ -143,7 +143,7 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     )
 
 
-async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, accept: str | None = None) -> AsyncIterator[str]:
+async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, encoder: EventEncoder) -> AsyncIterator[str]:
     """Run one turn and yield encoded AG-UI events.
 
     Emits ``RunStarted`` → (``TextMessageChunk`` if there is prose) → (one
@@ -151,7 +151,6 @@ async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, accept: s
     A mid-turn failure surfaces as a ``RunError`` event (the run has already
     started 200 OK on the wire).
     """
-    encoder = EventEncoder(accept=accept)
     request = _request_from_agui(core, incoming)
     text_message_id = uuid4().hex
     operations: list[object] = []
