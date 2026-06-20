@@ -13,7 +13,7 @@ A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride 
 | A2UI concept | A2A representation |
 |---|---|
 | Validated server→client messages | One `#!python DataPart` (MIME `#!python application/a2ui+json`) carrying the full message list, alongside a text `#!python Part` for the prose |
-| Button click / `#!python functionResponse` / client error | An inbound A2UI `#!python DataPart` on the request message, rewritten into the turn's prompt |
+| Button click / `#!python functionResponse` / client error | An inbound A2UI `#!python DataPart` on the request message — a registered action runs its handler on the server; anything else is rewritten into the turn's prompt |
 | Catalog negotiation | `#!python a2uiClientCapabilities` on the A2A message `#!python metadata` |
 | Protocol support advertised | An `#!python AgentExtension` on the agent card's `#!python capabilities.extensions` |
 
@@ -90,7 +90,7 @@ for part in message.parts:
 
 ## The Click Round-Trip
 
-A button click is sent back as an inbound A2UI `#!python DataPart` on the next request message — an `#!python action` envelope for tool-backed and LLM-handled buttons, or a `#!python functionResponse` (v1.0) for a server-initiated `#!python callFunction`. The executor rewrites each inbound envelope into the turn's prompt, so server-actions, LLM-actions, and client round-trips all flow through the agent's normal loop. See [Actions](/docs/beta/a2ui/actions) for the envelope shapes.
+A button click is sent back as an inbound A2UI `#!python DataPart` on the next request message — an `#!python action` envelope, or a `#!python functionResponse` (v1.0) for a server-initiated `#!python callFunction`. A click on a **registered** `#!python @a2ui_action` runs that handler on the server (its messages lead the `#!python DataPart`, the agent is not invoked); a click on any other button — plus `#!python error` and `#!python functionResponse` envelopes — is rewritten into the turn's prompt so the agent continues. A turn carrying only registered server-action clicks finalizes without invoking the agent. See [Actions](/docs/beta/a2ui/actions) for the envelope shapes.
 
 !!! note "v1.0 pause/resume"
     With `#!python protocol_version="v1.0"`, a `#!python callFunction(wantResponse=true)` transitions the A2A task to `#!python input-required`, carrying the `#!python callFunction` `#!python DataPart` on the finalization message so the client knows which function to run. The client's `#!python functionResponse` arrives on the next request and resumes the task — standard A2A task lifecycle, no extra bookkeeping.

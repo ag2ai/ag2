@@ -3,29 +3,38 @@ title: A2UI Actions & Round-Trips
 sidebarTitle: Actions
 ---
 
-A2UI **actions** are the clickable parts of a UI — buttons that, when pressed, drive the next turn. A clickable button is an `#!python @a2ui_action` tool you **declare on the transport** via `#!python actions=[...]` — the agent stays a plain `#!python Agent`. The transport injects the tool for the turn, advertises the button to the LLM, and routes a click back to it.
+A2UI **actions** are the clickable parts of a UI — buttons that, when pressed, drive what happens next. A clickable button is a function you decorate with `#!python @a2ui_action` and **declare on the transport** via `#!python actions=[...]` — the agent stays a plain `#!python Agent`. The transport advertises the button to the LLM so it can render it; a click runs your function **on the server**, the agent is not invoked.
 
-## Tool-Backed Buttons (`@a2ui_action`)
+## Server-Side Buttons (`@a2ui_action`)
 
-Decorate a tool function with `#!python @a2ui_action`, then declare it on the server with `#!python actions=`. It becomes both a tool the agent can call **and** a server `#!python event` action whose name routes a click back to that tool:
+Decorate a function with `#!python @a2ui_action`, then declare it on the server with `#!python actions=`. The button is declared to the LLM so it can render it, but a **click runs the function on the server** with the click's `#!python event.context` as keyword arguments — the agent is **not** invoked. Inside the handler you can do anything: hit a backend, call a tool, update a surface.
 
-```python linenums="1" hl_lines="6-9 13"
+```python linenums="1" hl_lines="6-11 15"
 from autogen.beta import Agent
 from autogen.beta.a2ui import A2UIServer, a2ui_action
 from autogen.beta.a2ui.transports import RestTransport
 from autogen.beta.config import AnthropicConfig
 
 @a2ui_action(description="Schedule all posts for the given time")
-def schedule_posts(time: str) -> str:
-    # ... do the work ...
-    return f"scheduled all posts for {time}"
+def schedule_posts(time: str) -> dict:
+    # ... do the work on the server ...
+    return {"updateComponents": {"surfaceId": "s1", "components": [
+        {"id": "root", "component": "Text", "text": f"Scheduled for {time}"},
+    ]}}
 
 agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
 
 app = A2UIServer(agent, transport=RestTransport(encoding="jsonl"), actions=[schedule_posts])
 ```
 
-When the LLM renders a button whose `#!python action.event.name` is `#!python "schedule_posts"`, a click sends the button's `#!python event.context` back as the tool's arguments. The decorator derives an example context from the function's parameter schema (here `#!python {"time": "<string>"}`) and injects it into the system prompt so the LLM emits the right keys; pass `#!python example_context=` to override it.
+When the LLM renders a button whose `#!python action.event.name` is `#!python "schedule_posts"`, a click sends the button's `#!python event.context` back as the handler's keyword arguments and runs it on the server. The decorator derives an example context from the function's parameter schema (here `#!python {"time": "<string>"}`) and injects it into the system prompt so the LLM emits the right keys; pass `#!python example_context=` to override it.
+
+What the handler returns is mapped to the client per the A2UI spec:
+
+- one A2UI server→client message — or a list of them (e.g. `#!python updateComponents` / `#!python updateDataModel`) — is sent to the renderer as a **surface update** (works on every protocol version);
+- any other JSON value becomes an `#!python actionResponse` **only** when the client asked for one (`#!python wantResponse` + `#!python actionId`, v1.0); otherwise it is fire-and-forget.
+
+A turn whose only input is registered server-action clicks **skips the agent entirely** — the handlers' messages are the whole response.
 
 Declaring the button on the transport — not on the agent — keeps the `#!python Agent` plain and reusable across deployments. The same `#!python actions=[...]` is accepted by `#!python A2UIAgentExecutor` for the [A2A transport](/docs/beta/a2ui/a2a), so a button is declared the same way wherever the agent is served.
 
@@ -36,11 +45,11 @@ A2UI components support two button shapes the spec distinguishes by what the cli
 - **Server `#!python event`** — sends a client→server message; the server handles it. This is what `#!python @a2ui_action` produces.
 - **Client `#!python functionCall`** — runs a function **on the renderer with no network round-trip** (e.g. `#!python openUrl`, copy-to-clipboard).
 
-Client `#!python functionCall` buttons execute entirely in the client, so they are **not registered on the server**. The LLM learns which client functions it may target from the active **catalog** and from the client's advertised [capabilities](/docs/beta/a2ui/capabilities) — not from server-side code. You can also render a button whose `#!python event.name` isn't backed by a tool: a click on it is rewritten generically into the next prompt so the LLM simply continues the conversation.
+Client `#!python functionCall` buttons execute entirely in the client, so they are **not registered on the server**. The LLM learns which client functions it may target from the active **catalog** and from the client's advertised [capabilities](/docs/beta/a2ui/capabilities) — not from server-side code. You can also render a button whose `#!python event.name` isn't backed by a registered action: a click on it is rewritten generically into the next prompt so the LLM simply continues the conversation.
 
 ## The Click Round-Trip
 
-The server is stateless, so a click is just another request. The client posts the conversation plus an `#!python a2ui` envelope describing what was pressed; the transport rewrites it into the current turn:
+The server is stateless, so a click is just another request. The client posts the conversation plus an `#!python a2ui` envelope describing what was pressed; the server runs the matching handler — or, for an unregistered button, rewrites the click into the current turn:
 
 ```python linenums="1" hl_lines="4-15"
 import httpx
@@ -65,7 +74,7 @@ async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
     resp = await client.post("/a2ui", json=body)
 ```
 
-When the action name matches a registered `#!python @a2ui_action` tool, the click resolves to that tool and runs it; otherwise the click is rewritten into a plain instruction so the LLM continues the conversation.
+When the action name matches a registered `#!python @a2ui_action`, the click runs that handler on the server (the agent is not invoked); otherwise the click is rewritten into a plain instruction so the LLM continues the conversation.
 
 !!! note "v1.0 round-trip"
     With `#!python protocol_version="v1.0"`, a client's reply to a server `#!python callFunction` arrives as a `#!python functionResponse` envelope in the next request and is rewritten to a continuation prompt — the stateless transport needs no pause/resume bookkeeping. The same applies to `#!python actionResponse`.
