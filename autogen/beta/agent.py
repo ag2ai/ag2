@@ -75,6 +75,7 @@ from .middleware.base import (
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
+from .run import RunHandle, RunRegistry
 from .stream import MemoryStream, Stream
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
@@ -653,6 +654,57 @@ class Agent(PluginTarget, Generic[TResult]):
             response_schema=response_schema,
             hitl_hook=hitl_hook,
         )
+
+    def run(
+        self,
+        *msg: SendableMessage | Input,
+        stream: Stream | None = None,
+        registry: "RunRegistry | None" = None,
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "RunHandle[Any]":
+        """Start a turn in the background and return a :class:`RunHandle`.
+
+        Unlike :meth:`ask` (which you await to completion), ``run`` schedules
+        the turn as an ``asyncio.Task`` and returns immediately. The returned
+        handle lets a producer push follow-up messages into the live run's
+        inbox via ``handle.send(...)``; they are consumed at the next step
+        boundary (between tool rounds / after the model is done), never
+        mid-LLM-call. The handle's ``task_id`` is the underlying stream id.
+
+        Must be called from within a running event loop. If ``stream`` is
+        omitted a fresh :class:`MemoryStream` is created and owned by the run;
+        pass your own to share the inbox/history. When ``registry`` is given the
+        handle is registered under its ``task_id`` for external addressing.
+        """
+        stream = stream or MemoryStream()
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(
+            self.ask(
+                *msg,
+                stream=stream,
+                dependencies=dependencies,
+                variables=variables,
+                prompt=prompt,
+                config=config,
+                tools=tools,
+                middleware=middleware,
+                observers=observers,
+                response_schema=response_schema,
+                hitl_hook=hitl_hook,
+            )
+        )
+        handle: RunHandle[Any] = RunHandle(stream, task, loop)
+        if registry is not None:
+            registry.register(handle)
+        return handle
 
     async def resume(
         self,
