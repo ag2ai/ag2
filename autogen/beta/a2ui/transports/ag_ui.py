@@ -21,7 +21,7 @@ text. Importing this module requires Starlette and ``ag2[ag-ui]``.
 import functools
 import logging
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from ag_ui.core import (
@@ -40,6 +40,7 @@ from starlette.routing import Route
 from autogen.beta.ag_ui.stream import AGStreamInput, map_agui_messages_to_events
 from autogen.beta.events import TextInput
 
+from .._types import JsonObject, ServerToClientMessage
 from ..dispatch import A2UIMessageFrame, A2UIProseFrame
 from ..incoming import iter_incoming_prompts, parse_incoming_interactions
 from ..request import A2UIServerRequest
@@ -82,11 +83,11 @@ async def _endpoint(core: "_A2UITurnCore", request: Request) -> Response:
     except Exception:  # noqa: BLE001 - bad/short body or disconnect → 400, not 500
         return Response('{"error": "invalid AG-UI RunAgentInput body"}', status_code=400, media_type="application/json")
 
-    encoder = EventEncoder(accept=request.headers.get("accept"))
+    encoder = EventEncoder(accept=request.headers.get("accept", ""))
     return StreamingResponse(_dispatch(core, incoming, encoder=encoder), media_type=encoder.get_content_type())
 
 
-def _click_envelopes(forwarded_props: object) -> list[dict[str, Any]]:
+def _click_envelopes(forwarded_props: object) -> list[JsonObject]:
     """Extract A2UI client→server ``action`` envelopes from a run's ``forwardedProps``.
 
     CopilotKit's ``@copilotkit/a2ui-renderer`` relays a button click by setting
@@ -153,7 +154,7 @@ async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, encoder: 
     """
     request = _request_from_agui(core, incoming)
     text_message_id = uuid4().hex
-    operations: list[object] = []
+    operations: list[ServerToClientMessage] = []
 
     yield encoder.encode(RunStartedEvent(thread_id=incoming.thread_id, run_id=incoming.run_id))
     try:

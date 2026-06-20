@@ -11,9 +11,8 @@ mismatch is logged and surfaced to the LLM but never blocks output.
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
 
-from ._types import A2UIVersion, JsonObject
+from ._types import A2UIVersion, JsonObject, JsonValue
 from .incoming import sanitize_for_prompt
 
 logger = logging.getLogger(__name__)
@@ -40,7 +39,7 @@ class A2UIClientCapabilities:
 
 
 def parse_client_capabilities(
-    metadata: Mapping[str, Any] | None,
+    metadata: Mapping[str, JsonValue] | None,
     *,
     version_key: A2UIVersion = _DEFAULT_VERSION_KEY,
 ) -> A2UIClientCapabilities | None:

@@ -9,8 +9,9 @@ import pytest
 from typing_extensions import Self
 
 from autogen.beta import Agent, Context
-from autogen.beta.a2ui import A2UIClientCapabilities
+from autogen.beta.a2ui import A2UIClientCapabilities, a2ui_action
 from autogen.beta.a2ui._runtime import _A2UIRuntime
+from autogen.beta.a2ui.actions import collect_action_declarations, collect_server_handlers
 from autogen.beta.a2ui.dispatch import A2UIMessageFrame, A2UIProseFrame, stream_turn
 from autogen.beta.a2ui.request import parse_request
 from autogen.beta.config import LLMClient, ModelConfig
@@ -126,3 +127,108 @@ class TestStreamTurn:
         frames = [f async for f in stream_turn(agent, rt, req)]
 
         assert frames == [A2UIProseFrame("ok")]
+
+
+def _server_action_envelope(
+    name: str, context: dict[str, Any], *, version: str = "v0.9", **extra: Any
+) -> dict[str, Any]:
+    return {
+        "version": version,
+        "action": {
+            "name": name,
+            "surfaceId": "s",
+            "sourceComponentId": "c",
+            "timestamp": "2026-06-19T00:00:00Z",
+            "context": context,
+            **extra,
+        },
+    }
+
+
+@pytest.mark.asyncio
+class TestServerActions:
+    async def test_server_action_click_runs_handler_and_skips_agent(self) -> None:
+        @a2ui_action
+        def add_to_basket(good_id: str) -> dict:
+            return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}}
+
+        # If the agent ran it would emit this prose; asserting it is absent proves
+        # the agent was skipped for a pure server-action turn.
+        agent = Agent(name="t", config=TestConfig("AGENT SHOULD NOT RUN"))
+        rt = _A2UIRuntime(actions=collect_action_declarations([add_to_basket]), validate_responses=False)
+        req = parse_request(
+            {"a2ui": [_server_action_envelope("add_to_basket", {"good_id": "G1"})]},
+            resolve_action=rt.get_action,
+        )
+
+        frames = [
+            f async for f in stream_turn(agent, rt, req, server_handlers=collect_server_handlers([add_to_basket]))
+        ]
+
+        assert frames == [
+            A2UIMessageFrame({
+                "version": "v0.9",
+                "updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1},
+            }),
+        ]
+
+    async def test_server_action_with_want_response_emits_action_response(self) -> None:
+        @a2ui_action
+        def typeahead(prefix: str) -> list[str]:
+            return ["apple", "application"]
+
+        agent = Agent(name="t", config=TestConfig("AGENT SHOULD NOT RUN"))
+        rt = _A2UIRuntime(
+            actions=collect_action_declarations([typeahead]),
+            protocol_version="v1.0",
+            validate_responses=False,
+        )
+        req = parse_request(
+            {
+                "a2ui": [
+                    _server_action_envelope(
+                        "typeahead", {"prefix": "app"}, version="v1.0", wantResponse=True, actionId="a-1"
+                    )
+                ]
+            },
+            resolve_action=rt.get_action,
+            version_key="v1.0",
+        )
+
+        frames = [f async for f in stream_turn(agent, rt, req, server_handlers=collect_server_handlers([typeahead]))]
+
+        assert frames == [
+            A2UIMessageFrame({
+                "version": "v1.0",
+                "actionId": "a-1",
+                "actionResponse": {"value": ["apple", "application"]},
+            }),
+        ]
+
+    async def test_server_action_alongside_user_message_also_runs_agent(self) -> None:
+        @a2ui_action
+        def add_to_basket(good_id: str) -> dict:
+            return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 2}}
+
+        agent = Agent(name="t", config=TestConfig("ok"))
+        rt = _A2UIRuntime(actions=collect_action_declarations([add_to_basket]), validate_responses=False)
+        req = parse_request(
+            {
+                "messages": [{"role": "user", "content": "and what else?"}],
+                "a2ui": [_server_action_envelope("add_to_basket", {"good_id": "G1"})],
+            },
+            resolve_action=rt.get_action,
+        )
+
+        frames = [
+            f async for f in stream_turn(agent, rt, req, server_handlers=collect_server_handlers([add_to_basket]))
+        ]
+
+        # Server-action frame first, then the agent's prose.
+        assert frames == [
+            A2UIMessageFrame({
+                "version": "v0.9",
+                "updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 2},
+            }),
+            A2UIProseFrame("ok"),
+        ]

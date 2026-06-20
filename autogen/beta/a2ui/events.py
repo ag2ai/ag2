@@ -36,8 +36,11 @@ class A2UIValidationFailedEvent(BaseEvent):
 
     __transient__ = True
 
-    errors: list[str] = Field(kw_only=False)
-    attempts: int = Field(kw_only=False)
+    # ``Field`` is a runtime descriptor; mypy can't see that it resolves to the
+    # annotated type, so the (correct) annotations need an assignment ignore —
+    # the same framework-wide pattern as the other ``BaseEvent`` subclasses.
+    errors: list[str] = Field(kw_only=False)  # type: ignore[assignment]
+    attempts: int = Field(kw_only=False)  # type: ignore[assignment]
 
 
 class A2UIMessageEvent(BaseEvent):
@@ -54,7 +57,7 @@ class A2UIMessageEvent(BaseEvent):
 
     __transient__ = True
 
-    message: ServerToClientMessage = Field(kw_only=False)
+    message: ServerToClientMessage = Field(kw_only=False)  # type: ignore[assignment]
 
 
 class A2UIClientEvent(BaseEvent):
@@ -79,7 +82,7 @@ class A2UIClientEvent(BaseEvent):
 
     __transient__ = True
 
-    interaction: A2UIIncomingParseResult = Field(kw_only=False)
+    interaction: A2UIIncomingParseResult = Field(kw_only=False)  # type: ignore[assignment]
 
 
 __all__ = ("A2UIClientEvent", "A2UIMessageEvent", "A2UIValidationFailedEvent")

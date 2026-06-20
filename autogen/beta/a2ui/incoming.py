@@ -7,7 +7,6 @@ import logging
 import re
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import Any
 
 from typing_extensions import assert_never
 
@@ -134,7 +133,7 @@ A2UIIncomingParseResult = (
 )
 
 
-def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
+def parse_incoming_message(data: JsonValue) -> A2UIIncomingParseResult:
     """Classify a single client→server A2UI envelope.
 
     Accepts a dict shaped like ``{"version": ..., "action": {...}}``,
@@ -167,13 +166,14 @@ def parse_incoming_message(data: Any) -> A2UIIncomingParseResult:
                     "A2UI action %r set wantResponse but provided no actionId; cannot correlate an actionResponse.",
                     name,
                 )
+        raw_context = action_obj.get("context")
         return A2UIIncomingActionResult(
             action=A2UIIncomingAction(
                 name=name,
                 surface_id=str(action_obj.get("surfaceId", "")),
                 source_component_id=str(action_obj.get("sourceComponentId", "")),
                 timestamp=str(action_obj.get("timestamp", "")),
-                context=dict(action_obj.get("context") or {}),
+                context=dict(raw_context) if isinstance(raw_context, dict) else {},
                 response_request=response_request,
             ),
         )
@@ -256,18 +256,15 @@ def sanitize_for_prompt(text: str) -> str:
     return cleaned
 
 
-def action_to_prompt(action: A2UIIncomingAction, action_def: A2UIEventAction | None) -> str | None:
-    """Rewrite a client A2UI ``action`` as an LLM instruction.
+def action_to_prompt(action: A2UIIncomingAction) -> str | None:
+    """Rewrite a client A2UI ``action`` as a generic LLM instruction.
 
-    ``action_def`` is the tool-backed action the caller resolved from the agent's
-    tools (e.g. ``runtime.get_action(action.name)``), or ``None`` when the clicked
-    button does not map to a server tool. A matched action routes the click to its
-    tool; an unmatched click is rewritten generically so the LLM can continue the
-    conversation — buttons are rendered dynamically by the LLM, so there is no
-    static registry to validate against. Returns ``None`` only for a nameless
+    Used only for clicks with **no** registered server action: buttons are
+    rendered dynamically by the LLM, so the click is rewritten generically and
+    the LLM continues the conversation (a registered action is handled on the
+    server and never reaches this path). Returns ``None`` only for a nameless
     (malformed) action. All client-supplied values pass through
-    :func:`sanitize_for_prompt`; the action's own fields (``tool_name``) are
-    developer-provided and trusted.
+    :func:`sanitize_for_prompt`.
     """
     if not action.name:
         return None
@@ -296,18 +293,7 @@ def action_to_prompt(action: A2UIIncomingAction, action_def: A2UIEventAction | N
             f"actionId '{action_id}' carrying the result (a 'value' on success, or an 'error')."
         )
 
-    # A matched tool-backed action routes the click to its tool; an unmatched
-    # click (action_def is None) falls through to a generic instruction so the
-    # LLM can react to the button it itself rendered.
-    tool_name = action_def.tool_name if action_def is not None else None
-    if tool_name:
-        return (
-            f"The user clicked the '{name}' button{origin}. "
-            f"Call the tool '{tool_name}' with arguments: {ctx_json}. "
-            f"Do not respond with text only.{response_hint}"
-        )
-    desc = f" {action_def.description}" if action_def is not None and action_def.description else ""
-    return f"The user clicked the '{name}' button{origin}.{desc} Context: {ctx_json}{response_hint}"
+    return f"The user clicked the '{name}' button{origin}. Context: {ctx_json}{response_hint}"
 
 
 def error_to_prompt(err: A2UIIncomingError) -> str:
@@ -356,7 +342,7 @@ def function_response_to_prompt(fr: A2UIIncomingFunctionResponse) -> str:
     )
 
 
-def parse_incoming_interactions(envelopes: Iterable[Any]) -> list[A2UIIncomingParseResult]:
+def parse_incoming_interactions(envelopes: Iterable[JsonValue]) -> list[A2UIIncomingParseResult]:
     """Parse client→server envelopes into typed results, dropping unclassifiable ones.
 
     Used by the transports to surface each incoming interaction as an
@@ -375,7 +361,7 @@ def parse_incoming_interactions(envelopes: Iterable[Any]) -> list[A2UIIncomingPa
 
 
 def iter_incoming_prompts(
-    envelopes: Iterable[Any],
+    envelopes: Iterable[JsonValue],
     resolve_action: Callable[[str], A2UIEventAction | None],
 ) -> Iterator[str]:
     """Rewrite client→server A2UI envelopes into corrective prompt strings.
@@ -383,14 +369,20 @@ def iter_incoming_prompts(
     Shared by the A2A and REST transports so the (security-sensitive) envelope
     classification + ``sanitize_for_prompt`` handling lives in one place; each
     transport only wraps the yielded strings in its own input type
-    (``TextInput`` / ``Part(text=...)``). Envelopes that cannot be safely mapped
-    are dropped with a warning: a nameless ``action``, a ``functionResponse``
-    missing its ``functionCallId``, or an unrecognized kind.
+    (``TextInput`` / ``Part(text=...)``). Clicks on a **registered** action
+    (``resolve_action`` returns its declaration) are skipped here — they run on
+    the server via ``run_server_action`` instead. Envelopes that cannot be safely
+    mapped are dropped with a warning: a nameless ``action``, a
+    ``functionResponse`` missing its ``functionCallId``, or an unrecognized kind.
     """
     for envelope in envelopes:
         result = parse_incoming_message(envelope)
         if isinstance(result, A2UIIncomingActionResult):
-            prompt = action_to_prompt(result.action, resolve_action(result.action.name))
+            if resolve_action(result.action.name) is not None:
+                # Registered action → handled on the server (its handler runs via
+                # run_server_action); never rewritten into a prompt for the agent.
+                continue
+            prompt = action_to_prompt(result.action)
             if prompt is None:
                 logger.warning("Dropping A2UI action with no name.")
                 continue

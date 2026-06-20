@@ -15,7 +15,7 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, Input, ModelMessage, ModelRequest, ModelResponse, TextInput
 
-from ._types import A2UIVersion
+from ._types import A2UIVersion, JsonObject, JsonValue
 from .actions import A2UIEventAction
 from .capabilities import A2UIClientCapabilities, parse_client_capabilities
 from .incoming import A2UIIncomingParseResult, iter_incoming_prompts, parse_incoming_interactions
@@ -51,7 +51,7 @@ class A2UIServerRequest:
 
 
 def parse_request(
-    body: bytes | str | dict[str, Any],
+    body: bytes | str | JsonObject,
     *,
     resolve_action: Callable[[str], A2UIEventAction | None],
     version_key: A2UIVersion = "v0.9",
@@ -60,10 +60,10 @@ def parse_request(
 
     Args:
         body: The raw JSON request body (bytes/str) or an already-decoded dict.
-        resolve_action: Looks up a tool-backed action by name (e.g.
-            ``runtime.get_action``). A matched action routes the click to its
-            tool; an unmatched click is rewritten generically so the LLM can
-            react to the button it rendered.
+        resolve_action: Looks up a registered server action by name (e.g.
+            ``runtime.get_action``). A matched action's click runs on the server
+            (handled in the turn core, kept out of the prompt); an unmatched click
+            is rewritten generically so the LLM can react to the button it rendered.
         version_key: The protocol version under which to read
             ``a2uiClientCapabilities`` (the client nests it under its version,
             e.g. ``"v1.0"``). Defaults to ``"v0.9"``; callers serving a non-v0.9
@@ -108,11 +108,11 @@ def parse_request(
     )
 
 
-def _decode_body(body: bytes | str | dict[str, Any]) -> dict[str, Any]:
+def _decode_body(body: bytes | str | JsonObject) -> JsonObject:
     if isinstance(body, dict):
         return body
     try:
-        decoded = json.loads(body)
+        decoded: JsonValue = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"request body is not valid JSON: {e}") from e
     if not isinstance(decoded, dict):
@@ -120,7 +120,7 @@ def _decode_body(body: bytes | str | dict[str, Any]) -> dict[str, Any]:
     return decoded
 
 
-def _map_messages(raw_messages: list[Any]) -> tuple[list[str], list[BaseEvent], list[Input]]:
+def _map_messages(raw_messages: list[JsonValue]) -> tuple[list[str], list[BaseEvent], list[Input]]:
     """Split the ``messages`` array into prompt / history / current-turn inputs.
 
     Mirrors the AG-UI history mapping: a trailing run of ``user`` messages is
@@ -160,7 +160,7 @@ def _map_messages(raw_messages: list[Any]) -> tuple[list[str], list[BaseEvent], 
 
 
 def _map_a2ui_envelopes(
-    raw_a2ui: list[Any],
+    raw_a2ui: list[JsonValue],
     resolve_action: Callable[[str], A2UIEventAction | None],
 ) -> list[Input]:
     """Rewrite client→server ``action`` / ``functionResponse`` / ``error`` envelopes as prompt inputs.

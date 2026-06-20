@@ -8,20 +8,23 @@ followed by one :class:`A2UIMessageFrame` per A2UI message. Shared core under
 the SSE / NDJSON wire encoders.
 """
 
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 from autogen.beta.agent import Agent
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import BaseEvent, ModelRequest, TextInput
 from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.tool import Tool
 
 from ._runtime import _A2UIRuntime
 from ._types import ServerToClientMessage
+from .actions import ServerActionHandler
 from .events import A2UIMessageEvent
+from .incoming import A2UIIncomingActionResult
 from .middleware import A2UIInboundMiddleware
 from .request import A2UIServerRequest
+from .server_action import run_server_action
 
 
 @dataclass(slots=True)
@@ -40,32 +43,64 @@ class A2UIMessageFrame:
 
 A2UIFrame = A2UIProseFrame | A2UIMessageFrame
 
+# Shared immutable default so the keyword arg never aliases a mutable {}.
+_NO_SERVER_HANDLERS: Mapping[str, ServerActionHandler] = MappingProxyType({})
+
 
 async def stream_turn(
     agent: Agent,
     runtime: _A2UIRuntime,
     request: A2UIServerRequest,
     *,
-    additional_tools: Iterable[Tool] = (),
+    server_handlers: Mapping[str, ServerActionHandler] = _NO_SERVER_HANDLERS,
 ) -> AsyncIterator[A2UIFrame]:
     """Execute one turn and yield its prose then A2UI message frames.
 
+    Server-side actions are handled first and never invoke the agent: each
+    incoming click whose name maps to a ``server_handlers`` entry runs that
+    handler and its result is yielded as A2UI message frames. The agent then
+    runs only if the turn still has input for it (a user message, or a click on
+    a button with no registered action) — a turn carrying *only* server-side
+    clicks skips the agent entirely.
+
     Args:
-        agent: The plain ``Agent`` to run. Must have ``config`` set.
+        agent: The plain ``Agent`` to run. Must have ``config`` set (unless the
+            turn carries only server-side clicks, in which case it is not run).
         runtime: The A2UI runtime supplying the prompt section, validation
             middleware, and catalog/capabilities helpers.
         request: The parsed turn (history, current inputs, prompt, variables).
-        additional_tools: Clickable A2UI actions to expose for this turn only
-            (the ``A2UIActionTool``s passed to ``A2UIServer(actions=[...])``).
-            The agent itself stays plain — the tools ride along just for the turn.
+        server_handlers: Action name → handler for ``@a2ui_action`` buttons,
+            executed on click without invoking the agent.
 
     Yields:
-        An :class:`A2UIProseFrame` first (only when there is prose), then an
-        :class:`A2UIMessageFrame` for each collected A2UI message.
+        Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
+        runs) an :class:`A2UIProseFrame` for its prose followed by an
+        :class:`A2UIMessageFrame` per A2UI message it produced.
 
     Raises:
-        RuntimeError: If the agent has no ``config`` to create an LLM client.
+        RuntimeError: If the agent must run but has no ``config`` to create an
+            LLM client.
     """
+    # Run server-side click handlers and emit their messages. These never reach
+    # the agent (the prompt rewriter already skipped registered actions).
+    handled_server = False
+    if server_handlers:
+        for interaction in request.client_interactions:
+            if not isinstance(interaction, A2UIIncomingActionResult):
+                continue
+            handler = server_handlers.get(interaction.action.name)
+            if handler is None:
+                continue
+            handled_server = True
+            for message in await run_server_action(handler, interaction.action, version=runtime.version_string):
+                yield A2UIMessageFrame(message)
+
+    # Run the agent only when the turn has real input for it. A turn whose only
+    # content was server-side clicks is complete already; don't fabricate a
+    # blank agent turn for it (but keep the blank-turn fallback otherwise).
+    if not request.current_inputs and handled_server:
+        return
+
     if agent.config is None:
         raise RuntimeError("Agent.config is not set; cannot serve over REST")
     client = agent.config.create()
@@ -112,7 +147,6 @@ async def stream_turn(
         initial_event,
         context=ctx,
         client=client,
-        additional_tools=additional_tools,
         additional_middleware=extra_middleware,
     )
 
@@ -129,18 +163,24 @@ class _A2UITurnCore:
     """Transport-neutral turn engine shared by every transport.
 
     Bundles the plain ``Agent``, the configured ``_A2UIRuntime``, and the
-    clickable ``actions`` (``A2UIActionTool``s) so a transport can run one turn
-    via :meth:`run_turn` without knowing how A2UI is wired. The actions are
-    injected per-turn as ``additional_tools`` — the agent stays plain.
+    ``server_handlers`` for clickable actions, so a transport can run one turn
+    via :meth:`run_turn` without knowing how A2UI is wired. A click on a
+    registered action runs its handler on the server without invoking the agent;
+    a click on any other button is rewritten into a prompt for the agent.
     """
 
     agent: Agent
     runtime: _A2UIRuntime
-    action_tools: tuple[Tool, ...] = field(default_factory=tuple)
+    server_handlers: Mapping[str, ServerActionHandler] = field(default_factory=dict)
 
     def run_turn(self, request: A2UIServerRequest) -> AsyncIterator[A2UIFrame]:
         """Run one turn and yield its prose then A2UI message frames."""
-        return stream_turn(self.agent, self.runtime, request, additional_tools=self.action_tools)
+        return stream_turn(
+            self.agent,
+            self.runtime,
+            request,
+            server_handlers=self.server_handlers,
+        )
 
 
 __all__ = ("A2UIFrame", "A2UIMessageFrame", "A2UIProseFrame", "stream_turn")

@@ -116,8 +116,10 @@ class TestParseRequestMapping:
 
 
 class TestParseRequestActions:
-    def test_registered_action_becomes_prompt(self) -> None:
-        actions = {"confirm": A2UIEventAction(name="confirm", tool_name="do_confirm", description="Confirm it")}
+    def test_registered_action_is_skipped_for_server_handling(self) -> None:
+        # A registered action is handled on the server (its handler runs in the
+        # turn core), so it is NOT rewritten into a prompt for the agent.
+        actions = {"confirm": A2UIEventAction(name="confirm", description="Confirm it")}
         req = parse_request(
             {
                 "messages": [],
@@ -136,10 +138,7 @@ class TestParseRequestActions:
             },
             resolve_action=actions.get,
         )
-        assert len(req.current_inputs) == 1
-        prompt = req.current_inputs[0].content
-        assert "confirm" in prompt
-        assert "do_confirm" in prompt
+        assert req.current_inputs == []
 
     def test_unregistered_action_becomes_generic_prompt(self) -> None:
         # An unmatched click no longer drops: buttons are rendered dynamically by
@@ -176,8 +175,9 @@ class TestParseRequestActions:
         assert "error" in req.current_inputs[0].content.lower()
         assert "VALIDATION_FAILED" in req.current_inputs[0].content
 
-    def test_action_appended_after_trailing_user_text(self) -> None:
-        actions = {"go": A2UIEventAction(name="go", description="Go")}
+    def test_unregistered_action_appended_after_trailing_user_text(self) -> None:
+        # An unregistered click becomes a generic prompt appended after the
+        # trailing user message (a registered action would be skipped instead).
         req = parse_request(
             {
                 "messages": [{"role": "user", "content": "and also"}],
@@ -188,7 +188,7 @@ class TestParseRequestActions:
                     }
                 ],
             },
-            resolve_action=actions.get,
+            resolve_action=_no_actions,
         )
         assert [i.content for i in req.current_inputs][0] == "and also"
         assert len(req.current_inputs) == 2

@@ -26,14 +26,20 @@ from autogen.beta.stream import MemoryStream
 
 from .._runtime import _A2UIRuntime
 from .._types import A2UIVersion, JsonObject, JsonSchema, ServerToClientMessage
-from ..action_tool import A2UIActionTool, collect_action_declarations
+from ..actions import A2UIAction, collect_action_declarations, collect_server_handlers
 from ..capabilities import (
     A2UIClientCapabilities,
     parse_client_capabilities,
 )
 from ..events import A2UIMessageEvent
-from ..incoming import A2UIIncomingParseResult, iter_incoming_prompts, parse_incoming_interactions
+from ..incoming import (
+    A2UIIncomingActionResult,
+    A2UIIncomingParseResult,
+    iter_incoming_prompts,
+    parse_incoming_interactions,
+)
 from ..middleware import A2UIInboundMiddleware
+from ..server_action import run_server_action
 from .extension import try_activate_a2ui_extension
 from .parts import create_a2ui_parts, get_a2ui_data
 
@@ -59,10 +65,12 @@ class A2UIAgentExecutor(AgentExecutor):
        fold catalog negotiation into the turn's system prompt
        (:meth:`_extra_system_prompt`).
     3. Detect incoming A2UI DataParts on the request message:
-       - ``action`` envelopes are rewritten as a ``TextInput`` prompt
-         (Approach 3.B: server-actions and LLM-actions both flow through
-         the agent's normal ``ask`` loop, so client-tool round-trips,
-         streaming, and middleware all work uniformly).
+       - an ``action`` envelope for a **registered** action runs that action's
+         handler on the server (the agent is not invoked); its messages lead the
+         finalization DataPart.
+       - an ``action`` envelope with no registered action is rewritten as a
+         generic ``TextInput`` prompt so the agent can react to the button it
+         itself rendered.
        - ``error`` envelopes (e.g. ``VALIDATION_FAILED``) are rewritten as
          a corrective ``TextInput`` so the agent can regenerate.
     4. Collect the :class:`A2UIMessageEvent`s the validation middleware emits
@@ -76,7 +84,7 @@ class A2UIAgentExecutor(AgentExecutor):
         self,
         agent: Agent,
         *,
-        actions: Sequence[A2UIActionTool] = (),
+        actions: Sequence[A2UIAction] = (),
         protocol_version: A2UIVersion = "v0.9",
         custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
         custom_catalog_rules: str | None = None,
@@ -89,14 +97,16 @@ class A2UIAgentExecutor(AgentExecutor):
         """Wrap a plain ``Agent`` as an A2UI-aware A2A executor.
 
         Takes the same flat A2UI kwargs as :class:`A2UIServer`. Clickable buttons
-        (``@a2ui_action`` tools) are declared via ``actions`` — not on the agent;
-        they are injected per-turn so the agent stays plain and reusable across
-        deployments.
+        (``@a2ui_action``) are declared via ``actions`` — not on the agent — so it
+        stays plain and reusable across deployments. A click on a registered
+        action runs its handler on the server (the agent is not invoked); a click
+        on any other button is rewritten into a prompt for the agent.
         """
         super().__init__(agent)
-        self._action_tools = tuple(actions)
+        action_objs = tuple(actions)
+        self._server_handlers = collect_server_handlers(action_objs)
         self._runtime = _A2UIRuntime(
-            actions=collect_action_declarations(self._action_tools),
+            actions=collect_action_declarations(action_objs),
             protocol_version=protocol_version,
             custom_catalog=custom_catalog,
             custom_catalog_rules=custom_catalog_rules,
@@ -124,18 +134,25 @@ class A2UIAgentExecutor(AgentExecutor):
                 _INCOMING_INTERACTIONS.reset(token)
 
     def _rewrite_incoming_a2ui_parts(self, request_context: RequestContext) -> list[A2UIIncomingParseResult]:
-        """Replace A2UI DataParts (``action``/``error``) with synthesized text prompts.
+        """Consume incoming A2UI DataParts, rewriting them into text prompts.
+
+        Every A2UI DataPart is removed from the message: a click on an
+        unregistered button (and an ``error`` envelope) becomes a synthesized
+        text prompt for the agent; a click on a **registered** action yields no
+        prompt — it runs on the server in ``_run_one_turn`` — but the raw DataPart
+        is still dropped so it never reaches the agent.
 
         Returns the typed client→server interactions parsed from those DataParts
-        so ``_run_one_turn`` can surface them as ``A2UIClientEvent``s (the parts
-        themselves are rewritten to text here, so they must be captured now).
+        so ``_run_one_turn`` can run their server handlers and surface them as
+        ``A2UIClientEvent``s (the parts are consumed here, so they must be
+        captured now).
         """
         msg = request_context.message
         if msg is None:
             return []
 
         new_parts: list[Part] = []
-        rewritten = False
+        consumed_a2ui = False
         all_envelopes: list[JsonObject] = []
         for part in msg.parts:
             envelopes = _extract_a2ui_envelopes(part)
@@ -143,12 +160,14 @@ class A2UIAgentExecutor(AgentExecutor):
                 new_parts.append(part)
                 continue
 
+            # An A2UI DataPart is always consumed (never forwarded raw); a
+            # registered action simply produces no replacement prompt.
+            consumed_a2ui = True
             all_envelopes.extend(envelopes)
             for prompt in iter_incoming_prompts(envelopes, self._runtime.get_action):
                 new_parts.append(Part(text=prompt))
-                rewritten = True
 
-        if rewritten:
+        if consumed_a2ui:
             del msg.parts[:]
             msg.parts.extend(new_parts)
 
@@ -196,9 +215,9 @@ class A2UIAgentExecutor(AgentExecutor):
         context_id: str,
         extra_prompt: Sequence[str] = (),
     ) -> None:
-        # The clickable @a2ui_action tools are injected per-turn (the agent stays
-        # plain), alongside any client-side tool schemas the request carried.
-        client_tools = [*self._action_tools, *(self._make_client_tool(s) for s in parsed.tool_schemas)]
+        # Buttons run on the server, not as agent tools — only client-side tool
+        # schemas the request carried are injected for the turn.
+        client_tools = [self._make_client_tool(s) for s in parsed.tool_schemas]
         initial_event = self._build_initial_event(parsed)
 
         # The validation middleware emits one A2UIMessageEvent per validated
@@ -218,6 +237,38 @@ class A2UIAgentExecutor(AgentExecutor):
         interactions = _INCOMING_INTERACTIONS.get()
         if interactions:
             extra_middleware.append(A2UIInboundMiddleware(interactions))
+
+        # Run server-side action handlers for any registered click (the prompt
+        # rewriter already skipped these, so the agent never sees them). Their
+        # messages lead the finalization DataPart, ahead of the agent's own.
+        handled_server = False
+        for interaction in interactions:
+            if not isinstance(interaction, A2UIIncomingActionResult):
+                continue
+            handler = self._server_handlers.get(interaction.action.name)
+            if handler is not None:
+                handled_server = True
+                a2ui_messages.extend(
+                    await run_server_action(handler, interaction.action, version=self._runtime.version_string)
+                )
+
+        # A turn carrying only server-action clicks (no user text, no tool
+        # results) is complete already — finalize with the handlers' messages and
+        # skip the agent, mirroring the REST path (``stream_turn``). Otherwise the
+        # agent would run on an empty prompt and may emit spurious prose.
+        if handled_server and not parsed.inputs and not parsed.tool_results:
+            agent_msg = self._build_a2ui_message(updater, "", a2ui_messages, {})
+            await updater.complete(message=agent_msg)
+            await lifecycle_ctx.send(
+                task_state_to_status_update(
+                    TaskState.TASK_STATE_COMPLETED,
+                    task_id=task_id,
+                    context_id=context_id,
+                    message=agent_msg,
+                    timestamp=datetime.now(tz=timezone.utc),
+                ),
+            )
+            return
 
         response, final_variables = await self._dispatch_to_agent(
             initial_event,

@@ -6,12 +6,12 @@ import json
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import jsonschema
 from referencing.exceptions import Unresolvable
 
-from ._types import A2UIVersion, JsonSchema, ServerToClientMessage
+from ._types import A2UIVersion, JsonSchema, JsonValue, ServerToClientMessage
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ def strip_markdown_fences(text: str) -> str:
 def _parse_json_block(json_part: str) -> "tuple[list[ServerToClientMessage], str | None]":
     """Parse an ``<a2ui-json>`` block (JSON array/object, or JSONL) into A2UI messages."""
     try:
-        parsed = json.loads(json_part)
+        parsed: JsonValue = json.loads(json_part)
     except json.JSONDecodeError as whole_error:
         operations, jsonl_error = _parse_jsonl(json_part)
         if jsonl_error is None:
@@ -70,10 +70,14 @@ def _parse_json_block(json_part: str) -> "tuple[list[ServerToClientMessage], str
         # the block was meant to be a single array/object.
         return [], f"Invalid JSON: {whole_error}"
 
+    # The parsed JSON is a candidate A2UI message (object) or list of them; its
+    # conformance to ``ServerToClientMessage`` is enforced downstream by
+    # ``validate()`` against the schema, so the cast is the typed boundary
+    # between untyped wire JSON and the structured message type.
     if isinstance(parsed, dict):
-        return [parsed], None
+        return [cast(ServerToClientMessage, parsed)], None
     if isinstance(parsed, list):
-        return parsed, None
+        return cast("list[ServerToClientMessage]", parsed), None
     return [], f"Expected JSON array or object, got {type(parsed).__name__}"
 
 
@@ -84,12 +88,12 @@ def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | No
         if not line:
             continue
         try:
-            value = json.loads(line)
+            value: JsonValue = json.loads(line)
         except json.JSONDecodeError as e:
             return [], f"Invalid JSON: {e}"
         if not isinstance(value, dict):
             return [], f"Expected JSON object per line, got {type(value).__name__}"
-        operations.append(value)
+        operations.append(cast(ServerToClientMessage, value))
     if not operations:
         return [], "No JSON objects found"
     return operations, None

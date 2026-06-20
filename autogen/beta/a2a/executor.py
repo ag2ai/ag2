@@ -28,6 +28,7 @@ from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final.client_tool import ClientTool
 from autogen.beta.tools.final.function_tool import FunctionToolSchema
+from autogen.beta.tools.tool import Tool
 
 from .events import A2AEvent, A2ATaskStatusUpdate
 from .extension import CONTEXT_UPDATE_METADATA_KEY
@@ -323,7 +324,7 @@ class AgentExecutor(A2AAgentExecutorBase):
         self,
         initial_event: BaseEvent,
         stream: MemoryStream,
-        client_tools: list[ClientTool],
+        client_tools: Sequence[Tool],
         *,
         incoming_variables: dict[str, Any],
         extra_prompt: Sequence[str] = (),

@@ -12,7 +12,7 @@ from autogen.beta.agent import Agent
 
 from ._runtime import _A2UIRuntime
 from ._types import A2UIVersion, JsonSchema
-from .action_tool import A2UIActionTool, collect_action_declarations
+from .actions import A2UIAction, collect_action_declarations, collect_server_handlers
 from .dispatch import _A2UITurnCore
 from .transports.base import A2UITransport
 
@@ -53,7 +53,7 @@ class A2UIServer:
         agent: Agent,
         *,
         transport: A2UITransport,
-        actions: Sequence[A2UIActionTool] = (),
+        actions: Sequence[A2UIAction] = (),
         protocol_version: A2UIVersion = "v0.9",
         custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
         custom_catalog_rules: str | None = None,
@@ -70,9 +70,11 @@ class A2UIServer:
             transport: The single wire transport for this deployment (e.g.
                 ``AgUiTransport()`` or ``RestTransport(encoding="sse")``).
                 Required — one deployment serves one frontend over one transport.
-            actions: Clickable A2UI buttons (``@a2ui_action`` tools). Declared
-                here, not on the agent; they are injected per-turn so the agent
-                stays plain and reusable across deployments.
+            actions: Clickable buttons (``@a2ui_action``). Each is declared to the
+                LLM so it can render the button; a click runs the action's handler
+                on the server **without** invoking the agent. A button the LLM
+                draws with no registered action still works — its click is
+                rewritten into a generic prompt so the agent can react.
             protocol_version: A2UI protocol version: "v0.9" (default), "v0.9.1", or "v1.0".
             custom_catalog: A custom catalog extending the basic catalog (path or
                 dict). Must include a ``$id`` used as the catalogId.
@@ -89,9 +91,10 @@ class A2UIServer:
         """
         self._agent = agent
         self._transport = transport
-        action_tools = tuple(actions)
+        action_objs = tuple(actions)
         self._runtime = _A2UIRuntime(
-            actions=collect_action_declarations(action_tools),
+            # Buttons are declared to the LLM so it can render them.
+            actions=collect_action_declarations(action_objs),
             protocol_version=protocol_version,
             custom_catalog=custom_catalog,
             custom_catalog_rules=custom_catalog_rules,
@@ -101,7 +104,13 @@ class A2UIServer:
             validation_retries=validation_retries,
             system_message=system_message,
         )
-        self._core = _A2UITurnCore(agent, self._runtime, action_tools)
+        # A click on a registered action runs its handler on the server, never
+        # invoking the agent.
+        self._core = _A2UITurnCore(
+            agent,
+            self._runtime,
+            collect_server_handlers(action_objs),
+        )
         # The instance IS the app (no ``.app``/``build_app()``): build the
         # Starlette app once from the transport's routes and delegate to it.
         self._starlette = Starlette(routes=transport.routes(self._core))

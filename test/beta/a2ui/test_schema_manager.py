@@ -224,7 +224,6 @@ class TestPromptSection:
             actions=[
                 A2UIEventAction(
                     name="book_table",
-                    tool_name="book_restaurant",
                     description="Book a table",
                     example_context={"restaurant_id": "abc123"},
                 ),

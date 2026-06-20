@@ -29,7 +29,6 @@ from autogen.beta.a2a.extension import EXTRA_PARTS_DEPENDENCY_KEY
 from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui.a2a import create_a2ui_parts
 from autogen.beta.a2ui.a2a.executor import _extract_a2ui_envelopes
-from autogen.beta.events import ToolCallEvent
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
@@ -151,20 +150,19 @@ class TestFinalizationMessage:
 
 @pytest.mark.asyncio
 class TestIncomingActionRewrite:
-    """An incoming A2UI ``action`` envelope is rewritten into the agent's turn."""
+    """An incoming A2UI ``action`` envelope: registered → server handler; otherwise → prompt."""
 
-    async def test_action_click_executes_registered_tool(self) -> None:
+    async def test_registered_action_runs_server_handler(self) -> None:
         clicked: list[str] = []
 
-        @a2ui_action(description="Schedule all posts for the given time")
+        @a2ui_action(description="Submit the form")
         def submit(email: str) -> str:
             clicked.append(email)
             return "done"
 
-        agent = Agent(
-            name="ui_agent",
-            config=TestConfig(ToolCallEvent(name="submit", arguments='{"email": "user@example.com"}'), "All set."),
-        )
+        # The click runs the handler on the server with the action context — the
+        # agent is not asked to call any tool.
+        agent = Agent(name="ui_agent", config=TestConfig("All set."))
         client = client_for(agent, actions=[submit], validate_responses=False)
 
         reply = await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
@@ -172,31 +170,32 @@ class TestIncomingActionRewrite:
         assert clicked == ["user@example.com"]
         assert reply.response.content == "All set."
 
-    async def test_action_context_reaches_the_model(self) -> None:
+    async def test_registered_action_is_not_synthesized_into_the_prompt(self) -> None:
         config = CapturingConfig()
 
         @a2ui_action(description="Submit the form")
         def submit(email: str) -> str:
             return email
 
-        # The ACTION_ENVELOPE clicks the "submit" button, which maps to this tool.
+        # A registered click is handled on the server, so its name/context must
+        # NOT leak into the synthesized user turn (only the "act" message does).
         agent = Agent(name="ui_agent", config=config)
         client = client_for(agent, actions=[submit], validate_responses=False)
 
         await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
         synthesized = synthesized_text(config.messages[-1])
-        assert "submit" in synthesized
-        assert "user@example.com" in synthesized
+        assert "user@example.com" not in synthesized
+        assert "clicked" not in synthesized
 
     async def test_unregistered_action_becomes_generic_prompt(self) -> None:
         config = CapturingConfig()
-        agent = Agent(name="ui_agent", config=config)  # no tool-backed buttons
+        agent = Agent(name="ui_agent", config=config)  # no registered actions
         client = client_for(agent, validate_responses=False)
 
         await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
-        # No matching tool → the click is rewritten generically (not dropped):
+        # No registered action → the click is rewritten generically (not dropped):
         # the button name and its context still reach the model so the LLM can
         # react to the button it itself rendered.
         synthesized = synthesized_text(config.messages[-1])

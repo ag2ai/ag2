@@ -95,7 +95,7 @@ class _A2UIRuntime:
         return self.schema_manager.version_string
 
     def get_action(self, name: str) -> A2UIEventAction | None:
-        """Look up a tool-backed action by name (used to route incoming clicks)."""
+        """Look up a registered server action by name (used to route incoming clicks)."""
         for action in self.actions:
             if action.name == name:
                 return action

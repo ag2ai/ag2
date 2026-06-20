@@ -43,7 +43,11 @@ def get_a2ui_agent_extension(
         A configured ``AgentExtension`` for the requested A2UI version.
     """
     default_catalog = A2UI_DEFAULT_CATALOG_ID_BY_VERSION[version]
-    catalog_ids = list(supported_catalog_ids) if supported_catalog_ids is not None else [default_catalog]
+    # Built as a JsonValue list so it drops into the JsonValue-typed params dict
+    # (a plain list[str] would trip list invariance).
+    catalog_ids: list[JsonValue] = [
+        cid for cid in (supported_catalog_ids if supported_catalog_ids is not None else [default_catalog])
+    ]
     params: dict[str, JsonValue] = {"supportedCatalogIds": catalog_ids}
     if accepts_inline_catalogs:
         params["acceptsInlineCatalogs"] = True

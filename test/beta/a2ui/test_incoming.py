@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.a2ui.actions import A2UIEventAction
 from autogen.beta.a2ui.incoming import (
     A2UIIncomingAction,
     A2UIIncomingActionResult,
@@ -168,7 +167,7 @@ class TestActionToPrompt:
             context={"prefix": "app"},
             response_request=ActionResponseRequest(action_id="act-1"),
         )
-        prompt = action_to_prompt(action, A2UIEventAction(name="get_typeahead"))
+        prompt = action_to_prompt(action)
         assert prompt is not None
         assert "actionResponse" in prompt
         assert "act-1" in prompt
@@ -181,7 +180,7 @@ class TestActionToPrompt:
             timestamp="",
             context={},
         )
-        prompt = action_to_prompt(action, A2UIEventAction(name="click"))
+        prompt = action_to_prompt(action)
         assert prompt is not None
         assert "actionResponse" not in prompt
 

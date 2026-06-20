@@ -24,7 +24,7 @@ from dirty_equals import IsPartialDict
 from autogen.beta import Agent
 from autogen.beta.a2ui import A2UIServer, a2ui_action
 from autogen.beta.a2ui.transports import AgUiTransport
-from autogen.beta.events import ModelRequest, TextInput, ToolCallEvent
+from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.testing import TestConfig, TrackingConfig
 
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
@@ -144,42 +144,38 @@ async def test_server_serves_turn_over_http() -> None:
 
 @pytest.mark.asyncio
 async def test_button_click_in_forwarded_props_executes_server_action() -> None:
-    # CopilotKit relays a click as forwardedProps.a2uiAction and re-runs the
-    # agent (no new chat message). The click is rewritten into the turn; the
-    # mocked LLM then calls the @a2ui_action (injected for the turn) and answers
-    # once it returns. The agent stays plain — the action lives on the server.
+    # CopilotKit relays a click as forwardedProps.a2uiAction. The click runs the
+    # registered @a2ui_action on the server (the agent is NOT invoked); its
+    # returned surface update is emitted as an ACTIVITY_SNAPSHOT.
     clicked: list[str] = []
 
-    @a2ui_action(description="Schedule all posts for the given time")
-    def schedule_posts(time: str) -> str:
-        clicked.append(time)
-        return f"scheduled {time}"
+    @a2ui_action(description="Add the item to the cart")
+    def add_to_basket(good_id: str) -> dict:
+        clicked.append(good_id)
+        return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}}
 
-    agent = Agent(
-        name="ui",
-        config=TestConfig(ToolCallEvent(name="schedule_posts", arguments='{"time": "2:00 PM"}'), "All set."),
-    )
-    server = A2UIServer(agent, actions=[schedule_posts], transport=AgUiTransport(), validate_responses=False)
+    agent = Agent(name="ui", config=TestConfig("AGENT SHOULD NOT RUN"))
+    server = A2UIServer(agent, actions=[add_to_basket], transport=AgUiTransport(), validate_responses=False)
 
-    events = await _dispatch_events(server, _click_input("schedule_posts", {"time": "2:00 PM"}))
+    events = await _dispatch_events(server, _click_input("add_to_basket", {"good_id": "G1"}))
 
-    assert clicked == ["2:00 PM"]
-    [text] = [e for e in events if e["type"] == "TEXT_MESSAGE_CHUNK"]
-    assert text["delta"] == "All set."
+    assert clicked == ["G1"]
+    # Agent skipped (pure server-action turn): no prose, one surface update.
+    assert [e for e in events if e["type"] == "TEXT_MESSAGE_CHUNK"] == []
+    [activity] = [e for e in events if e["type"] == "ACTIVITY_SNAPSHOT"]
+    assert activity["activityType"] == "a2ui-surface"
+    assert activity["content"] == {
+        "a2ui_operations": [IsPartialDict({"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}})],
+    }
 
 
 @pytest.mark.asyncio
-async def test_click_is_rewritten_into_the_llm_turn() -> None:
-    # The click must reach the LLM as the current turn — proving it was read
-    # from forwardedProps (not from messages, which is empty here).
-    @a2ui_action(description="Schedule all posts for the given time")
-    def schedule_posts(time: str) -> str:
-        return f"scheduled {time}"
-
+async def test_unregistered_click_is_rewritten_into_the_llm_turn() -> None:
+    # A click on a button with no registered action must reach the LLM as the
+    # current turn — proving it was read from forwardedProps (messages is empty).
     tracking = TrackingConfig(TestConfig("ok"))
     server = A2UIServer(
         Agent(name="ui", config=tracking),
-        actions=[schedule_posts],
         transport=AgUiTransport(),
         validate_responses=False,
     )

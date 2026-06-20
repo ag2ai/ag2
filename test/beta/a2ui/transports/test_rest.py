@@ -94,12 +94,15 @@ class TestJSONLApp:
         assert resp.status_code == 400
 
 
-def test_action_click_drives_a_turn() -> None:
+def test_action_click_runs_server_action() -> None:
+    # A click on a registered action runs its handler on the server (the agent is
+    # not invoked); the handler's surface update is streamed back as the only
+    # frame, with no agent prose.
     @a2ui_action(description="Confirm the booking")
-    def confirm() -> str:
-        return "ok"
+    def confirm() -> dict:
+        return {"updateDataModel": {"surfaceId": "s1", "path": "/confirmed", "value": True}}
 
-    client = TestClient(_server("Confirmed.", validate=False, actions=[confirm]))
+    client = TestClient(_server("AGENT SHOULD NOT RUN", validate=False, actions=[confirm]))
 
     resp = client.post(
         "/a2ui",
@@ -121,4 +124,6 @@ def test_action_click_drives_a_turn() -> None:
     )
 
     assert resp.status_code == 200
-    assert '"text": "Confirmed."' in resp.text
+    assert "AGENT SHOULD NOT RUN" not in resp.text
+    assert '"updateDataModel"' in resp.text
+    assert "/confirmed" in resp.text

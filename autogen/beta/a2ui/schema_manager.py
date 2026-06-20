@@ -10,11 +10,23 @@ from typing import TypedDict
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
-from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue  # noqa: F401
+from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue
 from .actions import A2UIEventAction
 from .constants import A2UI_DEFAULT_CATALOG_ID_BY_VERSION, A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 _VERSIONS_DIR = Path(__file__).parent
+
+
+def _as_object(value: "JsonValue | None") -> JsonObject:
+    """Narrow a ``JsonValue`` to a JSON object, returning ``{}`` when it is not a dict.
+
+    JSON Schema documents are dynamic ``dict[str, JsonValue]`` trees, so reading a
+    nested member (``components`` / ``functions`` / ``$defs`` / ``properties``)
+    yields a broad ``JsonValue``. Funnelling those reads through this helper keeps
+    the schema-munging code statically typed without scattering ``isinstance``
+    checks or ``cast``s at every access.
+    """
+    return value if isinstance(value, dict) else {}
 
 
 class _VersionConfigEntry(TypedDict):
@@ -193,21 +205,21 @@ class A2UISchemaManager:
         if self._custom_catalog is None:
             return self._basic_catalog
 
-        merged: JsonSchema = dict(self._basic_catalog)
+        merged: JsonObject = dict(self._basic_catalog)
         custom_id = self._custom_catalog.get("$id")
-        if custom_id:
+        if isinstance(custom_id, str):
             merged["$id"] = custom_id
 
-        components: JsonSchema = dict(self._basic_catalog.get("components", {}))
-        components.update(self._custom_catalog.get("components", {}))
+        components: JsonObject = dict(_as_object(self._basic_catalog.get("components")))
+        components.update(_as_object(self._custom_catalog.get("components")))
         merged["components"] = components
 
-        functions: JsonSchema = dict(self._basic_catalog.get("functions", {}))
-        functions.update(self._custom_catalog.get("functions", {}))
+        functions: JsonObject = dict(_as_object(self._basic_catalog.get("functions")))
+        functions.update(_as_object(self._custom_catalog.get("functions")))
         merged["functions"] = functions
 
-        defs: JsonSchema = dict(self._basic_catalog.get("$defs", {}))
-        defs.update(self._custom_catalog.get("$defs", {}))
+        defs: JsonObject = dict(_as_object(self._basic_catalog.get("$defs")))
+        defs.update(_as_object(self._custom_catalog.get("$defs")))
         if components:
             defs["anyComponent"] = {
                 "oneOf": [{"$ref": f"#/components/{name}"} for name in components],
@@ -224,10 +236,10 @@ class A2UISchemaManager:
     def _get_all_components(self) -> JsonSchema:
         """Return all available components from both basic and custom catalogs."""
         self._ensure_loaded()
-        components: JsonSchema = {}
-        components.update(self._basic_catalog.get("components", {}))
+        components: JsonObject = {}
+        components.update(_as_object(self._basic_catalog.get("components")))
         if self._custom_catalog is not None:
-            components.update(self._custom_catalog.get("components", {}))
+            components.update(_as_object(self._custom_catalog.get("components")))
         return components
 
     def get_component_schemas(self) -> dict[str, JsonSchema]:
@@ -236,7 +248,7 @@ class A2UISchemaManager:
         schemas: dict[str, JsonSchema] = {}
         for catalog in [self._basic_catalog, self._custom_catalog]:
             if catalog is not None:
-                components = catalog.get("components", {})
+                components = _as_object(catalog.get("components"))
                 for name, defn in components.items():
                     if isinstance(defn, dict) and name not in schemas:
                         schemas[name] = defn
@@ -260,11 +272,11 @@ class A2UISchemaManager:
         ]
         for schema in [self._server_to_client, self._basic_catalog, self._common_types]:
             schema_id = schema.get("$id")
-            if schema_id:
+            if isinstance(schema_id, str):
                 resources.append((schema_id, Resource.from_contents(schema, default_specification=DRAFT202012)))
         if self._custom_catalog is not None:
             custom_id = self._custom_catalog.get("$id")
-            if custom_id:
+            if isinstance(custom_id, str):
                 # Register the MERGED catalog at the custom catalog's $id,
                 # so refs like "<custom_id>#/components/Text" resolve.
                 resources.append((
@@ -288,7 +300,9 @@ class A2UISchemaManager:
 
     def _load_spec_json(self, filename: str) -> JsonSchema:
         """Load a JSON file from the spec/ subdirectory (upstream A2UI files)."""
-        data: JsonSchema = self._load_json_file(self._spec_dir / filename)  # type: ignore[assignment]
+        data = self._load_json_file(self._spec_dir / filename)
+        if not isinstance(data, dict):
+            raise ValueError(f"A2UI spec file {self._spec_dir / filename} must be a JSON object")
         return data
 
     def _load_spec_text(self, filename: str) -> str:
@@ -352,18 +366,19 @@ class A2UISchemaManager:
 
         all_components = self._get_all_components()
         if all_components:
-            basic_components = sorted(self._basic_catalog.get("components", {}).keys())
+            basic_components = sorted(_as_object(self._basic_catalog.get("components")).keys())
             custom_components = (
-                sorted(self._custom_catalog.get("components", {}).keys()) if self._custom_catalog else []
+                sorted(_as_object(self._custom_catalog.get("components")).keys()) if self._custom_catalog else []
             )
 
             comp_section = "\n\n## Available Components\n\n"
             if basic_components:
                 comp_section += f"**Basic catalog:** {', '.join(basic_components)}\n\n"
-            if custom_components:
+            if custom_components and self._custom_catalog is not None:
                 comp_section += f"**Custom components:** {', '.join(custom_components)}\n\n"
+                custom_comp_defs = _as_object(self._custom_catalog.get("components"))
                 for comp_name in custom_components:
-                    comp_def = self._custom_catalog.get("components", {}).get(comp_name, {})  # type: ignore[union-attr]
+                    comp_def = _as_object(custom_comp_defs.get(comp_name))
                     desc = self._extract_component_description(comp_name, comp_def)
                     if desc:
                         comp_section += f"- **{comp_name}**: {desc}\n"
@@ -415,16 +430,18 @@ class A2UISchemaManager:
 
     def _extract_component_description(self, name: str, comp_def: JsonSchema) -> str:
         """Extract a human-readable description of a custom component for the prompt."""
-        desc: str = comp_def.get("description", "")
-        if desc:
-            return desc
+        raw_desc = comp_def.get("description")
+        if isinstance(raw_desc, str) and raw_desc:
+            return raw_desc
 
         props: set[str] = set()
-        for item in comp_def.get("allOf", []):
-            if "properties" in item:
-                props.update(k for k in item["properties"] if k not in ("id", "component", "accessibility"))
-        if "properties" in comp_def:
-            props.update(k for k in comp_def["properties"] if k not in ("id", "component", "accessibility"))
+        all_of = comp_def.get("allOf")
+        if isinstance(all_of, list):
+            for item in all_of:
+                item_props = _as_object(item.get("properties")) if isinstance(item, dict) else {}
+                props.update(k for k in item_props if k not in ("id", "component", "accessibility"))
+        own_props = _as_object(comp_def.get("properties"))
+        props.update(k for k in own_props if k not in ("id", "component", "accessibility"))
 
         if props:
             return f"Properties: {', '.join(sorted(props))}"

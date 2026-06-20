@@ -6,8 +6,7 @@ import pytest
 
 from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui._runtime import _A2UIRuntime
-from autogen.beta.a2ui.action_tool import collect_action_declarations
-from autogen.beta.a2ui.actions import A2UIEventAction
+from autogen.beta.a2ui.actions import A2UIEventAction, collect_action_declarations
 from autogen.beta.a2ui.middleware import A2UIValidationMiddleware
 
 
@@ -132,7 +131,7 @@ class TestRuntimeActions:
         assert "schedule" in prompt
         assert {a.name for a in rt.actions} == {"schedule"}
 
-    def test_get_action_resolves_tool_backed(self) -> None:
+    def test_get_action_resolves_registered_action(self) -> None:
         @a2ui_action(description="Save data")
         def save(value: str) -> str:
             return value
@@ -141,5 +140,5 @@ class TestRuntimeActions:
         save_action = rt.get_action("save")
         assert save_action is not None
         assert save_action.action_type == "event"
-        assert save_action.tool_name == "save"
+        assert save_action.name == "save"
         assert rt.get_action("nonexistent") is None

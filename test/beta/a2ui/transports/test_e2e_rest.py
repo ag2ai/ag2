@@ -22,7 +22,7 @@ from dirty_equals import IsPartialDict
 from autogen.beta import Agent
 from autogen.beta.a2ui import A2UIServer, a2ui_action
 from autogen.beta.a2ui.transports import RestTransport
-from autogen.beta.events import ModelRequest, TextInput, ToolCallEvent
+from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.testing import TestConfig, TrackingConfig
 
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
@@ -93,26 +93,19 @@ async def test_sse_single_turn_streams_text_message_done() -> None:
 
 
 @pytest.mark.asyncio
-async def test_action_round_trip_client_click_executes_server_tool() -> None:
+async def test_action_round_trip_client_click_executes_server_action() -> None:
     clicked: list[str] = []
 
-    @a2ui_action(description="Schedule all posts for the given time")
-    def schedule_posts(time: str) -> str:
-        clicked.append(time)
-        return f"scheduled {time}"
+    @a2ui_action(description="Add the item to the cart")
+    def add_to_basket(good_id: str) -> dict:
+        clicked.append(good_id)
+        return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}}
 
-    # The click envelope is rewritten into a prompt; the mocked LLM then
-    # calls the action (injected for the turn), and answers with prose once it
-    # returns. The agent stays plain — the action lives on the server.
-    agent = Agent(
-        name="ui",
-        config=TestConfig(
-            ToolCallEvent(name="schedule_posts", arguments='{"time": "2:00 PM"}'),
-            "All set.",
-        ),
-    )
+    # The click runs the registered action on the server; the agent is NOT
+    # invoked, and the handler's surface update is streamed back.
+    agent = Agent(name="ui", config=TestConfig("AGENT SHOULD NOT RUN"))
     app = A2UIServer(
-        agent, actions=[schedule_posts], transport=RestTransport(encoding="jsonl"), validate_responses=False
+        agent, actions=[add_to_basket], transport=RestTransport(encoding="jsonl"), validate_responses=False
     )
 
     async with _client(app) as client:
@@ -124,11 +117,11 @@ async def test_action_round_trip_client_click_executes_server_tool() -> None:
                     {
                         "version": "v0.9",
                         "action": {
-                            "name": "schedule_posts",
+                            "name": "add_to_basket",
                             "surfaceId": "s1",
                             "sourceComponentId": "btn",
                             "timestamp": "2026-06-15T00:00:00Z",
-                            "context": {"time": "2:00 PM"},
+                            "context": {"good_id": "G1"},
                         },
                     }
                 ],
@@ -136,9 +129,9 @@ async def test_action_round_trip_client_click_executes_server_tool() -> None:
         )
 
     assert resp.status_code == 200
-    assert clicked == ["2:00 PM"]
+    assert clicked == ["G1"]
     lines = [json.loads(line) for line in resp.text.splitlines() if line]
-    assert lines == [{"text": "All set."}]
+    assert lines == [{"version": "v0.9", "updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}}]
 
 
 @pytest.mark.asyncio
