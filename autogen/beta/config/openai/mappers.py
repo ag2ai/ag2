@@ -10,6 +10,7 @@ from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
 from openai.types.responses import ResponseUsage
 
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.config.openai.events import OpenAIReasoningEvent, OpenAIServerToolCallEvent
 from autogen.beta.events import (
     BaseEvent,
@@ -272,6 +273,11 @@ def events_to_responses_input(
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "openai-responses")
 
+        elif isinstance(message, CompactionSummary):
+            # Surface the summary as a user turn so it stays visible and gives a valid opening turn
+            text = f"[Summary of earlier conversation]\n{message.summary}"
+            result.append({"role": "user", "content": [{"type": "input_text", "text": text}]})
+
     return result
 
 
@@ -349,13 +355,6 @@ def convert_messages(
                     else:
                         raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "openai-completions")
 
-                elif isinstance(inp, FileIdInput):
-                    raise UnsupportedInputError(
-                        "FileIdInput is not supported by OpenAI Chat Completions API. "
-                        "Use OpenAIResponsesConfig instead of OpenAIConfig to work with file uploads.",
-                        "openai-completions",
-                    )
-
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "openai-completions")
 
@@ -364,6 +363,10 @@ def convert_messages(
                 result.append({"role": "user", "content": parts[0]["text"]})
             else:
                 result.append({"role": "user", "content": parts})
+
+        elif isinstance(message, CompactionSummary):
+            # Surface the summary as a user turn so it stays visible and gives a valid opening turn
+            result.append({"role": "user", "content": f"[Summary of earlier conversation]\n{message.summary}"})
 
     return result
 
@@ -504,9 +507,7 @@ def normalize_usage(usage: CompletionUsage) -> Usage:
         completion_tokens=usage.completion_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.prompt_tokens_details.cached_tokens if usage.prompt_tokens_details else None,
-        cache_creation_input_tokens=usage.completion_tokens_details.reasoning_tokens
-        if usage.completion_tokens_details
-        else None,
+        thinking_tokens=usage.completion_tokens_details.reasoning_tokens if usage.completion_tokens_details else None,
     )
 
 
@@ -516,7 +517,7 @@ def normalize_responses_usage(usage: ResponseUsage) -> Usage:
         completion_tokens=usage.output_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
-        cache_creation_input_tokens=usage.output_tokens_details.reasoning_tokens,
+        thinking_tokens=usage.output_tokens_details.reasoning_tokens,
     )
 
 

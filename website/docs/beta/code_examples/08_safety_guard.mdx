@@ -55,21 +55,16 @@ from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
 
-
 def section(title: str) -> None:
     print(f"\n── {title} ───")
 
-
 # ---- Tool under supervision -------------------------------------------------
-
 
 def write_file(path: str, content: str) -> str:
     """Pretend-write ``content`` to ``path``. This playground never touches disk."""
     return f"[ok] wrote {len(content)} bytes to {path}"
 
-
 # ---- Guardian observer ------------------------------------------------------
-
 
 class PathGuardian(BaseObserver):
     """Emits a FATAL alert if anything tries to write outside /tmp."""
@@ -90,7 +85,6 @@ class PathGuardian(BaseObserver):
                     message=f"blocked dangerous write: {event.arguments}",
                 )
         return None
-
 
 async def main() -> None:
     config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
@@ -137,7 +131,6 @@ async def main() -> None:
     print(f"HaltEvents seen:      {len(halt_events)}")
     for h in halt_events:
         print(f"  - source={h.source} reason={h.reason!r}")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

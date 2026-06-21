@@ -20,8 +20,8 @@ The framework supports both. You can wrap eval metrics in pytest assertions ("pa
 
 Every eval suite has four pieces. That's it.
 
-1. A **dataset** — a suite of tasks with inputs and (optional) expected outputs.
-2. An **agent** — an `Agent` instance, or a factory that builds a fresh one per task.
+1. A **dataset** — a `Suite` of tasks with inputs and (optional) expected outputs.
+2. An **agent** — an `Agent` instance.
 3. One or more **scorers** — functions that grade a run.
 4. A call to **run_agent** — the framework's entry point.
 
@@ -34,36 +34,34 @@ The rest of these docs cover each piece in depth. Read the quick-start below fir
 
 The simplest plausible eval. Two tasks, one custom scorer, one prebuilt.
 
-```python linenums="1" hl_lines="13-15 17-19 22-24 26-32"
+```python linenums="1" hl_lines="11-16 23-27 30-32 36-44"
 import asyncio
 from pathlib import Path
 
 from autogen.beta import Agent, tool
 from autogen.beta.config import GeminiConfig
 from autogen.beta.events import ToolCallEvent
-from autogen.beta.eval import run_agent, scorer
+from autogen.beta.eval import Suite, run_agent, scorer
 from autogen.beta.eval.scorers import tool_called
 
-
-# 1. Dataset — inline list (or load from JSONL)
-dataset = [
+# 1. Dataset — inline tasks (or Suite.from_jsonl("tasks.jsonl"))
+dataset = Suite.from_list([
     {"task_id": "t1", "inputs": {"input": "What's the weather in Tokyo?"},
      "reference_outputs": {"city": "Tokyo"}},
     {"task_id": "t2", "inputs": {"input": "Weather in Paris?"},
      "reference_outputs": {"city": "Paris"}},
-]
+])
 
-# 2. Agent factory — a fresh agent per task
+# 2. Agent — one instance, reused across tasks
 @tool
 async def get_weather(city: str) -> str:
     return f"Sunny, 72F in {city}"
 
-def build_agent(*, config=None):
-    return Agent(
-        "weather",
-        config=config or GeminiConfig(model="gemini-3-flash-preview"),
-        tools=[get_weather],
-    )
+agent = Agent(
+    "weather",
+    config=GeminiConfig(model="gemini-3-flash-preview"),
+    tools=[get_weather],
+)
 
 # 3. Scorer — a plain function with @scorer
 @scorer
@@ -74,7 +72,7 @@ def called_get_weather(trace) -> bool:
 async def main():
     result = await run_agent(
         dataset,
-        agent=build_agent,
+        agent=agent,
         scorers=[
             called_get_weather,
             tool_called("get_weather"),  # prebuilt
@@ -119,7 +117,7 @@ cassettes = {
 
 result = await run_agent(
     dataset,
-    agent=build_agent,
+    agent=agent,
     scorers=[called_get_weather],
     model_config=cassettes,  # dict keyed by task_id
     store_dir=Path("./runs"),

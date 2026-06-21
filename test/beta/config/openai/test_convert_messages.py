@@ -9,6 +9,7 @@ from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
 from autogen.beta import ToolResult
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.config.openai.mappers import convert_messages, events_to_responses_input
 from autogen.beta.events import (
     AudioInput,
@@ -619,3 +620,14 @@ def test_completions_hallucinated_tool_call_maps_with_error_text() -> None:
             "content": "autogen.beta.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
         },
     ]
+
+
+def test_compaction_summary_renders_as_user_turn() -> None:
+    summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
+    text = "[Summary of earlier conversation]\nLooked up Paris and Tokyo."
+
+    completions = convert_messages([], [summary], SerializerCls)
+    assert completions[-1] == {"role": "user", "content": text}
+
+    responses = events_to_responses_input([summary], SerializerCls)
+    assert responses == [{"role": "user", "content": [{"type": "input_text", "text": text}]}]

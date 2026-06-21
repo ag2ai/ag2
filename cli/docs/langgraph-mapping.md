@@ -794,8 +794,6 @@ The converter should emit warnings for:
 - [LangChain Middleware](https://docs.langchain.com/oss/python/langchain/middleware/overview)
 - [LangChain Tools](https://docs.langchain.com/oss/python/langchain/tools)
 - [LangChain Messages](https://docs.langchain.com/oss/python/langchain/messages)
-- [AG2 ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent/)
-- [AG2 GroupChat](https://docs.ag2.ai/latest/docs/api-reference/autogen/GroupChat/)
 - [AG2 Swarm Orchestration](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_swarm/)
 - [AG2 Quickstart](https://docs.ag2.ai/latest/docs/home/quickstart/)
 - [AG2 Swarm Deep-Dive](https://docs.ag2.ai/0.8.3/docs/user-guide/advanced-concepts/swarm/deep-dive/)

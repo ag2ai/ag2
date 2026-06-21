@@ -44,10 +44,10 @@ class TextAnalyzerAgent(ConversableAgent):
         system_message (str): system message for the ChatCompletion inference.
         human_input_mode (str): This agent should NEVER prompt the human for input.
         llm_config (LLMConfig or dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)
+            Please refer to `OpenAIWrapper.create`
             for available options.
             To disable llm-based auto reply, set to False.
-        **kwargs (dict): other kwargs in [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
+        **kwargs (dict): other kwargs in `ConversableAgent`.
         """
         warnings.warn(
             "TextAnalyzerAgent is deprecated and will be removed in v0.14. "

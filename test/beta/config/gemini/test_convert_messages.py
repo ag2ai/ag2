@@ -7,6 +7,7 @@ from fast_depends.use import SerializerCls
 from google.genai import types
 
 from autogen.beta import ToolResult
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.config.gemini.events import (
     GeminiServerToolCallEvent,
     GeminiServerToolResultEvent,
@@ -507,3 +508,31 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
             }
         ],
     }
+
+
+class TestConvertMessagesCompactionSummary:
+    """A CompactionSummary must render as a user turn so the summary stays visible
+    and gives a valid opening turn (Gemini rejects a non-user first turn)."""
+
+    def test_summary_renders_as_user_text(self) -> None:
+        summary = CompactionSummary(summary="Earlier the user configured the project.", event_count=12)
+
+        [content] = convert_messages([summary], SerializerCls)
+
+        assert content.model_dump(exclude_none=True) == {
+            "role": "user",
+            "parts": [{"text": "[Summary of earlier conversation]\nEarlier the user configured the project."}],
+        }
+
+    def test_summary_leads_a_tool_cycle_with_a_user_turn(self) -> None:
+        summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
+        call = ToolCallEvent(id="c9", name="get_weather", arguments='{"city": "NYC"}')
+        events = [
+            summary,
+            ModelResponse(tool_calls=ToolCallsEvent(calls=[call])),
+            ToolResultsEvent(results=[ToolResultEvent(parent_id="c9", name="get_weather", result=ToolResult("21C"))]),
+        ]
+
+        contents = convert_messages(events, SerializerCls)
+
+        assert contents[0].role == "user"

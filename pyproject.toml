@@ -93,7 +93,7 @@ ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 diskcache = ["diskcache"]
 
 # providers
-openai = ["openai>=2.30.0,<3.0"]
+openai = ["openai>=2.43.0,<3.0"]
 openai-realtime = ["ag2[openai]", "openai[realtime]"]
 
 deepseek = ["ag2[openai]"]
@@ -280,6 +280,7 @@ websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
 atr-guardrail = ["pyatr>=0.2.6"]
 websockets = ["websockets>=14.0,<17"]
+network-ws = ["ag2[websockets]"]
 watchdog = ["watchdog>=4.0,<7"]
 long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
@@ -344,7 +345,6 @@ docs = [
     "ag2[watchdog]",                   # Watchdog is exposed in the public API by the optional `autogen.beta.knowledge` module
     "ag2[tavily,ddgs,perplexity]",     # Search tools are exposed by optional beta search modules
     "mkdocs-material==9.6.19",
-    "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
@@ -357,7 +357,6 @@ docs = [
     "mkdocs-redirects==1.2.2",                          # required for handling redirects natively
     "pillow",                                           # required for mkdocs-glightbo
     "cairosvg",                                         # required for mkdocs-glightbo
-    "pdoc3==0.11.6",
     "jinja2==3.1.6",
     "pyyaml==6.0.2",
     "termcolor==3.1.0",
@@ -392,6 +391,7 @@ dev = [
 optionals = [
     "ag2[redis]",
     "ag2[ag-ui]",
+    "ag2[mcp]", # autogen.beta.mcp — serve an Agent as an MCP server
     "ag2[tracing]",
     "ag2[watchdog]", # DiskKnowledgeStore
     # code execution
@@ -405,6 +405,7 @@ optionals = [
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
+    "ag2[bedrock]",
     "ag2[gemini]",
     "ag2[ollama]",
     "ag2[dashscope]",

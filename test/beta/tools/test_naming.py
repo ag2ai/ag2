@@ -138,8 +138,27 @@ def test_empty_args() -> None:
             "description": "Tool description.",
             "name": "my_tool",
             "parameters": {
-                "type": "null",
+                "type": "object",
+                "properties": {},
             },
+        },
+        "type": "function",
+    }
+
+
+def test_explicit_schema_is_preserved() -> None:
+    explicit = {"type": "object", "properties": {"x": {"type": "string"}}, "required": ["x"]}
+
+    @tool(schema=explicit)
+    def my_tool() -> str:
+        """Tool description."""
+        return ""
+
+    assert asdict(my_tool.schema) == {
+        "function": {
+            "description": "Tool description.",
+            "name": "my_tool",
+            "parameters": explicit,
         },
         "type": "function",
     }

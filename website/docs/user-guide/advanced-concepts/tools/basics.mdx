@@ -70,7 +70,7 @@ import Example from "/snippets/python-examples/toolregister.mdx";
 
 ### Alternative Registration Methods
 
-Alternatively, you can use decorators [`register_for_execution`](/docs/api-reference/autogen/ConversableAgent#register-for-execution) and [`register_for_llm`](/docs/api-reference/autogen/ConversableAgent#register-for-llm) to register a tool. So, instead of using [`register_function`](/docs/api-reference/autogen/register_function), you can register them with the function definition.
+Alternatively, you can use decorators `register_for_execution` and `register_for_llm` to register a tool. So, instead of using `register_function`, you can register them with the function definition.
 ```python
 @date_agent.register_for_llm(description="Get the day of the week for a given date")
 @executor_agent.register_for_execution()

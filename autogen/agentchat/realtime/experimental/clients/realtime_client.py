@@ -10,7 +10,6 @@ from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
 
 from anyio import create_task_group
 
-from .....doc_utils import export_module
 from .....llm_config import LLMConfig
 from ..realtime_events import InputAudioBufferDelta, RealtimeEvent
 
@@ -21,7 +20,6 @@ Role = Literal["user", "assistant", "system"]
 
 
 @runtime_checkable
-@export_module("autogen.agentchat.realtime.experimental.clients")
 class RealtimeClientProtocol(Protocol):
     async def send_function_result(self, call_id: str, result: str) -> None:
         """Send the result of a function call to a Realtime API.
@@ -170,7 +168,6 @@ def register_realtime_client() -> Callable[[type[T]], type[T]]:
     return decorator
 
 
-@export_module("autogen.agentchat.realtime.experimental.clients")
 def get_client(llm_config: LLMConfig | dict[str, Any], logger: Logger, **kwargs: Any) -> "RealtimeClientProtocol":
     """Get a registered Realtime API client.
 

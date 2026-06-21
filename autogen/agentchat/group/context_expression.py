@@ -6,12 +6,10 @@ import ast
 import re
 from dataclasses import dataclass
 
-from ...doc_utils import export_module
 from .context_variables import ContextVariables
 
 
 @dataclass
-@export_module("autogen")
 class ContextExpression:
     """A class to evaluate logical expressions using context variables.\n
     \n

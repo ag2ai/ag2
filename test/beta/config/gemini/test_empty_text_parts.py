@@ -105,3 +105,57 @@ class TestProcessResponseSkipsEmptyTextParts:
         await client._process_response(response, ctx)
 
         assert [e for e in captured if isinstance(e, ModelMessage)] == []
+
+
+@pytest.mark.asyncio
+class TestProcessResponseConcatenatesTextParts:
+    """Regression: Gemini may split one answer across multiple ``Part(text=...)``.
+
+    A thinking model answering a ``response_schema`` call sometimes returns the
+    JSON object across several text parts. ``_process_response`` must concatenate
+    them into one ``ModelMessage`` — keeping only the last part drops the opening
+    ``{...`` prefix and feeds a tail slice (often starting at a ``[`` quoted in the
+    text) to the schema validator, raising a spurious ``json_invalid``.
+    """
+
+    async def test_multiple_text_parts_concatenated(
+        self,
+        client: GeminiClient,
+        memory_context: tuple[Context, MemoryStream, list[BaseEvent]],
+    ) -> None:
+        ctx, _, captured = memory_context
+        # JSON answer split mid-string; the second part begins at a ``[`` the
+        # model quoted inside ``reasoning``.
+        response = _response([
+            _candidate([
+                types.Part(text='{"mode": "A.5", "reasoning": "cut off at (\''),
+                types.Part(text="[util/env'), premature termination.\"}"),
+            ])
+        ])
+
+        result = await client._process_response(response, ctx)
+
+        expected = '{"mode": "A.5", "reasoning": "cut off at (\'[util/env\'), premature termination."}'
+        assert result.content == expected
+        assert [e for e in captured if isinstance(e, ModelMessage)] == [ModelMessage(expected)]
+
+    async def test_text_parts_concatenated_around_thought(
+        self,
+        client: GeminiClient,
+        memory_context: tuple[Context, MemoryStream, list[BaseEvent]],
+    ) -> None:
+        ctx, _, captured = memory_context
+        # A thought part interleaved between answer parts must not break the join.
+        response = _response([
+            _candidate([
+                types.Part(text="thinking...", thought=True),
+                types.Part(text='{"a": 1, '),
+                types.Part(text='"b": 2}'),
+            ])
+        ])
+
+        result = await client._process_response(response, ctx)
+
+        assert result.content == '{"a": 1, "b": 2}'
+        assert [e for e in captured if isinstance(e, ModelReasoning)] == [ModelReasoning("thinking...")]
+        assert [e for e in captured if isinstance(e, ModelMessage)] == [ModelMessage('{"a": 1, "b": 2}')]

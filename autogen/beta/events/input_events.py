@@ -40,8 +40,20 @@ class ModelRequest(BaseEvent):
     parts: "list[Input]" = Field(kw_only=False)
 
     @classmethod
-    def ensure_request(cls, msgs: "Iterable[str | Input]") -> "ModelRequest":
+    def ensure_request(cls, msgs: "Iterable[SendableMessage | Input]") -> "ModelRequest":
         return cls([Input.ensure_input(m) for m in msgs])
+
+
+class DrainedModelRequest(ModelRequest):
+    """``ModelRequest`` re-emitted by the agent loop after draining
+    ``context.pending_messages``.
+
+    Observers, logging middleware, and history storage treat it as a normal
+    ``ModelRequest`` (``TypeCondition`` uses ``isinstance``). The agent loop's
+    own LLM-trigger subscriber distinguishes it by type and skips its built-in
+    LLM invocation — without this marker, re-emitting the merged request would
+    recursively trigger another LLM call.
+    """
 
 
 class DataInput(Input):

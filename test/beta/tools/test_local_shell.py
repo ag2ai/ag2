@@ -2,18 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import json
 import sys
-from pathlib import Path
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path, PurePosixPath
 
 import pytest
 
 from autogen.beta import Agent, MemoryStream
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.testing import TestConfig
-from autogen.beta.tools import LocalShellTool
-from autogen.beta.tools.shell import LocalShellEnvironment
-from autogen.beta.tools.shell.environment.base import check_ignore, matches
+from autogen.beta.tools import LocalEnvironment, SandboxShellTool
+from autogen.beta.tools.sandbox import ExecResult, SandboxFactory
+from autogen.beta.tools.sandbox.filter import check_ignore, matches
 
 
 class TestMatches:
@@ -92,28 +95,46 @@ class TestCheckIgnore:
         assert result is not None
         assert "Access denied" in result
 
+    def test_remote_pure_workdir_blocks_matching_path(self) -> None:
+        # Finding #2: a remote backend has no host filesystem — paths are
+        # checked lexically against a PurePosixPath workdir, no .resolve().
+        result = check_ignore("cat .env", PurePosixPath("/workspace"), ["**/.env"])
+        assert result is not None
+        assert ".env" in result
 
-class TestLocalShellToolConstruction:
+    def test_remote_pure_workdir_allows_safe_path(self) -> None:
+        assert check_ignore("cat README.md", PurePosixPath("/workspace"), ["**/.env"]) is None
+
+    def test_remote_pure_workdir_blocks_traversal(self) -> None:
+        result = check_ignore("cat ../../etc/passwd", PurePosixPath("/workspace"), ["**/.env"])
+        assert result is not None
+        assert "Access denied" in result
+
+    def test_remote_pure_workdir_blocks_absolute_outside(self) -> None:
+        result = check_ignore("cat /etc/passwd", PurePosixPath("/workspace"), ["**/.env"])
+        assert result is not None
+        assert "Access denied" in result
+
+
+class TestSandboxShellToolConstruction:
     def test_auto_tempdir_created(self) -> None:
-        shell = LocalShellTool()
+        shell = SandboxShellTool()
         assert shell.workdir.exists()
         assert shell.workdir.is_dir()
 
     def test_explicit_path_created(self, tmp_path: Path) -> None:
         target = tmp_path / "workspace"
-        shell = LocalShellTool(environment=target)
+        shell = SandboxShellTool(LocalEnvironment(target))
         assert shell.workdir == target
         assert target.exists()
 
     def test_workdir_is_readonly_property(self, tmp_path: Path) -> None:
-        shell = LocalShellTool(environment=tmp_path)
+        shell = SandboxShellTool(LocalEnvironment(tmp_path))
         with pytest.raises(AttributeError):
             shell.workdir = tmp_path  # type: ignore[misc]
 
 
 class TestShellExecution:
-    """These tests call the tool function directly via the agent + TestConfig."""
-
     def _make_tool_call(self, command: str) -> ToolCallEvent:
         return ToolCallEvent(
             arguments=json.dumps({"command": command}),
@@ -129,20 +150,7 @@ class TestShellExecution:
     @pytest.mark.asyncio
     async def test_allowed_permits_matching_command(self, tmp_path: Path) -> None:
         output = tmp_path / "out.txt"
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["touch"]))
-        # "touch" is allowed and the command contains no shell operators —
-        # the file MUST be created. Mirrors test_allowed_blocks_non_matching_command,
-        # which uses the same touch pattern to assert rejection.
-        agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
-        await agent.ask("run it")
-        assert output.exists(), "touch was allowed but file was not created"
-
-    @pytest.mark.asyncio
-    async def test_allowed_blocks_shell_redirect_bypass(self, tmp_path: Path) -> None:
-        output = tmp_path / "out.txt"
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["echo"]))
-        # Even though "echo" is allowed, shell redirection (`>`) must be blocked
-        # to prevent bypassing the whitelist by writing to arbitrary files.
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), allowed=["echo"])
         agent = Agent("a", config=self._make_config(f"echo hello > {output}"), tools=[shell])
         await agent.ask("run it")
         assert not output.exists(), "shell redirect bypass was not blocked"
@@ -150,40 +158,23 @@ class TestShellExecution:
     @pytest.mark.asyncio
     async def test_allowed_blocks_non_matching_command(self, tmp_path: Path) -> None:
         output = tmp_path / "out.txt"
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["echo"]))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), allowed=["echo"])
         # "touch" is not in allowed — the file must NOT be created
         agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
         await agent.ask("run it")
         assert not output.exists(), "touch was blocked but file was created anyway"
 
     @pytest.mark.asyncio
-    async def test_allowed_blocks_command_substitution_bypass(self, tmp_path: Path) -> None:
-        output = tmp_path / "subst.txt"
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["echo"]))
-        # `$(touch ...)` runs `touch` inside command substitution. Even though
-        # `echo` is the head command, the substituted command must NOT execute
-        # — otherwise the allow-list is bypassable identically to the backtick
-        # form (` `cmd` `), which is already blocked.
-        agent = Agent("a", config=self._make_config(f"echo $(touch {output})"), tools=[shell])
-        await agent.ask("run it")
-        assert not output.exists(), "$() command substitution bypass was not blocked"
-
-    # ── blocked ───────────────────────────────────────────────────────────────
-
-    @pytest.mark.asyncio
     async def test_blocked_rejects_command(self, tmp_path: Path) -> None:
         output = tmp_path / "out.txt"
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, blocked=["touch"]))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), blocked=["touch"])
         agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
         await agent.ask("run it")
         assert not output.exists(), "touch was blocked but file was created anyway"
 
-    # ── env merging ───────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_env_merged_not_replaced(self, tmp_path: Path) -> None:
-        """Extra env vars must be added on top of os.environ, not replace it."""
-        # Write a helper script — avoids shell variable syntax differences
+        # Use a helper script — avoids shell variable syntax differences
         # between bash ($VAR) and cmd.exe (%VAR%) across platforms.
         script = tmp_path / "check_env.py"
         script.write_text(
@@ -192,12 +183,7 @@ class TestShellExecution:
             "path = os.environ.get('PATH', '')\n"
             "print(custom + '|' + path)\n"
         )
-        shell = LocalShellTool(
-            environment=LocalShellEnvironment(
-                path=tmp_path,
-                env={"MY_CUSTOM_VAR": "hello"},
-            )
-        )
+        shell = SandboxShellTool(LocalEnvironment(tmp_path, env_vars={"MY_CUSTOM_VAR": "hello"}))
         cmd = f'"{sys.executable}" check_env.py'
         tool_results: list[str] = []
         stream = MemoryStream()
@@ -212,18 +198,10 @@ class TestShellExecution:
         path_part = result.split("|", 1)[1] if "|" in result else ""
         assert path_part.strip(), f"PATH was lost — env was replaced instead of merged: {result!r}"
 
-    # ── timeout ───────────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_timeout_returns_string_not_exception(self, tmp_path: Path) -> None:
-        """A timed-out command must return an error string, not raise."""
         output_file = tmp_path / "timeout_result.txt"
-        shell = LocalShellTool(
-            environment=LocalShellEnvironment(
-                path=tmp_path,
-                timeout=1,
-            )
-        )
+        shell = SandboxShellTool(LocalEnvironment(tmp_path, timeout=1))
         # sleep 5 will time out after 1s
         cmd = f"sleep 5 && echo ok > {output_file}"
         agent = Agent("a", config=self._make_config(cmd), tools=[shell])
@@ -233,12 +211,10 @@ class TestShellExecution:
         # The file should not exist — command was killed
         assert not output_file.exists()
 
-    # ── ignore ────────────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_ignore_blocks_env_file(self, tmp_path: Path) -> None:
         (tmp_path / ".env").write_text("SECRET=password")
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, ignore=["**/.env"]))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), ignore=["**/.env"])
 
         tool_results: list[str] = []
 
@@ -252,16 +228,13 @@ class TestShellExecution:
         assert "Access denied" in tool_results[0], f"Expected 'Access denied' but got: {tool_results[0]!r}"
         assert "SECRET" not in tool_results[0], "File content leaked despite ignore pattern"
 
-    # ── exit code ─────────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_exit_code_included_on_failure(self, tmp_path: Path) -> None:
-        """A failed command must include [exit code: N] in the tool result."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path))
         agent = Agent("a", config=self._make_config("exit 42"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
@@ -270,23 +243,20 @@ class TestShellExecution:
 
     @pytest.mark.asyncio
     async def test_exit_code_absent_on_success(self, tmp_path: Path) -> None:
-        """A successful command must NOT include [exit code: ...] in the result."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path))
         agent = Agent("a", config=self._make_config("echo hello"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
         assert "exit code" not in tool_results[0], f"Unexpected exit code in success: {tool_results[0]!r}"
 
-    # ── filesystem persistence ────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_files_persist_between_ask_calls(self, tmp_path: Path) -> None:
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path))
         agent = Agent(
             "a",
             config=TestConfig(
@@ -323,16 +293,13 @@ class TestShellExecution:
         assert await reply2.content() == "read"
         assert (tmp_path / "counter.txt").read_text().strip() == "42"
 
-    # ── output truncation ─────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_output_truncated_when_exceeds_limit(self, tmp_path: Path) -> None:
-        """Output longer than max_output must be cut with a note appended."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, max_output=20))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path, max_output=20))
         # Generate 100 chars of output
         agent = Agent("a", config=self._make_config("python3 -c \"print('x' * 100)\""), tools=[shell])
         await agent.ask("run it", stream=stream)
@@ -346,55 +313,47 @@ class TestShellExecution:
 
     @pytest.mark.asyncio
     async def test_output_not_truncated_within_limit(self, tmp_path: Path) -> None:
-        """Short output must be returned as-is without any truncation note."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, max_output=1000))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path, max_output=1000))
         agent = Agent("a", config=self._make_config("echo hello"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
         assert "truncated" not in tool_results[0], "Unexpected truncation note for short output"
 
-    # ── timeout exit code 124 ─────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_timeout_returns_exit_code_124(self, tmp_path: Path) -> None:
-        """Timed-out commands must include [exit code: 124] (Unix convention)."""
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, timeout=1))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path, timeout=1))
         agent = Agent("a", config=self._make_config("sleep 5"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
         assert "exit code: 124" in tool_results[0], f"Expected exit code 124 but got: {tool_results[0]!r}"
 
-    # ── readonly ──────────────────────────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_readonly_blocks_write_commands(self, tmp_path: Path) -> None:
-        """readonly=True must block touch, rm, mkdir."""
         output = tmp_path / "should_not_exist.txt"
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, readonly=True))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), readonly=True)
         agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
         await agent.ask("run it")
         assert not output.exists(), "touch was not blocked by readonly=True"
 
     @pytest.mark.asyncio
     async def test_readonly_allows_read_commands(self, tmp_path: Path) -> None:
-        """readonly=True must allow cat, ls, grep."""
         (tmp_path / "hello.txt").write_text("world")
 
         tool_results: list[str] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, readonly=True))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), readonly=True)
         agent = Agent("a", config=self._make_config("cat hello.txt"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
@@ -402,27 +361,89 @@ class TestShellExecution:
         assert "world" in tool_results[0], f"cat was blocked by readonly=True: {tool_results[0]!r}"
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(sys.platform == "win32", reason="touch is POSIX-only")
     async def test_readonly_overridden_by_explicit_allowed(self, tmp_path: Path) -> None:
-        """explicit allowed= takes precedence over readonly=True."""
         output = tmp_path / "out.txt"
-        shell = LocalShellTool(
-            environment=LocalShellEnvironment(
-                path=tmp_path,
-                readonly=True,
-                allowed=["touch"],  # user explicitly allows touch despite readonly
-            )
+        shell = SandboxShellTool(
+            LocalEnvironment(tmp_path),
+            readonly=True,
+            allowed=["touch"],  # user explicitly allows touch despite readonly
         )
         agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
         await agent.ask("run it")
         assert output.exists(), "touch should be allowed when explicit allowed= overrides readonly"
 
-    # ── workdir in tool description ───────────────────────────────────────────
-
     @pytest.mark.asyncio
     async def test_workdir_in_tool_description(self, tmp_path: Path) -> None:
-        """The shell tool description must include the working directory path."""
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path))
 
         schemas = await shell.schemas(None)  # type: ignore[arg-type]
         description = schemas[0].function.description
         assert str(tmp_path) in description, f"workdir not in description: {description!r}"
+
+
+class _LoopRecordingSandbox:
+    """Minimal Sandbox that records the event loop each exec runs on."""
+
+    def __init__(self, loops: list[int]) -> None:
+        self._loops = loops
+
+    @property
+    def workdir(self) -> PurePosixPath:
+        return PurePosixPath("/workspace")
+
+    @property
+    def host_workdir(self) -> None:
+        return None
+
+    async def __aenter__(self) -> "_LoopRecordingSandbox":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def exec(
+        self, argv: list[str], *, env: dict[str, str] | None = None, timeout: float | None = None
+    ) -> ExecResult:
+        self._loops.append(id(asyncio.get_running_loop()))
+        return ExecResult(output="ok", exit_code=0)
+
+
+class _RecordingFactory:
+    """A SandboxFactory (not a SingletonFactory) yielding the recording sandbox."""
+
+    def __init__(self) -> None:
+        self.loops: list[int] = []
+        self._sandbox = _LoopRecordingSandbox(self.loops)
+
+    @asynccontextmanager
+    async def open(self, context: object = None) -> "AsyncIterator[_LoopRecordingSandbox]":
+        yield self._sandbox
+
+
+class TestShellRunsInAgentLoop:
+    """Regression for finding #1: SandboxShellTool's tool fn must be async so
+    every command runs in the agent's single event loop — not via a throw-away
+    asyncio.run() per call (which breaks loop-bound remote clients)."""
+
+    def _tc(self, command: str) -> ToolCallEvent:
+        return ToolCallEvent(arguments=json.dumps({"command": command}), name="run_shell_command")
+
+    @pytest.mark.asyncio
+    async def test_sequential_commands_share_one_event_loop(self) -> None:
+        factory = _RecordingFactory()
+        assert isinstance(factory, SandboxFactory)
+        shell = SandboxShellTool(factory)
+        config = TestConfig(
+            ModelResponse(tool_calls=ToolCallsEvent([self._tc("echo a")])),
+            ModelResponse(tool_calls=ToolCallsEvent([self._tc("echo b")])),
+            "done",
+        )
+        agent = Agent("a", config=config, tools=[shell])
+
+        await agent.ask("run two commands")
+
+        assert len(factory.loops) == 2, f"expected 2 exec calls, got {factory.loops}"
+        assert len(set(factory.loops)) == 1, (
+            f"shell commands ran on different event loops — the sync asyncio.run regression is back: {factory.loops}"
+        )

@@ -18,6 +18,7 @@ from .events import (
 from .files import FilesAPI
 from .middleware import Middleware
 from .observers import observer
+from .plugin import Plugin
 from .response import PromptedSchema, ResponseSchema, response_schema
 from .spec import AgentSpec
 from .stream import MemoryStream
@@ -40,6 +41,7 @@ __all__ = (
     "KnowledgeConfig",
     "MemoryStream",
     "Middleware",
+    "Plugin",
     "PromptedSchema",
     "ResponseSchema",
     "Task",

@@ -23,6 +23,7 @@ from .._types import Feedback
 from ..trace import TokenUsage
 
 if TYPE_CHECKING:
+    from ..sources.trace_source import TraceRef
     from .result import Aggregates, RunResult, ScoreStats, TaskResult
 
 
@@ -81,7 +82,15 @@ def _task_to_dict(tr: "TaskResult") -> dict[str, Any]:
         "tokens": _tokens_to_dict(tr.trace.tokens),
         "feedback": [_feedback_to_dict(fb) for fb in tr.feedback],
         "budget_violation": tr.budget_violation,
+        "trace_ref": _trace_ref_to_dict(tr.trace_ref),
     }
+
+
+def _trace_ref_to_dict(ref: "TraceRef | None") -> dict[str, Any] | None:
+    """Serialize a :class:`TraceRef` (or ``None``) — the real OTEL trace id + join key."""
+    if ref is None:
+        return None
+    return {"trace_id": ref.trace_id, "task_id": ref.task_id, "metadata": dict(ref.metadata)}
 
 
 def _event_to_dict(event: Any) -> dict[str, Any]:
@@ -160,6 +169,7 @@ def load_run(path: str | os.PathLike[str]) -> "RunResult":
     # module top would invert the result.py -> store.py dependency (AGENTS.md exempts
     # circular-import shims).
     from ..dataset import Suite, Task
+    from ..sources.trace_source import TraceRef
     from ..trace import Trace
     from .result import RunResult, TaskResult
 
@@ -186,15 +196,29 @@ def load_run(path: str | os.PathLike[str]) -> "RunResult":
         trace = Trace(
             events=[], exception=_exception_from_dict(t.get("exception")), duration_ms=int(t.get("duration_ms", 0))
         )
+        ref_doc = t.get("trace_ref")
+        trace_ref: TraceRef | None = (
+            TraceRef(
+                trace_id=ref_doc.get("trace_id", ""),
+                task_id=ref_doc.get("task_id"),
+                metadata=dict(ref_doc.get("metadata") or {}),
+            )
+            if ref_doc is not None
+            else None
+        )
         task_results.append(
             TaskResult(
-                task=task, trace=trace, feedback=feedback, budget_violation=bool(t.get("budget_violation", False))
+                task=task,
+                trace=trace,
+                feedback=feedback,
+                budget_violation=bool(t.get("budget_violation", False)),
+                trace_ref=trace_ref,
             )
         )
 
     suite_doc = doc.get("suite", {})
     suite = Suite(
-        tuple(tr.task for tr in task_results),
+        tasks=tuple(tr.task for tr in task_results),
         name=suite_doc.get("name", "loaded"),
         source=suite_doc.get("source", str(path)),
     )

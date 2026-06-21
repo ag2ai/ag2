@@ -51,9 +51,11 @@ __all__ = (
     "AdapterResult",
     "AdapterState",
     "ChannelAdapter",
+    "ExpectedTurn",
     "default_build_packet_envelope",
     "default_build_round_envelope",
     "default_build_text_envelope",
+    "default_expected_next",
     "default_extract_turn_input",
     "default_render_envelope",
     "default_tools_for",
@@ -79,6 +81,22 @@ class AdapterResult:
 
     next_state: ChannelState | None = None
     auto_close_reason: str = ""
+
+
+@dataclass(slots=True, frozen=True)
+class ExpectedTurn:
+    """Who the protocol expects to act next, and what put the turn on them.
+
+    ``agent_id`` is the participant the adapter expects to send the
+    next substantive envelope. ``triggering_envelope_id`` names the
+    envelope that put the turn on this participant — typically the
+    previous speaker's send. ``None`` when no specific envelope drove
+    the expectation (e.g. fresh channel, expected speaker is the
+    creator with nothing yet posted).
+    """
+
+    agent_id: str
+    triggering_envelope_id: str | None = None
 
 
 class ChannelAdapter(Protocol):
@@ -129,6 +147,22 @@ class ChannelAdapter(Protocol):
         """Decide post-accept transitions.
 
         Receives state AFTER ``fold(envelope, ...)`` has run.
+        """
+        ...
+
+    def expected_next(
+        self,
+        metadata: ChannelMetadata,
+        state: AdapterState,
+    ) -> "ExpectedTurn | None":
+        """Identify the participant the protocol expects to act next.
+
+        Free-form channels (no turn ordering) and channels that have
+        completed their protocol cycle return ``None``. Turn-taking
+        adapters return ``ExpectedTurn(agent_id, triggering_envelope_id)``
+        so the hub can answer ``pending_turns_for(agent_id)`` and a
+        reconnecting client can re-fire its notify handler against the
+        triggering envelope.
         """
         ...
 
@@ -318,6 +352,19 @@ def default_tools_for(
     for free-form text channels).
     """
     return []
+
+
+def default_expected_next(
+    metadata: ChannelMetadata,
+    state: AdapterState,
+) -> "ExpectedTurn | None":
+    """Default ``expected_next``: no specific participant expected.
+
+    Free-form adapters (e.g. conversation) delegate to this from
+    ``expected_next``. Adapters that enforce turn ordering override
+    to surface the expected speaker.
+    """
+    return None
 
 
 def default_build_text_envelope(

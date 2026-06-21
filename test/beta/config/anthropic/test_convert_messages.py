@@ -19,6 +19,7 @@ from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
 from autogen.beta import ToolResult
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
@@ -871,3 +872,11 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
             ],
         }
     ]
+
+
+def test_compaction_summary_renders_as_user_turn() -> None:
+    summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
+
+    result = convert_messages([summary], SerializerCls)
+
+    assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]

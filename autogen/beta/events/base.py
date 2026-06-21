@@ -117,6 +117,9 @@ class _ConditionMeta(type):
         return TypeCondition(cls).not_()
 
 
+_MISSING = object()
+
+
 def _process_fields(cls: type) -> None:
     """Process annotations and set up Field descriptors for a class."""
     fields: dict[str, Field] = {}
@@ -130,8 +133,8 @@ def _process_fields(cls: type) -> None:
 
     own_namespace = vars(cls)
     for field_name in annotations:
-        raw = own_namespace.get(field_name)
-        if not raw:
+        raw = own_namespace.get(field_name, _MISSING)
+        if raw is _MISSING:
             field = Field()
         elif isinstance(raw, Field):
             field = raw

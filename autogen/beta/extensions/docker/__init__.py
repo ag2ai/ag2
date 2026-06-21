@@ -5,8 +5,8 @@
 from autogen.beta.exceptions import missing_additional_dependency
 
 try:
-    from .environment import DockerCodeEnvironment
+    from .environment import DockerEnvironment
 except ImportError as e:
-    DockerCodeEnvironment = missing_additional_dependency("DockerCodeEnvironment", "docker>=6.0.0,<8", e)  # type: ignore[misc]
+    DockerEnvironment = missing_additional_dependency("DockerEnvironment", "docker>=6.0.0,<8", e)  # type: ignore[misc]
 
-__all__ = ("DockerCodeEnvironment",)
+__all__ = ("DockerEnvironment",)

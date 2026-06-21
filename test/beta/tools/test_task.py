@@ -21,11 +21,26 @@ from autogen.beta.events import (
     TaskStarted,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
+    UsageEvent,
 )
 from autogen.beta.testing import TestConfig
+from autogen.beta.tools import Toolkit
 from autogen.beta.tools.subagents import run_task as run_task_mod
 from autogen.beta.tools.subagents import subagent_tool
 from autogen.beta.tools.subagents.run_task import run_task
+from autogen.beta.usage import UsageReport
+
+
+def _tool_names(tools: list) -> set[str]:
+    """Collect tool names, expanding any ``Toolkit`` into its member tools."""
+    names: set[str] = set()
+    for t in tools:
+        if isinstance(t, Toolkit):
+            names |= {inner.schema.function.name for inner in t.tools}
+        else:
+            names.add(t.schema.function.name)
+    return names
 
 
 def _make_parent_context(
@@ -546,22 +561,20 @@ class TestSubtaskOptOut:
         """A bare Agent has no subtask tools by default (``tasks=False``)."""
         agent = Agent("default")
 
-        names = {t.schema.function.name for t in agent._build_subtask_tools()}
-        assert names == set()
+        # Auto-injected tools live in ``_additional_tools``, not ``agent.tools``.
+        assert _tool_names(agent._additional_tools) == set()
 
     async def test_explicit_disabled_actor_has_no_subtask_tools(self) -> None:
         """Explicit ``tasks=False`` also suppresses subtask tools."""
         agent = Agent("disabled", tasks=False)
 
-        names = {t.schema.function.name for t in agent._build_subtask_tools()}
-        assert names == set()
+        assert _tool_names(agent._additional_tools) == set()
 
     async def test_taskconfig_actor_has_subtask_tools(self) -> None:
         """Passing ``tasks=TaskConfig(...)`` opts in to the auto-injected subtask tools."""
         agent = Agent("enabled", tasks=TaskConfig())
 
-        names = {t.schema.function.name for t in agent._build_subtask_tools()}
-        assert names == {"run_subtask", "run_subtasks"}
+        assert _tool_names(agent._additional_tools) == {"run_subtask", "run_subtasks"}
 
 
 @pytest.mark.asyncio
@@ -629,33 +642,26 @@ class TestSubtaskInheritance:
             tasks=TaskConfig(config=sub_config, exclude_tools=["secret_tool"]),
         )
 
-        # Reach the spawn path directly so we can inspect what the subtask sees.
-        parent_ctx = _make_parent_context()
-        # Trigger _spawn_subtask via the wrapped tool; capture spawned agent.
-        spawned_actors: list[Agent] = []
-        original_spawn = parent._spawn_subtask
+        # Capture the bare child Agent the real ``_spawn_subtask`` hands to
+        # ``run_task`` (rather than reconstructing the spawn logic), then assert
+        # on the tools it actually inherited.
+        captured: list[Agent] = []
+        original = run_task_mod.run_task
 
-        async def capture_spawn(task: str, ctx: Context) -> str:
-            # Reconstruct the spawn manually so we can intercept the bare agent.
-            tc = parent._task_config
-            assert tc is not None
-            inherited = [t for t in parent.tools if t.schema.function.name not in set(tc.exclude_tools)]
-            bare = Agent(
-                name="captured",
-                prompt=tc.prompt,
-                config=tc.config,
-                tools=inherited,
-                tasks=False,
-            )
-            spawned_actors.append(bare)
-            return await original_spawn(task, ctx)
+        async def capturing_run_task(agent, *args, **kwargs):
+            captured.append(agent)
+            return await original(agent, *args, **kwargs)
 
-        parent._spawn_subtask = capture_spawn  # type: ignore[assignment]
-        await parent.ask("go", stream=parent_ctx.stream)
+        run_task_mod.run_task = capturing_run_task
+        actor_mod._run_task = capturing_run_task
+        try:
+            await parent.ask("go", stream=MemoryStream())
+        finally:
+            run_task_mod.run_task = original
+            actor_mod._run_task = original
 
-        # The captured subtask agent must not have secret_tool.
-        assert spawned_actors, "subtask must have been spawned"
-        names = {t.schema.function.name for t in spawned_actors[0].tools}
+        assert captured, "subtask must have been spawned"
+        names = _tool_names(captured[0].tools)
         assert "secret_tool" not in names
         assert "public_tool" in names
 
@@ -729,8 +735,8 @@ class TestSubtaskNoRecursion:
     async def test_child_has_no_subtask_tools(self) -> None:
         """A subtask Agent never gets ``run_subtask`` — recursion impossible.
 
-        Spawn a subtask, capture the bare child Agent, and assert its
-        ``_subtask_tools`` is empty regardless of what the parent has.
+        Spawn a subtask, capture the bare child Agent, and assert it has
+        no tools regardless of what the parent has.
         """
         sub_config = TestConfig(ModelResponse(ModelMessage("Done.")))
         parent = Agent(
@@ -762,7 +768,7 @@ class TestSubtaskNoRecursion:
         child = captured[0]
         # The child Agent has zero subtask tools and zero ``_task_config``.
         assert child._task_config is None
-        assert child._build_subtask_tools() == []
+        assert not child.tools
 
 
 @pytest.mark.asyncio
@@ -846,12 +852,84 @@ def test_run_subtask_description_advertises_parallel_invocation() -> None:
     blocks in one assistant message rather than serializing them.
     """
     agent = Agent("any", tasks=TaskConfig())
-    [run_subtask, run_subtasks] = agent._build_subtask_tools()
+    [toolkit] = agent._additional_tools
+    [run_subtask, run_subtasks] = toolkit.tools
 
     desc = run_subtask.schema.function.description
     assert "parallel" in desc.lower()
     # And ``run_subtasks`` advertises the bundled fan-out.
     assert "parallel" in run_subtasks.schema.function.description.lower()
+
+
+@pytest.mark.asyncio
+class TestSubtaskUsageRollup:
+    async def test_rollup_sums_all_model_calls(self) -> None:
+        """A tool-looping sub-agent rolls up usage from every model call.
+
+        The sub-agent makes two model calls (tool dispatch, then wrap-up). The
+        rollup carried back via ``TaskResult.usage`` / ``TaskCompleted.usage``
+        must be the sum of both — not just the final turn.
+        """
+
+        @tool
+        def noop() -> str:
+            """A tool that does nothing."""
+            return "ok"
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5),
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8),
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        result = await run_task(worker, "go", parent_context=parent_ctx)
+
+        assert result.completed is True
+        # Sum of both model calls (10+20 prompt, 5+8 completion).
+        assert result.usage == Usage(prompt_tokens=30, completion_tokens=13)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        completed = [e for e in events if isinstance(e, TaskCompleted)][0]
+        assert completed.usage == Usage(prompt_tokens=30, completion_tokens=13)
+
+    async def test_rollup_emits_subtask_usage_event_on_parent(self) -> None:
+        """The rollup reaches the parent as a single ``UsageEvent`` so the
+        parent's report accounts for the sub-task without seeing its per-call
+        events (which live on the sub-agent's private stream)."""
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8),
+                ),
+            ),
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert usage_events == [
+            UsageEvent(Usage(prompt_tokens=20, completion_tokens=8), kind="subtask"),
+        ]
+        assert usage_events[0].label == "worker"
+
+        report = UsageReport.from_events(events)
+        assert report.total == Usage(prompt_tokens=20, completion_tokens=8)
+        assert report.by_kind == {"subtask": Usage(prompt_tokens=20, completion_tokens=8)}
 
 
 class TestHitlPropagation:

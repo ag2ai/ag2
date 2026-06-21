@@ -4,7 +4,7 @@ sidebarTitle: Code Execution
 description: "Execute Python code from AG2 agents using system, virtual, or Docker environments. Generate, run, and validate code with PythonCodeExecutionTool."
 ---
 
-Add code execution as a capability for your AG2 agents with the [`PythonCodeExecutionTool`](/docs/api-reference/autogen/tools/experimental/PythonCodeExecutionTool)! Utilizing a provided Python environment, whether that's the system one, a local virtual one, or a Docker container, your agents can generate, run and utilize the results of Python code.
+Add code execution as a capability for your AG2 agents with the `PythonCodeExecutionTool`! Utilizing a provided Python environment, whether that's the system one, a local virtual one, or a Docker container, your agents can generate, run and utilize the results of Python code.
 
 The ability to execute code enables your agents to not only create code for applications but also to validate hypotheses, validate existing code, and cycle through code iterations until a working solution can be found.
 
@@ -18,7 +18,7 @@ Different environments offer different levels of isolation:
 - Docker environment: Container isolation - provides stronger separation from your host system
 </Warning>
 
-The [`PythonCodeExecutionTool`](/docs/api-reference/autogen/tools/experimental/PythonCodeExecutionTool) is comprised of a Python environment and a working directory, both of which you need to specify.
+The `PythonCodeExecutionTool` is comprised of a Python environment and a working directory, both of which you need to specify.
 
 ## Installation
 
@@ -35,7 +35,7 @@ There are three environments the tool can run code in:
 2. **Virtual Environment (venv)** - utilizing Python's virtual environment capabilities, this has its own independent set of Python packages.
 3. **Docker Environment** - executes code within Docker containers, providing stronger isolation and environment control.
 
-You create and pass these in using the `python_environment` parameter of the [`PythonCodeExecutionTool`](/docs/api-reference/autogen/tools/experimental/PythonCodeExecutionTool).
+You create and pass these in using the `python_environment` parameter of the `PythonCodeExecutionTool`.
 
 <Tip>
 In terms of isolation and security:
@@ -93,7 +93,7 @@ Note: Docker must be installed and running on your system to use this environmen
 
 ## Working Directory
 
-The tool will create a `script.py` file with the code and execute it. The location of this file is specified by passing in a `WorkingDirectory` to the `working_directory` parameter of the [`PythonCodeExecutionTool`](/docs/api-reference/autogen/tools/experimental/PythonCodeExecutionTool).
+The tool will create a `script.py` file with the code and execute it. The location of this file is specified by passing in a `WorkingDirectory` to the `working_directory` parameter of the `PythonCodeExecutionTool`.
 
 If you don't want to specify a directory you can use `WorkingDirectory`'s `create_tmp` method to create a temporary one.
 

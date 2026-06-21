@@ -2,7 +2,7 @@
 title: Slack Tools
 ---
 
-If you want to add the ability for your agents to send and/or retrieve messages for your Slack channel [`SlackSendTool`](/docs/api-reference/autogen/tools/experimental/SlackSendTool) and [`SlackRetrieveTool`](/docs/api-reference/autogen/tools/experimental/SlackRetrieveTool) are easy to add.
+If you want to add the ability for your agents to send and/or retrieve messages for your Slack channel `SlackSendTool` and `SlackRetrieveTool` are easy to add.
 
 <Tip>
 If you haven't had a chance to read about how AG2's Communication Platform agents and tools work, read the [overview](/docs/user-guide/reference-agents/communication-platforms/overview) first.
@@ -18,10 +18,10 @@ pip install ag2[openai,commsagent-slack]
 
 ### Capabilities
 
-[`SlackSendTool`](/docs/api-reference/autogen/tools/experimental/SlackSendTool) can:
+`SlackSendTool` can:
 - Construct and send a message to the configured channel. If a message is longer than the platforms permitted message length, they will split the message into multiple messages.
 
-[`SlackRetrieveTool`](/docs/api-reference/autogen/tools/experimental/SlackRetrieveTool) can:
+`SlackRetrieveTool` can:
 - Retrieve the latest X messages from a channel.
 - Retrieve messages since a given date.
 - Retrieve messages since a given message ID.
@@ -69,7 +69,7 @@ Now you should be good to go with your OAuth token, channel ID, and a bot on you
 
 ### Code example
 
-Here's a simple example using the Slack tools with a [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent)-based agent to send a weather forecast to a Slack channel.
+Here's a simple example using the Slack tools with a `ConversableAgent`-based agent to send a weather forecast to a Slack channel.
 
 ```python
 # Tools are available in the autogen.tools namespace

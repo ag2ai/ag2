@@ -10,17 +10,17 @@ For each type of executor, AG2 provides two ways to execute code: locally and in
 
 | Code Executor (`autogen.coding`) | Environment | Platform |
 | ---------------------------- | ----------- | -------- |
-| [`LocalCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)  | Shell       | Local  |
-| [`DockerCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor) | Shell       | Docker |
-| [`RemyxCodeExecutor`](/docs/api-reference/autogen/coding/RemyxCodeExecutor) | Pre-built Docker | Remyx Cloud |
-| [`YepCodeCodeExecutor`](/docs/api-reference/autogen/coding/YepCodeCodeExecutor) | Serverless | YepCode Cloud |
-| [`DaytonaCodeExecutor`](/docs/api-reference/autogen/coding/DaytonaCodeExecutor) | Sandbox | Daytona Cloud |
-| [`jupyter.JupyterCodeExecutor`](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)           | Jupyter Kernel (e.g., python3) | Local/Docker |
+| `LocalCommandLineCodeExecutor`  | Shell       | Local  |
+| `DockerCommandLineCodeExecutor` | Shell       | Docker |
+| `RemyxCodeExecutor` | Pre-built Docker | Remyx Cloud |
+| `YepCodeCodeExecutor` | Serverless | YepCode Cloud |
+| `DaytonaCodeExecutor` | Sandbox | Daytona Cloud |
+| `jupyter.JupyterCodeExecutor`           | Jupyter Kernel (e.g., python3) | Local/Docker |
 
 ## Local Execution
 
 The figure below shows the architecture of the local command line code executor
-([`autogen.coding.LocalCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)).
+(`autogen.coding.LocalCommandLineCodeExecutor`).
 
 <Danger>
 Executing LLM-generated code poses a security risk to your host environment.
@@ -117,7 +117,7 @@ temp_dir.cleanup()
 ```
 
 ## Docker Execution
-To mitigate the security risk of running LLM-generated code locally, we can use the docker command line code executor ([`autogen.coding.DockerCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor)) to execute code in a docker container.
+To mitigate the security risk of running LLM-generated code locally, we can use the docker command line code executor (`autogen.coding.DockerCommandLineCodeExecutor`) to execute code in a docker container.
 
 This way, the generated code can only access resources that are explicitly given to it.
 
@@ -414,7 +414,7 @@ executor.stop()
 
 ## Agentic Code Exploration with Remyx
 
-For exploring and executing novel codebases, AG2 supports [Remyx's](https://remyx.ai) Docker images through the [`RemyxCodeExecutor`](/docs/api-reference/autogen/coding/RemyxCodeExecutor). This executor provides instant access to Remyx-built images that reproduce codebases from 7000+ ArXiv papers plus other resources, with dependencies resolved and environments reproduced.
+For exploring and executing novel codebases, AG2 supports [Remyx's](https://remyx.ai) Docker images through the `RemyxCodeExecutor`. This executor provides instant access to Remyx-built images that reproduce codebases from 7000+ ArXiv papers plus other resources, with dependencies resolved and environments reproduced.
 
 ### Key Benefits
 
@@ -536,7 +536,7 @@ For interactive examples, see the Remyx Executor Notebook.
 
 ## Serverless Execution with YepCode
 
-For production-grade serverless code execution, AG2 supports [YepCode's](https://yepcode.io) serverless runtime through the [`YepCodeCodeExecutor`](/docs/api-reference/autogen/coding/YepCodeCodeExecutor). This executor runs code in secure, isolated sandboxes with automatic dependency management.
+For production-grade serverless code execution, AG2 supports [YepCode's](https://yepcode.io) serverless runtime through the `YepCodeCodeExecutor`. This executor runs code in secure, isolated sandboxes with automatic dependency management.
 
 ### Key Benefits of YepCode Execution
 
@@ -670,7 +670,7 @@ For more examples, see the [YepCode Executor Notebook](/docs/use-cases/notebooks
 
 ## Sandboxed Execution with Daytona
 
-For secure, isolated code execution in the cloud, AG2 supports [Daytona's](https://www.daytona.io) sandbox runtime through the [`DaytonaCodeExecutor`](/docs/api-reference/autogen/coding/DaytonaCodeExecutor). This executor runs code in fast, isolated sandboxes with full support for Python, Bash, JavaScript, and TypeScript.
+For secure, isolated code execution in the cloud, AG2 supports [Daytona's](https://www.daytona.io) sandbox runtime through the `DaytonaCodeExecutor`. This executor runs code in fast, isolated sandboxes with full support for Python, Bash, JavaScript, and TypeScript.
 
 ### Key Benefits
 
@@ -797,10 +797,10 @@ The choice between command line and Jupyter code executor depends on the nature 
 - [Daytona Sandboxed Code Execution](/docs/use-cases/notebooks/notebooks/agentchat_daytona_executor)
 
 ### API
-- [ConversableAgent.code_execution_config](/docs/api-reference/autogen/ConversableAgent#conversableagent)
-- [LocalCommandLineCodeExecutor](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)
-- [DockerCommandLineCodeExecutor](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor)
-- [RemyxCodeExecutor](/docs/api-reference/autogen/coding/RemyxCodeExecutor)
-- [YepCodeCodeExecutor](/docs/api-reference/autogen/coding/YepCodeCodeExecutor)
-- [DaytonaCodeExecutor](/docs/api-reference/autogen/coding/DaytonaCodeExecutor)
-- [jupyter.JupyterCodeExecutor](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)
+- `ConversableAgent.code_execution_config`
+- `LocalCommandLineCodeExecutor`
+- `DockerCommandLineCodeExecutor`
+- `RemyxCodeExecutor`
+- `YepCodeCodeExecutor`
+- `DaytonaCodeExecutor`
+- `jupyter.JupyterCodeExecutor`

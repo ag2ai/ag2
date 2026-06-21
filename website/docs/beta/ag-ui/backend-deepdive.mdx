@@ -33,7 +33,6 @@ agent = Agent(
 stream = AGUIStream(agent)
 app = FastAPI()
 
-
 @app.post("/chat")
 async def run_agent(
     message: RunAgentInput,
@@ -60,7 +59,7 @@ You often need to pass **per-request context** (user ID, org ID, plan, permissio
 
 AG2 supports this via `ContextVariables`. Your tool can accept a `context` parameter, and you provide values when dispatching.
 
-```python title="tools_context.py" linenums="1" hl_lines="1-2 6 20"
+```python title="tools_context.py" linenums="1" hl_lines="1 6-7 20"
 from autogen.beta import Agent, Context, tool
 from autogen.beta.ag_ui import AGUIStream, RunAgentInput
 from autogen.beta.config import OpenAIConfig
@@ -93,12 +92,10 @@ Example backend tool:
 from autogen.beta import Agent, tool
 from autogen.beta.config import OpenAIConfig
 
-
 @tool
 def calculate_sum(a: int, b: int) -> int:
     """Adds two numbers and returns the result."""
     return a + b
-
 
 agent = Agent(
     name="calculator",

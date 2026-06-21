@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING
 import httpx
 from a2a.client import Client, ClientCallInterceptor, ClientConfig, ClientFactory
 from a2a.client.client_factory import TransportProtocol
-from a2a.types import AgentCard
+from a2a.types import AgentCard, AgentInterface
+from a2a.utils.constants import PROTOCOL_VERSION_1_0
+from packaging.version import InvalidVersion, Version
 
-from ..errors import A2AInvalidCardError
+from ..errors import A2AIncompatibleProtocolVersionError, A2AInvalidCardError
 from . import TransportName
 from .grpc import default_grpc_channel_factory
 
@@ -34,11 +36,18 @@ def binding_to_transport(binding: str) -> TransportName | None:
     return _BINDING_TO_TRANSPORT.get(binding)
 
 
-def select_transport(card: AgentCard, *, url: str, prefer: TransportName | None) -> TransportName:
-    """Pick a transport from ``card.supported_interfaces``.
+def select_interface(
+    card: AgentCard, *, url: str, prefer: TransportName | None
+) -> tuple[AgentInterface, TransportName]:
+    """Pick the ``AgentInterface`` AG2 will connect through, with its transport.
 
     Resolution: 1) ``prefer`` matches a declared binding (raise if absent);
     2) interface whose ``url`` matches ``url``; 3) first listed interface.
+
+    Returning the interface itself (not just the transport name) lets the
+    caller validate the *exact* interface that will be used — when a card
+    declares two interfaces with the same binding, the first-by-binding one
+    is not necessarily the one ``url`` resolution would select.
     """
     interfaces = list(card.supported_interfaces)
     if not interfaces:
@@ -46,9 +55,8 @@ def select_transport(card: AgentCard, *, url: str, prefer: TransportName | None)
 
     if prefer is not None:
         for iface in interfaces:
-            transport = binding_to_transport(iface.protocol_binding)
-            if transport == prefer:
-                return transport
+            if binding_to_transport(iface.protocol_binding) == prefer:
+                return iface, prefer
         raise A2AInvalidCardError(
             f"AgentCard at {url!r} does not declare prefer={prefer!r}; "
             f"available: {[iface.protocol_binding for iface in interfaces]}",
@@ -58,7 +66,7 @@ def select_transport(card: AgentCard, *, url: str, prefer: TransportName | None)
         if iface.url == url:
             transport = binding_to_transport(iface.protocol_binding)
             if transport is not None:
-                return transport
+                return iface, transport
 
     first = interfaces[0]
     transport = binding_to_transport(first.protocol_binding)
@@ -66,7 +74,31 @@ def select_transport(card: AgentCard, *, url: str, prefer: TransportName | None)
         raise A2AInvalidCardError(
             f"AgentCard at {url!r} declares unsupported binding {first.protocol_binding!r}",
         )
-    return transport
+    return first, transport
+
+
+def validate_protocol_version(iface: AgentInterface, *, url: str, transport: TransportName) -> None:
+    """Raise ``A2AIncompatibleProtocolVersionError`` if ``iface`` advertises an
+    A2A protocol version older than 1.0.
+
+    A2A v1.0 is a breaking change vs. the 0.x
+    (see https://a2a-protocol.org/latest/announcing-1.0/), so we refuse pre-1.0
+    interfaces at connect time rather than letting them surface as obscure
+    RPC failures later.
+
+    An empty / missing / unparsable ``protocol_version`` is treated as
+    compatible: the field is optional and the A2A SDK defaults it to the
+    current version, so rejecting it would break spec-conforming 1.0 servers.
+    """
+    raw = iface.protocol_version
+    if not raw:
+        return
+    try:
+        version = Version(raw)
+    except InvalidVersion:
+        return
+    if version < Version(PROTOCOL_VERSION_1_0):
+        raise A2AIncompatibleProtocolVersionError(url=url, transport=transport, protocol_version=raw)
 
 
 def make_httpx_client(

@@ -1,4 +1,6 @@
 /site
 /docs/assets/**
 /docs/snippets/**
+/docs/llms.txt
+/docs/llms-full.txt
 /data/notebooks_metadata.yml

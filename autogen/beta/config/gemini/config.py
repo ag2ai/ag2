@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from typing import TypedDict
 
 import google.auth
+import httpx
 from google.genai import types
 from typing_extensions import Unpack
 
@@ -27,9 +28,12 @@ class GeminiBaseConfigOverrides(TypedDict, total=False):
     frequency_penalty: float | None
     seed: int | None
     cached_content: str | None
+    response_modalities: list[str] | None
+    image_config: types.ImageConfig | None
     thinking_config: types.ThinkingConfig | None
     thinking_level: ThinkingLevel | None
     thinking_budget: int | None
+    http_client: httpx.AsyncClient | None
 
 
 class GeminiConfigOverrides(GeminiBaseConfigOverrides, total=False):
@@ -55,9 +59,12 @@ class GeminiBaseConfig:
     frequency_penalty: float | None = None
     seed: int | None = None
     cached_content: str | None = None
+    response_modalities: list[str] | None = None
+    image_config: types.ImageConfig | None = None
     thinking_config: types.ThinkingConfig | None = None
     thinking_level: ThinkingLevel | None = None
     thinking_budget: int | None = None
+    http_client: httpx.AsyncClient | None = None
 
     def _build_create_config(self) -> CreateConfig:
         config = CreateConfig()
@@ -78,6 +85,10 @@ class GeminiBaseConfig:
             config["frequency_penalty"] = self.frequency_penalty
         if self.seed is not None:
             config["seed"] = self.seed
+        if self.response_modalities is not None:
+            config["response_modalities"] = self.response_modalities
+        if self.image_config is not None:
+            config["image_config"] = self.image_config
 
         thinking = self._resolve_thinking_config()
         if thinking is not None:
@@ -110,6 +121,7 @@ class GeminiConfig(GeminiBaseConfig, ModelConfig):
             model=self.model,
             api_key=self.api_key,
             vertexai=False,
+            http_client=self.http_client,
             streaming=self.streaming,
             create_config=self._build_create_config(),
             cached_content=self.cached_content,
@@ -135,6 +147,7 @@ class VertexAIConfig(GeminiBaseConfig, ModelConfig):
             credentials=self.credentials,
             project=self.project,
             location=self.location,
+            http_client=self.http_client,
             streaming=self.streaming,
             create_config=self._build_create_config(),
             cached_content=self.cached_content,

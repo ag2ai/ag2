@@ -12,7 +12,6 @@ from typing import Any, ClassVar, Literal
 from pydantic import Field
 
 from ..code_utils import TIMEOUT_MSG, _cmd
-from ..doc_utils import export_module
 from .base import CodeBlock, CodeExtractor, CodeResult, CommandLineCodeResult
 from .docker_commandline_code_executor import DockerCommandLineCodeExecutor
 from .markdown_code_extractor import MarkdownCodeExtractor
@@ -79,7 +78,6 @@ DEFAULT_SYSTEM_GUIDELINES = """**Important Guidelines:**
 Begin by exploring the repository structure to understand what's available."""
 
 
-@export_module("autogen.coding")
 class RemyxCodeResult(CodeResult):
     """A code result class for Remyx executor."""
 
@@ -87,7 +85,6 @@ class RemyxCodeResult(CodeResult):
     paper_title: str | None = Field(default=None, description="The paper title.")
 
 
-@export_module("autogen.coding")
 class RemyxCodeExecutor(DockerCommandLineCodeExecutor):
     """A code executor that runs research paper code in local Docker containers.
 

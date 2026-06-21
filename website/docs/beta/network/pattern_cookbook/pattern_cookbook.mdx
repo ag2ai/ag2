@@ -99,7 +99,6 @@ adapter scope.
 ```python linenums="1" hl_lines="1"
 from autogen.beta.network.workflow_helpers import set_context
 
-
 async def classify_as_billing(reason: str, channel: ChannelInject) -> str:
     """Classify the request as billing. Sets context_vars['category']."""
     await set_context(channel, "category", "billing")

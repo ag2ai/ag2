@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from typing import Annotated, Any
 from urllib.parse import urlparse
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....llm_config import LLMConfig
 from ....oai.client import OpenAIWrapper
@@ -314,7 +313,6 @@ async def _research_single_query(
 
 
 @require_optional_import(["tavily", "crawl4ai", "tiktoken", "tldextract", "bs4"], "quick-research")
-@export_module("autogen.tools.experimental")
 class QuickResearchTool(Tool):
     """Performs parallel web research across multiple queries.
 

@@ -13,7 +13,6 @@ from types import TracebackType
 
 from typing_extensions import Self
 
-from ...doc_utils import export_module
 from ..base import CodeBlock, CodeExecutor, CodeExtractor, IPythonCodeResult
 from ..markdown_code_extractor import MarkdownCodeExtractor
 from ..utils import silence_pip
@@ -21,7 +20,6 @@ from .base import JupyterConnectable, JupyterConnectionInfo
 from .jupyter_client import JupyterClient
 
 
-@export_module("autogen.coding.jupyter")
 class JupyterCodeExecutor(CodeExecutor):
     def __init__(
         self,

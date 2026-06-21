@@ -16,10 +16,6 @@
   },
   "redirects": [
     {
-      "source": "/reference/:slug*",
-      "destination": "/docs/api-reference/:slug*"
-    },
-    {
       "source": "/blog/:slug*",
       "destination": "/docs/blog/:slug*"
     },
@@ -60,10 +56,6 @@
     {
       "name": "User Guide",
       "url": "docs/user-guide"
-    },
-    {
-      "name": "API References",
-      "url": "docs/api-reference"
     },
     {
       "name": "Use Cases",
@@ -368,12 +360,14 @@
         "docs/beta/motivation",
         "docs/beta/agents",
         "docs/beta/agent_harness",
+        "docs/beta/resume",
         "docs/beta/structured_output",
+        "docs/beta/model_configuration",
         {
-          "group": "Models & Providers",
+          "group": "Multimodality",
           "pages": [
-            "docs/beta/model_configuration",
-            "docs/beta/inputs/inputs"
+            "docs/beta/multimodal/inputs",
+            "docs/beta/multimodal/image_generation"
           ]
         },
         "docs/beta/system_prompts",
@@ -427,7 +421,8 @@
             "docs/beta/network/envelopes_and_events",
             "docs/beta/network/expectations_and_audit",
             "docs/beta/network/task_observation",
-            "docs/beta/network/views_and_skills"
+            "docs/beta/network/views_and_skills",
+            "docs/beta/network/distributed"
           ]
         },
         {
@@ -444,6 +439,7 @@
             "docs/beta/tools/approval_required"
           ]
         },
+        "docs/beta/skills",
         {
           "group": "Extensions",
           "pages": [
@@ -518,6 +514,7 @@
         },
         "docs/beta/ag2_compatibility",
         "docs/beta/roadmap",
+        "docs/beta/coding_with_ai",
         "docs/beta/contribution_policy",
         {
           "group": "Code Examples",

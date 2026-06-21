@@ -19,7 +19,7 @@ from autogen.beta.eval.scorers import agent_judge
 from autogen.beta.eval.trace import Trace
 from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent
 from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware
-from autogen.beta.testing import TestConfig
+from autogen.beta.testing import TestConfig, TrackingConfig
 
 
 def _empty_trace() -> Trace:
@@ -128,6 +128,30 @@ async def test_score_is_clamped_to_scale() -> None:
 
     assert fb.score == 1.0
     assert "clamped" in (fb.comment or "")
+
+
+@pytest.mark.asyncio()
+async def test_reference_rendered_into_prompt_by_default() -> None:
+    config = TrackingConfig(TestConfig('{"score": 1.0, "reasoning": "ok"}'))
+    judge = agent_judge(config, criterion="correct vs reference", key="correctness")
+
+    await _score(judge, inputs={"input": "q"}, outputs={"body": "a"}, reference_outputs={"answer": "gold"})
+
+    prompt = repr(config.mock.call_args.args[0])
+    assert "## Reference" in prompt
+    assert "gold" in prompt
+
+
+@pytest.mark.asyncio()
+async def test_include_reference_false_omits_reference_section() -> None:
+    config = TrackingConfig(TestConfig('{"score": 1.0, "reasoning": "ok"}'))
+    judge = agent_judge(config, criterion="grounded in tool results", key="faithfulness", include_reference=False)
+
+    await _score(judge, inputs={"input": "q"}, outputs={"body": "a"}, reference_outputs={"answer": "gold"})
+
+    prompt = repr(config.mock.call_args.args[0])
+    assert "## Reference" not in prompt
+    assert "gold" not in prompt
 
 
 @pytest.mark.asyncio()

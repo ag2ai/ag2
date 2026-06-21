@@ -10,7 +10,6 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model
 
-from ..doc_utils import export_module
 from ..logger.logger_utils import event_print
 
 __all__ = [
@@ -22,7 +21,6 @@ __all__ = [
 ]
 
 
-@export_module("autogen.events")
 class BaseEvent(BaseModel, ABC):
     uuid: UUID
 
@@ -50,7 +48,6 @@ def camel2snake(name: str) -> str:
 _event_classes: dict[str, type[BaseModel]] = {}
 
 
-@export_module("autogen.events")
 def wrap_event(event_cls: type[BaseEvent]) -> type[BaseModel]:
     """Wrap an event class with a type field to be used in a union type
 
@@ -100,7 +97,6 @@ def wrap_event(event_cls: type[BaseEvent]) -> type[BaseModel]:
     return wrapper_cls
 
 
-@export_module("autogen.events")
 def get_annotated_type_for_event_classes() -> type[Any]:
     # this is a dynamic type so we need to disable the type checker
     union_type = Union[tuple(_event_classes.values())]  # type: ignore[valid-type]  # noqa: UP007

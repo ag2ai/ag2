@@ -5,7 +5,6 @@
 from collections.abc import Callable
 from typing import Any
 
-from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
 from ...tools import Tool
 from ..registry import register_interoperable_class
@@ -31,7 +30,6 @@ def _has_async_run(langchain_tool: Any) -> bool:
 
 
 @register_interoperable_class("langchain")
-@export_module("autogen.interop")
 class LangChainInteroperability:
     """A class implementing the `Interoperable` protocol for converting Langchain tools
     into a general `Tool` format.

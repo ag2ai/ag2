@@ -56,7 +56,7 @@ class TestBaseObserver:
 
         with ExitStack() as stack:
             obs.register(stack, ctx)
-            await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
+            await ctx.send(ToolCallEvent(name="search", arguments="{}"))
 
             assert obs.process_count == 1
             assert len(signals) == 1
@@ -72,7 +72,7 @@ class TestBaseObserver:
         obs.register(stack, ctx)
         stack.close()
 
-        await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
+        await ctx.send(ToolCallEvent(name="search", arguments="{}"))
         assert obs.process_count == 0
 
     async def test_null_signal_not_emitted(self) -> None:
@@ -88,7 +88,7 @@ class TestBaseObserver:
 
         with ExitStack() as stack:
             obs.register(stack, ctx)
-            await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
+            await ctx.send(ToolCallEvent(name="search", arguments="{}"))
 
             assert len(signals) == 0
 
@@ -101,10 +101,10 @@ class TestBaseObserver:
             obs.register(stack, ctx)
 
             # ModelMessage doesn't match ToolCallEvent watch
-            await stream.send(ModelMessage(content="hello"), ctx)
+            await ctx.send(ModelMessage(content="hello"))
             assert obs.process_count == 0
 
-            await stream.send(ToolCallEvent(name="t", arguments="{}"), ctx)
+            await ctx.send(ToolCallEvent(name="t", arguments="{}"))
             assert obs.process_count == 1
 
 
@@ -132,10 +132,10 @@ class TestInvertedConditionObserver:
         with ExitStack() as stack:
             obs.register(stack, ctx)
 
-            await stream.send(ToolCallEvent(name="t", arguments="{}"), ctx)
+            await ctx.send(ToolCallEvent(name="t", arguments="{}"))
             assert obs.process_count == 0
 
-            await stream.send(ModelMessage(content="hello"), ctx)
+            await ctx.send(ModelMessage(content="hello"))
             assert obs.process_count == 1
             assert obs.seen_types == [ModelMessage]
 
@@ -169,7 +169,7 @@ class TestObserverExceptionHandling:
             observer.register(stack, ctx)
 
             with caplog.at_level(logging.ERROR):
-                await stream.send(ModelMessage(content="trigger"), ctx)
+                await ctx.send(ModelMessage(content="trigger"))
                 await asyncio.sleep(0.01)
 
         assert any("process() failed" in r.message for r in caplog.records)
@@ -188,7 +188,7 @@ class TestObserverExceptionHandling:
 
         with ExitStack() as stack:
             observer.register(stack, ctx)
-            await stream.send(ModelMessage(content="test"), ctx)
+            await ctx.send(ModelMessage(content="test"))
             await asyncio.sleep(0.01)
 
         assert len(signals) == 0

@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
-from ....doc_utils import export_module
 from ....fast_depends.utils import asyncify
 from .realtime_events import FunctionCall, RealtimeEvent
 from .realtime_observer import RealtimeObserver
@@ -16,7 +15,6 @@ if TYPE_CHECKING:
     from logging import Logger
 
 
-@export_module("autogen.agentchat.realtime.experimental")
 class FunctionObserver(RealtimeObserver):
     """Observer for handling function calls from the OpenAI Realtime API."""
 

@@ -51,7 +51,7 @@ The hub funnels every termination through one transition, so observers only have
 
 Your code holds a `#!python Channel` handle and calls `#!python close()` whenever it decides the channel is done. Most explicit, lowest ceremony, runs entirely outside the LLM turn.
 
-```python linenums="1" hl_lines="9 10"
+```python linenums="1" hl_lines="10"
 channel = await alice.open(
     type="discussion",
     target=[bob.agent_id, carol.agent_id],
@@ -77,9 +77,8 @@ The reason string flows on `#!python EV_CHANNEL_CLOSED.event_data["reason"]` —
 
 The LLM itself decides. Define a tool that injects the active `#!python Channel` and calls `#!python close(...)`.
 
-```python linenums="1" hl_lines="1 5 6 7"
+```python linenums="1" hl_lines="1 3 5-7"
 from autogen.beta.network.client.inject import ChannelInject
-
 
 async def end_conversation(reason: str, channel: ChannelInject) -> str:
     """Close the active discussion. The reason flows on EV_CHANNEL_CLOSED."""
@@ -87,7 +86,6 @@ async def end_conversation(reason: str, channel: ChannelInject) -> str:
         return "no active channel"
     await channel.close(reason=f"agent_close:{reason}")
     return f"closed: {reason}"
-
 
 alice_agent.tool(end_conversation)
 bob_agent.tool(end_conversation)
@@ -107,7 +105,7 @@ The default notify handler stamps the active `#!python Channel` into `#!python c
 
 Subclass the adapter, watch every accepted envelope for a sentinel, return `#!python CLOSING`. Closest analogue to classic `#!python is_termination_msg`.
 
-```python linenums="1" hl_lines="9 10 11 12 13 14 15"
+```python linenums="1" hl_lines="9-16"
 class TerminatingConversationAdapter(ConversationAdapter):
     """Auto-closes when an EV_TEXT body contains the configured keyword."""
 
@@ -126,7 +124,6 @@ class TerminatingConversationAdapter(ConversationAdapter):
             )
         return super().on_accepted(metadata, envelope, state)
 
-
 hub.register_adapter(TerminatingConversationAdapter(keyword="TERMINATE"))
 ```
 
@@ -144,7 +141,7 @@ Three properties this gives you for free:
 
 In `workflow` channels, terminate is just another transition. Wire a condition that emits `#!python TerminateTarget(reason="...")`. The graph's `#!python max_turns` and `#!python default_target` provide the two implicit terminate paths.
 
-```python linenums="1" hl_lines="3 4 5 11"
+```python linenums="1" hl_lines="5 11 12"
 graph = TransitionGraph(
     initial_speaker=triage.agent_id,
     transitions=[
@@ -213,7 +210,7 @@ print(f"reason: {close_env.event_data.get('reason')!r}")
 
 Or stream live and return on the close envelope:
 
-```python linenums="1" hl_lines="11"
+```python linenums="1" hl_lines="12 13"
 async def stream_until_closed(hub, channel_id, name_by_id, *, timeout=180.0):
     seen: set[str] = set()
     deadline = asyncio.get_event_loop().time() + timeout

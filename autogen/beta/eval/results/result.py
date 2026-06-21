@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from .._types import Feedback
 from ..dataset import Suite, Task
+from ..sources.trace_source import TraceRef
 from ..trace import TokenUsage, Trace
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ class TaskResult:
     trace: Trace
     feedback: tuple[Feedback, ...]
     budget_violation: bool = False
+    trace_ref: TraceRef | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,7 +147,7 @@ class RunResult:
 
     @property
     def target_path(self) -> str:
-        """``"<module>:<name>"`` provenance of the evaluated target (factory or instance type)."""
+        """``"<module>:<name>"`` provenance of the evaluated agent (its instance type)."""
         return self._target_path
 
     @property

@@ -5,12 +5,10 @@
 from typing import Any
 
 from .... import Agent, ConversableAgent, OpenAIWrapper
-from ....doc_utils import export_module
 
 __all__ = ["TimeReplyAgent"]
 
 
-@export_module("autogen.agents.contrib")  # API Reference: autogen > agents > contrib > TimeReplyAgent
 class TimeReplyAgent(ConversableAgent):
     """A simple agent that returns the current time.
 

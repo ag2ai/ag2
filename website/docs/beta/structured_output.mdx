@@ -56,7 +56,7 @@ The following patterns mirror how structured output is used in applications: tri
 
 Route incoming text into fields your helpdesk or CRM already understands:
 
-```python linenums="1" hl_lines="18 26"
+```python linenums="1" hl_lines="7 10-12 18"
 from typing import Annotated
 from pydantic import BaseModel, Field
 
@@ -90,7 +90,7 @@ triage = await reply.content()
 
 Turn natural language into something your scheduling layer can consume:
 
-```python linenums="1" hl_lines="17 23"
+```python linenums="1" hl_lines="6-11 17"
 from dataclasses import dataclass
 
 from autogen.beta import Agent
@@ -120,7 +120,7 @@ window = await reply.content()
 
 Use a primitive schema when the payload is a single JSON value and your prompt defines the scale:
 
-```python linenums="1" hl_lines="8 14"
+```python linenums="1" hl_lines="6 8"
 from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
 
@@ -155,7 +155,7 @@ result = await reply.content()
 
 ### Dataclasses
 
-```python linenums="1" hl_lines="8"
+```python linenums="1" hl_lines="3-6 8"
 from dataclasses import dataclass
 
 @dataclass
@@ -171,7 +171,7 @@ result = await reply.content()
 
 ### Pydantic models
 
-```python linenums="1" hl_lines="7"
+```python linenums="1" hl_lines="3-5 7"
 from pydantic import BaseModel
 
 class Sentiment(BaseModel):
@@ -251,7 +251,7 @@ result = await reply.content()
 
 ### Async validator: enrich after JSON parse
 
-```python linenums="1" hl_lines="4"
+```python linenums="1" hl_lines="4 6-7"
 import json
 
 @response_schema
@@ -355,7 +355,7 @@ Parameters with a Python default (plain value or `Field(default, ...)`) are usua
 
 Validators participate in the same dependency injection model as tools. Inject [`Context`](/docs/beta/context/variables) to read `variables`, tie validation to session state, or perform lookups:
 
-```python linenums="1" hl_lines="4"
+```python linenums="1" hl_lines="4 6"
 from autogen.beta import Context, response_schema
 
 @response_schema
@@ -370,6 +370,9 @@ def validate_with_context(content: str, context: Context) -> str:
 ## `PromptedSchema` (models without native structured output)
 
 Some models or providers do not support API-level structured output (no `response_format` JSON schema). `PromptedSchema` **injects the JSON Schema into the system prompt** and sets `json_schema` to `None` on the wire so the client does not request native structured mode. Validation still goes through the inner schema’s `validate` method.
+
+!!! note
+    **Amazon Bedrock** supports [native structured output](https://docs.aws.amazon.com/bedrock/latest/userguide/structured-output.html){.external-link target="_blank"} on the Converse API — `BedrockConfig` sends schemas via `outputConfig` automatically. Support is model-dependent (check the Bedrock model pages), and Bedrock compiles each new schema on first use, so the first request with a given schema can take noticeably longer than subsequent ones.
 
 ```python linenums="1" hl_lines="6"
 from autogen.beta import Agent, PromptedSchema
@@ -386,7 +389,7 @@ result = await reply.content()
 
 You can keep a **single** schema definition (type, `ResponseSchema`, or `@response_schema` callable) and **only wrap it when** you need prompt-based delivery. The inner `validate` logic and JSON shape stay the same; `PromptedSchema` swaps how the schema reaches the model (system-prompt text instead of API `response_format`).
 
-```python linenums="1" hl_lines="7 15 22 23"
+```python linenums="1" hl_lines="7 15 22"
 from autogen.beta import Agent, PromptedSchema, ResponseSchema, response_schema
 from autogen.beta.config import OpenAIConfig
 

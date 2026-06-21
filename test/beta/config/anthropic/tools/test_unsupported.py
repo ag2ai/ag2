@@ -24,7 +24,7 @@ async def test_image_generation(context: Context) -> None:
 
 @pytest.mark.asyncio
 async def test_shell(context: Context) -> None:
-    """ShellTool is unsupported on Anthropic (client-side bash; use LocalShellTool)."""
+    """ShellTool is unsupported on Anthropic (client-side bash; use SandboxShellTool)."""
     tool = ShellTool()
 
     [schema] = await tool.schemas(context)

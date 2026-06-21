@@ -75,7 +75,7 @@ chat_results = await local_agent.a_initiate_chats([
 
 Beta agents fully support AG2's pattern-based [handoff mechanisms](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs). You can use `AgentTarget` to explicitly dictate which agent should take over when the current agent completes its work.
 
-```python linenums="1" hl_lines="13-15 17-19"
+```python linenums="1" hl_lines="22-24"
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat.group.multi_agent_chat import a_run_group_chat
 from autogen.agentchat.group import AgentTarget
@@ -121,7 +121,7 @@ Beta agent tools can trigger a handoff directly from inside a tool by returning 
 
 Use `final=True` alongside the target to end the agent's turn immediately after the tool runs, without invoking the LLM again for a follow-up reply.
 
-```python linenums="1" hl_lines="19-20 27-32"
+```python linenums="1" hl_lines="17-21"
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import a_run_group_chat
 from autogen.agentchat.group import AgentTarget
@@ -169,7 +169,7 @@ await result.process()
 
 You can build dynamic [group chats](/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction) using `AutoPattern`, where multiple beta agents and standard agents participate in a shared environment.
 
-```python linenums="1" hl_lines="9-11 13-15"
+```python linenums="1" hl_lines="17-21"
 from autogen.agentchat.group.multi_agent_chat import a_run_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.llm_config.config import LLMConfig
@@ -230,7 +230,6 @@ def issue_tracker(
     issue_count += 1
     context.variables["issue_count"] = issue_count
     return f"Issue tracked. Total issues: {issue_count}"
-
 
 local_agent = ConversableAgent(
     "local_agent",

@@ -10,6 +10,7 @@ from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
 from autogen.beta.events import (
     BaseEvent,
@@ -154,7 +155,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         # Anthropic's bash tool is client-side — it ships a typed schema but the
         # application must execute the command itself and return a tool_result.
         # autogen/beta does not provide a default executor for this here.
-        # Use LocalShellTool (tools/shell/) instead, which runs commands via subprocess
+        # Use SandboxShellTool (tools/shell/) instead, which runs commands via subprocess
         # and works with any provider.
         raise UnsupportedToolError(t.type, "anthropic")
 
@@ -457,6 +458,10 @@ def convert_messages(
                 else:
                     content = content_parts
                 result.append({"role": "user", "content": content})
+
+        elif isinstance(message, CompactionSummary):
+            # Surface the summary as a user turn so it stays visible and gives a valid opening turn
+            result.append({"role": "user", "content": f"[Summary of earlier conversation]\n{message.summary}"})
 
         elif isinstance(message, (ToolResultEvent, ToolErrorEvent)):
             # Fallback path — an individual result event without a

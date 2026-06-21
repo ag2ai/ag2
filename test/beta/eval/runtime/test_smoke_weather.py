@@ -122,7 +122,7 @@ async def test_smoke_weather_end_to_end(tmp_path: Path) -> None:
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[*_PREBUILT_SCORERS, *_CUSTOM_SCORERS],
         model_config=_CASSETTES,
         budgets=BudgetThresholds(max_tokens_per_task=2_000, max_seconds_per_task=10.0),
@@ -214,7 +214,7 @@ async def test_smoke_weather_summary_is_printable(tmp_path: Path) -> None:
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent,
+        agent=_build_weather_agent(),
         scorers=[*_PREBUILT_SCORERS, *_CUSTOM_SCORERS],
         store_dir=tmp_path,
         model_config=_CASSETTES,

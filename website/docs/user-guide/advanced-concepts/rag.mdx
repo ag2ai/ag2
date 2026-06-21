@@ -38,14 +38,14 @@ Also based on AG2's base GraphRAG capability, this capability uses a FalkorDB Gr
 See the [Trip planning with a FalkorDB GraphRAG agent using a Swarm notebook](/docs/use-cases/notebooks/notebooks/agentchat_groupchat_graphrag_trip_planner).
 
 <Tip>
-If you need a capability for a different GraphRAG database, consider building a capability similar to these using our [GraphRagCapability](/docs/api-reference/autogen/agentchat/contrib/graph_rag/graph_rag_capability/GraphRagCapability) base class.
+If you need a capability for a different GraphRAG database, consider building a capability similar to these using our `GraphRagCapability` base class.
 </Tip>
 
 ## 3. Incorporating context into an Agent's system message
 
 ConversableAgent has a number of hooks that get run before an agent replies. You can utilise the `update_agent_state` hook to run a function that updates your agent's system message with some context before it goes to the LLM.
 
-Within the function use the [ConversableAgent.update_system_message](/docs/api-reference/autogen/ConversableAgent#update-system-message) method to update the system message.
+Within the function use the `ConversableAgent.update_system_message` method to update the system message.
 
 Let’s walk through a simple example where we take a list of files from the current directory, include it in an agent’s system message, and ask an LLM to analyze or explain the files.
 

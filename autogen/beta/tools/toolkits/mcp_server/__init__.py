@@ -7,13 +7,13 @@ from autogen.beta.exceptions import missing_optional_dependency
 from .types import MCPServerConfig, MCPStdioServerConfig
 
 try:
-    from .toolkit import MCPServer
+    from .toolkit import MCPToolkit
 except ImportError as e:
-    MCPServer = missing_optional_dependency("MCPServer", "mcp", e)  # type: ignore[misc]
+    MCPToolkit = missing_optional_dependency("MCPToolkit", "mcp", e)  # type: ignore[misc]
 
 
 __all__ = (
-    "MCPServer",
     "MCPServerConfig",
     "MCPStdioServerConfig",
+    "MCPToolkit",
 )

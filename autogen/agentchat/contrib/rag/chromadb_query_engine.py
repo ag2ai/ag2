@@ -8,7 +8,6 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ..vectordb.base import VectorDBFactory
 
@@ -36,7 +35,6 @@ logger = logging.getLogger(__name__)
 
 
 @require_optional_import(["chromadb", "llama_index"], "rag")
-@export_module("autogen.agentchat.contrib.rag")
 class ChromaDBQueryEngine:
     """This engine leverages Chromadb to persist document embeddings in a named collection
     and LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response

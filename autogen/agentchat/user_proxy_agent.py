@@ -7,13 +7,11 @@
 from collections.abc import Callable
 from typing import Any, Literal
 
-from ..doc_utils import export_module
 from ..llm_config import LLMConfig
 from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent
 
 
-@export_module("autogen")
 class UserProxyAgent(ConversableAgent):
     """(In preview) A proxy agent for the user, that can execute code and provide feedback to the other agents.\n
     \n
@@ -83,7 +81,7 @@ class UserProxyAgent(ConversableAgent):
             - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.\n
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.\n
         llm_config (LLMConfig or dict or False or None): llm inference configuration.\n
-            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)\n
+            Please refer to `OpenAIWrapper.create`\n
             for available options.\n
             Default to False, which disables llm-based auto reply.\n
             When set to None, will use self.DEFAULT_CONFIG, which defaults to False.\n
@@ -92,7 +90,7 @@ class UserProxyAgent(ConversableAgent):
         description (str): a short description of the agent. This description is used by other agents\n
             (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)\n
         **kwargs (dict): Please refer to other kwargs in\n
-            [ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent).\n
+            `ConversableAgent`.\n
         """
         super().__init__(
             name=name,

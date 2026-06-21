@@ -33,7 +33,6 @@ from pydantic_core import to_jsonable_python
 from autogen import ConversableAgent
 from autogen.agentchat import ContextVariables
 from autogen.agentchat.remote import AgentService, RequestMessage, ServiceResponse
-from autogen.doc_utils import export_module
 
 try:
     from starlette.endpoints import HTTPEndpoint
@@ -46,7 +45,6 @@ def _get_timestamp() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1000)
 
 
-@export_module("autogen.ag_ui")
 class AGUIStream:
     def __init__(
         self,

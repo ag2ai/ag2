@@ -116,7 +116,6 @@ from autogen.beta.testing import TestConfig
 
 load_dotenv()
 
-
 async def approve(reason: str, channel: ChannelInject) -> str:
     """Mark the draft approved by setting done=True in context.
     The graph's ContextEquals(done, True) rule terminates the
@@ -128,7 +127,6 @@ async def approve(reason: str, channel: ChannelInject) -> str:
     print(f"  [tool] approve({reason!r})")
     await set_context(channel, "done", True)
     return f"approved: {reason}"
-
 
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
@@ -253,7 +251,6 @@ async def main() -> None:
     await drafter_hc.close()
     await reviewer_hc.close()
     await hub.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

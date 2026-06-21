@@ -22,10 +22,11 @@ from .builtin import (
 )
 from .code import SandboxCodeTool
 from .final import Toolkit, tool
+from .sandbox import LocalEnvironment
 from .search import DuckDuckSearchTool, PerplexitySearchToolkit, TavilySearchTool
-from .shell import LocalShellTool
-from .skills import SkillSearchToolkit, SkillsToolkit
-from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
+from .shell import SandboxShellTool
+from .skills import MemorySkill, SkillPlugin, SkillSearchToolkit, SkillsToolkit
+from .toolkits import FilesystemToolkit, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
 
 __all__ = (
     "CodeExecutionTool",
@@ -34,17 +35,20 @@ __all__ = (
     "DuckDuckSearchTool",
     "FilesystemToolkit",
     "ImageGenerationTool",
-    "LocalShellTool",
-    "MCPServer",
+    "LocalEnvironment",
     "MCPServerConfig",
     "MCPServerTool",
     "MCPStdioServerConfig",
+    "MCPToolkit",
+    "MemorySkill",
     "MemoryTool",
     "NetworkPolicy",
     "PerplexitySearchToolkit",
     "SandboxCodeTool",
+    "SandboxShellTool",
     "ShellTool",
     "Skill",
+    "SkillPlugin",
     "SkillSearchToolkit",
     "SkillsTool",
     "SkillsToolkit",

@@ -17,8 +17,8 @@ pip install ag2[openai,interop-crewai]
 
 Import necessary modules and tools.
 - [ScrapeWebsiteTool](https://docs.crewai.com/tools/scrapewebsitetool): A CrewAI tool for web scraping.
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) and [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent): Core AG2 classes.
-- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability): This module acts as a bridge, making it easier to integrate CrewAI tools with AG2’s architecture.
+- `AssistantAgent` and `UserProxyAgent`: Core AG2 classes.
+- `Interoperability`: This module acts as a bridge, making it easier to integrate CrewAI tools with AG2’s architecture.
 
 ```python
 import os
@@ -33,8 +33,8 @@ from autogen.interop import Interoperability
 
 Configure the agents for the interaction.
 - `config_list` defines the LLM configurations, including the model and API key.
-- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
 
 ```python
 llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
@@ -52,7 +52,7 @@ chatbot = AssistantAgent(
 ### Tool Integration
 
 Integrate the CrewAI tool with AG2.
-- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability) converts the CrewAI tool to a format compatible with AG2.
+- `Interoperability` converts the CrewAI tool to a format compatible with AG2.
 - [ScrapeWebsiteTool](https://docs.crewai.com/tools/scrapewebsitetool) is used for web scraping tasks.
 - Register the tool for both execution and interaction with LLMs.
 
@@ -66,7 +66,7 @@ ag2_tool.register_for_llm(chatbot)
 ```
 
 ### Initiating the chat
-Initiate the conversation between the [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) and the [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) to utilize the CrewAI tool.
+Initiate the conversation between the `UserProxyAgent` and the `AssistantAgent` to utilize the CrewAI tool.
 ```python
 message = "Scrape the website https://ag2.ai/"
 chat_result = user_proxy.initiate_chat(recipient=chatbot, message=message, max_turns=2)

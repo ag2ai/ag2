@@ -53,8 +53,8 @@ nest_asyncio.apply()
 Configure the agents for the interaction.
 
 - `config_list` defines the LLM configurations, including the model and API key.
-- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
 
 <Tip>
 [`Crawl4AI`](https://github.com/unclecode/crawl4ai) is built on top of [LiteLLM](https://github.com/BerriAI/litellm) and supports the same models as LiteLLM.
@@ -76,7 +76,7 @@ assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 
 ### Web Browsing with `Crawl4AI`
 
-[`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) offers three integration modes:
+`Crawl4AITool` offers three integration modes:
 1. **Basic Web Scraping (No LLM):**
 ```python
 crawlai_tool = Crawl4AITool()

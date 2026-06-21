@@ -25,7 +25,6 @@ chain so every LLM call sees a "you are <name>" prefix.
 from typing import TYPE_CHECKING
 
 from autogen.beta.agent import Plugin
-from autogen.beta.assembly import AssemblyPolicy
 from autogen.beta.events import BaseEvent
 
 from .tools import (
@@ -37,7 +36,6 @@ from .tools import (
 )
 
 if TYPE_CHECKING:
-    from autogen.beta.agent import Agent
     from autogen.beta.context import ConversationContext as Context
 
     from .agent_client import AgentClient
@@ -96,19 +94,4 @@ class NetworkPlugin(Plugin):
             ],
         )
         self._client = client
-
-    def register(self, agent: "Agent") -> None:
-        """Wire tools + assembly policy onto the agent. Idempotent-ish.
-
-        Calling ``register`` more than once on the same agent will add
-        the tools / policies again. ``HubClient.register`` only attaches
-        once per ``(Agent, identity)``, so this is rare in practice.
-        """
-        super().register(agent)
-        agent.add_policy(NetworkContextPolicy(self._client))
-
-
-# Make ``NetworkPlugin`` satisfy ``AssemblyPolicy`` indirectly via its
-# context-policy member. The Protocol is structural; ``NetworkContextPolicy``
-# implements ``apply`` correctly so the implicit assertion holds.
-_: AssemblyPolicy
+        self.add_policy(NetworkContextPolicy(client))

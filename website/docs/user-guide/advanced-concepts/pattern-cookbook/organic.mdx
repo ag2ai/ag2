@@ -2,7 +2,7 @@
 title: Organic
 ---
 
-The simplest of the Group Chat patterns, the Organic pattern utilizes entirely LLM-based transitions using the underlying Group Chat Manager using the AutoPattern pattern. The Group Chat Manager uses the messages together with a set of the group chat's agent's [`description`](/docs/api-reference/autogen/ConversableAgent#description) fields to determine the next agent.
+The simplest of the Group Chat patterns, the Organic pattern utilizes entirely LLM-based transitions using the underlying Group Chat Manager using the AutoPattern pattern. The Group Chat Manager uses the messages together with a set of the group chat's agent's `description` fields to determine the next agent.
 
 No hand-offs are specified as determining the next agent is solely done by the Group Chat Manager. The shared context variables can still be used and updated via the agent's tools, though they don't play a role in determining the workflow.
 
@@ -34,7 +34,7 @@ In the Organic Pattern, information flows through the system based on content an
 
 Our implementation using AG2's Group Chat demonstrates the Organic Pattern with a team of specialized agents whose expertise areas are clearly defined in their descriptions, allowing the Group Chat Manager to make intelligent routing decisions.
 
-* **Descriptive Agent Profiles**: Each agent includes a detailed [`description`](/docs/api-reference/autogen/ConversableAgent#description) field that clearly outlines their domain expertise and when they should be activated. Note, the [`system_message`](/docs/api-reference/autogen/ConversableAgent#system-message) field will be used if an agent's [`description`](/docs/api-reference/autogen/ConversableAgent#description) field is not specified - however, it is better to define [`description`](/docs/api-reference/autogen/ConversableAgent#description) separately for use by the Group Chat Manager, see the differences between [`description`](/docs/api-reference/autogen/ConversableAgent#description) and [`system_message`](/docs/api-reference/autogen/ConversableAgent#system-message) in the example below.
+* **Descriptive Agent Profiles**: Each agent includes a detailed `description` field that clearly outlines their domain expertise and when they should be activated. Note, the `system_message` field will be used if an agent's `description` field is not specified - however, it is better to define `description` separately for use by the Group Chat Manager, see the differences between `description` and `system_message` in the example below.
 
 * **Group Chat Manager Configuration**: The implementation uses the GroupManagerTarget target for the chat's After Work to delegate all routing decisions to the Group Chat Manager and we provide the Group Chat Manager with an LLM through the `group_manager_args` parameter on the AutoPattern.
 

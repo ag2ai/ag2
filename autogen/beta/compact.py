@@ -20,7 +20,14 @@ from fast_depends.pydantic import PydanticSerializer
 from autogen.beta.annotations import Context
 from autogen.beta.config import ModelConfig
 from autogen.beta.context import ConversationContext
-from autogen.beta.events import BaseEvent, ModelRequest
+from autogen.beta.events import (
+    BaseEvent,
+    ModelRequest,
+    ModelResponse,
+    ToolResultEvent,
+    ToolResultsEvent,
+    UsageEvent,
+)
 from autogen.beta.stream import MemoryStream
 
 from .knowledge import EventLogWriter, KnowledgeStore
@@ -63,6 +70,27 @@ class CompactStrategy(Protocol):
         ...
 
 
+def _retained_is_self_contained(events: list[BaseEvent], cut: int) -> bool:
+    """True when no tool result in events[cut:] references a dropped tool call."""
+    have: set[str] = set()
+    need: set[str] = set()
+    for event in events[cut:]:
+        if isinstance(event, ModelResponse):
+            have.update(call.id for call in event.tool_calls.calls)
+        elif isinstance(event, ToolResultsEvent):
+            need.update(r.parent_id for r in event.results if r.parent_id)
+        elif isinstance(event, ToolResultEvent) and event.parent_id:
+            need.add(event.parent_id)
+    return need <= have
+
+
+def _snap_to_turn_boundary(events: list[BaseEvent], cut: int) -> int:
+    """Advance `cut` so a tool-cycle split by the boundary compacts whole."""
+    while cut < len(events) and not _retained_is_self_contained(events, cut):
+        cut += 1
+    return cut
+
+
 @dataclass(slots=True)
 class CompactTrigger:
     """Deterministic conditions for triggering compaction.
@@ -94,8 +122,12 @@ class TailWindowCompact:
         if len(events) <= self._target:
             return events
 
-        dropped = events[: -self._target]
-        retained = events[-self._target :]
+        cut = _snap_to_turn_boundary(events, len(events) - self._target)
+        dropped = events[:cut]
+        retained = events[cut:]
+
+        if not retained:
+            return events
 
         if store:
             writer = EventLogWriter(store)
@@ -131,8 +163,12 @@ class SummarizeCompact:
         if len(events) <= self._target:
             return events
 
-        old = events[: -self._target]
-        recent = events[-self._target :]
+        cut = _snap_to_turn_boundary(events, len(events) - self._target)
+        old = events[:cut]
+        recent = events[cut:]
+
+        if not recent:
+            return events
 
         # Persist full old events before dropping
         if store:
@@ -140,14 +176,14 @@ class SummarizeCompact:
             await writer.persist_dropped(context.stream.id, old)
 
         # Summarize via LLM
-        summary_text = await self._summarize(old)
+        summary_text = await self._summarize(old, context)
         summary_event = CompactionSummary(
             summary=summary_text,
             event_count=len(old),
         )
         return [summary_event] + recent
 
-    async def _summarize(self, events: list[BaseEvent]) -> str:
+    async def _summarize(self, events: list[BaseEvent], context: Context) -> str:
         client = self._config.create()
         prompt_event = ModelRequest.ensure_request([
             "Summarize the following conversation history concisely, "
@@ -161,4 +197,15 @@ class SummarizeCompact:
             serializer=self._serializer,
         )
         self.last_usage = response.usage if hasattr(response, "usage") and response.usage else {}
+        # The summarization call runs on a throwaway stream; surface its usage
+        # onto the real agent stream so it isn't lost to monitoring.
+        if response.usage:
+            await context.send(
+                UsageEvent(
+                    response.usage,
+                    kind="compaction",
+                    model=response.model,
+                    provider=response.provider,
+                )
+            )
         return response.content or ""

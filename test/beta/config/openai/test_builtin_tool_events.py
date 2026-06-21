@@ -157,7 +157,7 @@ class TestReasoning:
         stream = MemoryStream()
         context = Context(stream=stream)
 
-        await stream.send(reasoning, context)
+        await context.send(reasoning)
 
         assert list(await stream.history.get_events()) == [reasoning]
 

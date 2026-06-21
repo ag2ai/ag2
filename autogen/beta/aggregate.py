@@ -17,13 +17,11 @@ from typing import Protocol, runtime_checkable
 
 from fast_depends.pydantic import PydanticSerializer
 
-from autogen.beta.annotations import Context
-from autogen.beta.config import ModelConfig
-from autogen.beta.context import ConversationContext
-from autogen.beta.events import BaseEvent, ModelRequest
-from autogen.beta.stream import MemoryStream
-
+from .annotations import Context
+from .config import ModelConfig
+from .events import BaseEvent, ModelRequest, UsageEvent
 from .knowledge import CONVERSATIONS_PREFIX, WORKING_MEMORY_PATH, KnowledgeStore
+from .stream import MemoryStream
 
 
 @runtime_checkable
@@ -85,12 +83,12 @@ class ConversationSummaryAggregate:
     ) -> None:
         if not events:
             return
-        summary = await self._summarize(events)
+        summary = await self._summarize(events, context)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         stream_id = str(context.stream.id)
         await store.write(f"{CONVERSATIONS_PREFIX}{ts}_{stream_id}.md", summary)
 
-    async def _summarize(self, events: list[BaseEvent]) -> str:
+    async def _summarize(self, events: list[BaseEvent], context: Context) -> str:
         client = self._config.create()
         prompt_event = ModelRequest.ensure_request([
             "Summarize this conversation. Include key decisions, "
@@ -98,12 +96,13 @@ class ConversationSummaryAggregate:
         ])
         response = await client(
             [prompt_event],
-            ConversationContext(MemoryStream()),
+            Context(MemoryStream()),
             tools=[],
             response_schema=None,
             serializer=self._serializer,
         )
         self.last_usage = response.usage if hasattr(response, "usage") and response.usage else {}
+        await _emit_aggregation_usage(response, context)
         return response.content or ""
 
 
@@ -182,10 +181,10 @@ class WorkingMemoryAggregate:
         if not events:
             return
         existing = await store.read(WORKING_MEMORY_PATH) or ""
-        updated = await self._merge(existing, events)
+        updated = await self._merge(existing, events, context)
         await store.write(WORKING_MEMORY_PATH, updated)
 
-    async def _merge(self, existing: str, events: list[BaseEvent]) -> str:
+    async def _merge(self, existing: str, events: list[BaseEvent], context: Context) -> str:
         client = self._config.create()
         prompt = self._prompt_template.format(
             existing=existing or "(empty)",
@@ -193,10 +192,29 @@ class WorkingMemoryAggregate:
         )
         response = await client(
             [ModelRequest.ensure_request([prompt])],
-            ConversationContext(MemoryStream()),
+            Context(MemoryStream()),
             tools=[],
             response_schema=None,
             serializer=self._serializer,
         )
         self.last_usage = response.usage if hasattr(response, "usage") and response.usage else {}
+        await _emit_aggregation_usage(response, context)
         return response.content or existing
+
+
+async def _emit_aggregation_usage(response: BaseEvent, context: Context) -> None:
+    """Surface an aggregation LLM call's usage onto the real agent stream.
+
+    The aggregation call runs on a throwaway stream, so without this its tokens
+    would never reach the event log the usage report reads from.
+    """
+    usage = getattr(response, "usage", None)
+    if usage:
+        await context.send(
+            UsageEvent(
+                usage,
+                kind="aggregation",
+                model=getattr(response, "model", None),
+                provider=getattr(response, "provider", None),
+            )
+        )

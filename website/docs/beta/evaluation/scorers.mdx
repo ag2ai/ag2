@@ -9,10 +9,9 @@ A scorer is a function that grades one agent run and produces a structured feedb
 
 Decorate a function with `#!python @scorer`. The framework calls it once per task; the return value becomes feedback.
 
-```python linenums="1" hl_lines="1 5"
+```python linenums="1" hl_lines="4-6"
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.eval import scorer
-
 
 @scorer
 def called_get_weather(trace) -> bool:
@@ -83,6 +82,9 @@ A load-bearing distinction:
 
 Write scorers reference-free whenever you can — the same code then runs everywhere.
 
+!!! note "Guard reference-based scorers against missing references"
+    A task without `reference_outputs` injects `reference_outputs=None`. Guard for it — `#!python if reference_outputs is None: return None` to skip the task, or `#!python return False` to count it as a fail. An unguarded `#!python reference_outputs["city"]` raises on `None`, which the framework records as `#!python score=None` (the run continues, but the task neither passes nor counts).
+
 ## One question per scorer
 
 Don't bundle. A god-scorer like
@@ -126,7 +128,7 @@ Six ship under `autogen.beta.eval.scorers`. Four are simple, deterministic check
 
 Each is a *factory* — calling it returns a `Scorer`. Drop them straight into the `scorers=` list:
 
-```python linenums="1" hl_lines="3-6"
+```python linenums="1" hl_lines="8-13"
 from autogen.beta.eval.scorers import (
     final_answer_matches,
     no_tool_errors,
@@ -160,6 +162,16 @@ scorers = [
 ```
 
 One judge = one criterion = one column. The score lands in `result.score_stats(key)`, so a *list* of judges is a multi-dimension **scorecard** — each criterion scored and aggregated independently. The numeric range defaults to `(0.0, 1.0)` and is **enforced** (out-of-range scores are clamped); pass `scale=(1, 5)` for a Likert range. The judge is an ordinary `Agent`, so it can be made deterministic using a `TestConfig` in CI.
+
+By default the judge sees the task's gold answer (rendered as a `## Reference` section whenever `reference_outputs` is present) — correct for a *correctness* judge, where matching the reference is the point. But for dimensions that must grade the answer **on its own** — *faithfulness*, *grounding* — leaking the gold answer lets the judge reward an answer for matching it rather than for being grounded in the agent's tool results. Pass `include_reference=False` to withhold the reference from those judges:
+
+```python linenums="1"
+scorers = [
+    agent_judge(config, criterion="The answer matches the reference.", key="correctness"),
+    agent_judge(config, criterion="Every claim is grounded in the tool results.",
+                key="faithfulness", include_reference=False),
+]
+```
 
 ## Pass / fail thresholds — `threshold`
 
@@ -246,10 +258,8 @@ If you want a key independent of the function name, construct a `Scorer` yoursel
 ```python linenums="1"
 from autogen.beta.eval import Scorer, Trace
 
-
 def _check(trace: Trace) -> bool:
     return len(trace.events_of(ToolCallEvent, name="get_weather")) == 1
-
 
 my_scorer = Scorer(_check, key="weather-tool-used")
 ```

@@ -2,36 +2,30 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""run_variants — compare named variants of a target and rank them.
+"""run_variants — compare named agent variants and rank them.
 
-A :class:`Variants` is a *single-axis* set of named builds — all configs, or
-all prompts, … — constructed via the typed ``Variants.from_*`` classmethods
-(mirroring ``Suite.from_*``). :func:`run_variants` runs each variant over the
-suite via :func:`~autogen.beta.eval.run_agent` and returns a :class:`VariantRunResult`
+A :class:`Variants` is a set of named :class:`~autogen.beta.Agent` instances —
+one per variant. :func:`run_variants` runs each variant over the suite via
+:func:`~autogen.beta.eval.run_agent` and returns a :class:`VariantRunResult`
 whose ``leaderboard(key)`` ranks the variants by a scorer.
 
-Each ``from_*`` fixes the axis and types its values, so one call can only vary
-one thing — comparisons stay controlled (vary one axis, hold the rest fixed).
-For an entirely different build per variant, use :meth:`Variants.from_targets`.
+Vary whatever you like across the agents (config, prompt, tools, middleware, …)
+by constructing them accordingly, and set ``axis`` to label what was varied —
+comparisons stay controlled when you hold everything but one axis fixed.
 """
 
 import os
 import re
 import time
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from functools import partial
 from operator import itemgetter
-from typing import Any
 from uuid import uuid4
 
 from autogen.beta.agent import Agent
-from autogen.beta.config import ModelConfig
 from autogen.beta.context import ConversationContext
-from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.stream import Stream
-from autogen.beta.tools.tool import Tool
 
 from ..dataset import Suite
 from ..events import VariantCompleted, VariantStarted
@@ -46,44 +40,29 @@ __all__ = (
     "run_variants",
 )
 
-_Build = Callable[..., Agent] | Agent
-
 
 @dataclass(frozen=True, slots=True)
 class Variants:
-    """A single-axis set of named target builds. Construct via the ``from_*`` classmethods."""
+    """A set of named :class:`~autogen.beta.Agent` variants to compare and rank.
 
-    axis: str
-    builds: Mapping[str, _Build]
+    Each value is a prebuilt agent instance; the keys name the variants. Vary
+    whatever you like across them (config, prompt, tools, middleware, …) by
+    constructing the agents accordingly, and set ``axis`` to label what you
+    varied (used in :meth:`VariantRunResult.summary`).
 
-    @classmethod
-    def from_configs(cls, factory: Callable[..., Agent], variants: Mapping[str, ModelConfig]) -> "Variants":
-        """One variant per model config — varies ``config`` on a shared factory."""
-        return cls("config", {name: partial(factory, config=cfg) for name, cfg in variants.items()})
+    ::
 
-    @classmethod
-    def from_prompts(cls, factory: Callable[..., Agent], variants: Mapping[str, str]) -> "Variants":
-        """One variant per system prompt — varies ``prompt`` on a shared factory."""
-        return cls("prompt", {name: partial(factory, prompt=prompt) for name, prompt in variants.items()})
+        Variants(
+            {
+                "gpt-4o": Agent("a", config=openai_cfg),
+                "sonnet": Agent("a", config=anthropic_cfg),
+            },
+            axis="config",
+        )
+    """
 
-    @classmethod
-    def from_tools(
-        cls, factory: Callable[..., Agent], variants: Mapping[str, Sequence[Callable[..., Any] | Tool]]
-    ) -> "Variants":
-        """One variant per tool set — varies ``tools`` on a shared factory."""
-        return cls("tools", {name: partial(factory, tools=list(tools)) for name, tools in variants.items()})
-
-    @classmethod
-    def from_middleware(
-        cls, factory: Callable[..., Agent], variants: Mapping[str, Sequence[MiddlewareFactory]]
-    ) -> "Variants":
-        """One variant per middleware stack — varies ``middleware`` on a shared factory."""
-        return cls("middleware", {name: partial(factory, middleware=list(mw)) for name, mw in variants.items()})
-
-    @classmethod
-    def from_targets(cls, variants: Mapping[str, _Build]) -> "Variants":
-        """One variant per whole build — each value is a factory or an instance (the escape hatch)."""
-        return cls("target", dict(variants))
+    agents: Mapping[str, Agent]
+    axis: str = "variant"
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,11 +125,11 @@ class VariantRunResult:
 
 
 async def run_variants(
-    suite: Suite | str | os.PathLike[str] | list[dict[str, Any]],
+    suite: str | Suite,
     *,
     variants: Variants,
-    scorers: Iterable[Scorer],
-    store_dir: str | os.PathLike[str],
+    scorers: Iterable[Scorer] = (),
+    store_dir: str | os.PathLike[str] | None = None,
     repeats: int = 1,
     concurrency: int = 4,
     run_id: str | None = None,
@@ -160,8 +139,9 @@ async def run_variants(
     """Run each variant over ``suite`` and return a ranked :class:`VariantRunResult`.
 
     Variants run sequentially; within each, tasks run up to ``concurrency`` in
-    parallel (and ``repeats`` times each). Every variant's run is persisted as
-    its own schema-0.1 JSON under ``store_dir`` (``<run_id>-<variant>.json``).
+    parallel (and ``repeats`` times each). When ``store_dir`` is set, every
+    variant's run is persisted as its own schema-0.1 JSON under it
+    (``<run_id>-<variant>.json``); omit it to run without persisting.
 
     Pass ``stream`` to observe the sweep: ``VariantStarted`` / ``VariantCompleted``
     wrap each variant, and that variant's own ``EvalStarted`` / ``TaskEvaluated``
@@ -173,33 +153,32 @@ async def run_variants(
     created_at = datetime.now(timezone.utc).isoformat()
     started = time.perf_counter()
 
-    eval_stream = stream
-    eval_ctx = ConversationContext(stream=eval_stream) if eval_stream is not None else None
+    eval_ctx = ConversationContext(stream=stream) if stream is not None else None
 
     results: dict[str, RunResult] = {}
-    total = len(variants.builds)
-    for index, (name, build) in enumerate(variants.builds.items(), start=1):
-        if eval_stream is not None:
-            await eval_stream.send(
+    total = len(variants.agents)
+    for index, (name, agent) in enumerate(variants.agents.items(), start=1):
+        if eval_ctx is not None:
+            await eval_ctx.send(
                 VariantStarted(run_id=base_run_id, label=label, variant=name, index=index, total=total),
-                eval_ctx,
             )
+
         results[name] = await run_agent(
             suite,
-            agent=build,
+            agent=agent,
             scorers=scorer_list,
             store_dir=store_dir,
             repeats=repeats,
             concurrency=concurrency,
             run_id=f"{base_run_id}-{_slug(name)}",
             label=label,
-            stream=eval_stream,
+            stream=stream,
             variant=name,
         )
-        if eval_stream is not None:
-            await eval_stream.send(
+
+        if eval_ctx is not None:
+            await eval_ctx.send(
                 VariantCompleted(run_id=base_run_id, label=label, variant=name, result=results[name]),
-                eval_ctx,
             )
 
     duration_ms = int((time.perf_counter() - started) * 1000)

@@ -15,33 +15,42 @@ specialist whose domain matches.
 
 * **Router agent thin.** The router's only job is to classify and
   call the matching `#!python classify_as_<category>` tool.
-* **Specialists answer.** Each specialist is a separate agent with a
-  domain-specific prompt; the graph routes the request to the right
-  one via `#!python ContextEquals` on the just-set category.
+* **Dynamic `#!python Handoff`.** Each classify tool returns
+  `#!python Handoff(target=<specialist>)` directly. The framework
+  reads the `#!python target` from the tool result and routes the
+  next turn to that specialist without any graph condition — no
+  `#!python ContextEquals` rules needed.
 * **Specialist's reply terminates.** A `#!python FromSpeaker(<specialist>) → TerminateTarget`
-  rule sits ABOVE the `#!python ContextEquals` rules so the workflow
-  closes after the specialist speaks (rather than looping back on
-  the sticky `category` flag — see warning below).
+  rule closes the workflow after the specialist speaks.
 
 ### Routing Mechanics
 
-Each `#!python classify_as_<category>` tool is a plain `#!python @tool`
-that calls `#!python set_context(channel, "category", <category>)`. The
-helper emits a non-substantive `#!python EV_CONTEXT_SET` envelope that
-lands in the WAL *before* the round's `#!python EV_PACKET` commits, so
-when the router's packet folds, `#!python ContextEquals("category", X)`
-already sees the just-set value and routes the next turn to the
-matching specialist.
+Each `#!python classify_as_<category>` tool returns
+`#!python Handoff(target=<specialist_name>)`. The workflow adapter
+reads the `#!python Handoff.target` from the tool's
+`#!python ToolResultEvent` and stamps it onto the outgoing packet as
+`#!python routing.target`. When `#!python fold` processes that
+packet, `#!python expected_next_speaker` is set directly from
+`#!python routing.target`, bypassing the transition graph entirely.
+No `#!python ContextEquals` state variable is needed.
 
-!!! warning "Sticky routing"
-    Note the transition ordering: `#!python FromSpeaker(<specialist>) → TerminateTarget`
-    rules sit ABOVE the `#!python ContextEquals` rules. Without that
-    ordering, `#!python ContextEquals("category", X)` would re-match
-    after the specialist speaks (the category var is never cleared)
-    and the graph would loop back to the same specialist. This is
-    the canonical "sticky routing" trap; the fix is *always* to list
-    terminate / `#!python FromSpeaker` rules before any sticky
-    `#!python ContextEquals`.
+!!! note "Why not ContextEquals?"
+    The original idiom — tools call `#!python set_context` then return
+    a string; the graph uses `#!python ContextEquals` to pick the
+    next speaker — stalls in practice.
+
+    `#!python set_context` emits a non-substantive `#!python EV_CONTEXT_SET`
+    envelope, and `#!python ContextEquals` only evaluates when a
+    *substantive* `#!python EV_PACKET` follows. But the router's classify
+    tool also returns a plain string. If the router produces no text body
+    (as a minimal implementation would), the round is silent:
+    `#!python build_round_envelope` returns `#!python None`, no
+    `#!python EV_PACKET` is posted, `#!python fold` is never called,
+    and `#!python ContextEquals` never fires. The channel stalls.
+
+    `#!python Handoff` sidesteps this entirely — the routing target is
+    resolved from the tool result, not from a graph condition evaluated
+    on a subsequent envelope.
 
 ## Agent Flow
 
@@ -54,16 +63,16 @@ sequenceDiagram
     participant General as general
 
     User->>Router: question
-    Router->>Router: classify_as_<category>(reason); set_context("category", <category>)
-    Note over Router: ContextEquals("category", X) routes to specialist
-    alt category=billing
-        Router->>Billing: AgentTarget(billing)
+    Router->>Router: classify_as_<category>(reason) → Handoff(target=<category>)
+    Note over Router: Handoff.target routes directly to specialist
+    alt Handoff(target="billing")
+        Router->>Billing: AgentTarget(billing) via Handoff
         Billing->>User: answer; FromSpeaker(billing) → TerminateTarget("billing_resolved")
-    else category=technical
-        Router->>Technical: AgentTarget(technical)
+    else Handoff(target="technical")
+        Router->>Technical: AgentTarget(technical) via Handoff
         Technical->>User: answer; FromSpeaker(technical) → TerminateTarget("technical_resolved")
-    else category=general
-        Router->>General: AgentTarget(general)
+    else Handoff(target="general")
+        Router->>General: AgentTarget(general) via Handoff
         General->>User: answer; FromSpeaker(general) → TerminateTarget("general_resolved")
     end
 ```
@@ -72,21 +81,9 @@ sequenceDiagram
 
 | Classic | Beta |
 |---|---|
-| `#!python StringLLMCondition` (framework asks LLM at the transition) | Router agent's LLM turn calls `#!python classify_as_<category>` tool; declarative graph reads the resulting state |
-| `#!python ReplyResult(context_variables={"category": "billing"}, target=AgentTarget(billing_specialist))` | `#!python await set_context(channel, "category", "billing")` from inside a plain `#!python @tool`; `#!python ContextEquals("category", "billing") → AgentTarget(billing)` graph rule |
-| `#!python ExpressionContextCondition(...)` per category | `#!python ContextEquals("category", X)` per category |
-
-### Gaps & Workarounds
-
-* **No `#!python LLMCondition`.** Classic `#!python StringLLMCondition`
-  allowed the *framework* to ask an LLM "should this transition
-  fire?" — purely declarative routing. Beta requires the router
-  agent to make the decision *inside its own LLM turn* and record it
-  via a tool call. Functionally equivalent but conceptually
-  different: the routing intelligence lives in the agent, not the
-  graph. Workaround: keep the router agent thin (system prompt =
-  "classify into one of {billing, technical, general} then call
-  `#!python classify_as_<category>`").
+| `#!python StringLLMCondition` (framework asks LLM at the transition) | Router agent's LLM turn calls `#!python classify_as_<category>` tool; tool returns `#!python Handoff(target=specialist)` |
+| `#!python ReplyResult(context_variables={"category": "billing"}, target=AgentTarget(billing))` | `#!python return Handoff(target="billing", reason=reason)` directly from the classify tool |
+| `#!python ExpressionContextCondition(...)` per category | No graph condition needed — `#!python Handoff.target` is authoritative |
 
 ## Code
 
@@ -99,8 +96,9 @@ sequenceDiagram
 """Cookbook 07 — Context-Aware Routing pattern.
 
 A router agent reads the user's request, classifies it into a
-category, and the graph's ``ContextEquals`` transitions route to the
-matching specialist.
+category, and returns Handoff(target=specialist) from the classify
+tool. The framework routes directly to the named specialist without
+any ContextEquals graph conditions.
 """
 
 import asyncio
@@ -111,58 +109,40 @@ from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_PACKET,
     EV_CHANNEL_CLOSED,
+    EV_PACKET,
     EV_TEXT,
     WORKFLOW_TYPE,
     AgentTarget,
-    ContextEquals,
     FromSpeaker,
+    Handoff,
     Hub,
     HubClient,
     LocalLink,
     Passport,
     Resume,
-    ChannelInject,
     TerminateTarget,
     Transition,
     TransitionGraph,
 )
-from autogen.beta.network.workflow_helpers import set_context
 from autogen.beta.testing import TestConfig
 
 load_dotenv()
 
-
-async def classify_as_billing(reason: str, channel: ChannelInject) -> str:
-    """Classify the request as billing. Sets
-    context_vars['category'] = 'billing' so the graph's
-    ContextEquals('category', 'billing') rule routes to the
-    billing specialist."""
-    if channel is None:
-        return "no channel"
+async def classify_as_billing(reason: str) -> Handoff:
+    """Classify the request as billing and route to the billing specialist."""
     print(f"  [tool] classify_as_billing({reason!r})")
-    await set_context(channel, "category", "billing")
-    return f"classified as billing: {reason}"
+    return Handoff(target="billing", reason=reason)
 
-
-async def classify_as_technical(reason: str, channel: ChannelInject) -> str:
-    """Classify as technical."""
-    if channel is None:
-        return "no channel"
+async def classify_as_technical(reason: str) -> Handoff:
+    """Classify as technical and route to the technical specialist."""
     print(f"  [tool] classify_as_technical({reason!r})")
-    await set_context(channel, "category", "technical")
-    return f"classified as technical: {reason}"
+    return Handoff(target="technical", reason=reason)
 
-
-async def classify_as_general(reason: str, channel: ChannelInject) -> str:
-    """Classify as general support."""
-    if channel is None:
-        return "no channel"
+async def classify_as_general(reason: str) -> Handoff:
+    """Classify as general support and route to the general specialist."""
     print(f"  [tool] classify_as_general({reason!r})")
-    await set_context(channel, "category", "general")
-    return f"classified as general: {reason}"
-
+    return Handoff(target="general", reason=reason)
 
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
@@ -182,8 +162,7 @@ async def main() -> None:
         "router",
         prompt=(
             "You are the routing agent. Classify the user's request "
-            "into ONE of three categories and call the matching tool. "
-            "Don't write any extra text — the tool advances the workflow.\n"
+            "into ONE of three categories and call the matching tool.\n"
             "\n"
             "Categories:\n"
             "* `classify_as_billing` — payment, refund, invoice, "
@@ -238,17 +217,13 @@ async def main() -> None:
     graph = TransitionGraph(
         initial_speaker=user.agent_id,
         transitions=[
-            # Specialist's reply terminates — listed BEFORE the
-            # ContextEquals routing rules so we don't loop on the
-            # sticky `category` var.
+            # Specialist's reply terminates.
             Transition(when=FromSpeaker(billing.agent_id),   then=TerminateTarget("billing_resolved")),
             Transition(when=FromSpeaker(technical.agent_id), then=TerminateTarget("technical_resolved")),
             Transition(when=FromSpeaker(general.agent_id),   then=TerminateTarget("general_resolved")),
-            # Route based on router-set category.
-            Transition(when=ContextEquals("category", "billing"),   then=AgentTarget(billing.agent_id)),
-            Transition(when=ContextEquals("category", "technical"), then=AgentTarget(technical.agent_id)),
-            Transition(when=ContextEquals("category", "general"),   then=AgentTarget(general.agent_id)),
-            # User's question → router.
+            # User's question → router. Routing to the specialist is
+            # via Handoff returns from classify tools — no ContextEquals
+            # rules needed.
             Transition(when=FromSpeaker(user.agent_id), then=AgentTarget(router.agent_id)),
         ],
         default_target=TerminateTarget("fall_through"),
@@ -275,16 +250,12 @@ async def main() -> None:
         "500 error. The status page says everything is green. Help?"
     )
 
-    # Wait for the workflow to terminate (any of the five close routes
-    # documented in /docs/beta/network/termination — this demo uses
-    # FromSpeaker(<specialist>) → TerminateTarget("<category>_resolved")).
     close_env = await user.wait_for_channel_event(
         channel_id=channel.channel_id,
         predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=120.0,
     )
 
-    # Print the transcript from the WAL after close.
     for env in await hub_obj.read_wal(channel.channel_id):
         speaker = name_by_id.get(env.sender_id, env.sender_id[:8])
         if env.event_type == EV_TEXT:
@@ -300,16 +271,12 @@ async def main() -> None:
 
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
-    state = hub_obj._adapter_states[channel.channel_id]
-    print(f"final context_vars: {state.context_vars!r}")
-
     await user_hc.close()
     await router_hc.close()
     await billing_hc.close()
     await technical_hc.close()
     await general_hc.close()
     await hub_obj.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -321,10 +288,9 @@ if __name__ == "__main__":
 channel: 8b4d...
 
            user: I tried to upgrade my subscription but the API is returning a 500 error. The status page says everything is green. Help?
-  [tool] classify_as_technical('User is reporting a 500 error from the API during a subscription upgrade — this is a technical/integration issue, not a billing dispute or general policy question.')
-         router:
-      technical: Capture the full request (endpoint, payload, response headers, request-id) and re-try the upgrade — if the 500 persists, share the request-id with us so we can trace it server-side; in the meantime, check whether the failure correlates with a specific plan, payment method, or coupon as those code paths are the most common 500 sources during upgrade.
+  [tool] classify_as_technical('API returning 500 error during subscription upgrade — technical issue')
+         router: [Handed off via classify_as_technical] API returning 500 error during subscription upgrade — technical issue
+      technical: Capture the full request (endpoint, payload, response headers, and request-id) and re-try the upgrade — if the 500 persists, share the request-id so we can trace it server-side; check whether the failure is tied to a specific plan tier, payment method, or coupon, as those code paths are the most common 500 sources during upgrades.
 
 closed: reason='technical_resolved'
-final context_vars: {'category': 'technical'}
 ```

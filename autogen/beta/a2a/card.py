@@ -16,7 +16,7 @@ from a2a.types import (
 from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
 
 from autogen.beta.agent import Agent
-from autogen.beta.tools.skills.local_skills import SkillsToolkit
+from autogen.beta.tools.skills.toolkit import SkillsToolkit
 
 from .extension import EXTENSION_URI
 from .security import Requirement, Scheme
@@ -175,10 +175,10 @@ def _resolve_skills(
         return list(explicit)
 
     auto = [
-        AgentSkill(id=meta.name, name=meta.name, description=meta.description or meta.name)
+        AgentSkill(id=skill.name, name=skill.name, description=skill.metadata.description or skill.name)
         for tool in agent.tools
         if isinstance(tool, SkillsToolkit)
-        for meta in tool.runtime.discover()
+        for skill in tool.merged_skills()
     ]
     if auto:
         return auto

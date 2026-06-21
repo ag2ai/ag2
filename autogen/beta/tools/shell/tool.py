@@ -2,81 +2,112 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 from collections.abc import Iterable
 from contextlib import AsyncExitStack, ExitStack
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
+from autogen.beta.tools.sandbox import LocalEnvironment, SandboxFactory
+from autogen.beta.tools.sandbox.adapter import ShellAdapter
 from autogen.beta.tools.tool import Tool
 
-from .environment import LocalShellEnvironment, ShellEnvironment
 
+class SandboxShellTool(Tool):
+    """Exposes a single ``run_shell_command(command)`` function that runs
+    shell commands inside an *environment* you choose — local subprocess,
+    Docker container, Daytona sandbox, or any custom backend.
 
-class LocalShellTool(Tool):
-    """The tool exposes a single ``shell`` function that runs commands in whatever
-    environment is provided — local subprocess, Docker container, SSH, etc.
-    All execution details are encapsulated inside the environment.
+    The **environment** decides *where* commands run and carries all
+    backend configuration (image, env vars, network, timeout, …). The
+    **tool** decides the agent-facing policy (``allowed`` / ``blocked`` /
+    ``ignore`` / ``readonly``). The two are orthogonal: the same
+    environment can back both a :class:`SandboxShellTool` and a
+    :class:`~autogen.beta.tools.SandboxCodeTool`.
 
-    Args:
-        environment: The execution environment, a path to a working directory,
-                     or ``None``. When a path (``str`` or :class:`~pathlib.Path`)
-                     is given, a :class:`LocalShellEnvironment` is created in
-                     that directory automatically. Defaults to
-                     :class:`LocalShellEnvironment` with a temporary directory.
+    Not to be confused with :class:`~autogen.beta.tools.ShellTool`, which is
+    a provider-executed (server-side) shell capability flag.
+    ``SandboxShellTool`` runs commands client-side, so it works with any
+    provider.
 
     Examples::
 
-        # Auto temp dir — cleaned up on exit
-        sh = LocalShellTool()
+        from autogen.beta.tools import SandboxShellTool, LocalEnvironment
+        from autogen.beta.extensions.docker import DockerEnvironment
 
-        # Pass a path directly — creates LocalShellEnvironment for you
-        sh = LocalShellTool("/tmp/my_project")
-        sh = LocalShellTool(Path("/tmp/my_project"))
+        # Local subprocess (default):
+        shell = SandboxShellTool()
+        shell = SandboxShellTool(LocalEnvironment("/tmp/proj"), allowed=["git", "ls"])
 
-        # Full control via explicit environment
-        sh = LocalShellTool(LocalShellEnvironment(path="/tmp/my_project"))
+        # Docker — configure the backend once, hand it over:
+        docker = DockerEnvironment(image="python:3.12-slim", network_mode="none")
+        shell = SandboxShellTool(docker, readonly=True)
 
-        # Read-only local inspection
-        sh = LocalShellTool(LocalShellEnvironment(path="/tmp/my_project", readonly=True))
-
-        # Future: Docker or SSH (not yet implemented)
-        # sh = LocalShellTool(DockerEnvironment(image="python:3.12"))
-        # sh = LocalShellTool(SSHEnvironment(host="server.com", user="ubuntu"))
+    Args:
+        environment: The execution backend — a
+                     :class:`~autogen.beta.tools.sandbox.SandboxFactory`
+                     (``LocalEnvironment`` / ``DockerEnvironment`` /
+                     ``DaytonaEnvironment``). ``None`` defaults to a
+                     local subprocess (``LocalEnvironment()``).
+        allowed: Whitelist of command prefixes. When ``readonly`` is set and
+                 ``allowed`` is ``None``, a read-only command set is used.
+        blocked: Blacklist of command prefixes. Best-effort only: it matches
+                 just the head command's prefix, so chaining (``;`` / ``|`` /
+                 ``&&`` / ``$(...)``) bypasses it (``echo x; rm -rf ~`` is not
+                 blocked by ``blocked=["rm"]``). It is **not** a security
+                 boundary — use ``allowed`` / ``readonly`` or an isolated
+                 container backend for that.
+        ignore: Glob patterns of paths that may not appear in a command.
+        readonly: Restrict to read-only commands (cat/ls/grep/…).
+        name / description / middleware: Tool wiring.
     """
 
     def __init__(
         self,
-        environment: ShellEnvironment | str | os.PathLike[str] | None = None,
-        name: str = "run_shell_command",
+        environment: "SandboxFactory | None" = None,
         *,
+        allowed: list[str] | None = None,
+        blocked: list[str] | None = None,
+        ignore: list[str] | None = None,
+        readonly: bool = False,
+        name: str = "run_shell_command",
         description: str = "Execute a shell command in the working directory: {workdir}",
         middleware: Iterable["ToolMiddleware"] = (),
     ) -> None:
-        if environment:
-            env: ShellEnvironment = LocalShellEnvironment.ensure_env(environment)
-        else:
-            env = LocalShellEnvironment()
-
-        self._tool: FunctionTool = tool(
-            env.run,
-            name=name,
-            description=description.format(workdir=env.workdir),
-            middleware=middleware,
+        backend: SandboxFactory = environment if environment is not None else LocalEnvironment()
+        adapter = ShellAdapter(
+            backend,
+            allowed=allowed,
+            blocked=blocked,
+            ignore=ignore,
+            readonly=readonly,
         )
 
-        self._workdir = env.workdir
+        async def run_shell_command(command: str, ctx: Context) -> str:
+            # Async so the command runs in the agent's own event loop. A sync
+            # tool fn would be driven via asyncio.run() per call (a fresh loop
+            # each time), which breaks remote backends whose client is bound to
+            # the first loop (e.g. Daytona's httpx keep-alive pool).
+            return await adapter.run(command, context=ctx)
+
+        self._adapter = adapter
+        self._workdir = adapter.workdir
+        self._tool: FunctionTool = tool(
+            run_shell_command,
+            name=name,
+            description=description.format(workdir=adapter.workdir),
+            middleware=middleware,
+        )
         self.name = name
 
     @property
-    def workdir(self) -> Path:
+    def workdir(self) -> "Path | PurePosixPath":
         """The working directory of the underlying environment."""
         return self._workdir
 
-    async def schemas(self, context: "Context") -> list:
+    async def schemas(self, context: "Context") -> list:  # type: ignore[type-arg]
         return await self._tool.schemas(context)
 
     def register(

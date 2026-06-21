@@ -10,7 +10,6 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Protocol, runtime_checkable
 
-from ..doc_utils import export_module
 from ..events.base_event import BaseEvent
 
 __all__ = ("IOStream", "InputStream", "OutputStream")
@@ -19,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
-@export_module("autogen.io")
 class OutputStream(Protocol):
     def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
         """Print data to the output stream.
@@ -42,7 +40,6 @@ class OutputStream(Protocol):
 
 
 @runtime_checkable
-@export_module("autogen.io")
 class InputStream(Protocol):
     def input(self, prompt: str = "", *, password: bool = False) -> str:
         """Read a line from the input stream.
@@ -59,7 +56,6 @@ class InputStream(Protocol):
 
 
 @runtime_checkable
-@export_module("autogen.io")
 class AsyncInputStream(Protocol):
     async def input(self, prompt: str = "", *, password: bool = False) -> str:
         """Read a line from the input stream.
@@ -76,13 +72,11 @@ class AsyncInputStream(Protocol):
 
 
 @runtime_checkable
-@export_module("autogen.io")
 class IOStreamProtocol(InputStream, OutputStream, Protocol):
     """A protocol for input/output streams."""
 
 
 @runtime_checkable
-@export_module("autogen.io")
 class AsyncIOStreamProtocol(AsyncInputStream, OutputStream, Protocol):
     """A protocol for input/output streams."""
 
@@ -90,7 +84,6 @@ class AsyncIOStreamProtocol(AsyncInputStream, OutputStream, Protocol):
 iostream_union = IOStreamProtocol | AsyncIOStreamProtocol
 
 
-@export_module("autogen.io")
 class IOStream:
     """A protocol for input/output streams."""
 

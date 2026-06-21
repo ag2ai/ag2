@@ -10,14 +10,12 @@ from typing import Any, Literal
 from termcolor import colored
 
 from .... import GroupChat, GroupChatManager, UserProxyAgent
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ...conversable_agent import ConversableAgent
 from .agent_builder import AgentBuilder
 from .tool_retriever import ToolBuilder, format_ag2_tool, get_full_tool_description
 
 
-@export_module("autogen.agentchat.contrib.captainagent")
 class CaptainAgent(ConversableAgent):
     """(In preview) Captain agent, designed to solve a task with an agent or a group of agents."""
 
@@ -155,7 +153,7 @@ Note that the previous experts will forget everything after you obtain the respo
         system_message (str): system message for the ChatCompletion inference.\n
             Please override this attribute if you want to reprogram the agent.\n
         llm_config (LLMConfig or dict or False): llm inference configuration.\n
-            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) for available options.\n
+            Please refer to `OpenAIWrapper.create` for available options.\n
         is_termination_msg (function): a function that takes a message in the form of a dictionary\n
             and returns a boolean value indicating if this received message is a termination message.\n
             The dict can contain the following keys: "content", "role", "name", "function_call".\n
@@ -340,7 +338,7 @@ Collect information from the general task, follow the suggestions from manager t
             - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
         llm_config (LLMConfig or dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)
+            Please refer to `OpenAIWrapper.create`
             for available options.
             Default to false, which disables llm-based auto reply.
         system_message (str or List): system message for ChatCompletion inference.

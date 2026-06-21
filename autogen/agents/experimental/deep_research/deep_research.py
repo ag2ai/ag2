@@ -5,14 +5,12 @@
 from typing import Any
 
 from .... import ConversableAgent
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ....tools.experimental import DeepResearchTool
 
 __all__ = ["DeepResearchAgent"]
 
 
-@export_module("autogen.agents.experimental")
 class DeepResearchAgent(ConversableAgent):
     """An agent that performs deep research tasks."""
 

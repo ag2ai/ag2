@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from autogen.beta.exceptions import SkillInstallError
-from autogen.beta.tools.skills.local_skills.loader import SkillLoader, parse_frontmatter
+from autogen.beta.tools.skills.runtime.local.loader import SkillLoader, parse_frontmatter
 from autogen.beta.tools.skills.skill_types import SkillMetadata
 
 _EXCLUDE_NAMES = frozenset({".git", ".env", "__pycache__", ".DS_Store", "node_modules"})
@@ -64,7 +64,7 @@ def extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
 
     Supports multiple monorepo layouts (with or without a ``skills/`` subdir),
     fuzzy matching by SKILL.md ``name`` frontmatter, and standalone repos.
-    Returns validated :class:`~autogen.beta.tools.local_skills.loader.SkillMetadata`
+    Returns validated :class:`~autogen.beta.tools.skills.skill_types.SkillMetadata`
     for the extracted skill.
 
     Raises:
@@ -121,8 +121,6 @@ def extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
         meta = SkillMetadata(
             name=skill_name,
             description=fm_str.get("description") or "",
-            path=final_dest,
-            has_scripts=(final_dest / "scripts").is_dir(),
             version=fm_str.get("version") or None,
             license=fm_str.get("license") or None,
             compatibility=fm_str.get("compatibility") or None,
@@ -133,12 +131,14 @@ def extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
 
 def format_install_result(meta: SkillMetadata, install_dir: Path) -> str:
     """Build a human-readable install summary from skill metadata."""
-    lines = [f"Installed: {meta.name} \u2192 {install_dir / meta.name}/"]
+    skill_dir = install_dir / meta.name
+    lines = [f"Installed: {meta.name} \u2192 {skill_dir}/"]
     lines.append(f"Description: {meta.description}")
     if meta.version:
         lines.append(f"Version: {meta.version}")
-    if meta.has_scripts:
-        script_names = sorted(p.name for p in (meta.path / "scripts").iterdir() if p.is_file())
+    scripts_dir = skill_dir / "scripts"
+    if scripts_dir.is_dir():
+        script_names = sorted(p.name for p in scripts_dir.iterdir() if p.is_file())
         if script_names:
             lines.append(f"Scripts: {', '.join(script_names)}")
     lines.append(f'Use load_skill("{meta.name}") to read full instructions.')

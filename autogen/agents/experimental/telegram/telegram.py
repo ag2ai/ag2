@@ -5,13 +5,11 @@
 from typing import Any
 
 from .... import ConversableAgent
-from ....doc_utils import export_module
 from ....tools.experimental import TelegramRetrieveTool, TelegramSendTool
 
 __all__ = ["TelegramAgent"]
 
 
-@export_module("autogen.agents.experimental")
 class TelegramAgent(ConversableAgent):
     """An agent that can send messages and retrieve messages on Telegram."""
 

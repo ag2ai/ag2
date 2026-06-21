@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from a2a.types import Task, TaskState
+from a2a.utils.constants import PROTOCOL_VERSION_1_0
 
 
 class A2AError(Exception):
@@ -18,6 +19,29 @@ class A2AClientToolsNotSupportedError(A2AError):
 
 class A2AInvalidCardError(A2AError):
     """Raised when an ``AgentCard`` is missing data required to connect."""
+
+
+class A2AIncompatibleProtocolVersionError(A2AError):
+    """Raised when the interface AG2 selected on an ``AgentCard`` advertises an
+    A2A protocol version older than 1.0.
+
+    The 1.0 protocol is not backwards-compatible with the earlier 0.x drafts
+    (see https://a2a-protocol.org/latest/announcing-1.0/), so AG2 refuses to
+    connect rather than silently negotiating a session that fails later with
+    opaque RPC-level errors. A missing or unparsable ``protocol_version`` is
+    treated as compatible — it is an optional field and the A2A SDK itself
+    defaults it to the current version.
+    """
+
+    def __init__(self, *, url: str, transport: str, protocol_version: str) -> None:
+        self.url = url
+        self.transport = transport
+        self.protocol_version = protocol_version
+        super().__init__(
+            f"AgentCard at {url!r} declares an incompatible A2A protocol version "
+            f"{protocol_version!r} for transport {transport!r}; AG2 requires "
+            f">= {PROTOCOL_VERSION_1_0} (see https://a2a-protocol.org/latest/announcing-1.0/)."
+        )
 
 
 class A2AReconnectError(A2AError):

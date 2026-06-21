@@ -10,10 +10,10 @@ from pydantic import Field
 
 from autogen.beta.exceptions import SkillDownloadError, SkillInstallError
 from autogen.beta.middleware import ToolMiddleware
-from autogen.beta.tools.final import Toolkit, tool
+from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.skills.local_skills import SkillsToolkit
 from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
+from autogen.beta.tools.skills.toolkit import SkillsToolkit
 
 from .client import SkillsClient
 from .config import SkillsClientConfig
@@ -74,34 +74,42 @@ class SkillSearchToolkit(SkillsToolkit):
         agent = Agent("a", config=config, tools=[skills.search_skills(), skills.install_skill()])
     """
 
-    __slots__ = ("_client", "_lock")
+    __slots__ = ("_client", "_lock", "_runtime")
 
     def __init__(
         self,
         runtime: SkillRuntime | str | os.PathLike[str] | None = None,
         *,
         client: SkillsClientConfig | None = None,
+        name: str = "skill_search_toolkit",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        if runtime is not None:
-            self._runtime: SkillRuntime = LocalRuntime.ensure_runtime(runtime)
-        else:
-            self._runtime = LocalRuntime()
+        # Search/install/remove target a single runtime, so resolve it here and
+        # hand that same instance to the multi-runtime base toolkit.
+        resolved = LocalRuntime() if runtime is None else LocalRuntime.ensure_runtime(runtime)
+        super().__init__(
+            resolved,
+            name=name,
+            middleware=middleware,
+        )
 
+        self._runtime = resolved
         self._client = SkillsClient(client)
         self._lock = SkillsLock(self._runtime.lock_dir / "skills-lock.json")
 
-        Toolkit.__init__(
-            self,
-            self.list_skills(),
-            self.load_skill(),
-            self.run_skill_script(),
+        for t in (
             self.search_skills(),
             self.install_skill(),
             self.remove_skill(),
-            name="local_skills_toolkit",
-            middleware=middleware,
-        )
+        ):
+            self._add_tool(t)
+
+    def _name_annotation(self, description: str) -> object:
+        # This toolkit installs skills at runtime, so the activation tools must
+        # accept ANY skill name. The base toolkit pins `name` to a Literal of the
+        # skills discovered at construction time, which would reject a freshly
+        # installed one — so override that to an unconstrained string.
+        return Annotated[str, Field(description=description)]
 
     def search_skills(
         self,

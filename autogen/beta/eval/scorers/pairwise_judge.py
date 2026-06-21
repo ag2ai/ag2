@@ -53,6 +53,7 @@ def pairwise_judge(
     criterion: str,
     key: str,
     include_trace: bool = False,
+    include_reference: bool = True,
     retries: int = 1,
     swap: bool = True,
     middleware: Iterable[MiddlewareFactory] = (),
@@ -65,6 +66,11 @@ def pairwise_judge(
         criterion: The single standard to compare on, in plain English.
         key: Result column this comparator reports under.
         include_trace: Render each response's tool-call trajectory into the prompt.
+        include_reference: When ``True`` (default), render the reference answer
+            into the prompt as a ``## Reference`` section whenever
+            ``reference_outputs`` is present. Set ``False`` for dimensions that must
+            judge the responses on their own (e.g. faithfulness / grounding), so the
+            golden answer cannot leak into the comparison.
         retries: ``content()`` re-asks on schema-validation failure.
         swap: Run the dual-order position-swap (default, recommended). When
             ``False``, a single call is used (faster, position-biased).
@@ -77,16 +83,21 @@ def pairwise_judge(
         response_schema=PairwiseVerdict,
         middleware=middleware,
     )
-    return _PairwiseJudge(judge, key, include_trace=include_trace, retries=retries, swap=swap)
+    return _PairwiseJudge(
+        judge, key, include_trace=include_trace, include_reference=include_reference, retries=retries, swap=swap
+    )
 
 
 class _PairwiseJudge:
     """A :class:`PairwiseComparator` backed by a judge :class:`Agent`."""
 
-    def __init__(self, judge: Agent, key: str, *, include_trace: bool, retries: int, swap: bool) -> None:
+    def __init__(
+        self, judge: Agent, key: str, *, include_trace: bool, include_reference: bool, retries: int, swap: bool
+    ) -> None:
         self._judge = judge
         self.key = key
         self._include_trace = include_trace
+        self._include_reference = include_reference
         self._retries = retries
         self._swap = swap
 
@@ -125,7 +136,16 @@ class _PairwiseJudge:
         trace_first: Trace,
         trace_second: Trace,
     ) -> PairwiseVerdict:
-        prompt = _render(task, reference_outputs, first, second, trace_first, trace_second, self._include_trace)
+        prompt = _render(
+            task,
+            reference_outputs,
+            first,
+            second,
+            trace_first,
+            trace_second,
+            self._include_trace,
+            self._include_reference,
+        )
         reply = await self._judge.ask(prompt)
         verdict = await reply.content(retries=self._retries)
         return (
@@ -165,12 +185,13 @@ def _render(
     trace_first: Trace,
     trace_second: Trace,
     include_trace: bool,
+    include_reference: bool,
 ) -> str:
     sections: list[str] = []
     task_input = task.inputs.get("input")
     if task_input is not None:
         sections.append(f"## Task\n{task_input}")
-    if reference_outputs:
+    if include_reference and reference_outputs:
         sections.append(f"## Reference\n{json.dumps(reference_outputs)}")
     sections.append(f"## Response 1\n{first}")
     if include_trace:
