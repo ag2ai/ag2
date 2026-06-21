@@ -31,6 +31,14 @@ def _write_script_skill(base: Path, name: str, script_body: str | None = None) -
     return base
 
 
+def _symlink_or_skip(link: Path, target: Path) -> None:
+    """Create ``link`` -> ``target``, skipping the test where symlinks are unsupported."""
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError):  # pragma: no cover - e.g. Windows without privilege
+        pytest.skip("symlinks are not supported on this platform")
+
+
 @pytest.mark.asyncio
 async def test_run_script_routes_to_last_runtime(tmp_path: Path, context: Context) -> None:
     # On a name clash, execution routes to the last runtime (project > global).
@@ -178,6 +186,57 @@ async def test_read_skill_resource_rejects_path_traversal(skill_tree: Path, cont
 
     args = json.dumps({"name": "react-best-practices", "resource": "../markdown-guide/SKILL.md"})
     result = await read_tool(ToolCallEvent(name="read_skill_resource", arguments=args), context)
+
+    assert isinstance(result, ToolErrorEvent)
+
+
+@pytest.mark.asyncio
+async def test_read_skill_resource_rejects_symlinked_resource_escape(skill_tree: Path, context: Context) -> None:
+    # A symlinked resource is *discovered* (Path.is_file follows the link, so it
+    # lands in the descriptor list), so the membership check alone passes. The
+    # resolved target escapes the skill directory, so the read must still be
+    # rejected — otherwise a bundled symlink leaks arbitrary files.
+    secret = skill_tree / "secret.txt"  # outside any skill directory
+    secret.write_text("TOP SECRET\n")
+    _symlink_or_skip(skill_tree / "react-best-practices" / "leak.txt", secret)
+
+    read_tool = SkillsToolkit(LocalRuntime(dir=skill_tree)).read_skill_resource()
+    args = json.dumps({"name": "react-best-practices", "resource": "leak.txt"})
+    result = await read_tool(ToolCallEvent(name="read_skill_resource", arguments=args), context)
+
+    assert isinstance(result, ToolErrorEvent)
+
+
+@pytest.mark.asyncio
+async def test_read_skill_resource_allows_in_bounds_symlink(skill_tree: Path, context: Context) -> None:
+    # The guard rejects *escapes*, not symlinks per se: a symlink whose target
+    # resolves back inside the skill directory is still served.
+    _symlink_or_skip(
+        skill_tree / "react-best-practices" / "alias.md",
+        skill_tree / "react-best-practices" / "references" / "guide.md",
+    )
+
+    read_tool = SkillsToolkit(LocalRuntime(dir=skill_tree)).read_skill_resource()
+    args = json.dumps({"name": "react-best-practices", "resource": "alias.md"})
+    result = await read_tool(ToolCallEvent(name="read_skill_resource", arguments=args), context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    assert "Detailed React guidance." in result.result.parts[0].content
+
+
+@pytest.mark.asyncio
+async def test_run_skill_script_rejects_symlinked_script_escape(tmp_path: Path, context: Context) -> None:
+    # Mirror of the resource escape for execution: a symlinked script under
+    # scripts/ is discovered and passes membership, but resolves outside the
+    # scripts directory, so it must be rejected rather than executed.
+    skills_root = _write_script_skill(tmp_path / "skills", "evil-skill", "echo SAFE\n")
+    outside = tmp_path / "outside.sh"
+    outside.write_text("echo PWNED\n")
+    _symlink_or_skip(skills_root / "evil-skill" / "scripts" / "evil.sh", outside)
+
+    run_tool = SkillsToolkit(LocalRuntime(dir=skills_root)).run_skill_script()
+    args = json.dumps({"name": "evil-skill", "script": "evil.sh"})
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
 
     assert isinstance(result, ToolErrorEvent)
 

@@ -114,15 +114,12 @@ class LocalRuntime(SkillRuntime):
 
         *context* is part of the runtime protocol (used by callable-backed runtimes
         for dependency injection); a filesystem read ignores it.
-
-        The model can only address a resource that discovery actually listed, so
-        path traversal is structurally impossible — no separate guard needed.
         """
         skill = self._loader.get_skill(name)
-        if resource not in {r.name for r in skill.resources}:
-            skill_dir = self._loader.get_path(name)
+        skill_dir = self._loader.get_path(name)
+        resolved = _resolve_within(skill_dir / resource, skill_dir)
+        if resource not in {r.name for r in skill.resources} or resolved is None:
             raise FileNotFoundError(f"resource {resource!r} not found in {skill_dir}")
-        resolved = self._loader.get_path(name) / resource
         text = resolved.read_text(encoding="utf-8", errors="replace")
         if len(text) > _RESOURCE_READ_CAP:
             return text[:_RESOURCE_READ_CAP] + "\n<!-- resource truncated -->"
@@ -145,11 +142,10 @@ class LocalRuntime(SkillRuntime):
                 "named arguments (an object) are only supported for in-process scripts"
             )
         skill = self._loader.get_skill(name)
-        if script not in {s.name for s in skill.scripts}:
-            scripts_dir = self._loader.get_path(name) / "scripts"
-            raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
         scripts_dir = self._loader.get_path(name) / "scripts"
-        resolved_script = scripts_dir / script
+        resolved_script = _resolve_within(scripts_dir / script, scripts_dir)
+        if script not in {s.name for s in skill.scripts} or resolved_script is None:
+            raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
         command = _script_command(resolved_script)
         if args:
             command.extend(args)
@@ -218,6 +214,16 @@ class LocalRuntime(SkillRuntime):
             blocked=self.blocked or None,
             timeout=self.timeout,
         )
+
+
+def _resolve_within(path: Path, base: Path) -> Path | None:
+    """Resolve *path* (following symlinks) and return it only when it is a file
+    that stays inside *base*; otherwise return ``None``.
+    """
+    resolved = path.resolve()
+    if not resolved.is_file() or not resolved.is_relative_to(base.resolve()):
+        return None
+    return resolved
 
 
 def _script_command(resolved_script: Path) -> list[str]:
