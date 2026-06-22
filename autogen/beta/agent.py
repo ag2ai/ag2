@@ -845,10 +845,9 @@ class Agent(PluginTarget, Generic[TResult]):
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
-        # ``ask`` is the blocking degenerate case of ``run``: open a run, await
-        # its result, and let the block close (the turn is already done, so
-        # cancel-on-exit is a no-op).
-        async with self._spawn_run(
+        # ``ask`` is the blocking degenerate case of ``run``: open a run, drive
+        # it to its result, and let the scope close.
+        async with self._open_run(
             *msg,
             stream=stream,
             dependencies=dependencies,
@@ -943,14 +942,14 @@ class Agent(PluginTarget, Generic[TResult]):
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentRun[Any, Any]":
-        """Non-blocking counterpart to ``ask``: start a turn in the background.
+        """Observable counterpart to ``ask``: open a turn scope you can watch.
 
-        Returns an :class:`AgentRun` async context manager. Entering it launches
-        the turn and yields a handle for live observation and the final reply;
-        the turn is scoped to the block (cancel-on-exit). Mirrors ``ask``'s
-        signature.
+        Returns an :class:`AgentRun` async context manager. Entering it opens the
+        turn scope (subscribers live) and yields a handle; the turn advances when
+        ``result()`` is awaited, with events flowing through ``run.stream`` as it
+        runs. Mirrors ``ask``'s signature.
         """
-        return self._spawn_run(
+        return self._open_run(
             *msg,
             stream=stream,
             dependencies=dependencies,
@@ -964,7 +963,7 @@ class Agent(PluginTarget, Generic[TResult]):
             hitl_hook=hitl_hook,
         )
 
-    def _spawn_run(
+    def _open_run(
         self,
         *msg: SendableMessage | Input,
         stream: Stream | None,
