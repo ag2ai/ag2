@@ -276,8 +276,9 @@ class PluginTarget(PromptObserverMixin):
         return func
 
     def add_tool(self, t: Callable[..., Any] | Tool) -> Self:
-        """Bind a tool to this target's provider immediately (eager)."""
-        self.tools.append(FunctionTool.ensure_tool(t, provider=self.dependency_provider))
+        """Bind a tool to this target (eager). The provider is resolved at call
+        time from the live context, not stored on the tool."""
+        self.tools.append(FunctionTool.ensure_tool(t))
         return self
 
     def _init_target(

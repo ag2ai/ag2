@@ -2,10 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .plugin import SkillPlugin
-from .toolkit import SkillsToolkit
+from .runtime import LocalRuntime
 
-__all__ = (
-    "SkillPlugin",
-    "SkillsToolkit",
-)
+__all__ = ("LocalRuntime",)

@@ -10,11 +10,15 @@ from pathlib import Path
 import yaml
 
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
-from autogen.beta.tools.skills.skill_types import SkillMetadata
+from autogen.beta.tools.skills.skill_types import Resource, Script, Skill, SkillMetadata
 
 logger = logging.getLogger(__name__)
 
 _UNQUOTED_COLON_RE = re.compile(r"^(\s*[A-Za-z0-9_-]+:\s+)(.*)$")
+
+# Cap on the number of bundled resources listed per skill. Discovery stops
+# scanning once this many are found and flags the skill as truncated.
+_RESOURCE_CAP = 50
 
 
 def parse_frontmatter(text: str) -> dict[str, object]:
@@ -109,7 +113,9 @@ class SkillLoader:
     ) -> None:
         self._paths = [Path(p) for p in (paths or self.DEFAULT_PATHS)]
         self._strict = strict
-        self._cache: dict[str, SkillMetadata] | None = None
+        # name -> (descriptor, skill directory). The directory is kept here, not
+        # on the Skill, so the descriptor stays a pure (path-free) value object.
+        self._cache: dict[str, tuple[Skill, Path]] | None = None
 
     def invalidate(self) -> None:
         """Clear the cached skill metadata.
@@ -118,8 +124,8 @@ class SkillLoader:
         """
         self._cache = None
 
-    def discover(self) -> list[SkillMetadata]:
-        """Scan all configured paths and return metadata for every skill found.
+    def discover(self) -> list[Skill]:
+        """Scan all configured paths and return a :class:`Skill` for each found.
 
         Results are cached after the first scan.  Call :meth:`invalidate` to
         force a rescan (e.g. after installing or removing a skill).
@@ -133,10 +139,12 @@ class SkillLoader:
         the remaining skills still load — a single bad skill never aborts the
         whole scan.
         """
-        if self._cache is not None:
-            return sorted(self._cache.values(), key=lambda m: m.name)
+        if self._cache is None:
+            self._cache = self._scan()
+        return [skill for skill, _ in sorted(self._cache.values(), key=lambda e: e[0].name)]
 
-        seen: dict[str, SkillMetadata] = {}
+    def _scan(self) -> dict[str, tuple[Skill, Path]]:
+        seen: dict[str, tuple[Skill, Path]] = {}
         for base in self._paths:
             if not base.exists():
                 continue
@@ -147,25 +155,24 @@ class SkillLoader:
                 if not skill_md.exists():
                     continue
                 try:
-                    meta = self._load_metadata(skill_dir, skill_md)
+                    skill = self._load_skill(skill_dir, skill_md)
                 except (InvalidSkillError, OSError, yaml.YAMLError) as exc:
                     if self._strict:
                         raise
                     logger.warning("Skipping skill %r: %s", skill_dir.name, exc)
                     continue
-                if meta.name in seen:
+                if skill.name in seen:
                     logger.warning(
                         "Skill name %r in %s is shadowed by a higher-priority skill; ignoring",
-                        meta.name,
+                        skill.name,
                         skill_dir,
                     )
                     continue
-                seen[meta.name] = meta
-        self._cache = seen
-        return sorted(seen.values(), key=lambda m: m.name)
+                seen[skill.name] = (skill, skill_dir)
+        return seen
 
-    def _load_metadata(self, skill_dir: Path, skill_md: Path) -> SkillMetadata:
-        """Build and validate the metadata for one skill.
+    def _load_skill(self, skill_dir: Path, skill_md: Path) -> Skill:
+        """Build and validate the :class:`Skill` for one directory.
 
         Strict mode raises :class:`InvalidSkillError` on any spec violation (the
         install path relies on this). Lenient mode follows the agentskills.io
@@ -180,8 +187,6 @@ class SkillLoader:
         meta = SkillMetadata(
             name=fm.get("name") or skill_dir.name,
             description=fm.get("description") or "",
-            path=skill_dir,
-            has_scripts=(skill_dir / "scripts").is_dir(),
             version=fm.get("version") or None,
             license=fm.get("license") or None,
             compatibility=fm.get("compatibility") or None,
@@ -190,7 +195,14 @@ class SkillLoader:
             self.validate_skill_metadata(skill_dir, fm_raw, meta)
         else:
             self._validate_lenient(skill_dir, meta)
-        return meta
+        resources, truncated = _list_resources(skill_dir)
+        return Skill(
+            metadata=meta,
+            scripts=_list_scripts(skill_dir),
+            resources=resources,
+            resources_truncated=truncated,
+            location=str(skill_md),
+        )
 
     def _validate_lenient(self, skill_dir: Path, meta: SkillMetadata) -> None:
         """Warn on cosmetic issues, raise only when the skill is unusable.
@@ -230,15 +242,30 @@ class SkillLoader:
         """
         return self._find_dir(name)
 
+    def get_skill(self, name: str) -> Skill:
+        """Return the :class:`Skill` descriptor by name.
+
+        Raises:
+            SkillNotFoundError: if no skill with that name is found.
+        """
+        if self._cache is None:
+            self._cache = self._scan()
+        entry = self._cache.get(name)
+        if entry is None:
+            raise SkillNotFoundError(f"Skill {name!r} not found in any configured path")
+        return entry[0]
+
     def _find_dir(self, name: str) -> Path:
         if not name.strip():
             raise InvalidSkillNameError("skill name must not be empty")
         if "/" in name or "\\" in name:
             raise InvalidSkillNameError("skill name must not contain path separators")
-        for meta in self.discover():
-            if meta.name == name:
-                return meta.path
-        raise SkillNotFoundError(f"Skill {name!r} not found in any configured path")
+        if self._cache is None:
+            self._cache = self._scan()
+        entry = self._cache.get(name)
+        if entry is None:
+            raise SkillNotFoundError(f"Skill {name!r} not found in any configured path")
+        return entry[1]
 
     @classmethod
     def validate_skill_metadata(cls, skill_dir: Path, fm: dict[str, object], meta: SkillMetadata) -> None:
@@ -271,3 +298,38 @@ class SkillLoader:
         allowed_tools = fm.get("allowed-tools")
         if allowed_tools is not None and not isinstance(allowed_tools, str):
             raise InvalidSkillError(f"Invalid allowed-tools for {name!r}: expected string")
+
+
+def _list_scripts(skill_dir: Path) -> tuple[Script, ...]:
+    """List executable files under ``scripts/`` as :class:`Script` descriptors.
+
+    Names are paths relative to ``scripts/`` (posix). Returns an empty tuple
+    when the skill has no ``scripts/`` directory.
+    """
+    scripts_dir = skill_dir / "scripts"
+    if not scripts_dir.is_dir():
+        return ()
+    return tuple(
+        Script(name=p.relative_to(scripts_dir).as_posix()) for p in sorted(scripts_dir.rglob("*")) if p.is_file()
+    )
+
+
+def _list_resources(skill_dir: Path, *, cap: int = _RESOURCE_CAP) -> tuple[tuple[Resource, ...], bool]:
+    """List bundled resources as :class:`Resource` descriptors.
+
+    A resource is any file under *skill_dir* that is not ``SKILL.md`` and not
+    under ``scripts/``. Names are paths relative to the skill directory (posix).
+    Returns ``(resources, truncated)``; scanning stops once *cap* resources are
+    found and flags ``truncated``.
+    """
+    scripts_dir = skill_dir / "scripts"
+    out: list[Resource] = []
+    truncated = False
+    for p in sorted(skill_dir.rglob("*")):
+        if not p.is_file() or p.name == "SKILL.md" or p.is_relative_to(scripts_dir):
+            continue
+        if len(out) >= cap:
+            truncated = True
+            break
+        out.append(Resource(name=p.relative_to(skill_dir).as_posix()))
+    return tuple(out), truncated

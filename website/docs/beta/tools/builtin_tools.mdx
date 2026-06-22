@@ -203,7 +203,7 @@ agent = Agent(
 
 ## Image Generation
 
-Instructs the model to generate images inline during a conversation. Generated images are returned via `#!python reply.images`.
+`ImageGenerationTool` instructs the model to generate images inline during a conversation. Generated images are returned via `#!python reply.files`.
 
 ```python linenums="1"
 from autogen.beta import Agent
@@ -224,20 +224,12 @@ agent = Agent(
 )
 
 reply = await agent.ask("Generate a logo for a coffee shop.")
-images: list[bytes] = reply.images
+for image in reply.files:
+    print(image.metadata.get("media_type"), len(image.data))
 ```
 
-| Parameter | Description |
-| :--- | :--- |
-| `quality` | `"low"`, `"medium"`, `"high"`, or `"auto"` |
-| `size` | e.g. `"1024x1024"`, `"1536x1024"`, or `"auto"` |
-| `background` | `"transparent"`, `"opaque"`, or `"auto"` |
-| `output_format` | `"png"`, `"jpeg"`, or `"webp"` |
-| `output_compression` | 0–100, for jpeg/webp only |
-| `partial_images` | 1–3, number of partial images to stream |
-
 !!! note
-    `ImageGenerationTool` is only supported by OpenAI (Responses API). Using it with other providers will raise an error.
+    `ImageGenerationTool` is only supported by OpenAI (Responses API). Gemini generates images through a response modality rather than a tool. See [Image Generation](/docs/beta/multimodal/image_generation/) for the full guide covering both providers.
 
 ## Anthropic Tool Versions
 

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from autogen.import_utils import optional_import_block, require_optional_import
 
+from .llms_txt import generate_llms_txt
 from .notebook_processor import (
     create_base_argument_parser,
     process_notebooks_core,
@@ -1279,6 +1280,9 @@ def main(force: bool) -> None:
 
     process_blog_files(mkdocs_output_dir, authors_yml_path, snippets_dir_path)
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
+
+    # Generate Beta-scoped llms.txt / llms-full.txt (https://llmstxt.org/) at the site root.
+    generate_llms_txt(website_dir, mkdocs_docs_dir)
 
     if args.website_build_directory is None:
         args.website_build_directory = mkdocs_output_dir

@@ -420,6 +420,43 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
 
 
 @pytest.mark.asyncio
+async def test_delegate_to_self_returns_actionable_error() -> None:
+    """Delegating to one's own name fails fast with a clear message.
+
+    Regression for #2991: a consulting channel needs a respondent distinct
+    from the initiator. When the caller delegates to itself the single
+    participant collapses both roles, and the consulting adapter rejects the
+    open with the opaque ``consulting requires exactly one respondent`` —
+    surfacing to the model as a cryptic error and, in multi-agent pipelines,
+    a hang. ``delegate`` must short-circuit with an actionable error instead.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    from autogen.beta.network.policies import AGENT_CLIENT_DEP
+
+    alice_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+
+    delegate_tool = make_delegate_tool(alice)
+    result = await _invoke(
+        delegate_tool,
+        {"target": "alice", "prompt": "answer your own question"},
+        dependencies={AGENT_CLIENT_DEP: alice},
+    )
+
+    assert "cannot delegate to self" in result
+    # The opaque adapter-level error must never reach the caller.
+    assert "exactly one respondent" not in result
+    # No channel should have been opened for the doomed self-consult.
+    assert await hub.list_channels(state=ChannelState.ACTIVE) == []
+
+    await alice_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
 async def test_delegate_fails_fast_when_channel_closes_before_reply() -> None:
     """If the consulting channel closes / expires before the target replies,
     delegate returns immediately with an error — not after the 300s timeout."""

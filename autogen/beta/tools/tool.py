@@ -6,8 +6,6 @@ from abc import ABC
 from collections.abc import Iterable
 from contextlib import AsyncExitStack, ExitStack
 
-from fast_depends import Provider
-
 from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware
 
@@ -16,9 +14,6 @@ from .schemas import ToolSchema
 
 class Tool(ABC):
     name: str
-
-    def set_provider(self, provider: Provider) -> None:
-        pass
 
     async def schemas(self, context: "Context") -> Iterable[ToolSchema]: ...
 

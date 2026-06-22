@@ -6,8 +6,6 @@ from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
 from typing import Any, overload
 
-from fast_depends import Provider
-
 from autogen.beta.annotations import Context
 from autogen.beta.exceptions import ToolConflictError
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
@@ -40,10 +38,6 @@ class Toolkit(Tool):
     @property
     def tools(self) -> tuple[Tool, ...]:
         return tuple(self._tools.values())
-
-    def set_provider(self, provider: Provider) -> None:
-        for t in self.tools:
-            t.set_provider(provider)
 
     def _add_tool(self, tool: Tool | Callable[..., Any], *, unsafe: bool = False) -> None:
         t = FunctionTool.ensure_tool(tool).with_middleware(*self._middleware)

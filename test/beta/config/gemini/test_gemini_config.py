@@ -146,6 +146,61 @@ def test_credentials_none_passes_through(mock_from_file, mock_client) -> None:
     assert kwargs["credentials"] is None
 
 
+class TestResponseModalities:
+    def test_default_omits_response_modalities(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-flash-image")
+        assert "response_modalities" not in config._build_create_config()
+
+    def test_response_modalities_passes_through(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-flash-image", response_modalities=["TEXT", "IMAGE"])
+        assert config._build_create_config()["response_modalities"] == ["TEXT", "IMAGE"]
+
+    def test_copy_overrides_response_modalities(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-flash-image")
+        copied = config.copy(response_modalities=["TEXT", "IMAGE"])
+
+        assert copied.response_modalities == ["TEXT", "IMAGE"]
+        assert config.response_modalities is None
+
+    def test_vertex_response_modalities_passes_through(self) -> None:
+        config = VertexAIConfig(
+            model="gemini-3.1-flash-image",
+            project="proj",
+            location="us-central1",
+            response_modalities=["TEXT", "IMAGE"],
+        )
+        assert config._build_create_config()["response_modalities"] == ["TEXT", "IMAGE"]
+
+
+class TestImageConfig:
+    def test_default_omits_image_config(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-flash-image")
+        assert "image_config" not in config._build_create_config()
+
+    def test_image_config_passes_through(self) -> None:
+        image_config = types.ImageConfig(aspect_ratio="16:9", image_size="2K")
+        config = GeminiConfig(model="gemini-3.1-flash-image", image_config=image_config)
+        assert config._build_create_config()["image_config"] is image_config
+
+    def test_copy_overrides_image_config(self) -> None:
+        image_config = types.ImageConfig(aspect_ratio="1:1")
+        config = GeminiConfig(model="gemini-3.1-flash-image")
+        copied = config.copy(image_config=image_config)
+
+        assert copied.image_config is image_config
+        assert config.image_config is None
+
+    def test_vertex_image_config_passes_through(self) -> None:
+        image_config = types.ImageConfig(aspect_ratio="16:9", image_size="2K")
+        config = VertexAIConfig(
+            model="gemini-3.1-flash-image",
+            project="proj",
+            location="us-central1",
+            image_config=image_config,
+        )
+        assert config._build_create_config()["image_config"] is image_config
+
+
 class TestThinkingConfig:
     def test_default_omits_thinking_config(self) -> None:
         config = GeminiConfig(model="gemini-3.1-pro-preview")
