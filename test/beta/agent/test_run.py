@@ -23,9 +23,22 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.beta import Agent, tool
-from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent
+from autogen.beta.events import (
+    BaseEvent,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from autogen.beta.stream import MemoryStream
-from autogen.beta.testing import TestConfig
+from autogen.beta.testing import TestConfig, TrackingConfig
+
+
+def _texts(event: BaseEvent) -> list[str]:
+    """Text parts of a ``ModelRequest``-like event (empty for anything else)."""
+    return [p.content for p in getattr(event, "parts", []) if isinstance(p, TextInput)]
 
 
 @pytest.mark.asyncio
@@ -163,6 +176,50 @@ async def test_turn_never_runs_without_result() -> None:
 
     events = await stream.history.get_events()
     assert not any(isinstance(e, ModelResponse) for e in events), "an undriven run must not call the model"
+
+
+@pytest.mark.asyncio
+class TestEnqueue:
+    async def test_forwards_to_stream_inbox(self) -> None:
+        agent = Agent("runner", config=TestConfig("ok"))
+
+        async with agent.run("Hi!") as run:
+            run.enqueue("queued")
+            via_handle = list(run.stream.pending_messages)
+            await run.result()
+
+        assert via_handle == [ModelRequest.ensure_request(["queued"])]
+
+    async def test_before_result_merges_into_first_model_call(self) -> None:
+        config = TrackingConfig(TestConfig("answer"))
+        agent = Agent("runner", config=config)
+
+        async with agent.run("Hi!") as run:
+            run.enqueue("extra context")
+            result = await run.result()
+
+        first_seen = config.mock.call_args_list[0].args[0]
+        assert _texts(first_seen) == ["extra context", "Hi!"]
+        assert result.body == "answer"
+
+    async def test_during_turn_is_consumed_by_the_same_turn(self) -> None:
+        config = TrackingConfig(TestConfig(ToolCallEvent(name="ping", arguments="{}"), "r1", "r2", "r3"))
+        agent = Agent("runner", config=config, tools=[tool(lambda: "pong", name="ping")])
+
+        injected = False
+        async with agent.run("Hi!") as run:
+
+            @run.stream.where(ToolResultEvent).subscribe
+            async def inject(_event: BaseEvent) -> None:
+                nonlocal injected
+                if not injected:
+                    injected = True
+                    run.enqueue("injected message")
+
+            await run.result()
+
+        seen = [text for call in config.mock.call_args_list for text in _texts(call.args[0])]
+        assert "injected message" in seen, "a message enqueued mid-turn must reach a model call in that turn"
 
 
 @pytest.mark.asyncio

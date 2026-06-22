@@ -455,6 +455,18 @@ class AgentRun(Generic[TResult, TAgent]):
         """The stream the turn runs on — subscribe to it to observe the turn live."""
         return self.__context.stream
 
+    def enqueue(self, *content: SendableMessage | Input) -> None:
+        """Append a follow-up message to the turn's inbox (non-blocking).
+
+        Forwards to the stream inbox. The running turn drains it at its next or
+        final model call, so a message enqueued while the turn is driving is
+        consumed by that turn; one enqueued before ``result()`` merges into the
+        first model call; one enqueued after the turn completes waits for the
+        next turn on this stream. Safe to call from a stream subscriber (inline
+        during the drive) or a concurrent task — it only appends.
+        """
+        self.__context.enqueue(*content)
+
     async def __aenter__(self) -> "AgentRun[TResult, TAgent]":
         client = self.__client
         if client is None:
