@@ -1,0 +1,134 @@
+---
+title: RAG
+---
+
+!!! tip
+    Looking for an agent to handle this for you? Check out [DocAgent](../reference-agents/docagent/docagent-performance.md), which simplifies the RAG process by streamlining data retrieval and generation-making it faster and easier for you.
+
+Retrieval-Augmented Generation is a technique to improve LLM-generated responses by providing additional knowledge. This typically involves gathering the information and injecting it into an agent's system message for use by their LLM.
+
+There are a number of ways to incorporate RAG into your AG2 workflow and agents:
+- Use an AG2 reference agent, [DocAgent](../reference-agents/docagent/docagent-performance.md)
+- Add RAG capabilities to an agent
+- Incorporate context into an agent's system message (manually and automatically)
+
+## 1. DocAgent
+
+Use AG2's reference agent, [DocAgent](../reference-agents/docagent/docagent-performance.md), built specifically for RAG. It will take the hassle out of loading, parsing, storing, and querying documents/web pages.
+
+## 2. Add RAG capabilities to an agent
+
+AG2 allows you to add *capabilities* to agents and an example of a capability is RAG using a graph database.
+
+It only takes two steps to do this:
+1. Create the capability
+2. Add it to the agent
+
+See the notebooks associated with the capabilities below for walk-throughs.
+
+#### RAG Capability: Neo4j GraphRAG
+Based on AG2's base GraphRAG capability, this Neo4j GraphRAG capability allows the embedding and querying of information with a Neo4j graph database.
+
+See the [Using Neo4j's graph database with AG2 agents for Q&A notebook](../../use-cases/notebooks/notebooks/agentchat_graph_rag_neo4j.md).
+
+#### RAG Capability: FalkorDB GraphRAG
+Also based on AG2's base GraphRAG capability, this capability uses a FalkorDB GraphRAG database.
+
+See the [Trip planning with a FalkorDB GraphRAG agent using a Swarm notebook](../../use-cases/notebooks/notebooks/agentchat_groupchat_graphrag_trip_planner.md).
+
+!!! tip
+    If you need a capability for a different GraphRAG database, consider building a capability similar to these using our `GraphRagCapability` base class.
+
+## 3. Incorporating context into an Agent's system message
+
+ConversableAgent has a number of hooks that get run before an agent replies. You can utilise the `update_agent_state` hook to run a function that updates your agent's system message with some context before it goes to the LLM.
+
+Within the function use the `ConversableAgent.update_system_message` method to update the system message.
+
+Let’s walk through a simple example where we take a list of files from the current directory, include it in an agent’s system message, and ask an LLM to analyze or explain the files.
+
+We start with our imports, LLM configuration, and the system message template, which we'll inject the file listing in to.
+```python
+import os
+from typing import Any
+
+from autogen import ConversableAgent
+
+config_list = {"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]}
+
+base_system_message = "You are a helpful agent, answering questions about the files in a directory:\n{filelisting}"
+```
+
+Here's the function we'll attach to the hook, it gets all files in the current directory and updates the associated agent's system message accordingly.
+
+```python
+def give_agent_file_listing(agent: ConversableAgent, messages: list[dict[str, Any]]) -> None:
+    # Get the list of files in the current directory
+    files = os.listdir()
+
+    # Put them in a string
+    files_str = "\n".join(files)
+
+    # Use the system message template and update the agent's system message to include the file listing
+    agent.update_system_message(base_system_message.format(filelisting=files_str))
+```
+
+Now we create the agent and attach the hook.
+
+```python
+files_agent = ConversableAgent(
+    name="files_agent",
+    system_message="""You are a helpful agent, answering questions about the files in a directory.""",
+    llm_config=config_list,
+    )
+
+files_agent.register_hook(
+    hookable_method="update_agent_state",
+    hook=give_agent_file_listing,
+    )
+```
+
+Finally we create a human-in-the-loop agent and ask our `files_agent` about the files.
+
+```python
+human = ConversableAgent(
+    name="human",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=1,
+    )
+
+human.initiate_chat(
+    recipient=files_agent,
+    message="Tell me about the files in my directory.",
+    max_turns=1,
+    )
+```
+
+And we can see the LLM now knows about the files and directories in the current folder and is able to provide some information about them.
+
+```console
+human (to files_agent):
+
+Tell me about the files in my directory.
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+files_agent (to human):
+
+Certainly! Here's a brief explanation of each file and directory in your list:
+
+1. **.ssh**: Contains configuration files and keys related to the SSH protocol, which are used to securely log into remote systems.
+
+2. **.dotnet**: This directory is related to .NET and contains files and settings for .NET core and related development tools.
+
+3. **.config**: A directory commonly used to store user-level configuration files for applications.
+
+4. **.cache**: This directory is typically used to store cached data, which can improve the performance of the applications.
+
+5. **ag2**: A directory for the open-source AgentOS, AG2 :)
+
+These explanations are based on typical setups and usages; your specific use cases might vary. If you need more details on any item or it's a custom entry, checking the contents or configuration might be necessary for precise information.
+
+--------------------------------------------------------------------------------
+```

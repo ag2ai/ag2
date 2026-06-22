@@ -1,0 +1,1035 @@
+---
+title: ReasoningAgent
+sidebarTitle: ReasoningAgent
+---
+
+`ReasoningAgent` is designed to enhance language models' reasoning capabilities through systematic exploration of thought processes. By implementing the Tree of Thoughts (ToT) framework, it enables LLMs like GPT-4 and Llama to break down complex problems into manageable steps and explore multiple solution paths simultaneously.
+
+Here, we demonstrate the key features and capabilities of the `ReasoningAgent`, showing how it can effectively reason about problems.
+
+## Search Strategies
+
+The `ReasoningAgent` supports multiple search strategies for exploring the reasoning space:
+
+### 1. Beam Search (Default)
+- Maintains the top `k` most promising paths at each step
+- Efficient for problems with clear evaluation criteria
+- Configurable beam width to balance exploration vs computation
+- Special case: DFS mode (beam size = 1) for linear reasoning similar to Chain-of-Thought
+
+### 2. Monte Carlo Tree Search (MCTS)
+- Balances exploration and exploitation using UCT formula
+- Particularly effective for problems with delayed rewards
+- Stochastic exploration helps avoid local optima
+- Configurable number of simulations and exploration constant
+
+### 3. Language Agent Tree Search (LATS)
+- Provides immediate reflection feedback before the next simulation
+- Helps identify poor reasoning paths early for future improvement
+- Especially useful for complex multi-step reasoning
+
+## Core Components
+
+1. **Thinker Agent**: Generates potential next steps in the reasoning process
+2. **Grader Agent**: Evaluates the quality of each reasoning step
+3. **Interim Execution**: Option to execute the selected steps, enabling stepwise reasoning.
+4. **Code Execution**: a child user agent will execute code automatically during reasoning
+5. **Tree Structure**: Organizes thoughts hierarchically for systematic exploration
+6. **Visualization Tools**: Built-in Graphviz support for analyzing reasoning paths
+7. **Logging Features**: Log and save thinking trajectories to finetune the language model
+8. **Configuration Options**: The agent is highly configurable through a single `reason_config` dictionary
+9. **Customizabilty with scope**: Define task-specific context to guide the agent’s reasoning.
+
+## Configuration Options
+
+The agent is highly configurable through a single `reason_config` dictionary:
+
+```python
+import random
+
+from autogen.agents.experimental import ReasoningAgent, ThinkNode
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+
+verbose = True
+
+question = "What is the expected maximum dice value if you can roll a 6-sided dice three times?"
+random.seed(1)  # setup seed for reproducibility
+
+def last_meaningful_msg(sender, recipient, summary_args):
+    import warnings
+
+    if sender == recipient:
+        return "TERMINATE"
+
+    summary = ""
+    chat_messages = recipient.chat_messages[sender]
+
+    for msg in reversed(chat_messages):
+        try:
+            content = msg["content"]
+            if isinstance(content, str):
+                summary = content.replace("TERMINATE", "")
+            elif isinstance(content, list):
+                # Remove the `TERMINATE` word in the content list.
+                summary = "\n".join(
+                    x["text"].replace("TERMINATE", "") for x in content if isinstance(x, dict) and "text" in x
+                )
+            if summary.strip().rstrip():
+                return summary
+        except (IndexError, AttributeError) as e:
+            warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
+    return summary
+
+    user_proxy = UserProxyAgent(
+      name="user_proxy",
+      human_input_mode="NEVER",
+      code_execution_config=False,
+      is_termination_msg=lambda x: True, # terminate when reasoning agent responds
+   )
+```
+
+## Chain-of-Thought Reasoning with DFS
+
+The simplest form of tree-based reasoning uses depth-first search (DFS) to explore a single path, similar to OpenAI's O1 feature.
+By setting `method="dfs"` in the reason_config, the agent will:
+1. Generate one reasoning step at a time
+2. Follow that single path until reaching a conclusion
+3. Never explore alternative branches
+
+Note: The effectiveness depends on the underlying model's training. Models not specifically trained for step-by-step reasoning
+may show limited improvement with this approach.
+
+Note 2: To enable the execution of each selected step before generating the next step suggestions, pass
+`"interim_execution": True` in reason_config.
+
+```python
+reason_agent = ReasoningAgent(
+    name="reason_agent",
+    system_message="answer math questions",
+    reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
+    silent=False,
+    # NOTE: it is equivalent to use beam size 1 for O1-style reasoning
+    # reason_config={"method": "beam_search", "beam_size": 1, "max_depth": 3},
+    llm_config=llm_config,
+)
+
+ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+
+```console
+To predict the expected maximum value of rolling a 6-sided dice three times, we can utilize statistical techniques and concepts from probability theory, specifically order statistics. Here is the detailed solution:
+
+### Probabilistic Approach Using Order Statistics
+
+1. **Probability Distribution**: The value from a single roll of a fair 6-sided dice ranges uniformly from 1 to 6, each with probability \( \frac{1}{6} \).
+
+2. **Order Statistics**:
+   - When rolling the dice three times, we are interested in the distribution of the maximum value.
+   - For a 6-sided dice, given \( n \) rolls, the cumulative distribution function (CDF) represents the probability that the maximum value is less than or equal to \( k \).
+
+3. **Cumulative Distribution Function (CDF)**:
+   - Let \( X_{max} \) be the maximum value from the three rolls.
+   - The probability that \( X_{max} \leq k \):
+     \[
+     P(X_{max} \leq k) = \left(\frac{k}{6}\right)^3
+     \]
+   - This represents that all three dice rolls result in values less than or equal to \( k \).
+
+4. **Probability Mass Function (PMF)**:
+   - The probability that \( X_{max} = k \) can be found by considering the probabilities that the maximum value is less than or equal to \( k \) but greater than \( k-1 \):
+     \[
+     P(X_{max} = k) = P(X_{max} \leq k) - P(X_{max} \leq k-1) = \left(\frac{k}{6}\right)^3 - \left(\frac{k-1}{6}\right)^3
+     \]
+
+5. **Expected Value Calculation**:
+   - The expected maximum value can be calculated using:
+     \[
+     E[X_{max}] = \sum_{k=1}^{6} k \cdot P(X_{max} = k)
+     \]
+   - Plugging in the PMF:
+     \[
+     E[X_{max}] = \sum_{k=1}^{6} k \left[\left(\frac{k}{6}\right)^3 - \left(\frac{k-1}{6}\right)^3 \right]
+     \]
+
+6. **Computational Evaluation**:
+   - Perform the summation:
+     \[
+     E[X_{max}] = 1 \left[\left(\frac{1}{6}\right)^3 - \left(0\right)^3 \right] + 2 \left[\left(\frac{2}{6}\right)^3 - \left(\frac{1}{6}\right)^3 \right] + \ldots + 6 \left[\left(\frac{6}{6}\right)^3 - \left(\frac{5}{6}\right)^3 \right]
+     \]
+
+By evaluating this sum numerically, you get:
+
+\[
+E[X_{max}] \approx 4.47
+\]
+
+Thus, the expected maximum value if you roll a 6-sided dice three times is approximately \( \mathbf{4.47} \).
+```
+
+## Beam Search in Tree of Thought
+
+Beam Search is a powerful technique used in tree-based reasoning that allows the agent to explore multiple paths simultaneously. By setting `beam_size` greater than 1, the agent can maintain several candidate solutions at each step, evaluating them based on their potential to lead to the best final answer. This method is particularly effective when the solution space is large and complex, as it balances exploration and exploitation, ensuring that promising paths are prioritized while still considering alternative options.
+
+In this approach, the agent generates multiple reasoning steps in parallel, allowing it to compare different trajectories and select the most promising ones for further exploration. This can lead to more robust and accurate conclusions, especially in scenarios where intermediate evaluations are critical to the final outcome.
+
+```python
+reason_agent = ReasoningAgent(
+    name="reason_agent",
+    reason_config={"method": "beam_search", "beam_size": 3},
+    llm_config=llm_config,
+)
+
+ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+````console
+To find the expected maximum dice value if you can roll a 6-sided dice three times, we can approach this problem using probability theory and the concept of order statistics.
+
+### Plan
+1. **Derive Probability Distribution**: Determine the probability distribution of the maximum value when rolling three 6-sided dice.
+2. **Calculate Expected Value**: Use the probability distribution to calculate the expected value of the maximum roll.
+
+### Derivation
+1. A 6-sided die has outcomes {1, 2, 3, 4, 5, 6}.
+2. For each possible maximum value \( x \), we need to find the probability \( P(\text{max} = x) \).
+
+Let \( X_i \) be the result of roll i.
+
+The probability that the maximum value is \( x \), \( P(\text{max} = x) \) is:
+\[ P(\max(X_1, X_2, X_3) = x) = P(\max(X_1, X_2, X_3) \leq x) - P(\max(X_1, X_2, X_3) \leq x-1) \]
+
+Using the complement rule and the fact that the rolls are independent:
+\[ P(\max(X_1, X_2, X_3) \leq x) = (P(X_1 \leq x) \cdot P(X_2 \leq x) \cdot P(X_3 \leq x)) = (x/6)^3 \]
+\[ P(\max(X_1, X_2, X_3) \leq x-1) = ((x-1)/6)^3 \]
+
+Therefore,
+\[ P(\text{max} = x) = (x/6)^3 - ((x-1)/6)^3 \]
+
+3. **Calculate Expected Value**:
+\[ E[\text{max}] = \sum_{x=1}^{6} x \cdot P(\text{max} = x) \]
+
+### Python Code
+We can implement the above calculations in Python to find the expected value.
+
+```python
+# filename: expected_max_dice_value.py
+import numpy as np
+
+# Calculate the probabilities
+prob_max = [(i / 6) ** 3 - ((i - 1) / 6) ** 3 for i in range(1, 7)]
+
+# Expected value computation
+expected_max = sum(i * prob for i, prob in enumerate(prob_max, start=1))
+
+print(f'The expected maximum value when rolling a 6-sided dice three times is: {expected_max}')
+```
+
+Execute this script to compute the expected value using the derived probabilities. This will provide the precise expected maximum value when rolling a 6-sided dice three times.
+````
+
+We can see that in this case the agent suggests to execute a script. Later, we will see how it can do this internally.
+
+### Beam Search with Batch Grading
+By default, node grading is performed one at a time. While this approach is often sufficient, certain applications benefit from a batched grading approach on each beam expansion. In other words, instead of grading all nodes across the entire search in a single pass, we group each beam's newly expanded nodes into a single batch for grading. This yields:
+
+1. **Context-aware evaluation**: Within a single beam iteration, the grader can compare and contrast multiple node expansions at once.
+2. **Improved efficiency**: Combining multiple evaluations into one request per beam iteration can reduce the total number of LLM calls.
+
+To enable batch grading, set `"batch_grading": True` in the `reason_config`. By default, `batch_grading` is set to `False`, meaning individual node grading is performed without batching.
+
+```python
+  reason_agent = ReasoningAgent(
+      name="reason_agent",
+      reason_config={"method": "beam_search", "beam_size": 3, "batch_grading": True},
+      llm_config=llm_config,
+  )
+
+ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+
+````console
+To determine the expected maximum value when rolling a 6-sided dice three times, we need to follow the steps below:
+
+### Step 1: Determine cumulative distribution function (CDF)
+First, identify the probability that the maximum roll is less than or equal to each possible value (from 1 to 6).
+
+### Step 2: Derive probabilities for each possible maximum in three rolls
+Next, use the cumulative distribution function to calculate the probabilities of obtaining a specific maximum outcome.
+
+### Step 3: Compute the expectation
+Calculate the expected maximum value by taking the weighted sum of possible maximum values and their corresponding probabilities.
+
+### Step 4: Detailed Expected Value Calculation
+Calculate the expected maximum dice value with detailed intermediate steps.
+
+Here's the Python code to accomplish the task:
+
+```python
+import numpy as np
+
+# Number of sides on the dice
+n_sides = 6
+# Number of rolls
+n_rolls = 3
+
+# Function to calculate the probability of the maximum roll being k
+def prob_max_is_k(k, n_sides, n_rolls):
+    return (k**n_rolls - (k-1)**n_rolls) / n_sides**n_rolls
+
+# Calculate probabilities for each maximum value
+probabilities = [prob_max_is_k(k, n_sides, n_rolls) for k in range(1, n_sides + 1)]
+
+# Calculate expected maximum value
+expected_max_value = sum(k * prob for k, prob in enumerate(probabilities, 1))
+
+print(f"Probabilities for each maximum value: {probabilities}")
+print(f"Expected maximum value: {expected_max_value}")
+```
+
+Execute the code to get the result and follow through step-by-step calculations.
+````
+
+## MCTS
+This section demonstrates how to use Monte Carlo Tree Search (MCTS) with `ReasoningAgent` for complex reasoning tasks. MCTS provides several advantages over beam search when:
+
+1. Ground truth evaluation is available
+2. LLM-based evaluation is expensive
+3. You want to generate diverse, high-quality training data
+
+```python
+mcts_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    # setup small depth and simulations for conciseness.
+    reason_config={"method": "mcts", "nsim": 3, "max_depth": 4},
+    llm_config=llm_config,
+)
+
+ans = user_proxy.initiate_chat(mcts_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+
+```console
+Let's break down the problem step by step, using the trajectory described:
+
+### Step 1: Statistical Properties
+
+Consider a 6-sided die with faces numbered from 1 to 6. We want to find the expected maximum value when rolling the die three times.
+
+### Step 2: Probability Distribution
+
+To calculate the expected maximum value, we need to determine the probability distribution for the maximum value when rolling three times:
+
+- The probability that the maximum value is 1: All three rolls must be 1.
+  \[
+  P(\text{max}=1) = \left(\frac{1}{6}\right)^3 = \frac{1}{216}
+  \]
+
+- The probability that the maximum value is 2: At least one roll must be 2, and no roll can be greater than 2.
+  \[
+  P(\text{max}=2) = \left(\frac{2}{6}\right)^3 - \left(\frac{1}{6}\right)^3 = \frac{8}{216} - \frac{1}{216} = \frac{7}{216}
+  \]
+
+- The probability that the maximum value is 3: At least one roll must be 3, and no roll can be greater than 3.
+  \[
+  P(\text{max}=3) = \left(\frac{3}{6}\right)^3 - \left(\frac{2}{6}\right)^3 = \frac{27}{216} - \frac{8}{216} = \frac{19}{216}
+  \]
+
+- The probability that the maximum value is 4: At least one roll must be 4, and no roll can be greater than 4.
+  \[
+  P(\text{max}=4) = \left(\frac{4}{6}\right)^3 - \left(\frac{3}{6}\right)^3 = \frac{64}{216} - \frac{27}{216} = \frac{37}{216}
+  \]
+
+- The probability that the maximum value is 5: At least one roll must be 5, and no roll can be greater than 5.
+  \[
+  P(\text{max}=5) = \left(\frac{5}{6}\right)^3 - \left(\frac{4}{6}\right)^3 = \frac{125}{216} - \frac{64}{216} = \frac{61}{216}
+  \]
+
+- The probability that the maximum value is 6: At least one roll must be 6.
+  \[
+  P(\text{max}=6) = 1 - \left(\frac{5}{6}\right)^3 = 1 - \frac{125}{216} = \frac{91}{216}
+  \]
+
+### Step 3: Expected Maximum Value
+
+To find the expected maximum value, we multiply each possible maximum value by its probability and sum the results:
+
+\[
+E[\text{max}] = 1 \cdot \frac{1}{216} + 2 \cdot \frac{7}{216} + 3 \cdot \frac{19}{216} + 4 \cdot \frac{37}{216} + 5 \cdot \frac{61}{216} + 6 \cdot \frac{91}{216}
+\]
+
+Calculating these products:
+
+\[
+E[\text{max}] = \frac{1}{216} + \frac{14}{216} + \frac{57}{216} + \frac{148}{216} + \frac{305}{216} + \frac{546}{216}
+\]
+
+Summing them up:
+
+\[
+E[\text{max}] = \frac{1 + 14 + 57 + 148 + 305 + 546}{216} = \frac{1071}{216} \approx 4.96
+\]
+
+### Final Answer
+
+The expected maximum value when rolling a 6-sided die three times is approximately 4.96.
+```
+
+## LATS
+
+It is important to note that our reasoning agent operates based on "process" and lacks direct access to the environment. In contrast, the LATS approach relies on feedback from the environment. To address this, we utilize our existing grader agent to generate pseudo-rewards and provide feedback. The major difference between our LATS implementation and our MCTS implementation is that the LATS approach incorporate the reflection into prompt context before next round of simulation. You can define the agent using the LATS approach as follows.
+
+```python
+lats_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    # setup small depth and simulations for conciseness.
+    reason_config={"method": "lats", "nsim": 3, "max_depth": 4},
+    llm_config=llm_config,
+)
+
+ans = user_proxy.initiate_chat(lats_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+```console
+Let's break down the problem step by step, using the trajectory described:
+
+### Step 1: Statistical Properties
+
+Consider a 6-sided die with faces numbered from 1 to 6. We want to find the expected maximum value when rolling the die three times.
+
+### Step 2: Probability Distribution
+
+To calculate the expected maximum value, we need to determine the probability distribution for the maximum value when rolling three times:
+
+- The probability that the maximum value is 1: All three rolls must be 1.
+  \[
+  P(\text{max}=1) = \left(\frac{1}{6}\right)^3 = \frac{1}{216}
+  \]
+
+- The probability that the maximum value is 2: At least one roll must be 2, and no roll can be greater than 2.
+  \[
+  P(\text{max}=2) = \left(\frac{2}{6}\right)^3 - \left(\frac{1}{6}\right)^3 = \frac{8}{216} - \frac{1}{216} = \frac{7}{216}
+  \]
+
+- The probability that the maximum value is 3: At least one roll must be 3, and no roll can be greater than 3.
+  \[
+  P(\text{max}=3) = \left(\frac{3}{6}\right)^3 - \left(\frac{2}{6}\right)^3 = \frac{27}{216} - \frac{8}{216} = \frac{19}{216}
+  \]
+
+- The probability that the maximum value is 4: At least one roll must be 4, and no roll can be greater than 4.
+  \[
+  P(\text{max}=4) = \left(\frac{4}{6}\right)^3 - \left(\frac{3}{6}\right)^3 = \frac{64}{216} - \frac{27}{216} = \frac{37}{216}
+  \]
+
+- The probability that the maximum value is 5: At least one roll must be 5, and no roll can be greater than 5.
+  \[
+  P(\text{max}=5) = \left(\frac{5}{6}\right)^3 - \left(\frac{4}{6}\right)^3 = \frac{125}{216} - \frac{64}{216} = \frac{61}{216}
+  \]
+
+- The probability that the maximum value is 6: At least one roll must be 6.
+  \[
+  P(\text{max}=6) = 1 - \left(\frac{5}{6}\right)^3 = 1 - \frac{125}{216} = \frac{91}{216}
+  \]
+
+### Step 3: Expected Maximum Value
+
+To find the expected maximum value, we multiply each possible maximum value by its probability and sum the results:
+
+\[
+E[\text{max}] = 1 \cdot \frac{1}{216} + 2 \cdot \frac{7}{216} + 3 \cdot \frac{19}{216} + 4 \cdot \frac{37}{216} + 5 \cdot \frac{61}{216} + 6 \cdot \frac{91}{216}
+\]
+
+Calculating these products:
+
+\[
+E[\text{max}] = \frac{1}{216} + \frac{14}{216} + \frac{57}{216} + \frac{148}{216} + \frac{305}{216} + \frac{546}{216}
+\]
+
+Summing them up:
+
+\[
+E[\text{max}] = \frac{1 + 14 + 57 + 148 + 305 + 546}{216} = \frac{1071}{216} \approx 4.96
+\]
+
+### Final Answer
+
+The expected maximum value when rolling a 6-sided die three times is approximately 4.96.
+```
+
+## Interim Execution During Reasoning
+
+You can enable `interim_execution` by setting it to `True` in `reason_config`. This allows intermediate steps to be executed during the reasoning process, promoting more effective step-by-step thinking and enabling future steps to be informed by the outputs of earlier ones.
+By default `interim_execution` is `False` which means that the selected steps won't be executed during reasoning.
+
+```python
+lats_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    reason_config={"method": "lats", "nsim": 3, "max_depth": 4, "interim_execution": True},
+    llm_config=llm_config,
+)
+
+ans = user_proxy.initiate_chat(lats_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+
+```console
+Given a thinking process, you have to provide a complete response to a user's question.
+Question:
+What is the expected maximum dice value if you can roll a 6-sided dice three times?
+
+Thinking process:
+# Question:
+Content: What is the expected maximum dice value if you can roll a 6-sided dice three times?
+---
+# Trajectory:
+
+Step 1:
+Content: Identify the process
+To determine the expected maximum dice value, we need to calculate the probability for each possible maximum value (1 through 6) across three rolls and compute the expected value using these probabilities.
+
+Step 2:
+Content: Probability calculation
+Calculate the probability of each possible maximum value (1 through 6) for three rolls. The probability that the maximum value is exactly \( k \) can be computed using the formula:
+\[ P(\text{max} = k) = \left( \frac{k}{6} \right)^3 - \left( \frac{k-1}{6} \right)^3 \]
+
+Step 3:
+Content: Expected value calculation
+Combine probabilities calculated for individual maximum values to determine the expected maximum value:
+\[ E(\text{max}) = \sum_{k=1}^{6} k \cdot P(\text{max} = k) \]
+
+Step 4:
+Content: Compute individual probabilities and sum the results
+Calculate each probability \( P(\text{max} = k) \) for \( k \) from 1 to 6. Use these probabilities to sum up the expected value:
+\[ E(\text{max}) = \sum_{k=1}^{6} k \left( \left( \frac{k}{6} \right)^3 - \left( \frac{k-1}{6} \right)^3 \right) \]
+
+Step 5:
+Content: Final result
+Compute the numerical value of the expected maximum.
+
+Final Answer:
+Let's perform the calculations step-by-step.
+
+The probability that the maximum value after rolling three times is less than or equal to \( k \) is:
+\[ P(\text{max} \le k) = \left( \frac{k}{6} \right)^3 \]
+
+Therefore, the probability that the maximum value is exactly \( k \) is:
+\[ P(\text{max} = k) = P(\text{max} \le k) - P(\text{max} \le k-1) = \left( \frac{k}{6} \right)^3 - \left( \frac{k-1}{6} \right)^3 \]
+
+We can calculate the expected value using these probabilities:
+\[
+E(\text{max}) = \sum_{k=1}^{6} k \cdot P(\text{max} = k)
+\]
+Substituting the probabilities, we get:
+\[
+E(\text{max}) = \sum_{k=1}^{6} k \left( \left( \frac{k}{6} \right)^3 - \left( \frac{k-1}{6} \right)^3 \right)
+\]
+
+Let's calculate each term:
+\[
+P(\text{max}=1) = \left( \frac{1}{6} \right)^3 - \left( \frac{0}{6} \right)^3 = \frac{1}{216}
+\]
+\[
+P(\text{max}=2) = \left( \frac{2}{6} \right)^3 - \left( \frac{1}{6} \right)^3 = \frac{8}{216} - \frac{1}{216} = \frac{7}{216}
+\]
+\[
+P(\text{max}=3) = \left( \frac{3}{6} \right)^3 - \left( \frac{2}{6} \right)^3 = \frac{27}{216} - \frac{8}{216} = \frac{19}{216}
+\]
+\[
+P(\text{max}=4) = \left( \frac{4}{6} \right)^3 - \left( \frac{3}{6} \right)^3 = \frac{64}{216} - \frac{27}{216} = \frac{37}{216}
+\]
+\[
+P(\text{max}=5) = \left( \frac{5}{6} \right)^3 - \left( \frac{4}{6} \right)^3 = \frac{125}{216} - \frac{64}{216} = \frac{61}{216}
+\]
+\[
+P(\text{max}=6) = \left( \frac{6}{6} \right)^3 - \left( \frac{5}{6} \right)^3 = 1 - \frac{125}{216} = \frac{91}{216}
+\]
+
+Now, calculate the expected maximum:
+\[
+E(\text{max}) = 1 \cdot \frac{1}{216} + 2 \cdot \frac{7}{216} + 3 \cdot \frac{19}{216} + 4 \cdot \frac{37}{216} + 5 \cdot \frac{61}{216} + 6 \cdot \frac{91}{216}
+\]
+
+\[
+E(\text{max}) = \frac{1}{216} + \frac{14}{216} + \frac{57}{216} + \frac{148}{216} + \frac{305}{216} + \frac{546}{216}
+\]
+
+\[
+E(\text{max}) = \frac{1071}{216} \approx 4.958
+\]
+
+Thus, if you roll a 6-sided die three times, the expected maximum value is approximately 4.958.
+```
+
+## Code Execution During Reasoning
+
+You can setup the parameter `code_execution_config` in reasoning agent to enable code execution during reasoning.
+By default, `code_execution_config=False`, which means it will not execute code for reasoning. Note that to allow for code execution, `interim_execution` must be set to `True` at `reason_config`.
+
+```python
+lats_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    reason_config={"method": "lats", "nsim": 3, "max_depth": 4, 'interim_execution': True},
+    code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
+    # Enable Code execution. We skip docker here for simplicity
+    llm_config=llm_config,
+)
+
+ans = user_proxy.initiate_chat(
+    lats_agent,
+    message=question + " Run a python simulation to get the result",
+    summary_method=last_meaningful_msg
+    )
+
+print(ans.summary)
+```
+
+````console
+Sure, I can run a Python simulation to estimate the expected maximum value when rolling a 6-sided dice three times. Here is the Python script:
+
+```python
+import random
+import collections
+
+def roll_and_max():
+    rolls = [random.randint(1, 6) for _ in range(3)]
+    return max(rolls)
+
+def simulate_max_dice_value(num_trials):
+    results = [roll_and_max() for _ in range(num_trials)]
+    expected_max_value = sum(results) / num_trials
+    return expected_max_value
+
+def analyze_distribution(num_trials):
+    results = [roll_and_max() for _ in range(num_trials)]
+    counter = collections.Counter(results)
+    for value in sorted(counter):
+        print(f"Maximum Value: {value}, Frequency: {counter[value]}")
+
+num_trials = 10000  # Running with 10,000 trials for better estimation
+print(f"Expected maximum dice value: {simulate_max_dice_value(num_trials)}")
+analyze_distribution(num_trials)
+```
+
+Copy and run this code snippet. It will print the expected maximum dice value and the distribution of maximum values over 10,000 trials.
+
+Here's what the output might look like:
+
+```python
+Expected maximum dice value: 4.6083
+Maximum Value: 2, Frequency: 48
+Maximum Value: 3, Frequency: 166
+Maximum Value: 4, Frequency: 599
+Maximum Value: 5, Frequency: 2237
+Maximum Value: 6, Frequency: 6950
+```
+
+From the simulation, the expected maximum dice value when rolling a 6-sided dice three times seems to be around 4.6083. The distribution shows that a maximum value of 6 is the most frequent outcome, which makes sense given the nature of the dice rolls.
+````
+
+## Visualizing the Reasoning Tree
+
+### Installation of Graphviz
+
+To visualize the reasoning tree, you need to install Graphviz. Please note that using `pip install` may not be sufficient for all operating systems. In some cases, you might need to manually download and install Graphviz.
+
+`pip install graphviz`
+
+### To save the visualization as "tree_of_thoughts.png", run the following command:
+```python
+mcts_agent.visualize_tree()
+```
+
+## Utilizing ReasoningAgent for Nested Chat Interactions
+
+In this example, we will explore how the `ReasoningAgent` can be employed to facilitate nested chat interactions, specifically for writing a blog post about NVIDIA. The agent will engage in a structured dialogue to enhance the quality of the content through iterative feedback and reasoning.
+
+### Task: Writing a Blog Post on NVIDIA
+
+The goal is to generate a concise yet engaging blog post about NVIDIA. The process involves one turn (for simplicity) of conversation where the agent reflects on the content, reasons about improvements, and incorporates user feedback. You can update the `max_turns` parameter to execute multiple times.
+
+```python
+writer = AssistantAgent(
+    name="Writer",
+    system_message="""You are a professional writer, known for your insightful and engaging articles.
+You transform complex concepts into compelling narratives.
+You should improve the quality of the content based on the feedback from the user.
+""",
+    llm_config=llm_config,
+)
+reason_agent_for_writer = ReasoningAgent(
+    name="reason_agent",
+    reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
+    llm_config=llm_config,
+)
+
+def reflection_message(recipient, messages, sender, config):
+    print("Reflecting...", "yellow")
+    return f"Reflect, Reason and provide critique on the following writing. \n\n {recipient.chat_messages_for_summary(sender)[-1]['content']}"
+
+user_proxy.register_nested_chats(
+    [
+        {
+            "recipient": reason_agent_for_writer,
+            "message": reflection_message,
+            "summary_method": "last_msg",
+            "max_turns": 1,
+        }
+    ],
+    trigger=writer,
+)
+
+task = """Write a concise but engaging blogpost about Nvidia."""
+res = user_proxy.initiate_chat(recipient=writer, message=task, max_turns=2, summary_method="last_msg")
+
+print(res.summary)
+```
+```console
+**The Unstoppable Rise of Nvidia: Empowering the Future of Computing**
+
+In the dynamic realm of technology, one company stands tall, continually pushing the boundaries of what's possible: Nvidia. Originating as a modest graphics chip manufacturer in 1993, Nvidia has metamorphosed into a powerhouse driving innovations across diverse industries from gaming to artificial intelligence (AI).
+
+**Revolutionizing Gaming**
+
+Nvidia's ascent began in the gaming industry, where its groundbreaking GPUs (Graphics Processing Units) transformed how we experience digital entertainment. The release of the GeForce series became a landmark moment, enabling unprecedented graphics quality and immersive gameplay that became standards in the industry. Gamers worldwide could render stunning, lifelike environments and complex textures, an evolution tracing back to Nvidia’s ceaseless commitment to performance enhancement.
+
+**Pioneering AI and Deep Learning**
+
+Beyond gaming, Nvidia’s influence has transcended into other technological territories, most notably AI and deep learning. The introduction of the CUDA (Compute Unified Device Architecture) platform redefined efficiency by harnessing the parallel processing power of GPUs, accelerating computational tasks that traditionally relied on CPUs. Researchers and developers suddenly had a magic wand to realize complex models, leading to breakthroughs in fields like medical research, autonomous driving, and natural language processing.
+
+Nvidia's GPUs are the silent workhorses behind many AI breakthroughs, powering everything from language translation apps to sophisticated medical diagnostics tools. The company's DGX systems offer unparalleled computational power, enabling enterprises to handle large-scale AI workloads effortlessly. It's not just about raw power; Nvidia’s software stack—highlighted by CUDA—provides a comprehensive ecosystem for developers to deploy, optimize, and scale AI models effectively.
+
+**Driving the Autonomous Revolution**
+
+As we look towards a future dominated by autonomous systems, Nvidia is at the forefront of this revolution as well. Nvidia Drive, the company’s autonomous vehicle platform, integrates AI to interpret and navigate complex road environments safely. In a remarkable blend of hardware and software, Nvidia's platforms are designed to handle the vast computational demands of self-driving technology, promising safer and smarter vehicles on tomorrow's roads.
+
+**Sustainability and Data Centers**
+
+Moreover, Nvidia's contributions extend to the realm of data centers and cloud computing. The Nvidia A100 Tensor Core GPUs signify a leap in computation power and efficiency that optimally supports modern data centers in managing vast amounts of data while consuming less energy. By focusing on sustainability, Nvidia is not just leading in technology but also ensuring its impact is environmentally responsible.
+
+**Looking Ahead**
+
+The narrative of Nvidia is one of relentless innovation and vision. We find ourselves in an era where Nvidia's technologies are integral to advancements in and out of the digital world. From transforming how we play games to enabling smarter, more resilient AI applications, Nvidia's trajectory signifies a transformative force in modern computing. With a keen eye on future trends and a robust pipeline of groundbreaking technologies, Nvidia is poised to drive the next wave of digital transformation, capturing the essence of the future itself.
+```
+
+## Use a different Model for Grading
+
+To use a different model for grading instead of gpt-5, pass the `grader_llm_config` argument when initializing the `ReasoningAgent`. This ensures that the grading of trajectories is performed using the specified configuration from the `config_list`, separate from the main `llm_config`.
+
+```python
+# Put your key in the OPENAI_API_KEY environment variable
+grader_llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+
+writer = AssistantAgent(
+    name="Writer",
+    system_message="""You are a professional writer, known for your insightful and engaging articles.
+You transform complex concepts into compelling narratives.
+You should improve the quality of the content based on the feedback from the user.
+    """,
+    llm_config=llm_config,
+)
+reason_agent_for_writer = ReasoningAgent(
+    name="reason_agent",
+    grader_llm_config=grader_llm_config,
+    reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
+    llm_config=llm_config,
+)
+```
+
+## Save data to future training
+In this section, we will focus on saving the reasoning agent's decision-making data to help future training.
+
+By capturing the structure and content of the reasoning tree, we can create a valuable dataset that can be used to enhance the agent's learning process. This data will allow us to analyze the agent's reasoning patterns, improve its performance, and refine its ability to generate high-quality responses.
+
+The saved data can be utilized for various training methodologies, including supervised fine-tuning and reinforcement learning, ultimately contributing to the development of a more robust and effective reasoning agent.
+
+```python
+import json
+
+data = reason_agent._root.to_dict()
+with open("reasoning_tree.json", "w") as f:
+    json.dump(data, f)
+
+# recover the node
+new_node = ThinkNode.from_dict(json.load(open("reasoning_tree.json")))  # noqa: SIM115
+
+sft_data = reason_agent.extract_sft_dataset()
+rlhf_data = reason_agent.extract_rlhf_preference_dataset()
+
+print(rlhf_data)
+```
+
+## Utilizing Ground Truth to Enhance Training Data Generation
+
+Access to ground truth answers allows us to improve the evaluation of reasoning paths. In this section, we will explore:
+- The process of incorporating ground truth into prompts
+- The methods by which the agent leverages ground truth for evaluation
+
+```python
+prompt = """What is the expected maximum dice value if you can roll a 6-sided dice three times?
+
+GROUND_TRUTH:
+We define X as the highest outcome among the three rolls.
+The probability that X is at least m is 1 - \\left(\frac{m-1}{6}\right)^3 for each m from 1 to 6.
+Summing these probabilities gives the expectation E(X) = \\sum_{m=1}^{6} [1 - (\frac{m-1}{6})^3].
+Calculating this sum results in E(X) = 6 - \frac{225}{216} = \frac{119}{24}, which approximates to 4.9583.
+Therefore, the expected maximum value when rolling a six-sided die three times is \frac{119}{24} or approximately 4.9583.
+"""
+random.seed(1)  # setup seed for reproducibility
+
+mcts_agent2 = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    # setup small depth and simulations for conciseness.
+    reason_config={"method": "mcts", "nsim": 3, "max_depth": 4},
+    llm_config=llm_config,
+)
+
+ans = user_proxy.initiate_chat(mcts_agent2, message=prompt, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+
+```console
+Let's break down the problem step by step, using the trajectory described:
+
+### Step 1: Statistical Properties
+
+Consider a 6-sided die with faces numbered from 1 to 6. We want to find the expected maximum value when rolling the die three times.
+
+### Step 2: Probability Distribution
+
+To calculate the expected maximum value, we need to determine the probability distribution for the maximum value when rolling three times:
+
+- The probability that the maximum value is 1: All three rolls must be 1.
+  \[
+  P(\text{max}=1) = \left(\frac{1}{6}\right)^3 = \frac{1}{216}
+  \]
+
+- The probability that the maximum value is 2: At least one roll must be 2, and no roll can be greater than 2.
+  \[
+  P(\text{max}=2) = \left(\frac{2}{6}\right)^3 - \left(\frac{1}{6}\right)^3 = \frac{8}{216} - \frac{1}{216} = \frac{7}{216}
+  \]
+
+- The probability that the maximum value is 3: At least one roll must be 3, and no roll can be greater than 3.
+  \[
+  P(\text{max}=3) = \left(\frac{3}{6}\right)^3 - \left(\frac{2}{6}\right)^3 = \frac{27}{216} - \frac{8}{216} = \frac{19}{216}
+  \]
+
+- The probability that the maximum value is 4: At least one roll must be 4, and no roll can be greater than 4.
+  \[
+  P(\text{max}=4) = \left(\frac{4}{6}\right)^3 - \left(\frac{3}{6}\right)^3 = \frac{64}{216} - \frac{27}{216} = \frac{37}{216}
+  \]
+
+- The probability that the maximum value is 5: At least one roll must be 5, and no roll can be greater than 5.
+  \[
+  P(\text{max}=5) = \left(\frac{5}{6}\right)^3 - \left(\frac{4}{6}\right)^3 = \frac{125}{216} - \frac{64}{216} = \frac{61}{216}
+  \]
+
+- The probability that the maximum value is 6: At least one roll must be 6.
+  \[
+  P(\text{max}=6) = 1 - \left(\frac{5}{6}\right)^3 = 1 - \frac{125}{216} = \frac{91}{216}
+  \]
+
+### Step 3: Expected Maximum Value
+
+To find the expected maximum value, we multiply each possible maximum value by its probability and sum the results:
+
+\[
+E[\text{max}] = 1 \cdot \frac{1}{216} + 2 \cdot \frac{7}{216} + 3 \cdot \frac{19}{216} + 4 \cdot \frac{37}{216} + 5 \cdot \frac{61}{216} + 6 \cdot \frac{91}{216}
+\]
+
+Calculating these products:
+
+\[
+E[\text{max}] = \frac{1}{216} + \frac{14}{216} + \frac{57}{216} + \frac{148}{216} + \frac{305}{216} + \frac{546}{216}
+\]
+
+Summing them up:
+
+\[
+E[\text{max}] = \frac{1 + 14 + 57 + 148 + 305 + 546}{216} = \frac{1071}{216} \approx 4.96
+\]
+
+### Final Answer
+
+The expected maximum value when rolling a 6-sided die three times is approximately 4.96.
+```
+
+## Forest of Thoughts
+
+The concept of a "Forest of Thoughts" allows us to leverage bootstrapping techniques to execute the tree of thoughts multiple times, creating a diverse set of answers. After running these independent reasoning processes, we can aggregate them to form our final answer.
+
+```python
+forest_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    # setup small depth and simulations for conciseness.
+    reason_config={"method": "dfs", "max_depth": 4, "forest_size": 3},
+    llm_config=llm_config,
+)
+
+ans = user_proxy.initiate_chat(forest_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+```console
+To find the expected maximum dice value when rolling a 6-sided die three times, we can follow these steps:
+
+Step 1: Use statistical properties and formulas to determine the expected maximum value of rolling a 6-sided die three times.
+
+Step 2: Calculate the probability distribution of the maximum value when rolling a 6-sided die three times. Consider each possible outcome (1 through 6). The probability that \(k\) will be the maximum value can be calculated by considering the likelihood that all three rolls are less than or equal to \(k\) and at least one roll equals \(k\).
+
+Probability \(P(X = k)\):
+1. For \(k = 1\):
+\[ P(X = 1) = \left( \frac{1}{6} \right)^3 = \frac{1}{216} \]
+2. For \(k = 2\):
+\[ P(X = 2) = \left( \frac{2}{6} \right)^3 - \left( \frac{1}{6} \right)^3 = \frac{8}{216} - \frac{1}{216} = \frac{7}{216} \]
+3. For \(k = 3\):
+\[ P(X = 3) = \left( \frac{3}{6} \right)^3 - \left( \frac{2}{6} \right)^3 = \frac{27}{216} - \frac{8}{216} = \frac{19}{216} \]
+4. For \(k = 4\):
+\[ P(X = 4) = \left( \frac{4}{6} \right)^3 - \left( \frac{3}{6} \right)^3 = \frac{64}{216} - \frac{27}{216} = \frac{37}{216} \]
+5. For \(k = 5\):
+\[ P(X = 5) = \left( \frac{5}{6} \right)^3 - \left( \frac{4}{6} \right)^3 = \frac{125}{216} - \frac{64}{216} = \frac{61}{216} \]
+6. For \(k = 6\):
+\[ P(X = 6) = 1 - \left( \frac{5}{6} \right)^3 = 1 - \frac{125}{216} = \frac{91}{216} \]
+
+Step 3: Sum the weighted probabilities to find the expected maximum value
+
+The expected maximum value \(E[X]\) is calculated by summing the products of each maximum value by its probability:
+
+\[ E[X] = \sum_{k=1}^{6} k \cdot P(X = k) \]
+\[ E[X] = 1 \cdot \frac{1}{216} + 2 \cdot \frac{7}{216} + 3 \cdot \frac{19}{216} + 4 \cdot \frac{37}{216} + 5 \cdot \frac{61}{216} + 6 \cdot \frac{91}{216} \]
+\[ E[X] = \frac{1 + 14 + 57 + 148 + 305 + 546}{216} \]
+\[ E[X] = \frac{1071}{216} \approx 4.96 \]
+
+Final Answer: The expected maximum dice value when rolling a 6-sided die three times is approximately \(4.96\).
+```
+
+## Scope
+The effectiveness of a LLM agent on a given task can be significantly enhanced through prompt optimization. To support this for the `ReasoningAgent`, a `scope` parameter can be specified during initialization. This parameter will provide valuable context about the agent’s intended use, the reasoning process it should follow, and any constraints or pitfalls to avoid. This information is incorporated into the agent’s thought process to guide its behavior more effectively.
+
+Note: The `scope` differs from the `system_message` in that it informs the agent’s reasoning throughout the entire thinking process, whereas the `system_message` is used solely when generating the final response.
+
+```python
+scope = """You assess ethical risks of AI systems used in services.
+Begin by identifying stakeholders and their interests.
+Then, evaluate potential ethical risks (bias, transparency, impact).
+Finally, suggest mitigation strategies and ethical safeguards"""
+
+reason_agent = ReasoningAgent(
+    name="reason_agent",
+    reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
+    silent=False,
+    scope=scope,
+    llm_config=llm_config,
+)
+
+question = "What are the ethical risks of using AI in healthcare?"
+ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+
+```console
+### Step 1: Identify Stakeholders
+In the context of AI in healthcare, the main stakeholders include:
+- **Patients:** The primary beneficiaries of healthcare services.
+- **Healthcare Providers:** Includes doctors, nurses, and other medical professionals.
+- **Hospitals and Clinics:** Organizations that deliver healthcare services.
+- **Insurance Companies:** Entities that provide health insurance coverage.
+- **Healthcare Administrators:** Individuals who manage healthcare operations.
+- **Technology Developers:** Companies and individuals developing AI solutions for healthcare.
+- **Regulatory Bodies:** Government agencies and boards overseeing healthcare practices and AI technology.
+
+### Step 2: Identify Stakeholder Interests
+
+**Patients:**
+- **Privacy:** Ensuring personal health data is secure and confidential.
+- **Accuracy:** Reliable diagnostics and treatment recommendations.
+- **Autonomy:** Having informed consent and control over personal health decisions.
+- **Equity:** Fair access to healthcare regardless of socio-economic status.
+
+**Healthcare Providers:**
+- **Efficiency:** Improving operational efficiency and reducing workload.
+- **Training:** Adequate training on AI tools to ensure effective usage.
+- **Clinical Judgment:** Augmenting, not replacing, clinical decision-making.
+
+**Hospitals and Clinics:**
+- **Cost Reduction:** Lowering costs through operational efficiencies.
+- **Quality of Care:** Improving patient outcomes with advanced technology.
+- **Liability:** Managing risks associated with AI errors.
+
+**Insurance Companies:**
+- **Cost Management:** Controlling expenditures through better predictive analytics.
+- **Risk Assessment:** Improved evaluation of risk for more accurately assessing policyholders.
+- **Compliance:** Adhering to regulatory requirements for AI use.
+
+**Technology Developers:**
+- **Innovation:** Creating cutting-edge solutions to improve healthcare.
+- **Market Expansion:** Expanding the reach and adoption of AI solutions.
+- **Ethical Standards:** Ensuring their products are ethically sound.
+
+**Regulatory Bodies:**
+- **Safety:** Ensuring AI tools do not harm patients.
+- **Compliance:** Enforcing regulations around AI use.
+- **Standardization:** Implementing standards for AI technology in healthcare.
+
+### Step 3: Ethical Risks
+
+**Bias:**
+- **Data Bias:** AI models trained on biased data may produce inequitable results, disproportionately affecting marginalized groups.
+- **Algorithm Bias:** AI algorithms may inadvertently prioritize certain patient demographics over others.
+
+**Transparency:**
+- **Openness:** AI systems may lack transparency, making it difficult to understand and trust their recommendations.
+- **Explanation:** Difficulty in explaining AI-driven decisions could impact patient trust.
+
+**Impact:**
+- **Displacement:** Potential for AI to displace healthcare jobs, affecting traditional roles and employment.
+- **Accountability:** Who bears responsibility for errors made by AI systems?
+
+**Privacy:**
+- **Data Security:** Risk of unauthorized access to sensitive health data.
+- **Consent:** Ensuring patients understand and consent to AI-driven diagnostics and treatments.
+
+### Mitigation Strategies and Ethical Safeguards
+
+**Bias Mitigation:**
+- **Diverse Training Data:** Ensure diverse and inclusive data sets are used to train AI models.
+- **Algorithm Audits:** Regularly audit algorithms for biases and address identified issues.
+
+**Transparency Enhancement:**
+- **Explainable AI:** Develop AI systems that provide clear explanations for their decisions.
+- **User Education:** Train healthcare providers to understand and explain AI tools to patients.
+
+**Privacy Assurance:**
+- **Robust Security Protocols:** Implement strong security measures to protect health data.
+- **Informed Consent:** Ensure patients are fully informed about the use of AI in their care.
+
+**Impact Management:**
+- **Workforce Transition:** Prepare healthcare workers for transitions by providing training on AI integration.
+- **Clear Accountability:** Establish clear guidelines on responsibility for AI errors and outcomes.
+
+**Regulatory Compliance:**
+- **Regular Review:** Continually update regulatory standards in line with technological advancements.
+- **Stakeholder Involvement:** Involve all stakeholders in the development and review of ethical guidelines and regulations.
+
+By identifying stakeholders and their interests, evaluating potential ethical risks, and suggesting mitigation strategies, we can foster responsible and ethical use of AI in healthcare systems.
+```

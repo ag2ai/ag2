@@ -1,0 +1,155 @@
+---
+title: "LLM Configuration: Powering Agent Intelligence"
+sidebarTitle: "LLM Configuration: Powering Agent Intelligence"
+---
+
+Configuring an LLM is crucial for your AG2 agents - it's what gives them their thinking power! LLM Configuration defines how your agents connect to language models, specifying:
+
+- Which language model provider and model to use
+- How to authenticate with the provider
+- Parameters that control the model's behavior
+- Optional structured output formats for standardized responses
+
+## Supported LLM Providers
+
+Your agents deserve options! AG2 plays nicely with an impressive lineup of model providers:
+
+- **Cloud Models**: OpenAI, Anthropic, Google (Gemini), Amazon (Bedrock), Mistral AI, Cerebras, Together AI, and Groq
+- **Local Models**: Ollama, LiteLLM, and LM Studio
+
+So whether you want to tap into cloud-based intelligence or keep things running on your local machine, AG2 has got you covered. You can find more information about the supported models in the [AG2 Models documentation](../models/amazon-bedrock.md).
+
+!!! note
+    **Starting with version 0.8**, AG2 takes a "bring your own LLM" approach - provider packages aren't included by default, so you'll need to install your favorites explicitly, for example:
+    ```bash
+    pip install ag2[openai]
+    pip install ag2[gemini]
+    pip install ag2[anthropic,cohere,mistral]
+    ```
+
+## Creating an LLM Configuration
+
+Once you have installed AG2 with your preferred LLM provider, we need to create the LLM configuration object with the API type, model, and key if necessary.
+
+Here are the different ways to create an LLM configuration in AG2:
+
+### Method 1: Single Model
+
+The simplest approach is to directly specify the model provider, model name, and authentication:
+
+```python hl_lines="4-8"
+import os
+from autogen import LLMConfig
+
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ["OPENAI_API_KEY"]
+})
+```
+
+### Method 2: Multiple Models with Fallback
+
+For more advanced scenarios, especially when you want to set up fallback models, pass multiple configuration dictionaries:
+
+```python hl_lines="4-13"
+import os
+from autogen import LLMConfig
+
+llm_config = LLMConfig(
+    {
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ["OPENAI_API_KEY"]
+    },
+    {
+        "api_type": "openai",
+        "model": "gpt-5",
+        "api_key": os.environ["OPENAI_API_KEY"]
+    },
+)
+```
+
+AG2's LLM configuration offers additional methods to create an LLM configuration, allowing you to specify multiple LLMs for fallback support and filtering them per agent. See the [LLM Configuration deep-dive](../advanced-concepts/llm-configuration-deep-dive.md) for more details.
+
+!!! danger
+    Never hard-code API keys or secrets in your code. Always use environment variables or secure configuration files. For example, you can set your API key in the environment like below:
+
+    === "macOS / Linux"
+
+         ```bash
+        export OPENAI_API_KEY="YOUR_API_KEY"
+        ```
+
+    === "Windows"
+
+         ```bash
+        setx OPENAI_API_KEY "YOUR_API_KEY"
+        ```
+
+## Integrating LLM Configuration with Agents
+
+Once you've created your LLM configuration, there are two ways to apply it to your agents:
+
+### Method 1: Passing as a Keyword Argument
+
+```python hl_lines="6"
+from autogen import ConversableAgent
+
+my_agent = ConversableAgent(
+    name="helpful_agent",
+    system_message="You are a poetic AI assistant",
+    llm_config=llm_config
+)
+```
+
+### Method 2: Sharing Configuration Across Agents
+
+You can pass the same LLM configuration to multiple agents:
+
+```python hl_lines="3-12"
+from autogen import ConversableAgent
+
+finance_bot = ConversableAgent(
+    name="finance_bot",
+    system_message="You are a financial compliance assistant",
+    llm_config=llm_config,
+)
+
+analysis_bot = ConversableAgent(
+    name="analysis_bot",
+    system_message="You analyze financial data for anomalies",
+    llm_config=llm_config,
+)
+```
+
+## Financial Compliance Example: LLM Configuration
+
+Time to put theory into practice! Let's set up the brains for our financial compliance assistant:
+
+```python
+from autogen import LLMConfig
+import os
+
+# Basic configuration using environment variable
+llm_config = LLMConfig(
+    {
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ["OPENAI_API_KEY"],
+    },
+    temperature=0.2,  # Lower temperature for more consistent financial analysis
+)
+```
+
+**Code walkthrough**:
+
+- We're using OpenAI's `gpt-5-nano` model because our financial bot needs smarts without breaking the bank. You can use a different model if you prefer.
+- We've set temperature to 0.2 because when it comes to financial compliance, creativity is NOT what we want (sorry, creative accountants!)
+- We're keeping our API key in an environment variable because security first, folks!
+
+This configuration gives our financial compliance assistant the right balance of intelligence, consistency, and security - exactly what you want when dealing with suspicious transactions.
+
+## Next Steps
+
+Now that you've got the brains sorted for your AG2 agents, it's time to give them a body! Head over to [ConversableAgent](conversable-agent.md) to create actual thinking agents powered by your LLM configuration.

@@ -1,0 +1,149 @@
+---
+title: Envelopes and Events
+sidebarTitle: Envelopes & Events
+---
+
+The `#!python Envelope` is the wire format for everything that flows between agents on the network. Every send produces one; every observer reads them. This page covers the envelope shape, the built-in event types, audience/visibility rules, and how to send raw envelopes when `#!python channel.send(text)` isn't enough.
+
+## The Envelope
+
+```python
+@dataclass(slots=True)
+class Envelope:
+    envelope_id: str        # hub-stamped UUID
+    channel_id: str
+    sender_id: str          # agent_id
+    audience: list[str] | None  # None = broadcast to all channel participants
+    event_type: str         # "ag2.msg.text", "ag2.channel.invite", etc.
+    event_data: dict        # event-specific payload
+    causation_id: str | None = None  # envelope_id this one is "in reply to"
+    priority: Priority = Priority.NORMAL
+    created_at: str = ""    # hub-stamped ISO-Z
+    sequence: int = 0       # hub-stamped per-channel monotonic counter
+```
+
+The hub stamps `envelope_id`, `created_at`, and `sequence` at admission time. Everything else comes from the sender.
+
+## Built-in Event Types
+
+Constants exported from `#!python autogen.beta.network`:
+
+### Substantive events
+
+| Constant | String | Carried in `event_data` |
+|---|---|---|
+| `#!python EV_TEXT` | `"ag2.msg.text"` | `{"text": "<body>"}` |
+| `#!python EV_PACKET` | `"ag2.packet"` | `{"routing": {...}, "context_updates": {...}, "body": "<text>"}` |
+
+These are the envelopes adapters fold into per-channel state. `#!python EV_TEXT` carries plain text. `#!python EV_PACKET` is the workflow adapter's atomic round-end capture: it bundles the agent's routing decision (matched against `#!python ToolCalled(...)` rules), accumulated `context_vars` mutations, and final body text into one envelope. Posted by the framework after each `#!python Agent.ask` round; tool authors don't construct these directly.
+
+### Channel lifecycle events
+
+| Constant | String | Source |
+|---|---|---|
+| `#!python EV_CHANNEL_INVITE` | `"ag2.channel.invite"` | Hub posts to each `target` when a channel is created. |
+| `#!python EV_CHANNEL_INVITE_ACK` | `"ag2.channel.invite.ack"` | Each invitee posts when accepting. |
+| `#!python EV_CHANNEL_INVITE_REJECT` | `"ag2.channel.invite.reject"` | Optional — invitee rejects (default handler doesn't, but you can override). |
+| `#!python EV_CHANNEL_OPENED` | `"ag2.channel.opened"` | Hub posts when all acks land. |
+| `#!python EV_CHANNEL_CLOSED` | `"ag2.channel.closed"` | Hub posts on any termination path; `event_data.reason` carries why. |
+| `#!python EV_CHANNEL_EXPIRED` | `"ag2.channel.expired"` | Hub posts when TTL sweeper closes the channel. |
+| `#!python EV_EXPECTATION_VIOLATED` | `"ag2.channel.expectation_violated"` | Hub posts when an expectation evaluator's threshold is breached and the handler is `notify` (vs `audit` / `auto_close`). |
+
+### Task lifecycle events
+
+| Constant | String | Notes |
+|---|---|---|
+| `#!python ag2.task.started` | `"ag2.task.started"` | Mirrored from `#!python TaskStarted`. |
+| `#!python ag2.task.progress` | `"ag2.task.progress"` | Mirrored from `#!python TaskProgress`. |
+| `#!python ag2.task.completed` | `"ag2.task.completed"` | Mirrored from `#!python TaskCompleted`. |
+| `#!python ag2.task.failed` | `"ag2.task.failed"` | Mirrored from `#!python TaskFailed`. |
+| `#!python ag2.task.expired` | `"ag2.task.expired"` | Mirrored from `#!python TaskExpired`. |
+
+These flow only when an `#!python AgentClient` is running an LLM turn — see [Task Observation](task_observation.md).
+
+## Audience and Visibility
+
+`#!python audience: list[str] | None` controls who sees the envelope:
+
+- `#!python None` — broadcast to all channel participants.
+- `#!python [agent_id_1, agent_id_2, ...]` — only those participants see it.
+
+The `#!python visible_to(envelope, agent_id)` helper says whether a given participant should see an envelope:
+
+```python linenums="1"
+from autogen.beta.network import visible_to
+
+if visible_to(env, my_agent_id):
+    process(env)
+```
+
+Views (`#!python FullTranscript`, `#!python WindowedSummary`) honour the audience: an envelope addressed only to `[bob]` doesn't appear in `carol`'s projection. See [Views & Skills](views_and_skills.md).
+
+## Priority
+
+```python
+class Priority(IntEnum):
+    LOW = 0
+    NORMAL = 1
+    HIGH = 2
+    URGENT = 3
+```
+
+The hub processes higher-priority envelopes ahead of lower-priority ones in queue order. Use sparingly; most application envelopes should leave `priority` at `NORMAL`.
+
+## Sending Raw Envelopes
+
+The `#!python channel.send(text, audience=...)` helper wraps the envelope construction for you. When you need a custom event type or to set fields the helper doesn't expose, build an `#!python Envelope` and post it directly:
+
+```python linenums="1" hl_lines="3-10"
+from autogen.beta.network import Envelope, EV_TEXT
+
+envelope = Envelope(
+    channel_id=channel.channel_id,
+    sender_id=alice.agent_id,
+    audience=[bob.agent_id],
+    event_type="myapp.review_request",
+    event_data={"document_id": "doc-123", "kind": "security"},
+)
+await alice.send_envelope(envelope)
+```
+
+The hub doesn't validate `event_type` against any allowlist; custom types pass through unmodified. Adapters fold only event types they recognise — substantive ones (`#!python EV_TEXT`, plus `#!python EV_PACKET` under the workflow adapter) and lifecycle ones (`#!python EV_CHANNEL_*`). Custom event types are written to the WAL and delivered to participants but don't advance turn-taking state.
+
+!!! tip "Adapter-shaped envelopes"
+    When the envelope *should* advance the channel's protocol (a normal text turn, a workflow round packet) but you're constructing it outside the agent loop — a bridge, a gateway, a test harness — use the adapter's Layer-2 helpers instead of building the `#!python Envelope` by hand: `#!python adapter.build_text_envelope(...)` / `#!python adapter.build_packet_envelope(..., handoff=, context_set=)`, fetched via `#!python hub.adapter_for(channel_id)`. They produce exactly the shape the adapter folds. See [Adapters Overview → Driving a channel without an Agent](adapters_overview.md#driving-a-channel-without-an-agent).
+
+## Causation
+
+`#!python causation_id` lets you mark an envelope as "in reply to" another:
+
+```python linenums="1"
+await channel.send(reply_text, causation_id=incoming_envelope.envelope_id)
+```
+
+The default handler does this automatically when it replies to an inbound `#!python EV_TEXT`. Custom handlers should set it when they're producing a logical reply — useful for tooling that builds threaded views of a channel.
+
+## Reading the WAL
+
+The hub maintains a per-channel write-ahead log:
+
+```python linenums="1"
+wal = await hub.read_wal(channel_id)
+for env in wal:
+    print(f"{env.sequence:>3}  {env.event_type}  from={env.sender_id[:8]}")
+```
+
+Envelopes appear in admission order. The WAL is the canonical replay surface — `#!python Hub.hydrate()` re-folds it through each adapter to rebuild in-memory state on restart.
+
+## Custom Event Types — Practical Tips
+
+When you define your own event types:
+
+1. Use a dotted namespace prefix (`"myapp.review_request"`, not `"review"`) to avoid collisions with future `ag2.*` events.
+2. Make `event_data` JSON-serialisable (no datetimes, dataclasses, etc.) so it round-trips through the store cleanly.
+3. If multiple participants need to react, set `audience=None`. If only one, address it specifically; views will filter it out from non-recipients.
+4. Don't rely on adapters to do anything special with custom types — they pass through. Your custom handler is responsible for processing them.
+
+## Inspecting Frames
+
+Below the envelope layer is the frame layer (`#!python HelloFrame`, `#!python SendFrame`, `#!python NotifyFrame`, …) — that's the link transport. Most users don't touch it. It surfaces only when you're implementing a custom transport (see [Agent Clients](agent_clients.md)) or debugging a connection issue.

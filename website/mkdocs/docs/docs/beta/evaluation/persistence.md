@@ -1,0 +1,147 @@
+---
+title: "Persistence & tracking"
+sidebarTitle: "Persistence"
+---
+
+Every run is saved to disk. That's what turns "run an eval once" into "track an agent over its lifetime" — comparing each version against its past selves to confirm improvements and catch regressions before they ship.
+
+## The schema-0.1 JSON
+
+Every `run_agent()` writes a JSON file to `store_dir/<run_id>.json` before returning. The file is the run's permanent record — comparable across days, releases, and pull requests. Shape:
+
+```json
+{
+  "schema_version": "0.1",
+  "run_id": "01J7Z3M4QF8X9Y0K1V2N3P4Q5R",
+  "label": "weather-eval",
+  "created_at": "2026-05-11T14:23:00+00:00",
+  "duration_ms": 5292,
+  "suite": { "name": "dataset", "size": 5, "source": "eval/dataset.jsonl" },
+  "target": "autogen.beta.agent:Agent",
+  "concurrency": 4,
+  "tasks": [
+    {
+      "task_id": "weather-001",
+      "inputs": { "input": "What's the weather in Tokyo?" },
+      "reference_outputs": { "city": "Tokyo" },
+      "tags": ["happy-path"],
+      "metadata": {},
+      "duration_ms": 1234,
+      "events": [
+        { "type": "ToolCallEvent", "name": "get_weather", "arguments": "..." }
+      ],
+      "exception": null,
+      "tokens": { "input": 423, "output": 78, "cache_creation": 0, "cache_read": 0 },
+      "feedback": [
+        { "key": "tool_called[get_weather]", "score": true, "value": null, "comment": null }
+      ],
+      "budget_violation": false,
+      "trace_ref": { "trace_id": "6c9e58736a7f8b080ed7c72213b7dcd8", "task_id": "weather-001", "metadata": {} }
+    }
+  ],
+  "aggregates": {
+    "pass_rate": { "tool_called[get_weather]": 1.0 },
+    "score_stats": { "extra_tool_calls": { "mean": 0.0, "p50": 0.0, "p95": 0.0, "n": 5 } },
+    "value_counts": { "termination_reason": { "completed": 5 } },
+    "tokens": { "input": 2115, "output": 390, "total": 2505 },
+    "errors": 0,
+    "budget_violations": 0
+  }
+}
+```
+
+The per-task `trace_ref` is the real OpenTelemetry trace id of that task's spans (see [External telemetry](runs.md#external-telemetry-exporting-spans-to-your-own-backend)) — a stored row deep-links to the trace in your backend. The schema is forward-compatible: future versions add fields at the end of objects; existing fields don't change name or type. **Don't rely on this shape for in-tree code** — use the `RunResult` Python API. The JSON is for cross-process / cross-time persistence: a future dashboard, a CI artifact, a diff between two releases.
+
+## Comparing two runs
+
+Persistence pays off when you compare two runs: *"did my change make the agent better or worse?"*. Load a past run with `load_run(path)` and `diff` the current one against it.
+
+```python linenums="1"
+from autogen.beta.eval import load_run, run_agent
+
+baseline = load_run("runs/last_release.json")          # a previously saved run
+current = await run_agent(suite, agent=my_new_agent, scorers=[...], store_dir="runs")
+
+delta = current.diff(baseline)
+print(delta.summary())
+#   correctness    88.0% -> 71.0%   -17.0   REGRESSION
+#   tool_called    90.0% -> 95.0%    +5.0
+#   flipped pass->fail: ['correctness:task-12']
+```
+
+`diff` joins the two runs by `task_id` and scorer key and reports per-scorer pass-rate / mean deltas plus the tasks that flipped pass↔fail. `RunDiff.regressions` is the `(scorer, task_id)` pairs that went pass → fail — the CI gate:
+
+```python linenums="1"
+assert not current.diff(baseline).regressions   # fail the build if anything regressed
+```
+
+!!! warning "Runs must be comparable"
+    By default (`strict=True`) `diff` raises `RunsNotComparableError` when the two runs didn't grade the same tasks with the same checks — a task or scorer present in only one run, or a task whose `inputs` / `reference_outputs` changed under the same id (*content drift*). The error itemizes every mismatch and tells you to pass **`strict=False`** to diff the overlap instead. With `strict=False`, only the genuinely comparable `(task, scorer)` pairs are diffed and everything excluded is reported on the `RunDiff` (`content_changed`, `only_in_current` / `only_in_baseline`, `scorers_only_in_*`) — so you are never silently shown an apples-to-oranges number.
+
+!!! note
+    `load_run` reconstructs each run's **scores and task identity** — enough for `diff` and the `pass_rate` / `score_stats` / `value_counts` accessors. It does not replay event traces, so a loaded run's `aggregates.tokens` reads zero; read the JSON directly if you need event-level detail.
+
+## Tracking an agent across iterations
+
+Persistence turns a one-off eval into a record of an agent's progress. There's no separate "project" concept to set up — you get one from three habits:
+
+- **One `store_dir` per agent** — the folder *is* that agent's history.
+- **A `run_id` that encodes the version** — `run_id="blog-writer-v7"` saves as `blog-writer-v7.json`.
+- **A stable suite** — keep the eval set fixed across iterations so the runs stay comparable.
+
+Then every iteration follows the same loop: **run → compare to the last → act on the diff.**
+
+### Iteration 1 — establish a baseline
+
+```python linenums="1"
+result = await run_agent(
+    suite, agent=agent_v1, scorers=SCORERS,
+    store_dir="runs/blog-writer", run_id="v1", label="first cut",
+)
+print(result.summary())
+```
+
+You now have `runs/blog-writer/v1.json`. Read the scorecard and note what's weak — say `has_call_to_action` sits at 40%.
+
+### Iteration 2 — change something, then confirm you moved the needle
+
+You tweak the prompt to always end with a call to action, and re-run against the **same suite** with a new `run_id`:
+
+```python linenums="1"
+from autogen.beta.eval import load_run
+
+current = await run_agent(
+    suite, agent=agent_v2, scorers=SCORERS,
+    store_dir="runs/blog-writer", run_id="v2", label="add CTA",
+)
+print(current.diff(load_run("runs/blog-writer/v1.json")).summary())
+#   has_call_to_action   40.0% -> 100.0%   +60.0
+#   mentions_topic      100.0% -> 100.0%    +0.0
+```
+
+The diff confirms the fix landed and nothing else moved. Ship it.
+
+### Iteration 3 — catch a regression before it ships
+
+Later you swap to a cheaper model and re-run:
+
+```python linenums="1"
+current = await run_agent(
+    suite, agent=agent_v3, scorers=SCORERS,
+    store_dir="runs/blog-writer", run_id="v3", label="cheaper model",
+)
+diff = current.diff(load_run("runs/blog-writer/v2.json"))
+print(diff.summary())
+#   has_call_to_action  100.0% -> 100.0%    +0.0
+#   mentions_topic      100.0% ->  80.0%   -20.0   REGRESSION
+print(diff.regressions)   # [('mentions_topic', 'task-3')]
+```
+
+The cheaper model dropped the topic on one task. Now you can **decide deliberately**: accept −20% for the cost saving, or adjust (sharpen the prompt, or keep the old model for that case). Either way you knew *before* merging — and in CI, `assert not diff.regressions` would have blocked it for you.
+
+The folder now holds `v1.json`, `v2.json`, `v3.json` — a complete, comparable history. Diff any pair to see how the agent moved between two points in its life, or hand the JSONs to a dashboard later.
+
+## Where to next
+
+- **[Runs](runs.md)** — producing the runs you persist here.
+- **[Variants](variants.md)** — compare several builds in a single run instead of across iterations.

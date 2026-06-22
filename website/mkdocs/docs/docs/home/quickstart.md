@@ -1,0 +1,426 @@
+---
+title: "Quickstart Guide"
+mode: "wide"
+---
+
+<div class="homepage-hero-section">
+  <div class="hero-content">
+    <div class="hero-logo-section">
+      <img class="hero-logo" noZoom src="/assets/img/ag2.svg" alt="AG2 Logo" />
+    </div>
+    <div class="hero-text-section">
+      <h2 class="hero-title">Open-Source AgentOS for AI Agents</h2>
+      <p class="hero-subtitle">Build production-ready multi-agent systems in minutes, not months.</p>
+    </div>
+  </div>
+</div>
+
+<p align="center">
+  <a href="https://www.pepy.tech/projects/ag2">
+    <img src="https://static.pepy.tech/personalized-badge/ag2?period=month&units=international_system&left_color=grey&right_color=green&left_text=downloads/month" alt="Downloads"/>
+  </a>
+  <a href="https://pypi.org/project/autogen/">
+    <img src="https://img.shields.io/pypi/v/ag2?label=PyPI&color=green" />
+  </a>
+  <img src="https://img.shields.io/pypi/pyversions/ag2.svg?label=" alt="" />
+  <a href="https://discord.gg/pAbnFJrkgZ">
+    <img src="https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat" alt="Discord" />
+  </a>
+</p>
+
+AG2 (formerly AutoGen) is an open-source framework for building AI agents and enabling multi-agent collaboration to solve tasks. It supports various LLMs, tool use, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns, streamlining agentic AI development and research.
+
+## Key Features
+
+<div class="key-features">
+    <div class="card">
+            <div class="key-feature">
+                <img noZoom src="/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
+                <div class="key-feature-text">
+                    <b>Multi-Agent Conversation Framework</b>
+                    <p>AG2 provides multi-agent conversation framework as a high-level abstraction. With this framework, one can conveniently build LLM workflows.</p>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="key-feature">
+                <img noZoom src="/assets/img/autogen_app.svg" alt='Easily Build Diverse Applications' />
+                <div class="key-feature-text">
+                    <b>Easily Build Diverse Applications</b>
+                    <p>AG2 offers a collection of working systems spanning a wide range of applications from various domains and complexities.</p>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="key-feature">
+                <img noZoom src="/assets/img/extend.svg" alt='Enhanced LLM Inference & Optimization' />
+                <div class="key-feature-text">
+                    <b>Enhanced LLM Inference & Optimization</b>
+                    <p>AG2 supports enhanced LLM inference APIs, which can be used to improve inference performance and reduce cost.</p>
+                </div>
+            </div>
+        </div>
+</div>
+
+## Get Started in 3 Minutes
+
+Install AG2 and create your first agent — just two commands:
+
+```bash
+pip install "ag2[openai]"
+```
+
+```python
+import os
+
+from autogen import ConversableAgent, LLMConfig
+
+# Configure the LLM (uses the OPENAI_API_KEY environment variable)
+llm_config = LLMConfig(
+    {"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}
+)
+
+# Create and run an agent
+agent = ConversableAgent(
+    name="helpful_agent",
+    system_message="You are a poetic AI assistant, respond in rhyme.",
+    llm_config=llm_config,
+)
+
+response = agent.run(
+    message="In one sentence, what's the big deal about AI?",
+    max_turns=3,
+)
+response.process()
+```
+
+**[Follow the full Quick Start guide to run this yourself -->](../quick-start.md)**
+
+## Core Agent Concepts
+
+AG2 provides several foundational agent types and interaction patterns to build sophisticated AI systems. Here are the key concepts:
+
+- **Conversable Agent:** The fundamental building block that can send messages, receive messages, and generate responses using GenAI models, external tools, or human input.
+- **Human in the Loop:** Seamlessly integrate human judgment and expertise into agent workflows, allowing for oversight, guidance, and collaboration at critical decision points.
+- **Orchestrating Multiple Agents:** Coordinate complex agent interactions through built-in patterns like swarms, group chats, nested conversations, and sequential workflows—or create custom orchestration by registering specialized reply methods.
+- **Tools:** Extend agent capabilities by registering external programs and APIs that agents can invoke and execute to access specialized functionality or data.
+
+### Conversable agent
+
+The `ConversableAgent` is the fundamental building block of AG2, designed to enable seamless communication between AI entities. This core agent type handles message exchange and response generation, serving as the base class for all agents in the framework.
+
+In the example below, we'll create a simple information validation workflow with two specialized agents that communicate with each other:
+
+```python
+# 1. Import ConversableAgent class
+from autogen import ConversableAgent, LLMConfig
+import os
+
+# 2. Define our LLM configuration for OpenAI's gpt-5-nano
+#    uses the OPENAI_API_KEY environment variable
+llm_config = LLMConfig(
+    {"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}
+)
+
+# 3. Create our LLM agent
+# Create an AI agent
+assistant = ConversableAgent(
+    name="assistant",
+    system_message="You are an assistant that responds concisely.",
+    llm_config=llm_config
+)
+
+# Create another AI agent
+fact_checker = ConversableAgent(
+    name="fact_checker",
+    system_message="You are a fact-checking assistant.",
+    llm_config=llm_config
+)
+
+# 4. Start the conversation
+assistant.initiate_chat(
+    recipient=fact_checker,
+    message="What is AG2?",
+    max_turns=2
+)
+```
+
+When you run this code, you'll see a simple fact-checking interaction in action. The assistant agent initiates the conversation by asking "What is AG2?", and the fact-checker agent responds with information about the AG2 framework.
+
+### Human in the loop
+
+Human oversight is crucial for many AI workflows, especially when dealing with critical decisions, creative tasks, or situations requiring expert judgment. AG2 makes integrating human feedback seamless through its human-in-the-loop functionality.
+You can configure how and when human input is solicited using the `human_input_mode` parameter:
+
+- `ALWAYS`: Requires human input for every response
+- `NEVER`: Operates autonomously without human involvement
+- `TERMINATE`: Only requests human input to end conversations
+
+For convenience, AG2 provides the specialized `UserProxyAgent` class that automatically sets `human_input_mode` to `ALWAYS` and supports code execution:
+
+```python
+# 1. Import ConversableAgent and UserProxyAgent classes
+from autogen import ConversableAgent, UserProxyAgent, LLMConfig
+import os
+
+# 2. Define our LLM configuration for OpenAI's gpt-5-nano
+#    uses the OPENAI_API_KEY environment variable
+llm_config = LLMConfig(
+    {"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}
+)
+
+# 3. Create our LLM agent
+assistant = ConversableAgent(
+    name="assistant",
+    system_message="You are a helpful assistant.",
+    llm_config=llm_config
+)
+
+# 4. Create a human agent with manual input mode
+human = ConversableAgent(
+    name="human",
+    human_input_mode="ALWAYS"
+)
+# or
+human = UserProxyAgent(name="human", code_execution_config={"work_dir": "coding", "use_docker": False})
+
+# 5. Start the chat
+human.initiate_chat(
+    recipient=assistant,
+    message="Hello! What's 2 + 2?"
+)
+
+```
+
+In this example, the human serves as both the conversation initiator and an active participant. You'll be prompted for input at each step, allowing you to guide the assistant, validate its responses, and provide additional context as needed—essential for workflows where human judgment and domain expertise are required.
+
+### Orchestrating multiple agents
+
+AG2 enables sophisticated multi-agent collaboration through flexible orchestration patterns, allowing you to create dynamic systems where specialized agents work together to solve complex problems.
+
+The framework offers both custom orchestration and several built-in collaboration patterns including `GroupChat` and `Swarm`.
+
+Here's how to implement a collaborative team for curriculum development using GroupChat:
+
+```python
+from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig
+import os
+
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = LLMConfig(
+    {"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}
+)
+
+planner_message = """You are a classroom lesson agent.
+Given a topic, write a lesson plan for a fourth grade class.
+Use the following format:
+<title>Lesson plan title</title>
+<learning_objectives>Key learning objectives</learning_objectives>
+<script>How to introduce the topic to the kids</script>
+"""
+
+reviewer_message = """You are a classroom lesson reviewer.
+You compare the lesson plan to the fourth grade curriculum and provide a maximum of 3 recommended changes.
+Provide only one round of reviews to a lesson plan.
+"""
+
+# 1. Add a separate 'description' for our planner and reviewer agents
+planner_description = "Creates or revises lesson plans."
+
+reviewer_description = """Provides one round of reviews to a lesson plan
+for the lesson_planner to revise."""
+
+lesson_planner = ConversableAgent(
+    name="planner_agent",
+    system_message=planner_message,
+    description=planner_description,
+    llm_config=llm_config
+)
+
+lesson_reviewer = ConversableAgent(
+    name="reviewer_agent",
+    system_message=reviewer_message,
+    description=reviewer_description,
+    llm_config=llm_config
+)
+
+# 2. The teacher's system message can also be used as a description, so we don't define it
+teacher_message = """You are a classroom teacher.
+You decide topics for lessons and work with a lesson planner.
+and reviewer to create and finalise lesson plans.
+When you are happy with a lesson plan, output "DONE!".
+"""
+
+teacher = ConversableAgent(
+    name="teacher_agent",
+    system_message=teacher_message,
+    # 3. Our teacher can end the conversation by saying DONE!
+    is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper(),
+    llm_config=llm_config
+)
+
+# 4. Create the GroupChat with agents and selection method
+groupchat = GroupChat(
+    agents=[teacher, lesson_planner, lesson_reviewer],
+    speaker_selection_method="auto",
+    messages=[],
+)
+
+# 5. Our GroupChatManager will manage the conversation and uses an LLM to select the next agent
+manager = GroupChatManager(
+    name="group_manager",
+    groupchat=groupchat,
+    llm_config=llm_config,
+)
+
+# 6. Initiate the chat with the GroupChatManager as the recipient
+teacher.initiate_chat(
+    recipient=manager,
+    message="Today, let's introduce our kids to the solar system."
+)
+```
+
+When executed, this code creates a collaborative system where the teacher initiates the conversation, and the lesson planner and reviewer agents work together to create and refine a lesson plan. The GroupChatManager orchestrates the conversation, selecting the next agent to respond based on the context of the discussion.
+
+For workflows requiring more structured processes, explore the Swarm pattern in the detailed [documentation](../user-guide/basic-concepts/introducing-swarm-orchestration.md).
+
+### Tools
+
+While large language models excel at generating content and reasoning, they have inherent limitations: they lack real-time data access, can't perform precise calculations reliably, and cannot interact with external systems. Tools overcome these limitations by connecting agents to specialized functions, APIs, and data sources.
+
+With AG2's tool integration, you can:
+
+- Access up-to-date information beyond the model's training data
+- Interact with external services and databases
+- Execute domain-specific operations with precision
+
+Here's how to implement a date calculation tool:
+
+```python
+from datetime import datetime
+from typing import Annotated
+
+from autogen import ConversableAgent, register_function, LLMConfig
+import os
+
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = LLMConfig(
+    {"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}
+)
+
+# 1. Our tool, returns the day of the week for a given date
+def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
+    date = datetime.strptime(date_string, "%Y-%m-%d")
+    return date.strftime("%A")
+
+# 2. Agent for determining whether to run the tool
+date_agent = ConversableAgent(
+    name="date_agent",
+    system_message="You get the day of the week for a given date.",
+    llm_config=llm_config
+)
+
+# 3. And an agent for executing the tool
+executor_agent = ConversableAgent(
+    name="executor_agent",
+    human_input_mode="NEVER",
+)
+
+# 4. Registers the tool with the agents, the description will be used by the LLM
+register_function(
+    get_weekday,
+    caller=date_agent,
+    executor=executor_agent,
+    description="Get the day of the week for a given date",
+)
+
+# 5. Two-way chat ensures the executor agent follows the suggesting agent
+chat_result = executor_agent.initiate_chat(
+    recipient=date_agent,
+    message="I was born on the 25th of March 1995, what day was it?",
+    max_turns=2,
+)
+
+print(chat_result.chat_history[-1]["content"])
+```
+
+When executed, this code determines that March 25, 1995, was a Saturday—delivering an accurate response through tool execution rather than relying on the model's potentially outdated or imprecise knowledge. This pattern can be extended to integrate any Python function, API, or external system into your agent workflows.
+
+## Advanced agentic design patterns
+
+AG2 offers sophisticated patterns and capabilities to build production-ready agent systems for complex use cases. These advanced features enable you to create robust, secure, and highly functional agent workflows.
+
+- [Structured Output](../user-guide/basic-concepts/structured-outputs.md)
+- [Retrieval Augmented Generation (RAG)](../user-guide/advanced-concepts/rag.md)
+- [Code Execution](../user-guide/advanced-concepts/code-execution.md)
+
+## Popular resources
+
+### Real-World Applications Repository
+
+Our dedicated <a href="https://github.com/ag2ai/build-with-ag2" target="_blank">Build with AG2</a> repository contains examples spanning various domains and use cases. These examples demonstrate how to implement advanced patterns like RAG, multi-agent workflows, and tool integration in real-world scenarios, helping you move from concept to implementation quickly.
+
+### Interactive Tutorials
+
+Explore our collection of [Jupyter Notebooks](../use-cases/notebooks/Notebooks.md) for hands-on learning experiences. These interactive tutorials cover everything from basic agent creation to advanced orchestration patterns, with step-by-step explanations and executable code samples that you can modify and experiment with in real-time.
+
+### Video Resources
+
+<div class="popular-resources">
+  <div class="card">
+      <div class="youtube-video">
+        <iframe
+          class="w-full aspect-video rounded-md"
+          src="https://www.youtube.com/embed/RLwyXRVvlNk"
+          title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+        <a target="_blank" href="https://www.youtube.com/watch?v=RLwyXRVvlNk">
+          Foundation Capital Interview with Dr. Chi Wang
+        </a>
+      </div>
+    </div>
+    <div class="card">
+      <div class="youtube-video">
+        <iframe
+          class="w-full aspect-video rounded-md"
+          src="https://www.youtube.com/embed/TBNTH-fwGPE"
+          title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+        <a target="_blank" href="https://www.youtube.com/watch?v=TBNTH-fwGPE">
+          Learn AG2 on DeepLearningAI
+        </a>
+      </div>
+    </div>
+</div>
+
+## Next Steps
+<div class="explore-content">
+  <div class="explore-content-grid-container">
+    <a class="card" href="../quick-start">
+<h2>Quick Start</h2>
+        Build your first agent in 3 minutes with a step-by-step guide.
+      </a>
+      <a class="card" href="../../user-guide/basic-concepts/installing-ag2">
+<h2>Core Concepts</h2>
+        Work through the key concepts of AG2 including ConversableAgent, GroupChat, Swarm, and tools.
+      </a>
+      <a class="card" href="../use-cases/use-cases/customer-service">
+<h2>Use Cases</h2>
+        Try out use case workflows including Customer Service, Travel Planning, and Game Design.
+      </a>
+      <a class="card" href="../use-cases/notebooks/Notebooks">
+<h2>Notebook Examples</h2>
+        A collection of interactive notebooks across all AG2 topics.
+      </a>
+      <a class="card" href="../user-guide/advanced-concepts/rag">
+<h2>Advanced Concepts</h2>
+        Advance to RAG, Code Execution, and more complex GroupChats and Swarms.
+      </a>
+  </div>
+</div>

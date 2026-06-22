@@ -1,0 +1,421 @@
+---
+title: "One Coherent Agent Isn't Enough — Action-Driven Networking with AG2"
+authors: [marklysze]
+
+date: 2026-05-14
+slug: ag2-network-one-coherent-agent
+tags:
+    - AG2 Beta
+    - Network
+    - Multi-Agent
+    - Choreography
+    - Action-driven
+categories:
+    - AG2 Beta
+    - Network
+    - Multi-Agent
+    - Choreography
+    - Action-driven
+date: 2026-05-14
+slug: AG2-Action-Driven-Network
+---
+
+![AG2 Network — One Coherent Agent Isn't Enough](img/n1-banner.webp)
+
+A single agent is a great starting point, but real work extends beyond just one.
+
+Real work spans people, teams, services, and machines. A support escalation touches a triage bot, a knowledge agent, an on-call engineer, and a postmortem writer. None of them is "in charge" — they each take a turn, in the open, over a shared thread that outlives any one of them.
+
+That's what the **AG2 Network** is built for: a layer where stateful, identity-bound, choreographed *actions* live. By the end of this post you'll have run all four conversation shapes the network ships with — and have a flavor for AG2's new multi-agent network, which we'll expand on in upcoming posts.
+
+<!-- more -->
+
+This is the first post in a four-part series introducing the AG2 Network:
+
+1. **One Coherent Agent Isn't Enough** *(this post)* — the action-driven multi-agent network, the key primitives, and the four conversation shapes.
+2. [**Choreography You Can Dial In**](/docs/blog/2026/05/15/AG2-Network-Choreography-Dial/) — setting expectations, audience addressing, deeper choreography patterns, and the orchestration cookbook.
+3. [**What Survives, Survives Exactly**](/docs/blog/2026/05/16/AG2-Network-What-Survives/) — the substrate: write-ahead log + fold + hub restart, plus identity (Passport / Resume / SKILL.md) and the audit log.
+4. [**Networks You Can Deploy**](/docs/blog/2026/06/16/AG2-Network-Networks-You-Can-Deploy/) — WebSocket transport, authentication, at-least-once delivery, and dynamic membership.
+
+In parallel, to build strong and capable agents, a companion post, **The Agent Harness: An Agent Is More Than a Loop**, zooms *inside* a single agent to make them long-running and knowledge-centric.
+
+## One Coherent Agent Isn't Enough
+
+![Two shapes of state — left: a client/server bouncing requests and responses, with state living in the client. Right: alice and carol, both stateless, with envelopes converging into a shared channel whose write-ahead log (WAL) ticks light up as messages land.](img/n1-mismatch.webp)
+
+The instinct when you have many agents is to add a *coordinator*: one agent (or one Python loop) that decides who runs next, collects the output, and decides again. That works in the demo. Then it has to ship, and the coordinator turns out to be a bottleneck, a single point of failure, and the place where all the state lives in memory until the process restarts and the conversation is gone.
+
+The deeper issue: **the internet wasn't drawn for this either**. HTTP, REST, MCP, A2A — they all work because the *client* has memory, in its head or its harness. A single agent talking to tools through MCP fits that mold perfectly. But two agents collaborating across processes don't. Both ends are stateless. The state has to live somewhere — and it can't live in either harness, because neither side can see the whole conversation alone.
+
+The natural home for that state is **the channel itself** — a durable, addressable thread that participants take turns writing to. Nobody on either end "owns" it. The hub that hosts the channel is a thin, stateless router: it stamps every message, appends it to the channel's log, fans it out. Restart the hub and it re-derives every channel from disk, byte for byte.
+
+That gives the network a fundamentally different *shape* from the request-response world we inherited.
+
+> *The harness above each agent doesn't scale across processes. The natural home is the channel itself.*
+
+## The Four Primitives
+
+AG2's Network introduces primitives to support all levels of multi-agent engagements. We'll explore them over the next few blogs, but let's start with four key primitives to get you up and running.
+
+![The four primitives — HubClients in, Hub at the center, channels routed through the adapter, WAL spine along the bottom](img/n1-primitives.webp)
+
+- **Hub** — the only authoritative state. Registry of agents, write-ahead log per channel, audit log, the adapter registry. Stateless in the sense that the *application* puts no logic here — the hub just routes envelopes and folds them. Crash it, restart it: state is re-derived from disk.
+- **HubClient** — one duplex connection to the hub per process boundary. In a real deployment each agent lives in its own process with one `HubClient`. Locally they can share a process for clarity.
+- **Channel** — the unit of conversation. Durable, addressable by ID, identity-scoped. Lifecycle: `INVITED → ACTIVE → CLOSING → CLOSED`. Every channel is governed by exactly one **adapter**.
+- **Adapter** — bound one-to-one with a channel, the adapter is the key orchestration definition. Stateless code that decides "what's allowed next" — *who can speak*, *when does this auto-close*. Four adapters ship; you'll meet all four below. Adapter state is a pure fold of the channel's WAL, which is why a hub restart is a non-event.
+
+A `Passport` (an agent's identity record) and an `Envelope` (the wire message) slip through every example below. When you see `Passport(name="alice")`, that's an immutable identity stamp the hub will assign an `agent_id` to; when you see `EV_TEXT` or `EV_CHANNEL_CLOSED`, those are envelope event types riding on the channel's WAL.
+
+## Four Shapes of Orchestration
+
+Adapters lay the foundation for you to choose, or create, the orchestration that works for your task. Opening a channel with an adapter sets the **protocol your agents must be orchestrated by.**
+
+We've started with four adapters. As noted, they're derived from a protocol and you can roll your own.
+
+| Adapter | Shape | Turn order | Closes |
+|---|---|---|---|
+| `consulting` | 1 ↔ 1, one round | ask → answer | auto-closes after the reply |
+| `conversation` | 1 ↔ 1, free-form | none | explicit `close()` or TTL |
+| `discussion` | N participants | round-robin | explicit `close()` or TTL |
+| `workflow` | N participants | a declared `TransitionGraph` | when the graph terminates |
+
+Note: The `workflow` adapter correlates closely with AG2's classic group chat with handoffs.
+
+Let's run through each one.
+
+### `consulting` — 1Q1R, the smallest viable network
+
+![consulting — INVITE / ACK / Q / R / auto-close](img/n1-consulting.webp)
+
+The simplest possible network: one agent asks another a single question, gets a single answer, and the channel auto-closes.
+
+```python linenums="1"
+import asyncio
+
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.knowledge import MemoryKnowledgeStore
+from autogen.beta.network import (
+    EV_CHANNEL_CLOSED,
+    EV_TEXT,
+    Hub,
+    HubClient,
+    LocalLink,
+    Passport,
+    Resume,
+)
+
+async def main() -> None:
+    config = AnthropicConfig(model="claude-sonnet-4-6")
+
+    # Hub: registry + WAL + audit log + adapters live here.
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+    link = LocalLink(hub)  # in-process duplex transport
+
+    # One HubClient per process boundary. Locally they share a process.
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+
+    alice = await alice_hc.register(
+        Agent("alice", prompt="Ask one focused question and stop.", config=config),
+        Passport(name="alice"),
+        Resume(),
+    )
+    bob = await bob_hc.register(
+        Agent("bob", prompt="Answer in one short sentence.", config=config),
+        Passport(name="bob"),
+        Resume(),
+    )
+
+    # Strict 1Q1R; the adapter auto-closes on bob's reply.
+    channel = await alice.open(type="consulting", target="bob")
+    await channel.send(
+        "What's the single most important property of a distributed system?",
+        audience=[bob.agent_id],
+    )
+
+    # Wait for the consulting round to close.
+    close_env = await alice.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
+        timeout=60.0,
+    )
+    print(f"closed: {close_env.event_data.get('reason')!r}")
+
+    # Replay the conversation from the channel's write-ahead log.
+    for env in await hub.read_wal(channel.channel_id):
+        if env.event_type == EV_TEXT:
+            speaker = "alice" if env.sender_id == alice.agent_id else "bob"
+            print(f"{speaker}: {env.event_data['text']}")
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+asyncio.run(main())
+```
+
+Output example:
+
+```text
+closed: 'consulting_complete'
+alice: What's the single most important property of a distributed system?
+bob: Fault tolerance — because a system that can't survive partial failures defeats its entire purpose.
+```
+
+Reach for `consulting` when you want a tool-like agent call: a single specialist invocation with a structured boundary. See [Consulting Adapter](../../../beta/network/consulting.md) for the full surface.
+
+### `conversation` — 1:1 free-form
+
+A 2-party channel with no turn ordering. Either side can speak. Useful for an agent + a human, or two agents in a back-and-forth.
+
+![conversation — alice (green) and bob (red) take turns, no enforced order; the channel accumulates messages from both sides](img/n1-conversation.webp)
+
+```python linenums="1"
+import asyncio
+
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.knowledge import MemoryKnowledgeStore
+from autogen.beta.network import (
+    EV_TEXT,
+    Hub,
+    HubClient,
+    LocalLink,
+    Passport,
+    Resume,
+)
+
+async def wait_for_text_count(hub: Hub, channel_id: str, expected: int) -> None:
+    """Tail the channel's WAL; return after `expected` EV_TEXT envelopes.
+    Used to close the channel when we reach a certain number of messages."""
+    seen: set[str] = set()
+    count = 0
+    while count < expected:
+        for env in await hub.read_wal(channel_id):
+            if env.envelope_id in seen:
+                continue
+            seen.add(env.envelope_id)
+            if env.event_type == EV_TEXT:
+                count += 1
+        await asyncio.sleep(0.05)
+
+async def main() -> None:
+    config = AnthropicConfig(model="claude-sonnet-4-6")
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+
+    alice = await alice_hc.register(
+        Agent("alice", prompt="You are alice. Ask follow-ups, one short sentence at a time.", config=config),
+        Passport(name="alice"), Resume(),
+    )
+    bob = await bob_hc.register(
+        Agent("bob", prompt="You are bob. Answer in one short sentence; ask one follow-up.", config=config),
+        Passport(name="bob"), Resume(),
+    )
+
+    channel = await alice.open(type="conversation", target="bob")
+    await channel.send("How would you explain consensus to a curious novice?")
+
+    # Let them go four turns, then close from the application side.
+    await wait_for_text_count(hub, channel.channel_id, expected=4)
+    await channel.close()
+
+    for env in await hub.read_wal(channel.channel_id):
+        if env.event_type == EV_TEXT:
+            speaker = "alice" if env.sender_id == alice.agent_id else "bob"
+            print(f"{speaker}: {env.event_data['text']}")
+
+    await alice_hc.close(); await bob_hc.close(); await hub.close()
+```
+
+(`wait_for_text_count` is a small helper that tails the WAL until it sees N `EV_TEXT` envelopes — `conversation` and `discussion` don't auto-terminate, so the application decides when enough has been said.)
+
+`conversation` doesn't auto-terminate. The application decides when the work is done. See [Conversation Adapter](../../../beta/network/conversation.md).
+
+### `discussion` — N-party round-robin
+
+![discussion — two full rounds of round-robin (a1, b2, c3, a4, b5, c6); the expected_next_speaker pointer rotates and out-of-turn participants skip the LLM call](img/n1-discussion.webp)
+
+Three agents — an optimist, a realist, a skeptic — debate a topic, round-robin, with no coordinator deciding turns. The adapter enforces the order; each agent's default handler skips the LLM call entirely when it's not its turn (`hc.can_send` returns false).
+
+```python linenums="1"
+import asyncio
+
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.knowledge import MemoryKnowledgeStore
+from autogen.beta.network import (
+    EV_TEXT,
+    ORDERING_ROUND_ROBIN,
+    Hub, HubClient, LocalLink, Passport, Resume,
+)
+
+async def wait_for_text_count(hub: Hub, channel_id: str, expected: int) -> None:
+    """Tail the channel's WAL; return after `expected` EV_TEXT envelopes.
+    Used to close the channel when we reach a certain number of messages."""
+    seen: set[str] = set()
+    count = 0
+    while count < expected:
+        for env in await hub.read_wal(channel_id):
+            if env.envelope_id in seen:
+                continue
+            seen.add(env.envelope_id)
+            if env.event_type == EV_TEXT:
+                count += 1
+        await asyncio.sleep(0.05)
+
+async def main() -> None:
+    config = AnthropicConfig(model="claude-sonnet-4-6")
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc, bob_hc, carol_hc = (HubClient(link, hub=hub) for _ in range(3))
+
+    alice = await alice_hc.register(
+        Agent("alice", prompt="You are the optimist. One short sentence.", config=config),
+        Passport(name="alice"), Resume(),
+    )
+    bob = await bob_hc.register(
+        Agent("bob", prompt="You are the realist. One short sentence.", config=config),
+        Passport(name="bob"), Resume(),
+    )
+    carol = await carol_hc.register(
+        Agent("carol", prompt="You are the skeptic. One short sentence.", config=config),
+        Passport(name="carol"), Resume(),
+    )
+
+    channel = await alice.open(
+        type="discussion",
+        target=[bob.agent_id, carol.agent_id],
+        knobs={"ordering": ORDERING_ROUND_ROBIN},
+    )
+    await channel.send("Topic: should every developer learn Rust? Keep it brief.")
+
+    # 6 messages = two full round-robin cycles. Then close to halt the chain.
+    await wait_for_text_count(hub, channel.channel_id, expected=6)
+    await channel.close()
+
+    names = {alice.agent_id: "alice", bob.agent_id: "bob", carol.agent_id: "carol"}
+    for env in await hub.read_wal(channel.channel_id):
+        if env.event_type == EV_TEXT:
+            print(f"{names[env.sender_id]:>6}: {env.event_data['text']}")
+
+    await alice_hc.close(); await bob_hc.close(); await carol_hc.close()
+    await hub.close()
+
+asyncio.run(main())
+```
+
+Reach for `discussion` when you want a fixed cast taking turns — brainstorms, panel reviews, devil's-advocate debates. See [Discussion Adapter](../../../beta/network/discussion.md).
+
+### `workflow` — graph-driven
+
+![workflow — researcher → writer → reviewer with a conditional loop-back to writer when the reviewer's tool call returns Handoff(target=writer); approval routes to terminate](img/n1-workflow.webp)
+
+`workflow` is the most expressive adapter: speaker order is governed by a declarative `TransitionGraph` you pass in at channel-open together with handoffs from tools. Two convenience factories ship for the simple cases — `TransitionGraph.sequence([...])` for a linear pipeline, and `TransitionGraph.round_robin([...], max_turns=N)` for a hard-capped rotation — but the real power is in **conditional handoffs**: each `Transition` says *"when this condition fires, hand off to that target."*
+
+In this example: researcher gathers facts, writer drafts, reviewer either approves or kicks the draft back to the writer. The reviewer's two routing tools illustrate the **two ways** workflow lets you drive routing:
+
+- **Dynamic** — `request_revision` returns `Handoff(target="writer", reason=...)`. The tool *itself* picks the next speaker at call time. No graph rule needed; a returned `Handoff` supersedes any matching `ToolCalled` rule. Use this when the target depends on runtime state (load balancing, content-driven dispatch, "ask whichever specialist is registered for X").
+- **Static** — `approve` returns a plain string and is matched by `ToolCalled("approve")` → `TerminateTarget("approved")`. The graph owns the decision. Use this when routing is fixed at channel-open time.
+
+```python linenums="1" hl_lines="9 10 11 12 41 42 43 44 45 46 47 48 49"
+from autogen.beta import Agent, tool
+from autogen.beta.network import (
+    AgentTarget, FromSpeaker, Handoff, TerminateTarget,
+    ToolCalled, Transition, TransitionGraph,
+)
+# ... imports + hub setup as above ...
+
+@tool
+def request_revision(reason: str) -> Handoff:
+    """Send the draft back to the writer for revision."""
+    return Handoff(target="writer", reason=reason)
+
+@tool
+def approve() -> str:
+    """Approve the draft and end the workflow."""
+    return "Approved."
+
+researcher = await researcher_hc.register(
+    Agent("researcher", prompt="Given a topic, list 3 concrete factual bullets.", config=config),
+    Passport(name="researcher"), Resume(claimed_capabilities=["research"]),
+)
+writer = await writer_hc.register(
+    Agent("writer", prompt="Given research bullets, draft a 2-sentence explanation for a novice.", config=config),
+    Passport(name="writer"), Resume(claimed_capabilities=["writing"]),
+)
+reviewer = await reviewer_hc.register(
+    Agent(
+        "reviewer",
+        prompt=(
+            "You are a strict-but-fair reviewer. "
+            "On the FIRST draft, always call request_revision with one concrete suggestion. "
+            "On the REVISED draft, always call approve(). "
+            "Exactly one revision round, then approve."
+        ),
+        config=config,
+        tools=[request_revision, approve],
+    ),
+    Passport(name="reviewer"), Resume(claimed_capabilities=["reviewing"]),
+)
+
+# Conditional graph — `request_revision` doesn't appear here: it routes
+# itself via the Handoff it returns. The graph only owns the static rules:
+# the terminator and the default forward flow.
+graph = TransitionGraph(
+    initial_speaker=researcher.agent_id,
+    transitions=[
+        Transition(when=ToolCalled("approve"),            then=TerminateTarget("approved")),
+        Transition(when=FromSpeaker(researcher.agent_id), then=AgentTarget(writer.agent_id)),
+        Transition(when=FromSpeaker(writer.agent_id),     then=AgentTarget(reviewer.agent_id)),
+    ],
+)
+
+channel = await researcher.open(
+    type="workflow",
+    target=[writer.agent_id, reviewer.agent_id],
+    knobs={"graph": graph.to_dict()},
+)
+await channel.send("Topic: how does HTTPS keep traffic private?")
+
+# Auto-terminates with reason="approved" once the reviewer is happy.
+await researcher.wait_for_channel_event(
+    channel_id=channel.channel_id,
+    predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
+    timeout=180.0,
+)
+```
+
+Note that `Handoff(target="writer", ...)` uses the participant's `Passport.name` rather than its `agent_id` — tool code stays decoupled from runtime IDs and portable across channels.
+
+The four conditions — `ToolCalled`, `FromSpeaker`, `ContextEquals`, and `Always` — cover most routing needs out of the box. For graphs that need to inspect arbitrary state, you can write a custom `TransitionCondition` and register it.
+
+Reach for `workflow` when "who speaks next" is structured — pipelines, escalation, conditional routing. See [Workflow Adapter](../../../beta/network/workflow.md).
+
+## The Bigger Picture
+
+You've now run all four conversation shapes. There are three more layers the network adds on top, each covered in an upcoming post:
+
+- **A choreography dial** — same primitive, more knobs. *Expectations* like `reply_within(30s, auto_close)` give the channel a deterministic response when a participant misses a deadline. *Audience* on each envelope (`audience=[a, b]`) lets a single channel carry private side-channels for free. Deeper `TransitionGraph` patterns — conditional handoffs, dynamic `Handoff` returns, context-aware routing — sit alongside. **Post 2: [Choreography You Can Dial In](/docs/blog/2026/05/15/AG2-Network-Choreography-Dial/).**
+- **A trustworthy substrate** — what's written down and who you are. The hub's WAL is the source of truth: kill the hub, restart it, every channel comes back byte-for-byte. Identity is three records (`Passport` + `Resume` + `SKILL.md`), not a name string. The audit log records every envelope. **Post 3: [What Survives, Survives Exactly](/docs/blog/2026/05/16/AG2-Network-What-Survives/).**
+- **Cross-boundary deployment** — what lets you actually ship this. A single channel can span two organizations through Passport + Visa. Participants register and unregister dynamically. Text, audio, image, and video ride the same fan-out. And a real production-incident demo ties it all together. **Post 4: [Networks You Can Deploy](/docs/blog/2026/06/16/AG2-Network-Networks-You-Can-Deploy/).**
+
+## Interactive Playground
+
+Jump into [AG2's Playground](https://playground.ag2.ai/) to take an interactive tour of the AG2 Network and run Beta examples live.
+
+## The full series
+
+- [**Choreography You Can Dial In**](/docs/blog/2026/05/15/AG2-Network-Choreography-Dial/) *(orchestration deep-dive)*
+- [**What Survives, Survives Exactly**](/docs/blog/2026/05/16/AG2-Network-What-Survives/) *(the substrate)*
+- [**Networks You Can Deploy**](/docs/blog/2026/06/16/AG2-Network-Networks-You-Can-Deploy/) *(WebSocket, auth, at-least-once delivery)*
+
+A deeper dive into agents:
+- **The Agent Harness** *(knowledge, long-context memory)*
+
+Docs: [Network Quick Start](../../../beta/network/quick_start.md) · [Channel Adapters Overview](../../../beta/network/adapters_overview.md) · [Hub & Identity](../../../beta/network/hub_and_identity.md) · [Migrating from Group Chat](../../../beta/network/migration_from_group_chat.md)

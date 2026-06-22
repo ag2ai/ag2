@@ -1,0 +1,161 @@
+---
+title: Contribution Policy
+sidebarTitle: Contribution Policy
+---
+
+AG2 is what it is today because of its contributors. This page explains how contributions will work in the v1.0 era — what lives in Core, what lives as an Extension, and what we ask of contributors in each.
+
+!!! note
+    This policy applies to the **AG2 Beta** track (`autogen.beta`), which becomes the official AG2 framework at v1.0. See the [Release Roadmap](../user-guide/release-roadmap.md) for the full v1.0 plan.
+
+## Why a new policy
+
+**AG2 v1.0 is focused on production and scalability.** Teams building real systems on AG2 need a foundation that is small, predictable, and dependable under load. Core is what those teams depend on, and keeping it tight is critical to the v1.0 release.
+
+Over the years AG2 has grown to include many agents, tools, and integrations — many contributed by the community. That is a great strength, but has made the framework heavier than it needs to be and harder to evolve and support.
+
+For v1.0, we want a focused **Core** that AG2 actively maintains, alongside a vibrant set of **Extensions** maintained by the contributors who care about them most.
+
+## Core and Extensions
+
+**Core** is the foundational AG2 Beta framework — maintained by AG2 with contributions from the community and AG2 team, kept lightweight, and held to a strict quality bar.
+
+Today, everything shipped under `autogen.beta` is Core: the Agent runtime, primary LLM providers, common built-in tools, middleware, structured output, telemetry, history management, and the context and dependency-injection primitives.
+
+**Extensions** are first-class components of the AG2 ecosystem — agents, tools, providers, middleware, and integrations that extend what you can build with Core. Most are community-contributed, but AG2 may also author Extensions where it makes sense (for example, integrations we want to ship without expanding Core's dependency surface). The defining characteristic of an Extension is **who maintains it** — every Extension has a named maintainer (AG2 or community) who commits to keeping it working. Typical Extensions include:
+
+- Additional middleware
+- LLM providers and third-party model gateways
+- Third-party code executors and sandboxing backends
+- Domain-specific tools and integrations
+- Adapters for external frameworks and services
+
+Reliance on a third-party SDK is a strong signal that something belongs in Extensions, but the deciding question is who is best placed to own it long-term — AG2, or a contributor closer to the integration. An Extension can be just as widely used and just as polished as anything in Core; what differs is the maintenance model.
+
+!!! note "Extensions are first-class"
+    An Extension is not a second-tier component. The bar for documentation, tests, and code quality is the same one Core is held to — the difference is who commits to maintaining it over time, not how good it has to be on the day it ships.
+
+## Phase 1 — until v1.0
+
+Core and Extensions live in the same repository. Extensions go under `autogen/beta/extensions/` and ship as part of `pip install ag2`. The contribution flow stays familiar during the transition.
+
+## Phase 2 — at v1.0
+
+- **Core** stays in this repository.
+- **Extensions** move to a dedicated repository, with their own documentation alongside.
+- A separate **Extensions-archived** repository holds Extensions that are no longer maintained. Archived Extensions remain available and can be revived (see [Maintainership and inactivity](#maintainership-and-inactivity)).
+
+## Contributing to Core
+
+Core is held to the rigour AG2 contributors are used to:
+
+- A core maintainer must agree to support the change.
+- Tests with meaningful coverage of new behaviour.
+- Type hints, docstrings, and the development standards outlined in documentation and `AGENTS.md`.
+- Documentation updated in the same PR where applicable.
+- New dependencies added sparingly — Core is intentionally lightweight.
+- Security considered — changes must not weaken Core's security, and contributors are expected to assess the security impact of what they ship.
+
+If you are unsure whether a change belongs in Core or as an Extension, open an Issue or draft PR first.
+
+## Contributing an Extension
+
+Extensions are held to the same quality bar as Core; the difference is that the maintenance commitment sits with the Extension's maintainer rather than with AG2. An Extension contribution must:
+
+- Include **documentation** that lets a new user understand and use it — at minimum a module-level docstring summarising the Extension, docstrings on public classes and functions, and a page under the **Extensions** section of the docs. Following standards as noted in [Code Documentation example](#code-documentation-example).
+- Include **tests** covering the Extension's behaviour.
+- Declare third-party packages as **additional dependencies**, not as `pip install ag2[...]` extras — Extensions are not shipped as pyproject extras. Guard the optional imports with a `try/except ImportError` block in the Extension's `__init__.py` and fall back via `missing_additional_dependency`, so the install hint points at the upstream package directly (for example `pip install "daytona>=0.171.0,<1"`). Use `missing_optional_dependency` (the `ag2[...]` extra form) only for Core modules.
+- Pass **code review by AG2** so we can confirm it is safe to ship alongside Core.
+- Have a **named maintainer** (you, your team, or a designated successor) who agrees to:
+    - respond to issues and PRs,
+    - keep the Extension working with current Core releases, and
+    - **let us know if you can no longer maintain it**, so we can find a new maintainer or move it to the archive.
+
+AG2 facilitates Extension PR reviews, but ongoing bug fixes and evolution are the maintainer's role.
+
+## Contributing Examples and Showcases
+
+Full, runnable, examples and showcases, using Core or active Extensions, belong in the [build-with-ag2](https://github.com/ag2ai/build-with-ag2){.external-link target="_blank"} repository, not in Core or Extension repos. This keeps each codebase focused on framework code and gives examples a single, discoverable home.
+
+When Core functionality is deprecated or Extensions are archived, corresponding Examples/Showcases will be removed from the Build-with-AG2 repository.
+
+!!! note
+    The responsibility to maintain an Example or Showcase in the Build-with-AG2 repository **is the same** as contributing an Extension, with the exception that they will be removed, not archived, when functionality is deprecated or related Extensions archived.
+
+## Maintainership and inactivity
+
+We do not expect anyone to maintain an Extension forever. What we ask is that maintainers tell us when they cannot continue, so users are not left guessing.
+
+In Phase 2, an Extension is considered for archival if **all** of the following hold:
+
+- It has been broken (failing CI against the latest Core, or an unresolved critical bug) for **30+ days**,
+- The maintainer has not responded to issues or PRs for **30 days**, and
+- A **30-day notice** has been posted asking for a new maintainer.
+
+If no one steps up, the Extension moves to **Extensions-archived**. Archived Extensions can be revived at any time (with a commitment to maintain it) — open an Issue and we will help bring it back.
+
+## Promoting an Extension to Core
+
+Promotion to Core is an exception, not a planned path. It requires a core maintainer willing to own the component, a track record of stability and adoption as an Extension, and compatibility with Core's dependency and quality expectations. If you think your Extension is a candidate, open an Issue and we will discuss.
+
+## Working together
+
+We are grateful for everyone who has contributed to AG2 — past, present, and future. This policy exists so AG2 can keep growing without losing the stability production users depend on, and so contributors have clear, fair expectations on both sides.
+
+If anything is unclear or you have ideas to improve it, open an Issue or join us on [Discord](https://discord.com/invite/pAbnFJrkgZ){.external-link target="_blank"}.
+
+!!! note
+    The repository's [`CONTRIBUTING.md`](https://github.com/ag2ai/ag2/blob/main/CONTRIBUTING.md){.external-link target="_blank"} will be updated to reflect this policy as we move toward v1.0.
+
+## Code documentation example
+
+Below is a minimal sketch of AG2's coding documentation standard. It includes the AG2 copyright header and [Google-style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings){.external-link target="_blank"} docstrings on the module, public classes, and public functions.
+
+```python linenums="1"
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+"""Acme search Extension for AG2.
+
+Provides a tool that lets agents query the Acme Search API and
+receive ranked search results with cited sources. Designed for agents that
+need up-to-date web information without managing the HTTP client themselves.
+
+Maintainer: <github-handle>
+Docs: https://docs.ag2.ai/extensions/search-tools/acme
+Examples: https://github.com/ag2ai/build-with-ag2/extensions/acme-search-tool
+"""
+
+from autogen.beta.tools import Tool
+
+class AcmeSearch(Tool):
+    """Tool that performs web searches via the Acme Search API.
+
+    The tool issues a single ranked-search request per call. Deduplication
+    and re-ranking of results are the agent's responsibility.
+
+    Attributes:
+        api_key: Acme Search API key. Sent in the ``Authorization`` header.
+        max_results: Maximum number of results to return per query. Must be
+            between 1 and 20 inclusive.
+    """
+
+    def __init__(self, api_key: str, max_results: int = 5) -> None:
+        ...
+
+    async def search(self, query: str) -> list["SearchResult"]:
+        """Run a search against the Acme Search API.
+
+        Args:
+            query: The natural-language query to send.
+
+        Returns:
+            A list of ``SearchResult`` objects, ordered by relevance.
+
+        Raises:
+            AcmeSearchAPIError: If the upstream service returns a non-2xx
+                status code or a malformed response payload.
+        """
+        ...
+```

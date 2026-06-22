@@ -1,0 +1,293 @@
+---
+title: "Networks You Can Deploy"
+authors: [marklysze]
+
+date: 2026-06-16
+slug: ag2-network-networks-you-can-deploy
+tags:
+    - AG2 Beta
+    - Network
+    - Multi-Agent
+    - WebSocket
+    - Authentication
+    - Durability
+categories:
+    - AG2 Beta
+    - Network
+    - Multi-Agent
+    - WebSocket
+    - Authentication
+    - Durability
+date: 2026-06-16
+slug: AG2-Network-Networks-You-Can-Deploy
+---
+
+![Networks You Can Deploy](img/n4-banner.webp)
+
+Moving agents to separate processes usually means rewriting the networking layer. With the AG2 Network, it's a constructor argument.
+
+The Hub absorbs the topology difference. Replace `LocalLink` with `WsLink`, add an auth registry, and your agents are distributed. This post covers the three things you actually wire up to go from a local prototype to a network you can deploy.
+
+<!-- more -->
+
+This is the fourth post in a four-part series on the AG2 Network:
+
+1. [**One Coherent Agent Isn't Enough**](/docs/blog/2026/05/14/AG2-Action-Driven-Network/) — the action-driven network; Hub, HubClient, Channel, Adapter.
+2. [**Choreography You Can Dial In**](/docs/blog/2026/05/15/AG2-Network-Choreography-Dial/) — expectations, audience addressing, TransitionGraph.
+3. [**What Survives, Survives Exactly**](/docs/blog/2026/05/16/AG2-Network-What-Survives/) — write-ahead log, three identity records, audit log.
+4. **Networks You Can Deploy** *(this post)* — WebSocket transport, authentication, at-least-once delivery.
+
+## Crossing the Process Boundary
+
+In the previous posts every example used `LocalLink` — an in-process link that connects a `HubClient` to a `Hub` object in the same Python process. Swapping to WebSocket is a single-line change on the client side:
+
+```python
+# In-process (development)
+from autogen.beta.network import LocalLink
+
+hc = HubClient(LocalLink(hub))  # hub is a Hub object in this process
+
+# Cross-process (production)
+from autogen.beta.network import WsLink
+
+hc = HubClient(WsLink("ws://hub:8765"))  # hub is a running process elsewhere
+```
+
+The hub process itself runs `serve_ws` — an async context manager that binds a WebSocket server to an existing `Hub`:
+
+```python linenums="1"
+import asyncio
+from pathlib import Path
+
+from autogen.beta.knowledge import DiskKnowledgeStore
+from autogen.beta.network import Hub, serve_ws
+
+async def main() -> None:
+    hub = await Hub.open(DiskKnowledgeStore(Path("./hub-data")))
+    async with serve_ws(hub, "0.0.0.0", 8765) as server:
+        host, port = server.sockets[0].getsockname()
+        print(f"hub listening on ws://{host}:{port}")
+        await asyncio.Future()  # run until interrupted
+
+asyncio.run(main())
+```
+
+Agent processes are entirely separate Python programs. Each constructs its own `WsLink` and `HubClient`:
+
+```python linenums="1"
+import asyncio
+
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.network import (
+    EV_TEXT,
+    HubClient,
+    Passport,
+    Resume,
+    WsLink,
+)
+
+HUB_URL = "ws://hub:8765"
+
+async def main() -> None:
+    hc = HubClient(WsLink(HUB_URL))
+    alice = await hc.register(
+        Agent("alice", prompt="You coordinate tasks.", config=AnthropicConfig(model="claude-sonnet-4-6")),
+        Passport(name="alice"),
+        Resume(summary="coordinator"),
+    )
+
+    channel = await alice.open(type="consulting", target=["bob"])
+    await channel.send("What is the current deployment status?")
+
+    await alice.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_TEXT and e.sender_id != alice.agent_id,
+        timeout=60.0,
+    )
+    await hc.close()
+
+asyncio.run(main())
+```
+
+![Three processes — alice, hub, bob — each a separate Python program connected via WebSocket](img/n4-banner.webp)
+
+Everything else — `open`, `send`, `wait_for_channel_event`, `peers`, `read_wal`, `on_envelope` — is identical to the in-process API. The hub's protocol is the same regardless of whether the link goes through in-process queues or a real WebSocket.
+
+> **One topology change, zero agent-code changes.** The agent doesn't know or care whether its `HubClient` speaks to a local object or a remote process.
+
+## Authentication: Knowing Who's Connecting
+
+When agents run in separate processes, the hub needs to verify that a connecting client really is who it claims to be. The default is `NoAuth` — every connection is accepted. For a deployed system, use `ApiKeyAuth`.
+
+### Configuring the hub
+
+Pass an `AuthRegistry` to `Hub.open`. The registry maps scheme names to adapters; `ApiKeyAuth` handles the `"api_key"` scheme:
+
+```python linenums="1"
+from autogen.beta.knowledge import DiskKnowledgeStore
+from autogen.beta.network import ApiKeyAuth, AuthRegistry, Hub, serve_ws
+
+AGENT_KEYS = {
+    "alice": "ak-alice-f3a2b1",
+    "bob":   "ak-bob-9c8d7e",
+    "carol": "ak-carol-5f4e3d",
+}
+
+async def main() -> None:
+    hub = await Hub.open(
+        DiskKnowledgeStore("./hub-data"),
+        auth=AuthRegistry([ApiKeyAuth(keys=AGENT_KEYS)]),
+    )
+    async with serve_ws(hub, "0.0.0.0", 8765):
+        await asyncio.Future()
+```
+
+`ApiKeyAuth` uses constant-time comparison (`hmac.compare_digest`) so token-rejection latency doesn't leak which prefix matched.
+
+### Configuring each agent process
+
+Each agent's `Passport` carries an `AuthBlock` that tells the hub which scheme to validate and what claim to present:
+
+```python linenums="1"
+from autogen.beta.network import AuthBlock, HubClient, Passport, Resume, WsLink
+
+hc = HubClient(WsLink("ws://hub:8765"))
+alice = await hc.register(
+    Agent("alice", ...),
+    Passport(
+        name="alice",
+        auth=AuthBlock(scheme="api_key", claim={"token": "ak-alice-f3a2b1"}),
+    ),
+    Resume(),
+)
+```
+
+![The hub's AuthRegistry validates each connecting agent's token before the HelloFrame handshake completes](img/n4-auth.webp)
+
+If the token is wrong or the name has no registered key, the hub raises `AuthError` at the handshake — before any envelope is accepted or dispatched. Unknown agents get no information beyond rejection.
+
+### Dynamic key resolution
+
+For large deployments where key-per-name static dicts don't scale, pass a `resolver` instead:
+
+```python
+async def resolve_key(name: str) -> str | None:
+    """Return the expected token for `name`, or None if unknown."""
+    return await secrets_manager.get(f"agent/{name}/api_key")
+
+auth = AuthRegistry([ApiKeyAuth(resolver=resolve_key)])
+```
+
+The resolver is tried as fallback when the name is not in `keys`. Return `None` to reject.
+
+## At-Least-Once Delivery
+
+In-process agents don't drop messages — if the hub dispatches to a `LocalLink` client, the client receives it. Over WebSocket, connections close. Processes restart. The network partition you planned around happened anyway.
+
+The AG2 Network solves this with at-least-once delivery: the hub tracks which envelopes each agent has acknowledged. If a connection drops before an `EV_TEXT` is acked, the hub doesn't forget it — the next connection from that agent replays it.
+
+### How replay works
+
+Every `HelloFrame` that opens a WebSocket connection carries an optional `since_envelope_id` — the agent's high-water mark. When set, the hub replays all unacked envelopes addressed to this agent with `envelope_id` strictly greater than that mark, then resumes live traffic.
+
+`HubClient.attach` is the reconnect-aware entry point. It binds the same identity (same `agent_id`, same WAL history) to a fresh connection:
+
+```python linenums="1"
+from autogen.beta.network import HubClient, Passport, Resume, WsLink
+
+# Original node (simulating a process that dropped)
+bob_hc1 = HubClient(WsLink("ws://hub:8765"))
+bob1 = await bob_hc1.register(Agent("bob", ...), Passport(name="bob"), Resume())
+# ... connection drops; alice's message arrived but was never acked
+
+# Fresh process: attach under the same name; hub replays the missed envelope
+bob_hc2 = HubClient(WsLink("ws://hub:8765"))
+bob2 = await bob_hc2.attach(
+    Agent("bob", ...),
+    name="bob",
+    since_envelope_id="",  # "" = replay everything the hub has not seen acked
+)
+# bob2 receives alice's message again and replies normally
+```
+
+`bob2.agent_id == bob1.agent_id` — the identity is the same. The channel WAL grows in place. From the other participants' perspective, `bob` had a brief pause, not a death.
+
+![Bob drops and reconnects. The hub replays e004/e005 to the fresh connection. The DROPPED label fades out as attach() completes.](img/n4-reconnect.webp)
+
+### `since_envelope_id` values
+
+| Value | Effect |
+|---|---|
+| `""` (empty string, default) | Replay everything not acked (hub uses the persisted cursor) |
+| `"env_abc123"` | Replay strictly past that specific envelope |
+| `None` | Skip replay entirely |
+
+### Finishing interrupted turns
+
+Replay re-delivers missed envelopes. But if the agent was already mid-turn — it had received the envelope and started processing — replay won't re-fire. Call `resume_pending_turns()` after `attach()` to re-fire any turn the channel protocol is waiting for:
+
+```python
+bob2 = await bob_hc2.attach(Agent("bob", ...), name="bob", since_envelope_id="")
+replayed = await bob2.resume_pending_turns()
+# replayed = number of pending turns re-fired
+```
+
+`resume_pending_turns` asks the hub for any `PendingTurn` entries, fetches each turn's triggering envelope from the WAL, and feeds it back through the notify handler. It is idempotent: if a prior reply already landed, the handler can short-circuit so the same logical turn is not posted twice.
+
+> **What the hub guarantees:** if an envelope was WAL-appended, it will be delivered to every addressed participant — eventually, exactly once in logical terms. The transport may deliver it more than once; the handler is responsible for idempotency.
+
+## HubBackedCheckpointStore: Durable Task State
+
+Agents that do long-running LLM tasks need to survive a process restart mid-task. `HubBackedCheckpointStore` delegates `checkpoint_task` / `read_task_checkpoint` to the hub's `KnowledgeStore`, so task state is durable wherever the hub persists its own data (`DiskKnowledgeStore`, `RedisKnowledgeStore`, …):
+
+```python linenums="1"
+from autogen.beta.network import HubBackedCheckpointStore, HubClient, WsLink
+
+hc = HubClient(WsLink("ws://hub:8765"))
+checkpoint_store = HubBackedCheckpointStore(hc)
+
+alice = await hc.register(
+    Agent(
+        "alice",
+        prompt="You run long multi-step research tasks.",
+        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        checkpoint_store=checkpoint_store,
+    ),
+    Passport(name="alice"),
+    Resume(claimed_capabilities=["research"]),
+)
+```
+
+The store accepts either a `Hub` (in-process) or a `HubClient` (cross-process) — the API is identical, and the durability tracks wherever the hub stores its data. Agents that don't need cross-process durability can use any other `CheckpointStore` implementation, or omit checkpointing entirely.
+
+## Dynamic Membership
+
+Agents can register and unregister at runtime. The hub handles this without restarting:
+
+```python
+# New agent joins the network
+carol = await hc.register(Agent("carol", ...), Passport(name="carol"), Resume())
+
+# Agent leaves cleanly
+await carol.unregister()
+```
+
+After `unregister`, `carol`'s identity records are removed from disk and the hub's registry caches are updated. Any open channels `carol` was participating in remain open; her `agent_id` is simply absent from future `peers` results.
+
+## The Federation Seam
+
+The `RemoteAgentProxy` Protocol is the hub's seam for cross-org federation. When a participant's passport carries `kind="remote_agent"`, the hub routes envelopes to it through a registered proxy rather than a local endpoint. No proxies ship in the framework — each tenant implements the wire protocol they need (A2A, gRPC, HTTP, message bus) and registers it:
+
+```python
+hub.register_remote_proxy(MyA2AProxy(scheme="a2a", target_url="https://partner.example.com/a2a"))
+```
+
+From the channel's perspective, a `remote_agent` participant is indistinguishable from a local one. It sends envelopes the same way and its messages appear in the same WAL.
+
+## Where to Next
+
+- **The Agent Harness: An Agent Is More Than a Loop** — what's inside each node in the network: Stream, middleware, tools, observers, HITL, memory.
+- Docs: [Hub & Identity](../../../beta/network/hub_and_identity.md) · [Network Quick Start](../../../beta/network/quick_start.md) · [Channel Adapters Overview](../../../beta/network/adapters_overview.md)
+
+The three previous posts described the protocol. This one described the deployment. The two together are the full picture: a network that is durable by construction, authenticated from the handshake, and capable of surviving the failures that always eventually happen.

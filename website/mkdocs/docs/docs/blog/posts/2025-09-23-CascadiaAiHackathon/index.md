@@ -1,0 +1,34 @@
+---
+title: "Cascadia AI Hackathon Winner: Dino Park Meets AG2"
+authors: [qingyunwu]
+
+render_macros: false
+tags:
+    - Hackathon
+    - Community
+categories:
+    - Hackathon
+    - Community
+date: 2025-09-23
+slug: CascadiaAiHackathon
+---
+
+### **Cascadia AI Hackathon Winner: Dino Park Meets AG2**
+
+![Pixelated dinosaurs](img/pixelated_dinosaurs.png)
+
+Last weekend at the Cascadia AI Hackathon in Seattle, developers showed off what's possible with multi-agent systems.
+
+The prize for Best Use of AG2 went to Jeff Linwood, who built a dinosaur park simulation game where rangers, guests, and even the dinosaurs themselves are represented as AI agents orchestrated in a swarm.
+
+Jeff reflected on the experience:
+
+"I got a chance to work on some fun tech and build out a ridiculous dinosaur-themed simulation game using AI-based NPCs. I ended up winning the prize for best use of the AG2 agentic framework!"
+
+We loved seeing AG2 power such a creative and playful project — and we're excited to see what else the open-source community will build next.
+
+👏 Huge congrats Jeff, and thanks to Carter Rabasa and the Cascadia AI organizers for bringing this community together.
+
+![Jeff presenting his project](img/jeff_presenting.jpeg)
+
+<!-- more -->

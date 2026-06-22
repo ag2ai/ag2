@@ -1,0 +1,288 @@
+authors:
+  sonichi:
+    name: Chi Wang
+    description: Founder of AutoGen (now AG2) & FLAML
+    url: https://www.linkedin.com/in/chi-wang-autogen/
+    avatar: https://github.com/sonichi.png
+
+  qingyunwu:
+    name: Qingyun Wu
+    description: Co-Founder of AutoGen/AG2 & FLAML, Assistant Professor at Penn State University
+    url: https://qingyun-wu.github.io/
+    avatar: https://github.com/qingyun-wu.png
+
+  yiranwu:
+    name: Yiran Wu
+    description: PhD student at Pennsylvania State University
+    url: https://github.com/yiranwu0
+    avatar: https://github.com/yiranwu0.png
+
+  jialeliu:
+    name: Jiale Liu
+    description: PhD student at Pennsylvania State University
+    url: https://github.com/LeoLjl
+    avatar: https://github.com/leoljl.png
+
+  thinkall:
+    name: Li Jiang
+    description: Senior Software Engineer at Microsoft
+    url: https://github.com/thinkall
+    avatar: https://github.com/thinkall.png
+
+  rickyloynd-microsoft:
+    name: Ricky Loynd
+    description: Senior Research Engineer at Microsoft
+    url: https://github.com/rickyloynd-microsoft
+    avatar: https://github.com/rickyloynd-microsoft.png
+
+  samershi:
+    name: Saleema Amershi
+    description: Senior Principal Research Manager at Microsoft Research
+    url: https://github.com/samershi
+    avatar: https://github.com/samershi.png
+
+  pcdeadeasy:
+    name: Piali Choudhury
+    description: Principal RSDE at Microsoft Research
+    url: https://github.com/pcdeadeasy
+    avatar: https://github.com/pcdeadeasy.png
+
+  victordibia:
+    name: Victor Dibia
+    description: Principal RSDE at Microsoft Research
+    url: https://github.com/victordibia
+    avatar: https://github.com/victordibia.png
+
+  afourney:
+    name: Adam Fourney
+    description: Principal Researcher Microsoft Research
+    url: https://www.adamfourney.com
+    avatar: https://github.com/afourney.png
+
+  beibinli:
+    name: Beibin Li
+    description: Senior Research Engineer at Microsoft
+    url: https://github.com/beibinli
+    avatar: https://github.com/beibinli.png
+
+  gagb:
+    name: Gagan Bansal
+    description: Senior Researcher at Microsoft Research
+    url: https://www.linkedin.com/in/gagan-bansal/
+    avatar: https://github.com/gagb.png
+
+  jieyuz2:
+    name: Jieyu Zhang
+    description: PhD student at University of Washington
+    url: https://jieyuz2.github.io/
+    avatar: https://github.com/jieyuz2.png
+
+  julianakiseleva:
+    name: Julia Kiseleva
+    description: Senior Researcher at Microsoft Research
+    url: https://github.com/julianakiseleva/
+    avatar: https://avatars.githubusercontent.com/u/5908392?v=4
+
+  narabzad:
+    name: Negar Arabzadeh
+    description: PhD student at the University of Waterloo
+    url: https://www.negara.me/
+    avatar: https://github.com/Narabzad.png
+
+  LinxinS97:
+    name: Linxin Song
+    description: PhD student at the University of Southern California
+    url: https://linxins.net
+    avatar: https://github.com/LinxinS97.png
+
+  skzhang1:
+    name: Shaokun Zhang
+    description: PhD student at the Pennsylvania State University
+    url: https://github.com/skzhang1
+    avatar: https://github.com/skzhang1.png
+
+  olgavrou:
+    name: Olga Vrousgou
+    description: Senior Software Engineer at Microsoft Research
+    url: https://github.com/olgavrou/
+    avatar: https://github.com/olgavrou.png
+
+  joshkyh:
+    name: Joshua Kim
+    description: AI Freelancer at SpectData
+    url: https://github.com/joshkyh/
+    avatar: https://github.com/joshkyh.png
+
+  freedeaths:
+    name: Yishen Sun
+    description: Data Scientist at PingCAP LAB
+    url: https://github.com/freedeaths/
+    avatar: https://github.com/freedeaths.png
+
+  yifanzeng:
+    name: Yifan Zeng
+    description: PhD student at Oregon State University
+    url: https://xhmy.github.io/
+    avatar: https://xhmy.github.io/assets/img/photo.jpg
+
+  jluey:
+    name: James Woffinden-Luey
+    description: Senior Research Engineer at Microsoft Research
+    url: https://github.com/jluey1
+    avatar: https://github.com/jluey1.png
+
+  Hk669:
+    name: Hrushikesh Dokala
+    description: CS Undergraduate Based in India
+    url: https://github.com/Hk669
+    avatar: https://github.com/Hk669.png
+
+  marklysze:
+    name: Mark Sze
+    description: Software Engineer at AG2.ai
+    url: https://github.com/marklysze
+    avatar: https://github.com/marklysze.png
+
+  areibman:
+    name: Alex Reibman
+    description: Co-founder/CEO at AgentOps
+    url: https://github.com/areibman
+    avatar: https://github.com/areibman.png
+
+  bboynton97:
+    name: Braelyn Boynton
+    description: AI Engineer at AgentOps
+    url: https://github.com/bboynton97
+    avatar: https://github.com/bboynton97.png
+
+  Noel1997:
+    name: Noel Nebu Panicker
+    description: AI Engineer at Nexla
+    url: https://github.com/Noel1997
+    avatar: https://github.com/Noel1997.png
+
+  ameydesai:
+    name: Amey Desai
+    description: Head of AI at Nexla
+    url: https://github.com/ameyitis
+    avatar: https://github.com/ameyitis.png
+
+  sternakt:
+    name: Tvrtko Sternak
+    description: Machine Learning Engineer at Airt
+    url: https://github.com/sternakt
+    avatar: https://github.com/sternakt.png
+
+  davorrunje:
+    name: Davor Runje
+    description: CTO at Airt
+    url: https://github.com/davorrunje
+    avatar: https://github.com/davorrunje.png
+
+  BabyCNM:
+    name: BabyCNM
+    description: AG2 Contributor
+    url: https://github.com/BabyCNM
+    avatar: https://github.com/BabyCNM.png
+
+  AgentGenie:
+    name: AgentGenie
+    description: AG2 Contributor
+    url: https://github.com/AgentGenie
+    avatar: https://github.com/AgentGenie.png
+
+  davorinrusevljan:
+    name: Davorin Ruševljan
+    description: Developer
+    url: https://github.com/davorinrusevljan
+    avatar: https://github.com/davorinrusevljan.png
+
+  rjambrecic:
+    name: Robert Jambrecic
+    description: Machine Learning Engineer at Airt
+    url: https://github.com/rjambrecic
+    avatar: https://github.com/rjambrecic.png
+
+  stellaxiang:
+    name: Stella Xiang
+    description: Developer
+    url: https://www.linkedin.com/in/xingyu-xiang/
+    avatar: https://github.com/stellaxiang.png
+
+  tyler_suard:
+    name: Tyler Suard
+    description: AI Developer
+    url: https://www.manning.com/books/enterprise-rag
+    avatar: ../img/profile.png
+
+  rui_wang:
+    name: Rui Wang
+    description: CTO at AgentWeb
+    url: https://agentweb.pro
+    avatar: ../img/profile.png
+
+  ag2:
+    name: ""
+    description: ""
+    url: https://raw.githubusercontent.com/ag2ai/ag2/refs/heads/main/website/logo/ag2.svg
+    avatar: https://raw.githubusercontent.com/ag2ai/ag2/refs/heads/main/website/logo/ag2.svg
+
+  boris_bolliet:
+    name: Boris Bolliet
+    description: Researcher, Cambridge University
+    url: ""
+    avatar: ../img/boris_profile.png
+
+  inigo_zubeldia:
+    name: Inigo Zubeldia
+    description: Researcher, Cambridge University
+    url: ""
+    avatar: ../img/inigo_profile.png
+
+  james_fergusson:
+    name: James Fergusson
+    description: Professor, Cambridge University
+    url: ""
+    avatar: ../img/james_profile.png
+
+  francisco_villaescusa:
+    name: Francisco Villaescusa-Navarro
+    description: Research Scientist, Simons Foundation
+    url: ""
+    avatar: ../img/francisco_profile.png
+
+  harish:
+    name: Harish Mohan Raj
+    description: Software Engineer at AG2.ai
+    url: https://github.com/harishmohanraj
+    avatar: https://github.com/harishmohanraj.png
+
+  leandro_duarte:
+    name: Leandro Duarte
+    description: Product Owner at Cegid
+    url: ""
+    avatar: ../img/profile.png
+
+  nipun_suwandaratna:
+    name: Nipun Suwandaratna
+    description: AI Solutions Architect at Hampshire Property Group
+    url: https://github.com/nipunsa102
+    avatar: https://github.com/nipunsa102.png
+
+  priyansh4320:
+    name: Priyanshu Deshmukh
+    description: Building Amazing AI :)
+    url: https://github.com/priyansh4320
+    avatar: https://github.com/priyansh4320.png
+
+  Lancetnik:
+    name: Nikita Pastukhov
+    description: AG2 Maintainer, FastStream Author
+    url: https://github.com/Lancetnik
+    avatar: https://github.com/Lancetnik.png
+
+  faridun-ag2:
+    name: Faridun Mirzoev
+    description: Fullstack Engineer at AG2
+    url: https://github.com/faridun-ag2
+    avatar: https://github.com/faridun-ag2.png

@@ -1,0 +1,59 @@
+---
+title: "Comparing variants"
+sidebarTitle: "Variants"
+---
+
+To answer "which is best?" — across models, prompts, tools, middleware, or whole builds — run the same suite under several named **variants** and rank them on a leaderboard.
+
+## `run_variants`
+
+A `Variants` is a mapping of name → `Agent` instance, plus an `axis` label that records what you varied:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import GeminiConfig, OpenAIConfig
+from autogen.beta.eval import Variants, run_variants
+
+board = await run_variants(
+    suite,
+    variants=Variants({
+        "gpt-4o": Agent("weather", config=OpenAIConfig("gpt-4o"), tools=[get_weather]),
+        "flash":  Agent("weather", config=GeminiConfig("gemini-3-flash-preview"), tools=[get_weather]),
+    }, axis="config"),
+    scorers=[...],
+    store_dir="runs",
+    repeats=5,                                # optional — N runs per variant for stability
+)
+
+print(board.summary("final_answer_matches"))  # ranked leaderboard
+board.best("final_answer_matches")             # the winning variant's name
+board.results["gpt-4o"]                        # each variant's full RunResult
+```
+
+## One axis at a time
+
+`Variants` holds prebuilt agents, so you vary whatever you like by constructing them accordingly. For a controlled comparison, vary **one** axis across the agents and hold the rest fixed — then set `axis=` to label what changed (it shows up in `summary()`; it defaults to `"variant"`):
+
+| Axis | Vary across the agents | `axis=` |
+|---|---|---|
+| model / provider / params | `config=` | `"config"` |
+| system prompt | `prompt=` | `"prompt"` |
+| tool set | `tools=` | `"tools"` |
+| middleware stack | `middleware=` | `"middleware"` |
+
+```python linenums="1"
+# Vary the system prompt, hold everything else fixed.
+variants = Variants({
+    "terse":   Agent("a", prompt="Answer in one word.", config=cfg, tools=tools),
+    "verbose": Agent("a", prompt="Explain, then answer.", config=cfg, tools=tools),
+}, axis="prompt")
+```
+
+Need a per-task model override *within* a variant? Pass `model_config=` to `run_variants` exactly as with `run_agent` — it reaches each variant's `run_agent` call.
+
+Each variant runs via `run_agent()` (so `repeats`, persistence, everything applies) and is saved as its own `<run_id>-<variant>.json`. `VariantRunResult.leaderboard(key)` ranks variants by a scorer — pass-rate for boolean scorers, mean for numeric — best first; **tied scores share a rank**, and `best(key)` returns `None` when there's no unique winner. (A 3-way 100% tie usually means the eval isn't *discriminating* — make the task harder, or score quality with a judge — not that there's a true winner.)
+
+## Where to next
+
+- **[Pairwise](pairwise.md)** — when "A vs B" is easier to judge than scoring each variant on its own.
+- **[Persistence & tracking](persistence.md)** — every variant's run is saved, so you can diff it against past runs.

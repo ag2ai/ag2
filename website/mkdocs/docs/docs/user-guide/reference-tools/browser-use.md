@@ -1,0 +1,203 @@
+---
+title: Browser Use
+description: "Enable AG2 agents to navigate websites, extract dynamic content, and interact with web pages using the Browser Use integration."
+---
+
+AG2 now integrates [Browser Use](https://browser-use.com), allowing your agents to navigate websites, extract dynamic content, and interact with web pages. This makes automated data collection, web automation, and other tasks easier and more efficient.
+
+![Browser Use Example](../reference-agents/assets/websurferagent_animated.gif)
+
+### Installation
+
+<Warning>
+[`Browser Use`](https://github.com/browser-use/browser-use) requires **Python 3.11 or higher**.
+</Warning>
+
+To get started with the `Browser Use` integration in AG2, follow these steps:
+
+1. Install AG2 with the `browser-use` extra:
+    ```bash
+    pip install ag2[openai,browser-use]
+    ```
+    <Tip>
+    If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[openai,browser-use]
+    ```
+    or
+    ```bash
+    pip install -U ag2[openai,browser-use]
+    ```
+    as `autogen` and `ag2` are aliases for the same PyPI package.
+    </Tip>
+2. Set up Playwright:
+
+    ```bash
+    # Installs Playwright and browsers for all OS
+    playwright install
+    # Additional command, mandatory for Linux only
+    playwright install-deps
+    ```
+
+3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
+    ```bash
+    pip install nest_asyncio
+    ```
+
+You're all set! Now you can start using browsing features in AG2.
+
+### Imports
+
+```python
+import os
+import nest_asyncio
+
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from autogen.tools.experimental import BrowserUseTool
+
+nest_asyncio.apply()
+```
+
+### Agent Configuration
+
+Configure the agents for the interaction.
+
+- `config_list` defines the LLM configurations, including the model and API key.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
+
+<Tip>
+[`Browser Use`](https://github.com/browser-use/browser-use) supports the following models: [Supported Models](https://docs.browser-use.com/customize/supported-models#supported-models)
+
+We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `DeepSeek` and `Ollama` haven't performed as well.
+</Tip>
+
+```python
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ["OPENAI_API_KEY"],
+})
+
+user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config=llm_config,
+)
+```
+
+### Web Browsing with Browser Use
+
+The `BrowserUseTool` allows agents to interact with web pages—navigating, searching, and extracting information.
+
+To see the agent's activity in real-time, set `headless` to `False` in the `browser_config`. If `True`, the browser runs in the background.
+
+```python
+browser_use_tool = BrowserUseTool(
+    llm_config=llm_config,
+    browser_config={"headless": False},
+)
+
+browser_use_tool.register_for_execution(user_proxy)
+browser_use_tool.register_for_llm(assistant)
+```
+
+### Initiate Chat
+
+Now, let’s run a task where the assistant searches Reddit for “AG2,” clicks the first post, and retrieves the first comment.
+
+```python
+result = user_proxy.initiate_chat(
+    recipient=assistant,
+    message="Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment.",
+    max_turns=2,
+)
+```
+
+```console
+user_proxy (to assistant):
+
+Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment.
+
+--------------------------------------------------------------------------------
+assistant (to user_proxy):
+
+***** Suggested tool call (call_kHzzd6KnbDpGatDyN5Pm2hLv): browser_use *****
+Arguments:
+{"task":"Go to Reddit, search for 'ag2', click on the first post and return the first comment."}
+****************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION browser_use...
+Call ID: call_kHzzd6KnbDpGatDyN5Pm2hLv
+Input arguments: {'task': "Go to Reddit, search for 'ag2', click on the first post and return the first comment."}
+INFO     [agent] 🚀 Starting task: Go to Reddit, search for 'ag2', click on the first post and return the first comment.
+INFO     [agent]
+📍 Step 1
+INFO     [agent] 🤷 Eval: Unknown - No previous actions to evaluate.
+INFO     [agent] 🧠 Memory:
+INFO     [agent] 🎯 Next goal: Navigate to Reddit
+INFO     [agent] 🛠️  Action 1/1: {"go_to_url":{"url":"https://www.reddit.com"}}
+INFO     [controller] 🔗  Navigated to https://www.reddit.com
+INFO     [agent]
+📍 Step 2
+INFO     [agent] 🤷 Eval: Unknown - Initial navigation to Reddit completed successfully.
+INFO     [agent] 🧠 Memory: Navigated to Reddit and located the search box.
+INFO     [agent] 🎯 Next goal: Search for 'ag2'
+INFO     [agent] 🛠️  Action 1/2: {"input_text":{"index":4,"text":"ag2"}}
+INFO     [agent] 🛠️  Action 2/2: {"click_element":{"index":4}}
+INFO     [controller] ⌨️  Input "ag2" into index 4
+INFO     [controller] Something new appeared after action 1 / 2
+INFO     [agent]
+📍 Step 3
+INFO     [agent] 👍 Eval: Successful in inputting search term 'ag2'.
+INFO     [agent] 🧠 Memory: Input 'ag2' into the search box on Reddit.
+INFO     [agent] 🎯 Next goal: Click the search button for 'ag2'.
+INFO     [agent] 🛠️  Action 1/1: {"click_element":{"index":12}}
+INFO     [controller] 🖱️  Clicked button with index 12:
+INFO     [agent]
+📍 Step 4
+INFO     [agent] 👍 Eval: Successful in searching for 'ag2' and reached the results page.
+INFO     [agent] 🧠 Memory: Landed on Reddit search results for 'ag2'.
+INFO     [agent] 🎯 Next goal: Click on the first post.
+INFO     [agent] 🛠️  Action 1/1: {"click_element":{"index":14}}
+INFO     [controller] 🖱️  Clicked button with index 14: AG2 vs Autogen, which one to use?
+INFO     [agent]
+📍 Step 5
+INFO     [agent] 👍 Eval: Successful in clicking the first post for 'ag2'.
+INFO     [agent] 🧠 Memory: Accessed the chosen post 'AG2 vs Autogen, which one to use?' and the comments section is visible.
+INFO     [agent] 🎯 Next goal: Extract the first comment from the comments section.
+INFO     [agent] 🛠️  Action 1/1: {"extract_content":{"include_links":false}}
+INFO     [controller] 📄  Extracted page as text
+: Go to AI_Agentsr/AI_Agentsr/AI_AgentsA place for discussion around the use of AI Agents and related tools. AI Agents are LLMs that have the ability to "use tools" or "execute functions" in an autonomous or semi-autonomous (also known as human-in-the-loop) fashion.
+
+Follow our event calendar: https://lu.ma/oss4ai
+
+Join us on Discord! https://discord.gg/6tGkQcFjBY55KMembers29Online•22 days agoXodnilAG2 vs Autogen, which one to use?DiscussionI’m trying to decide betweenAG2andAutoGenfor building a multi-agent system. Both seem powerful, but I’m not sure which one fits my needs better. It's so confusing really.From what I’ve seen:AG2: Focuses on stability and backward compatibility, with features like StateFlow and Reasoner agents. But how does it handle structured outputs and multi-agent workflows?AutoGen: Known for advanced multi-agent collaboration and human-in-the-loop functionality. It integrates well with LLMs, but is it beginner-friendly?Which one would you recommend and why?ThanksAomI_V•Promoted🔥 Create AI Agents with ZERO code or hassle: click to connect your tools, click to add knowledge, click to launch!app.omnimind.aiAdd a commentSort by:BestOpen comment sort optionsBestTopNewControversialOldQ&Amacronancer•22d agoMy impression was that AG2 was a successor architecture for Autogen.I could be wrong, and I have not had the time to read into these very deeply.ReplyreplyCtiPath•21d agoYou’re correct. In November, the developers of AutoGen branched off to form AG2. Much of AG2 is still AutoGen under the hood. But they are making some improvements like the new Captain Agent.ReplyreplyMore repliesLong_Complex_4395•22d agoI am not really conversant with frameworks for AI agents, so I may not understand their capabilities. The first rule of thumb for using any framework is what do you want to achieve?So, what are you building?Do you have a workflow for what you intend to build?What are your expectations?These questions would guide you to frame your question better for people to actually help you.Replyreplyfreudweeks•21d agoAG2 seems much more active. I think autogen is now in a support mode, while MSFT's next version, autogen 0.4 is what they're actively creating features for but is unstable. Since the founders of autogen went to ag2, I think it's a safe enough bet to go to ag2. You can always pick up autogen 0.4 when it comes out later.Replyreply
+
+INFO     [agent]
+📍 Step 6
+INFO     [agent] 🤷 Eval: Extracted page content containing the first comment.
+INFO     [agent] 🧠 Memory: Extracted comments from the selected post on Reddit, including the first comment.
+INFO     [agent] 🎯 Next goal: Complete the task.
+INFO     [agent] 🛠️  Action 1/1: {"done":{"text":"First comment: 'My impression was that AG2 was a successor architecture for Autogen. I could be wrong, and I have not had the time to read into these very deeply.'"}}
+INFO     [agent] 📄 Result: First comment: 'My impression was that AG2 was a successor architecture for Autogen. I could be wrong, and I have not had the time to read into these very deeply.'
+INFO     [agent] ✅ Task completed successfully
+user_proxy (to assistant):
+
+***** Response from calling tool (call_kHzzd6KnbDpGatDyN5Pm2hLv) *****
+{"extracted_content":["🔗  Navigated to https://www.reddit.com","⌨️  Input \"ag2\" into index 4","🖱️  Clicked button with index 12: ","🖱️  Clicked button with index 14: AG2 vs Autogen, which one to use?","📄  Extracted page as text\n: Go to AI_Agentsr/AI_Agentsr/AI_AgentsA place for discussion around the use of AI Agents and related tools. AI Agents are LLMs that have the ability to \"use tools\" or \"execute functions\" in an autonomous or semi-autonomous (also known as human-in-the-loop) fashion.\n\nFollow our event calendar: https://lu.ma/oss4ai\n\nJoin us on Discord! https://discord.gg/6tGkQcFjBY55KMembers29Online•22 days agoXodnilAG2 vs Autogen, which one to use?DiscussionI’m trying to decide betweenAG2andAutoGenfor building a multi-agent system. Both seem powerful, but I’m not sure which one fits my needs better. It's so confusing really.From what I’ve seen:AG2: Focuses on stability and backward compatibility, with features like StateFlow and Reasoner agents. But how does it handle structured outputs and multi-agent workflows?AutoGen: Known for advanced multi-agent collaboration and human-in-the-loop functionality. It integrates well with LLMs, but is it beginner-friendly?Which one would you recommend and why?ThanksAomI_V•Promoted🔥 Create AI Agents with ZERO code or hassle: click to connect your tools, click to add knowledge, click to launch!app.omnimind.aiAdd a commentSort by:BestOpen comment sort optionsBestTopNewControversialOldQ&Amacronancer•22d agoMy impression was that AG2 was a successor architecture for Autogen.I could be wrong, and I have not had the time to read into these very deeply.ReplyreplyCtiPath•21d agoYou’re correct. In November, the developers of AutoGen branched off to form AG2. Much of AG2 is still AutoGen under the hood. But they are making some improvements like the new Captain Agent.ReplyreplyMore repliesLong_Complex_4395•22d agoI am not really conversant with frameworks for AI agents, so I may not understand their capabilities. The first rule of thumb for using any framework is what do you want to achieve?So, what are you building?Do you have a workflow for what you intend to build?What are your expectations?These questions would guide you to frame your question better for people to actually help you.Replyreplyfreudweeks•21d agoAG2 seems much more active. I think autogen is now in a support mode, while MSFT's next version, autogen 0.4 is what they're actively creating features for but is unstable. Since the founders of autogen went to ag2, I think it's a safe enough bet to go to ag2. You can always pick up autogen 0.4 when it comes out later.Replyreply\n","First comment: 'My impression was that AG2 was a successor architecture for Autogen. I could be wrong, and I have not had the time to read into these very deeply.'"],"final_result":"First comment: 'My impression was that AG2 was a successor architecture for Autogen. I could be wrong, and I have not had the time to read into these very deeply.'"}
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user_proxy):
+
+The first comment on the Reddit post regarding 'ag2' is:
+
+"My impression was that AG2 was a successor architecture for Autogen. I could be wrong, and I have not had the time to read into these very deeply."
+
+TERMINATE
+```
+
+<BrowserUse/>

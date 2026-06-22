@@ -1,0 +1,142 @@
+---
+title: SlackAgent
+sidebarTitle: SlackAgent
+---
+
+If you need an agent to send messages to your Slack channel and/or retrieve Slack messages to action, `SlackAgent` can help you.
+
+!!! tip
+    If you haven't had a chance to read about how AG2's Communication Platform agents and tools work, read the [overview](overview.md) first.
+
+## Installation
+
+Install AG2 with the LLM model provider and Slack platform extra.
+
+```bash
+pip install ag2[openai,commsagent-slack]
+```
+
+### Capabilities
+
+`SlackAgent` can:
+
+- Construct and send a message to the configured channel. If a message is longer than the platforms permitted message length, they will split the message into multiple messages.
+- Retrieve the latest X messages from a channel.
+- Retrieve messages since a given date.
+- Retrieve messages since a given message ID.
+- Retrieve a message given its ID.
+
+It will also automatically append Slack's messaging requirements to the system message:
+
+- 40,000 character limit
+- Markdown
+- bold/italic/code
+- emojis
+- notification formats
+
+This is on by default, but you can turn these off by setting `has_writing_instructions` to `False` when creating the agent.
+
+### In-built Tools
+
+The `SlackAgent` has two in-built tools that it will call upon as it needs:
+
+- `SlackSendTool`
+- `SlackRetrieveTool`
+
+Find out more about these tools and how you can add them to your own AG2 agents in the [Slack Tools](../../reference-tools/communication-platforms/slack.md) documentation.
+
+### Platform configuration
+
+Each agent is configured for a specific channel. This configuration is applied when you create the agent.
+
+The `SlackAgent` require authentication (OAuth token) and channel details in order to send/retrieve messages.
+
+Here are the steps to get a token:
+
+- Create an app, from scratch, at https://api.slack.com/apps
+- In your app settings, go to Features > OAuth & Permissions:
+    - Under “Bot Token Scopes”, add these permissions:
+      - chat:write (to send messages)
+      - channels:history
+      - channels:read (to access channel info)
+      - groups:read (for private channels)
+      - im:read (for direct messages)
+      - users:read (to get user info)
+      - files:read (to access file attachments)
+      - groups:history
+      - im:history
+      - mpim:history
+- With your app setup, now install it in your workspace, using the “Install App” menu, to create an OAuth Token.
+
+To get the ID for your channel:
+
+- Open Slack in a browser
+- Navigate to your channel
+- Get the channel ID from the URL (e.g., …/C12345678)
+
+Finally you need to add the bot to your channel:
+
+- In Slack, go to your channel
+- Type `/invite @YourBotName`, e.g. `/invite @ag2commsagent`
+
+Now you should be good to go with your OAuth token, channel ID, and a bot on your channel ready to send and retrieve messages!
+
+### Code example
+
+Here's a simple example using the `SlackAgent` that gets the current weather and sends a message to a Slack channel to give them a weather forecast.
+
+```python
+# Agents are available in the autogen.agents namespace
+from autogen import ConversableAgent, register_function, LLMConfig
+from autogen.agents.experimental import SlackAgent
+
+# For running the code in Jupyter, use nest_asyncio to allow nested event loops
+#import nest_asyncio
+#nest_asyncio.apply()
+
+llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
+
+# Our Slack credentials
+_bot_token = "xoxo..."  # OAuth token
+_channel_id = "C1234567"  # ID of the Slack channel
+
+# Our tool executor agent, which will run the tools once recommended by the slack_agent, no LLM required
+executor_agent = ConversableAgent(
+    name="executor_agent",
+    human_input_mode="NEVER",
+)
+
+slack_agent = SlackAgent(
+    name="slack_agent",
+    bot_token=_bot_token,
+    channel_id=_channel_id,
+    llm_config=llm_config,
+)
+
+# We get the registered tools and register them for execution with the tool executor
+for tool in slack_agent.tools:
+    tool.register_for_execution(executor_agent)
+
+# Weather function
+def get_weather():
+    return "The weather today is 25 degrees Celsius and sunny, with a late storm."
+
+# Register for LLM recommendation with our slack_agent and for execution with our executor_agent
+register_function(
+    get_weather,
+    caller=slack_agent,
+    executor=executor_agent,
+    description="Get the current weather forecast",
+)
+
+# Ask the SlackAgent to get the weather (using the get_weather tool) and then send a message out (using its SlackSendTool tool)
+executor_agent.initiate_chat(
+    recipient=slack_agent,
+    message="Get the latest weather forecast and send it to our Slack channel. Use some emojis to make it fun!",
+    max_turns=3,
+)
+
+```
+
+Here's the message it sent:
+![Slack output](../assets/commsplatforms_slack_sentmsg.png)

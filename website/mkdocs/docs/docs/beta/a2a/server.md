@@ -1,0 +1,264 @@
+---
+title: Exposing an Agent as an A2A Server
+sidebarTitle: Server
+---
+
+`#!python A2AServer` wraps an existing `#!python Agent` and produces a transport object you can serve directly. JSON-RPC is the default; the same `#!python A2AServer` instance can also build REST and gRPC transports that share one task store.
+
+## Minimal Server
+
+The smallest end-to-end setup: an `#!python Agent` with a tool, served over JSON-RPC on a single port via `uvicorn`.
+
+```python linenums="1"
+import uvicorn
+
+from autogen.beta import Agent
+from autogen.beta.a2a import A2AServer, build_card
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import tool
+
+@tool(description="Add two integers and return the sum as a string.")
+async def calc_add(a: int, b: int) -> str:
+    return f"{a + b}"
+
+async def main() -> None:
+    agent = Agent(
+        name="claude",
+        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        tools=[calc_add],
+    )
+    server = A2AServer(agent)
+    card = build_card(agent, url="http://127.0.0.1:8000")
+    asgi = server.build_jsonrpc(url="http://127.0.0.1:8000", card=card)
+
+    await uvicorn.Server(uvicorn.Config(asgi, host="127.0.0.1", port=8000)).serve()
+
+```
+
+After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.well-known/agent-card.json`. A client connects by passing that base URL to `#!python A2AConfig(card_url=...)` — see the [Client](client.md) page.
+
+## What `A2AServer` Holds
+
+`#!python A2AServer.__init__` materialises transport-agnostic state — the executor, the task store, optional push notifications. Transport-specific parameters (URL, paths, ports) live on the `#!python build_*` methods.
+
+| Constructor argument | Purpose |
+|---|---|
+| `#!python agent` | The AG2 `#!python Agent` exposed over A2A |
+| `#!python task_store` | Shared `#!python TaskStore`. Defaults to a single `#!python InMemoryTaskStore` reused across every `#!python build_*` call |
+| `#!python push_config_store` | Enables push-notifications CRUD (see [Tasks & Push](tasks_and_push.md)). Optional |
+| `#!python push_sender` | Custom delivery sender. Defaults to no-op when not set |
+| `#!python extended_card` | Auth-aware extra metadata returned via `#!python GetExtendedAgentCard` |
+| `#!python card_modifier` / `#!python extended_card_modifier` | Per-request hooks that mutate the card before it's served |
+| `#!python executor` | Escape hatch — drop in a custom `#!python AgentExecutor` (see [Advanced](advanced.md#custom-agentexecutor)) |
+
+!!! note
+    The default `#!python InMemoryTaskStore` is materialised **once** at `#!python __init__` time. This is what makes JSON-RPC, REST and gRPC bound to the same `#!python A2AServer` see each other's tasks — a single store, three transports.
+
+## Server-side Tools
+
+Tools attached to the wrapped `#!python Agent` execute on the server, just as they would for a local agent. The remote LLM picks them up automatically.
+
+```python linenums="1" hl_lines="10-13"
+from autogen.beta import Agent
+from autogen.beta.a2a import A2AServer
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import tool
+from autogen.beta.tools.builtin import WebSearchTool
+
+agent = Agent(
+    name="claude",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[
+        WebSearchTool(),  # built-in provider tool — runs on Anthropic's side
+        calc_add,         # @tool — runs on this server
+    ],
+)
+server = A2AServer(agent)
+```
+
+For client-side tools — declared on the *caller* and forwarded back from the server when the LLM calls them — see [Client → Local Tools](client.md#local-tools-forwarded-from-the-server).
+
+## Choosing a Transport
+
+The default `#!python build_jsonrpc(...)` is the right choice for most setups. JSON-RPC is the most widely-supported A2A binding, works over any HTTP infrastructure (proxies, gateways, load balancers), and is what every A2A client implementation speaks first.
+
+Reach for an alternative transport when:
+
+| Transport | Use when |
+|---|---|
+| `#!python build_jsonrpc` (default) | You want the simplest, most portable HTTP binding. Recommended start. |
+| `#!python build_rest` | You need a HTTP+JSON REST surface with stable URLs (logging, cache control, route-level auth in a gateway). |
+| `#!python build_grpc` | You need bidirectional streaming with low overhead, or your infra is gRPC-native. |
+
+### REST
+
+```python linenums="1"
+card = build_card(agent, url="http://127.0.0.1:8001", transports=("rest",))
+rest_app = server.build_rest(url="http://127.0.0.1:8001", card=card)
+await uvicorn.Server(uvicorn.Config(rest_app, host="127.0.0.1", port=8001)).serve()
+```
+
+`#!python build_rest(path_prefix="/v1")` mounts the routes under a sub-path; both the card and the dispatcher respect it.
+
+### gRPC
+
+```python linenums="1"
+card = build_card(
+    agent,
+    url="grpc://127.0.0.1:50051",
+    transports=("grpc",),
+    grpc_url="grpc://127.0.0.1:50051",
+)
+grpc_server = server.build_grpc(
+    bind="127.0.0.1:50051",
+    grpc_url="grpc://127.0.0.1:50051",
+    card=card,
+)
+await grpc_server.start()
+await grpc_server.wait_for_termination()
+```
+
+`#!python build_grpc` returns an unstarted `#!python grpc.aio.Server` — the caller is responsible for `#!python start()` and `#!python wait_for_termination()`. `#!python bind` is the listener address, `#!python grpc_url` is the URL declared in the card (they're usually identical, but differ when the server sits behind a load balancer).
+
+!!! note
+    A2A v1.x has no `#!python GetAgentCard` gRPC method — the public card is always served over HTTP at `#!python /.well-known/agent-card.json`. So even for a gRPC-only server clients fetch the card via HTTP first, then switch to gRPC for the actual exchange. Plan your card URL accordingly.
+
+### One Server, Three Transports
+
+The same `#!python A2AServer` instance can back any combination of transports. Build a single multi-transport `#!python AgentCard` and call each `#!python build_*` against it — they share one task store.
+
+```python linenums="1" hl_lines="7-9 12-14"
+from a2a.server.tasks import InMemoryPushNotificationConfigStore
+
+server = A2AServer(agent, push_config_store=InMemoryPushNotificationConfigStore())
+card = build_card(
+    agent,
+    url="http://127.0.0.1:8000",
+    transports=("jsonrpc", "rest", "grpc"),
+    rest_url="http://127.0.0.1:8001",
+    grpc_url="grpc://127.0.0.1:50051",
+)
+
+asgi = server.build_jsonrpc(url="http://127.0.0.1:8000", card=card)
+rest = server.build_rest(url="http://127.0.0.1:8001", card=card)
+grpc = server.build_grpc(bind="127.0.0.1:50051", grpc_url="grpc://127.0.0.1:50051", card=card)
+
+await grpc.start()
+await asyncio.gather(
+    uvicorn.Server(uvicorn.Config(asgi, host="127.0.0.1", port=8000)).serve(),
+    uvicorn.Server(uvicorn.Config(rest, host="127.0.0.1", port=8001)).serve(),
+    grpc.wait_for_termination(),
+)
+```
+
+## Customising the `AgentCard`
+
+`#!python build_card(agent, url=...)` accepts a handful of optional kwargs to enrich the published card with discovery metadata and auth declarations.
+
+| Argument | Purpose |
+|---|---|
+| `#!python version` | Card version (defaults to `#!python "1.0.0"`) |
+| `#!python description` | Free-form description. Defaults to the first entry of the agent's system prompt |
+| `#!python skills` | Explicit `#!python Sequence[AgentSkill]`. When `#!python None`, `#!python build_card` walks `#!python agent.tools` for any `#!python SkillsToolkit` and publishes its local skills automatically; falls back to a single agent-derived skill if none are found |
+| `#!python push_notifications` | Toggles `#!python capabilities.push_notifications` on the card |
+| `#!python provider` | `#!python AgentProvider` block (organization, URL) |
+| `#!python documentation_url` / `#!python icon_url` | Discovery metadata |
+| `#!python security` | Auth declarations — see below |
+| `#!python tenants` | `#!python Mapping[TransportName, str]` — surface a per-transport tenant on the corresponding `#!python AgentInterface.tenant` |
+| `#!python rest_url` / `#!python rest_path_prefix` / `#!python grpc_url` | Per-transport URL overrides for multi-transport cards |
+
+### Declaring Authentication
+
+`#!python autogen.beta.a2a.security` ships factories for every A2A-recognised scheme. Each factory returns a typed `#!python Scheme` object that carries its card-level binding name. Pass them to `#!python require(...)` to build `#!python Requirement` entries; `#!python build_card` auto-derives the card's `#!python security_schemes` from the schemes referenced in `#!python security=` — no duplicate declarations.
+
+```python linenums="1" hl_lines="8-9 14"
+from autogen.beta.a2a import A2AServer, build_card
+from autogen.beta.a2a.security import (
+    bearer_scheme,
+    api_key_scheme,
+    require,
+)
+
+bearer = bearer_scheme(name="bearer", bearer_format="JWT")
+api_key = api_key_scheme(name="x_api_key", key_name="X-API-Key", location="header")
+
+card = build_card(
+    agent,
+    url="http://127.0.0.1:8000",
+    security=[require(bearer), require(api_key)],
+)
+```
+
+| Helper | Scheme |
+|---|---|
+| `#!python bearer_scheme(name=..., bearer_format=..., description=...)` | HTTP Bearer (e.g. JWT) |
+| `#!python http_auth_scheme(name=..., scheme=..., ...)` | Any other HTTP auth scheme (basic, digest, custom bearer formats) |
+| `#!python api_key_scheme(name=..., key_name=..., location=...)` | API key in header / query / cookie. `#!python name` is the card binding; `#!python key_name` is the header/query/cookie key sent by the client. |
+| `#!python oauth2_scheme(name=..., flows=..., oauth2_metadata_url=...)` | OAuth2 wrapping a pre-built `#!python OAuthFlows` |
+| `#!python open_id_connect_scheme(name=..., url=...)` | OpenID Connect discovery URL |
+| `#!python mtls_scheme(name=...)` | Mutual TLS client-cert auth |
+
+#### Combining requirements: AND vs OR
+
+The `#!python security=` list holds independent rules — clients only need to satisfy **one** of them (entries are OR-ed). Inside a single `#!python require(...)` call, **all** passed schemes must be presented together (arguments are AND-ed). Attach OAuth2/OIDC scopes via `#!python scheme.with_scopes(...)`.
+
+**Example A — accept Bearer OR API-key** (two separate `#!python require()` calls):
+
+```python linenums="1"
+security=[
+    require(bearer),
+    require(api_key),
+]
+```
+
+| Request headers | Accepted? |
+|---|---|
+| `#!python Authorization: Bearer <jwt>` | ✅ matches first rule |
+| `#!python X-API-Key: <key>` | ✅ matches second rule |
+| both headers present | ✅ either rule alone is enough |
+| neither | ❌ no rule satisfied |
+
+**Example B — require Bearer AND API-key together** (one `#!python require()` with two args):
+
+```python linenums="1"
+security=[
+    require(bearer, api_key),
+]
+```
+
+| Request headers | Accepted? |
+|---|---|
+| only `#!python Authorization: Bearer <jwt>` | ❌ missing API key |
+| only `#!python X-API-Key: <key>` | ❌ missing Bearer |
+| both headers present | ✅ both args inside the same `#!python require()` satisfied |
+
+**Example C — mixing scopes** (OAuth2 needs scopes, Bearer doesn't):
+
+```python linenums="1"
+security=[
+    require(bearer, oauth.with_scopes("read", "write")),
+]
+```
+
+Scheme binding names are arbitrary strings — pass any value to `#!python name=`, including non-identifier forms like `#!python "X-My-Scheme"`:
+
+```python linenums="1"
+custom = bearer_scheme(name="X-My-Scheme")
+require(custom)
+```
+
+!!! note
+    `#!python build_card` only **declares** auth on the card — it does not enforce it. Wire the actual check into the ASGI app (Starlette middleware, gateway, reverse proxy) or the gRPC server's interceptors.
+
+## Adding Cross-cutting Middleware
+
+A2A doesn't define server-side middleware. Attach CORS, auth or tracing directly to the returned transport object:
+
+```python linenums="1" hl_lines="4"
+from starlette.middleware.cors import CORSMiddleware
+
+asgi = server.build_jsonrpc(url="http://127.0.0.1:8000")
+asgi.add_middleware(CORSMiddleware, allow_origins=["*"])
+```
+
+For gRPC, attach interceptors when constructing the channel via `#!python grpc.aio.Server` options on `#!python build_grpc(options=...)`.

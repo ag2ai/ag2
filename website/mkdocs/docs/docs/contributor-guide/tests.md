@@ -1,0 +1,67 @@
+---
+title: Tests
+---
+
+Tests are automatically run via GitHub actions. There are two workflows:
+
+1. [core-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-test.yml)
+1. [core-llm-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-llm-test.yml)
+
+The first workflow is required to pass for all PRs (and it doesn't do any OpenAI calls). The second workflow is required for changes that affect the OpenAI tests (and does actually call LLM). The second workflow requires approval to run. When writing tests that require OpenAI calls, please use [`pytest.mark.skipif`](https://github.com/ag2ai/ag2/blob/b1adac515931bf236ac59224269eeec683a162ba/test/oai/test_client.py#L19) to make them run in only when `openai` package is installed. If additional dependency for this test is required, install the dependency in the corresponding python version in [core-llm-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-llm-test.yml).
+
+Make sure all tests pass, this is required for [core-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-test.yml) checks to pass
+
+## Running tests locally
+
+To run tests, install the [test] option:
+
+```bash
+pip install -e."[openai,test]"
+```
+
+Then you can run the tests from the `test` folder using the following command:
+
+```bash
+bash scripts/test.sh test
+```
+
+Tests for the `autogen.agentchat.contrib` module may be skipped automatically if the
+required dependencies are not installed. Please consult the documentation for
+each contrib module to see what dependencies are required.
+
+See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#testing) for how to run notebook tests.
+
+## Skip flags for tests
+
+- `-m`: Used to select or deselect specific groups of tests marked with pytest markers, such as tests for LLM services like OpenAI, Gemini etc. For example, you can mark tests with `@pytest.mark.openai` and then use `-m openai` to run only those tests.
+- `-m "not docker"`: Skips tests that explicitly require Docker. The `docker` Python package is an optional dependency — install with `pip install ag2[docker]` (or `pip install ag2[test]`, which already includes it) to run these tests.
+- `-m "not redis"`: Skips tests that require a Redis server.
+
+**Examples:**
+
+To skip tests that require access to LLM services and Docker, run:
+```bash
+bash scripts/test-core-skip-llm.sh -m "not docker"
+```
+
+To run tests for all LLM services (OpenAI, Gemini, etc.), use:
+```bash
+bash scripts/test-core-llm.sh
+```
+
+To run tests specifically for the OpenAI LLM service, use:
+```bash
+bash scripts/test-core-llm.sh -m "openai"
+```
+
+## Coverage
+
+Any code you commit should not decrease coverage. To ensure your code maintains or increases coverage, use the following commands after installing the required test dependencies:
+
+```bash
+pip install -e ."[openai,test]"
+
+bash scripts/test.sh test --cov-report=html
+```
+
+Pytest generated a code coverage report and created a htmlcov directory containing an index.html file and other related files. Open index.html in any web browser to visualize and navigate through the coverage data interactively. This interactive visualization allows you to identify uncovered lines and review coverage statistics for individual files.

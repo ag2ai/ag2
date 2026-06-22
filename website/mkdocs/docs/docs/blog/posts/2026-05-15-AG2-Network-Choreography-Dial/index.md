@@ -1,0 +1,370 @@
+---
+title: "Choreography You Can Dial In"
+authors: [marklysze]
+
+date: 2026-05-15
+slug: ag2-network-choreography-dial
+tags:
+    - AG2 Beta
+    - Network
+    - Multi-Agent
+    - Choreography
+    - Expectations
+    - TransitionGraph
+categories:
+    - AG2 Beta
+    - Network
+    - Multi-Agent
+    - Choreography
+    - Expectations
+    - TransitionGraph
+date: 2026-05-15
+slug: AG2-Network-Choreography-Dial
+---
+
+![AG2 Network — Choreography You Can Dial In](img/n2-banner-animated.webp)
+
+We've touched on the four built-in conversation shapes; now you need to make them survive contact with the real world.
+
+In the first post — [*One Coherent Agent Isn't Enough*](/docs/blog/2026/05/14/AG2-Action-Driven-Network/) — you opened a channel, watched agents take turns, and saw the hub fold envelopes into a durable thread. That's the *shape*. This post is about the *dials* on top of that shape — the knobs that turn a loose multi-agent free-for-all into something you'd actually run when an agent goes quiet at 2am, a step needs to time out, or a sub-conversation has to stay off the main thread.
+
+<!-- more -->
+
+If you haven't run the first post's examples yet, start there — every snippet below builds on the same `Hub` / `HubClient` / `Channel` / `Adapter` primitives.
+
+This is the second post in a four-part series introducing the AG2 Network:
+
+1. [**One Coherent Agent Isn't Enough**](/docs/blog/2026/05/14/AG2-Action-Driven-Network/) — the action-driven multi-agent network, the key primitives, and the four conversation shapes.
+2. **Choreography You Can Dial In** *(this post)* — setting expectations, audience addressing, deeper choreography patterns, and the orchestration cookbook.
+3. [**What Survives, Survives Exactly**](/docs/blog/2026/05/16/AG2-Network-What-Survives/) — the substrate: write-ahead log + fold + hub restart, plus identity (Passport / Resume / SKILL.md) and the audit log.
+4. [**Networks You Can Deploy**](/docs/blog/2026/06/16/AG2-Network-Networks-You-Can-Deploy/) — WebSocket transport, authentication, at-least-once delivery, and dynamic membership.
+
+In parallel, to build strong and capable agents, we're preparing a companion post, **The Agent Harness: An Agent Is More Than a Loop**, that zooms *inside* a single agent to make them long-running and knowledge-centric. Keep an eye out for that one (we'll update this when it's ready).
+
+## Choreography you can dial in
+
+![A dial sweeping from "pure choreography" on the left to "full orchestration" on the right. As expectations and TransitionGraph edges are added, the indicator slides right.](img/n2-dial.webp)
+
+> *Pure choreography is loose; full orchestration is rigid. The framework offers control as a dial: pick how much, where, and when.*
+
+The four adapters from the first post each sit at a different position on that dial. `consulting` is the leftmost notch — one question, one answer, hard close. `conversation` is one click right — two parties, free-form, until someone closes the channel. `discussion` lives near the middle — a fixed cast taking turns in a deterministic round-robin. `workflow` is the rightmost notch — a `TransitionGraph` declared up front that decides who speaks next on every turn. Same primitives end to end; what changes is how much of the routing you write down.
+
+But the starting notch isn't the only dial. Two more sit on top of every adapter, and you reach for them when "what conversation shape do I want?" turns into "when two participants need a side bar, or when the next speaker depends on what the previous one returned?":
+
+- **Audience addressing** — every envelope carries an `audience` list, so two participants can open a private side-channel without polluting the main thread. The WAL keeps both cleanly separated.
+- **Deeper TransitionGraph rules** — `FromSpeaker`, `ContextEquals`, `ToolCalled`, and dynamic `Handoff` returns let a workflow react to *what* was said, not just *who* said it.
+
+The adapters also ship built-in time-based SLAs — expectations that govern how long any step can stall before the hub acts. The next section covers those; the two dials follow.
+
+The next three sections walk through built-in expectations, then each dial, ending with a centerpiece that combines both. Every concept lands as a first-class envelope on the channel's write-ahead log — so the choreography you dial in survives a fold replay, the same way the conversation does.
+
+## Built-in expectations
+
+![A channel timeline with acks_within(30s, auto_close) armed: the invite is sent, no ACK arrives, the countdown expires, an EV_CHANNEL_CLOSED envelope appears on the WAL.](img/n2-expectations.webp)
+
+Every adapter ships built-in time-based SLAs — expectations that fire when a channel stalls. `consulting` arms two: `acks_within(30s, auto_close)` (the invitee must ACK within 30 seconds) and `reply_within(600s, auto_close)` (the respondent must reply within 10 minutes). `conversation` arms `max_silence(3600s, audit)` — the hub logs silence but leaves the channel open. The hub evaluates all expectations on a 10-second sweep; the sweep is stateless and re-derives every timer from the WAL, so a hub restart never loses a deadline.
+
+Three evaluators ship today:
+
+| Evaluator | Fires when… |
+|---|---|
+| `acks_within` | an invitee hasn't ACKed within `seconds` of the channel invite |
+| `reply_within` | the respondent hasn't replied within `seconds` of the initiator's question |
+| `max_silence` | no participant has posted a substantive envelope for `seconds` |
+
+Three handlers decide what happens when an evaluator fires:
+
+| Handler | Effect |
+|---|---|
+| `auto_close` | close the channel immediately with reason `expectation_violated:<name>` |
+| `notify_channel` | broadcast `ag2.expectation.violated` to every participant and stay open |
+| `audit` | record to the audit log and do nothing visible |
+
+When the `consulting` adapter's `acks_within(30s, auto_close)` fires, the hub closes the channel before `open()` returns — the close reason `expectation_violated:acks_within` lands in the WAL and is visible to any listener awaiting `EV_CHANNEL_CLOSED`. The centerpiece at the end of this post shows the full lifecycle (open → content → close) with both dials live.
+
+## Audience addressing and private side-channels
+
+![A shared channel with three participants; one envelope is broadcast to all three (arrows light up everywhere), then a sub-channel envelope addressed to only two participants is highlighted, while the main thread keeps moving in the background.](img/n2-audience.webp)
+
+Every envelope carries an optional `audience` field — a list of participant IDs that should receive the message. Omit it and the hub broadcasts to everyone. Set it and only those participants see the envelope. The WAL records both variants identically; the audience filter is applied at dispatch time, not write time, so the full log stays durable even if a participant was excluded.
+
+Private side-channels use the same primitive: open a second channel with a restricted participant list. The two channels run on separate WALs that never intersect. An agent on the main channel cannot discover that the side-channel exists, let alone read its messages.
+
+The example below has three participants on a discussion channel. After a public exchange, alice opens a private `consulting` channel with carol — bob is not invited and never sees that conversation.
+
+```python linenums="1"
+import asyncio
+
+from autogen.beta.knowledge import MemoryKnowledgeStore
+from autogen.beta.network import (
+    EV_CHANNEL_CLOSED, EV_TEXT,
+    Hub, HubClient, LocalLink, Passport,
+)
+
+async def main() -> None:
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    carol_hc = HubClient(link, hub=hub)
+
+    alice = await alice_hc.register_human(Passport(name="alice", kind="human"))
+    bob = await bob_hc.register_human(Passport(name="bob", kind="human"))
+    carol = await carol_hc.register_human(Passport(name="carol", kind="human"))
+
+    # ── Main discussion channel: alice, bob, carol ──────────────────────────
+    main_ch = await alice.open(
+        type="discussion",
+        target=[bob.agent_id, carol.agent_id],
+    )
+    await main_ch.send("alice (main): topic — should we adopt the new infra?")
+
+    await bob.next_envelope(
+        predicate=lambda e: e.channel_id == main_ch.channel_id and e.event_type == EV_TEXT,
+        timeout=10.0,
+    )
+    await bob.send(main_ch.channel_id, "bob (main): I need more context before deciding.")
+
+    await carol.next_envelope(
+        predicate=lambda e: e.channel_id == main_ch.channel_id and e.sender_id == bob.agent_id,
+        timeout=10.0,
+    )
+
+    # ── Private side-channel: alice ↔ carol (bob excluded) ─────────────────
+    side_ch = await alice.open(type="consulting", target=carol.agent_id)
+    await side_ch.send("carol (private): off the record — do you trust the vendor?")
+
+    await carol.next_envelope(
+        predicate=lambda e: e.channel_id == side_ch.channel_id and e.event_type == EV_TEXT,
+        timeout=10.0,
+    )
+    await carol.send(side_ch.channel_id, "alice (private reply): between us — not yet.")
+
+    await alice.next_envelope(
+        predicate=lambda e: e.channel_id == side_ch.channel_id and e.event_type == EV_CHANNEL_CLOSED,
+        timeout=10.0,
+    )
+    await carol.send(main_ch.channel_id, "carol (main): let's request a reference check first.")
+
+    # ── Show both WALs ──────────────────────────────────────────────────────
+    print("=== MAIN CHANNEL WAL (alice + bob + carol) ===")
+    for env in await hub.read_wal(main_ch.channel_id):
+        if env.event_type == EV_TEXT:
+            print(f"  {env.event_data.get('text', '')!r}")
+
+    print("\n=== SIDE-CHANNEL WAL (alice + carol only) ===")
+    for env in await hub.read_wal(side_ch.channel_id):
+        if env.event_type == EV_TEXT:
+            print(f"  {env.event_data.get('text', '')!r}")
+
+    await main_ch.close()
+    await alice_hc.close()
+    await bob_hc.close()
+    await carol_hc.close()
+    await hub.close()
+
+asyncio.run(main())
+```
+
+Both WALs are first-class objects on the hub. Bob can replay the main channel from start to finish — carol's private consultation with alice never appears there. From the hub's point of view, two channels ran in parallel, each with its own participant list, its own adapter, and its own set of expectations.
+
+## Deeper TransitionGraph
+
+![Three role cards (drafter / reviewer / specialist) with envelopes flying between them as each turn fires; a "transitions" rules box on the right highlights the matching rule each turn, and on the final turn the ContextEquals("done", True) rule fires and the channel closes with reason "approved". A context_vars panel on the left flips done from False to True.](img/n2-transitions.webp)
+
+`TransitionGraph.sequence([a, b, c])` from the first post is the simplest possible graph — a straight line. For real workflows you'll want two patterns beyond that.
+
+**Dynamic Handoff — routing by return value, not graph edge.** Any `@tool` on a workflow agent can return a `Handoff` instance. The framework extracts the target from the tool's result and overrides the graph rule for that turn. This means the drafter doesn't need a separate `ToolCalled("classify")` edge for every possible specialist — it calls one tool and lets the return value decide:
+
+```python linenums="1"
+from autogen.beta.network import AgentTarget, FromSpeaker, Handoff, Transition, TransitionGraph
+
+drafter_agent = Agent("drafter", prompt="Call classify(topic) for complex topics.", config=config)
+
+@drafter_agent.tool
+async def classify(topic: str) -> Handoff:
+    """Route a complex technical topic to the right specialist."""
+    specialist_id = lookup_specialist(topic)     # your routing logic here
+    return Handoff(target=specialist_id, reason=f"complex topic: {topic}")
+
+graph = TransitionGraph(
+    initial_speaker=user.agent_id,
+    transitions=[
+        Transition(when=FromSpeaker(user.agent_id), then=AgentTarget(drafter.agent_id)),
+        # Fallback path if drafter writes a plain reply instead of calling classify.
+        Transition(when=FromSpeaker(drafter.agent_id), then=AgentTarget(default_agent.agent_id)),
+    ],
+    default_target=TerminateTarget("done"),
+    max_turns=12,
+)
+```
+
+When the `classify()` tool returns `Handoff(target=specialist_id)`, the fold sets the next speaker as the `specialist_id`. The graph edge is never consulted.
+
+**ContextEquals — routing on state, not sender.** `ContextEquals(key, value)` fires when `channel.context_vars[key] == value`. You write context vars from a `@tool` via `set_context(channel, key, value)`. Similar to a tool returning a Handoff, this is evaluated before evaluating transitions, so the same turn that sets a var can immediately route on it:
+
+```python linenums="1"
+from autogen.beta.network import (
+    AgentTarget, ContextEquals, FromSpeaker,
+    TerminateTarget, ToolCalled, Transition, TransitionGraph,
+)
+from autogen.beta.network.workflow_helpers import set_context
+
+reviewer_agent = Agent("reviewer", prompt="Call review_draft(quality, reason) once per turn.", config=config)
+
+@reviewer_agent.tool
+async def review_draft(quality: str, reason: str, channel: ChannelInject) -> str:
+    """Review a draft. quality='approved' ends the workflow; 'needs_work' requests a revision."""
+    if quality == "approved":
+        await set_context(channel, "done", True)
+        return f"approved: {reason}"
+    return f"revision requested: {reason}"
+
+graph = TransitionGraph(
+    initial_speaker=user.agent_id,
+    transitions=[
+        # Terminate as soon as done=True — must be listed before the ToolCalled rule.
+        Transition(when=ContextEquals("done", value=True), then=TerminateTarget("approved")),
+        Transition(when=FromSpeaker(user.agent_id), then=AgentTarget(drafter.agent_id)),
+        Transition(when=FromSpeaker(drafter.agent_id), then=AgentTarget(reviewer.agent_id)),
+        # ToolCalled ensures EV_PACKET is posted even when the reviewer produces no
+        # text body — so the fold and ContextEquals check always happen.
+        Transition(when=ToolCalled("review_draft"), then=AgentTarget(drafter.agent_id)),
+    ],
+    default_target=TerminateTarget("max_iterations"),
+    max_turns=10,
+)
+```
+
+Two things to notice. First, `ContextEquals("done", True)` is listed *before* `ToolCalled("review_draft")` — transitions are walked in list order (with equal `priority`, list position breaks ties), so termination fires before the loop-back. Second, the `ToolCalled("review_draft")` entry does double duty: it makes the adapter post an `EV_PACKET` even when the reviewer calls the tool but writes no text, so the fold always runs and the ContextEquals check always gets evaluated. Without it, an empty-body turn silently disappears and the graph never advances.
+
+## Centerpiece runnable — both dials at once
+
+![A workflow channel with two roles (drafter and specialist). A dynamic Handoff arc jumps from drafter to specialist; specialist calls flag() which sets a context var; a ContextEquals rule fires and the channel closes with reason specialist_done.](img/n2-centerpiece.webp)
+
+The final example combines both dials on a single workflow channel:
+
+1. **Dynamic Handoff** — the drafter calls `classify()` which returns a `Handoff` pointing at the specialist. The graph doesn't need a static edge for every possible specialist.
+2. **ContextEquals routing** — the specialist calls `flag(status='complete')` which writes `status` to the channel's `context_vars`. A `ContextEquals("status", "complete")` transition fires on the specialist's round-end packet and terminates the workflow cleanly.
+
+```python linenums="1"
+import asyncio
+
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.knowledge import MemoryKnowledgeStore
+from autogen.beta.network import (
+    EV_CHANNEL_CLOSED,
+    AgentTarget, ChannelInject, ContextEquals, FromSpeaker, Handoff,
+    Hub, HubClient, LocalLink, Passport, Resume,
+    TerminateTarget, ToolCalled, Transition, TransitionGraph,
+)
+from autogen.beta.network.workflow_helpers import set_context
+
+async def main() -> None:
+    config = AnthropicConfig(model="claude-haiku-4-5-20251001")
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    user_hc, drafter_hc, spec_hc = (HubClient(link, hub=hub) for _ in range(3))
+
+    user = await user_hc.register_human(Passport(name="user", kind="human"))
+
+    drafter_agent = Agent(
+        "drafter",
+        prompt="Call classify(topic) to route complex topics to the specialist.",
+        config=config,
+    )
+    specialist_id_holder: list[str] = []
+
+    @drafter_agent.tool
+    async def classify(topic: str) -> Handoff:
+        """Route a complex technical topic to the domain specialist."""
+        return Handoff(target=specialist_id_holder[0], reason=f"complex topic: {topic}")
+
+    drafter = await drafter_hc.register(
+        drafter_agent, Passport(name="drafter"), Resume(), attach_plugin=False,
+    )
+
+    specialist_agent = Agent(
+        "specialist",
+        prompt="Call flag(status='complete') first, then write your 2-sentence analysis.",
+        config=config,
+    )
+
+    @specialist_agent.tool
+    async def flag(status: str, channel: ChannelInject) -> str:
+        """Flag the analysis status for downstream routing."""
+        await set_context(channel, "status", status)
+        return "Status recorded. Write your 2-sentence analysis in this reply."
+
+    specialist = await spec_hc.register(
+        specialist_agent, Passport(name="specialist"), Resume(), attach_plugin=False,
+    )
+    specialist_id_holder.append(specialist.agent_id)
+
+    graph = TransitionGraph(
+        initial_speaker=user.agent_id,
+        transitions=[
+            Transition(when=FromSpeaker(user.agent_id), then=AgentTarget(drafter.agent_id)),
+            Transition(when=FromSpeaker(drafter.agent_id), then=AgentTarget(specialist.agent_id)),
+            # ContextEquals terminates when the specialist flags status='complete'.
+            # ToolCalled("flag") forces EV_PACKET even on text-free tool-only turns,
+            # ensuring the fold always runs and ContextEquals always gets evaluated.
+            Transition(
+                when=ContextEquals("status", "complete"),
+                then=TerminateTarget("specialist_done"),
+                priority=-1,
+            ),
+            Transition(when=ToolCalled("flag"), then=TerminateTarget("specialist_done")),
+            Transition(when=FromSpeaker(specialist.agent_id), then=TerminateTarget("specialist_done")),
+        ],
+        default_target=TerminateTarget("done"),
+        max_turns=12,
+    )
+
+    channel = await user.open(
+        type="workflow",
+        target=[drafter.agent_id, specialist.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+    await channel.send(
+        "Brief: explain the security implications of DNS-over-HTTPS for enterprise networks."
+    )
+
+    close_env = await user.next_envelope(
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED and e.channel_id == channel.channel_id,
+        timeout=120.0,
+    )
+    print(f"closed: {close_env.event_data.get('reason')!r}")
+    # → 'specialist_done'
+
+    for hc in (user_hc, drafter_hc, spec_hc):
+        await hc.close()
+    await hub.close()
+
+asyncio.run(main())
+```
+
+The WAL from a real run looks like this:
+
+```
+        user  ag2.channel.invite          (× 2 — drafter, specialist)
+     drafter  ag2.channel.invite.ack
+  specialist  ag2.channel.invite.ack
+        user  ag2.channel.opened
+        user  EV_TEXT   : Brief: explain the security implications of DNS-over-HTTPS…
+     drafter  EV_PACKET : routing=handoff  body=Routing to specialist: complex topic…
+  specialist  EV_CONTEXT_SET : {'status': 'complete'}
+  specialist  EV_PACKET : routing=terminate:specialist_done  body=## Security Implications of DoH…
+        user  ag2.channel.closed          reason=specialist_done
+```
+
+Every dial lands exactly once, in the right place, in the right order. The `EV_CONTEXT_SET` is the specialist writing to the channel's state; the `EV_PACKET` that follows is the turn-end envelope whose fold evaluates `ContextEquals("status", "complete")` and terminates the workflow. The `EV_CHANNEL_CLOSED` carries `reason=specialist_done` — clean, deterministic, no stall required.
+
+## Wrapping up
+
+Two dials, one primitive. Audience addressing governs *visibility* — who sees which envelope on which thread. `TransitionGraph` conditions govern *routing* — who speaks next based on what was said or what state was written. The built-in expectations govern *time* automatically: every adapter ships SLAs that fire without any configuration. All three are first-class envelopes on the WAL, which means everything you dial in survives a hub restart exactly as written.
+
+The next post in this series — [**What Survives, Survives Exactly**](/docs/blog/2026/05/16/AG2-Network-What-Survives/) — zooms into that WAL. You'll see how the hub re-derives every channel from scratch on restart, how identity (Passport / Resume / SKILL.md) and the audit log compose with the same fold model, and what "durable" really means for a multi-agent conversation.

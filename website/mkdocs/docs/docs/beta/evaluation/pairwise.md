@@ -1,0 +1,122 @@
+---
+title: "Pairwise comparison"
+sidebarTitle: "Pairwise"
+---
+
+Sometimes "which answer is better?" is easier and more reliable than scoring each answer in isolation — especially for subjective quality. `run_pairwise` runs two variants over the same suite and asks a **comparator** to pick a winner per task, then reports B's win-rate with a confidence interval.
+
+## `run_pairwise`
+
+```python linenums="1"
+from autogen.beta.eval import run_pairwise
+from autogen.beta.eval.scorers import pairwise_judge
+
+result = await run_pairwise(
+    suite,
+    variant_a=agent_v1,
+    variant_b=agent_v2,
+    comparators=[pairwise_judge(config, criterion="more helpful answer", key="quality")],
+    store_dir="runs",
+)
+wr = result.win_rate("quality")        # win-rate for B, with a Wilson confidence interval
+print(wr.rate, wr.ci, wr.ties)
+```
+
+`PairwiseRunResult` reports B's win-rate, ties, position flips, and — when you supply both a model and a human comparator — their agreement (Cohen's κ).
+
+## Comparators
+
+A comparator decides the winner of one pair. Two kinds ship — an LLM judge, and a human:
+
+- **`pairwise_judge(config, criterion=, key=)`** — an LLM. It judges each pair in **both orders** (A-then-B and B-then-A) and only counts a win when the verdict is consistent, which cancels position bias. Like `agent_judge`, it renders the gold answer as a `## Reference` section by default; pass `include_reference=False` for criteria that must compare the responses on their own (e.g. grounding) without seeing the reference.
+- **`human_pairwise(...)` / `human_labels(...)`** — a person decides. Covered next.
+
+## Human comparison
+
+A human is often the ground truth for "which is better." There are two ways to collect those judgements.
+
+### Inline — judge as the run goes
+
+`human_pairwise` prompts a reviewer for each task. The default prompt prints the question and both answers **blinded** — Response 1 / Response 2, in random order so there's no position bias — and reads `1` / `2` / `tie`:
+
+```python linenums="1"
+from autogen.beta.eval import run_pairwise
+from autogen.beta.eval.scorers import human_pairwise
+
+result = await run_pairwise(
+    suite,
+    variant_a=agent_v1,
+    variant_b=agent_v2,
+    comparators=[human_pairwise(key="quality")],   # prompts in the terminal, per task
+    store_dir="runs",
+)
+print(result.win_rate("quality").rate)
+```
+
+```text
+Task: What's the capital of France?
+[1] The capital of France is Paris.
+[2] Paris.
+Which is better? 1 / 2 / tie: 2
+```
+
+Pass your own `ask` callback to collect the choice from a UI or notebook instead of the terminal. It receives `(task, response_1, response_2)` (still blinded) and returns `"1"`, `"2"`, or `"tie"`:
+
+```python linenums="1"
+def ask(task, response_1, response_2) -> str:
+    # render the two answers in your own UI, collect a click, map it to "1" / "2" / "tie"
+    return my_review_ui.compare(task.inputs["input"], response_1, response_2)
+
+human_pairwise(key="quality", ask=ask)
+```
+
+### At scale — blinded offline labeling
+
+Past a handful of cases — or with several labelers — you don't sit at a terminal. Export a **blinded manifest**, have people label it in any tool, then import the results. This is the workflow for a real human-eval pass.
+
+```python linenums="1"
+from autogen.beta.eval import DirectoryTraceSource, evaluate_pairwise
+from autogen.beta.eval.scorers import export_pairwise_cases, human_labels
+
+champion = DirectoryTraceSource("runs/champion")        # two sets of captured traces
+challenger = DirectoryTraceSource("runs/challenger")
+
+# 1. write a blinded JSONL — one line per (task, criterion)
+await export_pairwise_cases(
+    champion, challenger,
+    criteria=["more helpful"],
+    out="labels.jsonl",
+    suite=suite,
+)
+
+# 2. a person opens labels.jsonl (or a spreadsheet / labeling UI) and adds
+#    "preferred": "1" | "2" | "tie" to each line.
+
+# 3. import the labelled file and compute the win-rate
+result = await evaluate_pairwise(
+    champion, challenger,
+    comparators=[human_labels("labels.jsonl", criterion="more helpful", key="helpful")],
+    suite=suite,
+    store_dir="runs",
+)
+print(result.win_rate("helpful").rate)
+```
+
+Each manifest line is blinded — the labeler sees the two answers but **not** which model produced which:
+
+```json
+{"case_id": "task-1::more helpful", "task_id": "task-1", "criterion": "more helpful",
+ "task_input": "What's the capital of France?",
+ "response_1": "Paris.", "response_2": "The capital of France is Paris.", "first_variant": "b"}
+```
+
+`first_variant` is the de-blinding key — it records which model is Response 1. Keep it out of the labeler's view; `human_labels` uses it to map their `"1"` / `"2"` back to the right variant. Export several `criteria` at once and add one `human_labels(criterion=…, key=…)` comparator per criterion.
+
+## Grading existing pairs — `evaluate_pairwise`
+
+`run_pairwise` is to `evaluate_pairwise` what `run_agent` is to `evaluate_traces`: the *grade-only* version. Given two trace sources you already have, it pairs them by `task_id` and runs the comparators — no agent invocation. The offline-labeling flow above is one use; it works just as well with `pairwise_judge` to re-grade captured champion/challenger traces with an LLM.
+
+## Where to next
+
+- **[Variants](variants.md)** — rank more than two on a leaderboard.
+- **[Scorers](scorers.md)** — `pairwise_judge` is the head-to-head cousin of the `agent_judge` scorer.

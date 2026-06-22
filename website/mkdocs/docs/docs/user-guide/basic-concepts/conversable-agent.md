@@ -1,0 +1,190 @@
+---
+title: "ConversableAgent: Building Intelligent Agents"
+sidebarTitle: "ConversableAgent: Building Intelligent Agents"
+---
+
+!!! example "Try it on the AG2 Playground"
+    See a two-agent conversation running live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
+The `ConversableAgent` is the fundamental building block of AG2 - think of it as both the brain and the personality of your AI system. With an LLM configuration providing its thinking power, a ConversableAgent can:
+
+- Communicate with other agents and humans
+- Process information and generate responses
+- Follow instructions defined in its system message
+- Execute tools and functions when needed
+
+Every agent in your AG2 system is either a `ConversableAgent` or built upon one, making it the most important class to understand.
+
+## Creating a ConversableAgent
+
+Once you've set up your LLM configuration, creating a `ConversableAgent` is straightforward:
+
+```python hl_lines="7-11"
+from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+# Create LLM configuration first
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+
+# Create the agent using the context manager approach
+my_agent = ConversableAgent(
+    name="helpful_agent",  # Give your agent a unique name
+    system_message="You are a helpful AI assistant",  # Define its personality and purpose
+    llm_config=llm_config  # Pass the LLM configuration
+)
+```
+
+**Key Parameters**
+
+When creating a `ConversableAgent`, there are several important parameters to consider:
+
+- `name`: A unique identifier for your agent
+- `system_message`: Instructions that define the agent's role, personality, and behavior
+- `llm_config`: Configuration for the language model (can be passed directly or via context manager)
+
+## Interacting with a ConversableAgent
+
+The simplest way to interact with a `ConversableAgent` is to use the `run()` and `process()` methods. Here's a basic example:
+
+```python hl_lines="2-6 9"
+# Establish the workflow
+response = my_agent.run(
+    message="What's the capital of France?",
+    max_turns=2,  # Limit conversation length
+    user_input=True  # Allow user to provide input
+)
+
+# Process the workflow
+response.process()
+```
+
+???+ info
+
+    **Why Two Steps: `run()` and `process()`**
+
+    You might wonder why we need to call both `run()` and `process()` to get results.
+
+    **👉 Here’s what’s happening:**
+
+    When you call `run()`, it doesn’t immediately give you the final output.
+    Instead, it returns an iterator, a special object that holds a stream of events, messages, and metadata.
+
+    **👉 Why? Because flexibility matters.**
+
+    The workflow steps won’t actually start running until you iterate over this iterator.
+    This design gives you full control and makes it easy to build things like:
+
+    - Custom UIs
+    - Real-time dashboards
+    - Interactive apps where you control how and when each event is handled
+
+    **👉 Okay — so what does `process()` do?**
+
+    `process()` is a built-in helper method that takes care of iterating through those events for you.
+    It simulates a chat-like console experience — printing messages, handling user inputs, and making it feel like a live conversation.
+
+    **👉 In short:**
+
+    Use `run()` and iterate over the events yourself when you want full control over the workflow's events and how they are processed. **👉 Learn more** about the `run()` method in the `ConversableAgent API reference`.
+
+    Use `process()` along with `run()` when you just want a quick, ready-to-go chat experience in the console.
+
+<RunMethodHelpMsg/>
+
+## Financial Compliance Example
+
+Let's create a simple financial agent using `ConversableAgent`:
+
+```python
+from autogen import ConversableAgent, LLMConfig
+import os
+
+# Configure the LLM (we created this in the previous section)
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ["OPENAI_API_KEY"],
+    "temperature": 0.2,
+})
+
+# Create a basic financial agent
+finance_agent = ConversableAgent(
+    name="finance_agent",
+    system_message="You are a financial assistant who helps analyze financial data and transactions.",
+    llm_config=llm_config,
+)
+
+# Run the agent with a prompt
+response = finance_agent.run(
+    message="Can you explain what makes a transaction suspicious?",
+    max_turns=1
+)
+
+# Iterate through the chat automatically with console output
+response.process()
+```
+
+In this simple example:
+
+- We've created a financial agent with a basic system message
+- We're asking it a straightforward question about suspicious transactions
+- We're limiting the conversation to just one turn by setting `max_turns=1`. This is one of the many ways to end a conversation. You can find more options in the [Ending a chat](../advanced-concepts/orchestration/ending-a-chat.md).
+
+## How to Run This Example
+
+- Save the code above to a file (e.g., `financial_compliance.py`)
+- Set your OpenAI API key in your environment variable or use your preferred model provider
+- Make sure you have AG2 installed: `pip install ag2[openai]`
+- Run the script: `python financial_compliance.py`
+
+#### Example Output
+
+When you run the code, you should see output similar to this:
+
+```console
+user (to finance_agent):
+
+Can you explain what makes a transaction suspicious?
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+finance_agent (to user):
+
+Certainly! A transaction may be considered suspicious for several reasons, often related to patterns or behaviors that deviate from the norm. Here are some common indicators:
+
+1. **Unusual Amounts**: Transactions that are significantly larger or smaller than typical amounts for a particular account or customer can raise red flags.
+
+2. **Inconsistent Behavior**: If a customer's transaction history suddenly changes—such as a sudden increase in frequency or volume of transactions—it may warrant further investigation.
+
+3. **Geographic Anomalies**: Transactions involving countries or regions known for high levels of fraud or money laundering can be suspicious, especially if the customer has no known connections to those areas.
+
+4. **Rapid Movement of Funds**: Transactions that involve moving money quickly between accounts, especially if they are done in a short time frame, can indicate attempts to obscure the source of funds.
+
+5. **Structuring or Smurfing**: Breaking up large transactions into smaller ones to avoid detection or reporting thresholds can be a sign of suspicious activity.
+
+6. **Lack of Clear Purpose**: Transactions that lack a clear business or personal purpose, or that do not align with the customer's known activities, can be suspicious.
+
+7. **High-Risk Industries**: Transactions involving businesses in industries that are considered high-risk for fraud, such as gambling, adult entertainment, or cryptocurrency, may be flagged.
+
+8. **Unusual Account Activity**: Sudden changes in account behavior, such as a dormant account suddenly becoming active or frequent withdrawals without corresponding deposits, can be suspicious.
+
+9. **Third-Party Transactions**: Transactions involving third parties who are not directly related to the account holder can raise concerns, especially if they are frequent or involve large sums.
+
+10. **Negative Media Reports**: If a person or entity is associated with negative news reports related to fraud, money laundering, or other illicit activities, their transactions may be scrutinized.
+
+Financial institutions often use automated systems to monitor transactions for these and other indicators, and they may file Suspicious Activity Reports (SARs) when they identify potentially suspicious transactions.
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> TERMINATING RUN (16d4d75c-ca0d-4952-bfff-f7802a57e5e7): Maximum turns (1) reached
+```
+
+This is just the beginning of what you can do with `ConversableAgent`. In subsequent sections, we'll expand this example to handle more complex financial tasks and interactions.
+
+## Next Steps
+Now that you understand the basics of `ConversableAgent`, it's time to add some human oversight!
+
+For financial compliance systems, a human review of flagged transactions adds an essential layer of security and compliance. In the next section, you'll see how to build upon our simple example to create a more robust financial assistant with human oversight.

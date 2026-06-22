@@ -1,0 +1,75 @@
+---
+title: A2A Protocol Overview
+sidebarTitle: Overview
+---
+
+The `#!python autogen.beta.a2a` module exposes any AG2 `#!python Agent` over the [Agent2Agent (A2A) protocol](https://a2a-protocol.org/){.external-link target="_blank"} and lets one AG2 agent talk to a remote A2A endpoint as if it were a regular LLM provider. The protocol is transport-agnostic: the same agent can be served over JSON-RPC, HTTP+JSON (REST) or gRPC, and clients pick the binding from the published `#!python AgentCard`.
+
+## When To Use A2A
+
+Reach for A2A when the agents you need to combine **don't live in the same Python process**:
+
+- A remote agent owned by a different team (or a different runtime) that you want to call as a tool.
+- A network of services that need a vendor-neutral, spec-defined wire format instead of bespoke HTTP APIs.
+- A long-running task that should outlive a single client request and be polled / streamed by id.
+
+For in-process multi-agent scenarios — strict turn order, governance, audit trails — see the [Multi-Agent Network](../network/overview.md) instead. A2A is the cross-process / cross-host complement, not a replacement.
+
+## Mental Model
+
+```
+   ┌────────────────────────┐                  ┌────────────────────────┐
+   │ Local Agent            │                  │ A2AServer              │
+   │  config=A2AConfig(...) │  AgentCard       │  wraps an Agent        │
+   │                        │  ◀──────────────▶│  + TaskStore           │
+   │  send / sendStreaming  │  Task lifecycle  │  + (optional) push     │
+   └──────────┬─────────────┘                  └────────────┬───────────┘
+              │                                             │
+              │  one of: jsonrpc / rest / grpc              │
+              └──────────────────  network  ────────────────┘
+```
+
+The server publishes an `#!python AgentCard` at `#!python /.well-known/agent-card.json`. Every binding the server supports is listed in `#!python card.supported_interfaces`; the client reads the card, picks one binding (via `#!python prefer=...` or the first match) and uses it for the actual `#!python message/send`, `#!python tasks/get` and friends. URLs for individual transports are encoded in the card — the client never has to know them up front.
+
+## Core Concepts
+
+| Concept | Lives in | Purpose |
+|---|---|---|
+| `#!python A2AServer` | `#!python autogen.beta.a2a` | Wraps an `#!python Agent` and produces a Starlette app (JSON-RPC / REST) or `#!python grpc.aio.Server` |
+| `#!python build_card` | `#!python autogen.beta.a2a` | Builds the `#!python AgentCard` declaring which transports the server speaks |
+| `#!python A2AConfig` | `#!python autogen.beta.a2a` | A `#!python ModelConfig` — plug it into a local `#!python Agent` to talk to a remote A2A server as its LLM |
+| `#!python TaskStore` | A2A SDK | Backs every transport on one server. Defaults to `#!python InMemoryTaskStore` |
+| `#!python ClientToolsExtension` | `#!python urn:ag2:client-tools:v1` | AG2-defined extension declared in the card. Lets a remote LLM call tools that live on the *client* |
+| `#!python list_tasks` / `#!python get_task` / `#!python cancel_task` | `#!python autogen.beta.a2a.tasks` | Helpers for inspecting and aborting tasks on the remote server |
+| `#!python A2APushConfig` | `#!python autogen.beta.a2a.push` | Webhook subscription config + CRUD helpers |
+| `#!python A2AEvent` family | `#!python autogen.beta.a2a.events` | Typed wire events surfaced into the AG2 stream — subscribe for observability |
+
+## Reading Order
+
+1. [Server](server.md) — expose an existing `#!python Agent` over A2A.
+2. [Client](client.md) — connect to a remote A2A endpoint, multi-turn, client-side tools, `#!python as_tool()`.
+3. [Tasks & Push](tasks_and_push.md) — inspect/cancel tasks and manage push-notification webhooks.
+4. [Advanced](advanced.md) — HITL via `#!python input_required`, streaming reconnect, custom `#!python AgentExecutor`.
+
+## Public API
+
+Top-level imports — the most commonly used entry points are re-exported from `#!python autogen.beta.a2a`:
+
+```python linenums="1"
+from autogen.beta.a2a import A2AConfig, A2AServer, build_card
+```
+
+Sub-modules:
+
+| Module | Contents |
+|---|---|
+| `#!python autogen.beta.a2a.tasks` | `#!python list_tasks`, `#!python get_task`, `#!python cancel_task`, `#!python ListedTasks` |
+| `#!python autogen.beta.a2a.push` | `#!python A2APushConfig`, `#!python A2APushAuthentication`, CRUD helpers |
+| `#!python autogen.beta.a2a.security` | `#!python Scheme` / `#!python Requirement` types, scheme factories (`#!python bearer_scheme`, `#!python api_key_scheme`, `#!python oauth2_scheme`, `#!python mtls_scheme`, `#!python http_auth_scheme`, `#!python open_id_connect_scheme`) and the `#!python require()` builder for `#!python AgentCard` auth declarations |
+| `#!python autogen.beta.a2a.events` | Typed `#!python A2AEvent` wrappers surfaced into the AG2 stream — `#!python A2ATaskSnapshot`, `#!python A2ATaskStatusUpdate`, `#!python A2ATaskArtifactUpdate`, `#!python A2ATextArtifact`, `#!python A2AToolCallArtifact`, `#!python A2AMessage` |
+| `#!python autogen.beta.a2a.errors` | Exception hierarchy — `#!python A2AError`, `#!python A2ATaskTerminalError`, `#!python A2AReconnectError`, `#!python A2AInvalidCardError`, `#!python A2AClientToolsNotSupportedError` |
+| `#!python autogen.beta.a2a.transports` | `#!python TransportName` — `#!python Literal["jsonrpc", "rest", "grpc"]` — plus low-level `#!python build_*` builders |
+| `#!python autogen.beta.a2a.testing` | In-process test helpers — `#!python make_test_client_factory`, `#!python make_test_rest_client_factory`, `#!python pick_free_port` |
+
+!!! note
+    The A2A integration depends on [`a2a-sdk`](https://pypi.org/project/a2a-sdk/){.external-link target="_blank"}. Install with the `a2a` extras: `#!bash pip install "ag2[a2a]"`. gRPC is an additional optional dependency — install with `#!bash pip install "ag2[a2a-grpc]"`.

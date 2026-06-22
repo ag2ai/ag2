@@ -1,0 +1,168 @@
+---
+title: MCP Servers
+sidebarTitle: MCP
+---
+
+# MCP Servers
+
+[MCP (Model Context Protocol)](https://modelcontextprotocol.io/){.external-link target="_blank"} is a protocol introduced by Anthropic that aims to standardize how tools and prompts are exposed to LLMs.
+It can be thought of as a superset of regular [Tools](tools.md), created to solve two problems:
+
+1. Each LLM provider had its own tool schema and types, making tools non-portable across providers.
+2. There was no standard way to give an LLM a scoped, context-optimized surface to invoke APIs, RPCs, and similar remote capabilities.
+
+## Two ways to connect an MCP server
+
+Autogen supports both ways MCP servers are typically wired into an agent:
+
+- **Client-side connection** — Autogen connects to the MCP server itself, discovers the tools, and executes them locally. The LLM only ever sees ordinary function tools. Works with every provider. Supports both **remote** servers (HTTP / streamable-http) and **local** servers (subprocess speaking MCP over stdin/stdout).
+- **Provider-side connection** — the MCP server URL and credentials are forwarded to the LLM provider, which connects to the server and invokes the tools on its end. Only works with providers that natively support it (e.g. Anthropic).
+
+| | `MCPToolkit` (client-side) | `MCPServerTool` (provider-side) |
+|---|---|---|
+| Who connects to the MCP server | Autogen | LLM provider |
+| Who executes tool calls | Autogen | LLM provider |
+| Works with any LLM provider | Yes | No — provider must support MCP passthrough |
+| Supports local stdio servers | Yes | No — provider only accepts URLs |
+| Credentials leave your infra | No | Yes — forwarded to the LLM provider |
+| Custom middleware on tool calls | Yes | No |
+| Lifecycle / connection pooling | Handled by Autogen | Handled by provider |
+
+!!! tip
+    Pick `MCPToolkit` when you want provider-agnostic behavior, local control over tool execution, when you need to run a local stdio MCP server, or when your MCP credentials must stay inside your infrastructure. Pick `MCPServerTool` when you're only targeting a provider that supports it and you'd rather let the provider manage the MCP lifecycle for you.
+
+## Client-side: `MCPToolkit`
+
+`MCPToolkit` is a [Toolkit](toolkits.md) — it discovers the server's tools lazily and exposes each one as a regular function tool to the agent. It accepts either a remote URL/`MCPServerConfig` or an `MCPStdioServerConfig` for a locally-launched subprocess; the rest of the agent doesn't care which transport is in use.
+
+### Remote servers (HTTP)
+
+The simplest form takes a URL string and uses the streamable-http transport:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPToolkit
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    tools=[MCPToolkit("https://my-mcp-url.example.com")],
+)
+```
+
+Most real-world MCP servers require authentication. Use `MCPServerConfig` for typed configuration:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPToolkit, MCPServerConfig
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    tools=[
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://my-mcp-url.example.com",
+                authorization_token="XXXXXX",
+            )
+        )
+    ],
+)
+```
+
+`MCPServerConfig` also accepts `headers`, `allowed_tools`, `blocked_tools`, `description`, and a `server_label` for logging, plus transport-level knobs `connection_timeout` (default `30.0`), `proxy`, and `verify` (TLS verification, default `True`). The first group — `server_url`, `server_label`, `authorization_token`, `description`, `allowed_tools`, `blocked_tools`, `headers` — can also be a `Variable` if the value is only known at runtime; `connection_timeout`, `proxy`, and `verify` take plain values only.
+
+### Local servers (stdin/stdout)
+
+Many MCP servers ship as CLIs that speak MCP over their own stdin/stdout — `npx -y @modelcontextprotocol/server-filesystem`, `uvx some-mcp-server`, a Python script in your repo, etc. Use `MCPStdioServerConfig` to launch one as a subprocess; Autogen pipes the MCP protocol through its stdio.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPToolkit, MCPStdioServerConfig
+
+agent_with_local_mcp = Agent(
+    name="Filesystem bot",
+    tools=[
+        MCPToolkit(
+            MCPStdioServerConfig(
+                command="npx",
+                args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp/workspace"],
+            )
+        )
+    ],
+)
+```
+
+You can pass environment variables, a working directory, and the usual filtering options:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPToolkit, MCPStdioServerConfig
+
+agent_with_local_mcp = Agent(
+    name="GitHub bot",
+    tools=[
+        MCPToolkit(
+            MCPStdioServerConfig(
+                command="uvx",
+                args=["mcp-server-github"],
+                env={"GITHUB_TOKEN": "ghp_XXXXXX"},
+                cwd="/srv/workspace",
+                allowed_tools=["list_issues", "create_issue"],
+                server_label="github",
+            )
+        )
+    ],
+)
+```
+
+`MCPStdioServerConfig` accepts `command`, `args`, `env`, `cwd`, `server_label`, `description`, `allowed_tools`, `blocked_tools`, and `encoding` (default `"utf-8"`). All of these except `encoding` can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
+
+!!! note
+    The subprocess is launched lazily, on the first tool-discovery / tool-call. A short-lived MCP session is opened for each operation, so there's no persistent process to manage from your code.
+
+### Multiple servers
+
+`MCPToolkit` is just a toolkit, so you can register as many as you need — and freely mix remote and local ones:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPToolkit, MCPStdioServerConfig
+
+agent_with_mcp = Agent(
+    name="Mixed bot",
+    tools=[
+        MCPToolkit("https://my-mcp-url.example.com"),
+        MCPToolkit("https://my-mcp-url2.example.com"),
+        MCPToolkit(
+            MCPStdioServerConfig(
+                command="npx",
+                args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+            )
+        ),
+    ],
+)
+```
+
+## Provider-side: `MCPServerTool`
+
+`MCPServerTool` does not open a connection — it ships the server URL and credentials to the LLM provider as part of the request. The provider is then responsible for connecting to the MCP server and dispatching tool calls. Because the provider only accepts a URL, this path does **not** support local stdio servers — use `MCPToolkit` with `MCPStdioServerConfig` for those.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPServerTool
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    tools=[
+        MCPServerTool(
+            server_url="https://my-mcp-url.example.com",
+            server_label="weather",
+            authorization_token="XXXXXX",
+        ),
+    ],
+)
+```
+
+`MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime.
+
+!!! warning
+    With provider-side connections, your MCP credentials are sent to the LLM provider on every request. Only use this path with providers and servers you trust with those credentials.

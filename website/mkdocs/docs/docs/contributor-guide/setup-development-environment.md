@@ -1,0 +1,142 @@
+---
+title: Setting up Development Environment
+---
+
+## Setting up LLM Keys
+
+If you are contributing to the AG2 project, you will need an LLM key depending on the submodule you are working on.
+
+=== "Using environment variables (recommended/main method)"
+
+    The primary way to configure LLM credentials for AG2 is by setting individual environment variables for each provider. This includes variables like `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `GEMINI_API_KEY`, and so on.
+
+    For example, to set up a Gemini API key:
+    ```bash
+    export GEMINI_API_KEY="<your_api_key>"
+    ```
+
+    Similarly, for OpenAI, Azure, Anthropic, etc.:
+    ```bash
+    export OPENAI_API_KEY="<your_openai_api_key>"
+    export AZURE_OPENAI_API_KEY="<your_azure_api_key>"
+    export AZURE_OPENAI_API_BASE="<your_azure_base_url>"
+    export ANTHROPIC_API_KEY="<your_anthropic_api_key>"
+    # ...and so on for other providers
+    ```
+
+    The AG2 test and tooling system will automatically detect these environment variables and construct the required configuration for all supported LLM providers. This method is recommended and should be your default approach for both local and CI environments.
+
+=== "Using OAI_CONFIG_LIST (legacy/secondary method)"
+
+    As an alternative, AG2 also supports an environment variable called `OAI_CONFIG_LIST` in JSON format to store the LLM keys. `OAI_CONFIG_LIST` is a list of dictionaries where each dictionary contains the following keys:
+    - `model`(required): The name of the OpenAI/LLM model.
+    - `api_key`(optional): The API key for the OpenAI/LLM model.
+    - `api_type`(optional): The type of the API key. It is used for non-OpenAI LLMs.
+    - `api_version`(optional): The version of the API key. It is used for Azure API.
+    - `base_url`(optional): The base URL for the OpenAI/LLM model.
+    - `tags`(optional): A list of tags for the OpenAI/LLM model which can be used for filtering.
+
+    Here is an example of the `OAI_CONFIG_LIST` in JSON format with two OpenAI models and a Gemini model:
+    ```bash
+    [
+        {
+            "model": "gpt-4o",
+            "api_key": "<your_api_key>",
+            "tags": ["gpt-4o", "tool", "vision"]
+        },
+        {
+            "model": "gpt-5-nano",
+            "api_key": "<your_api_key>",
+            "tags": ["gpt-5-nano", "tool", "vision"]
+        },
+        {
+            "api_type": "google",
+            "model": "gemini-pro",
+            "api_key": "<your_gemini_api_key>",
+        }
+    ]
+    ```
+
+    This `OAI_CONFIG_LIST` can be set in two ways:
+
+    === "As environment variable"
+
+        Simply set the `OAI_CONFIG_LIST` environment variable in your terminal:
+        ```bash
+        export OAI_CONFIG_LIST='[{"api_type": "openai", "model": "gpt-4o","api_key": "<your_api_key>","tags": ["gpt-4o", "tool", "vision"]},{"api_type": "openai", "model": "gpt-5-nano","api_key": "<your_api_key>","tags": ["gpt-5-nano", "tool", "vision"]},{"api_type": "google", "model": "gemini-pro","api_key": "<your_gemini_api_key>",}]'
+        ```
+
+    === "As file"
+
+        Save the `OAI_CONFIG_LIST` in a file and set the path as an environment variable. For example, if saved as `OAI_CONFIG_LIST.json`:
+
+        ```bash
+        export OAI_CONFIG_LIST="/path/to/OAI_CONFIG_LIST.json"
+        ```
+
+    !!! tip
+
+        Learn more about `OAI_CONFIG_LIST` [here](../user-guide/advanced-concepts/llm-configuration-deep-dive.md).
+
+=== "Using LLM keys directly"
+
+    Alternatively, you can set up the LLM keys directly as environment variables. Following is an example of setting up the Gemini api key as an environment variable:
+    ```bash
+    export GEMINI_API_KEY="<your_api_key>"
+    ```
+
+## Setting up the Development Environment
+
+To contribute to the AG2 project, AG2 provides three different methods to set up the development environment:
+
+=== "Dev Containers"
+    1. Setup the necessary LLM keys as mentioned above in your terminal.
+      2. Clone the AG2 repository and cd into the repository.
+      3. Open the project in Visual Studio Code by running the following command from the root of the repository:
+        ```bash
+        code .
+        ```
+      4. Press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
+      5. Select the desired python environment and wait for the container to build.
+      6. Once the container is built, you can start developing AG2.
+
+=== "Codespaces"
+    1. Open the AG2 repository on GitHub and fork the repository.
+      2. Navigate to Settings -> Secrets and variables -> Codespaces.
+      3. Add the necessary LLM keys as mentioned above by clicking on the `New repository secret` button.
+      4. Navigate back to the forked repository.
+      5. Click on the `Code` button and select `Open with Codespaces`.
+      6. Once the container is built, you can start developing AG2.
+
+=== "Virtual Environment"
+    1. Setup the necessary LLM keys as mentioned above in your terminal.
+      2. Fork the AG2 repository and clone the forked repository.
+      3. Create a virtual environment by running the following command from the root of the repository:
+          ```bash
+          python3 -m venv venv
+          ```
+      4. Activate the virtual environment by running the following command:
+          ```bash
+          source venv/bin/activate
+          ```
+      5. Install the required dependencies by running the following command:
+          ```bash
+          pip install -e ".[dev]" && prek install
+          ```
+      6. Once the dependencies are installed, you can start developing AG2.
+
+## Verifying the Development Environment
+
+To make sure that we have set up the development environment correctly, we can run the prek hooks and tests.
+
+To run the prek hooks, run the following command:
+
+```bash
+prek run --all-files
+```
+
+To run the non-llm tests, run the following command:
+
+```bash
+bash scripts/test-core-skip-llm.sh
+```
