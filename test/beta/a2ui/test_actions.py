@@ -2,10 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
-
 from autogen.beta.a2ui import A2UIAction, a2ui_action
-from autogen.beta.a2ui.actions import A2UIEventAction, collect_action_declarations, collect_server_handlers
+from autogen.beta.a2ui.actions import A2UIEventAction, collect_action_declarations, collect_server_actions
 
 
 class TestDecorator:
@@ -80,7 +78,7 @@ class TestExampleContext:
 
 
 class TestCollectors:
-    def test_collect_declarations_and_handlers(self) -> None:
+    def test_collect_declarations_and_actions(self) -> None:
         @a2ui_action(description="Add to cart")
         def add_to_basket(good_id: str) -> dict:
             return {"ok": True}
@@ -92,26 +90,11 @@ class TestCollectors:
         objs = [add_to_basket, remove]
 
         assert {a.name for a in collect_action_declarations(objs)} == {"add_to_basket", "remove"}
-        assert sorted(collect_server_handlers(objs)) == ["add_to_basket", "remove"]
+        # The collector maps name → the A2UIAction itself (which owns its execution).
+        assert collect_server_actions(objs) == {"add_to_basket": add_to_basket, "remove": remove}
 
     def test_collectors_ignore_non_actions(self) -> None:
         def plain() -> None: ...
 
         assert collect_action_declarations([plain]) == ()
-        assert collect_server_handlers([plain]) == {}
-
-
-@pytest.mark.asyncio
-async def test_handler_wraps_sync_function_as_async() -> None:
-    calls: list[str] = []
-
-    @a2ui_action
-    def add_to_basket(good_id: str) -> dict:
-        calls.append(good_id)
-        return {"good_id": good_id}
-
-    # The stored handler is an async callable invoked with the click context.
-    result = await add_to_basket.handler(good_id="G1")
-
-    assert calls == ["G1"]
-    assert result == {"good_id": "G1"}
+        assert collect_server_actions([plain]) == {}

@@ -2,12 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Execute a server-side A2UI action handler (``@a2ui_action``) and map its
-result onto the wire.
+"""Map a server-side A2UI action's result onto the wire.
 
-A server-side click never invokes the agent: the registered handler runs with
-the click's ``event.context`` as keyword arguments, and whatever it returns is
-turned into A2UI server→client messages per the spec:
+A server-side click never invokes the agent: the action runs on the server (via
+:meth:`~autogen.beta.a2ui.actions.A2UIAction.run`, which resolves dependency
+injection) with the click's ``event.context`` as keyword arguments, and whatever
+it returns is turned into A2UI server→client messages per the spec:
 
 - one server→client message (or a list of them, e.g. ``updateComponents`` /
   ``updateDataModel``) → emitted verbatim as a surface update (every version);
@@ -20,11 +20,17 @@ turned into A2UI server→client messages per the spec:
 """
 
 import logging
-from typing import Any, TypeGuard, cast
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
+
+from autogen.beta.context import ConversationContext
+from autogen.beta.stream import MemoryStream
 
 from ._types import A2UIVersion, JsonObject, JsonValue, ServerToClientMessage
-from .actions import ServerActionHandler
+from .actions import A2UIAction
 from .incoming import A2UIIncomingAction
+
+if TYPE_CHECKING:
+    from autogen.beta.agent import Agent
 
 logger = logging.getLogger(__name__)
 
@@ -70,25 +76,56 @@ def _action_response(
     return message  # type: ignore[return-value]
 
 
+def build_server_action_context(
+    agent: "Agent",
+    *,
+    variables: dict[str, Any] | None = None,
+) -> ConversationContext:
+    """Build the :class:`ConversationContext` a server action runs against.
+
+    A click runs without invoking the agent, so it has no turn context of its
+    own. This mirrors what the agent itself receives — the agent's dependencies
+    (for ``Inject``), merged variables (for ``Variable``), and the agent's
+    ``dependency_provider`` (for ``Depends`` resolution and
+    ``dependency_provider.override(...)``) — over a throwaway stream, so a
+    handler's ``Depends``/``Inject`` parameters resolve exactly like a tool's.
+    """
+    return ConversationContext(
+        MemoryStream(),
+        dependencies=dict(agent._agent_dependencies),
+        variables={**dict(agent._agent_variables), **(variables or {})},
+        dependency_provider=agent.dependency_provider,
+    )
+
+
 async def run_server_action(
-    handler: ServerActionHandler,
-    action: A2UIIncomingAction,
+    action: A2UIAction,
+    click: A2UIIncomingAction,
     *,
     version: A2UIVersion,
+    context: ConversationContext,
 ) -> list[ServerToClientMessage]:
-    """Run a server-side action handler and map its result to A2UI messages.
+    """Run a server-side action and map its result to A2UI messages.
+
+    The DI execution lives on the action itself (:meth:`A2UIAction.run`, the same
+    path as an agent tool); this function owns only the wire mapping — turning the
+    handler's return (or failure) into A2UI server→client messages.
 
     Args:
-        handler: The async handler (an ``@a2ui_action`` function).
-        action: The parsed incoming click (``name`` / ``context`` /
+        action: The :class:`A2UIAction` to run. :meth:`A2UIAction.run` solves it
+            against ``context`` so ``Depends``/``Inject`` parameters resolve and
+            ``event.context`` is coerced by the serializer.
+        click: The parsed incoming click (``name`` / ``context`` /
             ``response_request``).
         version: The wire ``version`` string to stamp on emitted messages and
             the protocol version gating ``actionResponse`` (v1.0 only).
+        context: The conversation context supplying dependencies, variables, and
+            the ``dependency_provider`` (see :func:`build_server_action_context`).
 
     Returns:
         The server→client messages to emit for this click (possibly empty).
     """
-    wants_response = action.response_request is not None
+    wants_response = click.response_request is not None
     can_respond = wants_response and version == "v1.0"
     if wants_response and not can_respond:
         # ``actionResponse`` does not exist before v1.0; a client that set
@@ -96,21 +133,21 @@ async def run_server_action(
         logger.warning(
             "A2UI server action %r requested a response, but actionResponse requires v1.0 (have %s); "
             "the handler result will not be returned to the client.",
-            action.name,
+            click.name,
             version,
         )
-    action_id = action.response_request.action_id if action.response_request is not None else ""
+    action_id = click.response_request.action_id if click.response_request is not None else ""
 
     try:
-        result = await handler(**action.context)
+        result = await action.run(click, context=context)
     except Exception as e:  # noqa: BLE001 - a handler failure must not tear down the turn
-        logger.exception("A2UI server action %r failed", action.name)
+        logger.exception("A2UI server action %r failed", click.name)
         if can_respond:
             return [_action_response(action_id, version, error={"code": "ACTION_FAILED", "message": str(e)})]
         return []
 
     return _result_to_messages(
-        result, action_name=action.name, version=version, can_respond=can_respond, action_id=action_id
+        result, action_name=click.name, version=version, can_respond=can_respond, action_id=action_id
     )
 
 
@@ -143,4 +180,4 @@ def _result_to_messages(
     return []
 
 
-__all__ = ("run_server_action",)
+__all__ = ("build_server_action_context", "run_server_action")

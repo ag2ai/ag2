@@ -10,7 +10,9 @@ agent renders the button (the action is declared to the LLM so it knows the
 button exists and what ``context`` to send), but a **click runs the function on
 the server** — it is *not* an agent tool and never enters the agent's tool
 machinery. Inside the function you can do anything: hit a backend, call a tool,
-or invoke the agent yourself.
+or invoke the agent yourself. Like an agent tool, the function may declare
+``Depends(...)`` / ``Inject(...)`` parameters; they resolve against the agent's
+``dependency_provider`` when the action runs (see :meth:`A2UIAction.run`).
 
 A button the LLM draws that has **no** registered action still works: its click
 is rewritten into a generic prompt so the agent can react (see
@@ -19,16 +21,23 @@ to a click" needs no decorator at all; an action is only for running
 deterministic server logic on click.
 """
 
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Callable, Iterable
+from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
-from typing import Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
+from fast_depends.core import CallModel
 from fast_depends.pydantic.schema import get_schema
 
 from autogen.beta.tools.final import FunctionParameters
-from autogen.beta.utils import CONTEXT_OPTION_NAME, _to_async, build_model
+from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
 
 from ._types import JsonValue
+
+if TYPE_CHECKING:
+    from autogen.beta.context import ConversationContext
+
+    from .incoming import A2UIIncomingAction
 
 # JSON-schema ``type`` → placeholder shown to the LLM as the expected
 # ``event.context`` value. Used only when no explicit ``example_context`` is given.
@@ -107,24 +116,48 @@ def _derive_example_context(schema: FunctionParameters) -> dict[str, JsonValue]:
     return {prop_name: _placeholder_for(prop_schema) for prop_name, prop_schema in properties.items()}
 
 
-# A server-side action handler: an async callable invoked with the click's
-# resolved ``event.context`` as keyword arguments.
-ServerActionHandler = Callable[..., Awaitable[Any]]
-
-
 @dataclass(slots=True, frozen=True)
 class A2UIAction:
     """A clickable A2UI button bound to a server-side handler.
 
     Produced by :func:`a2ui_action` (not meant to be constructed directly).
     Carries the :class:`A2UIEventAction` declaration (so the LLM can render the
-    button) and the async ``handler`` that runs on click. It is deliberately
-    **not** a tool: the agent never sees or calls it. Pass it in
-    ``A2UIServer(actions=[...])``.
+    button) and ``model`` — a ``fast_depends`` :class:`~fast_depends.core.CallModel`
+    that the action runs (via :meth:`run`) with dependency injection and
+    serializer-coerced ``event.context``. It is deliberately **not** a tool: the
+    agent never sees or calls it. Pass it in ``A2UIServer(actions=[...])``.
     """
 
     action: A2UIEventAction
-    handler: ServerActionHandler
+    model: CallModel
+
+    async def run(self, click: "A2UIIncomingAction", *, context: "ConversationContext") -> Any:
+        """Execute this action's handler with dependency injection resolved.
+
+        Mirrors :meth:`~autogen.beta.tools.final.function_tool.FunctionTool.__call__`:
+        the action is provider-agnostic, so the ``dependency_provider`` is taken
+        from the live ``context`` at call time rather than baked into the action.
+        The click's ``context`` supplies the handler's keyword arguments (coerced
+        by the serializer), and generator dependencies are torn down with the
+        ``AsyncExitStack`` after the handler returns.
+
+        Args:
+            click: The parsed incoming click; its ``context`` becomes the
+                handler's keyword arguments.
+            context: The conversation context supplying ``Depends``/``Inject``
+                dependencies, variables, and the ``dependency_provider``.
+
+        Returns:
+            Whatever the handler returns (opaque user value; the caller maps it
+            onto the wire).
+        """
+        async with AsyncExitStack() as stack:
+            return await self.model.asolve(
+                **(click.context | {CONTEXT_OPTION_NAME: context}),
+                stack=stack,
+                cache_dependencies={},
+                dependency_provider=context.dependency_provider,
+            )
 
 
 def collect_action_declarations(actions: Iterable[object]) -> tuple[A2UIEventAction, ...]:
@@ -136,13 +169,16 @@ def collect_action_declarations(actions: Iterable[object]) -> tuple[A2UIEventAct
     return tuple(a.action for a in actions if isinstance(a, A2UIAction))
 
 
-def collect_server_handlers(actions: Iterable[object]) -> dict[str, ServerActionHandler]:
-    """Map action name → handler for each :class:`A2UIAction`.
+def collect_server_actions(actions: Iterable[object]) -> dict[str, A2UIAction]:
+    """Map action name → the :class:`A2UIAction` that runs on click.
 
     Used by the turn core / executor to run a click on the server without
-    invoking the agent. Non-actions are ignored.
+    invoking the agent. The action (not its raw ``CallModel``) is returned so the
+    object owns its own execution — :meth:`A2UIAction.run` runs the handler
+    through ``fast_depends``, resolving ``Depends``/``Inject`` parameters and
+    coercing ``event.context`` via the serializer. Non-actions are ignored.
     """
-    return {a.action.name: a.handler for a in actions if isinstance(a, A2UIAction)}
+    return {a.action.name: a for a in actions if isinstance(a, A2UIAction)}
 
 
 @overload
@@ -228,7 +264,10 @@ def a2ui_action(
             description=action_description,
             example_context=ctx,
         )
-        return A2UIAction(action=action, handler=_to_async(f, sync_to_thread=sync_to_thread))
+        return A2UIAction(
+            action=action,
+            model=call_model,
+        )
 
     if function is not None:
         return make(function)
@@ -238,8 +277,7 @@ def a2ui_action(
 __all__ = (
     "A2UIAction",
     "A2UIEventAction",
-    "ServerActionHandler",
     "a2ui_action",
     "collect_action_declarations",
-    "collect_server_handlers",
+    "collect_server_actions",
 )

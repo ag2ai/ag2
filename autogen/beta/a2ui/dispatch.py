@@ -19,12 +19,12 @@ from autogen.beta.stream import MemoryStream
 
 from ._runtime import _A2UIRuntime
 from ._types import ServerToClientMessage
-from .actions import ServerActionHandler
+from .actions import A2UIAction
 from .events import A2UIMessageEvent
 from .incoming import A2UIIncomingActionResult
 from .middleware import A2UIInboundMiddleware
 from .request import A2UIServerRequest
-from .server_action import run_server_action
+from .server_action import build_server_action_context, run_server_action
 
 
 @dataclass(slots=True)
@@ -44,7 +44,7 @@ class A2UIMessageFrame:
 A2UIFrame = A2UIProseFrame | A2UIMessageFrame
 
 # Shared immutable default so the keyword arg never aliases a mutable {}.
-_NO_SERVER_HANDLERS: Mapping[str, ServerActionHandler] = MappingProxyType({})
+_NO_SERVER_ACTIONS: Mapping[str, A2UIAction] = MappingProxyType({})
 
 
 async def stream_turn(
@@ -52,13 +52,13 @@ async def stream_turn(
     runtime: _A2UIRuntime,
     request: A2UIServerRequest,
     *,
-    server_handlers: Mapping[str, ServerActionHandler] = _NO_SERVER_HANDLERS,
+    server_actions: Mapping[str, A2UIAction] = _NO_SERVER_ACTIONS,
 ) -> AsyncIterator[A2UIFrame]:
     """Execute one turn and yield its prose then A2UI message frames.
 
     Server-side actions are handled first and never invoke the agent: each
-    incoming click whose name maps to a ``server_handlers`` entry runs that
-    handler and its result is yielded as A2UI message frames. The agent then
+    incoming click whose name maps to a ``server_actions`` entry runs that
+    action and its result is yielded as A2UI message frames. The agent then
     runs only if the turn still has input for it (a user message, or a click on
     a button with no registered action) — a turn carrying *only* server-side
     clicks skips the agent entirely.
@@ -69,8 +69,8 @@ async def stream_turn(
         runtime: The A2UI runtime supplying the prompt section, validation
             middleware, and catalog/capabilities helpers.
         request: The parsed turn (history, current inputs, prompt, variables).
-        server_handlers: Action name → handler for ``@a2ui_action`` buttons,
-            executed on click without invoking the agent.
+        server_actions: Action name → :class:`A2UIAction` for ``@a2ui_action``
+            buttons, executed on click without invoking the agent.
 
     Yields:
         Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
@@ -81,18 +81,26 @@ async def stream_turn(
         RuntimeError: If the agent must run but has no ``config`` to create an
             LLM client.
     """
-    # Run server-side click handlers and emit their messages. These never reach
+    # Run server-side click actions and emit their messages. These never reach
     # the agent (the prompt rewriter already skipped registered actions).
     handled_server = False
-    if server_handlers:
+    if server_actions:
+        # Server actions resolve their dependencies against the agent's DI
+        # surface (built once for the turn, only when a click actually runs).
+        action_context = build_server_action_context(agent, variables=request.variables)
         for interaction in request.client_interactions:
             if not isinstance(interaction, A2UIIncomingActionResult):
                 continue
-            handler = server_handlers.get(interaction.action.name)
-            if handler is None:
+            server_action = server_actions.get(interaction.action.name)
+            if server_action is None:
                 continue
             handled_server = True
-            for message in await run_server_action(handler, interaction.action, version=runtime.version_string):
+            for message in await run_server_action(
+                server_action,
+                interaction.action,
+                version=runtime.version_string,
+                context=action_context,
+            ):
                 yield A2UIMessageFrame(message)
 
     # Run the agent only when the turn has real input for it. A turn whose only
@@ -163,7 +171,7 @@ class _A2UITurnCore:
     """Transport-neutral turn engine shared by every transport.
 
     Bundles the plain ``Agent``, the configured ``_A2UIRuntime``, and the
-    ``server_handlers`` for clickable actions, so a transport can run one turn
+    ``server_actions`` for clickable actions, so a transport can run one turn
     via :meth:`run_turn` without knowing how A2UI is wired. A click on a
     registered action runs its handler on the server without invoking the agent;
     a click on any other button is rewritten into a prompt for the agent.
@@ -171,7 +179,7 @@ class _A2UITurnCore:
 
     agent: Agent
     runtime: _A2UIRuntime
-    server_handlers: Mapping[str, ServerActionHandler] = field(default_factory=dict)
+    server_actions: Mapping[str, A2UIAction] = field(default_factory=dict)
 
     def run_turn(self, request: A2UIServerRequest) -> AsyncIterator[A2UIFrame]:
         """Run one turn and yield its prose then A2UI message frames."""
@@ -179,7 +187,7 @@ class _A2UITurnCore:
             self.agent,
             self.runtime,
             request,
-            server_handlers=self.server_handlers,
+            server_actions=self.server_actions,
         )
 
 

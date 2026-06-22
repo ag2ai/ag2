@@ -2,29 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""A2UI ⇄ A2A behaviour, exercised end to end through a real client→server round-trip.
-
-These tests drive the public surface only: a client :class:`~autogen.beta.Agent`
-talks to an :class:`A2AServer` wired with an :class:`A2UIAgentExecutor` over an
-in-process httpx ``ASGITransport`` (the same harness the ``test/beta/a2a`` E2E
-suite uses). Incoming A2UI envelopes ride the outgoing message via the
-``EXTRA_PARTS`` dependency hatch; outgoing A2UI DataParts and task-state
-transitions are observed off the client's event stream.
-
-The server LLM is mocked. Two doubles appear, both mirroring the sanctioned
-pattern in ``test/beta/a2a/_helpers.py`` (``RecordingConfig``): ``TestConfig``
-for canned responses, and a local capturing config for the cases where the
-assertion is about *what the executor fed the model* — the resolved system
-prompt (capability negotiation) or the synthesized user turn (incoming-envelope
-rewrites) — neither of which ``TrackingConfig`` (last message only) exposes.
-"""
-
 import json
 
 import pytest
 from a2a.types import Part, TaskState
 
-from autogen.beta import Agent
+from autogen.beta import Agent, Depends
 from autogen.beta.a2a.extension import EXTRA_PARTS_DEPENDENCY_KEY
 from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui.a2a import create_a2ui_parts
@@ -187,6 +170,35 @@ class TestIncomingActionRewrite:
         synthesized = synthesized_text(config.messages[-1])
         assert "user@example.com" not in synthesized
         assert "clicked" not in synthesized
+
+    async def test_registered_action_handler_resolves_injected_dependency(self) -> None:
+        # The server handler runs through fast_depends against the agent's
+        # dependency_provider, so a Depends(...) parameter (here swapped via an
+        # override, the test-DB pattern) is resolved before the click runs.
+        class Recorder:
+            def __init__(self) -> None:
+                self.emails: list[str] = []
+
+        recorder = Recorder()
+
+        def get_db() -> Recorder:
+            raise RuntimeError("the real database is unavailable under test")
+
+        def get_stub_db() -> Recorder:
+            return recorder
+
+        @a2ui_action(description="Submit the form")
+        def submit(email: str, db: Recorder = Depends(get_db)) -> str:
+            db.emails.append(email)
+            return "done"
+
+        agent = Agent(name="ui_agent", config=TestConfig("All set."))
+        agent.dependency_provider.override(get_db, get_stub_db)
+        client = client_for(agent, actions=[submit], validate_responses=False)
+
+        await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
+
+        assert recorder.emails == ["user@example.com"]
 
     async def test_unregistered_action_becomes_generic_prompt(self) -> None:
         config = CapturingConfig()

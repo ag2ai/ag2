@@ -11,7 +11,7 @@ from typing_extensions import Self
 from autogen.beta import Agent, Context
 from autogen.beta.a2ui import A2UIClientCapabilities, a2ui_action
 from autogen.beta.a2ui._runtime import _A2UIRuntime
-from autogen.beta.a2ui.actions import collect_action_declarations, collect_server_handlers
+from autogen.beta.a2ui.actions import collect_action_declarations, collect_server_actions
 from autogen.beta.a2ui.dispatch import A2UIMessageFrame, A2UIProseFrame, stream_turn
 from autogen.beta.a2ui.request import parse_request
 from autogen.beta.config import LLMClient, ModelConfig
@@ -161,9 +161,7 @@ class TestServerActions:
             resolve_action=rt.get_action,
         )
 
-        frames = [
-            f async for f in stream_turn(agent, rt, req, server_handlers=collect_server_handlers([add_to_basket]))
-        ]
+        frames = [f async for f in stream_turn(agent, rt, req, server_actions=collect_server_actions([add_to_basket]))]
 
         assert frames == [
             A2UIMessageFrame({
@@ -195,7 +193,7 @@ class TestServerActions:
             version_key="v1.0",
         )
 
-        frames = [f async for f in stream_turn(agent, rt, req, server_handlers=collect_server_handlers([typeahead]))]
+        frames = [f async for f in stream_turn(agent, rt, req, server_actions=collect_server_actions([typeahead]))]
 
         assert frames == [
             A2UIMessageFrame({
@@ -220,9 +218,7 @@ class TestServerActions:
             resolve_action=rt.get_action,
         )
 
-        frames = [
-            f async for f in stream_turn(agent, rt, req, server_handlers=collect_server_handlers([add_to_basket]))
-        ]
+        frames = [f async for f in stream_turn(agent, rt, req, server_actions=collect_server_actions([add_to_basket]))]
 
         # Server-action frame first, then the agent's prose.
         assert frames == [

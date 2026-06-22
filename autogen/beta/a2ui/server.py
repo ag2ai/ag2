@@ -12,7 +12,7 @@ from autogen.beta.agent import Agent
 
 from ._runtime import _A2UIRuntime
 from ._types import A2UIVersion, JsonSchema
-from .actions import A2UIAction, collect_action_declarations, collect_server_handlers
+from .actions import A2UIAction, collect_action_declarations, collect_server_actions
 from .dispatch import _A2UITurnCore
 from .transports.base import A2UITransport
 
@@ -109,7 +109,7 @@ class A2UIServer:
         self._core = _A2UITurnCore(
             agent,
             self._runtime,
-            collect_server_handlers(action_objs),
+            collect_server_actions(action_objs),
         )
         # The instance IS the app (no ``.app``/``build_app()``): build the
         # Starlette app once from the transport's routes and delegate to it.

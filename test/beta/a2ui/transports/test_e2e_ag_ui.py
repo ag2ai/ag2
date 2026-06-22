@@ -21,7 +21,7 @@ import pytest
 from ag_ui.core import RunAgentInput
 from dirty_equals import IsPartialDict
 
-from autogen.beta import Agent
+from autogen.beta import Agent, Depends
 from autogen.beta.a2ui import A2UIServer, a2ui_action
 from autogen.beta.a2ui.transports import AgUiTransport
 from autogen.beta.events import ModelRequest, TextInput
@@ -164,6 +164,39 @@ async def test_button_click_in_forwarded_props_executes_server_action() -> None:
     assert [e for e in events if e["type"] == "TEXT_MESSAGE_CHUNK"] == []
     [activity] = [e for e in events if e["type"] == "ACTIVITY_SNAPSHOT"]
     assert activity["activityType"] == "a2ui-surface"
+    assert activity["content"] == {
+        "a2ui_operations": [IsPartialDict({"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}})],
+    }
+
+
+@pytest.mark.asyncio
+async def test_button_click_resolves_injected_dependency() -> None:
+    # DI is not transport-specific: the AG-UI transport shares the same turn
+    # core as REST, so a clicked server action resolves its Depends(...) against
+    # the agent's dependency_provider (here swapped via an override — the
+    # test-DB pattern) before running, with the agent never invoked.
+    class CartStore:
+        def __init__(self) -> None:
+            self.items: list[str] = []
+
+    def get_store() -> CartStore:
+        raise RuntimeError("the real store is unavailable under test")
+
+    stub = CartStore()
+
+    @a2ui_action(description="Add the item to the cart")
+    def add_to_basket(good_id: str, store: CartStore = Depends(get_store)) -> dict:
+        store.items.append(good_id)
+        return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": len(store.items)}}
+
+    agent = Agent(name="ui", config=TestConfig("AGENT SHOULD NOT RUN"))
+    agent.dependency_provider.override(get_store, lambda: stub)
+    server = A2UIServer(agent, actions=[add_to_basket], transport=AgUiTransport(), validate_responses=False)
+
+    events = await _dispatch_events(server, _click_input("add_to_basket", {"good_id": "G7"}))
+
+    assert stub.items == ["G7"]
+    [activity] = [e for e in events if e["type"] == "ACTIVITY_SNAPSHOT"]
     assert activity["content"] == {
         "a2ui_operations": [IsPartialDict({"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}})],
     }

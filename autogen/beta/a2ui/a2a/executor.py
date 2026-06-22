@@ -26,7 +26,7 @@ from autogen.beta.stream import MemoryStream
 
 from .._runtime import _A2UIRuntime
 from .._types import A2UIVersion, JsonObject, JsonSchema, ServerToClientMessage
-from ..actions import A2UIAction, collect_action_declarations, collect_server_handlers
+from ..actions import A2UIAction, collect_action_declarations, collect_server_actions
 from ..capabilities import (
     A2UIClientCapabilities,
     parse_client_capabilities,
@@ -39,7 +39,7 @@ from ..incoming import (
     parse_incoming_interactions,
 )
 from ..middleware import A2UIInboundMiddleware
-from ..server_action import run_server_action
+from ..server_action import build_server_action_context, run_server_action
 from .extension import try_activate_a2ui_extension
 from .parts import create_a2ui_parts, get_a2ui_data
 
@@ -104,7 +104,7 @@ class A2UIAgentExecutor(AgentExecutor):
         """
         super().__init__(agent)
         action_objs = tuple(actions)
-        self._server_handlers = collect_server_handlers(action_objs)
+        self._server_actions = collect_server_actions(action_objs)
         self._runtime = _A2UIRuntime(
             actions=collect_action_declarations(action_objs),
             protocol_version=protocol_version,
@@ -242,15 +242,24 @@ class A2UIAgentExecutor(AgentExecutor):
         # rewriter already skipped these, so the agent never sees them). Their
         # messages lead the finalization DataPart, ahead of the agent's own.
         handled_server = False
-        for interaction in interactions:
-            if not isinstance(interaction, A2UIIncomingActionResult):
-                continue
-            handler = self._server_handlers.get(interaction.action.name)
-            if handler is not None:
-                handled_server = True
-                a2ui_messages.extend(
-                    await run_server_action(handler, interaction.action, version=self._runtime.version_string)
-                )
+        if interactions:
+            # Server actions resolve their dependencies against the agent's DI
+            # surface, exactly like the agent's own tools (and the REST path).
+            action_context = build_server_action_context(self._agent, variables=parsed.context_update)
+            for interaction in interactions:
+                if not isinstance(interaction, A2UIIncomingActionResult):
+                    continue
+                server_action = self._server_actions.get(interaction.action.name)
+                if server_action is not None:
+                    handled_server = True
+                    a2ui_messages.extend(
+                        await run_server_action(
+                            server_action,
+                            interaction.action,
+                            version=self._runtime.version_string,
+                            context=action_context,
+                        )
+                    )
 
         # A turn carrying only server-action clicks (no user text, no tool
         # results) is complete already — finalize with the handlers' messages and
