@@ -495,6 +495,65 @@ def test_rate_batch_nodes_invalid_response(mock_credentials: Credentials) -> Non
         assert rewards == [0.0, 0.0]
 
 
+def test_rate_node_uses_cache_for_zero_value(mock_credentials: Credentials) -> None:
+    """A node already graded with the worst rating (value == 0.0) must not be re-graded.
+
+    Regression for #2987: the cache guard keyed on ``value > 0`` skipped the fast path for
+    legitimately zero-valued (rating 1 or parse-failure) trajectories, triggering an extra
+    grader (LLM) call on every revisit.
+    """
+    parent = ThinkNode(content=TEST_QUESTION)
+    node = ThinkNode(content="We can conduct a survey to find the capital of France.", parent=parent)
+    # Simulate a node that was already graded with the worst rating: rating_details set, value 0.0.
+    node.rating_details = "Suggests a non-executable approach.\nRating: 1"
+    node.value = 0.0
+
+    agent = ReasoningAgent("test_agent", llm_config=mock_credentials.llm_config)
+
+    with patch.object(agent, "send") as mock_send:
+        value = agent.rate_node(node)
+
+    assert value == 0.0
+    # Cached fast path must return without invoking the grader.
+    mock_send.assert_not_called()
+
+
+def test_rate_batch_nodes_uses_cache_for_zero_value(mock_credentials: Credentials) -> None:
+    """An already-graded zero-valued node must keep its cached rating in batch grading.
+
+    Regression for #2987 at the ``rate_batch_nodes`` site: the ``value > 0`` guard caused a
+    previously graded worst-rated node to be re-parsed and its ``rating_details`` overwritten.
+    """
+    parent = ThinkNode(content=TEST_QUESTION)
+    think_node1 = ThinkNode(content="The capital of France is Paris.", parent=parent)
+    think_node2 = ThinkNode(content="We can conduct a survey to find out the capital of France.", parent=parent)
+
+    # think_node2 was already graded with the worst rating on a prior visit.
+    cached_details = "Option 2: Previously graded as worst.\nRating: 1"
+    think_node2.rating_details = cached_details
+    think_node2.value = 0.0
+
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+            reason_config={"batch_grading": True},
+        )
+
+        mock_oai_reply.return_value = (
+            True,
+            {
+                "content": "Option 1: Answers the question correctly.\nRating: 10\n\nOption 2: Suggests a non-executable approach to a very simple question.\nRating: 1"
+            },
+        )
+
+        rewards = agent.rate_batch_nodes([think_node1, think_node2])
+
+    assert rewards == [1.0, 0.0]
+    # Cached node keeps its original rating_details rather than being overwritten by a re-parse.
+    assert think_node2.rating_details == cached_details
+
+
 def test_execute_node_with_cached_output(mock_credentials: Credentials, think_node: ThinkNode) -> None:
     """
     Test that execute_node returns the cached output if it exists.
