@@ -9,6 +9,7 @@ from autogen.beta.config.xai.mappers import tool_to_api
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.tools.builtin.image_generation import ImageGenerationTool
 from autogen.beta.tools.builtin.memory import MemoryTool
+from autogen.beta.tools.builtin.retrieval import RetrievalTool
 from autogen.beta.tools.builtin.shell import ShellTool
 from autogen.beta.tools.builtin.skills import SkillsTool
 from autogen.beta.tools.builtin.web_fetch import WebFetchTool
@@ -57,6 +58,16 @@ async def test_skills(context: Context) -> None:
 @pytest.mark.asyncio
 async def test_web_fetch(context: Context) -> None:
     tool = WebFetchTool()
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(UnsupportedToolError, match="xai"):
+        tool_to_api(schema)
+
+
+@pytest.mark.asyncio
+async def test_retrieval(context: Context) -> None:
+    tool = RetrievalTool("kb_123")
 
     [schema] = await tool.schemas(context)
 

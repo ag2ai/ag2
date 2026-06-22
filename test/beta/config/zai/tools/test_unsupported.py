@@ -5,28 +5,16 @@
 import pytest
 
 from autogen.beta import Context
-from autogen.beta.config.ollama.mappers import tool_to_api
+from autogen.beta.config.zai.mappers import tool_to_api
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.tools.builtin.code_execution import CodeExecutionTool
 from autogen.beta.tools.builtin.image_generation import ImageGenerationTool
 from autogen.beta.tools.builtin.mcp_server import MCPServerTool
 from autogen.beta.tools.builtin.memory import MemoryTool
-from autogen.beta.tools.builtin.retrieval import RetrievalTool
 from autogen.beta.tools.builtin.shell import ShellTool
 from autogen.beta.tools.builtin.skills import SkillsTool
 from autogen.beta.tools.builtin.web_fetch import WebFetchTool
-from autogen.beta.tools.builtin.web_search import WebSearchTool
 from autogen.beta.tools.builtin.x_search import XSearchTool
-
-
-@pytest.mark.asyncio
-async def test_web_search(context: Context) -> None:
-    tool = WebSearchTool()
-
-    [schema] = await tool.schemas(context)
-
-    with pytest.raises(UnsupportedToolError):
-        tool_to_api(schema)
 
 
 @pytest.mark.asyncio
@@ -35,7 +23,7 @@ async def test_web_fetch(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(UnsupportedToolError):
+    with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)
 
 
@@ -45,7 +33,7 @@ async def test_code_execution(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(UnsupportedToolError):
+    with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)
 
 
@@ -55,7 +43,7 @@ async def test_shell(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(UnsupportedToolError):
+    with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)
 
 
@@ -65,7 +53,7 @@ async def test_memory(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(UnsupportedToolError):
+    with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)
 
 
@@ -75,7 +63,7 @@ async def test_image_generation(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(UnsupportedToolError):
+    with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)
 
 
@@ -85,7 +73,7 @@ async def test_mcp_server(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(UnsupportedToolError):
+    with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)
 
 
@@ -95,7 +83,7 @@ async def test_skills(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(UnsupportedToolError):
+    with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)
 
 
@@ -105,15 +93,5 @@ async def test_x_search(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(UnsupportedToolError):
-        tool_to_api(schema)
-
-
-@pytest.mark.asyncio
-async def test_retrieval(context: Context) -> None:
-    tool = RetrievalTool("kb_123")
-
-    [schema] = await tool.schemas(context)
-
-    with pytest.raises(UnsupportedToolError):
+    with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)

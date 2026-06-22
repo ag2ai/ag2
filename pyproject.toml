@@ -123,6 +123,8 @@ groq = ["groq>=0.9.0"]
 
 xai = ["xai-sdk>=1.12.2,<2"]
 
+zai = ["zai-sdk>=0.2.3,<1"]
+
 ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 
 bedrock = ["boto3>=1.34.149"]
@@ -409,6 +411,7 @@ optionals = [
     "ag2[ollama]",
     "ag2[dashscope]",
     "ag2[xai]",
+    "ag2[zai]",
 ]
 
 testing = [

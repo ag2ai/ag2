@@ -7,15 +7,17 @@ sidebarTitle: Built-in Tools
 
 AG2 includes built-in tools that map to server-side capabilities offered by LLM providers. These tools are executed by the provider's API — not locally — and require no function implementation on your side.
 
-| Tool | Anthropic | OpenAI | Gemini |
-| :--- | :---: | :---: | :---: |
-| `CodeExecutionTool` | ✓ | ✓ | ✓ |
-| `WebSearchTool` | ✓ | ✓ | ✓ |
-| `WebFetchTool` | ✓ | ✗ | ✓ |
-| `ShellTool` | ✓ | ✓ | ✗ |
-| `MCPServerTool` | ✓ | ✓ | ✗ |
-| `ImageGenerationTool` | ✗ | ✓ | ✗ |
-| `MemoryTool` | ✓ | ✗ | ✗ |
+| Tool | Anthropic | OpenAI | Gemini | xAI | Z.AI |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| `CodeExecutionTool` | ✓ | ✓ | ✓ | ✓ | ✗ |
+| `WebSearchTool` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `WebFetchTool` | ✓ | ✗ | ✓ | ✗ | ✗ |
+| `ShellTool` | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `MCPServerTool` | ✓ | ✓ | ✗ | ✓ | ✗ |
+| `ImageGenerationTool` | ✗ | ✓ | ✗ | ✗ | ✗ |
+| `MemoryTool` | ✓ | ✗ | ✗ | ✗ | ✗ |
+| `XSearchTool` | ✗ | ✗ | ✗ | ✓ | ✗ |
+| `RetrievalTool` | ✗ | ✗ | ✗ | ✗ | ✓ |
 
 ## Web Search
 
@@ -42,13 +44,16 @@ agent = Agent(
 
 Not all parameters are supported by every provider. Unsupported parameters are silently ignored.
 
-| Parameter | Anthropic | OpenAI | Gemini |
-| :--- | :---: | :---: | :---: |
-| `max_uses` | ✓ | ✓ | ✗ |
-| `user_location` | ✓ | ✓ | ✗ |
-| `search_context_size` | ✗ | ✓ | ✗ |
-| `allowed_domains` | ✓ | ✓ | ✗ |
-| `blocked_domains` | ✓ | ✗ | ✓ |
+| Parameter | Anthropic | OpenAI | Gemini | xAI | Z.AI |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| `max_uses` | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `user_location` | ✓ | ✓ | ✗ | ✓ | ✗ |
+| `search_context_size` | ✗ | ✓ | ✗ | ✗ | ✓ |
+| `allowed_domains` | ✓ | ✓ | ✗ | ✓ | ✗ |
+| `blocked_domains` | ✓ | ✗ | ✓ | ✓ | ✗ |
+
+!!! note
+    Z.AI maps `WebSearchTool` to its `search-prime` engine and only honors `search_context_size` (as `content_size`); the other parameters are silently ignored.
 
 ## Web Fetch
 
@@ -230,6 +235,70 @@ for image in reply.files:
 
 !!! note
     `ImageGenerationTool` is only supported by OpenAI (Responses API). Gemini generates images through a response modality rather than a tool. See [Image Generation](/docs/beta/multimodal/image_generation/) for the full guide covering both providers.
+
+## X Search
+
+`XSearchTool` gives xAI's Grok models real-time search over X (Twitter), optionally scoped to specific handles, a date range, or media understanding. This tool is xAI-specific.
+
+```python linenums="1"
+from datetime import datetime
+
+from autogen.beta import Agent
+from autogen.beta.config import XAIConfig
+from autogen.beta.tools import XSearchTool
+
+agent = Agent(
+    "researcher",
+    config=XAIConfig(model="grok-4"),
+    tools=[
+        XSearchTool(
+            allowed_x_handles=["xai"],
+            from_date=datetime(2024, 1, 1),
+            enable_image_understanding=True,
+        ),
+    ],
+)
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `allowed_x_handles` | Restrict the search to these X handles. |
+| `excluded_x_handles` | Exclude these X handles from results. |
+| `from_date` / `to_date` | Bound the search to a `datetime` range. |
+| `enable_image_understanding` | Let the model interpret images in posts. |
+| `enable_video_understanding` | Let the model interpret videos in posts. |
+
+!!! note
+    `XSearchTool` is only supported by xAI.
+
+## Retrieval
+
+`RetrievalTool` lets the model query a Z.AI knowledge base by id, grounding its answers in the retrieved documents.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import ZAIConfig
+from autogen.beta.tools.builtin import RetrievalTool
+
+agent = Agent(
+    "researcher",
+    config=ZAIConfig(model="glm-4.6"),
+    tools=[
+        RetrievalTool(
+            knowledge_id="kb_123",
+            prompt_template="Use {{ knowledge }} to answer {{ question }}.",
+        ),
+    ],
+)
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `knowledge_id` | **Required.** Id of the Z.AI knowledge base to query. |
+| `prompt_template` | Optional template for injecting retrieved content, using `{{ knowledge }}` and `{{ question }}` placeholders. |
+
+!!! note
+    `RetrievalTool` is only supported by Z.AI.
 
 ## Anthropic Tool Versions
 
