@@ -99,8 +99,9 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     if isinstance(t, WebSearchToolSchema):
         # Z.AI's web_search tool only understands `content_size`; max_uses,
         # user_location, allowed_domains and blocked_domains have no equivalent
-        # and are silently dropped.
-        web_search: dict[str, Any] = {"search_engine": "search-prime"}
+        # and are silently dropped. `enable` is required: it defaults to false,
+        # so the search never activates unless we set it explicitly.
+        web_search: dict[str, Any] = {"enable": True, "search_engine": "search-prime"}
         if t.search_context_size is not None:
             web_search["content_size"] = t.search_context_size
         return {"type": "web_search", "web_search": web_search}

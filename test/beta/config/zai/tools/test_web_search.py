@@ -15,7 +15,10 @@ async def test_defaults(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    assert tool_to_api(schema) == {"type": "web_search", "web_search": {"search_engine": "search-prime"}}
+    assert tool_to_api(schema) == {
+        "type": "web_search",
+        "web_search": {"enable": True, "search_engine": "search-prime"},
+    }
 
 
 @pytest.mark.asyncio
@@ -26,7 +29,7 @@ async def test_search_context_size_maps_to_content_size(context: Context) -> Non
 
     assert tool_to_api(schema) == {
         "type": "web_search",
-        "web_search": {"search_engine": "search-prime", "content_size": "high"},
+        "web_search": {"enable": True, "search_engine": "search-prime", "content_size": "high"},
     }
 
 
@@ -36,4 +39,7 @@ async def test_fields_zai_cannot_express_are_ignored(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    assert tool_to_api(schema) == {"type": "web_search", "web_search": {"search_engine": "search-prime"}}
+    assert tool_to_api(schema) == {
+        "type": "web_search",
+        "web_search": {"enable": True, "search_engine": "search-prime"},
+    }
