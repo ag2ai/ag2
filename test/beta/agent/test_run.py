@@ -247,7 +247,7 @@ async def test_cancelling_result_cancels_turn_inline() -> None:
 
     async with agent.run("Hi!") as run:
         with pytest.raises(asyncio.TimeoutError):
-            async with asyncio.timeout(0.2):
-                await run.result()
+            # asyncio.wait_for (vs asyncio.timeout) keeps this runnable on Python 3.10.
+            await asyncio.wait_for(run.result(), timeout=0.2)
 
     assert cancelled.is_set(), "cancelling the result() await must cancel the in-flight turn"

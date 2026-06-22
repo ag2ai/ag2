@@ -412,8 +412,8 @@ class AgentRun(Generic[TResult, TAgent]):
       ``get`` / ``join`` observation.
 
     The turn runs only inside the block, and only while ``result()`` is awaited,
-    so cancelling that await (e.g. an ``asyncio.timeout``) cancels the turn
-    inline; leaving the block without driving runs nothing.
+    so cancelling that await (e.g. ``asyncio.wait_for(run.result(), timeout)``)
+    cancels the turn inline; leaving the block without driving runs nothing.
     """
 
     def __init__(
