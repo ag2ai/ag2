@@ -2,13 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .local import LocalRuntime
-from .memory import MemoryRuntime, MemorySkill
-from .protocol import SkillRuntime
+from .runtime import MemoryRuntime
+from .skill import MemorySkill
 
 __all__ = (
-    "LocalRuntime",
     "MemoryRuntime",
     "MemorySkill",
-    "SkillRuntime",
 )

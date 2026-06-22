@@ -43,6 +43,13 @@ jobs:
       - name: Verify the build
         run: |
           ls -la ./website/mkdocs/site
+          # Ensure the Beta-scoped llms.txt files were generated and copied into the site.
+          for f in llms.txt llms-full.txt; do
+            if [ ! -s "./website/mkdocs/site/$f" ]; then
+              echo "::error::Expected non-empty ./website/mkdocs/site/$f (llms.txt generation failed)"
+              exit 1
+            fi
+          done
         working-directory: .
 
       - name: Configure Git user
@@ -66,26 +73,19 @@ jobs:
           echo $VERSION
           echo $IS_RC
 
-          # mike commits the freshly built site locally (no --push). The commits it
-          # creates each carry a full site snapshot, so we soft-reset them away and let
-          # the commit step below force-push a single squashed commit. This keeps the
-          # gh-pages branch from accumulating large historical commits.
+          # mike commits the built site locally; the force-push step below squashes it.
           if [ "$IS_RC" == "False" ] || [ "$VERSION" == "0.9.1post0" ]; then
             cd website/mkdocs
             mike deploy -F mkdocs.yml --update-aliases $VERSION latest
             mike set-default --allow-empty -F mkdocs.yml latest
-
-            # Doc commits are large, keep only the last one
-            git checkout gh-pages
-            git reset --soft HEAD~3
           else
             cd website/mkdocs
             mike deploy -F mkdocs.yml --update-aliases $VERSION
-
-            # Doc commits are large, keep only the last one
-            git checkout gh-pages
-            git reset --soft HEAD~2
           fi
+
+          # Collapse mike's commits into one staged change on top of published gh-pages.
+          git checkout gh-pages
+          git reset --soft origin/gh-pages
 
       - name: Force-push squashed docs to GH Pages
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'

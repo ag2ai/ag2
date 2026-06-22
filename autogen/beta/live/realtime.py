@@ -123,9 +123,7 @@ class LiveAgent(PluginTarget):
         active_config = config if config is not None else self._config
         active_hitl = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
 
-        all_tools: list[Tool] = self.tools + [
-            FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools
-        ]
+        all_tools: list[Tool] = self.tools + [FunctionTool.ensure_tool(t) for t in tools]
         all_observers: list[Observer] = self._observers + list(observers)
 
         initial_event = ModelRequest([])

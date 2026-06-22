@@ -8,7 +8,9 @@ from dataclasses import dataclass
 import pytest
 
 from autogen.beta import Agent
-from autogen.beta.config import OpenAIConfig
+from autogen.beta.config import OpenAIConfig, OpenAIResponsesConfig
+from autogen.beta.events import ImageInput
+from autogen.beta.tools import ImageGenerationTool
 
 
 @pytest.fixture()
@@ -17,6 +19,56 @@ def openai_config() -> OpenAIConfig:
     if not api_key:
         pytest.skip("OPENAI_API_KEY not set")
     return OpenAIConfig(model="gpt-5.4-nano", api_key=api_key, temperature=0)
+
+
+@pytest.fixture()
+def openai_responses_config() -> OpenAIResponsesConfig:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        pytest.skip("OPENAI_API_KEY not set")
+    return OpenAIResponsesConfig(model="gpt-5.4-nano", api_key=api_key)
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio()
+async def test_image_generation(openai_responses_config: OpenAIResponsesConfig) -> None:
+    """ImageGenerationTool on the Responses API returns image bytes via reply.files."""
+    agent = Agent(
+        name="image_agent",
+        prompt="You generate images when asked.",
+        config=openai_responses_config,
+        tools=[ImageGenerationTool(size="1024x1024", output_format="png")],
+    )
+
+    reply = await agent.ask("Generate an image of a single red circle on a white background.")
+
+    assert reply.files, "expected at least one generated image in reply.files"
+    assert len(reply.files[0].data) > 0
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio()
+@pytest.mark.timeout(120)  # two sequential image-generation calls (generate + edit)
+async def test_image_editing(openai_responses_config: OpenAIResponsesConfig) -> None:
+    """A generated image fed back in as ImageInput is edited and returned via reply.files."""
+    agent = Agent(
+        name="image_agent",
+        prompt="You generate and edit images using the image generation tool.",
+        config=openai_responses_config,
+        tools=[ImageGenerationTool(size="1024x1024", output_format="png")],
+    )
+
+    generated = await agent.ask("Generate an image of a single blue circle on a white background.")
+    assert generated.files, "expected an image to edit"
+    source = generated.files[0]
+
+    edited = await agent.ask(
+        "Add a small red square next to the circle. Keep everything else the same.",
+        ImageInput(data=source.data, media_type=source.metadata.get("media_type", "image/png")),
+    )
+
+    assert edited.files, "expected an edited image in reply.files"
+    assert len(edited.files[0].data) > 0
 
 
 @pytest.mark.openai

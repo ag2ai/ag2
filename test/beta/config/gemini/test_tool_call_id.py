@@ -17,12 +17,13 @@ from autogen.beta import Context
 from autogen.beta.config.gemini.gemini_client import GeminiClient
 
 
-def _part(*, function_call=None, text=None, thought=None, thought_signature=None) -> SimpleNamespace:
+def _part(*, function_call=None, text=None, thought=None, thought_signature=None, inline_data=None) -> SimpleNamespace:
     return SimpleNamespace(
         function_call=function_call,
         text=text,
         thought=thought,
         thought_signature=thought_signature,
+        inline_data=inline_data,
     )
 
 
