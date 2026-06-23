@@ -98,13 +98,9 @@ async def main() -> None:
 
     alice = await hub.register(
         Agent("alice", prompt="Ask one focused question and stop.", config=config),
-        Passport(name="alice"),
-        Resume(),
     )
     bob = await hub.register(
         Agent("bob", prompt="Answer in one short sentence.", config=config),
-        Passport(name="bob"),
-        Resume(),
     )
 
     # Strict 1Q1R; the adapter auto-closes on bob's reply.
@@ -185,11 +181,9 @@ async def main() -> None:
 
     alice = await hub.register(
         Agent("alice", prompt="You are alice. Ask follow-ups, one short sentence at a time.", config=config),
-        Passport(name="alice"), Resume(),
     )
     bob = await hub.register(
         Agent("bob", prompt="You are bob. Answer in one short sentence; ask one follow-up.", config=config),
-        Passport(name="bob"), Resume(),
     )
 
     channel = await alice.open(type="conversation", target="bob")
@@ -251,15 +245,12 @@ async def main() -> None:
 
     alice = await hub.register(
         Agent("alice", prompt="You are the optimist. One short sentence.", config=config),
-        Passport(name="alice"), Resume(),
     )
     bob = await hub.register(
         Agent("bob", prompt="You are the realist. One short sentence.", config=config),
-        Passport(name="bob"), Resume(),
     )
     carol = await hub.register(
         Agent("carol", prompt="You are the skeptic. One short sentence.", config=config),
-        Passport(name="carol"), Resume(),
     )
 
     channel = await alice.open(

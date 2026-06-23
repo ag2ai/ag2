@@ -89,8 +89,6 @@ from autogen.beta.network import (
     EV_TEXT,
     WORKFLOW_TYPE,
     Hub,
-    Passport,
-    Resume,
     TransitionGraph,
 )
 from autogen.beta.testing import TestConfig
@@ -142,10 +140,10 @@ async def main() -> None:
         config=config,
     )
 
-    intake = await hub.register(intake_agent, Passport(name="intake"), Resume())
-    validator = await hub.register(validator_agent, Passport(name="validator"), Resume())
-    enricher = await hub.register(enricher_agent, Passport(name="enricher"), Resume())
-    fulfilment = await hub.register(fulfilment_agent, Passport(name="fulfilment"), Resume())
+    intake = await hub.register(intake_agent)
+    validator = await hub.register(validator_agent)
+    enricher = await hub.register(enricher_agent)
+    fulfilment = await hub.register(fulfilment_agent)
 
     graph = TransitionGraph.sequence([
         intake.agent_id,

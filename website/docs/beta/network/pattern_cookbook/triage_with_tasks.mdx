@@ -151,8 +151,6 @@ from autogen.beta.network import (
     EV_TEXT,
     WORKFLOW_TYPE,
     Hub,
-    Passport,
-    Resume,
     TransitionGraph,
 )
 from autogen.beta.testing import TestConfig
@@ -211,11 +209,11 @@ async def main() -> None:
         config=config,
     )
 
-    intake = await hub_obj.register(intake_agent, Passport(name="intake"), Resume())
-    triage = await hub_obj.register(triage_agent, Passport(name="triage"), Resume())
-    researcher = await hub_obj.register(researcher_agent, Passport(name="researcher"), Resume())
-    writer = await hub_obj.register(writer_agent, Passport(name="writer"), Resume())
-    reviewer = await hub_obj.register(reviewer_agent, Passport(name="reviewer"), Resume())
+    intake = await hub_obj.register(intake_agent)
+    triage = await hub_obj.register(triage_agent)
+    researcher = await hub_obj.register(researcher_agent)
+    writer = await hub_obj.register(writer_agent)
+    reviewer = await hub_obj.register(reviewer_agent)
 
     graph = TransitionGraph.sequence([
         intake.agent_id,

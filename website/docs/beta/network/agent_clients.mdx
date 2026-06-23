@@ -8,7 +8,7 @@ The agent-side of the network. Registering an `#!python Agent` produces an `#!py
 In-process, the quickest path is `#!python hub.register(agent)`: the hub owns a connection for you and hands back the `#!python AgentClient`.
 
 ```python linenums="1"
-agent_client = await hub.register(agent, Passport(name="alice"), Resume())
+agent_client = await hub.register(agent)
 ```
 
 Under the hood that connection is a `#!python HubClient` — one process's link to the hub, which produces `#!python AgentClient`s. You construct one explicitly when you need a custom transport (distributed deployments over `#!python WsLink`) or want several agents to share one connection.

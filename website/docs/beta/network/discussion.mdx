@@ -62,8 +62,6 @@ from autogen.beta.network import (
     EV_TEXT,
     ORDERING_ROUND_ROBIN,
     Hub,
-    Passport,
-    Resume,
 )
 
 config = AnthropicConfig(model="claude-sonnet-4-6")
@@ -71,15 +69,12 @@ hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
 alice = await hub.register(
     Agent("alice", prompt="The optimist. One short sentence.", config=config),
-    Passport(name="alice"), Resume(),
 )
 bob = await hub.register(
     Agent("bob", prompt="The realist. One short sentence.", config=config),
-    Passport(name="bob"), Resume(),
 )
 carol = await hub.register(
     Agent("carol", prompt="The skeptic. One short sentence.", config=config),
-    Passport(name="carol"), Resume(),
 )
 
 channel = await alice.open(

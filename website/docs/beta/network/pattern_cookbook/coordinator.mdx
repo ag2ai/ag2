@@ -167,7 +167,6 @@ from autogen.beta.network import (
     Finish,
     Handoff,
     Hub,
-    Passport,
     Resume,
     TransitionGraph,
 )
@@ -275,19 +274,19 @@ async def main() -> None:
         config=config,
     )
 
-    user = await hub_obj.register(user_agent, Passport(name="user"), Resume(), attach_plugin=False)
+    user = await hub_obj.register(user_agent, attach_plugin=False)
     coordinator = await hub_obj.register(
-        coord_agent, Passport(name="coordinator"), Resume(), attach_plugin=False
+        coord_agent, attach_plugin=False
     )
     researcher = await hub_obj.register(
-        researcher_agent, Passport(name="researcher"), researcher_resume, attach_plugin=False
+        researcher_agent, resume=researcher_resume, attach_plugin=False
     )
-    critic = await hub_obj.register(critic_agent, Passport(name="critic"), critic_resume, attach_plugin=False)
+    critic = await hub_obj.register(critic_agent, resume=critic_resume, attach_plugin=False)
     cost_analyst = await hub_obj.register(
-        cost_agent, Passport(name="cost_analyst"), cost_resume, attach_plugin=False
+        cost_agent, resume=cost_resume, attach_plugin=False
     )
     operator = await hub_obj.register(
-        operator_agent, Passport(name="operator"), operator_resume, attach_plugin=False
+        operator_agent, resume=operator_resume, attach_plugin=False
     )
 
     graph = TransitionGraph(

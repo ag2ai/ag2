@@ -81,13 +81,9 @@ async def first_run() -> str:
 
     alice = await hub.register(
         Agent("alice", prompt="Ask one short question.", config=AnthropicConfig(model="claude-sonnet-4-6")),
-        Passport(name="alice"),
-        Resume(),
     )
     bob = await hub.register(
         Agent("bob", prompt="Answer in one sentence.", config=AnthropicConfig(model="claude-sonnet-4-6")),
-        Passport(name="bob"),
-        Resume(),
     )
 
     channel = await alice.open(type="consulting", target="bob")
@@ -208,16 +204,12 @@ async def first_run() -> str:
     # Alice sends manually; bob responds automatically via LLM.
     alice = await hub.register(
         Agent("alice", prompt=PROMPT, config=AnthropicConfig(model="claude-sonnet-4-6")),
-        Passport(name="alice"),
-        Resume(),
         attach_plugin=False,
     )
     alice.on_envelope(_noop_handler)
 
     bob = await hub.register(
         Agent("bob", prompt=PROMPT, config=AnthropicConfig(model="claude-sonnet-4-6")),
-        Passport(name="bob"),
-        Resume(),
     )
 
     channel = await alice.open(type="discussion", target="bob")

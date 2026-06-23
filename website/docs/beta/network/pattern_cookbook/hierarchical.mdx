@@ -112,8 +112,6 @@ from autogen.beta.network import (
     FromSpeaker,
     Handoff,
     Hub,
-    Passport,
-    Resume,
     TerminateTarget,
     Transition,
     TransitionGraph,
@@ -192,10 +190,10 @@ async def main() -> None:
         config=config,
     )
 
-    intake = await hub.register(intake_agent, Passport(name="intake"), Resume())
-    coord = await hub.register(coord_agent, Passport(name="coord"), Resume())
-    researcher = await hub.register(researcher_agent, Passport(name="researcher"), Resume())
-    writer = await hub.register(writer_agent, Passport(name="writer"), Resume())
+    intake = await hub.register(intake_agent)
+    coord = await hub.register(coord_agent)
+    researcher = await hub.register(researcher_agent)
+    writer = await hub.register(writer_agent)
 
     graph = TransitionGraph(
         initial_speaker=intake.agent_id,

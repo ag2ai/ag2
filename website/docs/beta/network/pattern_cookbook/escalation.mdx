@@ -115,8 +115,6 @@ from autogen.beta.network import (
     FromSpeaker,
     Handoff,
     Hub,
-    Passport,
-    Resume,
     ChannelInject,
     TerminateTarget,
     ToolCalled,
@@ -208,10 +206,10 @@ async def main() -> None:
     )
     senior_agent.tool(resolve)
 
-    user = await hub_obj.register(user_agent, Passport(name="user"), Resume())
-    tier1 = await hub_obj.register(tier1_agent, Passport(name="tier1"), Resume())
-    tier2 = await hub_obj.register(tier2_agent, Passport(name="tier2"), Resume())
-    senior = await hub_obj.register(senior_agent, Passport(name="senior"), Resume())
+    user = await hub_obj.register(user_agent)
+    tier1 = await hub_obj.register(tier1_agent)
+    tier2 = await hub_obj.register(tier2_agent)
+    senior = await hub_obj.register(senior_agent)
 
     graph = TransitionGraph(
         initial_speaker=user.agent_id,

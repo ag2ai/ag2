@@ -15,8 +15,6 @@ from autogen.beta.network import (
     EV_CHANNEL_CLOSED,
     EV_TEXT,
     Hub,
-    Passport,
-    Resume,
 )
 
 async def main() -> None:
@@ -28,13 +26,9 @@ async def main() -> None:
     # register() attaches each agent directly — the hub owns the connection.
     alice = await hub.register(
         Agent("alice", prompt="Ask one focused question and stop.", config=config),
-        Passport(name="alice"),
-        Resume(),
     )
     bob = await hub.register(
         Agent("bob", prompt="Answer in one short sentence.", config=config),
-        Passport(name="bob"),
-        Resume(),
     )
 
     # Strict 1Q1R; the adapter auto-closes on bob's reply.

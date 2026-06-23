@@ -61,14 +61,14 @@ import asyncio
 
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
-from autogen.beta.network import HubClient, Passport, Resume, WsLink
+from autogen.beta.network import HubClient, WsLink
 
 async def main() -> None:
     hub_client = HubClient(WsLink("ws://hub-host:8765"))
     await hub_client.open()  # WebSocket connect + handshake
 
     agent = Agent("bob", prompt="Answer in one short sentence.", config=AnthropicConfig(model="claude-haiku-4-5"))
-    bob = await hub_client.register(agent, Passport(name="bob"), Resume())
+    bob = await hub_client.register(agent)
 
     print(f"registered as {bob.agent_id}; awaiting channels")
     await asyncio.Future()  # stay connected; default handler answers inbound consults
@@ -87,7 +87,7 @@ import asyncio
 
 from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
-from autogen.beta.network import EV_TEXT, HubClient, Passport, Resume, WsLink
+from autogen.beta.network import EV_TEXT, HubClient, WsLink
 from autogen.beta.network.adapters.consulting import CONSULTING_TYPE
 
 async def main() -> None:
@@ -96,8 +96,6 @@ async def main() -> None:
 
     alice = await hub_client.register(
         Agent("alice", prompt="You are a coordinator.", config=OpenAIConfig(model="gpt-4o-mini")),
-        Passport(name="alice"),
-        Resume(),
     )
 
     # open() and send() travel to the hub over the wire;
@@ -140,7 +138,7 @@ passport = Passport(
     name="bob",
     auth=AuthBlock(scheme="api_key", claim={"token": "token-bob"}),
 )
-bob = await hub_client.register(agent, passport, Resume())
+bob = await hub_client.register(agent, passport)
 ```
 
 The hub's `#!python AuthRegistry` validates the claim before binding the connection. Raise `#!python AuthError` from a custom `#!python AuthAdapter` (a `#!python Protocol`) to reject any scheme you define.
