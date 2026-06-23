@@ -735,7 +735,7 @@ CONSTRUCTS = {
 |---|---|
 | `ChatOpenAI(model="gpt-4o")` | `LLMConfig(api_type="openai", model="gpt-4o")` |
 | `ChatAnthropic(model="claude-sonnet-4-20250514")` | `LLMConfig(api_type="anthropic", model="claude-sonnet-4-20250514")` |
-| `ChatGoogleGenerativeAI(model="gemini-2.0-flash")` | `LLMConfig(api_type="google", model="gemini-2.0-flash")` |
+| `ChatGoogleGenerativeAI(model="gemini-3.5-flash")` | `LLMConfig(api_type="google", model="gemini-3.5-flash")` |
 | `ChatOllama(model="llama3")` | `LLMConfig(api_type="ollama", model="llama3", base_url="http://localhost:11434/v1")` |
 | `"openai:gpt-4o"` (string format) | `LLMConfig(api_type="openai", model="gpt-4o")` |
 
