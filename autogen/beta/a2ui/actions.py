@@ -124,8 +124,11 @@ class A2UIAction:
     Carries the :class:`A2UIEventAction` declaration (so the LLM can render the
     button) and ``model`` — a ``fast_depends`` :class:`~fast_depends.core.CallModel`
     that the action runs (via :meth:`run`) with dependency injection and
-    serializer-coerced ``event.context``. It is deliberately **not** a tool: the
-    agent never sees or calls it. Pass it in ``A2UIServer(actions=[...])``.
+    serializer-coerced ``event.context`` as input. (The handler's *return* is
+    coerced to JSON by the caller — see
+    :func:`~autogen.beta.a2ui.server_action.run_server_action`.) It is
+    deliberately **not** a tool: the agent never sees or calls it. Pass it in
+    ``A2UIServer(actions=[...])``.
     """
 
     action: A2UIEventAction

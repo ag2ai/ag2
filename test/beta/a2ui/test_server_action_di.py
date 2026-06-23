@@ -4,12 +4,14 @@
 
 import json
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from typing import Annotated, Any
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
-from autogen.beta import Agent, Depends, Inject
+from autogen.beta import Agent, Context, Depends, Inject, Variable
 from autogen.beta.a2ui import A2UIServer, a2ui_action
 from autogen.beta.a2ui.transports import RestTransport
 from autogen.beta.testing import TestConfig
@@ -168,6 +170,130 @@ async def test_sync_handler_runs_with_injected_dependency() -> None:
     assert db.added == ["G5"]
     lines = [json.loads(line) for line in resp.text.splitlines() if line]
     assert lines == [{"version": "v0.9", "updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}}]
+
+
+@pytest.mark.asyncio
+async def test_variable_injects_into_server_action() -> None:
+    # A context Variable resolves into a server action exactly like a tool's:
+    # the action's context carries the agent's variables merged with the turn's.
+    captured: list[int] = []
+
+    @a2ui_action
+    async def show_count(count: int = Variable("count")) -> dict:
+        captured.append(count)
+        return {"ok": True}
+
+    agent = Agent(name="ui", config=TestConfig("AGENT SHOULD NOT RUN"), variables={"count": 5})
+    app = _server(agent, show_count)
+
+    resp = await _post_click(app, "show_count", {})
+
+    assert resp.status_code == 200
+    assert captured == [5]
+
+
+@pytest.mark.asyncio
+async def test_context_injected_into_server_action() -> None:
+    # `ctx: Context` injects the live ConversationContext, carrying the merged
+    # variables and the agent's dependencies — the same surface a tool sees.
+    seen: list[dict[str, Any]] = []
+
+    @a2ui_action
+    async def inspect_ctx(ctx: Context) -> dict:
+        seen.append({"vars": dict(ctx.variables), "deps": dict(ctx.dependencies)})
+        return {"ok": True}
+
+    store = Database()
+    agent = Agent(
+        name="ui",
+        config=TestConfig("AGENT SHOULD NOT RUN"),
+        variables={"count": 7},
+        dependencies={"db": store},
+    )
+    app = _server(agent, inspect_ctx)
+
+    resp = await _post_click(app, "inspect_ctx", {})
+
+    assert resp.status_code == 200
+    assert seen == [{"vars": {"count": 7}, "deps": {"db": store}}]
+
+
+@pytest.mark.asyncio
+async def test_handler_result_is_serialized_for_wire() -> None:
+    # A handler may return a message whose value is a non-JSON-native object
+    # (here a datetime). It must be coerced through the serializer before the
+    # wire, mirroring how a tool result is encoded — not crash json.dumps.
+    when = datetime(2026, 6, 23, 12, 0, tzinfo=timezone.utc)
+
+    @a2ui_action
+    async def stamp() -> dict:
+        return {"updateDataModel": {"surfaceId": "s1", "path": "/at", "value": when}}
+
+    app = _server(Agent(name="ui", config=TestConfig("AGENT SHOULD NOT RUN")), stamp)
+
+    resp = await _post_click(app, "stamp", {})
+
+    assert resp.status_code == 200
+    lines = [json.loads(line) for line in resp.text.splitlines() if line]
+    assert lines == [
+        {
+            "version": "v0.9",
+            "updateDataModel": {"surfaceId": "s1", "path": "/at", "value": "2026-06-23T12:00:00Z"},
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_action_response_value_is_serialized() -> None:
+    # When the client asks for a correlated reply (v1.0 wantResponse), a handler
+    # returning a Pydantic model must be coerced to JSON for the actionResponse
+    # value — not passed raw to json.dumps.
+    class Receipt(BaseModel):
+        order_id: str
+        total: float
+
+    @a2ui_action
+    async def checkout() -> Receipt:
+        return Receipt(order_id="O1", total=9.5)
+
+    agent = Agent(name="ui", config=TestConfig("AGENT SHOULD NOT RUN"))
+    app = A2UIServer(
+        agent,
+        actions=[checkout],
+        transport=RestTransport(encoding="jsonl"),
+        validate_responses=False,
+        protocol_version="v1.0",
+    )
+
+    body = {
+        "messages": [],
+        "a2ui": [
+            {
+                "version": "v1.0",
+                "action": {
+                    "name": "checkout",
+                    "surfaceId": "s1",
+                    "sourceComponentId": "btn",
+                    "timestamp": "2026-06-15T00:00:00Z",
+                    "context": {},
+                    "wantResponse": True,
+                    "actionId": "a1",
+                },
+            }
+        ],
+    }
+    async with _client(app) as client:
+        resp = await client.post("/a2ui", json=body)
+
+    assert resp.status_code == 200
+    lines = [json.loads(line) for line in resp.text.splitlines() if line]
+    assert lines == [
+        {
+            "version": "v1.0",
+            "actionId": "a1",
+            "actionResponse": {"value": {"order_id": "O1", "total": 9.5}},
+        }
+    ]
 
 
 @pytest.mark.asyncio

@@ -11,9 +11,13 @@ it returns is turned into A2UI server→client messages per the spec:
 
 - one server→client message (or a list of them, e.g. ``updateComponents`` /
   ``updateDataModel``) → emitted verbatim as a surface update (every version);
-- any other JSON value → wrapped in an ``actionResponse`` **only** when the
+- any other value → wrapped in an ``actionResponse`` **only** when the
   client asked for one (``wantResponse`` + ``actionId``, v1.0) — otherwise
   dropped with a debug log (no pre-v1.0 wire for it);
+
+The handler's return is coerced to JSON (``pydantic_core``) before any of the
+above, so a Pydantic model / datetime / Enum / dataclass reaches the wire as
+plain JSON — the same way the sibling AG-UI transport renders agent state.
 - ``None`` / no response requested → fire-and-forget;
 - a raised exception → an ``actionResponse`` error when a response was
   requested, else logged.
@@ -21,6 +25,8 @@ it returns is turned into A2UI server→client messages per the spec:
 
 import logging
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
+
+from pydantic_core import to_jsonable_python
 
 from autogen.beta.context import ConversationContext
 from autogen.beta.stream import MemoryStream
@@ -140,6 +146,17 @@ async def run_server_action(
 
     try:
         result = await action.run(click, context=context)
+        # Coerce the handler's (opaque) return into an embeddable JSON value, so a
+        # Pydantic model / datetime / Enum / dataclass becomes JSON-native before
+        # it reaches ``json.dumps`` (REST), the AG-UI encoder, or the A2A
+        # ``DataPart``. This mirrors the sibling AG-UI transport, which renders
+        # agent state onto the wire the same way (``ag_ui/stream.py``'s
+        # ``_encode_context``); ``pydantic_core`` is the same engine the agent
+        # serializer uses for text wire slots. Kept inside the ``try`` so a
+        # serialization failure is treated like any other handler failure below
+        # (surfaced as an ``actionResponse`` error or logged), never tearing the
+        # turn down.
+        result = to_jsonable_python(result)
     except Exception as e:  # noqa: BLE001 - a handler failure must not tear down the turn
         logger.exception("A2UI server action %r failed", click.name)
         if can_respond:
