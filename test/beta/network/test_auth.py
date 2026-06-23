@@ -133,7 +133,7 @@ class TestHelloFrameAuthWiring:
             ttl_sweep_interval=0,
             expectation_sweep_interval=0,
         )
-        passport = await hub.register(Passport(name="alice"), Resume())
+        passport = await hub.register_identity(Passport(name="alice"), Resume())
 
         link = LocalLink(hub)
         client = link.client()
@@ -156,7 +156,7 @@ class TestHelloFrameAuthWiring:
             ttl_sweep_interval=0,
             expectation_sweep_interval=0,
         )
-        passport = await hub.register(
+        passport = await hub.register_identity(
             Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "k-alice"})),
             Resume(),
         )
@@ -180,7 +180,7 @@ class TestHelloFrameAuthWiring:
             ttl_sweep_interval=0,
             expectation_sweep_interval=0,
         )
-        passport = await hub.register(
+        passport = await hub.register_identity(
             Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "k-alice"})),
             Resume(),
         )
@@ -207,7 +207,7 @@ class TestHelloFrameAuthWiring:
             ttl_sweep_interval=0,
             expectation_sweep_interval=0,
         )
-        passport = await hub.register(
+        passport = await hub.register_identity(
             Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "k-alice"})),
             Resume(),
         )
@@ -232,7 +232,7 @@ class TestHelloFrameAuthWiring:
             ttl_sweep_interval=0,
             expectation_sweep_interval=0,
         )
-        passport = await hub.register(Passport(name="alice"), Resume())
+        passport = await hub.register_identity(Passport(name="alice"), Resume())
 
         link = LocalLink(hub)
         client = link.client()
@@ -282,7 +282,7 @@ class TestHelloFrameAuthWiring:
             ttl_sweep_interval=0,
             expectation_sweep_interval=0,
         )
-        passport = await hub.register(
+        passport = await hub.register_identity(
             Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "k-alice"})),
             Resume(),
         )
@@ -300,7 +300,7 @@ class TestHelloFrameAuthWiring:
 
 
 class TestRegisterTimeAuth:
-    """Hub.register() also runs the auth validator at registration time.
+    """Hub.register_identity() also runs the auth validator at registration time.
     Confirm ApiKeyAuth integrates with that path too."""
 
     @pytest.mark.asyncio
@@ -313,7 +313,7 @@ class TestRegisterTimeAuth:
         )
         try:
             with pytest.raises(AuthError):
-                await hub.register(
+                await hub.register_identity(
                     Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "wrong"})),
                     Resume(),
                 )
@@ -329,7 +329,7 @@ class TestRegisterTimeAuth:
             expectation_sweep_interval=0,
         )
         try:
-            passport = await hub.register(
+            passport = await hub.register_identity(
                 Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "k-alice"})),
                 Resume(),
             )

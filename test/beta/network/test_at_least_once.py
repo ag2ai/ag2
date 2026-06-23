@@ -81,7 +81,7 @@ async def _raw_bob(hub: Hub, name: str = "bob"):
     """Register an agent directly via ``Hub.register`` and bind a bare
     ``LocalLinkClient`` to it. The returned link can be driven with
     arbitrary frames without the default auto-ack interfering."""
-    passport = await hub.register(Passport(name=name), Resume())
+    passport = await hub.register_identity(Passport(name=name), Resume())
     link = LocalLink(hub)
     raw_client = link.client()
     hub.bind_endpoint(raw_client.endpoint_id, passport.agent_id)
