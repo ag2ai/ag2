@@ -56,7 +56,7 @@ that backs `ask`/`_ask`/`resume`/`_execute` — there is one launch primitive.
   block without ever driving runs nothing — there is no turn to cancel and nothing to
   clean up but the scope's subscriptions.
 
-`ask` is the degenerate case: `async with self._spawn_run(...) as handle: return await
+`ask` is the degenerate case: `async with self._open_run(...) as handle: return await
 handle.result()` — open the scope, drive once, close.
 
 ## Consequences

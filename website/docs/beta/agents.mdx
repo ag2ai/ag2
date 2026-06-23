@@ -135,32 +135,43 @@ reply = await agent.ask(
 
 `ask()` blocks until the whole turn is done. When you want to *watch* a turn unfold — stream tokens to a UI, log tool calls as they happen, or steer the agent mid-turn — use `run()` instead. It returns an `AgentRun` async context manager:
 
-```python linenums="1" hl_lines="11 13-15 17"
-from autogen.beta import Agent
-from autogen.beta.events import ToolCallEvent
+```python linenums="1" hl_lines="13-14 18-21 23-25 27"
+from autogen.beta import Agent, tool
+from autogen.beta.events import ModelMessageChunk, ToolCallEvent
 from autogen.beta.config import OpenAIConfig
+
+@tool
+def get_weather(city: str) -> str:
+    """Return the current weather for a city."""
+    return f"It is 22°C and sunny in {city}."
 
 agent = Agent(
     "assistant",
-    prompt="You are a helpful assistant.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    prompt="Use the get_weather tool when asked about weather.",
+    config=OpenAIConfig("gpt-4o-mini", streaming=True),  # streaming=True emits token chunks
+    tools=[get_weather],
 )
 
-async with agent.run("Give me one sentence about AG2 beta.") as run:
+async with agent.run("What's the weather in Paris?") as run:
     # Subscribe before driving — callbacks fire inline as the turn runs.
     @run.stream.where(ToolCallEvent).subscribe()
     async def on_tool_call(event: ToolCallEvent) -> None:
-        print("Agent requested tool:", event.name)
+        print("\n[tool]", event.name, event.arguments)
+
+    @run.stream.where(ModelMessageChunk).subscribe()
+    async def on_token(chunk: ModelMessageChunk) -> None:
+        print(chunk.content, end="", flush=True)
 
     reply = await run.result()
 
-print(reply.body)
+print("\n", reply.body)
 ```
 
 How it behaves:
 
 * Entering the `async with` block opens the turn scope, but **the model is not called until you `await run.result()`** — so subscribe (or pass `observers=`) *before* driving.
 * `run.stream` is the live event stream; `run.result()` drives the turn once and is idempotent (the same `AgentReply` on repeat calls, re-raising the same failure).
+* **Token streaming needs `#!python streaming=True` on the model config** (as above); the model then emits `ModelMessageChunk` events as it generates. Every event type is observed the same way — the example also filters `ToolCallEvent` to log tool calls live.
 * The turn runs only inside the block, only while `result()` is awaited. Cancel that await — e.g. `#!python await asyncio.wait_for(run.result(), timeout=5)` — to cancel the turn.
 
 `AgentReply.run(...)` is the same thing for a **continuation**: it watches a follow-up turn on an existing conversation, just as `AgentReply.ask(...)` continues one with a blocking call.
