@@ -68,7 +68,7 @@ ag2 arena agent_v1.py agent_v2.py --eval tests/cases.yaml
 ### Model Comparison
 
 ```bash
-ag2 arena my_agent.py --models gpt-4o,claude-sonnet-4-6,gemini-2.0-flash --eval tests/
+ag2 arena my_agent.py --models gpt-4o,claude-sonnet-4-6,gemini-3.5-flash --eval tests/
 ```
 
 Same agent, different backends. Helps you choose the best model for your use case.
