@@ -72,7 +72,7 @@ async def test_depends_injects_into_server_action() -> None:
         return db
 
     @a2ui_action(description="Add the item to the cart")
-    async def add_to_cart(good_id: str, database: Database = Depends(get_db)) -> dict:
+    async def add_to_cart(good_id: str, database: Annotated[Database, Depends(get_db)]) -> dict:
         count = database.add(good_id)
         return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": count}}
 
@@ -97,7 +97,7 @@ async def test_dependency_override_swaps_implementation() -> None:
         return stub
 
     @a2ui_action
-    async def add_to_cart(good_id: str, database: Database = Depends(get_db)) -> dict:
+    async def add_to_cart(good_id: str, database: Annotated[Database, Depends(get_db)]) -> dict:
         database.add(good_id)
         return {"ok": True}
 
@@ -158,7 +158,7 @@ async def test_sync_handler_runs_with_injected_dependency() -> None:
         return db
 
     @a2ui_action
-    def add_to_cart(good_id: str, database: Database = Depends(get_db)) -> dict:
+    def add_to_cart(good_id: str, database: Annotated[Database, Depends(get_db)]) -> dict:
         count = database.add(good_id)
         return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": count}}
 
@@ -179,7 +179,7 @@ async def test_variable_injects_into_server_action() -> None:
     captured: list[int] = []
 
     @a2ui_action
-    async def show_count(count: int = Variable("count")) -> dict:
+    async def show_count(count: Annotated[int, Variable("count")]) -> dict:
         captured.append(count)
         return {"ok": True}
 
@@ -309,7 +309,7 @@ async def test_generator_dependency_is_set_up_and_torn_down() -> None:
             events.append("close")
 
     @a2ui_action
-    async def add_to_cart(good_id: str, session: Database = Depends(get_session)) -> dict:
+    async def add_to_cart(good_id: str, session: Annotated[Database, Depends(get_session)]) -> dict:
         session.add(good_id)
         events.append(f"used:{session.added}")
         return {"ok": True}

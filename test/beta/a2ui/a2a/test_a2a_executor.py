@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from typing import Annotated
 
 import pytest
 from a2a.types import Part, TaskState
@@ -188,7 +189,7 @@ class TestIncomingActionRewrite:
             return recorder
 
         @a2ui_action(description="Submit the form")
-        def submit(email: str, db: Recorder = Depends(get_db)) -> str:
+        def submit(email: str, db: Annotated[Recorder, Depends(get_db)]) -> str:
             db.emails.append(email)
             return "done"
 

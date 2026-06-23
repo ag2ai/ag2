@@ -14,7 +14,7 @@ itself the ASGI app.
 """
 
 import json
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 import pytest
@@ -185,7 +185,7 @@ async def test_button_click_resolves_injected_dependency() -> None:
     stub = CartStore()
 
     @a2ui_action(description="Add the item to the cart")
-    def add_to_basket(good_id: str, store: CartStore = Depends(get_store)) -> dict:
+    def add_to_basket(good_id: str, store: Annotated[CartStore, Depends(get_store)]) -> dict:
         store.items.append(good_id)
         return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": len(store.items)}}
 
