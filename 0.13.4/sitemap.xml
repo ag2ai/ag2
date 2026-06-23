@@ -421,27 +421,7 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2023/10/18/RetrieveChat/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2023/10/26/TeachableAgent/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2023/11/06/LMM-Agent/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/2023/11/09/EcoAssistant/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2023/11/13/OAI-assistants/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2023/11/20/AgentEval/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -450,10 +430,6 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/2023/12/01/AutoGenStudio/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2023/12/23/AgentOptimizer/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -497,10 +473,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2024/06/21/AgentEval/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/2024/06/24/AltModels-Classes/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -510,10 +482,6 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/2024/11/15/CaptainAgent/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2024/11/17/Swarm/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -529,10 +497,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2024/12/20/RealtimeAgent/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/2024/12/20/Reasoning-Update/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -545,23 +509,11 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2025/01/08/RealtimeAgent-over-websocket/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2025/01/09/RealtimeAgent-over-WebRTC/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/2025/01/10/WebSockets/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/2025/01/22/Tools-ChatContext-Dependency-Injection/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/2025/01/29/RealtimeAgent-with-gemini/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -813,15 +765,7 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_JSON_mode_example/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_LlamaIndex_query_engine/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_MathChat/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -833,19 +777,7 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_RetrieveChat_mongodb/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_RetrieveChat_pgvector/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_RetrieveChat_qdrant/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_agenteval_cq_math/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -853,15 +785,7 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_agentoptimizer/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_agents_deep_researcher/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_agents_docagent/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -889,18 +813,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_autobuild_agent_library/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_autobuild_basic/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_autogen_uniformed_api_calling/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_azr_ai_search/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -917,19 +829,11 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_captainagent/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_captainagent_crosstool/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_chromadb_query_engine/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_config_loader_utility_functions/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -945,10 +849,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_dalle_and_gpt4v/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_databricks_dbrx/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -957,19 +857,7 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_function_call/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_function_call_async/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_function_call_code_writing/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_function_call_currency_calculator/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -1001,10 +889,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_gpt_assistant_agent_function_call/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_graph_rag_falkordb/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1025,19 +909,11 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_group_chat_with_llamaindex_agents/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_groupchat/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_groupchat_RAG/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_groupchat_customized/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -1069,14 +945,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_human_feedback/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_image_generation_capability/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_inception_function/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1085,19 +953,7 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_langchain/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_lats_search/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_lmm_gpt-4v/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_lmm_llava/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -1141,10 +997,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_nested_chats_chess/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_nested_chats_chess_altmodels/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1158,34 +1010,6 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_nestedchat_optiguide/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_oai_assistant_function_call/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_oai_assistant_groupchat/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_oai_assistant_retrieval/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_oai_assistant_twoagents_basic/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_oai_chatgpt_gpt4/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_oai_code_interpreter/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_oai_completion/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -1217,34 +1041,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_realtime_gemini_swarm_websocket/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_realtime_gemini_websocket/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_realtime_swarm/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_realtime_swarm_webrtc/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_realtime_swarm_websocket/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_realtime_webrtc/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_realtime_websocket/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_reasoning_agent/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1265,10 +1061,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_run_and_event_processing/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_safeguard_demo/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1281,14 +1073,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_society_of_mind/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_stream/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1297,31 +1081,11 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_swarm/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_swarm_enhanced/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_swarm_graphrag_telemetry_trip_planner/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_swarm_w_groupchat_legacy/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_tabular_data_rag_workflow/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_teachability/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_teachable_oai_assistants/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -1361,10 +1125,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_tools_firecrawl/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_tools_run_examples/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1394,14 +1154,6 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_v2_responses_client/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_video_transcript_translate_with_whisper/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_web_info/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -1441,19 +1193,11 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/tools_searxng_search/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/tools_tavily_search/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/tools_veronica_circuit_breaker/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/tools_web_search_preview/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -1609,10 +1353,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/pattern-cookbook/context_aware_routing/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1653,22 +1393,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/realtime-agent/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/realtime-agent/twilio/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/realtime-agent/webrtc/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/realtime-agent/websocket/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/tools/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1686,10 +1410,6 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/tools/tools-with-secrets/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/tools/interop/crewai/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -1738,10 +1458,6 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/introducing-group-chat/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/introducing-swarm-orchestration/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -1965,10 +1681,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/reference-tools/code-execution/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/reference-tools/crawl4ai/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -1977,19 +1689,11 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/reference-tools/firecrawl/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/reference-tools/perplexity-search/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/reference-tools/quick-research/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/reference-tools/searxng-search/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -2377,14 +2081,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/category/realtime-api/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/category/non-openai-models/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/category/dependency-injection/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -2393,11 +2089,11 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/category/swarm/</loc>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/tutorial/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/category/tutorial/</loc>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/non-openai-models/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -2405,15 +2101,11 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/swarm/</loc>
+         <lastmod>2026-06-23</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/category/security/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/category/evaluation/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/category/multimodal/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
@@ -2437,10 +2129,6 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/page/7/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/archive/2026/page/2/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
@@ -2449,19 +2137,7 @@
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/archive/2025/page/3/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/archive/2024/page/2/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/archive/2023/page/2/</loc>
-         <lastmod>2026-06-23</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/category/research/page/2/</loc>
          <lastmod>2026-06-23</lastmod>
     </url>
     <url>
