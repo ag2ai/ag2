@@ -12,8 +12,6 @@ from typing import Annotated, Any, Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import Self
 
-from autogen.doc_utils import export_module
-
 from .entry import ApplicationConfig, LLMConfigEntry
 from .types import ConfigEntries
 from .utils import config_list_from_json, filter_config
@@ -21,7 +19,6 @@ from .utils import config_list_from_json, filter_config
 ConfigItem: TypeAlias = LLMConfigEntry | ConfigEntries | dict[str, Any]
 
 
-@export_module("autogen")
 class LLMConfig:
     config_list: list[ConfigEntries]
 

@@ -15,7 +15,6 @@ try:
 except ImportError:
     aiofiles = None  # type: ignore[assignment]
 
-from ....doc_utils import export_module
 from ...tool import Tool
 
 
@@ -410,7 +409,6 @@ class WorkspaceEditor:
 VALID_OPERATIONS = {"create_file", "update_file", "delete_file"}
 
 
-@export_module("autogen.tools")
 class ApplyPatchTool(Tool):
     """Tool for applying code patches with GPT-5.1.
 

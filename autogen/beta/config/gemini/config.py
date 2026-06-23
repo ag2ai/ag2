@@ -28,6 +28,8 @@ class GeminiBaseConfigOverrides(TypedDict, total=False):
     frequency_penalty: float | None
     seed: int | None
     cached_content: str | None
+    response_modalities: list[str] | None
+    image_config: types.ImageConfig | None
     thinking_config: types.ThinkingConfig | None
     thinking_level: ThinkingLevel | None
     thinking_budget: int | None
@@ -57,6 +59,8 @@ class GeminiBaseConfig:
     frequency_penalty: float | None = None
     seed: int | None = None
     cached_content: str | None = None
+    response_modalities: list[str] | None = None
+    image_config: types.ImageConfig | None = None
     thinking_config: types.ThinkingConfig | None = None
     thinking_level: ThinkingLevel | None = None
     thinking_budget: int | None = None
@@ -81,6 +85,10 @@ class GeminiBaseConfig:
             config["frequency_penalty"] = self.frequency_penalty
         if self.seed is not None:
             config["seed"] = self.seed
+        if self.response_modalities is not None:
+            config["response_modalities"] = self.response_modalities
+        if self.image_config is not None:
+            config["image_config"] = self.image_config
 
         thinking = self._resolve_thinking_config()
         if thinking is not None:

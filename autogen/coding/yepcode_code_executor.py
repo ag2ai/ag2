@@ -12,7 +12,6 @@ from typing import ClassVar
 
 from pydantic import Field
 
-from ..doc_utils import export_module
 from .base import CodeBlock, CodeExecutor, CodeExtractor, CodeResult
 from .markdown_code_extractor import MarkdownCodeExtractor
 
@@ -30,14 +29,12 @@ except ImportError:
     YepCodeApiConfig = None
 
 
-@export_module("autogen.coding")
 class YepCodeCodeResult(CodeResult):
     """A code result class for YepCode executor."""
 
     execution_id: str | None = Field(default=None, description="The YepCode execution ID for this result.")
 
 
-@export_module("autogen.coding")
 class YepCodeCodeExecutor(CodeExecutor):
     """A code executor class that executes code using YepCode's serverless runtime.
 

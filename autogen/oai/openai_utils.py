@@ -28,7 +28,6 @@ if TYPE_CHECKING:
 
     from ..llm_config import LLMConfig
 
-from ..doc_utils import export_module
 
 NON_CACHE_KEY = [
     "api_key",
@@ -183,7 +182,6 @@ def is_valid_api_key(api_key: str) -> bool:
     return bool(re.fullmatch(api_key_re, api_key))
 
 
-@export_module("autogen")
 def get_config_list(
     api_keys: list[str],
     base_urls: list[str] | None = None,
@@ -235,7 +233,6 @@ def get_config_list(
     return config_list
 
 
-@export_module("autogen")
 def get_first_llm_config(
     llm_config: Union["LLMConfig", dict[str, Any]],
 ) -> dict[str, Any]:
@@ -263,7 +260,6 @@ def get_first_llm_config(
     return to_return if isinstance(to_return, dict) else to_return.model_dump()  # type: ignore [no-any-return]
 
 
-@export_module("autogen")
 def config_list_openai_aoai(
     key_file_path: str | None = ".",
     openai_api_key_file: str | None = "key_openai.txt",
@@ -393,7 +389,6 @@ def config_list_openai_aoai(
     return config_list
 
 
-@export_module("autogen")
 def config_list_from_models(
     key_file_path: str | None = ".",
     openai_api_key_file: str | None = "key_openai.txt",
@@ -460,7 +455,6 @@ def config_list_from_models(
     return config_list
 
 
-@export_module("autogen")
 def config_list_gpt4_gpt35(
     key_file_path: str | None = ".",
     openai_api_key_file: str | None = "key_openai.txt",
@@ -528,7 +522,6 @@ def get_config(
     return config
 
 
-@export_module("autogen")
 def config_list_from_dotenv(
     dotenv_file_path: str | None = None,
     model_api_key_map: dict[str, Any] | None = None,

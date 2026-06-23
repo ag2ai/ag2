@@ -129,24 +129,20 @@ from autogen.beta.testing import TestConfig
 
 load_dotenv()
 
-
 async def classify_as_billing(reason: str) -> Handoff:
     """Classify the request as billing and route to the billing specialist."""
     print(f"  [tool] classify_as_billing({reason!r})")
     return Handoff(target="billing", reason=reason)
-
 
 async def classify_as_technical(reason: str) -> Handoff:
     """Classify as technical and route to the technical specialist."""
     print(f"  [tool] classify_as_technical({reason!r})")
     return Handoff(target="technical", reason=reason)
 
-
 async def classify_as_general(reason: str) -> Handoff:
     """Classify as general support and route to the general specialist."""
     print(f"  [tool] classify_as_general({reason!r})")
     return Handoff(target="general", reason=reason)
-
 
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
@@ -281,7 +277,6 @@ async def main() -> None:
     await technical_hc.close()
     await general_hc.close()
     await hub_obj.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

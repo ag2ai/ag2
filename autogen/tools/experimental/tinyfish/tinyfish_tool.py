@@ -9,7 +9,6 @@ from contextlib import contextmanager
 from typing import Annotated, Any
 from urllib.parse import urlparse
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....llm_config import LLMConfig
 from ... import Depends, Tool
@@ -289,7 +288,6 @@ def _tinyfish_fetch(
         }
 
 
-@export_module("autogen.tools.experimental")
 class TinyFishTool(Tool):
     """TinyFishTool is a tool that uses the TinyFish API to deep-scrape web pages with a natural language goal.
 
@@ -363,7 +361,6 @@ class TinyFishTool(Tool):
         )
 
 
-@export_module("autogen.tools.experimental")
 class TinyFishSearchTool(Tool):
     """TinyFishSearchTool uses the TinyFish Search API to search the web.
 
@@ -433,7 +430,6 @@ class TinyFishSearchTool(Tool):
         )
 
 
-@export_module("autogen.tools.experimental")
 class TinyFishFetchTool(Tool):
     """TinyFishFetchTool uses the TinyFish Fetch API to extract content from URLs.
 

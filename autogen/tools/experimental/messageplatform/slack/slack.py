@@ -6,7 +6,6 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Annotated, Any
 
-from .....doc_utils import export_module
 from .....import_utils import optional_import_block, require_optional_import
 from .... import Tool
 from ....dependency_injection import Depends, on
@@ -21,7 +20,6 @@ MAX_MESSAGE_LENGTH = 40000
 
 
 @require_optional_import(["slack_sdk"], "commsagent-slack")
-@export_module("autogen.tools.experimental")
 class SlackSendTool(Tool):
     """Sends a message to a Slack channel."""
 
@@ -87,7 +85,6 @@ class SlackSendTool(Tool):
 
 
 @require_optional_import(["slack_sdk"], "commsagent-slack")
-@export_module("autogen.tools.experimental")
 class SlackRetrieveTool(Tool):
     """Retrieves messages from a Slack channel."""
 
@@ -191,7 +188,6 @@ class SlackRetrieveTool(Tool):
 
 
 @require_optional_import(["slack_sdk"], "commsagent-slack")
-@export_module("autogen.tools.experimental")
 class SlackRetrieveRepliesTool(Tool):
     """Retrieves replies to a specific Slack message from both threads and the channel."""
 

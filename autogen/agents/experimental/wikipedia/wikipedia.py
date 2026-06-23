@@ -5,11 +5,9 @@
 from typing import Any
 
 from .... import ConversableAgent
-from ....doc_utils import export_module
 from ....tools.experimental import WikipediaPageLoadTool, WikipediaQueryRunTool
 
 
-@export_module("autogen.agents.experimental")
 class WikipediaAgent(ConversableAgent):
     """An AI agent that leverages Wikipedia tools to provide accurate, concise answers
     to user queries.

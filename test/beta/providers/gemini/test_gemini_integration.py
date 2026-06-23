@@ -4,12 +4,16 @@
 
 import os
 from dataclasses import dataclass
+from io import BytesIO
 
 import pytest
+from PIL import Image
+from google.genai import types
 
 from autogen.beta import Agent
 from autogen.beta.config import GeminiConfig
 from autogen.beta.config.gemini.events import GeminiToolCallEvent
+from autogen.beta.events import ImageInput
 from autogen.beta.streams.redis.serializer import Serializer, deserialize, serialize
 
 
@@ -35,6 +39,75 @@ async def test_system_prompt(gemini_config: GeminiConfig) -> None:
     assert reply.body is not None
     body_lower = reply.body.lower()
     assert any(word in body_lower for word in ["paris", "france", "est", "la", "le", "de"])
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio()
+async def test_image_generation(gemini_config: GeminiConfig) -> None:
+    """An image model with IMAGE response modality returns image bytes via reply.files."""
+    config = gemini_config.copy(
+        model="gemini-3.1-flash-image",
+        response_modalities=["TEXT", "IMAGE"],
+    )
+    agent = Agent(
+        name="image_agent",
+        prompt="You generate images when asked.",
+        config=config,
+    )
+
+    reply = await agent.ask("Generate an image of a single red circle on a white background.")
+
+    assert reply.files, "expected at least one generated image in reply.files"
+    image = reply.files[0]
+    assert len(image.data) > 0
+    assert image.metadata.get("media_type", "").startswith("image/")
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio()
+async def test_image_generation_with_image_config(gemini_config: GeminiConfig) -> None:
+    """image_config controls the dimensions of the generated image."""
+    config = gemini_config.copy(
+        model="gemini-3.1-flash-image",
+        response_modalities=["TEXT", "IMAGE"],
+        image_config=types.ImageConfig(aspect_ratio="1:1", image_size="1K"),
+    )
+    agent = Agent(name="image_agent", prompt="You generate images when asked.", config=config)
+
+    reply = await agent.ask("Generate an image of a single red circle on a white background.")
+
+    assert reply.files, "expected at least one generated image in reply.files"
+    width, height = Image.open(BytesIO(reply.files[0].data)).size
+    assert width == height, f"expected a square (1:1) image, got {width}x{height}"
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio()
+@pytest.mark.timeout(120)  # two sequential image-generation calls (generate + edit)
+async def test_image_editing(gemini_config: GeminiConfig) -> None:
+    """A generated image fed back in as ImageInput is edited and returned via reply.files."""
+    config = gemini_config.copy(
+        model="gemini-3.1-flash-image",
+        response_modalities=["TEXT", "IMAGE"],
+    )
+    agent = Agent(
+        name="image_agent",
+        prompt="You generate and edit images when asked.",
+        config=config,
+    )
+
+    generated = await agent.ask("Generate an image of a single blue circle on a white background.")
+    assert generated.files, "expected an image to edit"
+    source = generated.files[0]
+
+    edited = await agent.ask(
+        "Add a small red square next to the circle. Keep everything else the same.",
+        ImageInput(data=source.data, media_type=source.metadata.get("media_type", "image/png")),
+    )
+
+    assert edited.files, "expected an edited image in reply.files"
+    assert len(edited.files[0].data) > 0
+    assert edited.files[0].metadata.get("media_type", "").startswith("image/")
 
 
 @pytest.mark.gemini

@@ -35,7 +35,7 @@ The example uses AG2's `DefaultPattern` to run eight agents in sequence. Each is
 
 The Human Review step is first-class in this pipeline, not optional. `present_for_review` emits a structured summary to the browser -- quality score, gaps, report outline, sources, findings preview -- then returns `RevertToUserTarget()`. AG2 fires an `InputRequestEvent`, which the SSE endpoint converts to an `INPUT_REQUEST` event for the frontend. The browser shows an approve/feedback panel and the pipeline waits. When the user responds, the `human_review_agent` uses an LLM condition to decide: loop back to the Researcher, or advance to the Writer.
 
-If you'd prefer a lighter-weight option, AG2's built-in [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is a composable tool that any agent can call directly -- the [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) covers when to use which.
+If you'd prefer a lighter-weight option, AG2's built-in `DeepResearchTool` is a composable tool that any agent can call directly -- the [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) covers when to use which.
 
 ## How Agents and UI Connect
 

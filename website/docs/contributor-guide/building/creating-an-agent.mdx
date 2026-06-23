@@ -46,15 +46,14 @@ Cons:
 
 ## How a tool-based agent is created
 
-Let's take a look at a tool-based agent, the [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent). You can read more about how it's used [here](/docs/user-guide/reference-agents/communication-platforms/discordagent).
+Let's take a look at a tool-based agent, the `DiscordAgent`. You can read more about how it's used [here](/docs/user-guide/reference-agents/communication-platforms/discordagent).
 
-All agents should be based on [ConversableAgent](/docs/api-reference/autogen/ConversableAgent), this makes them usable in all orchestrations.
+All agents should be based on `ConversableAgent`, this makes them usable in all orchestrations.
 
-The DiscordAgent uses two tools to send and retrieve messages for a Discord channel. In addition to [ConversableAgent](/docs/api-reference/autogen/ConversableAgent)'s parameters, it also takes in the authentication and channel details, as well as a boolean to indicate whether writing instructions should be appended to the agent's system message.
+The DiscordAgent uses two tools to send and retrieve messages for a Discord channel. In addition to `ConversableAgent`'s parameters, it also takes in the authentication and channel details, as well as a boolean to indicate whether writing instructions should be appended to the agent's system message.
 
 Let's look at the code for DiscordAgent with annotations added ([current code here](https://github.com/ag2ai/ag2/blob/main/autogen/agents/experimental/discord/discord.py)):
 ```python
-@export_module("autogen.agents.experimental") # Indicates where this appears in the API Reference documentation, autogen > agents > experimental > DiscordAgent
 class DiscordAgent(ConversableAgent): # Built on the ConversableAgent class
     """An agent that can send messages and retrieve messages on Discord."""
     # Ensure there's a docstring for the agent for documentation
@@ -116,7 +115,7 @@ class DiscordAgent(ConversableAgent): # Built on the ConversableAgent class
 
 ### Agent's Tool
 
-Let's look at one of the tools that the agent is using, [DiscordSendTool](/docs/user-guide/reference-tools/communication-platforms/discord), to see how a [Tool](/docs/api-reference/autogen/tools/Tool) is created (annotations added):
+Let's look at one of the tools that the agent is using, [DiscordSendTool](/docs/user-guide/reference-tools/communication-platforms/discord), to see how a `Tool` is created (annotations added):
 
 (See the [Creating a Tool](/docs/contributor-guide/building/creating-a-tool) page for a more detailed guide on creating tools)
 
@@ -132,7 +131,6 @@ MAX_BATCH_RETRIEVE_MESSAGES = 100
 # Denote that this requires a 3rd party package, with "discord" being the namespace
 # Our AG2 'extra' is called "commsagent_discord"
 @require_optional_import(["discord"], "commsagent-discord")
-@export_module("autogen.tools.experimental") # Where this appears in the API Reference documentation
 class DiscordSendTool(Tool): # Built on the Tool class
     """Sends a message to a Discord channel."""
     # Ensure there's a docstring for the tool for documentation
@@ -194,9 +192,6 @@ Let's take a look at a basic agent that tells the time utilising a reply functio
 from typing import Any, Optional, Union
 __all__ = ["TimeAgent"]
 
-# Where our agent appears in the documentation
-# autogen > agents > contrib > TimeAgent
-@export_module("autogen.agents.contrib")
 class TimeAgent(ConversableAgent): # Built on the ConversableAgent class
     """This agent outputs the date and time."""
     # Ensure there's a docstring for the agent for documentation
@@ -314,7 +309,7 @@ Changes to [pyproject.toml](https://github.com/ag2ai/ag2/blob/main/pyproject.tom
 
 It's critical that tests are created for each piece of functionality within your agent or tool.
 
-See this [test file](https://github.com/ag2ai/ag2/blob/main/test/agents/experimental/websurfer/test_websurfer.py) for the [WebSurferAgent](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) as an example.
+See this [test file](https://github.com/ag2ai/ag2/blob/main/test/agents/experimental/websurfer/test_websurfer.py) for the `WebSurferAgent` as an example.
 
 See this documentation for how to run [tests locally and coverage](/docs/contributor-guide/tests).
 

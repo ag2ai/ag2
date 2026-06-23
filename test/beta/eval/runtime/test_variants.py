@@ -2,14 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for run_variants — typed single-axis variant comparison + leaderboard."""
+"""Tests for run_variants — instance-based variant comparison + leaderboard."""
 
 import pytest
 
 pytest.importorskip("opentelemetry.sdk")
 
 from autogen.beta import Agent
-from autogen.beta.eval import Variants, run_variants, scorer
+from autogen.beta.eval import Suite, Variants, run_variants, scorer
 from autogen.beta.eval.scorers import final_answer_matches
 from autogen.beta.testing import TestConfig
 
@@ -24,17 +24,19 @@ def got_reply(outputs) -> bool:
 
 
 @pytest.mark.asyncio()
-async def test_from_configs_runs_each_variant_and_ranks(tmp_path) -> None:
-    variants = Variants.from_configs(
-        _build,
+async def test_runs_each_variant_and_ranks(tmp_path) -> None:
+    variants = Variants(
         {
-            "right": TestConfig("The capital is Tokyo."),
-            "wrong": TestConfig("The capital is Paris."),
+            "right": _build(config=TestConfig("The capital is Tokyo.")),
+            "wrong": _build(config=TestConfig("The capital is Paris.")),
         },
+        axis="config",
     )
 
     board = await run_variants(
-        [{"task_id": "t1", "inputs": {"input": "Capital of Japan?"}, "reference_outputs": {"answer": "Tokyo"}}],
+        Suite.from_list([
+            {"task_id": "t1", "inputs": {"input": "Capital of Japan?"}, "reference_outputs": {"answer": "Tokyo"}}
+        ]),
         variants=variants,
         scorers=[final_answer_matches(field="answer", matcher="contains")],
         store_dir=tmp_path,
@@ -55,36 +57,33 @@ async def test_from_configs_runs_each_variant_and_ranks(tmp_path) -> None:
 
 
 @pytest.mark.asyncio()
-async def test_from_targets_accepts_factories_and_instances(tmp_path) -> None:
-    variants = Variants.from_targets({
-        "factory": lambda: Agent("a", config=TestConfig("hi from factory")),
-        "instance": Agent("b", config=TestConfig("hi from instance")),  # reused as-is
+async def test_variants_are_agent_instances(tmp_path) -> None:
+    variants = Variants({
+        "a": Agent("a", config=TestConfig("hi from a")),
+        "b": Agent("b", config=TestConfig("hi from b")),
     })
 
     board = await run_variants(
-        [{"task_id": "t1", "inputs": {"input": "say hi"}}],
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "say hi"}}]),
         variants=variants,
         scorers=[got_reply],
         store_dir=tmp_path,
     )
 
-    assert board.axis == "target"
-    assert set(board.results) == {"factory", "instance"}
-    assert board.results["factory"].pass_rate("got_reply") == 1.0
-    assert board.results["instance"].pass_rate("got_reply") == 1.0
+    assert board.axis == "variant"  # default axis label
+    assert set(board.results) == {"a", "b"}
+    assert board.results["a"].pass_rate("got_reply") == 1.0
+    assert board.results["b"].pass_rate("got_reply") == 1.0
 
 
 @pytest.mark.asyncio()
 async def test_errored_variant_does_not_abort_the_sweep(tmp_path) -> None:
-    """A variant whose build raises is recorded (ranked last), not fatal to the others."""
-
-    def boom(*, config=None) -> Agent:
-        raise RuntimeError("bad build")
-
-    variants = Variants.from_targets({"ok": lambda: Agent("ok", config=TestConfig("hi")), "broken": boom})
+    """A variant whose agent errors is recorded (ranked last), not fatal to the others."""
+    # The "broken" agent has no config, so its ``ask`` raises — captured on the trace.
+    variants = Variants({"ok": Agent("ok", config=TestConfig("hi")), "broken": Agent("broken")})
 
     board = await run_variants(
-        [{"task_id": "t1", "inputs": {"input": "hi"}}],
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}]),
         variants=variants,
         scorers=[got_reply],
         store_dir=tmp_path,
@@ -98,10 +97,16 @@ async def test_errored_variant_does_not_abort_the_sweep(tmp_path) -> None:
 @pytest.mark.asyncio()
 async def test_tie_shares_a_rank_and_has_no_unique_best(tmp_path) -> None:
     """Variants tied on the top score share rank 1, and ``best()`` returns None."""
-    variants = Variants.from_configs(_build, {"a": TestConfig("Tokyo"), "b": TestConfig("Tokyo")})
+    variants = Variants(
+        {
+            "a": _build(config=TestConfig("Tokyo")),
+            "b": _build(config=TestConfig("Tokyo")),
+        },
+        axis="config",
+    )
 
     board = await run_variants(
-        [{"task_id": "t1", "inputs": {"input": "capital?"}, "reference_outputs": {"answer": "Tokyo"}}],
+        Suite.from_list([{"task_id": "t1", "inputs": {"input": "capital?"}, "reference_outputs": {"answer": "Tokyo"}}]),
         variants=variants,
         scorers=[final_answer_matches(field="answer", matcher="contains")],
         store_dir=tmp_path,

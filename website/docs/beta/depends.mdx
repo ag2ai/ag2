@@ -17,7 +17,7 @@ You can use `Depends` to execute side-effects before your tool runs—even if yo
 
 To do this, simply declare the dependency in your tool's signature. The framework will execute it, and you can safely ignore the injected value.
 
-```python linenums="1" hl_lines="2 13"
+```python linenums="1" hl_lines="13"
 from typing import Annotated
 from autogen.beta import Depends, tool
 
@@ -115,7 +115,7 @@ def process_data(
 
 If you explicitly want the dependency to be re-calculated every single time it is injected, you can disable the cache by passing `use_cache=False`:
 
-```python linenums="1" hl_lines="4-5"
+```python linenums="1" hl_lines="3-4"
 @tool
 def random_tool(
     val1: Annotated[int, Depends(get_random_number, use_cache=False)],

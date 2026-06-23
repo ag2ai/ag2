@@ -12,11 +12,11 @@ my_tool = MyAmazingTool()
 We'll be getting into the AG2 code-base, it's useful to understand how AG2 works under the hood, [see this section](/docs/contributor-guide/how-ag2-works/overview) for the rundown.
 </Tip>
 
-Creating a new tool in AG2 is easy and empowers any [ConversableAgent](/docs/api-reference/autogen/ConversableAgent)-based agent in AG2.
+Creating a new tool in AG2 is easy and empowers any `ConversableAgent`-based agent in AG2.
 
 ## How a tool is created
 
-Let's look at how the [Crawl4AITool](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) tool was implemented.
+Let's look at how the `Crawl4AITool` tool was implemented.
 
 The Crawl4AITool uses a 3rd party package to crawl a website and extract information, returning the crawled data as its response.
 
@@ -33,9 +33,6 @@ __all__ = ["Crawl4AITool"]
 # Denote that this requires a 3rd party package, with "crawl4ai"
 # being the namespace. Our AG2 'extra' is called "crawl4ai".
 @require_optional_import(["crawl4ai"], "crawl4ai")
-@export_module("autogen.tools.experimental")
-# Indicates where this appears in the API Reference documentation
-# autogen > tools > experimental > Crawl4AITool
 class Crawl4AITool(Tool): # Built on the Tool class
     """
     Crawl a website and extract information using the crawl4ai library.
@@ -111,7 +108,7 @@ class Crawl4AITool(Tool): # Built on the Tool class
         )
 ```
 
-And this tool can now be registered with any [ConversableAgent](/docs/api-reference/autogen/ConversableAgent)-based agent.
+And this tool can now be registered with any `ConversableAgent`-based agent.
 
 Here's how to use the Crawl4AITool:
 
@@ -190,7 +187,7 @@ Changes to [pyproject.toml](https://github.com/ag2ai/ag2/blob/main/pyproject.tom
 
 It's critical that tests are created for each piece of functionality within your tool.
 
-See this [test file](https://github.com/ag2ai/ag2/blob/main/test/tools/experimental/browser_use/test_browser_use.py) for the [BrowserUseTool](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) as an example.
+See this [test file](https://github.com/ag2ai/ag2/blob/main/test/tools/experimental/browser_use/test_browser_use.py) for the `BrowserUseTool` as an example.
 
 See this documentation for how to run [tests locally and coverage](/docs/contributor-guide/tests).
 

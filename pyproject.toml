@@ -93,7 +93,7 @@ ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 diskcache = ["diskcache"]
 
 # providers
-openai = ["openai>=2.41.0,<3.0"]
+openai = ["openai>=2.43.0,<3.0"]
 openai-realtime = ["ag2[openai]", "openai[realtime]"]
 
 deepseek = ["ag2[openai]"]
@@ -235,9 +235,6 @@ neo4j = [
     "llama-index-readers-web>=0.4,<0.7",
 ]
 
-# used for agentchat_realtime_swarm notebook and realtime agent twilio demo
-twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
-
 mcp = [
     # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
     "mcp>=1.11.0,<2",
@@ -251,16 +248,9 @@ mcp-proxy-gen = [
     "PyYAML",
 ]
 
-interop-crewai = [
-    "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
-    # TODO: crewai needs litellm and litellm version above 1.67.1 has problem in windows.
-    # TODO: Remove the below line once the problem is fixed
-    "litellm<=1.76.3",
-    "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
-]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai-slim>=1.0.12,<1.79", "fasta2a"]
-interop = ["ag2[interop-crewai, interop-langchain, interop-pydantic-ai]"]
+interop = ["ag2[interop-langchain, interop-pydantic-ai]"]
 
 autobuild = [
     "chromadb>=1.4.1,<1.5",
@@ -344,7 +334,6 @@ docs = [
     "ag2[watchdog]",                   # Watchdog is exposed in the public API by the optional `autogen.beta.knowledge` module
     "ag2[tavily,ddgs,perplexity]",     # Search tools are exposed by optional beta search modules
     "mkdocs-material==9.6.19",
-    "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
@@ -357,7 +346,6 @@ docs = [
     "mkdocs-redirects==1.2.2",                          # required for handling redirects natively
     "pillow",                                           # required for mkdocs-glightbo
     "cairosvg",                                         # required for mkdocs-glightbo
-    "pdoc3==0.11.6",
     "jinja2==3.1.6",
     "pyyaml==6.0.2",
     "termcolor==3.1.0",
@@ -464,7 +452,6 @@ markers = [
     "retrievechat_qdrant",
     "graph_rag_falkor_db",
     "neo4j",
-    "twilio",
     "mcp",
     "interop",
     "browser_use",
@@ -571,9 +558,7 @@ files = [
     #    "autogen/agentchat/conversable_agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
-    "autogen/agentchat/contrib/swarm_agent.py",
     "autogen/agentchat/group",
-    "autogen/agentchat/realtime_agent",
     "autogen/agentchat/utils.py",
     "autogen/agents",
     "autogen/coding",
@@ -595,9 +580,7 @@ files = [
     "website/*.py",
     "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",
-    "test/agentchat/contrib/test_swarm.py",
     "test/agentchat/group",
-    "test/agentchat/realtime_agent",
     "test/agents",
     "test/conftest.py",
     #    "test/fast_depends",
@@ -644,6 +627,6 @@ disallow_untyped_decorators = true
 disallow_any_unimported = true
 
 [tool.codespell]
-skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb,./notebook/agentchat_swarm_graphrag_telemetry_trip_planner.ipynb,./notebook/agentchat_graph_rag_neo4j.ipynb"
+skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb,./notebook/agentchat_graph_rag_neo4j.ipynb"
 quiet-level = 3
 ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch,iif,COO,EHR,ALS,crasher,fulfilment"

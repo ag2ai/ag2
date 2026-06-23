@@ -4,7 +4,7 @@ title: DocAgent
 ---
 
 In the realm of AI and automation, handling documents and extracting information efficiently is of utmost importance.
-[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly, and with natural language instructions, by leveraging an internal swarm of agents to streamline document processing and information retrieval.
+`DocAgent` introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly, and with natural language instructions, by leveraging an internal swarm of agents to streamline document processing and information retrieval.
 
 <Tip>
 DocAgent is new and keen to support your RAG needs. In the first iterations it has been kept simple and uses either local vector Chroma database (default) or an in-memory option (InMemoryQueryEngine).
@@ -44,13 +44,13 @@ DocAgent answers questions only related to ingested documents, even if it using 
 </Tip>
 
 ## Internal Swarm
-[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) leverages a [`Swarm`](/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation) of internal agents to handle the complex document processing tasks fluidly and efficiently.
+`DocAgent` leverages a [`Swarm`](/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation) of internal agents to handle the complex document processing tasks fluidly and efficiently.
 
-Here's a breakdown of how the internal swarm chat is used within the [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent):
+Here's a breakdown of how the internal swarm chat is used within the `DocAgent`:
 
 ### Swarm Agents
 
-[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) orchestrates the following swarm agents:
+`DocAgent` orchestrates the following swarm agents:
 
 - **Triage Agent**: Decides what type of task to perform from user requests.
 - **Task Manager Agent**: Manages the tasks and initiates actions.
@@ -137,7 +137,7 @@ This agent is currently in our `experimental` namespace, indicating that we have
 If you do find any bugs please [log an issue](https://github.com/ag2ai/ag2/issues) in the AG2 repository.
 </Warning>
 
-In the following simple example we ask the [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) to ingest a document and then provide a financial summary.
+In the following simple example we ask the `DocAgent` to ingest a document and then provide a financial summary.
 
 Note that the request is handled in natural language and the output will show the internal agents working together to understand, classify, ingest, and query.
 
@@ -452,9 +452,9 @@ Summary:
 
 ## Collections
 
-By default, [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) will ingest documents into the same collection. Every time you run the agent it will utilise this collection, enabling you to keep documents ingested across different runs.
+By default, `DocAgent` will ingest documents into the same collection. Every time you run the agent it will utilise this collection, enabling you to keep documents ingested across different runs.
 
-However, if you want to run multiple [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent)s or want to ingest into a clean or specific vector store collection, you can use the `collection_name` parameter when creating the agent to set a unique collection name.
+However, if you want to run multiple `DocAgent`s or want to ingest into a clean or specific vector store collection, you can use the `collection_name` parameter when creating the agent to set a unique collection name.
 
 ```python
 from autogen import LLMConfig

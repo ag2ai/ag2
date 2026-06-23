@@ -8,7 +8,7 @@ pytest.importorskip("google.genai")
 
 from google.genai import types as gtypes
 
-from autogen.beta import Usage
+from autogen.beta.events import Usage
 from autogen.beta.live.gemini import normalize_realtime_usage
 
 

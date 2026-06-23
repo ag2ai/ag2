@@ -9,7 +9,7 @@ tags: [Structured messages]
 
 ## **TL;DR**
 
-- Learn how to build an agent chat application using [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) and [`IOStream`](/docs/api-reference/autogen/io/IOStream)
+- Learn how to build an agent chat application using [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) and `IOStream`
 - Explore a hands-on example of connecting a web application to a responsive chat with agents over [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).
 - **Streamlined Real-Time Interactions**: [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) offer a low-latency, persistent connection for sending and receiving data in real time.
 
@@ -132,7 +132,7 @@ def on_connect(iostream: IOWebsockets) -> None:
 ```
 
 **Explanation:**
-1. **`on_connect`**: Handles client connections and manages the interaction between the [**`ConversableAgent`**](/docs/api-reference/autogen/ConversableAgent#conversableagent) and the client.
+1. **`on_connect`**: Handles client connections and manages the interaction between the `**`ConversableAgent`**` and the client.
 2. **Tool Registration**: The `weather_forecast` function provides a mock weather report and is linked to the agent for handling weather-related queries.
 
 ---

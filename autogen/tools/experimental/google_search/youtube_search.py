@@ -6,7 +6,6 @@
 import logging
 from typing import Annotated, Any
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ... import Depends, Tool
 from ...dependency_injection import on
@@ -133,7 +132,6 @@ def _youtube_search(
     return results
 
 
-@export_module("autogen.tools.experimental")
 class YoutubeSearchTool(Tool):
     """YoutubeSearchTool is a tool that uses the YouTube Data API to search for videos."""
 

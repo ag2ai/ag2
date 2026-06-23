@@ -40,23 +40,19 @@ from pydantic import BaseModel, Field
 from autogen.beta import Agent
 from autogen.beta.config import GeminiConfig
 
-
 def section(title: str) -> None:
     print(f"\n── {title} ───")
-
 
 class Ingredient(BaseModel):
     name: str
     quantity: float
     unit: str
 
-
 class Recipe(BaseModel):
     title: str = Field(description="Short human title for the recipe.")
     servings: int = Field(description="How many portions this recipe yields.")
     ingredients: list[Ingredient]
     steps: list[str] = Field(description="Ordered preparation steps.")
-
 
 def scale_ingredient(quantity: float, factor: float) -> float:
     """Return ``quantity`` multiplied by ``factor``, rounded to 2 decimals.
@@ -65,7 +61,6 @@ def scale_ingredient(quantity: float, factor: float) -> float:
     different number of servings.
     """
     return round(quantity * factor, 2)
-
 
 async def main() -> None:
     config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
@@ -105,7 +100,6 @@ async def main() -> None:
     print("Steps:")
     for i, step in enumerate(recipe.steps, 1):
         print(f"  {i}. {step}")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

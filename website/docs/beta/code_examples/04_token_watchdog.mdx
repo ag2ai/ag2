@@ -47,10 +47,8 @@ from autogen.beta.observer import BaseObserver, LoopDetector, TokenMonitor
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
 
-
 def section(title: str) -> None:
     print(f"\n── {title} ───")
-
 
 class AlertConsole(BaseObserver):
     """Watches the stream for ObserverAlerts and prints them to stdout."""
@@ -65,7 +63,6 @@ class AlertConsole(BaseObserver):
                 self.seen.append(event)
                 print(f"    [{event.severity.upper():<8}] {event.source}: {event.message}")
         return None  # Don't emit a follow-up alert
-
 
 async def main() -> None:
     config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
@@ -96,7 +93,6 @@ async def main() -> None:
     print()
     print(f"Total tokens tracked by TokenMonitor: {token_monitor.total_tokens}")
     print(f"Alerts emitted this run:              {len(console.seen)}")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

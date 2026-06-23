@@ -12,7 +12,7 @@ from autogen.beta.config.gemini import GeminiClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
-    config = GeminiConfig(model="gemini-2.0-flash", temperature=0.2, streaming=True)
+    config = GeminiConfig(model="gemini-3.5-flash", temperature=0.2, streaming=True)
 
     copied = config.copy()
 
@@ -21,7 +21,7 @@ def test_copy_without_overrides_returns_new_equal_instance() -> None:
 
 
 def test_copy_applies_overrides_without_mutating_original() -> None:
-    config = GeminiConfig(model="gemini-2.0-flash", api_key="key", temperature=0.2, streaming=False)
+    config = GeminiConfig(model="gemini-3.5-flash", api_key="key", temperature=0.2, streaming=False)
 
     copied = config.copy(model="gemini-2.5-flash", temperature=0.8, streaming=True, api_key=None)
 
@@ -30,14 +30,14 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
     assert copied.streaming is True
     assert copied.api_key is None
 
-    assert config.model == "gemini-2.0-flash"
+    assert config.model == "gemini-3.5-flash"
     assert config.temperature == 0.2
     assert config.streaming is False
     assert config.api_key == "key"
 
 
 def test_create_returns_gemini_client() -> None:
-    config = GeminiConfig(model="gemini-2.0-flash", api_key="test-key")
+    config = GeminiConfig(model="gemini-3.5-flash", api_key="test-key")
     client = config.create()
 
     assert isinstance(client, GeminiClient)
@@ -51,7 +51,7 @@ def test_vertex_config_create_returns_gemini_client() -> None:
 
 
 def test_defaults() -> None:
-    config = GeminiConfig(model="gemini-2.0-flash")
+    config = GeminiConfig(model="gemini-3.5-flash")
     assert config.streaming is False
     assert config.temperature is None
     assert config.max_output_tokens is None
@@ -67,7 +67,7 @@ def test_vertex_config_defaults() -> None:
 
 
 def test_max_output_tokens_can_be_set() -> None:
-    config = GeminiConfig(model="gemini-2.0-flash", max_output_tokens=8192)
+    config = GeminiConfig(model="gemini-3.5-flash", max_output_tokens=8192)
     assert config.max_output_tokens == 8192
 
 
@@ -144,6 +144,61 @@ def test_credentials_none_passes_through(mock_from_file, mock_client) -> None:
     mock_from_file.assert_not_called()
     _, kwargs = mock_client.call_args
     assert kwargs["credentials"] is None
+
+
+class TestResponseModalities:
+    def test_default_omits_response_modalities(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-flash-image")
+        assert "response_modalities" not in config._build_create_config()
+
+    def test_response_modalities_passes_through(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-flash-image", response_modalities=["TEXT", "IMAGE"])
+        assert config._build_create_config()["response_modalities"] == ["TEXT", "IMAGE"]
+
+    def test_copy_overrides_response_modalities(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-flash-image")
+        copied = config.copy(response_modalities=["TEXT", "IMAGE"])
+
+        assert copied.response_modalities == ["TEXT", "IMAGE"]
+        assert config.response_modalities is None
+
+    def test_vertex_response_modalities_passes_through(self) -> None:
+        config = VertexAIConfig(
+            model="gemini-3.1-flash-image",
+            project="proj",
+            location="us-central1",
+            response_modalities=["TEXT", "IMAGE"],
+        )
+        assert config._build_create_config()["response_modalities"] == ["TEXT", "IMAGE"]
+
+
+class TestImageConfig:
+    def test_default_omits_image_config(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-flash-image")
+        assert "image_config" not in config._build_create_config()
+
+    def test_image_config_passes_through(self) -> None:
+        image_config = types.ImageConfig(aspect_ratio="16:9", image_size="2K")
+        config = GeminiConfig(model="gemini-3.1-flash-image", image_config=image_config)
+        assert config._build_create_config()["image_config"] is image_config
+
+    def test_copy_overrides_image_config(self) -> None:
+        image_config = types.ImageConfig(aspect_ratio="1:1")
+        config = GeminiConfig(model="gemini-3.1-flash-image")
+        copied = config.copy(image_config=image_config)
+
+        assert copied.image_config is image_config
+        assert config.image_config is None
+
+    def test_vertex_image_config_passes_through(self) -> None:
+        image_config = types.ImageConfig(aspect_ratio="16:9", image_size="2K")
+        config = VertexAIConfig(
+            model="gemini-3.1-flash-image",
+            project="proj",
+            location="us-central1",
+            image_config=image_config,
+        )
+        assert config._build_create_config()["image_config"] is image_config
 
 
 class TestThinkingConfig:

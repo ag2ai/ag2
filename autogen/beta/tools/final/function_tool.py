@@ -8,7 +8,6 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias, overload
 
-from fast_depends import Provider
 from fast_depends.core import CallModel
 from fast_depends.pydantic.schema import get_schema
 
@@ -48,7 +47,6 @@ class FunctionTool(Tool):
         "model",
         "name",
         "schema",
-        "provider",
         "_middleware",
     )
 
@@ -72,7 +70,6 @@ class FunctionTool(Tool):
             )
         )
 
-        self.provider: Provider | None = None
         self.name = name
 
     def with_middleware(self, *middleware: ToolMiddleware) -> "FunctionTool":
@@ -87,18 +84,9 @@ class FunctionTool(Tool):
     async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return [self.schema]
 
-    def set_provider(self, provider: Provider) -> None:
-        self.provider = provider
-
     @staticmethod
-    def ensure_tool(
-        func: "Tool | Callable[..., Any]",
-        *,
-        provider: Provider | None = None,
-    ) -> "Tool":
-        t = deepcopy(func) if isinstance(func, Tool) else tool(func)
-        t.set_provider(provider)
-        return t
+    def ensure_tool(func: "Tool | Callable[..., Any]") -> "Tool":
+        return deepcopy(func) if isinstance(func, Tool) else tool(func)
 
     def register(
         self,
@@ -126,7 +114,7 @@ class FunctionTool(Tool):
                     **(event.serialized_arguments | {CONTEXT_OPTION_NAME: context}),
                     stack=stack,
                     cache_dependencies={},
-                    dependency_provider=self.provider,
+                    dependency_provider=context.dependency_provider,
                 )
 
             return ToolResultEvent.from_call(event, result=result)
@@ -179,17 +167,24 @@ def tool(
             call_model,
             name=name or f.__name__,
             description=description or f.__doc__ or "",
-            schema=schema
-            or get_schema(
-                call_model,
-                exclude=(CONTEXT_OPTION_NAME,),
-            ),
+            schema=_normalize_parameters(schema, call_model),
             middleware=middleware,
         )
 
     if function:
         return make_tool(function)
     return make_tool
+
+
+def _normalize_parameters(schema: FunctionParameters | None, call_model: CallModel) -> FunctionParameters:
+    if schema is not None:
+        return schema
+    # A no-arg callable yields {"type": "null"}, invalid as a JSON Schema object for tool
+    # `parameters` for some LLM providers.
+    generated = get_schema(call_model, exclude=(CONTEXT_OPTION_NAME,))
+    if generated.get("type") != "object":
+        return {"type": "object", "properties": {}}
+    return generated
 
 
 def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":

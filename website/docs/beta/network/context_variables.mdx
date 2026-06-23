@@ -53,9 +53,8 @@ rejected by `#!python validate_send`.
 
 Send the envelope from any participant via the existing `#!python Channel.send`:
 
-```python linenums="1" hl_lines="9 10 11 12 13 14"
+```python linenums="1" hl_lines="7-12"
 from autogen.beta.network import EV_CONTEXT_SET, ChannelInject
-
 
 async def set_route(route: str, channel: ChannelInject) -> str:
     """Record the routing decision for this channel."""
@@ -68,7 +67,6 @@ async def set_route(route: str, channel: ChannelInject) -> str:
         audience=[],   # context update; no participant needs notify
     )
     return f"route set to {route!r}"
-
 
 agent.tool(set_route)
 ```
@@ -114,7 +112,6 @@ idempotent), inject the State:
 ```python linenums="1"
 from autogen.beta.network import ChannelStateInject
 
-
 async def increment_counter(channel: ChannelInject, state: ChannelStateInject) -> str:
     """Demonstrates reading current state, then writing a new value."""
     if state is None or channel is None:
@@ -134,11 +131,10 @@ async def increment_counter(channel: ChannelInject, state: ChannelStateInject) -
 If `#!python ContextEquals` isn't enough, write a custom `#!python TransitionCondition`
 and register it. The Protocol is just two attributes:
 
-```python linenums="1" hl_lines="3 5 6 11"
+```python linenums="1" hl_lines="11 13-15 17"
 from typing import ClassVar
 from dataclasses import dataclass
 from autogen.beta.network import register_condition
-
 
 @dataclass(slots=True)
 class ContextThreshold:
@@ -151,7 +147,6 @@ class ContextThreshold:
     def evaluate(self, state, envelope) -> bool:
         value = state.context_vars.get(self.key, 0)
         return isinstance(value, (int, float)) and value >= self.threshold
-
 
 register_condition(ContextThreshold)
 ```

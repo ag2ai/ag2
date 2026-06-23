@@ -192,7 +192,7 @@ Authentication accepts any of the following:
 
 <Tabs>
   <Tab title="Service account key file">
-```python linenums="1" hl_lines="6"
+```python linenums="1" hl_lines="7"
 from autogen.beta.config import VertexAIConfig
 
 config = VertexAIConfig(
@@ -224,7 +224,7 @@ config = VertexAIConfig(
   </Tab>
 
   <Tab title="Pre-built Credentials object">
-```python linenums="1" hl_lines="4-6"
+```python linenums="1" hl_lines="4-6 12"
 import google.auth
 from autogen.beta.config import VertexAIConfig
 
@@ -277,7 +277,7 @@ Gemini 3 Pro models default to **dynamic / unbounded** thinking, which can cause
 
 Use `thinking_level` for **Gemini 3** models, or `thinking_budget` for **Gemini 2.5** models:
 
-```python linenums="1" hl_lines="6 13"
+```python linenums="1" hl_lines="6 14"
 from autogen.beta.config import GeminiConfig, VertexAIConfig
 
 # Gemini 3 — bound thinking with a level

@@ -4,7 +4,6 @@
 import os
 from typing import Annotated, Any
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....llm_config import LLMConfig
 from ... import Depends, Tool
@@ -103,7 +102,6 @@ def _tavily_search(
     ]
 
 
-@export_module("autogen.tools.experimental")
 class TavilySearchTool(Tool):
     """TavilySearchTool is a tool that uses the Tavily Search API to perform a search.
 

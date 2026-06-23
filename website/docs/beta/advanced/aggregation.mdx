@@ -29,7 +29,6 @@ from autogen.beta import Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.knowledge import KnowledgeStore
 
-
 class AggregateStrategy(Protocol):
     async def aggregate(
         self,
@@ -68,7 +67,7 @@ Both built-ins are importable from `#!python autogen.beta.aggregate` and both ta
 
 Writes a timestamped summary of the conversation to `/memory/conversations/`. The companion to [`EpisodicMemoryPolicy`](/docs/beta/advanced/assembly#episodicmemorypolicy), which reads from that directory.
 
-```python linenums="1" hl_lines="8-11"
+```python linenums="1" hl_lines="6 9"
 from autogen.beta.aggregate import ConversationSummaryAggregate
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
@@ -211,7 +210,6 @@ Any object with an `async aggregate(events, ctx, store)` method satisfies the pr
 ```python linenums="1"
 from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.knowledge import KnowledgeStore
-
 
 class ResponseLengthAggregate:
     """Track the length of each model response for later analysis."""

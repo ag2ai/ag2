@@ -27,7 +27,6 @@ from autogen.beta import Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.knowledge import KnowledgeStore
 
-
 class CompactStrategy(Protocol):
     async def compact(
         self,
@@ -66,7 +65,7 @@ Both built-ins are importable from `#!python autogen.beta.compact`.
 
 Keeps the last N events, drops the rest. Zero LLM cost. Suitable when old context has diminishing value and recency is what matters.
 
-```python linenums="1" hl_lines="6 9"
+```python linenums="1" hl_lines="5 7"
 from autogen.beta.compact import TailWindowCompact
 from autogen.beta.knowledge import MemoryKnowledgeStore
 
@@ -84,7 +83,7 @@ Passing a `KnowledgeStore` is optional. If provided, dropped events are persiste
 
 Summarizes the dropped portion via one LLM call, inserts a `CompactionSummary` event at the head of retained history. Use when you want to keep some sense of the old conversation instead of just forgetting it.
 
-```python linenums="1" hl_lines="8-12"
+```python linenums="1" hl_lines="6-9 11"
 from autogen.beta.compact import SummarizeCompact
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
@@ -101,6 +100,9 @@ retained = await compact.compact(events, ctx, store)
 
 The summarization model is independent from the agent's main model — pick a smaller / cheaper one. Token usage is recorded on the strategy instance as `#!python strategy.last_usage`.
 
+!!! note
+    Both built-ins snap the retained boundary to whole turns: a tool call and its result are never split. A tool cycle straddling the boundary is compacted as a unit, so the retained window can be slightly smaller than `target`. This keeps the retained history valid for providers that reject a tool result with no preceding call.
+
 ## CompactionSummary
 
 The synthetic event inserted by `SummarizeCompact` at the head of history.
@@ -114,7 +116,7 @@ summary = CompactionSummary(
 )
 ```
 
-`CompactionSummary` is on the allowlist of [`ConversationPolicy`](/docs/beta/advanced/assembly#conversationpolicy), so it passes through the assembly chain and reaches the LLM as context — without requiring special handling elsewhere.
+`CompactionSummary` is on the allowlist of [`ConversationPolicy`](/docs/beta/advanced/assembly#conversationpolicy), so it survives the assembly chain. Each provider mapper then renders it as a user turn, so the summary reaches the LLM as visible context at the head of history.
 
 ## Wiring onto an Agent
 
@@ -178,7 +180,6 @@ Any object with an `async compact(events, ctx, store)` method satisfies the prot
 ```python linenums="1"
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
 from autogen.beta.knowledge import KnowledgeStore
-
 
 class DropOldToolEvents:
     """Keep conversation events; drop tool events older than the last K."""

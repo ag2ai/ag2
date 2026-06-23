@@ -11,7 +11,7 @@ from openai.types.realtime.realtime_response_usage_input_token_details import (
     RealtimeResponseUsageInputTokenDetails,
 )
 
-from autogen.beta import Usage
+from autogen.beta.events import Usage
 from autogen.beta.live.openai import normalize_realtime_usage
 
 

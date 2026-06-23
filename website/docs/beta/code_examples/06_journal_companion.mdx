@@ -56,10 +56,8 @@ from autogen.beta.config import GeminiConfig
 from autogen.beta.knowledge import DiskKnowledgeStore
 from autogen.beta.policies import ConversationPolicy, WorkingMemoryPolicy
 
-
 def section(title: str) -> None:
     print(f"\n── {title} ───")
-
 
 async def main() -> None:
     config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
@@ -121,7 +119,6 @@ async def main() -> None:
         # because WorkingMemoryPolicy injected /memory/working.md as a prompt.
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -36,10 +36,8 @@ import asyncio
 from autogen.beta import Agent
 from autogen.beta.config import GeminiConfig
 
-
 def section(title: str) -> None:
     print(f"\n── {title} ───")
-
 
 TURNS = [
     "I want to plan a 5-day trip to Japan in late April. Just cherry-blossom season.",
@@ -48,7 +46,6 @@ TURNS = [
     "Looks great. For day 3, swap the shopping stop for something outdoorsy in or near Kyoto.",
     "Summarize the final itinerary in a single bullet list, one line per day.",
 ]
-
 
 async def main() -> None:
     config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
@@ -71,7 +68,6 @@ async def main() -> None:
         section(f"Turn {i} — {question}")
         reply = await reply.ask(question)
         print(reply.body)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

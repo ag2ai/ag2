@@ -94,11 +94,9 @@ One check is rarely enough. A scorer is just a function that asks **one** questi
 from autogen.beta.eval import scorer
 from autogen.beta.eval.scorers import no_tool_errors, token_budget
 
-
 @scorer
 def answered_briefly(outputs) -> bool:
     return len(outputs["body"]) < 100      # outputs["body"] is the final answer text
-
 
 scorers = [
     final_answer_matches(field="answer", matcher="contains"),
@@ -117,17 +115,13 @@ You don't want pre-merge CI calling a live model — slow, costly, flaky. Swap t
 ```python linenums="1"
 from autogen.beta.testing import TestConfig
 
-
-def build(*, config=None):
-    return Agent("geographer", prompt="Answer with the capital city.", config=config)
-
-
+# Same agent as Step 1 — a canned reply per task_id
 canned = {"france": TestConfig("Paris"), "japan": TestConfig("Tokyo")}
 
-result = await run_agent(suite, agent=build, scorers=scorers, model_config=canned, store_dir="./runs")
+result = await run_agent(suite, agent=agent, scorers=scorers, model_config=canned, store_dir="./runs")
 ```
 
-Two things changed. The agent is now a **factory** (`build`) so the runner can hand each task its own config, and `model_config` supplies the canned replies keyed by `task_id`. (A single fixed config can stay a plain instance, as in Step 1; per-task configs need the factory.) Same suite, same scorers, identical output on every machine — wrap `result.pass_rate(...)` in a `pytest` assertion and you have a CI gate.
+One thing changed: `model_config` supplies the canned replies keyed by `task_id`. It's passed through to `ask`, which **overrides** the agent's own config for that task — so the same `agent` from Step 1 runs deterministically with no API key, no separate build needed. Same suite, same scorers, identical output on every machine — wrap `result.pass_rate(...)` in a `pytest` assertion and you have a CI gate.
 
 ## Where to next
 

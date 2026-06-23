@@ -6,7 +6,6 @@ from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel, field_validator
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....llm_config import LLMConfig
 from ... import Depends, Tool
@@ -21,7 +20,6 @@ with optional_import_block():
 __all__ = ["BrowserUseResult", "BrowserUseTool", "ExtractedContent"]
 
 
-@export_module("autogen.tools.experimental.browser_use")
 class ExtractedContent(BaseModel):
     """Extracted content from the browser.
 
@@ -46,7 +44,6 @@ class ExtractedContent(BaseModel):
         return v
 
 
-@export_module("autogen.tools.experimental.browser_use")
 class BrowserUseResult(BaseModel):
     """The result of using the browser to perform a task.
 
@@ -70,7 +67,6 @@ class BrowserUseResult(BaseModel):
     ],
     "browser-use",
 )
-@export_module("autogen.tools.experimental")
 class BrowserUseTool(Tool):
     """BrowserUseTool is a tool that uses the browser to perform a task."""
 

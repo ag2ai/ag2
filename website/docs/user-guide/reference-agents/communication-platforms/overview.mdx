@@ -3,7 +3,7 @@ title: Communication Agents
 sidebarTitle: Overview
 ---
 
-Bring your social platforms into your AG2 workflow with [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent), [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent), and [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent).
+Bring your social platforms into your AG2 workflow with `DiscordAgent`, `SlackAgent`, and `TelegramAgent`.
 
 <Tip>
 If you're looking to add communication abilities to your existing AG2 agents, you can use the tools that underpin these agents, see [Discord Tools](/docs/user-guide/reference-tools/communication-platforms/discord), [Slack Tools](/docs/user-guide/reference-tools/communication-platforms/slack), and [Telegram Tools](/docs/user-guide/reference-tools/communication-platforms/telegram).
@@ -57,11 +57,11 @@ The three communication agents have two in-built tools for sending and retrievin
 
 | Agent | Send Tool | Retrieve Tool |
 | --- | --- | --- |
-| [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) | [`DiscordSendTool`](/docs/api-reference/autogen/tools/experimental/DiscordSendTool) | [`DiscordRetrieveTool`](/docs/api-reference/autogen/tools/experimental/DiscordRetrieveTool) |
-| [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent) | [`SlackSendTool`](/docs/api-reference/autogen/tools/experimental/SlackSendTool) | [`SlackRetrieveTool`](/docs/api-reference/autogen/tools/experimental/SlackRetrieveTool) |
-| [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent) | [`TelegramSendTool`](/docs/api-reference/autogen/tools/experimental/TelegramSendTool) | [`TelegramRetrieveTool`](/docs/api-reference/autogen/tools/experimental/TelegramRetrieveTool) |
+| `DiscordAgent` | `DiscordSendTool` | `DiscordRetrieveTool` |
+| `SlackAgent` | `SlackSendTool` | `SlackRetrieveTool` |
+| `TelegramAgent` | `TelegramSendTool` | `TelegramRetrieveTool` |
 
-As the agents are based on [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent) you can use them in any conversation pattern in AG2.
+As the agents are based on `ConversableAgent` you can use them in any conversation pattern in AG2.
 
 An important component of the new agents (as opposed to just using their tools) is that the platform's messaging requirements will be appended to their system message.
 
@@ -69,9 +69,9 @@ They cover aspects like maximum message length, preferred format (e.g. Markdown)
 
 | Agent | System Message guidance |
 | --- | --- |
-| [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) | 2,000 character limit, Markdown, bold/italic/code, use emojis |
-| [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent) | 40,000 character limit, Markdown, bold/italic/code, emojis, notification formats |
-| [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent) | 4,096 character limit, HTML, mentions and emojis |
+| `DiscordAgent` | 2,000 character limit, Markdown, bold/italic/code, use emojis |
+| `SlackAgent` | 40,000 character limit, Markdown, bold/italic/code, emojis, notification formats |
+| `TelegramAgent` | 4,096 character limit, HTML, mentions and emojis |
 
 These are enabled by default, but you can turn these off by setting `has_writing_instructions` to `False` when creating the agent.
 
