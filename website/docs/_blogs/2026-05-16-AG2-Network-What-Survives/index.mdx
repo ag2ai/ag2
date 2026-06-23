@@ -68,8 +68,6 @@ from autogen.beta.knowledge import DiskKnowledgeStore
 from autogen.beta.network import (
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
     Passport,
     Resume,
 )
@@ -80,17 +78,13 @@ DATA_DIR = Path("./hub-data")  # persisted across restarts
 async def first_run() -> str:
     """Alice asks, Bob's LLM replies — then abruptly stop."""
     hub = await Hub.open(DiskKnowledgeStore(DATA_DIR), ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt="Ask one short question.", config=AnthropicConfig(model="claude-sonnet-4-6")),
         Passport(name="alice"),
         Resume(),
     )
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt="Answer in one sentence.", config=AnthropicConfig(model="claude-sonnet-4-6")),
         Passport(name="bob"),
         Resume(),
@@ -210,13 +204,9 @@ async def _reconnect(hub, hc, agent, name, *, llm_handler=True):
 async def first_run() -> str:
     """Alice and Bob start a discussion — then the process crashes mid-conversation."""
     hub = await Hub.open(DiskKnowledgeStore(DATA_DIR), ttl_sweep_interval=0)
-    link = LocalLink(hub)
-
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
     # Alice sends manually; bob responds automatically via LLM.
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt=PROMPT, config=AnthropicConfig(model="claude-sonnet-4-6")),
         Passport(name="alice"),
         Resume(),
@@ -224,7 +214,7 @@ async def first_run() -> str:
     )
     alice.on_envelope(_noop_handler)
 
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt=PROMPT, config=AnthropicConfig(model="claude-sonnet-4-6")),
         Passport(name="bob"),
         Resume(),
@@ -243,8 +233,6 @@ async def first_run() -> str:
 
     print("=== Process crashes here — channel still open ===")
     channel_id = channel.channel_id
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
     return channel_id
 

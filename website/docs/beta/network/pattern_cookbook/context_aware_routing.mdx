@@ -117,8 +117,6 @@ from autogen.beta.network import (
     FromSpeaker,
     Handoff,
     Hub,
-    HubClient,
-    LocalLink,
     Passport,
     Resume,
     TerminateTarget,
@@ -148,13 +146,6 @@ async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub_obj)
-
-    user_hc = HubClient(link, hub=hub_obj)
-    router_hc = HubClient(link, hub=hub_obj)
-    billing_hc = HubClient(link, hub=hub_obj)
-    technical_hc = HubClient(link, hub=hub_obj)
-    general_hc = HubClient(link, hub=hub_obj)
 
     user_agent = Agent("user", config=TestConfig())
 
@@ -208,11 +199,11 @@ async def main() -> None:
         config=config,
     )
 
-    user = await user_hc.register(user_agent, Passport(name="user"), Resume())
-    router = await router_hc.register(router_agent, Passport(name="router"), Resume())
-    billing = await billing_hc.register(billing_agent, Passport(name="billing"), Resume())
-    technical = await technical_hc.register(technical_agent, Passport(name="technical"), Resume())
-    general = await general_hc.register(general_agent, Passport(name="general"), Resume())
+    user = await hub_obj.register(user_agent, Passport(name="user"), Resume())
+    router = await hub_obj.register(router_agent, Passport(name="router"), Resume())
+    billing = await hub_obj.register(billing_agent, Passport(name="billing"), Resume())
+    technical = await hub_obj.register(technical_agent, Passport(name="technical"), Resume())
+    general = await hub_obj.register(general_agent, Passport(name="general"), Resume())
 
     graph = TransitionGraph(
         initial_speaker=user.agent_id,
@@ -271,11 +262,6 @@ async def main() -> None:
 
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
-    await user_hc.close()
-    await router_hc.close()
-    await billing_hc.close()
-    await technical_hc.close()
-    await general_hc.close()
     await hub_obj.close()
 
 if __name__ == "__main__":

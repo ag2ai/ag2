@@ -54,25 +54,19 @@ from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_CHANNEL_CLOSED,
     Hub,
-    HubClient,
-    LocalLink,
     Passport,
     Resume,
 )
 
 config = AnthropicConfig(model="claude-sonnet-4-6")
 hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-link = LocalLink(hub)
 
-alice_hc = HubClient(link, hub=hub)
-bob_hc = HubClient(link, hub=hub)
-
-alice = await alice_hc.register(
+alice = await hub.register(
     Agent("alice", prompt="Ask one focused question.", config=config),
     Passport(name="alice"),
     Resume(),
 )
-bob = await bob_hc.register(
+bob = await hub.register(
     Agent("bob", prompt="Answer in one short sentence.", config=config),
     Passport(name="bob"),
     Resume(),

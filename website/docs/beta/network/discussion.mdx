@@ -62,27 +62,22 @@ from autogen.beta.network import (
     EV_TEXT,
     ORDERING_ROUND_ROBIN,
     Hub,
-    HubClient,
-    LocalLink,
     Passport,
     Resume,
 )
 
 config = AnthropicConfig(model="claude-sonnet-4-6")
 hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-link = LocalLink(hub)
 
-alice_hc, bob_hc, carol_hc = (HubClient(link, hub=hub) for _ in range(3))
-
-alice = await alice_hc.register(
+alice = await hub.register(
     Agent("alice", prompt="The optimist. One short sentence.", config=config),
     Passport(name="alice"), Resume(),
 )
-bob = await bob_hc.register(
+bob = await hub.register(
     Agent("bob", prompt="The realist. One short sentence.", config=config),
     Passport(name="bob"), Resume(),
 )
-carol = await carol_hc.register(
+carol = await hub.register(
     Agent("carol", prompt="The skeptic. One short sentence.", config=config),
     Passport(name="carol"), Resume(),
 )

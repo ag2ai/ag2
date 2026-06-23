@@ -151,8 +151,6 @@ from autogen.beta.network import (
     EV_TEXT,
     WORKFLOW_TYPE,
     Hub,
-    HubClient,
-    LocalLink,
     Passport,
     Resume,
     TransitionGraph,
@@ -165,13 +163,6 @@ async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub_obj)
-
-    intake_hc = HubClient(link, hub=hub_obj)
-    triage_hc = HubClient(link, hub=hub_obj)
-    researcher_hc = HubClient(link, hub=hub_obj)
-    writer_hc = HubClient(link, hub=hub_obj)
-    reviewer_hc = HubClient(link, hub=hub_obj)
 
     intake_agent = Agent("intake", config=TestConfig())
 
@@ -220,11 +211,11 @@ async def main() -> None:
         config=config,
     )
 
-    intake = await intake_hc.register(intake_agent, Passport(name="intake"), Resume())
-    triage = await triage_hc.register(triage_agent, Passport(name="triage"), Resume())
-    researcher = await researcher_hc.register(researcher_agent, Passport(name="researcher"), Resume())
-    writer = await writer_hc.register(writer_agent, Passport(name="writer"), Resume())
-    reviewer = await reviewer_hc.register(reviewer_agent, Passport(name="reviewer"), Resume())
+    intake = await hub_obj.register(intake_agent, Passport(name="intake"), Resume())
+    triage = await hub_obj.register(triage_agent, Passport(name="triage"), Resume())
+    researcher = await hub_obj.register(researcher_agent, Passport(name="researcher"), Resume())
+    writer = await hub_obj.register(writer_agent, Passport(name="writer"), Resume())
+    reviewer = await hub_obj.register(reviewer_agent, Passport(name="reviewer"), Resume())
 
     graph = TransitionGraph.sequence([
         intake.agent_id,
@@ -293,11 +284,6 @@ async def main() -> None:
     final_state = hub_obj._adapter_states[channel.channel_id]
     print(f"final context_vars: {final_state.context_vars!r}")
 
-    await intake_hc.close()
-    await triage_hc.close()
-    await researcher_hc.close()
-    await writer_hc.close()
-    await reviewer_hc.close()
     await hub_obj.close()
 
 if __name__ == "__main__":

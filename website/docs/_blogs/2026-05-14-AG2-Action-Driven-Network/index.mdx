@@ -85,8 +85,6 @@ from autogen.beta.network import (
     EV_CHANNEL_CLOSED,
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
     Passport,
     Resume,
 )
@@ -97,18 +95,13 @@ async def main() -> None:
 
     # Hub: registry + WAL + audit log + adapters live here.
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub)  # in-process duplex transport
 
-    # One HubClient per process boundary. Locally they share a process.
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt="Ask one focused question and stop.", config=config),
         Passport(name="alice"),
         Resume(),
     )
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt="Answer in one short sentence.", config=config),
         Passport(name="bob"),
         Resume(),
@@ -135,8 +128,6 @@ async def main() -> None:
             speaker = "alice" if env.sender_id == alice.agent_id else "bob"
             print(f"{speaker}: {env.event_data['text']}")
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -168,8 +159,6 @@ from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
     Passport,
     Resume,
 )
@@ -193,16 +182,12 @@ async def wait_for_text_count(hub: Hub, channel_id: str, expected: int) -> None:
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt="You are alice. Ask follow-ups, one short sentence at a time.", config=config),
         Passport(name="alice"), Resume(),
     )
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt="You are bob. Answer in one short sentence; ask one follow-up.", config=config),
         Passport(name="bob"), Resume(),
     )
@@ -219,7 +204,7 @@ async def main() -> None:
             speaker = "alice" if env.sender_id == alice.agent_id else "bob"
             print(f"{speaker}: {env.event_data['text']}")
 
-    await alice_hc.close(); await bob_hc.close(); await hub.close()
+    await hub.close()
 ```
 
 (`wait_for_text_count` is a small helper that tails the WAL until it sees N `EV_TEXT` envelopes — `conversation` and `discussion` don't auto-terminate, so the application decides when enough has been said.)
@@ -241,7 +226,7 @@ from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_TEXT,
     ORDERING_ROUND_ROBIN,
-    Hub, HubClient, LocalLink, Passport, Resume,
+    Hub, Passport, Resume,
 )
 
 
@@ -263,19 +248,16 @@ async def wait_for_text_count(hub: Hub, channel_id: str, expected: int) -> None:
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc, bob_hc, carol_hc = (HubClient(link, hub=hub) for _ in range(3))
-
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt="You are the optimist. One short sentence.", config=config),
         Passport(name="alice"), Resume(),
     )
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt="You are the realist. One short sentence.", config=config),
         Passport(name="bob"), Resume(),
     )
-    carol = await carol_hc.register(
+    carol = await hub.register(
         Agent("carol", prompt="You are the skeptic. One short sentence.", config=config),
         Passport(name="carol"), Resume(),
     )
@@ -296,7 +278,6 @@ async def main() -> None:
         if env.event_type == EV_TEXT:
             print(f"{names[env.sender_id]:>6}: {env.event_data['text']}")
 
-    await alice_hc.close(); await bob_hc.close(); await carol_hc.close()
     await hub.close()
 
 
@@ -334,15 +315,15 @@ def approve() -> str:
     """Approve the draft and end the workflow."""
     return "Approved."
 
-researcher = await researcher_hc.register(
+researcher = await hub.register(
     Agent("researcher", prompt="Given a topic, list 3 concrete factual bullets.", config=config),
     Passport(name="researcher"), Resume(claimed_capabilities=["research"]),
 )
-writer = await writer_hc.register(
+writer = await hub.register(
     Agent("writer", prompt="Given research bullets, draft a 2-sentence explanation for a novice.", config=config),
     Passport(name="writer"), Resume(claimed_capabilities=["writing"]),
 )
-reviewer = await reviewer_hc.register(
+reviewer = await hub.register(
     Agent(
         "reviewer",
         prompt=(

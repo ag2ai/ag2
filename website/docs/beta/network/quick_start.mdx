@@ -15,8 +15,6 @@ from autogen.beta.network import (
     EV_CHANNEL_CLOSED,
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
     Passport,
     Resume,
 )
@@ -26,18 +24,14 @@ async def main() -> None:
 
     # Hub: registry + WAL + audit log + adapters live here.
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub)  # in-process duplex transport
 
-    # Each agent gets its own HubClient (its own duplex pair to the hub).
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(
+    # register() attaches each agent directly — the hub owns the connection.
+    alice = await hub.register(
         Agent("alice", prompt="Ask one focused question and stop.", config=config),
         Passport(name="alice"),
         Resume(),
     )
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt="Answer in one short sentence.", config=config),
         Passport(name="bob"),
         Resume(),
@@ -66,8 +60,6 @@ async def main() -> None:
             speaker = "alice" if env.sender_id == alice.agent_id else "bob"
             print(f"{speaker}: {env.event_data['text']}")
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 asyncio.run(main())
@@ -86,15 +78,17 @@ bob: Fault tolerance — because a system that can't survive partial failures de
 In order:
 
 1. **`#!python Hub.open(MemoryKnowledgeStore())`** — boots an in-process hub. The `#!python KnowledgeStore` is where the hub persists its audit log, registry, and write-ahead logs (here in memory).
-2. **`#!python LocalLink(hub)`** — a transport factory. Each `#!python HubClient` constructed against the same link gets its own duplex queue pair to the hub.
-3. **`#!python HubClient(link, hub=hub)`** — one per process boundary. In a real deployment alice and bob would each live in their own process, each with one `#!python HubClient`. Here they share a process for clarity.
-4. **`#!python hc.register(agent, passport, resume)`** — registers an `#!python Agent` with the hub. Returns an `#!python AgentClient` whose `#!python agent_id` is hub-stamped.
-5. **`#!python alice.open(type="consulting", target="bob")`** — alice creates a consulting channel with bob as respondent. Internally: hub posts `#!python EV_CHANNEL_INVITE` to bob → bob's default handler auto-acks → hub posts `#!python EV_CHANNEL_OPENED` and `#!python alice.open(...)` returns with `#!python channel.state == ACTIVE`.
-6. **`#!python channel.send(text, audience=...)`** — alice sends an `#!python EV_TEXT` envelope.
-7. **Bob's default handler** — receives the `#!python EV_TEXT`, probes whether the adapter would accept a reply right now (it would — bob hasn't replied yet), runs `#!python Agent.ask(text)`, and sends bob's reply back through bob's own channel handle.
-8. **`#!python ConsultingAdapter`** — sees both `initiator_sent` and `respondent_replied` are true, returns `#!python AdapterResult(next_state=CLOSED, auto_close_reason="consulting_complete")`. Hub posts `#!python EV_CHANNEL_CLOSED`.
-9. **`#!python alice.wait_for_channel_event(...)`** — alice's loop wakes when she receives the close envelope.
-10. **`#!python hub.read_wal(channel_id)`** — replays every envelope the hub recorded for the channel. Each envelope is hub-stamped (id, timestamp, sender, audience, event_type, event_data).
+2. **`#!python hub.register(agent, passport, resume)`** — attaches an `#!python Agent` directly to the hub and returns an `#!python AgentClient` whose `#!python agent_id` is hub-stamped. The hub owns each agent's connection; `#!python agent_client.close()` and `#!python hub.close()` tear them down.
+3. **`#!python alice.open(type="consulting", target="bob")`** — alice creates a consulting channel with bob as respondent. Internally: hub posts `#!python EV_CHANNEL_INVITE` to bob → bob's default handler auto-acks → hub posts `#!python EV_CHANNEL_OPENED` and `#!python alice.open(...)` returns with `#!python channel.state == ACTIVE`.
+4. **`#!python channel.send(text, audience=...)`** — alice sends an `#!python EV_TEXT` envelope.
+5. **Bob's default handler** — receives the `#!python EV_TEXT`, probes whether the adapter would accept a reply right now (it would — bob hasn't replied yet), runs `#!python Agent.ask(text)`, and sends bob's reply back through bob's own channel handle.
+6. **`#!python ConsultingAdapter`** — sees both `initiator_sent` and `respondent_replied` are true, returns `#!python AdapterResult(next_state=CLOSED, auto_close_reason="consulting_complete")`. Hub posts `#!python EV_CHANNEL_CLOSED`.
+7. **`#!python alice.wait_for_channel_event(...)`** — alice's loop wakes when she receives the close envelope.
+8. **`#!python hub.read_wal(channel_id)`** — replays every envelope the hub recorded for the channel. Each envelope is hub-stamped (id, timestamp, sender, audience, event_type, event_data).
+
+!!! note "Distributed deployments use an explicit transport"
+
+    `#!python hub.register(agent)` is the in-process convenience — it owns a `#!python HubClient` over a `#!python LocalLink` for you. To run agents in their own processes or hosts, construct a `#!python HubClient` over a transport explicitly (`#!python HubClient(WsLink(url)).register(...)`). See [Distributed Deployment](/docs/beta/network/distributed) and [Agent Clients](/docs/beta/network/agent_clients).
 
 ## Mental Hooks
 

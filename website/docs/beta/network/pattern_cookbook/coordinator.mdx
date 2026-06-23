@@ -167,8 +167,6 @@ from autogen.beta.network import (
     Finish,
     Handoff,
     Hub,
-    HubClient,
-    LocalLink,
     Passport,
     Resume,
     TransitionGraph,
@@ -192,14 +190,6 @@ async def main() -> None:
     )
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub_obj)
-
-    user_hc = HubClient(link, hub=hub_obj)
-    coord_hc = HubClient(link, hub=hub_obj)
-    researcher_hc = HubClient(link, hub=hub_obj)
-    critic_hc = HubClient(link, hub=hub_obj)
-    cost_hc = HubClient(link, hub=hub_obj)
-    operator_hc = HubClient(link, hub=hub_obj)
 
     # Each Resume is built once and used twice: folded into the
     # coordinator's system message and passed to register().
@@ -285,18 +275,18 @@ async def main() -> None:
         config=config,
     )
 
-    user = await user_hc.register(user_agent, Passport(name="user"), Resume(), attach_plugin=False)
-    coordinator = await coord_hc.register(
+    user = await hub_obj.register(user_agent, Passport(name="user"), Resume(), attach_plugin=False)
+    coordinator = await hub_obj.register(
         coord_agent, Passport(name="coordinator"), Resume(), attach_plugin=False
     )
-    researcher = await researcher_hc.register(
+    researcher = await hub_obj.register(
         researcher_agent, Passport(name="researcher"), researcher_resume, attach_plugin=False
     )
-    critic = await critic_hc.register(critic_agent, Passport(name="critic"), critic_resume, attach_plugin=False)
-    cost_analyst = await cost_hc.register(
+    critic = await hub_obj.register(critic_agent, Passport(name="critic"), critic_resume, attach_plugin=False)
+    cost_analyst = await hub_obj.register(
         cost_agent, Passport(name="cost_analyst"), cost_resume, attach_plugin=False
     )
-    operator = await operator_hc.register(
+    operator = await hub_obj.register(
         operator_agent, Passport(name="operator"), operator_resume, attach_plugin=False
     )
 
@@ -356,12 +346,6 @@ async def main() -> None:
 
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
-    await user_hc.close()
-    await coord_hc.close()
-    await researcher_hc.close()
-    await critic_hc.close()
-    await cost_hc.close()
-    await operator_hc.close()
     await hub_obj.close()
 
 if __name__ == "__main__":

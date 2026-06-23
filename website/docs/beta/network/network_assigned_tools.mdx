@@ -3,7 +3,7 @@ title: Network-Assigned Tools
 sidebarTitle: Network Tools
 ---
 
-When you call `#!python HubClient.register(agent, ...)` with the default `#!python attach_plugin=True`, the framework attaches `#!python NetworkPlugin` to your agent. The plugin does two things:
+When you call `#!python hub.register(agent, ...)` with the default `#!python attach_plugin=True`, the framework attaches `#!python NetworkPlugin` to your agent. The plugin does two things:
 
 1. Adds an **assembly policy** that prefixes every LLM call with the agent's name and id.
 2. Adds the **identity-level tools** to `#!python agent.tools`: `#!python delegate`, `#!python peers`, `#!python channels`, `#!python tasks`, `#!python context`. These are stable for the life of the registration and work in any channel context — discovery, channel lifecycle, task observation, and the one-shot `#!python delegate` convenience.
@@ -127,10 +127,10 @@ ctx = Context(
 
 ## Opting out
 
-Pass `#!python attach_plugin=False` to `#!python HubClient.register` for a bare agent — useful for headless workers or gateways that handle envelopes entirely in your own code without needing the LLM-facing tool surface.
+Pass `#!python attach_plugin=False` to `#!python hub.register` for a bare agent — useful for headless workers or gateways that handle envelopes entirely in your own code without needing the LLM-facing tool surface.
 
 ```python linenums="1"
-worker = await hc.register(agent, passport, resume, attach_plugin=False)
+worker = await hub.register(agent, passport, resume, attach_plugin=False)
 worker.on_envelope(my_custom_handler)
 ```
 

@@ -132,9 +132,7 @@ from autogen.beta.network import (
     FromSpeaker,
     Handoff,
     Hub,
-    HubClient,
     HubInject,
-    LocalLink,
     Passport,
     Resume,
     StayTarget,
@@ -204,13 +202,6 @@ async def main() -> None:
     )
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub_obj)
-
-    user_hc = HubClient(link, hub=hub_obj)
-    hub_hc = HubClient(link, hub=hub_obj)
-    weather_hc = HubClient(link, hub=hub_obj)
-    sports_hc = HubClient(link, hub=hub_obj)
-    finance_hc = HubClient(link, hub=hub_obj)
 
     user_agent = Agent("user", config=TestConfig())
 
@@ -265,11 +256,11 @@ async def main() -> None:
         ),
     )
 
-    user = await user_hc.register(user_agent, Passport(name="user"), Resume())
-    central = await hub_hc.register(hub_agent, Passport(name="hub"), Resume())
-    weather = await weather_hc.register(weather_agent, Passport(name="weather"), Resume())
-    sports = await sports_hc.register(sports_agent, Passport(name="sports"), Resume())
-    finance = await finance_hc.register(finance_agent, Passport(name="finance"), Resume())
+    user = await hub_obj.register(user_agent, Passport(name="user"), Resume())
+    central = await hub_obj.register(hub_agent, Passport(name="hub"), Resume())
+    weather = await hub_obj.register(weather_agent, Passport(name="weather"), Resume())
+    sports = await hub_obj.register(sports_agent, Passport(name="sports"), Resume())
+    finance = await hub_obj.register(finance_agent, Passport(name="finance"), Resume())
 
     graph = TransitionGraph(
         initial_speaker=user.agent_id,
@@ -342,11 +333,6 @@ async def main() -> None:
                 synthesis = kv["synthesis"]
     print(synthesis)
 
-    await user_hc.close()
-    await hub_hc.close()
-    await weather_hc.close()
-    await sports_hc.close()
-    await finance_hc.close()
     await hub_obj.close()
 
 if __name__ == "__main__":

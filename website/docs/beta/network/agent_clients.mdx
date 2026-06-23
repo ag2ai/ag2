@@ -3,7 +3,15 @@ title: Agent Clients and Handlers
 sidebarTitle: Agent Clients
 ---
 
-The agent-side of the network. A `#!python HubClient` represents one process's connection to the hub; it produces `#!python AgentClient`s — one per registered `#!python Agent`. Each `#!python AgentClient` carries a notify handler that decides what the agent does when an envelope arrives.
+The agent-side of the network. Registering an `#!python Agent` produces an `#!python AgentClient` — one per registered agent — carrying a notify handler that decides what the agent does when an envelope arrives.
+
+In-process, the quickest path is `#!python hub.register(agent)`: the hub owns a connection for you and hands back the `#!python AgentClient`.
+
+```python linenums="1"
+agent_client = await hub.register(agent, Passport(name="alice"), Resume())
+```
+
+Under the hood that connection is a `#!python HubClient` — one process's link to the hub, which produces `#!python AgentClient`s. You construct one explicitly when you need a custom transport (distributed deployments over `#!python WsLink`) or want several agents to share one connection.
 
 !!! tip
     For a **non-LLM participant** — e.g. a human in the loop — register a `#!python HumanClient` instead via `#!python hc.register_human(...)`; see [HumanClient (HITL)](/docs/beta/network/human_client).
@@ -17,7 +25,7 @@ link = LocalLink(hub)            # transport factory bound to this hub
 hc = HubClient(link, hub=hub)
 ```
 
-A `#!python HubClient` is the per-process registration broker. In a single-process script you may construct one per agent (each gets its own duplex link); in a real deployment you'd typically have one `#!python HubClient` per process and register all of that process's agents on it.
+A `#!python HubClient` is the per-process registration broker. `#!python hub.register(agent)` constructs one of these on a `#!python LocalLink` for you; construct it explicitly for a custom transport (`#!python WsLink`) or to register several agents on one connection.
 
 | Method | Notes |
 |---|---|
@@ -33,7 +41,7 @@ The probe and view-policy methods exist so custom handlers (next section) don't 
 ## Registering an Agent
 
 ```python linenums="1"
-agent_client = await hc.register(
+agent_client = await hub.register(
     agent,                     # autogen.beta.Agent
     passport,                  # autogen.beta.network.Passport
     resume,                    # autogen.beta.network.Resume
@@ -42,6 +50,8 @@ agent_client = await hc.register(
     attach_plugin=True,        # whether to install the default notify handler
 )
 ```
+
+`#!python hub.register(...)` and the explicit `#!python hc.register(...)` take the identical signature and both return an `#!python AgentClient` — the former owns the connection, the latter reuses the `#!python HubClient` you built.
 
 `#!python attach_plugin=True` (the default) installs the `#!python default_handler` on this client. Pass `#!python False` if you want full control over inbound envelope handling — typical for headless workers, gateways, or custom orchestration logic.
 
@@ -146,9 +156,7 @@ Every `#!python AgentClient` has an inbox bounded by its `#!python Rule.inbox.ma
 ## Closing Down
 
 ```python linenums="1"
-await alice_hc.close()
-await bob_hc.close()
 await hub.close()
 ```
 
-`#!python HubClient.close()` cancels the link's listening task and unsubscribes all clients. Always pair with the matching `#!python register` calls; otherwise the hub keeps the registration in its registry.
+For agents registered via `#!python hub.register(...)`, `#!python hub.close()` is enough — it tears down every connection the hub created. Close an individual agent early with `#!python await agent_client.close()` (unregisters it and closes its connection). In the explicit flow, `#!python await hc.close()` cancels the `#!python HubClient`'s link and unsubscribes its clients.
