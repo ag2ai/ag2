@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from typing import Annotated, Any
 
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ... import Tool
 
@@ -67,7 +66,6 @@ def _duckduckgo_search(
     ]
 
 
-@export_module("autogen.tools.experimental")
 class DuckDuckGoSearchTool(Tool):
     """DuckDuckGoSearchTool is a tool that uses DuckDuckGo to perform a search.
 

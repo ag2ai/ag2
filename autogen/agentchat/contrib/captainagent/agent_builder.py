@@ -17,7 +17,6 @@ from termcolor import colored
 
 from .... import AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ....code_utils import CODE_BLOCK_PATTERN
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 
 __all__ = ["AgentBuilder"]
@@ -49,7 +48,6 @@ def _retrieve_json(text):
     return code_blocks[0]
 
 
-@export_module("autogen.agentchat.contrib.captainagent")
 class AgentBuilder:
     """AgentBuilder can help user build an automatic task solving process powered by multi-agent system.
     Specifically, our building pipeline includes initialize and build.
@@ -260,7 +258,6 @@ Match roles in the role set to each expert in expert set.
         agent_config: dict[str, Any],
         member_name: list[str],
         llm_config: LLMConfig | dict[str, Any],
-        use_oai_assistant: bool | None = False,
     ) -> AssistantAgent:
         """Create a group chat participant agent.
 
@@ -275,7 +272,6 @@ Match roles in the role set to each expert in expert set.
                 4. description: brief description of an agent that help group chat manager to pick the speaker.
             member_name: a list of agent names in the group chat.
             llm_config: specific configs for LLM (e.g., config_list, seed, temperature, ...).
-            use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
 
         Returns:
             agent: a set-up agent.
@@ -313,48 +309,36 @@ Match roles in the role set to each expert in expert set.
         server_id = self.online_server_name
         current_config = llm_config.copy()
         current_config.update({"config_list": config_list})
-        if use_oai_assistant:
-            from ..gpt_assistant_agent import GPTAssistantAgent
+        user_proxy_desc = ""
+        if self.cached_configs["coding"] is True:
+            user_proxy_desc = "\nThe group also include a Computer_terminal to help you run the python and shell code."
 
-            agent = GPTAssistantAgent(
-                name=agent_name,
-                llm_config={**current_config, "assistant_id": None},
-                instructions=system_message,
-                overwrite_instructions=False,
-            )
+        model_class = AssistantAgent
+        if agent_path:
+            module_path, model_class_name = agent_path.replace("/", ".").rsplit(".", 1)
+            module = importlib.import_module(module_path)
+            model_class = getattr(module, model_class_name)
+            if not issubclass(model_class, ConversableAgent):
+                logger.error(f"{model_class} is not a ConversableAgent. Use AssistantAgent as default")
+                model_class = AssistantAgent
+
+        additional_config = {
+            k: v
+            for k, v in agent_config.items()
+            if k not in ["model", "name", "system_message", "description", "agent_path", "tags"]
+        }
+        agent = model_class(
+            name=agent_name, llm_config=current_config.copy(), description=description, **additional_config
+        )
+        if system_message == "":
+            system_message = agent.system_message
         else:
-            user_proxy_desc = ""
-            if self.cached_configs["coding"] is True:
-                user_proxy_desc = (
-                    "\nThe group also include a Computer_terminal to help you run the python and shell code."
-                )
+            system_message = f"{system_message}\n\n{self.CODING_AND_TASK_SKILL_INSTRUCTION}"
 
-            model_class = AssistantAgent
-            if agent_path:
-                module_path, model_class_name = agent_path.replace("/", ".").rsplit(".", 1)
-                module = importlib.import_module(module_path)
-                model_class = getattr(module, model_class_name)
-                if not issubclass(model_class, ConversableAgent):
-                    logger.error(f"{model_class} is not a ConversableAgent. Use AssistantAgent as default")
-                    model_class = AssistantAgent
-
-            additional_config = {
-                k: v
-                for k, v in agent_config.items()
-                if k not in ["model", "name", "system_message", "description", "agent_path", "tags"]
-            }
-            agent = model_class(
-                name=agent_name, llm_config=current_config.copy(), description=description, **additional_config
-            )
-            if system_message == "":
-                system_message = agent.system_message
-            else:
-                system_message = f"{system_message}\n\n{self.CODING_AND_TASK_SKILL_INSTRUCTION}"
-
-            enhanced_sys_msg = self.GROUP_CHAT_DESCRIPTION.format(
-                name=agent_name, members=member_name, user_proxy_desc=user_proxy_desc, sys_msg=system_message
-            )
-            agent.update_system_message(enhanced_sys_msg)
+        enhanced_sys_msg = self.GROUP_CHAT_DESCRIPTION.format(
+            name=agent_name, members=member_name, user_proxy_desc=user_proxy_desc, sys_msg=system_message
+        )
+        agent.update_system_message(enhanced_sys_msg)
         self.agent_procs_assign[agent_name] = (agent, server_id)
         return agent
 
@@ -391,7 +375,6 @@ Match roles in the role set to each expert in expert set.
         default_llm_config: LLMConfig | dict[str, Any],
         coding: bool | None = None,
         code_execution_config: dict[str, Any] | None = None,
-        use_oai_assistant: bool | None = False,
         user_proxy: ConversableAgent | None = None,
         max_agents: int | None = None,
         **kwargs: Any,
@@ -403,7 +386,6 @@ Match roles in the role set to each expert in expert set.
             default_llm_config: specific configs for LLM (e.g., config_list, seed, temperature, ...).
             coding: use to identify if the user proxy (a code interpreter) should be added.
             code_execution_config: specific configs for user proxy (e.g., last_n_messages, work_dir, ...).
-            use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
             user_proxy: user proxy's class that can be used to replace the default user proxy.
             max_agents (Optional[int], default=None): Maximum number of agents to create for the task. If None, uses the value from self.max_agents.
             **kwargs (Any): Additional arguments to pass to _build_agents.
@@ -512,7 +494,7 @@ Match roles in the role set to each expert in expert set.
             "code_execution_config": code_execution_config,
         })
         _config_check(self.cached_configs)
-        return self._build_agents(use_oai_assistant, user_proxy=user_proxy, **kwargs)
+        return self._build_agents(user_proxy=user_proxy, **kwargs)
 
     def build_from_library(
         self,
@@ -522,7 +504,6 @@ Match roles in the role set to each expert in expert set.
         top_k: int = 3,
         coding: bool | None = None,
         code_execution_config: dict[str, Any] | None = None,
-        use_oai_assistant: bool | None = False,
         embedding_model: str | None = "all-mpnet-base-v2",
         user_proxy: ConversableAgent | None = None,
         **kwargs: Any,
@@ -538,7 +519,6 @@ Match roles in the role set to each expert in expert set.
             top_k: number of results to return.
             coding: use to identify if the user proxy (a code interpreter) should be added.
             code_execution_config: specific configs for user proxy (e.g., last_n_messages, work_dir, ...).
-            use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
             embedding_model: a Sentence-Transformers model use for embedding similarity to select agents from library.
                 As reference, chromadb use "all-mpnet-base-v2" as default.
             user_proxy: user proxy's class that can be used to replace the default user proxy.
@@ -632,7 +612,6 @@ Match roles in the role set to each expert in expert set.
                     building_task=skill,
                     default_llm_config=default_llm_config.copy(),
                     coding=False,
-                    use_oai_assistant=use_oai_assistant,
                     max_agents=1,
                 )
                 self.clear_agent(agent_config_temp["agent_configs"][0]["name"])
@@ -668,15 +647,14 @@ Match roles in the role set to each expert in expert set.
         })
         _config_check(self.cached_configs)
 
-        return self._build_agents(use_oai_assistant, user_proxy=user_proxy, **kwargs)
+        return self._build_agents(user_proxy=user_proxy, **kwargs)
 
     def _build_agents(
-        self, use_oai_assistant: bool | None = False, user_proxy: ConversableAgent | None = None, **kwargs
+        self, user_proxy: ConversableAgent | None = None, **kwargs
     ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Build agents with generated configs.
 
         Args:
-            use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
             user_proxy: user proxy's class that can be used to replace the default user proxy.
             **kwargs: Additional keyword arguments.
 
@@ -696,7 +674,6 @@ Match roles in the role set to each expert in expert set.
                 agent_config=config.copy(),
                 member_name=[agent["name"] for agent in agent_configs],
                 llm_config=default_llm_config,
-                use_oai_assistant=use_oai_assistant,
             )
         agent_list = [agent_config[0] for agent_config in self.agent_procs_assign.values()]
 
@@ -736,7 +713,6 @@ Match roles in the role set to each expert in expert set.
         self,
         filepath: str | None = None,
         config_json: str | None = None,
-        use_oai_assistant: bool | None = False,
         **kwargs: Any,
     ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Load building configs and call the build function to complete building without calling online LLMs' api.
@@ -744,7 +720,6 @@ Match roles in the role set to each expert in expert set.
         Args:
             filepath: filepath or JSON string for the save config.
             config_json: JSON string for the save config.
-            use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
             **kwargs (Any): Additional arguments to pass to _build_agents:
                 - code_execution_config (Optional[dict[str, Any]]): If provided, overrides the
                 code execution configuration from the loaded config.
@@ -780,7 +755,7 @@ Match roles in the role set to each expert in expert set.
                 "code_execution_config": kwargs["code_execution_config"],
             })
             del kwargs["code_execution_config"]
-            return self._build_agents(use_oai_assistant, **kwargs)
+            return self._build_agents(**kwargs)
         else:
             code_execution_config = cached_configs["code_execution_config"]
             self.cached_configs.update({
@@ -790,4 +765,4 @@ Match roles in the role set to each expert in expert set.
                 "default_llm_config": default_llm_config,
                 "code_execution_config": code_execution_config,
             })
-            return self._build_agents(use_oai_assistant, **kwargs)
+            return self._build_agents(**kwargs)

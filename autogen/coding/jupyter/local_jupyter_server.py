@@ -16,14 +16,12 @@ from types import TracebackType
 
 from typing_extensions import Self
 
-from ...doc_utils import export_module
 from .base import JupyterConnectable, JupyterConnectionInfo
 from .import_utils import require_jupyter_kernel_gateway_installed
 from .jupyter_client import JupyterClient
 
 
 @require_jupyter_kernel_gateway_installed()
-@export_module("autogen.coding.jupyter")
 class LocalJupyterServer(JupyterConnectable):
     class GenerateToken:
         pass

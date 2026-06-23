@@ -11,7 +11,6 @@ sidebarTitle: Client
 from autogen.beta import Agent
 from autogen.beta.a2a import A2AConfig
 
-
 async def main() -> None:
     remote = Agent(
         "remote",
@@ -58,18 +57,16 @@ The remote agent recovers the entire prior context on every turn — there is no
 
 Tools declared on the **client** are advertised to the server in the AG2 client-tools extension. When the remote LLM picks one, the call is routed back to the client and executed locally; the tool result is sent back into the server-side LLM loop. The server LLM never sees your local environment.
 
-```python linenums="1" hl_lines="9-14"
+```python linenums="1" hl_lines="7-9 14"
 from datetime import datetime
 
 from autogen.beta import Agent
 from autogen.beta.a2a import A2AConfig
 from autogen.beta.tools import tool
 
-
 @tool(description="Return the user's local wall-clock time as ISO-8601.")
 def get_local_time() -> str:
     return datetime.now().isoformat(timespec="seconds")
-
 
 remote = Agent(
     "remote",
@@ -88,7 +85,7 @@ The same agent can mix client-side and server-side tools — server tools execut
 
 A remote A2A agent plugs into a local `#!python Agent` like any other delegate via `#!python Agent.as_tool()`. The local LLM decides when to delegate; the wrapper exposes a `#!python task_<name>` tool that takes an `objective` (and optional `context`).
 
-```python linenums="1" hl_lines="13"
+```python linenums="1" hl_lines="14"
 from autogen.beta import Agent
 from autogen.beta.a2a import A2AConfig
 from autogen.beta.config import AnthropicConfig

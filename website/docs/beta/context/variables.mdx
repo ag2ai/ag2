@@ -58,7 +58,7 @@ await agent.ask(
 
 The most straightforward way to access variables inside a tool is by requesting the `Context` object. By adding an argument annotated with `Context`, the framework will automatically inject the current execution context, which contains the `.variables` dictionary.
 
-```python linenums="1" hl_lines="1 4 6-7"
+```python linenums="1" hl_lines="4 6-7"
 from autogen.beta import Context, tool
 
 @tool
@@ -74,7 +74,7 @@ def process_data(context: Context) -> str:
 
 Instead of passing the entire `Context` object, you can instruct the framework to inject specific variables directly into your tool's arguments using the `Variable` annotation. This makes your tool's signature cleaner and more explicit.
 
-```python linenums="1" hl_lines="1-2 9"
+```python linenums="1" hl_lines="9"
 from typing import Annotated
 from autogen.beta import Variable, tool
 
@@ -147,7 +147,7 @@ Variables are mutable. If a tool updates the `context.variables` dictionary, tha
 
 This is highly useful for sharing state or caching results between different tools without requiring the LLM to pass the data back and forth.
 
-```python linenums="1" hl_lines="4 9 11-12"
+```python linenums="1" hl_lines="4 9"
 @tool
 def authenticate(context: Context) -> str:
     # Generate and store a token in the context variables

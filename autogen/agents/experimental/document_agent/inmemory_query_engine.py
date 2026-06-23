@@ -13,7 +13,6 @@ from pydantic import BaseModel
 
 from .... import ConversableAgent
 from ....agentchat.contrib.rag import RAGQueryEngine
-from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 
 __all__ = ["InMemoryQueryEngine"]
@@ -37,7 +36,6 @@ class QueryAnswer(BaseModel):
     answer: str
 
 
-@export_module("autogen.agents.experimental")
 class InMemoryQueryEngine:
     """This engine stores ingested documents in memory and then injects them into an internal agent's system message for answering queries.
 

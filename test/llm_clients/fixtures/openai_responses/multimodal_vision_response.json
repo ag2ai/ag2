@@ -1,5 +1,5 @@
 {
-  "id": "chatcmpl-CjEO6mcfhce7reH44H1K8xzZpdDAa",
+  "id": "chatcmpl-DtjcWxu7IHhzwYU5ACPI7oaCw5Dp2m",
   "choices": [
     {
       "finish_reason": "stop",
@@ -16,11 +16,12 @@
       }
     }
   ],
-  "created": 1764896102,
+  "created": 1782175776,
   "model": "gpt-4o-mini-2024-07-18",
   "object": "chat.completion",
+  "moderation": null,
   "service_tier": "default",
-  "system_fingerprint": "fp_eca0ce8298",
+  "system_fingerprint": "fp_a5a1892700",
   "usage": {
     "completion_tokens": 1,
     "prompt_tokens": 8518,

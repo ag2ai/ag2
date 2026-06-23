@@ -45,8 +45,8 @@ async def test_run_pairwise_produces_then_compares(tmp_path) -> None:
 
     result = await run_pairwise(
         suite,
-        variant_a=_build_a,
-        variant_b=_build_b,
+        variant_a=_build_a(),
+        variant_b=_build_b(),
         comparators=[judge],
         variant_a_name="v1",
         variant_b_name="v2",
@@ -84,8 +84,8 @@ async def test_run_pairwise_label_is_recorded_and_serialized(tmp_path) -> None:
 
     result = await run_pairwise(
         suite,
-        variant_a=_build_a,
-        variant_b=_build_b,
+        variant_a=_build_a(),
+        variant_b=_build_b(),
         comparators=[judge],
         store_dir=tmp_path,
         label="bake-off",

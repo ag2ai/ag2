@@ -54,8 +54,8 @@ nest_asyncio.apply()
 Configure the agents for the interaction.
 
 - `config_list` defines the LLM configurations, including the model and API key.
-- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
 
 <Tip>
 [`Browser Use`](https://github.com/browser-use/browser-use) supports the following models: [Supported Models](https://docs.browser-use.com/customize/supported-models#supported-models)
@@ -80,7 +80,7 @@ assistant = AssistantAgent(
 ### Web Browsing with Browser Use
 
 
-The [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) allows agents to interact with web pages—navigating, searching, and extracting information.
+The `BrowserUseTool` allows agents to interact with web pages—navigating, searching, and extracting information.
 
 To see the agent's activity in real-time, set `headless` to `False` in the `browser_config`. If `True`, the browser runs in the background.
 

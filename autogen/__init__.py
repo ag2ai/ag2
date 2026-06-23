@@ -18,12 +18,9 @@ from .agentchat import (
     SelectionContext,
     UpdateSystemMessage,
     UserProxyAgent,
-    a_initiate_swarm_chat,
-    a_run_swarm,
     gather_usage_summary,
     initiate_chats,
     register_function,
-    run_swarm,
 )
 from .agentchat.group.context_expression import ContextExpression
 from .code_utils import DEFAULT_MODEL, FAST_MODEL
@@ -76,8 +73,6 @@ __all__ = [
     "UpdateSystemMessage",
     "UserProxyAgent",
     "__version__",
-    "a_initiate_swarm_chat",
-    "a_run_swarm",
     "config_list_from_dotenv",
     "config_list_from_models",
     "config_list_gpt4_gpt35",
@@ -86,5 +81,4 @@ __all__ = [
     "get_config_list",
     "initiate_chats",
     "register_function",
-    "run_swarm",
 ]

@@ -14,7 +14,6 @@ from a2a.utils.errors import InternalError
 
 from autogen import ConversableAgent
 from autogen.agentchat.remote import AgentService
-from autogen.doc_utils import export_module
 
 from .utils import (
     copy_artifact,
@@ -26,7 +25,6 @@ from .utils import (
 )
 
 
-@export_module("autogen.a2a")
 class AutogenAgentExecutor(AgentExecutor):
     """An agent executor that bridges Autogen ConversableAgents with A2A protocols.
 

@@ -6,12 +6,9 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from ....doc_utils import export_module
-
 __all__ = ["RAGQueryEngine"]
 
 
-@export_module("autogen.agentchat.contrib.rag")
 @runtime_checkable
 class RAGQueryEngine(Protocol):
     """A protocol class that represents a document ingestation and query engine on top of an underlying database.

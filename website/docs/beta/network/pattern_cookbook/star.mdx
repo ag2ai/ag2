@@ -147,9 +147,7 @@ from autogen.beta.testing import TestConfig
 
 load_dotenv()
 
-
 _REQUIRED_SPOKES = ("weather", "sports", "finance")
-
 
 async def ask_spoke(spoke: str, query: str) -> Handoff:
     """Route a query to one of the spokes. Returns a typed
@@ -159,7 +157,6 @@ async def ask_spoke(spoke: str, query: str) -> Handoff:
     if spoke not in _REQUIRED_SPOKES:
         return Handoff(target="hub", reason=f"unknown spoke {spoke!r}")
     return Handoff(target=spoke, reason=query)
-
 
 async def synthesise(headline: str, channel: ChannelInject, hub: HubInject) -> "Finish | str":
     """Scan the WAL for spoke replies by sender identity, build synthesis.
@@ -196,7 +193,6 @@ async def synthesise(headline: str, channel: ChannelInject, hub: HubInject) -> "
 
     await set_context(channel, "synthesis", synthesis)
     return Finish(reason="answered")
-
 
 async def main() -> None:
     # Hub config: disable parallel tool calls so Sonnet emits exactly
@@ -352,7 +348,6 @@ async def main() -> None:
     await sports_hc.close()
     await finance_hc.close()
     await hub_obj.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

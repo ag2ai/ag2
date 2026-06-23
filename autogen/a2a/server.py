@@ -15,7 +15,6 @@ from pydantic import Field
 from starlette.applications import Starlette
 
 from autogen import ConversableAgent
-from autogen.doc_utils import export_module
 
 from .agent_executor import AutogenAgentExecutor
 from .utils import make_async_card_modifier, make_async_extended_card_modifier
@@ -32,7 +31,6 @@ if TYPE_CHECKING:
     from autogen import ConversableAgent
 
 
-@export_module("autogen.a2a")
 class CardSettings(AgentCard):
     """Original A2A AgentCard object inheritor making some fields optional."""
 
@@ -82,7 +80,6 @@ class CardSettings(AgentCard):
     """
 
 
-@export_module("autogen.a2a")
 class A2aAgentServer:
     """A server wrapper for running an AG2 agent via the A2A protocol.
 

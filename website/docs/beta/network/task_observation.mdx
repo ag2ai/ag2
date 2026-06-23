@@ -134,7 +134,6 @@ async def research(topic: str, ctx: Context) -> str:
         # ...
     return f"researched {topic}"
 
-
 @worker.tool
 async def summarise(text: str, ctx: Context) -> str:
     async with worker.task("summarise", capability="summarisation", context=ctx) as t:

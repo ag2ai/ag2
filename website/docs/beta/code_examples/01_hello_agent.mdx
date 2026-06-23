@@ -35,10 +35,8 @@ import asyncio
 from autogen.beta import Agent
 from autogen.beta.config import GeminiConfig
 
-
 def section(title: str) -> None:
     print(f"\n── {title} ───")
-
 
 async def main() -> None:
     config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
@@ -58,7 +56,6 @@ async def main() -> None:
 
     reply2 = await agent.ask("And a tip for learning poker, in one sentence.")
     print(reply2.body)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

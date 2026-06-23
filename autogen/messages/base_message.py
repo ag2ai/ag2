@@ -10,14 +10,11 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model
 
-from ..doc_utils import export_module
-
 PetType = TypeVar("PetType", bound=Literal["cat", "dog"])
 
 __all__ = ["BaseMessage", "get_annotated_type_for_message_classes", "wrap_message"]
 
 
-@export_module("autogen.messages")
 class BaseMessage(BaseModel, ABC):
     uuid: UUID
 
@@ -47,7 +44,6 @@ def camel2snake(name: str) -> str:
 _message_classes: dict[str, type[BaseModel]] = {}
 
 
-@export_module("autogen.messages")
 def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
     """Wrap a message class with a type field to be used in a union type
 
@@ -97,7 +93,6 @@ def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
     return wrapper_cls
 
 
-@export_module("autogen.messages")
 def get_annotated_type_for_message_classes() -> type[Any]:
     # this is a dynamic type so we need to disable the type checker
     union_type = Union[tuple(_message_classes.values())]  # type: ignore[valid-type]  # noqa: UP007

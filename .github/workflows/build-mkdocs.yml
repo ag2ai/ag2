@@ -16,11 +16,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           lfs: true
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           version: "latest"
       - name: setup python
@@ -31,7 +31,7 @@ jobs:
       - name: Install quarto
         uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
 
-      - uses: extractions/setup-just@dd310ad5a97d8e7b41793f8ef055398d51ad4de6 # v2.0.0
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
       - name: Build MkDocs documentation
         run: |
           uv venv
@@ -43,6 +43,13 @@ jobs:
       - name: Verify the build
         run: |
           ls -la ./website/mkdocs/site
+          # Ensure the Beta-scoped llms.txt files were generated and copied into the site.
+          for f in llms.txt llms-full.txt; do
+            if [ ! -s "./website/mkdocs/site/$f" ]; then
+              echo "::error::Expected non-empty ./website/mkdocs/site/$f (llms.txt generation failed)"
+              exit 1
+            fi
+          done
         working-directory: .
 
       - name: Configure Git user
@@ -50,7 +57,7 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-      - name: Deploy docs to GH Pages
+      - name: Build docs and squash gh-pages commits
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
         run: |
           . .venv/bin/activate
@@ -66,9 +73,27 @@ jobs:
           echo $VERSION
           echo $IS_RC
 
+          # mike commits the built site locally; the force-push step below squashes it.
           if [ "$IS_RC" == "False" ] || [ "$VERSION" == "0.9.1post0" ]; then
-            cd website/mkdocs && mike deploy -F mkdocs.yml --update-aliases $VERSION latest
-            mike set-default --push --allow-empty -F mkdocs.yml latest
+            cd website/mkdocs
+            mike deploy -F mkdocs.yml --update-aliases $VERSION latest
+            mike set-default --allow-empty -F mkdocs.yml latest
           else
-            cd website/mkdocs && mike deploy --push -F mkdocs.yml --update-aliases $VERSION
+            cd website/mkdocs
+            mike deploy -F mkdocs.yml --update-aliases $VERSION
           fi
+
+          # Collapse mike's commits into one staged change on top of published gh-pages.
+          git checkout gh-pages
+          git reset --soft origin/gh-pages
+
+      - name: Force-push squashed docs to GH Pages
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
+        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
+        with:
+          branch: gh-pages
+          push_options: "--force"  # force push to keep gh-pages history clear
+          commit_message: "docs: deploy docs"
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
+          commit_author: github-actions[bot] <github-actions[bot]@users.noreply.github.com>

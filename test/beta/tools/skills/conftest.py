@@ -16,11 +16,13 @@ def skill_tree(tmp_path: Path) -> Path:
 
         tmp_path/
           react-best-practices/
-            SKILL.md  (has version, has scripts/)
+            SKILL.md  (has version, has scripts/ and a resource)
             scripts/
               scaffold.py
+            references/
+              guide.md
           markdown-guide/
-            SKILL.md  (no version, no scripts/)
+            SKILL.md  (no version, no scripts/, no resources)
     """
     react_dir = tmp_path / "react-best-practices"
     react_dir.mkdir(parents=True)
@@ -39,6 +41,9 @@ def skill_tree(tmp_path: Path) -> Path:
     scripts_dir = react_dir / "scripts"
     scripts_dir.mkdir()
     (scripts_dir / "scaffold.py").write_text('print("scaffold")\n', encoding="utf-8")
+    refs_dir = react_dir / "references"
+    refs_dir.mkdir()
+    (refs_dir / "guide.md").write_text("# Guide\nDetailed React guidance.\n", encoding="utf-8")
 
     md_dir = tmp_path / "markdown-guide"
     md_dir.mkdir(parents=True)

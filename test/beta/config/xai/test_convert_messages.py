@@ -9,6 +9,7 @@ from fast_depends.use import SerializerCls
 from xai_sdk.chat import chat_pb2
 
 from autogen.beta import ToolResult
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.config.xai.events import XAIAssistantEvent
 from autogen.beta.config.xai.mappers import convert_messages
 from autogen.beta.events import (
@@ -241,3 +242,13 @@ class TestAssistantRoundTrip:
         assert msg.role == chat_pb2.ROLE_ASSISTANT
         assert _content_texts(msg) == ["Hi"]
         assert replays == []
+
+
+def test_compaction_summary_renders_as_user_turn() -> None:
+    summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
+
+    [msg], replays = convert_messages([], [summary], SerializerCls)
+
+    assert msg.role == chat_pb2.ROLE_USER
+    assert _content_texts(msg) == ["[Summary of earlier conversation]\nLooked up Paris and Tokyo."]
+    assert replays == []

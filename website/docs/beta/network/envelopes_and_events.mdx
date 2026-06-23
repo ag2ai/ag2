@@ -95,7 +95,7 @@ The hub processes higher-priority envelopes ahead of lower-priority ones in queu
 
 The `#!python channel.send(text, audience=...)` helper wraps the envelope construction for you. When you need a custom event type or to set fields the helper doesn't expose, build an `#!python Envelope` and post it directly:
 
-```python linenums="1" hl_lines="3 4 5 6 7 8"
+```python linenums="1" hl_lines="3-10"
 from autogen.beta.network import Envelope, EV_TEXT
 
 envelope = Envelope(

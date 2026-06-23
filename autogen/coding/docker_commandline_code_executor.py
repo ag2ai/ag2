@@ -18,7 +18,6 @@ from typing import Any, ClassVar
 from typing_extensions import Self
 
 from ..code_utils import TIMEOUT_MSG, _cmd
-from ..doc_utils import export_module
 from ..import_utils import optional_import_block, require_optional_import
 from .base import CodeBlock, CodeExecutor, CodeExtractor, CommandLineCodeResult
 from .markdown_code_extractor import MarkdownCodeExtractor
@@ -44,7 +43,6 @@ __all__ = ("DockerCommandLineCodeExecutor",)
 
 
 @require_optional_import(["docker"], "docker")
-@export_module("autogen.coding")
 class DockerCommandLineCodeExecutor(CodeExecutor):
     DEFAULT_EXECUTION_POLICY: ClassVar[dict[str, bool]] = {
         "bash": True,

@@ -33,7 +33,7 @@ Each agent should have ONE clear responsibility:
 - Register tools for LLM on the agent that DECIDES when to use them
 - Register tools for execution on the agent that has ACCESS to the resource
 - In many setups: assistant decides (register_for_llm), user_proxy executes (register_for_execution)
-- Consider pre-built tools: DuckDuckGoSearchTool, QuickResearchTool, BrowserUseTool, PythonCodeExecutionTool
+- Consider pre-built tools: DuckDuckGoSearchTool, QuickResearchTool, BrowserUseTool, Crawl4AITool
 
 ### When to Use What
 

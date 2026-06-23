@@ -18,7 +18,6 @@ from textwrap import dedent, indent
 from .... import AssistantAgent, UserProxyAgent
 from ....coding import CodeExecutor, CodeExtractor, LocalCommandLineCodeExecutor, MarkdownCodeExtractor
 from ....coding.base import CodeBlock, CodeResult
-from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....tools import Tool, get_function_schema, load_basemodels_if_needed
 
@@ -28,7 +27,6 @@ with optional_import_block():
 
 
 @require_optional_import(["pandas", "sentence_transformers"], "retrievechat")
-@export_module("autogen.agentchat.contrib.captainagent")
 class ToolBuilder:
     TOOL_PROMPT_DEFAULT = """\n## Functions
 You have access to the following functions. They can be accessed from the module called 'functions' by their function names.
@@ -228,7 +226,6 @@ class LocalExecutorWithTools(CodeExecutor):
         pass
 
 
-@export_module("autogen.agentchat.contrib.captainagent")
 def format_ag2_tool(tool: Tool):
     # get the args first
     schema = get_function_schema(tool.func, description=tool.description)
@@ -274,7 +271,6 @@ def _wrap_function(func):
     return _wrapped_func
 
 
-@export_module("autogen.agentchat.contrib.captainagent")
 def get_full_tool_description(py_file):
     """Retrieves the function signature for a given Python file."""
     with open(py_file) as f:

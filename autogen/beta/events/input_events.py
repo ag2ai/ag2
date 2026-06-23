@@ -40,7 +40,7 @@ class ModelRequest(BaseEvent):
     parts: "list[Input]" = Field(kw_only=False)
 
     @classmethod
-    def ensure_request(cls, msgs: "Iterable[str | Input]") -> "ModelRequest":
+    def ensure_request(cls, msgs: "Iterable[SendableMessage | Input]") -> "ModelRequest":
         return cls([Input.ensure_input(m) for m in msgs])
 
 

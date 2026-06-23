@@ -99,7 +99,6 @@ from autogen.beta.testing import TestConfig
 
 load_dotenv()
 
-
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
 
@@ -209,7 +208,6 @@ async def main() -> None:
     await enricher_hc.close()
     await fulfilment_hc.close()
     await hub.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

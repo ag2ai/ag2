@@ -6,7 +6,6 @@
 import os
 from typing import Optional
 
-from .....doc_utils import export_module
 from .....import_utils import optional_import_block, require_optional_import
 from .credentials_provider import GoogleCredentialsProvider
 
@@ -19,7 +18,6 @@ with optional_import_block():
 __all__ = ["GoogleCredentialsLocalProvider"]
 
 
-@export_module("autogen.tools.experimental.google.authentication")
 class GoogleCredentialsLocalProvider(GoogleCredentialsProvider):
     def __init__(
         self,

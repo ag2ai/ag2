@@ -64,31 +64,26 @@ suite = Suite.from_list([
 
 Same shape as JSONL lines. Use this in notebooks or for ad-hoc suites that don't deserve a file yet.
 
-## The agent — an instance or a factory
+## The agent — an `Agent` instance
 
-`run_agent(agent=...)` accepts either a built **agent instance** or a **factory** that builds one:
+`run_agent(agent=...)` takes a built **`Agent` instance**, reused across every task. Each task runs on a fresh stream, so conversation history never leaks between tasks — agents are effectively stateless across `ask` calls (history lives on the per-call stream), so reusing one instance is safe for any normal agent.
 
-- **An instance** is the simplest path — `agent=my_agent`. The runner reuses it across tasks, but each task gets a fresh stream, so conversation history never leaks. Fine for any stateless agent (i.e. most agents).
-- **A factory** (a callable returning a fresh agent) is what you want when you need a clean instance per task — for per-task `model_config` injection (cassette-based CI), or for an agent that carries mutable instance state (e.g. a knowledge bootstrap). The runner calls it once per task.
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import GeminiConfig
 
-```python linenums="1" hl_lines="6 11"
-from autogen.beta import Agent, tool
-from autogen.beta.config import GeminiConfig, ModelConfig
-
-
-def build_weather_agent(*, config: ModelConfig | None = None) -> Agent:
-    return Agent(
-        "weather",
-        prompt="You are a weather assistant. Use get_weather.",
-        config=config or GeminiConfig(model="gemini-3-flash-preview"),
-        tools=[get_weather],
-    )
+weather_agent = Agent(
+    "weather",
+    prompt="You are a weather assistant. Use get_weather.",
+    config=GeminiConfig(model="gemini-3-flash-preview"),
+    tools=[get_weather],
+)
 ```
 
-The `config=` keyword is what the runner uses to inject either a live `ModelConfig` (when you pass `model_config=` to `run_agent()`) or a `TestConfig` cassette for deterministic CI. A factory without a `config=` parameter still works — the runner warns and falls through to the factory's default.
+Need a different model per task — a live `ModelConfig`, or a `TestConfig` cassette for deterministic CI? Pass `model_config=` to `run_agent()`; it is forwarded to `ask` and **overrides** the agent's own config for that task. One instance covers the whole suite — no per-task rebuild, no factory.
 
 !!! note "Multi-agent flows go through `evaluate_traces`"
-    `run_agent` is for an ask-shaped target — an `Agent` (or a factory of one). Multi-agent / network / workflow flows aren't driven by a single `ask(prompt)`, so they don't go through `run_agent`. Run them however they run — they emit OpenTelemetry spans — and grade the reconstructed trace with `evaluate_traces`. Grading is decoupled from production via the `Trace`, so the same scorers work either way.
+    `run_agent` is for an ask-shaped target — an `Agent`. Multi-agent / network / workflow flows aren't driven by a single `ask(prompt)`, so they don't go through `run_agent`. Run them however they run — they emit OpenTelemetry spans — and grade the reconstructed trace with `evaluate_traces`. Grading is decoupled from production via the `Trace`, so the same scorers work either way.
 
 ## Running
 
@@ -98,10 +93,10 @@ The `config=` keyword is what the runner uses to inject either a live `ModelConf
 from autogen.beta.eval import BudgetThresholds, run_agent
 
 result = await run_agent(
-    suite,                                 # Suite, str/Path (JSONL), or list[dict]
-    agent=build_weather_agent,
+    suite,                                 # a Suite, or a bare str (single-prompt suite)
+    agent=weather_agent,
     scorers=[...],                         # list of Scorer instances
-    store_dir=Path("./runs"),              # required — where the JSON lands
+    store_dir=Path("./runs"),              # optional — where the JSON lands (omit to skip persisting)
     model_config=cassettes,                # optional — None / ModelConfig / dict[task_id, ModelConfig]
     budgets=BudgetThresholds(              # optional — observational, doesn't abort
         max_tokens_per_task=2_000,
@@ -123,8 +118,8 @@ The same parameter is overloaded three ways:
 
 | Value | Behavior |
 |---|---|
-| `#!python None` (default) | Factory's default config wins. |
-| A single `ModelConfig` | Same config for every task. |
+| `#!python None` (default) | The agent's own config is used. |
+| A single `ModelConfig` | Same config for every task (overrides the agent's). |
 | A `#!python dict[task_id, ModelConfig]` | Per-task config. Standard pattern for cassette-based CI. |
 
 ### Repeats — consistency
@@ -132,7 +127,7 @@ The same parameter is overloaded three ways:
 `repeats=N` runs **each task N times** — the simplest way to ask "does my agent do this *consistently*?". The per-key `pass_rate` / `score_stats` pool across every run (so 8 of 10 passing shows as `80%`), and each run gets a distinct `task_id` suffix (`"weather-001#1"`, `"weather-001#2"`, …).
 
 ```python
-result = await run_agent(suite, agent=build_weather_agent, scorers=[...], store_dir="runs", repeats=10)
+result = await run_agent(suite, agent=weather_agent, scorers=[...], store_dir="runs", repeats=10)
 ```
 
 (At `temperature=0` consistency is near-trivial; `repeats` earns its keep when there's real nondeterminism.)
@@ -164,7 +159,7 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 result = await run_agent(
-    suite, agent=build_weather_agent, scorers=[...], store_dir="runs",
+    suite, agent=weather_agent, scorers=[...], store_dir="runs",
     run_id="evalrun_abc", variant="v3", label="checkout-suite",
     span_attributes={"ag2.org.id": org_id},                   # stamped on every span
     span_processors=[BatchSpanProcessor(OTLPSpanExporter())],  # also export to your backend
@@ -315,8 +310,7 @@ The framework catches exceptions at three levels and records them on the task in
 
 | Level | What happens |
 |---|---|
-| Target factory raises | Task gets `trace.exception = <the error>`, no events. Other tasks continue. |
-| `agent.ask()` raises | Same — exception lands on `trace.exception`, other tasks continue. |
+| `agent.ask()` raises | The exception lands on `trace.exception` (no events), and other tasks continue. |
 | A scorer raises | The scorer's feedback becomes `Feedback(score=None, comment="scorer raised: ...")`. Other scorers run normally. |
 
 The aggregate count of agent-level errors surfaces in `result.aggregates.errors`. Treat it as a CI signal — a healthy suite has zero.

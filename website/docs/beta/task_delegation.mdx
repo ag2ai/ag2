@@ -23,7 +23,7 @@ Breaking work across multiple agents gives you:
 
 Use `#!python Agent.as_tool()` to make one agent available as a tool for another.
 
-```python linenums="1" hl_lines="23-26"
+```python linenums="1" hl_lines="24-25"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 
@@ -124,7 +124,7 @@ The analyst's LLM may call `sub_task` multiple times — one per aspect — then
 
 `#!python dynamic_agent()` lets the calling LLM **construct** an ephemeral agent at runtime — picking a name, system prompt, and a subset of available tools per objective — instead of pre-defining each delegate as a named `#!python as_tool()`. Use it when the orchestrator should compose a focused worker on demand for each sub-task.
 
-```python linenums="1" hl_lines="2 16-19"
+```python linenums="1" hl_lines="2 17"
 from autogen.beta import Agent
 from autogen.beta.tools.dynamic import dynamic_agent
 from autogen.beta.config import OpenAIConfig
@@ -214,7 +214,7 @@ It stores the stream ID in `#!python context.dependencies` keyed by `#!python f"
 
 For full control, pass any callable matching `#!python StreamFactory = Callable[[Agent, Context], Stream]`:
 
-```python linenums="1" hl_lines="4-6 9"
+```python linenums="1" hl_lines="4-5 9"
 from autogen.beta import Agent, Context
 from autogen.beta.streams.redis import RedisStream
 

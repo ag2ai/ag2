@@ -4,7 +4,6 @@
 
 from typing import TYPE_CHECKING
 
-from ..doc_utils import export_module
 from .tool import Tool
 
 if TYPE_CHECKING:
@@ -13,7 +12,6 @@ if TYPE_CHECKING:
 __all__ = ["Toolkit"]
 
 
-@export_module("autogen.tools")
 class Toolkit:
     """A class representing a set of tools that can be used by an agent for various tasks."""
 

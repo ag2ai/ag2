@@ -16,10 +16,6 @@
   },
   "redirects": [
     {
-      "source": "/reference/:slug*",
-      "destination": "/docs/api-reference/:slug*"
-    },
-    {
       "source": "/blog/:slug*",
       "destination": "/docs/blog/:slug*"
     },
@@ -60,10 +56,6 @@
     {
       "name": "User Guide",
       "url": "docs/user-guide"
-    },
-    {
-      "name": "API References",
-      "url": "docs/api-reference"
     },
     {
       "name": "Use Cases",
@@ -144,13 +136,6 @@
                     "docs/user-guide/advanced-concepts/orchestration/group-chat/safeguards"
                   ]
                 },
-                {
-                  "group": "Swarm",
-                  "pages":
-                  [
-                    "docs/user-guide/advanced-concepts/orchestration/swarm/deprecation"
-                  ]
-                },
                 "docs/user-guide/advanced-concepts/orchestration/ending-a-chat",
                 {
                   "group": "Pattern Cookbook",
@@ -192,20 +177,9 @@
                   "pages":
                   [
                     "docs/user-guide/advanced-concepts/tools/interop/langchain",
-                    "docs/user-guide/advanced-concepts/tools/interop/crewai",
                     "docs/user-guide/advanced-concepts/tools/interop/pydanticai"
                   ]
                 }
-              ]
-            },
-            {
-              "group": "RealtimeAgent",
-              "pages":
-              [
-                "docs/user-guide/advanced-concepts/realtime-agent/index",
-                "docs/user-guide/advanced-concepts/realtime-agent/websocket",
-                "docs/user-guide/advanced-concepts/realtime-agent/webrtc",
-                "docs/user-guide/advanced-concepts/realtime-agent/twilio"
               ]
             },
             "docs/user-guide/advanced-concepts/rag",
@@ -292,7 +266,6 @@
             "docs/user-guide/reference-tools/perplexity-search",
             "docs/user-guide/reference-tools/wikipedia-search",
             "docs/user-guide/reference-tools/browser-use",
-            "docs/user-guide/reference-tools/code-execution",
             {
               "group": "Communication Platforms",
               "pages":
@@ -305,8 +278,6 @@
             "docs/user-guide/reference-tools/crawl4ai",
             "docs/user-guide/reference-tools/deep-research",
             "docs/user-guide/reference-tools/quick-research",
-            "docs/user-guide/reference-tools/firecrawl",
-            "docs/user-guide/reference-tools/searxng-search",
             "docs/user-guide/reference-tools/tavily-search",
             "docs/user-guide/reference-tools/tinyfish"
           ]
@@ -368,12 +339,14 @@
         "docs/beta/motivation",
         "docs/beta/agents",
         "docs/beta/agent_harness",
+        "docs/beta/resume",
         "docs/beta/structured_output",
+        "docs/beta/model_configuration",
         {
-          "group": "Models & Providers",
+          "group": "Multimodality",
           "pages": [
-            "docs/beta/model_configuration",
-            "docs/beta/inputs/inputs"
+            "docs/beta/multimodal/inputs",
+            "docs/beta/multimodal/image_generation"
           ]
         },
         "docs/beta/system_prompts",
@@ -445,6 +418,7 @@
             "docs/beta/tools/approval_required"
           ]
         },
+        "docs/beta/skills",
         {
           "group": "Extensions",
           "pages": [
@@ -525,6 +499,7 @@
         },
         "docs/beta/ag2_compatibility",
         "docs/beta/roadmap",
+        "docs/beta/coding_with_ai",
         "docs/beta/contribution_policy",
         {
           "group": "Code Examples",
@@ -588,6 +563,7 @@
         "docs/ecosystem/pgvector",
         "docs/ecosystem/portkey",
         "docs/ecosystem/promptflow",
+        "docs/ecosystem/tealtiger",
         "docs/ecosystem/waldiez"
       ]
     },

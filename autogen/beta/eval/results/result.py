@@ -147,7 +147,7 @@ class RunResult:
 
     @property
     def target_path(self) -> str:
-        """``"<module>:<name>"`` provenance of the evaluated target (factory or instance type)."""
+        """``"<module>:<name>"`` provenance of the evaluated agent (its instance type)."""
         return self._target_path
 
     @property

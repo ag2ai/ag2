@@ -19,6 +19,7 @@ from autogen.beta.config.client import LLMClient
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
+    BinaryResult,
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
@@ -52,7 +53,22 @@ class CreateConfig(TypedDict, total=False):
     presence_penalty: float | None
     frequency_penalty: float | None
     seed: int | None
+    response_modalities: list[str] | None
+    image_config: types.ImageConfig | None
     thinking_config: types.ThinkingConfig | None
+
+
+def _inline_data_to_binary(blob: types.Blob) -> BinaryResult:
+    """Wrap a Gemini inline-data image part as a ``BinaryResult``.
+
+    Image models (for example ``gemini-3.1-flash-image``) return generated
+    images as ``inline_data`` parts. The media type is stashed under the
+    ``media_type`` metadata key that ``reply.files`` consumers read.
+    """
+    metadata: dict[str, Any] = {}
+    if blob.mime_type:
+        metadata["media_type"] = blob.mime_type
+    return BinaryResult(blob.data or b"", metadata=metadata)
 
 
 class GeminiClient(LLMClient):
@@ -141,8 +157,9 @@ class GeminiClient(LLMClient):
         response: types.GenerateContentResponse,
         context: "ConversationContext",
     ) -> ModelResponse:
-        model_msg: ModelMessage | None = None
+        full_content: str = ""
         calls: list[ToolCallEvent] = []
+        files: list[BinaryResult] = []
 
         for candidate in response.candidates or ():
             pending_code_call_id: str | None = None
@@ -151,8 +168,9 @@ class GeminiClient(LLMClient):
                     if part.thought and part.text:
                         await context.send(ModelReasoning(part.text))
                     elif part.text:
-                        model_msg = ModelMessage(part.text)
-                        await context.send(model_msg)
+                        full_content += part.text
+                    elif part.inline_data and part.inline_data.data:
+                        files.append(_inline_data_to_binary(part.inline_data))
                     elif part.function_call:
                         fc = part.function_call
                         calls.append(
@@ -186,6 +204,11 @@ class GeminiClient(LLMClient):
                     GeminiServerToolResultEvent.from_grounding(grounding, parent_id=gnd_call.id, name=name)
                 )
 
+        model_msg: ModelMessage | None = None
+        if full_content:
+            model_msg = ModelMessage(full_content)
+            await context.send(model_msg)
+
         usage = Usage()
         if response.usage_metadata:
             usage = normalize_usage(response.usage_metadata)
@@ -203,6 +226,7 @@ class GeminiClient(LLMClient):
             model=self._model_name,
             provider="google",
             finish_reason=finish_reason,
+            files=files,
         )
 
     async def _process_stream(
@@ -212,6 +236,7 @@ class GeminiClient(LLMClient):
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCallEvent] = []
+        files: list[BinaryResult] = []
         usage = Usage()
         finish_reason: str | None = None
         pending_code_call_id: str | None = None
@@ -226,6 +251,8 @@ class GeminiClient(LLMClient):
                         elif part.text:
                             full_content += part.text
                             await context.send(ModelMessageChunk(part.text))
+                        elif part.inline_data and part.inline_data.data:
+                            files.append(_inline_data_to_binary(part.inline_data))
                         elif part.function_call:
                             fc = part.function_call
                             calls.append(
@@ -284,4 +311,5 @@ class GeminiClient(LLMClient):
             model=self._model_name,
             provider="google",
             finish_reason=finish_reason,
+            files=files,
         )

@@ -126,9 +126,6 @@ from autogen.tools.experimental import Crawl4AITool
 # Deep research
 from autogen.tools.experimental import DeepResearchTool
 
-# Code execution
-from autogen.tools.experimental import PythonCodeExecutionTool
-
 # Wikipedia — pip install ag2[wikipedia]
 from autogen.tools.experimental import WikipediaQueryRunTool, WikipediaPageLoadTool
 
@@ -143,15 +140,6 @@ from autogen.tools.experimental import YoutubeSearchTool
 
 # Perplexity search — pip install ag2[perplexity]
 from autogen.tools.experimental import PerplexitySearchTool
-
-# SearxNG search — pip install ag2[searxng]
-from autogen.tools.experimental import SearxngSearchTool
-
-# Firecrawl — pip install ag2[firecrawl]
-from autogen.tools.experimental import FirecrawlTool
-
-# Web search preview (OpenAI) — pip install ag2[openai]
-from autogen.tools.experimental import WebSearchPreviewTool
 
 # Reliable tool wrapper
 from autogen.tools.experimental import ReliableTool
@@ -188,7 +176,6 @@ from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProx
 
 # Interop — pip install ag2[interop]
 from autogen.interop import Interoperability
-from autogen.interop.crewai import CrewAIInteroperability
 from autogen.interop.langchain import LangChainInteroperability
 from autogen.interop.pydantic_ai import PydanticAIInteroperability
 
@@ -213,7 +200,7 @@ pip install ag2[anthropic]         # Anthropic support
 pip install ag2[gemini]            # Google Gemini
 pip install ag2[mcp]               # Model Context Protocol
 pip install ag2[rag]               # RAG capabilities
-pip install ag2[interop]           # Framework interop (CrewAI, LangChain, PydanticAI)
+pip install ag2[interop]           # Framework interop (LangChain, PydanticAI)
 pip install ag2[tracing]           # OpenTelemetry tracing
 pip install ag2[duckduckgo_search] # DuckDuckGo search (no API key)
 pip install ag2[tavily]            # Tavily search

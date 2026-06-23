@@ -20,7 +20,6 @@ from typing import Any, ClassVar
 from typing_extensions import ParamSpec
 
 from ..code_utils import PYTHON_VARIANTS, TIMEOUT_MSG, WIN32, _cmd
-from ..doc_utils import export_module
 from .base import CodeBlock, CodeExecutor, CodeExtractor, CommandLineCodeResult
 from .func_with_reqs import (
     FunctionWithRequirements,
@@ -36,7 +35,6 @@ __all__ = ("LocalCommandLineCodeExecutor",)
 A = ParamSpec("A")
 
 
-@export_module("autogen.coding")
 class LocalCommandLineCodeExecutor(CodeExecutor):
     SUPPORTED_LANGUAGES: ClassVar[list[str]] = [
         "bash",

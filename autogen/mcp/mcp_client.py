@@ -17,7 +17,6 @@ from mcp.client.sse import sse_client
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from pydantic import AnyUrl, BaseModel, Field
 
-from ..doc_utils import export_module
 from ..import_utils import optional_import_block, require_optional_import
 from ..tools import Tool, Toolkit
 
@@ -325,7 +324,6 @@ class MCPClientSessionManager:
             yield session
 
 
-@export_module("autogen.mcp")
 async def create_toolkit(
     session: "ClientSession",
     *,
@@ -356,7 +354,6 @@ async def create_toolkit(
     )
 
 
-@export_module("autogen.mcp.mcp_client")
 class ResultSaved(BaseModel):
     """Result saved to a file"""
 

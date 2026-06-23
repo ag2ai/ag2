@@ -103,7 +103,7 @@ async def advance_task(channel: ChannelInject, state: ChannelStateInject) -> str
 The matching graph routes per task type and terminates when the queue
 is empty:
 
-```python linenums="1" hl_lines="4 5 6 7 8 11"
+```python linenums="1" hl_lines="4-10"
 graph = TransitionGraph(
     initial_speaker=triage.agent_id,
     transitions=[
@@ -160,7 +160,6 @@ from autogen.beta.network import (
 from autogen.beta.testing import TestConfig
 
 load_dotenv()
-
 
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
@@ -300,7 +299,6 @@ async def main() -> None:
     await writer_hc.close()
     await reviewer_hc.close()
     await hub_obj.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

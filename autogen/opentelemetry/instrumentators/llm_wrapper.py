@@ -8,7 +8,6 @@ from typing import Any
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.trace import SpanKind
 
-from autogen.doc_utils import export_module
 from autogen.oai import client as oai_client_module
 from autogen.oai.client import OpenAIWrapper
 from autogen.opentelemetry.consts import SpanType
@@ -22,7 +21,6 @@ from autogen.opentelemetry.utils import (
 )
 
 
-@export_module("autogen.opentelemetry")
 def instrument_llm_wrapper(*, tracer_provider: TracerProvider, capture_messages: bool = False) -> None:
     """Instrument OpenAIWrapper.create() to emit LLM spans.
 

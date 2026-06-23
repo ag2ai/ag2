@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
 from ...llm_config import LLMConfig
 from ...oai import get_first_llm_config
@@ -37,7 +36,6 @@ T = TypeVar("T", bound="LangChainChatModelFactory")
     "browser-use",
     except_for=["__init__", "register_factory"],
 )
-@export_module("autogen.interop")
 class LangChainChatModelFactory(ABC):
     _factories: set["LangChainChatModelFactory"] = set()
 

@@ -7,14 +7,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from autogen.a2a import A2aAgentServer
-from autogen.doc_utils import export_module
 from autogen.opentelemetry.setup import get_tracer
 from autogen.opentelemetry.utils import TRACE_PROPAGATOR
 
 from .agent import instrument_agent
 
 
-@export_module("autogen.opentelemetry")
 def instrument_a2a_server(server: A2aAgentServer, *, tracer_provider: TracerProvider) -> A2aAgentServer:
     """Instrument an A2A server with OpenTelemetry tracing.
 

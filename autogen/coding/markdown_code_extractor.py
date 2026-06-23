@@ -7,14 +7,12 @@
 import re
 
 from ..code_utils import CODE_BLOCK_PATTERN, UNKNOWN, content_str, infer_lang
-from ..doc_utils import export_module
 from ..types import UserMessageImageContentPart, UserMessageTextContentPart
 from .base import CodeBlock, CodeExtractor
 
 __all__ = ("MarkdownCodeExtractor",)
 
 
-@export_module("autogen.coding")
 class MarkdownCodeExtractor(CodeExtractor):
     """(Experimental) A class that extracts code blocks from a message using Markdown syntax."""
 

@@ -20,8 +20,12 @@ from autogen.beta.testing import TestConfig
 
 
 def _knowledge_tool_call(agent: Agent):
-    """Extract the underlying async function from the auto-injected tool."""
-    return agent._build_knowledge_tool()[0].model.call
+    """Extract the underlying async function from the auto-injected tool.
+
+    Auto-injected tools (the knowledge tool) live in ``_additional_tools``,
+    not the public ``agent.tools`` (which holds only user-supplied tools).
+    """
+    return agent._additional_tools[0].model.call
 
 
 @pytest.mark.asyncio
@@ -102,12 +106,12 @@ class TestExposeToolFlag:
             "policy-only",
             knowledge=KnowledgeConfig(store=store, expose_tool=False),
         )
-        assert agent._build_knowledge_tool() == []
+        assert not agent._additional_tools
 
     async def test_expose_tool_true_is_default(self) -> None:
         store = MemoryKnowledgeStore()
         agent = Agent("with-tool", knowledge=KnowledgeConfig(store=store))
-        assert len(agent._build_knowledge_tool()) == 1
+        assert len(agent._additional_tools) == 1
 
     async def test_default_bootstrap_omits_tool_instruction_when_unexposed(self) -> None:
         """The root SKILL.md should not tell the model about a tool that does not exist."""

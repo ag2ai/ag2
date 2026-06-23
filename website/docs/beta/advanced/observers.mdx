@@ -10,7 +10,7 @@ Use observers when you want to monitor agent behavior (logging, metrics, debuggi
 
 Use the `#!python observer()` function to pair an event condition with a callback. The first argument is the event type (or condition) to match, the second is an optional callback:
 
-```python linenums="1" hl_lines="4"
+```python linenums="1" hl_lines="4-5"
 from autogen.beta import observer
 from autogen.beta.events import ModelResponse
 
@@ -234,12 +234,11 @@ Severity levels live in `autogen.beta.events.Severity`: `INFO`, `WARNING`, `CRIT
 
 Subclass `BaseObserver`, pick a [Watch](/docs/beta/advanced/watches), implement `process()`:
 
-```python linenums="1" hl_lines="10 14 17"
+```python linenums="1" hl_lines="10 13 17-21"
 from autogen.beta import Context
 from autogen.beta.observer import BaseObserver
 from autogen.beta.watch import CadenceWatch
 from autogen.beta.events import BaseEvent, ModelResponse, ObserverAlert, Severity
-
 
 class AvgCompletionObserver(BaseObserver):
     """Every N responses, emit an INFO alert with the average completion-token count."""

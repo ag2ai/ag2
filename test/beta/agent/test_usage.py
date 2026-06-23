@@ -4,8 +4,8 @@
 
 import pytest
 
-from autogen.beta import Agent, Usage
-from autogen.beta.events import ModelMessage, ModelResponse
+from autogen.beta import Agent
+from autogen.beta.events import ModelMessage, ModelResponse, Usage
 from autogen.beta.testing import TestConfig
 
 

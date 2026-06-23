@@ -25,8 +25,6 @@ from httpx._transports.base import AsyncBaseTransport
 from httpx._types import AuthTypes, CertTypes, CookieTypes, HeaderTypes, ProxyTypes, QueryParamTypes, TimeoutTypes
 from httpx._urls import URL
 
-from autogen.doc_utils import export_module
-
 from .utils import EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
 
 
@@ -36,7 +34,6 @@ class ClientFactory(Protocol):
     def make_sync(self) -> Client: ...
 
 
-@export_module("autogen.a2a")
 class HttpxClientFactory(ClientFactory):
     """
     An asynchronous HTTP client factory, with connection pooling, HTTP/2, redirects,
@@ -146,7 +143,6 @@ class EmptyClientFactory(ClientFactory):
         return Client(timeout=30.0)
 
 
-@export_module("autogen.a2a")
 def MockClient(  # noqa: N802
     response_message: str | dict[str, Any] | TextPart | DataPart | Part,
     *,

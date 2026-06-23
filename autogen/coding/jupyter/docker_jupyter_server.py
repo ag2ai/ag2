@@ -16,7 +16,6 @@ from types import TracebackType
 
 from typing_extensions import Self
 
-from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
 from ..docker_commandline_code_executor import _wait_for_ready
 from .base import JupyterConnectable, JupyterConnectionInfo
@@ -29,7 +28,6 @@ with optional_import_block():
 
 @require_optional_import(["docker"], "docker")
 @require_jupyter_kernel_gateway_installed()
-@export_module("autogen.coding.jupyter")
 class DockerJupyterServer(JupyterConnectable):
     DEFAULT_DOCKERFILE = """FROM quay.io/jupyter/docker-stacks-foundation
 

@@ -53,10 +53,8 @@ from autogen.beta.config import GeminiConfig
 from autogen.beta.events import TaskCompleted, TaskStarted
 from autogen.beta.stream import MemoryStream
 
-
 def section(title: str) -> None:
     print(f"\n── {title} ───")
-
 
 async def main() -> None:
     config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
@@ -123,7 +121,6 @@ async def main() -> None:
 
     reply2 = await coordinator2.ask("What is 237 times 19?")
     print(reply2.body)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

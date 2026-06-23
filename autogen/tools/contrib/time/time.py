@@ -7,12 +7,9 @@ from typing import Annotated
 
 from autogen.tools import Tool
 
-from ....doc_utils import export_module
-
 __all__ = ["TimeTool"]
 
 
-@export_module("autogen.tools.contrib")  # API Reference: autogen > tools > contrib > TimeAgent
 class TimeTool(Tool):
     """Outputs the current date and time of the computer."""
 

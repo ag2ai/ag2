@@ -25,7 +25,6 @@ from typing_extensions import Self
 
 from autogen import ConversableAgent
 from autogen.agentchat.remote import RequestMessage, ResponseMessage
-from autogen.doc_utils import export_module
 from autogen.events.agent_events import TerminationEvent
 from autogen.io.base import IOStream
 from autogen.oai.client import OpenAIWrapper
@@ -50,7 +49,6 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
-@export_module("autogen.a2a")
 class A2aRemoteAgent(ConversableAgent):
     """`a2a-sdk`-based client for handling asynchronous communication with an A2A server.
 

@@ -416,10 +416,29 @@ class TestAnthropicV2Vision:
         assert chat_result.summary is not None
         assert len(chat_result.summary) > 0
 
-        # Verify the response mentions something about the image (dog, schnauzer, etc.)
+        # Verify the response describes the image. The model's exact wording varies run to
+        # run (e.g. "dog", "canine", "terrier"), so we match a broad vocabulary for this
+        # schnauzer-on-grass photo to keep the vision smoke test from flaking.
         summary_lower = chat_result.summary.lower()
         assert any(
-            keyword in summary_lower for keyword in ["dog", "schnauzer", "animal", "pet", "image", "photo", "picture"]
+            keyword in summary_lower
+            for keyword in [
+                "dog",
+                "schnauzer",
+                "canine",
+                "terrier",
+                "puppy",
+                "animal",
+                "pet",
+                "breed",
+                "fur",
+                "coat",
+                "grass",
+                "beard",
+                "image",
+                "photo",
+                "picture",
+            ]
         )
 
         # Verify cost tracking

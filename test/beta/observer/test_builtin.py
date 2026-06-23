@@ -38,7 +38,7 @@ class TestTokenMonitor:
 
         # Send a response with 50 tokens — below threshold
         event = ModelResponse(usage=Usage(total_tokens=50))
-        await stream.send(event, ctx)
+        await ctx.send(event)
 
         assert len(signals) == 0
         assert monitor.total_tokens == 50
@@ -53,7 +53,7 @@ class TestTokenMonitor:
 
         monitor.register(ExitStack(), ctx)
 
-        await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
+        await ctx.send(ModelResponse(usage=Usage(total_tokens=110)))
 
         assert len(signals) == 1
         assert signals[0].severity is Severity.WARNING
@@ -70,7 +70,7 @@ class TestTokenMonitor:
         monitor.register(ExitStack(), ctx)
 
         # Jump straight past both thresholds
-        await stream.send(ModelResponse(usage=Usage(total_tokens=250)), ctx)
+        await ctx.send(ModelResponse(usage=Usage(total_tokens=250)))
 
         # Should emit CRITICAL (not WARNING since critical is checked first)
         assert len(signals) == 1
@@ -86,7 +86,7 @@ class TestTokenMonitor:
 
         monitor.register(ExitStack(), ctx)
 
-        await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
+        await ctx.send(ModelResponse(usage=Usage(total_tokens=110)))
         assert monitor.total_tokens == 110
         assert len(signals) == 1
 
@@ -94,7 +94,7 @@ class TestTokenMonitor:
         assert monitor.total_tokens == 0
 
         # Warning must fire again after reset
-        await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
+        await ctx.send(ModelResponse(usage=Usage(total_tokens=110)))
         assert len(signals) == 2
 
     async def test_task_completed_usage(self) -> None:
@@ -108,7 +108,7 @@ class TestTokenMonitor:
 
         monitor.register(ExitStack(), ctx)
 
-        await stream.send(
+        await ctx.send(
             TaskCompleted(
                 task_id="t1",
                 agent_name="task-1",
@@ -116,8 +116,7 @@ class TestTokenMonitor:
                 result="done",
                 task_stream=stream.id,
                 usage=Usage(total_tokens=60),
-            ),
-            ctx,
+            )
         )
 
         assert monitor.total_tokens == 60
@@ -134,7 +133,7 @@ class TestTokenMonitor:
 
         monitor.register(ExitStack(), ctx)
 
-        await stream.send(
+        await ctx.send(
             TaskCompleted(
                 task_id="t1",
                 agent_name="task-1",
@@ -142,8 +141,7 @@ class TestTokenMonitor:
                 result="done",
                 task_stream=stream.id,
                 usage=Usage(total_tokens=120),
-            ),
-            ctx,
+            )
         )
 
         assert len(signals) == 1
@@ -160,8 +158,8 @@ class TestTokenMonitor:
 
         monitor.register(ExitStack(), ctx)
 
-        await stream.send(ModelResponse(usage=Usage(total_tokens=60)), ctx)
-        await stream.send(
+        await ctx.send(ModelResponse(usage=Usage(total_tokens=60)))
+        await ctx.send(
             TaskCompleted(
                 task_id="t1",
                 agent_name="task-1",
@@ -169,8 +167,7 @@ class TestTokenMonitor:
                 result="done",
                 task_stream=stream.id,
                 usage=Usage(total_tokens=50),
-            ),
-            ctx,
+            )
         )
 
         assert monitor.total_tokens == 110
@@ -186,17 +183,16 @@ class TestTokenMonitor:
         monitor.register(ExitStack(), ctx)
 
         # ModelResponse with default (empty) Usage
-        await stream.send(ModelResponse(), ctx)
+        await ctx.send(ModelResponse())
         # TaskCompleted with default empty Usage
-        await stream.send(
+        await ctx.send(
             TaskCompleted(
                 task_id="t1",
                 agent_name="task-1",
                 objective="x",
                 result="done",
                 task_stream=stream.id,
-            ),
-            ctx,
+            )
         )
 
         assert monitor.total_tokens == 0
@@ -212,8 +208,8 @@ class TestTokenMonitor:
 
         monitor.register(ExitStack(), ctx)
 
-        await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
-        await stream.send(ModelResponse(usage=Usage(total_tokens=50)), ctx)
+        await ctx.send(ModelResponse(usage=Usage(total_tokens=110)))
+        await ctx.send(ModelResponse(usage=Usage(total_tokens=50)))
 
         assert len(signals) == 1
 
@@ -231,8 +227,8 @@ class TestLoopDetector:
         detector.register(ExitStack(), ctx)
 
         # Only 2 identical calls — below threshold of 3
-        await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
-        await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
+        await ctx.send(ToolCallEvent(name="search", arguments="q"))
+        await ctx.send(ToolCallEvent(name="search", arguments="q"))
 
         assert len(signals) == 0
 
@@ -248,7 +244,7 @@ class TestLoopDetector:
 
         # 3 identical calls — should trigger
         for _ in range(3):
-            await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
+            await ctx.send(ToolCallEvent(name="search", arguments="q"))
 
         assert len(signals) == 1
         assert signals[0].severity is Severity.WARNING
@@ -265,9 +261,9 @@ class TestLoopDetector:
         detector.register(ExitStack(), ctx)
 
         # Different calls — no loop
-        await stream.send(ToolCallEvent(name="search", arguments="q1"), ctx)
-        await stream.send(ToolCallEvent(name="search", arguments="q2"), ctx)
-        await stream.send(ToolCallEvent(name="search", arguments="q3"), ctx)
+        await ctx.send(ToolCallEvent(name="search", arguments="q1"))
+        await ctx.send(ToolCallEvent(name="search", arguments="q2"))
+        await ctx.send(ToolCallEvent(name="search", arguments="q3"))
 
         assert len(signals) == 0
 
@@ -282,14 +278,14 @@ class TestLoopDetector:
         detector.register(ExitStack(), ctx)
 
         for _ in range(3):
-            await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
+            await ctx.send(ToolCallEvent(name="search", arguments="q"))
         assert len(signals) == 1
 
         detector.reset()
 
         # Same sequence must trigger again after reset
         for _ in range(3):
-            await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
+            await ctx.send(ToolCallEvent(name="search", arguments="q"))
         assert len(signals) == 2
 
 

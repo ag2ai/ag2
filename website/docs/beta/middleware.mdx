@@ -147,7 +147,7 @@ Use `on_human_input()` when you want to:
 
 To make middleware apply to every turn for an agent, pass it through the `middleware` argument when constructing the agent.
 
-```python linenums="1" hl_lines="3 10-11"
+```python linenums="1" hl_lines="9-12"
 from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.middleware import LoggingMiddleware, RetryMiddleware
@@ -209,7 +209,6 @@ from autogen.beta.config import OpenAIConfig
 from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.middleware import AgentTurn, BaseMiddleware
 
-
 class A(BaseMiddleware):
     async def on_turn(
         self,
@@ -221,7 +220,6 @@ class A(BaseMiddleware):
         response = await call_next(event, context)
         print("exit A")
         return response
-
 
 class B(BaseMiddleware):
     async def on_turn(
@@ -235,7 +233,6 @@ class B(BaseMiddleware):
         print("exit B")
         return response
 
-
 class C(BaseMiddleware):
     async def on_turn(
         self,
@@ -247,7 +244,6 @@ class C(BaseMiddleware):
         response = await call_next(event, context)
         print("exit C")
         return response
-
 
 agent = Agent(
     "assistant",
@@ -286,7 +282,6 @@ from autogen.beta.config import OpenAIConfig
 from autogen.beta.events import BaseEvent, ModelResponse, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware, LLMCall, Middleware, ToolExecution
 
-
 class AuditMiddleware(BaseMiddleware):
     def __init__(
         self,
@@ -316,7 +311,6 @@ class AuditMiddleware(BaseMiddleware):
     ):
         self.logger.info("Executing tool: %s", event.name)
         return await call_next(event, context)
-
 
 agent = Agent(
     "assistant",
