@@ -142,6 +142,6 @@ result = run_group_chat(
 - Use `get_or_create=True` to avoid re-indexing documents on every run
 - Set `task="code"` for code search, `"qa"` for document Q&A
 - `docs_path` accepts directories, file paths, and URLs
-- For large corpora, consider Qdrant: `pip install ag2[qdrant]` with `QdrantRetrieveUserProxyAgent`
+- For large corpora, consider Qdrant: `pip install ag2[retrievechat-qdrant]` and set `vector_db="qdrant"` on `RetrieveUserProxyAgent`
 - `chunk_token_size` affects retrieval quality — smaller chunks are more precise, larger chunks have more context
 - Always set `code_execution_config=False` on the RAG proxy unless code execution is needed

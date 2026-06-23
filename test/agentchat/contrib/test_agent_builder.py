@@ -12,8 +12,8 @@ import tempfile
 
 import pytest
 
+from autogen.agentchat.assistant_agent import AssistantAgent
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
-from autogen.agentchat.contrib.text_analyzer_agent import TextAnalyzerAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from test.credentials import Credentials
 
@@ -125,14 +125,14 @@ def test_build_from_library(builder: AgentBuilder, credentials_all: Credentials)
 @pytest.mark.openai
 def test_build_with_agent_configs(builder: AgentBuilder, credentials_all: Credentials):
     conf = {
-        "building_task": "Generate one TextAnalyzerAgent to analyze text",
+        "building_task": "Generate one AssistantAgent to analyze text",
         "agent_configs": [
             {
                 "name": "TextAnalyzerAgent",
                 "model": ["gpt-4o"],
                 "description": "A helpful assistant to analyze text. Ask them to analyze any text, and they will provide you with the analysis.",
                 "system_message": "",
-                "agent_path": "autogen/agentchat/contrib/text_analyzer_agent/TextAnalyzerAgent",
+                "agent_path": "autogen/agentchat/assistant_agent/AssistantAgent",
             }
         ],
         "coding": True,
@@ -144,11 +144,11 @@ def test_build_with_agent_configs(builder: AgentBuilder, credentials_all: Creden
 
     is_agent_found = False
     for agent in agents:
-        if isinstance(agent, TextAnalyzerAgent):
+        if isinstance(agent, AssistantAgent):
             is_agent_found = True
             break
 
-    assert is_agent_found, "TextAnalyzerAgent not found in agents"
+    assert is_agent_found, "AssistantAgent not found in agents"
 
 
 @pytest.mark.openai

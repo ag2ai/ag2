@@ -68,7 +68,7 @@ from langchain.agents.middleware import ...          # register_hook / register_
 | **Edge (fixed)** | `graph.add_edge("a", "b")` | Implicit via `initiate_chat()` or GroupChat ordering | AG2 doesn't have explicit fixed edges; flow is determined by conversation |
 | **Conditional edge** | `graph.add_conditional_edges(src, func, map)` | `OnCondition(target=agent, condition="...")` in Swarm, or `speaker_selection_method` in GroupChat | Closest mapping is Swarm's `OnCondition` for LLM-driven routing |
 | **Entry point** | `graph.add_edge(START, "first")` | `initial_agent` in swarm, or first agent in `initiate_chat()` | Implicit in AG2 |
-| **End point** | `graph.add_edge("last", END)` | `is_termination_msg` or `AfterWork(AfterWorkOption.TERMINATE)` | AG2 uses termination conditions rather than explicit end nodes |
+| **End point** | `graph.add_edge("last", END)` | `is_termination_msg` or `handoffs.set_after_work(TerminateTarget())` | AG2 uses termination conditions rather than explicit end nodes |
 | **Compile** | `graph.compile(checkpointer=...)` | Not needed (AG2 agents are ready to use) | No compilation step in AG2 |
 | **Invoke** | `app.invoke({"messages": [...]})` | `agent.initiate_chat(recipient, message="...")` | Different invocation model |
 | **Stream** | `app.stream(input, stream_mode="values")` | No built-in streaming equivalent | MANUAL: AG2 has no graph-level streaming |
@@ -120,15 +120,6 @@ def route(state: AgentState) -> str:
 graph.add_conditional_edges("agent", route, {"tools": "tools", END: END})
 ```
 
-**AG2 Swarm equivalent:**
-```python
-agent = SwarmAgent(name="agent", ...)
-agent.register_hand_off([
-    OnCondition(target=tool_agent, condition="When tools need to be called"),
-    AfterWork(AfterWorkOption.TERMINATE)
-])
-```
-
 **AG2 GroupChat equivalent:**
 ```python
 groupchat = GroupChat(
@@ -151,7 +142,7 @@ groupchat = GroupChat(
 | Parameter | LangGraph | AG2 Equivalent |
 |---|---|---|
 | `model` | `BaseChatModel` or string like `"openai:gpt-4o"` | `llm_config=LLMConfig(model="gpt-4o", api_type="openai")` |
-| `tools` | `list[BaseTool \| Callable \| dict]` | `register_function(func, caller=agent, executor=agent)` or `functions=[...]` on SwarmAgent |
+| `tools` | `list[BaseTool \| Callable \| dict]` | `register_function(func, caller=agent, executor=agent)` or `functions=[...]` on `ConversableAgent` |
 | `prompt` | `str \| SystemMessage \| Callable` | `system_message="..."` |
 | `name` | `str` | `name="..."` |
 | `response_format` | `BaseModel` (Pydantic) for structured output | No direct equivalent; use tool-based structured output |
@@ -322,7 +313,7 @@ register_function(
 | Pattern | LangGraph | AG2 |
 |---|---|---|
 | Bind to model | `model.bind_tools([tool1, tool2])` | `register_function(func, caller=agent, ...)` |
-| Bind at agent creation | `create_react_agent(tools=[...])` | `ConversableAgent(functions=[func1, func2])` on SwarmAgent |
+| Bind at agent creation | `create_react_agent(tools=[...])` | `ConversableAgent(functions=[func1, func2])` |
 | Separate caller/executor | Not applicable (ToolNode handles both) | `register_function(func, caller=llm_agent, executor=exec_agent)` |
 | Dynamic tool selection | `tool_chooser` on ToolNode | `func_call_filter=True` in GroupChat |
 
@@ -374,14 +365,16 @@ def router(state):
 graph.add_conditional_edges("classifier", router)
 ```
 
-**AG2 Swarm:**
+**AG2:**
 ```python
-classifier = SwarmAgent(name="classifier", ...)
-classifier.register_hand_off([
-    OnCondition(target=billing_agent, condition="Route to billing for payment/invoice questions"),
-    OnCondition(target=tech_agent, condition="Route to tech support for technical issues"),
-    AfterWork(agent=general_agent),  # Default fallback
+from autogen.agentchat.group import OnCondition, AgentTarget, StringLLMCondition
+
+classifier = ConversableAgent(name="classifier", ...)
+classifier.handoffs.add_llm_conditions([
+    OnCondition(target=AgentTarget(billing_agent), condition=StringLLMCondition(prompt="Route to billing for payment/invoice questions")),
+    OnCondition(target=AgentTarget(tech_agent), condition=StringLLMCondition(prompt="Route to tech support for technical issues")),
 ])
+classifier.handoffs.set_after_work(AgentTarget(general_agent))  # Default fallback
 ```
 
 ### 5.3 Pattern: Supervisor / Hierarchical
@@ -426,7 +419,7 @@ groupchat = GroupChat(agents=[agent_a, agent_b], messages=[])
 ```
 
 > Note: AG2 doesn't have a typed shared scratchpad. The conversation itself serves
-> as the shared context. For structured shared state, use `context_variables` in Swarm.
+> as the shared context. For structured shared state, use `ContextVariables` in a group chat.
 
 ### 5.5 Pattern: Hierarchical Teams (Nested Subgraphs)
 

@@ -82,18 +82,6 @@ executor = DockerCommandLineCodeExecutor(
 
 Requires Docker to be running. Strongly recommended for production.
 
-## PythonCodeExecutionTool (Experimental)
-
-A tool-based approach — the agent calls code execution as a tool:
-
-```python
-from autogen.tools.experimental import PythonCodeExecutionTool
-
-code_tool = PythonCodeExecutionTool(work_dir="./output")
-code_tool.register_for_llm(assistant)
-code_tool.register_for_execution(user_proxy)
-```
-
 ## Safety Best Practices
 
 - **Always use Docker for untrusted code** — `DockerCommandLineCodeExecutor` sandboxes execution
