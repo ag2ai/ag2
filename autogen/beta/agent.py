@@ -19,8 +19,8 @@ import asyncio
 import json
 import logging
 import types
-from collections.abc import AsyncIterator, Callable, Iterable, Sequence
-from contextlib import ExitStack, asynccontextmanager, suppress
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
+from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
@@ -289,6 +289,227 @@ class AgentReply(Generic[TResult, TAgent]):
             additional_observers=observers,
             response_schema=response_schema,
         )
+
+    @overload
+    def run(
+        self,
+        *msg: SendableMessage | Input,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: type[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentRun[T2, TAgent]": ...
+
+    @overload
+    def run(
+        self,
+        *msg: SendableMessage | Input,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: ResponseProto[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentRun[T2, TAgent]": ...
+
+    @overload
+    def run(
+        self,
+        *msg: SendableMessage | Input,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: None,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentRun[str, TAgent]": ...
+
+    @overload
+    def run(
+        self,
+        *msg: SendableMessage | Input,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentRun[TAgent, TAgent]": ...
+
+    def run(
+        self,
+        *msg: SendableMessage | Input,
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "AgentRun[Any, Any]":
+        """Observable, non-blocking continuation of this reply (counterpart to ``ask``).
+
+        Continues the conversation on this reply's context/stream and reuses its
+        client (unless ``config`` overrides it), returning an :class:`AgentRun`
+        whose turn advances when ``result()`` is awaited.
+        """
+        initial_event = ModelRequest.ensure_request(list(msg))
+
+        context = self.context
+        if dependencies:
+            context.dependencies.update(dependencies)
+        if variables:
+            context.variables.update(variables)
+        if prompt:
+            context.prompt = list(prompt)
+
+        client = config.create() if config else self.__client
+
+        return self.__agent._make_run(
+            initial_event,
+            context=context,
+            config=config,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
+            response_schema=response_schema,
+            hitl_hook=hitl_hook,
+            client=client,
+        )
+
+
+class AgentRun(Generic[TResult, TAgent]):
+    """An observable turn opened by ``Agent.run``.
+
+    ``AgentRun`` is an async context manager. Entering it opens the turn *scope*
+    — middlewares are instantiated and the turn's subscribers (LLM callback,
+    HITL, tool executor) are registered on the stream — but the turn does not
+    advance until the caller drives it with ``result()``. Because the scope's
+    subscribers are already live, observation is **push-based**: subscribe to
+    ``stream`` (or attach ``observers=``) before driving, and the callbacks fire
+    inline as the turn runs. No background task is involved. See
+    ``docs/adr/0005-agent-run-turn-is-scoped-to-its-context-manager.md``.
+
+    * ``await run.result()`` — drives the turn (once) and returns its
+      ``AgentReply``; idempotent, re-raising the same failure on retry and never
+      re-running the turn.
+    * ``run.stream`` — the underlying stream, for ``subscribe`` / ``where`` /
+      ``get`` / ``join`` observation.
+
+    The turn runs only inside the block, and only while ``result()`` is awaited,
+    so cancelling that await (e.g. ``asyncio.wait_for(run.result(), timeout)``)
+    cancels the turn inline; leaving the block without driving runs nothing.
+    """
+
+    def __init__(
+        self,
+        agent: "Agent[TAgent]",
+        trigger: BaseEvent,
+        *,
+        context: Context,
+        config: ModelConfig | None,
+        tools: Iterable[Tool],
+        middleware: Iterable[MiddlewareFactory],
+        observers: Iterable[Observer],
+        response_schema: Omittable[ResponseProto[Any] | type | None],
+        hitl_hook: HumanHook | None,
+        client: LLMClient | None = None,
+    ) -> None:
+        self.__agent = agent
+        self.__trigger = trigger
+        self.__context = context
+        self.__config = config
+        self.__tools = tools
+        self.__middleware = middleware
+        self.__observers = observers
+        self.__response_schema = response_schema
+        self.__hitl_hook = hitl_hook
+        # A continuation (``AgentReply.run``) supplies the original turn's client
+        # so it keeps using the same provider; a fresh run leaves it None and the
+        # client is resolved from config on enter.
+        self.__client = client
+
+        self.__stack = AsyncExitStack()
+        self.__driver: Callable[[], Awaitable[AgentReply[TResult, TAgent]]] | None = None
+        self.__reply: AgentReply[TResult, TAgent] | None = None
+        self.__error: BaseException | None = None
+        self.__driven = False
+
+    @property
+    def stream(self) -> Stream:
+        """The stream the turn runs on — subscribe to it to observe the turn live."""
+        return self.__context.stream
+
+    def enqueue(self, *content: SendableMessage | Input) -> None:
+        """Append a follow-up message to the turn's inbox (non-blocking).
+
+        Forwards to the stream inbox. The running turn drains it at its next or
+        final model call, so a message enqueued while the turn is driving is
+        consumed by that turn; one enqueued before ``result()`` merges into the
+        first model call; one enqueued after the turn completes waits for the
+        next turn on this stream. Safe to call from a stream subscriber (inline
+        during the drive) or a concurrent task — it only appends.
+        """
+        self.__context.enqueue(*content)
+
+    async def __aenter__(self) -> "AgentRun[TResult, TAgent]":
+        client = self.__client
+        if client is None:
+            client = await self.__agent._prepare_turn(self.__trigger, self.__context, self.__config)
+        self.__driver = await self.__stack.enter_async_context(
+            self.__agent._turn_scope(
+                self.__trigger,
+                context=self.__context,
+                client=client,
+                hitl_hook=self.__hitl_hook,
+                additional_tools=self.__tools,
+                additional_middleware=self.__middleware,
+                additional_observers=self.__observers,
+                response_schema=self.__response_schema,
+            )
+        )
+        return self
+
+    async def result(self) -> "AgentReply[TResult, TAgent]":
+        """Drive the turn (once) and return its ``AgentReply`` (idempotent)."""
+        if self.__driver is None:
+            raise RuntimeError("AgentRun.result() called outside its 'async with' block")
+        if self.__driven:
+            if self.__error is not None:
+                raise self.__error
+            assert self.__reply is not None
+            return self.__reply
+        self.__driven = True
+        try:
+            self.__reply = await self.__driver()
+            return self.__reply
+        except BaseException as e:
+            self.__error = e
+            raise
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any,
+    ) -> bool:
+        await self.__stack.aclose()
+        return False
 
 
 _STREAM_TURN_LOCK_ATTR = "_ag2_turn_lock"
@@ -636,14 +857,150 @@ class Agent(PluginTarget, Generic[TResult]):
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
-        stream = stream or MemoryStream()
+        # ``ask`` is the blocking degenerate case of ``run``: open a run, drive
+        # it to its result, and let the scope close.
+        async with self._open_run(
+            *msg,
+            stream=stream,
+            dependencies=dependencies,
+            variables=variables,
+            prompt=prompt,
+            config=config,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
+            response_schema=response_schema,
+            hitl_hook=hitl_hook,
+        ) as handle:
+            return await handle.result()
+
+    @overload
+    def run(
+        self,
+        *msg: SendableMessage | Input,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: type[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentRun[T2, TResult]": ...
+
+    @overload
+    def run(
+        self,
+        msg: SendableMessage | Input,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: ResponseProto[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentRun[T2, TResult]": ...
+
+    @overload
+    def run(
+        self,
+        msg: SendableMessage | Input,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: None,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentRun[str, TResult]": ...
+
+    @overload
+    def run(
+        self,
+        msg: SendableMessage | Input,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentRun[TResult, TResult]": ...
+
+    def run(
+        self,
+        *msg: SendableMessage | Input,
+        stream: Stream | None = None,
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "AgentRun[Any, Any]":
+        """Observable counterpart to ``ask``: open a turn scope you can watch.
+
+        Returns an :class:`AgentRun` async context manager. Entering it opens the
+        turn scope (subscribers live) and yields a handle; the turn advances when
+        ``result()`` is awaited, with events flowing through ``run.stream`` as it
+        runs. Mirrors ``ask``'s signature.
+        """
+        return self._open_run(
+            *msg,
+            stream=stream,
+            dependencies=dependencies,
+            variables=variables,
+            prompt=prompt,
+            config=config,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
+            response_schema=response_schema,
+            hitl_hook=hitl_hook,
+        )
+
+    def _open_run(
+        self,
+        *msg: SendableMessage | Input,
+        stream: Stream | None,
+        dependencies: dict[Any, Any] | None,
+        variables: dict[Any, Any] | None,
+        prompt: Iterable[str],
+        config: ModelConfig | None,
+        tools: Iterable[Tool],
+        middleware: Iterable[MiddlewareFactory],
+        observers: Iterable[Observer],
+        response_schema: Omittable[ResponseProto[Any] | type | None],
+        hitl_hook: HumanHook | None,
+    ) -> "AgentRun[Any, Any]":
+        """Build a context from public kwargs and open a run over a fresh request.
+
+        The shared body of ``ask`` and ``run``: both delegate here so context
+        construction lives in one place.
+        """
         context = self.__build_context(
-            stream,
+            stream or MemoryStream(),
             prompt=prompt,
             dependencies=dependencies,
             variables=variables,
         )
-        return await self._drive(
+        return self._make_run(
             ModelRequest.ensure_request(msg),
             context=context,
             config=config,
@@ -652,6 +1009,39 @@ class Agent(PluginTarget, Generic[TResult]):
             observers=observers,
             response_schema=response_schema,
             hitl_hook=hitl_hook,
+        )
+
+    def _make_run(
+        self,
+        trigger: BaseEvent,
+        *,
+        context: Context,
+        config: ModelConfig | None,
+        tools: Iterable[Tool],
+        middleware: Iterable[MiddlewareFactory],
+        observers: Iterable[Observer],
+        response_schema: Omittable[ResponseProto[Any] | type | None],
+        hitl_hook: HumanHook | None,
+        client: LLMClient | None = None,
+    ) -> "AgentRun[Any, Any]":
+        """The launch primitive: wrap a ``(trigger, context)`` turn as an ``AgentRun``.
+
+        Every public entry point (``ask`` / ``run`` / ``_ask`` / ``resume`` /
+        ``AgentReply.run``) funnels through here, so there is a single place a
+        turn is launched. ``client`` is passed by continuations (``AgentReply.run``)
+        that reuse the original turn's client; a fresh run leaves it None.
+        """
+        return AgentRun(
+            self,
+            trigger,
+            context=context,
+            config=config,
+            tools=tools,
+            middleware=middleware,
+            observers=observers,
+            response_schema=response_schema,
+            hitl_hook=hitl_hook,
+            client=client,
         )
 
     async def resume(
@@ -691,7 +1081,7 @@ class Agent(PluginTarget, Generic[TResult]):
             variables=variables,
         )
 
-        return await self._drive(
+        async with self._make_run(
             trigger,
             context=context,
             config=config,
@@ -700,7 +1090,8 @@ class Agent(PluginTarget, Generic[TResult]):
             observers=observers,
             response_schema=response_schema,
             hitl_hook=hitl_hook,
-        )
+        ) as handle:
+            return await handle.result()
 
     async def _ask(
         self,
@@ -714,7 +1105,7 @@ class Agent(PluginTarget, Generic[TResult]):
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
         """`Agent.ask()` alternative method to call agent with prebuild `context`."""
-        return await self._drive(
+        async with self._make_run(
             ModelRequest.ensure_request(msg),
             context=context,
             config=config,
@@ -723,25 +1114,24 @@ class Agent(PluginTarget, Generic[TResult]):
             observers=observers,
             response_schema=response_schema,
             hitl_hook=hitl_hook,
-        )
+        ) as handle:
+            return await handle.result()
 
-    async def _drive(
+    async def _prepare_turn(
         self,
         trigger: BaseEvent,
-        *,
         context: Context,
-        config: ModelConfig | None = None,
-        tools: Iterable[Tool] = (),
-        middleware: Iterable[MiddlewareFactory] = (),
-        observers: Iterable[Observer] = (),
-        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
-        hitl_hook: HumanHook | None = None,
-    ) -> "AgentReply[Any, Any]":
-        """Shared core for `ask`/`_ask`/`resume`: drive the loop from `trigger`."""
+        config: ModelConfig | None,
+    ) -> LLMClient:
+        """Resolve the client and seed the prompt for a turn about to be driven.
+
+        Shared prelude for every ``AgentRun`` (and thus every public entry point):
+        pick the config, fail fast if none, and fill ``context.prompt`` from the
+        system + dynamic prompts when the caller hasn't supplied one.
+        """
         config = config or self.config
         if not config:
             raise ConfigNotProvidedError()
-        client = config.create()
 
         if not context.prompt:
             context.prompt.extend(self._system_prompt)
@@ -750,16 +1140,7 @@ class Agent(PluginTarget, Generic[TResult]):
                 p = await dp(trigger, context)
                 context.prompt.append(p)
 
-        return await self._execute(
-            trigger,
-            context=context,
-            client=client,
-            hitl_hook=hitl_hook,
-            additional_tools=tools,
-            additional_middleware=middleware,
-            additional_observers=observers,
-            response_schema=response_schema,
-        )
+        return config.create()
 
     async def _execute(
         self,
@@ -773,36 +1154,27 @@ class Agent(PluginTarget, Generic[TResult]):
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
     ) -> "AgentReply[Any, Any]":
-        # Serialize turns on the same stream. Tool executor subscribers
-        # (see ``tools/executor.py``) register on the stream during a turn
-        # and unregister when the turn exits. If two ``ask`` calls share a
-        # stream and run concurrently, both turns' subscribers see every
-        # event, causing duplicate tool execution, racing ``set_result``
-        # calls on ``context.stream.get`` futures, and orphaned tool_use
-        # records that break subsequent Anthropic turns
-        # ("messages.N: tool_use ids were found without tool_result
-        # blocks immediately after").
-        #
-        # The lock is a lazy per-stream asyncio.Lock attached to the
-        # stream itself. Streams created fresh for a single turn pay a
-        # no-contention acquire — no behaviour change. Shared streams
-        # queue turns instead of interleaving them. Sub-tasks spawn on
-        # their own stream (see ``run_task.py``), so they never contend
-        # with the parent turn's lock.
-        stream_lock = _get_stream_turn_lock(context.stream)
-        async with stream_lock:
-            return await self._execute_locked(
-                event,
-                context=context,
-                client=client,
-                hitl_hook=hitl_hook,
-                additional_tools=additional_tools,
-                additional_middleware=additional_middleware,
-                additional_observers=additional_observers,
-                response_schema=response_schema,
-            )
+        """Blocking turn: open the scope and immediately drive it to completion.
 
-    async def _execute_locked(
+        The shared entry for callers that already hold a ``client`` (notably
+        ``AgentReply.ask`` and the A2A executor). ``run`` / ``ask`` route through
+        ``AgentRun``, which enters the *same* ``_turn_scope`` but defers the drive
+        to ``result()``.
+        """
+        async with self._turn_scope(
+            event,
+            context=context,
+            client=client,
+            hitl_hook=hitl_hook,
+            additional_tools=additional_tools,
+            additional_middleware=additional_middleware,
+            additional_observers=additional_observers,
+            response_schema=response_schema,
+        ) as drive:
+            return await drive()
+
+    @asynccontextmanager
+    async def _turn_scope(
         self,
         event: BaseEvent,
         *,
@@ -813,8 +1185,32 @@ class Agent(PluginTarget, Generic[TResult]):
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
-    ) -> "AgentReply[Any, Any]":
-        async with self._knowledge_context.enter(context):
+    ) -> "AsyncIterator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
+        """Open a turn scope and yield a ``drive`` callable that runs it once.
+
+        Sets up everything a turn needs and keeps it live across the ``yield``:
+        the per-stream lock (serialisation), the knowledge context, the resolved
+        tool schemas, the instantiated middlewares, the turn's subscribers (LLM
+        callback, HITL, tool executor) and the observer lifecycle. The yielded
+        ``drive`` advances the turn from ``event`` and returns the ``AgentReply``.
+
+        Splitting *open the scope* from *drive the turn* is what lets ``AgentRun``
+        be observable without a background task: a caller enters the scope (so the
+        subscribers are live), subscribes to the stream, then calls ``drive`` —
+        events flow inline as the turn runs. ``ask`` enters and drives in one step.
+
+        The per-stream lock serialises turns on a shared stream. Tool executor
+        subscribers (see ``tools/executor.py``) register on the stream while the
+        scope is open; if two turns shared a stream and overlapped, both turns'
+        subscribers would see every event — causing duplicate tool execution,
+        racing ``set_result`` calls on ``context.stream.get`` futures, and
+        orphaned tool_use records that break subsequent Anthropic turns. The lock
+        is a lazy per-stream ``asyncio.Lock``; a fresh single-turn stream pays a
+        no-contention acquire. Sub-tasks spawn on their own stream, so they never
+        contend with the parent turn's lock.
+        """
+        stream_lock = _get_stream_turn_lock(context.stream)
+        async with stream_lock, self._knowledge_context.enter(context):
             if response_schema is omit:
                 final_schema = self._response_schema
             else:
@@ -922,15 +1318,19 @@ class Agent(PluginTarget, Generic[TResult]):
                     stack,
                     context,
                 ):
-                    message = await agent_turn(event, context)
-                    return AgentReply(
-                        message,
-                        context=context,
-                        agent=self,
-                        client=client,
-                        provider=self.dependency_provider,
-                        response_schema=final_schema,
-                    )
+
+                    async def drive() -> "AgentReply[Any, Any]":
+                        message = await agent_turn(event, context)
+                        return AgentReply(
+                            message,
+                            context=context,
+                            agent=self,
+                            client=client,
+                            provider=self.dependency_provider,
+                            response_schema=final_schema,
+                        )
+
+                    yield drive
 
     async def _spawn_subtask(self, task: str, ctx: Context) -> str:
         """Spawn a subtask Agent and delegate via ``run_task``.
