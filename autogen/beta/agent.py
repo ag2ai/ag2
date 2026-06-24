@@ -399,21 +399,27 @@ class AgentRun(Generic[TResult, TAgent]):
     ``AgentRun`` is an async context manager. Entering it opens the turn *scope*
     — middlewares are instantiated and the turn's subscribers (LLM callback,
     HITL, tool executor) are registered on the stream — but the turn does not
-    advance until the caller drives it with ``result()``. Because the scope's
-    subscribers are already live, observation is **push-based**: subscribe to
-    ``stream`` (or attach ``observers=``) before driving, and the callbacks fire
-    inline as the turn runs. No background task is involved. See
-    ``docs/adr/0005-agent-run-turn-is-scoped-to-its-context-manager.md``.
+    advance until the caller drives it. Because the scope's subscribers are
+    already live, observation is **push-based**: subscribe to ``stream`` (or
+    attach ``observers=``) before driving, and the callbacks fire inline as the
+    turn runs. See
+    ``docs/adr/0005-agent-run-turn-is-scoped-to-its-context-manager.md`` and its
+    amendment ``docs/adr/0006-agent-run-start-drives-in-background.md``.
 
-    * ``await run.result()`` — drives the turn (once) and returns its
-      ``AgentReply``; idempotent, re-raising the same failure on retry and never
-      re-running the turn.
-    * ``run.stream`` — the underlying stream, for ``subscribe`` / ``where`` /
-      ``get`` / ``join`` observation.
+    The turn is driven by a single task owned by the scope:
 
-    The turn runs only inside the block, and only while ``result()`` is awaited,
-    so cancelling that await (e.g. ``asyncio.wait_for(run.result(), timeout)``)
-    cancels the turn inline; leaving the block without driving runs nothing.
+    * ``await run.result()`` — drives the turn and returns its ``AgentReply``;
+      idempotent, re-raising the same failure on retry and never re-running the
+      turn. Cancelling the await (e.g. ``asyncio.wait_for(run.result(), timeout)``)
+      cancels the turn.
+    * ``run.start()`` — kicks off that same task without awaiting it, so the
+      caller can do other work (e.g. pull events via ``run.stream.join()``)
+      meanwhile, then ``await run.result()`` for the reply.
+
+    Either way the task is owned by the scope: leaving the block cancels it if it
+    is still running, so the turn never outlives the block. ``run.stream`` is the
+    underlying stream, for ``subscribe`` / ``where`` / ``get`` / ``join``
+    observation. Leaving the block without driving runs nothing.
     """
 
     def __init__(
@@ -446,9 +452,10 @@ class AgentRun(Generic[TResult, TAgent]):
 
         self.__stack = AsyncExitStack()
         self.__driver: Callable[[], Awaitable[AgentReply[TResult, TAgent]]] | None = None
-        self.__reply: AgentReply[TResult, TAgent] | None = None
-        self.__error: BaseException | None = None
-        self.__driven = False
+        # The single task driving the turn, created lazily by ``start()`` or
+        # ``result()``. It holds the turn's outcome, so awaiting it again is
+        # idempotent; ``__aexit__`` cancels it if it is still running.
+        self.__task: asyncio.Task[AgentReply[TResult, TAgent]] | None = None
 
     @property
     def stream(self) -> Stream:
@@ -485,21 +492,37 @@ class AgentRun(Generic[TResult, TAgent]):
         )
         return self
 
-    async def result(self) -> "AgentReply[TResult, TAgent]":
-        """Drive the turn (once) and return its ``AgentReply`` (idempotent)."""
+    def __ensure_task(self) -> "asyncio.Task[AgentReply[TResult, TAgent]]":
         if self.__driver is None:
-            raise RuntimeError("AgentRun.result() called outside its 'async with' block")
-        if self.__driven:
-            if self.__error is not None:
-                raise self.__error
-            assert self.__reply is not None
-            return self.__reply
-        self.__driven = True
+            raise RuntimeError("AgentRun driven outside its 'async with' block")
+        if self.__task is None:
+            self.__task = asyncio.ensure_future(self.__driver())
+        return self.__task
+
+    def start(self) -> None:
+        """Drive the turn in a scope-owned background task (non-blocking).
+
+        Use this to make the turn progress while the caller does other work —
+        typically pulling events via ``run.stream.join()``. ``await result()``
+        then returns the same reply (or re-raises the same failure) the task
+        produced. Idempotent: a no-op once the turn is already being driven. The
+        task is owned by the scope — leaving the block cancels it if it is still
+        running, so the turn never outlives the block.
+        """
+        self.__ensure_task()
+
+    async def result(self) -> "AgentReply[TResult, TAgent]":
+        """Drive the turn and return its ``AgentReply`` (idempotent).
+
+        Awaits the turn's task, creating it here if ``start()`` was not called.
+        Repeated calls return the same reply or re-raise the same failure.
+        Cancelling this await cancels the turn.
+        """
+        task = self.__ensure_task()
         try:
-            self.__reply = await self.__driver()
-            return self.__reply
-        except BaseException as e:
-            self.__error = e
+            return await task
+        except asyncio.CancelledError:
+            task.cancel()
             raise
 
     async def __aexit__(
@@ -508,6 +531,16 @@ class AgentRun(Generic[TResult, TAgent]):
         exc: BaseException | None,
         tb: Any,
     ) -> bool:
+        task = self.__task
+        if task is not None:
+            if not task.done():
+                task.cancel()
+            # Retrieve the outcome so a cancelled/failed background turn does not
+            # surface as an unretrieved-task warning. The caller opted out of the
+            # result by leaving the block without awaiting ``result()``, so its
+            # cancellation or failure is swallowed here.
+            with suppress(asyncio.CancelledError, Exception):
+                await task
         await self.__stack.aclose()
         return False
 

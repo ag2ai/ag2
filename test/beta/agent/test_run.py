@@ -5,16 +5,18 @@
 """Contract for ``Agent.run`` — the observable counterpart to ``Agent.ask``.
 
 ``run`` opens a turn *scope* and yields an ``AgentRun`` handle. The turn does
-not advance until the caller drives it with ``result()``; while it drives, every
-event flows through ``run.stream``, so observation is push-based (subscribe a
-callback, or attach ``observers=``). No background task is involved.
+not advance until the caller drives it; while it drives, every event flows
+through ``run.stream``, so observation is push-based (subscribe a callback, or
+attach ``observers=``).
 
-* ``await run.result()`` — the authoritative, idempotent ``AgentReply``.
+* ``await run.result()`` — drive inline and get the authoritative, idempotent
+  ``AgentReply``; cancelling that await (e.g. a timeout) cancels the turn inline.
+* ``run.start()`` — drive in a scope-owned background task; ``result()`` then
+  awaits it, and leaving the block cancels it if still running.
 * ``run.stream`` — the underlying stream; subscribe to observe the turn live.
-* The turn runs *inside* the block, only while ``result()`` is awaited; cancelling
-  that await (e.g. a timeout) cancels the turn inline.
 
-See docs/adr/0005-agent-run-turn-is-scoped-to-its-context-manager.md.
+See docs/adr/0005-agent-run-turn-is-scoped-to-its-context-manager.md and its
+amendment docs/adr/0006-agent-run-start-drives-in-background.md.
 """
 
 import asyncio
@@ -251,3 +253,83 @@ async def test_cancelling_result_cancels_turn_inline() -> None:
             await asyncio.wait_for(run.result(), timeout=0.2)
 
     assert cancelled.is_set(), "cancelling the result() await must cancel the in-flight turn"
+
+
+@pytest.mark.asyncio
+class TestStart:
+    async def test_drives_in_background_and_result_returns_reply(self) -> None:
+        tool_call = ToolCallEvent(name="ping", arguments="{}")
+        agent = Agent(
+            "runner",
+            config=TestConfig(tool_call, "done"),
+            tools=[tool(lambda: "pong", name="ping")],
+        )
+
+        seen: list[BaseEvent] = []
+        async with agent.run("Hi!") as run:
+            run.start()  # drive in the background; pull events meanwhile
+            with run.stream.join() as events:
+                async for event in events:
+                    seen.append(event)
+                    if isinstance(event, ModelResponse) and event.content == "done":
+                        break
+            reply = await run.result()
+
+        assert reply.body == "done"
+        assert [e for e in seen if isinstance(e, ToolCallEvent)] == [tool_call]
+
+    async def test_result_returns_same_reply_after_start(self) -> None:
+        agent = Agent("runner", config=TestConfig("hello"))
+
+        async with agent.run("Hi!") as run:
+            run.start()
+            first = await run.result()
+            second = await run.result()
+
+        assert first is second
+        assert first.body == "hello"
+
+    async def test_start_is_idempotent(self) -> None:
+        agent = Agent("runner", config=TestConfig("hello"))
+
+        async with agent.run("Hi!") as run:
+            run.start()
+            run.start()  # second call is a no-op
+            reply = await run.result()
+
+        assert reply.body == "hello"
+
+    async def test_leaving_block_cancels_started_turn(self) -> None:
+        cancelled = asyncio.Event()
+        running = asyncio.Event()
+
+        @tool
+        async def block() -> str:
+            """Blocks forever, flagging when it runs and when it is cancelled."""
+            running.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+            return "never"
+
+        agent = Agent(
+            "runner",
+            config=TestConfig(ToolCallEvent(name="block", arguments="{}"), "unreachable"),
+            tools=[block],
+        )
+
+        async with agent.run("Hi!") as run:
+            run.start()
+            await asyncio.wait_for(running.wait(), timeout=1.0)  # let the turn reach the tool
+            # leave the block without awaiting result()
+
+        assert cancelled.is_set(), "leaving the block must cancel a started, still-running turn"
+
+    async def test_start_outside_block_raises(self) -> None:
+        agent = Agent("runner", config=TestConfig("hello"))
+        run = agent.run("Hi!")
+
+        with pytest.raises(RuntimeError):
+            run.start()
