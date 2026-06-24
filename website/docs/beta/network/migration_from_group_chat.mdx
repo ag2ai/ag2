@@ -44,11 +44,8 @@ alice.initiate_chat(manager, message="Topic: should every dev learn Rust?")
 
 **Beta network:**
 
-```python linenums="1" hl_lines="6-9 11-16"
-from autogen.beta.network import (
-    Hub, Passport, Resume,
-    TransitionGraph,
-)
+```python linenums="1" hl_lines="3-6 8-13"
+from autogen.beta.network import TransitionGraph
 
 graph = TransitionGraph.round_robin(
     participants=[alice.agent_id, bob.agent_id, carol.agent_id],
