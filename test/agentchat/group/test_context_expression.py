@@ -454,6 +454,24 @@ class TestContextExpressionNewSyntax:
             is True
         )
 
+    def test_variable_used_in_len_and_bare_reference(self) -> None:
+        """A variable used both inside len() and as a bare reference must still be substituted.
+
+        Previously the bare ${var} was skipped whenever the same name appeared in a len()
+        match, so the literal ${var} survived into eval() and raised a ValueError.
+        """
+        context = ContextVariables(
+            data={
+                "items": [1, 2, 3],
+                "empty": [],
+            }
+        )
+
+        assert ContextExpression("len(${items}) > 0 and ${items}").evaluate(context) is True
+        assert ContextExpression("len(${empty}) == 0 or ${empty}").evaluate(context) is True
+        # bare reference appearing before the len() use
+        assert ContextExpression("${items} and len(${items}) == 3").evaluate(context) is True
+
     def test_string_injection_prevention(self) -> None:
         """Regression test for GHSA-9fvw-gr53-m7fw: string context vars must not allow eval injection.
 

@@ -191,12 +191,10 @@ class ContextExpression:
             full_match = match.group(0)
             eval_expr = eval_expr.replace(full_match, str(length_value))
 
-        # Then replace remaining variable references with their values
+        # Then replace remaining variable references with their values. The len() pass above
+        # already substituted every len(${var}) occurrence, so a variable can still have bare
+        # ${var} references left here even if it was also used inside len(); do not skip it.
         for var_name in self._variable_names:
-            # Skip variables that were already processed in len() expressions
-            if any(m.group(1) == var_name for m in len_matches):
-                continue
-
             # Check if variable exists in context, raise KeyError if not
             if not context_variables.contains(var_name):
                 raise KeyError(f"Missing context variable: '{var_name}'")
