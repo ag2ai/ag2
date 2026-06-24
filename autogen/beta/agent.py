@@ -403,8 +403,8 @@ class AgentRun(Generic[TResult, TAgent]):
     already live, observation is **push-based**: subscribe to ``stream`` (or
     attach ``observers=``) before driving, and the callbacks fire inline as the
     turn runs. See
-    ``docs/adr/0005-agent-run-turn-is-scoped-to-its-context-manager.md`` and its
-    amendment ``docs/adr/0006-agent-run-start-drives-in-background.md``.
+    ``docs/adr/0008-agent-run-turn-is-scoped-to-its-context-manager.md`` and its
+    amendment ``docs/adr/0009-agent-run-start-drives-in-background.md``.
 
     The turn is driven by a single task owned by the scope:
 

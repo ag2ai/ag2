@@ -15,8 +15,8 @@ attach ``observers=``).
   awaits it, and leaving the block cancels it if still running.
 * ``run.stream`` — the underlying stream; subscribe to observe the turn live.
 
-See docs/adr/0005-agent-run-turn-is-scoped-to-its-context-manager.md and its
-amendment docs/adr/0006-agent-run-start-drives-in-background.md.
+See docs/adr/0008-agent-run-turn-is-scoped-to-its-context-manager.md and its
+amendment docs/adr/0009-agent-run-start-drives-in-background.md.
 """
 
 import asyncio

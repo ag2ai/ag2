@@ -5,7 +5,7 @@ date: 2026-06-22
 
 # `Agent.run` opens a turn scope; the turn advances only while its result is awaited
 
-> **Amended by [0006](0006-agent-run-start-drives-in-background.md):** `AgentRun` now drives
+> **Amended by [0009](0009-agent-run-start-drives-in-background.md):** `AgentRun` now drives
 > the turn through a single scope-owned `asyncio.Task` (created by `start()` or `result()`),
 > and `start()` kicks it off without awaiting. The core decision below — entering the block
 > does not auto-start the turn — still holds; the "no background task" mechanism (driving
