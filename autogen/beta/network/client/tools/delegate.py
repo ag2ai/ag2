@@ -74,6 +74,14 @@ def make_delegate_tool(agent_client: "AgentClient") -> object:
         target_id = target_passport.agent_id
         if target_id is None:
             return f"Error: target {target!r} has no agent_id"
+        if target_id == actual_client.agent_id:
+            # A consulting channel needs a respondent distinct from the
+            # initiator. Delegating to self collapses both roles onto one
+            # participant, which the consulting adapter rejects with the
+            # opaque "consulting requires exactly one respondent". Fail
+            # fast here with an actionable message the caller can recover
+            # from instead of opening a doomed channel.
+            return f"Error: cannot delegate to self (target {target!r} is this agent)"
 
         # Open consulting channel — handshake awaited inside.
         knobs = {"capability": capability} if capability else None

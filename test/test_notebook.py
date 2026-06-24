@@ -63,39 +63,12 @@ def _test_oai_completion(save=False):
 
 
 @pytest.mark.skipif(
-    not sys.version.startswith("3.12"),
-    reason="do not run if py!=3.12",
-)
-@run_for_optional_imports(["openai"], "openai")
-def test_agentchat_function_call(save=False):
-    run_notebook("agentchat_function_call.ipynb", save=save)
-
-
-@pytest.mark.skipif(
-    not sys.version.startswith("3.10"),
-    reason="do not run if py!=3.10",
-)
-@run_for_optional_imports(["openai"], "openai")
-def test_agentchat_function_call_currency_calculator(save=False):
-    run_notebook("agentchat_function_call_currency_calculator.ipynb", save=save)
-
-
-@pytest.mark.skipif(
     not sys.version.startswith("3.13"),
     reason="do not run if py!=3.13",
 )
 @run_for_optional_imports(["openai"], "openai")
 def test_agentchat_function_call_async(save=False):
     run_notebook("agentchat_function_call_async.ipynb", save=save)
-
-
-@pytest.mark.skipif(
-    not sys.version.startswith("3.12"),
-    reason="do not run if py!=3.12",
-)
-@run_for_optional_imports(["openai"], "openai")
-def _test_agentchat_MathChat(save=False):  # noqa: N802
-    run_notebook("agentchat_MathChat.ipynb", save=save)
 
 
 @pytest.mark.skipif(

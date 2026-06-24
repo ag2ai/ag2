@@ -259,7 +259,7 @@ def _detect_generation_model() -> str | None:
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "claude-sonnet-4-20250514"
     if os.environ.get("GOOGLE_API_KEY"):
-        return "gemini-2.0-flash"
+        return "gemini-3.5-flash"
     return None
 
 
