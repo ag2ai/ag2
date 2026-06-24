@@ -274,11 +274,70 @@ class TestA2UIValidationMiddleware:
         reply = await agent.ask("Show UI", middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section])
         assert reply.body == "Here is your UI."
 
-    async def test_no_retry_when_validation_disabled(self) -> None:
-        # Invalid response should pass through unchanged when validation is off.
-        agent, rt = _build(TestConfig(INVALID_RESPONSE_MISSING_CATALOG), validate_responses=False)
-        reply = await agent.ask("Show UI", middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section])
-        assert reply.body == INVALID_RESPONSE_MISSING_CATALOG
+
+@pytest.mark.asyncio()
+class TestA2UIExtractionMiddleware:
+    """A2UI with ``validate_responses=False``: extraction still runs (publish +
+    strip), but the model's UI is trusted as-is — no schema check, no retry."""
+
+    async def test_extraction_when_validation_disabled_emits_and_strips(self) -> None:
+        # With validation off, A2UI is still extracted: the block is published
+        # out-of-band and stripped from the durable prose. The spec carries
+        # prose and UI as separate channels, so the block must never leak into
+        # the text regardless of the validation setting.
+        agent, rt = _build(TestConfig(VALID_RESPONSE), validate_responses=False)
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask(
+            "Show UI", stream=stream, middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section]
+        )
+
+        assert reply.body == "Here is your UI."
+        assert [e.message for e in events] == [
+            {
+                "version": "v0.9",
+                "createSurface": {
+                    "surfaceId": "s1",
+                    "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+                },
+            }
+        ]
+
+    async def test_invalid_response_published_unvalidated_when_disabled(self) -> None:
+        # Validation off: even a schema-invalid block is published as-is and
+        # stripped from prose — no schema check, no retry. The client validates
+        # and degrades gracefully (per the A2UI spec), not the server.
+        calls: list[list[BaseEvent]] = []
+        agent, rt = _build(
+            _RecordingConfig(TestConfig(INVALID_RESPONSE_MISSING_CATALOG), calls),
+            validate_responses=False,
+        )
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask(
+            "Show UI", stream=stream, middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section]
+        )
+
+        # Block stripped to prose — never leaks raw into the text channel.
+        assert reply.body == "Here."
+        assert len(calls) == 1  # no retry when validation is disabled
+        assert [e.message for e in events] == [{"version": "v0.9", "createSurface": {"surfaceId": "s1"}}]
+
+    async def test_broken_json_when_disabled_degrades_to_prose(self) -> None:
+        # Validation off and the block is unparsable JSON: nothing can be
+        # published, but the block is still stripped so no raw JSON leaks.
+        agent, rt = _build(TestConfig(INVALID_RESPONSE_BROKEN_JSON), validate_responses=False)
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask(
+            "Show UI", stream=stream, middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section]
+        )
+
+        assert reply.body == "Text."
+        assert events == []
 
 
 class TestToProseMessage:

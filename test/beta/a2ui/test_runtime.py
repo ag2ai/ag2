@@ -7,7 +7,7 @@ import pytest
 from autogen.beta.a2ui import a2ui_action
 from autogen.beta.a2ui._runtime import _A2UIRuntime
 from autogen.beta.a2ui.actions import A2UIEventAction, collect_action_declarations
-from autogen.beta.a2ui.middleware import A2UIValidationMiddleware
+from autogen.beta.a2ui.middleware import A2UIExtractionMiddleware, A2UIValidationMiddleware
 
 
 class TestRuntimeConstruction:
@@ -94,9 +94,13 @@ class TestRuntimeConstruction:
         assert len(factories) == 1
         assert isinstance(factories[0], A2UIValidationMiddleware)
 
-    def test_no_middleware_when_validation_disabled(self) -> None:
+    def test_extraction_middleware_when_validation_disabled(self) -> None:
+        # Validation off still attaches extraction: A2UI must be published and
+        # stripped from prose regardless of validation (spec: separate channels).
         rt = _A2UIRuntime(validate_responses=False)
-        assert rt.middleware_factories() == []
+        factories = rt.middleware_factories()
+        assert len(factories) == 1
+        assert isinstance(factories[0], A2UIExtractionMiddleware)
 
 
 class TestRuntimeActions:

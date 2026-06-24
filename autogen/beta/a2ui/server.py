@@ -82,8 +82,10 @@ class A2UIServer:
             include_schema_in_prompt: Include the full JSON schema in the prompt
                 (better validation, more tokens).
             include_rules_in_prompt: Include catalog rules in the prompt.
-            validate_responses: Validate A2UI output against the schema and retry
-                on failure. Requires ``ag2[a2ui]`` (jsonschema).
+            validate_responses: Validate A2UI output against the schema and retry on failure.
+                When False, A2UI is still extracted and published (the block is stripped
+                from the prose), but the model's UI is trusted as-is with no schema check
+                or retry — the client validates and degrades gracefully.
             validation_retries: Additional retries when validation fails (total
                 attempts = ``validation_retries + 1``). 0 disables retry.
             system_message: Custom prefix system message. If None, uses the

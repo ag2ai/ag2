@@ -15,7 +15,7 @@ from autogen.beta.middleware.base import MiddlewareFactory
 from ._types import A2UIVersion, JsonSchema
 from .actions import A2UIEventAction
 from .capabilities import A2UIClientCapabilities, capabilities_to_prompt
-from .middleware import A2UIValidationMiddleware
+from .middleware import A2UIExtractionMiddleware, A2UIValidationMiddleware
 from .parser import A2UIResponseParser
 from .schema_manager import A2UISchemaManager
 
@@ -75,8 +75,14 @@ class _A2UIRuntime:
         base_prompt = system_message if system_message is not None else DEFAULT_SYSTEM_MESSAGE
         self.system_prompt_section = f"{base_prompt}\n\n{prompt_section}"
 
-        self._middleware: MiddlewareFactory | None = (
-            A2UIValidationMiddleware(self.parser, validation_retries) if validate_responses else None
+        # A2UI extraction (parse → publish events → strip the block from prose)
+        # always runs so the wire stays spec-compliant: prose and UI messages
+        # travel as separate channels, never raw JSON in the text. Validation
+        # (schema check + corrective retry) is the optional layer on top.
+        self._middleware: MiddlewareFactory = (
+            A2UIValidationMiddleware(self.parser, validation_retries)
+            if validate_responses
+            else A2UIExtractionMiddleware(self.parser)
         )
 
     @property
@@ -102,8 +108,12 @@ class _A2UIRuntime:
         return None
 
     def middleware_factories(self) -> list[MiddlewareFactory]:
-        """Validation middleware to inject for the turn (empty when disabled)."""
-        return [self._middleware] if self._middleware is not None else []
+        """A2UI middleware to inject for the turn.
+
+        Always one factory: extraction-only when ``validate_responses=False``,
+        otherwise the validation middleware (which also extracts).
+        """
+        return [self._middleware]
 
     def capabilities_prompt(self, caps: A2UIClientCapabilities | None) -> str:
         """Render negotiated client capabilities as a per-turn prompt fragment."""

@@ -28,6 +28,71 @@ def _to_prose_message(original: ModelMessage | None, text: str) -> ModelMessage:
     return ModelMessage(text, metadata=metadata)
 
 
+async def _publish_a2ui(parse_result: A2UIParseResult, response: ModelResponse, context: Context) -> None:
+    """Publish a parsed A2UI block and strip it from the durable response.
+
+    Emits one :class:`A2UIMessageEvent` per parsed message onto the stream and
+    rewrites ``response.message`` to prose only, so the A2UI block travels
+    out-of-band of the text channel (the protocol carries prose and UI messages
+    separately). A no-op when the response has no A2UI block. When a block is
+    present but unparsable, there are no operations to emit, yet the block is
+    still stripped from the prose so raw JSON never leaks into the text.
+
+    Shared by :class:`A2UIExtractionMiddleware` (always on) and
+    :class:`A2UIValidationMiddleware` (after a response validates).
+    """
+    if not parse_result.has_a2ui:
+        return
+    for op in parse_result.operations:
+        await context.send(A2UIMessageEvent(op))
+    response.message = _to_prose_message(response.message, parse_result.text)
+
+
+class A2UIExtractionMiddleware(MiddlewareFactory):
+    """Factory that builds the always-on A2UI extraction middleware per turn.
+
+    Wraps ``on_llm_call`` to parse the model's response for an A2UI block,
+    publish it as out-of-band :class:`A2UIMessageEvent`s, and strip it from the
+    durable text — *without* any schema validation. This is the seam that makes
+    A2UI work; validation (:class:`A2UIValidationMiddleware`) is a separate,
+    optional layer that performs the same publication after it validates.
+
+    Used when ``validate_responses=False``: the model's UI is trusted as-is and
+    the client validates/degrades, but the wire still stays spec-compliant
+    (clean prose + structured UI messages, never raw JSON in the text).
+    """
+
+    def __init__(self, parser: A2UIResponseParser) -> None:
+        self._parser = parser
+
+    def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
+        return _A2UIExtractionMiddleware(event, context, parser=self._parser)
+
+
+class _A2UIExtractionMiddleware(BaseMiddleware):
+    """The per-turn instance used by :class:`A2UIExtractionMiddleware`."""
+
+    def __init__(self, event: BaseEvent, context: Context, *, parser: A2UIResponseParser) -> None:
+        super().__init__(event, context)
+        self._parser = parser
+
+    async def on_llm_call(
+        self,
+        call_next: LLMCall,
+        events: Sequence[BaseEvent],
+        context: Context,
+    ) -> ModelResponse:
+        response = await call_next(events, context)
+        # Tool calls / empty content — nothing to extract.
+        if response.tool_calls and response.tool_calls.calls:
+            return response
+        text = response.content
+        if not text:
+            return response
+        await _publish_a2ui(self._parser.parse(text), response, context)
+        return response
+
+
 class A2UIInboundMiddleware(MiddlewareFactory):
     """Factory that emits one :class:`A2UIClientEvent` per incoming interaction.
 
@@ -126,13 +191,10 @@ class _A2UIValidationMiddleware(BaseMiddleware):
 
             parse_result, validation_errors = self._validate(text)
             if validation_errors is None:
-                # Valid (or no A2UI at all). When A2UI content is present, emit
-                # one A2UIMessageEvent per message onto the stream and keep the
-                # durable response prose-only — transports consume the events.
-                if parse_result.has_a2ui:
-                    for op in parse_result.operations:
-                        await context.send(A2UIMessageEvent(op))
-                    response.message = _to_prose_message(response.message, parse_result.text)
+                # Valid (or no A2UI at all). Publish the validated block out-of-band
+                # and keep the durable response prose-only — transports consume the
+                # events. Same publication path as the extraction middleware.
+                await _publish_a2ui(parse_result, response, context)
                 return response
 
             if attempt >= self._max_retries:
