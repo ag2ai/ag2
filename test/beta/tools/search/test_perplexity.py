@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from importlib.metadata import version as metadata_version
 from typing import Any
 
 import httpx
@@ -23,6 +24,10 @@ from autogen.beta.tools.search.perplexity import (
 )
 
 PERPLEXITY_BASE_URL = "https://api.perplexity.ai"
+
+
+def _expected_integration_header_value() -> str:
+    return f"ag2/{metadata_version('ag2')}"
 
 
 def _tool_call_config(
@@ -238,7 +243,11 @@ class TestSearch:
     async def test_client_kwargs_forwarded_to_sdk(self) -> None:
         custom_url = "https://custom.perplexity.example"
         route = respx.post(f"{custom_url}/search").mock(return_value=httpx.Response(200, json=_search_response()))
-        toolkit = PerplexitySearchToolkit(api_key="test", base_url=custom_url)
+        toolkit = PerplexitySearchToolkit(
+            api_key="test",
+            base_url=custom_url,
+            default_headers={"X-Trace-Id": "abc-123"},
+        )
 
         agent = Agent(
             "a",
@@ -248,6 +257,8 @@ class TestSearch:
         await agent.ask("search")
 
         assert route.called
+        assert route.calls.last.request.headers["X-Pplx-Integration"] == _expected_integration_header_value()
+        assert route.calls.last.request.headers["X-Trace-Id"] == "abc-123"
 
     @respx.mock
     async def test_custom_tool_name_in_agent(self) -> None:
@@ -393,7 +404,11 @@ class TestAnswer:
         route = respx.post(f"{custom_url}/chat/completions").mock(
             return_value=httpx.Response(200, json=_chat_response())
         )
-        toolkit = PerplexitySearchToolkit(api_key="test", base_url=custom_url)
+        toolkit = PerplexitySearchToolkit(
+            api_key="test",
+            base_url=custom_url,
+            default_headers={"X-Trace-Id": "abc-123"},
+        )
 
         agent = Agent(
             "a",
@@ -403,6 +418,8 @@ class TestAnswer:
         await agent.ask("answer")
 
         assert route.called
+        assert route.calls.last.request.headers["X-Pplx-Integration"] == _expected_integration_header_value()
+        assert route.calls.last.request.headers["X-Trace-Id"] == "abc-123"
 
     @respx.mock
     async def test_custom_tool_name_in_agent(self) -> None:
