@@ -40,6 +40,7 @@ from ..results import BudgetThresholds, RunResult, TaskResult
 from ..scorer import Scorer
 from ..sources import TraceRef, TraceSource
 from ..trace import Trace
+from ._settle import reraise_if_not_exception
 
 __all__ = ("evaluate_traces",)
 
@@ -149,8 +150,7 @@ async def _grade(
     task_results: list[TaskResult] = []
     for ref, outcome in zip(refs, gathered):
         if isinstance(outcome, BaseException):
-            if not isinstance(outcome, Exception):
-                raise outcome  # propagate CancelledError / KeyboardInterrupt etc.
+            reraise_if_not_exception(outcome)
             logger.error("eval ref failed: %s", getattr(ref, "task_id", ref), exc_info=outcome)
             task_results.append(_error_task_result(ref, outcome))
         else:

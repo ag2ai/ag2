@@ -48,6 +48,7 @@ from ..scorer import Scorer
 from ..sources import InMemoryTraceSource, TraceRef
 from ..sources._otel import readable_spans_to_trace
 from ..trace import Trace
+from ._settle import reraise_if_not_exception
 from .evaluate import _grade
 
 __all__ = (
@@ -284,8 +285,7 @@ async def _produce(
     produced: list[tuple[TraceRef, Trace]] = []
     for task, outcome in zip(tasks, gathered):
         if isinstance(outcome, BaseException):
-            if not isinstance(outcome, Exception):
-                raise outcome  # propagate CancelledError / KeyboardInterrupt etc.
+            reraise_if_not_exception(outcome)
             logger.error("produce_one failed for task %s", task.task_id, exc_info=outcome)
             produced.append(_error_trace_pair(task, outcome))
         else:
