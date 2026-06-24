@@ -940,6 +940,10 @@ class Hub:
                 rule=rule,
                 attach_plugin=attach_plugin,
             )
+        # BaseException (not Exception) so an ``asyncio.CancelledError``
+        # raised during the ``await`` above — which is a BaseException
+        # since Python 3.8 — still triggers cleanup. We re-raise it
+        # unchanged below, so cancellation/shutdown is not swallowed.
         except BaseException:
             # Registration failed (e.g. a human passport) — don't leak the
             # freshly-created client; close and untrack it before re-raising.
