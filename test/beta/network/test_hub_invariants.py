@@ -28,6 +28,7 @@ Covers:
 import asyncio
 import contextlib
 import json
+import logging
 from typing import Any
 
 import pytest
@@ -875,3 +876,44 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
     await alice_hc.close()
     await bob_hc.close()
     await hub.close()
+
+
+class _FakeEndpoint:
+    """Minimal LinkEndpoint stub: yields ``frames_to_yield``, then stops."""
+
+    def __init__(self, frames_to_yield: list[object]) -> None:
+        self.endpoint_id = "fake-ep-001"
+        self.agent_id: str | None = None
+        self._frames = frames_to_yield
+
+    async def frames(self):  # type: ignore[override]
+        for frame in self._frames:
+            yield frame
+
+    async def send_frame(self, frame: object) -> None:  # noqa: D102
+        pass
+
+    async def close(self) -> None:  # noqa: D102
+        pass
+
+
+@pytest.mark.asyncio
+async def test_handle_endpoint_logs_dispatch_failure(caplog: pytest.LogCaptureFixture) -> None:
+    """``_handle_endpoint`` must log at ERROR level before dropping an endpoint
+    when the frame-dispatch loop raises an unexpected exception."""
+    store = MemoryKnowledgeStore()
+    hub = Hub(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    endpoint = _FakeEndpoint(frames_to_yield=[object()])
+
+    # Patch _dispatch_frame to raise so the loop fails deterministically.
+    async def _boom(ep: object, frame: object) -> None:
+        raise RuntimeError("dispatch failed")
+
+    hub._dispatch_frame = _boom  # type: ignore[method-assign]
+
+    with caplog.at_level(logging.ERROR, logger="autogen.beta.network.hub.core"):
+        await hub._handle_endpoint(endpoint)  # type: ignore[arg-type]
+
+    assert any("dispatch failed" in r.getMessage() or r.exc_info for r in caplog.records), (
+        f"Expected ERROR log with 'dispatch failed'; got records: {[r.getMessage() for r in caplog.records]}"
+    )

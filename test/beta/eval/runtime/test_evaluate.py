@@ -4,8 +4,11 @@
 
 """Tests for evaluate_traces() — grading traces from a TraceSource."""
 
+import asyncio
+
 import pytest
 
+import autogen.beta.eval.runtime.evaluate as ev
 from autogen.beta.eval import (
     BudgetThresholds,
     InMemoryTraceSource,
@@ -121,3 +124,54 @@ async def test_free_text_answer_content_mirrors_body(tmp_path) -> None:
     result = await evaluate_traces(source, scorers=[free_text_content_mirrors_body], store_dir=tmp_path)
 
     assert result.pass_rate("free_text_content_mirrors_body") == 1.0
+
+
+@pytest.mark.asyncio()
+async def test_evaluate_does_not_crash_whole_run_on_one_ref_failure(tmp_path, monkeypatch) -> None:
+    """If one _evaluate_ref coroutine raises, the run still returns with the surviving ref's result present."""
+    calls: dict[str, int] = {"n": 0}
+    real = ev._evaluate_ref
+
+    async def flaky(*args, **kwargs):  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("scorer exploded")
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(ev, "_evaluate_ref", flaky)
+
+    source = InMemoryTraceSource([
+        (TraceRef("t1", task_id="task-1"), _trace("Paris")),
+        (TraceRef("t2", task_id="task-2"), _trace("London")),
+    ])
+    suite = Suite.from_list([
+        {"task_id": "task-1", "inputs": {"input": "capital of France?"}},
+        {"task_id": "task-2", "inputs": {"input": "capital of UK?"}},
+    ])
+
+    result = await evaluate_traces(source, scorers=[has_one_response], suite=suite, store_dir=tmp_path)
+
+    # Run must not raise — it returns a RunResult with both entries
+    assert len(result.tasks) == 2
+    # The failed ref has its exception captured on the trace
+    failed = next(tr for tr in result.tasks if tr.task.task_id == "task-1")
+    assert isinstance(failed.trace.exception, RuntimeError)
+    # The surviving ref scored correctly
+    surviving = next(tr for tr in result.tasks if tr.task.task_id == "task-2")
+    assert surviving.feedback[0].score is True
+
+
+@pytest.mark.asyncio()
+async def test_evaluate_propagates_cancellation(tmp_path, monkeypatch) -> None:
+    """A CancelledError from one ref must propagate out (not become a partial RunResult)."""
+
+    async def cancelled(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(ev, "_evaluate_ref", cancelled)
+
+    source = InMemoryTraceSource([(TraceRef("t1", task_id="task-1"), _trace("Paris"))])
+    suite = Suite.from_list([{"task_id": "task-1", "inputs": {"input": "capital of France?"}}])
+
+    with pytest.raises(asyncio.CancelledError):
+        await evaluate_traces(source, scorers=[has_one_response], suite=suite, store_dir=tmp_path)

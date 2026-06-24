@@ -48,6 +48,8 @@ def subagent_tool(
             stream=task_stream,
         )
 
+        if not result.completed:
+            return f"Sub-task '{agent.name}' failed: {result.error}"
         return result.result or ""
 
     return delegate

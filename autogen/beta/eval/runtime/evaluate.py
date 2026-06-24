@@ -145,7 +145,16 @@ async def _grade(
         )
         for ref in refs
     ]
-    task_results = await asyncio.gather(*coros)
+    gathered = await asyncio.gather(*coros, return_exceptions=True)
+    task_results: list[TaskResult] = []
+    for ref, outcome in zip(refs, gathered):
+        if isinstance(outcome, BaseException):
+            if not isinstance(outcome, Exception):
+                raise outcome  # propagate CancelledError / KeyboardInterrupt etc.
+            logger.error("eval ref failed: %s", getattr(ref, "task_id", ref), exc_info=outcome)
+            task_results.append(_error_task_result(ref, outcome))
+        else:
+            task_results.append(outcome)
     duration_ms = int((time.perf_counter() - started_at) * 1000)
 
     result = RunResult(
@@ -168,6 +177,18 @@ async def _grade(
         await eval_ctx.send(EvalCompleted(run_id=actual_run_id, label=label, result=result))
 
     return result
+
+
+def _error_task_result(ref: TraceRef, exc: BaseException) -> TaskResult:
+    """Build a failed :class:`TaskResult` when ``_evaluate_ref`` raises.
+
+    The Trace carries the exception so :attr:`~autogen.beta.eval.Aggregates.errors`
+    is incremented correctly, and all other fields match what the success path
+    would produce for the same ref.
+    """
+    task = Task(task_id=ref.task_id or ref.trace_id, inputs={}, reference_outputs=None)
+    trace = Trace(events=(), exception=exc, duration_ms=0)
+    return TaskResult(task=task, trace=trace, feedback=(), budget_violation=False, trace_ref=ref)
 
 
 async def _evaluate_ref(

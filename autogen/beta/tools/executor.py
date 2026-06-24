@@ -56,9 +56,20 @@ class ToolExecutor:
         results: list[ToolErrorEvent | ToolResultEvent] = []
         client_calls: list[ClientToolCallEvent] = []
 
-        # Execute called tools in parallel
-        for event in await asyncio.gather(*(_execute_call(context, call) for call in event.calls)):
-            match event:
+        # Execute called tools in parallel. return_exceptions keeps one call's
+        # infra failure from discarding every other call's result.
+        calls = event.calls
+        outcomes = await asyncio.gather(
+            *(_execute_call(context, call) for call in calls),
+            return_exceptions=True,
+        )
+        for call, outcome in zip(calls, outcomes):
+            if isinstance(outcome, BaseException):
+                if not isinstance(outcome, Exception):
+                    raise outcome  # propagate CancelledError / KeyboardInterrupt etc.
+                results.append(ToolErrorEvent.from_call(call, outcome))
+                continue
+            match outcome:
                 case ClientToolCallEvent() as ev:
                     client_calls.append(ev)
 

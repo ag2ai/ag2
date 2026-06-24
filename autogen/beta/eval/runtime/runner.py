@@ -22,6 +22,7 @@ up to ``concurrency``, bounded by an :class:`asyncio.Semaphore`.
 """
 
 import asyncio
+import logging
 import os
 import time
 from collections.abc import Iterable, Sequence
@@ -53,6 +54,8 @@ __all__ = (
     "run_agent",
     "run_pairwise",
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def run_agent(
@@ -235,6 +238,17 @@ async def run_pairwise(
     )
 
 
+def _error_trace_pair(task: Task, exc: BaseException) -> tuple[TraceRef, Trace]:
+    """Build a failed ``(TraceRef, Trace)`` when ``_produce_one`` raises.
+
+    The Trace carries the exception so grading can surface it and
+    :attr:`~autogen.beta.eval.Aggregates.errors` is incremented correctly.
+    """
+    ref = TraceRef(trace_id=uuid4().hex, task_id=task.task_id)
+    trace = Trace(events=(), exception=exc, duration_ms=0)
+    return (ref, trace)
+
+
 async def _produce(
     tasks: Iterable[Task],
     agent: Agent[Any],
@@ -253,7 +267,7 @@ async def _produce(
             'Add an "input" to each (use "" for an intentionally empty prompt).'
         )
     semaphore = asyncio.Semaphore(max(1, concurrency))
-    produced = await asyncio.gather(
+    gathered = await asyncio.gather(
         *(
             _produce_one(
                 semaphore,
@@ -264,8 +278,18 @@ async def _produce(
                 span_processors=span_processors,
             )
             for task in tasks
-        )
+        ),
+        return_exceptions=True,
     )
+    produced: list[tuple[TraceRef, Trace]] = []
+    for task, outcome in zip(tasks, gathered):
+        if isinstance(outcome, BaseException):
+            if not isinstance(outcome, Exception):
+                raise outcome  # propagate CancelledError / KeyboardInterrupt etc.
+            logger.error("produce_one failed for task %s", task.task_id, exc_info=outcome)
+            produced.append(_error_trace_pair(task, outcome))
+        else:
+            produced.append(outcome)
     return InMemoryTraceSource(produced)
 
 

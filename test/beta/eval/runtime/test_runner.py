@@ -20,6 +20,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 pytest.importorskip("opentelemetry.sdk")
 
+import autogen.beta.eval.runtime.runner as runner_mod
 from autogen.beta import Agent, tool
 from autogen.beta.eval import (
     BudgetThresholds,
@@ -635,3 +636,41 @@ class TestTelemetryInjection:
             Feedback(key="city_argument_correct", score=True),
         )
         assert result.tasks[0].trace_ref is not None
+
+
+@pytest.mark.asyncio
+async def test_produce_one_failure_does_not_abort_whole_run(tmp_path: Path, monkeypatch) -> None:
+    """If one _produce_one coroutine raises, the run still returns with the surviving task's result present."""
+    calls: dict[str, int] = {"n": 0}
+    real = runner_mod._produce_one
+
+    async def flaky(*args, **kwargs):  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("agent production exploded")
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(runner_mod, "_produce_one", flaky)
+
+    suite = Suite.from_list([
+        {"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}},
+        {"task_id": "t2", "inputs": {"input": "Paris?"}, "reference_outputs": {"city": "Paris"}},
+    ])
+
+    result = await run_agent(
+        suite,
+        agent=_build_weather_agent(),
+        scorers=[called_get_weather],
+        store_dir=tmp_path,
+        model_config={"t1": _cassette("Tokyo"), "t2": _cassette("Paris")},
+        concurrency=2,
+    )
+
+    # Run must not raise — returns a RunResult with both task entries
+    assert len(result.tasks) == 2
+    # The failed production has its exception on the trace
+    failed = next(tr for tr in result.tasks if tr.task.task_id == "t1")
+    assert isinstance(failed.trace.exception, RuntimeError)
+    # The surviving task scored normally
+    surviving = next(tr for tr in result.tasks if tr.task.task_id == "t2")
+    assert surviving.feedback[0].score is True

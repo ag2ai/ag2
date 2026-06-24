@@ -2072,7 +2072,10 @@ class Hub:
         except asyncio.CancelledError:
             raise
         except Exception:
-            pass
+            logger.exception(
+                "endpoint frame loop failed; dropping endpoint endpoint_id=%s",
+                getattr(endpoint, "endpoint_id", "<unknown>"),
+            )
         finally:
             self._cleanup_endpoint(endpoint)
 
