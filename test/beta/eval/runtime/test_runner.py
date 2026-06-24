@@ -11,6 +11,7 @@ user passes through the factory still work, and the run is persisted
 to ``store_dir`` automatically.
 """
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -171,6 +172,34 @@ async def test_agent_ask_exception_is_captured_not_raised(tmp_path: Path) -> Non
     assert task_result.trace.events == ()
     # Scorers should still run — `called_get_weather` returns False on empty trace.
     assert task_result.feedback == (Feedback(key="called_get_weather", score=False),)
+
+
+@pytest.mark.asyncio
+async def test_agent_ask_cancellation_propagates(tmp_path: Path) -> None:
+    """A CancelledError from ``ask`` (a cancelling tool/timeout) propagates out of run_agent.
+
+    Unlike a regular exception — which ``_produce_one`` captures onto the trace — a
+    CancelledError is a BaseException that escapes the ``except Exception`` guard,
+    reaches the gather loop, and is re-raised so the run aborts instead of returning
+    a partial RunResult.
+    """
+
+    class CancellingAgent:
+        name = "cancelling"
+
+        async def ask(self, *args: object, **kwargs: object) -> object:
+            raise asyncio.CancelledError
+
+    suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}])
+
+    with pytest.raises(asyncio.CancelledError):
+        await run_agent(
+            suite,
+            agent=CancellingAgent(),  # type: ignore[arg-type]
+            scorers=[called_get_weather],
+            store_dir=tmp_path,
+            concurrency=1,
+        )
 
 
 @pytest.mark.asyncio

@@ -64,11 +64,6 @@ class ToolExecutor:
             return_exceptions=True,
         )
         for call, outcome in zip(calls, outcomes):
-            if isinstance(outcome, BaseException):
-                if not isinstance(outcome, Exception):
-                    raise outcome  # propagate CancelledError / KeyboardInterrupt etc.
-                results.append(ToolErrorEvent.from_call(call, outcome))
-                continue
             match outcome:
                 case ClientToolCallEvent() as ev:
                     client_calls.append(ev)
@@ -100,6 +95,12 @@ class ToolExecutor:
                         return
                     else:
                         results.append(ev)
+
+                case Exception() as exc:
+                    results.append(ToolErrorEvent.from_call(call, exc))
+
+                case BaseException():
+                    raise outcome
 
                 case ev:
                     results.append(ev)

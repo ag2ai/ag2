@@ -12,7 +12,6 @@ import pytest
 from fast_depends import Depends
 from pydantic import BaseModel
 
-import autogen.beta.tools.executor as executor_mod
 from autogen.beta import (
     Agent,
     Context,
@@ -25,8 +24,9 @@ from autogen.beta import (
     testing,
     tool,
 )
-from autogen.beta.events import ToolCallsEvent, ToolResultEvent, ToolResultsEvent
+from autogen.beta.events import ToolCallsEvent, ToolResultsEvent
 from autogen.beta.exceptions import ToolNotFoundError
+from autogen.beta.tools.executor import ToolExecutor
 from autogen.beta.tools.subagents import subagent_tool as subagent_tool_factory
 
 
@@ -325,13 +325,7 @@ async def test_subagent_tool_surfaces_failure_to_caller() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_tools_isolates_a_failing_tool() -> None:
-    """One failing tool must not suppress the other tool's result (public-API end-to-end).
-
-    Note: this exercises FunctionTool's Exception→ToolErrorEvent conversion path.
-    It does NOT cover the gather-level return_exceptions guard (executor.py:67-70),
-    because a normal Exception is caught inside FunctionTool.__call__ before it
-    reaches the gather. See test_execute_tools_isolates_a_raising_call for that guard.
-    """
+    """A tool that fails must not suppress another tool's result — both come back."""
 
     @tool(name="good_tool")
     def good_tool() -> str:
@@ -343,7 +337,7 @@ async def test_execute_tools_isolates_a_failing_tool() -> None:
 
     stream = MemoryStream()
     ctx = Context(stream=stream)
-    ex = executor_mod.ToolExecutor(serializer=MagicMock())
+    ex = ToolExecutor(serializer=MagicMock())
 
     with ExitStack() as stack:
         ex.register(stack, ctx, tools=[good_tool, bad_tool])
@@ -363,48 +357,46 @@ async def test_execute_tools_isolates_a_failing_tool() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_tools_isolates_a_raising_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    """White-box guard: the gather return_exceptions path isolates infra-level raises.
+async def test_execute_tools_isolates_a_call_that_raises_past_the_tool() -> None:
+    """A failure that escapes the tool itself (a raising middleware) must not discard
+    the batch — it comes back as that call's error while the others still return."""
 
-    The gather-level ``return_exceptions`` guard (executor.py:67-70) is only reachable
-    when ``_execute_call`` itself raises at the infrastructure level. A normal raising
-    tool is converted to a ToolErrorEvent inside FunctionTool.__call__ before reaching
-    this guard, so this specific path requires injection via monkeypatch.
-    """
-    good = events.ToolCallEvent(id="ok", name="good")
-    bad = events.ToolCallEvent(id="boom", name="bad")
+    async def boom_middleware(call_next: object, event: events.ToolCallEvent, context: Context) -> object:
+        raise RuntimeError("middleware exploded")
 
-    async def fake_execute_call(context: object, call: events.ToolCallEvent) -> ToolResultEvent:
-        if call.id == "boom":
-            raise RuntimeError("infra exploded")
-        return ToolResultEvent(parent_id=call.id, result=ToolResult(TextInput("done")))
+    @tool(name="good_tool")
+    def good_tool() -> str:
+        return "all good"
 
-    monkeypatch.setattr(executor_mod, "_execute_call", fake_execute_call)
+    @tool(name="bad_tool", middleware=[boom_middleware])
+    def bad_tool() -> str:
+        return "never reached"
 
-    sent: list[object] = []
-    ctx = MagicMock()
+    stream = MemoryStream()
+    ctx = Context(stream=stream)
+    ex = ToolExecutor(serializer=MagicMock())
 
-    async def _send(ev: object, *a: object, **k: object) -> None:
-        sent.append(ev)
+    with ExitStack() as stack:
+        ex.register(stack, ctx, tools=[good_tool, bad_tool])
+        await ctx.send(
+            ToolCallsEvent([
+                events.ToolCallEvent(name="good_tool"),
+                events.ToolCallEvent(name="bad_tool"),
+            ])
+        )
 
-    ctx.send = _send
-
-    ex = executor_mod.ToolExecutor(serializer=MagicMock())
-    await ex.execute_tools(ToolCallsEvent([good, bad]), ctx)
-
-    results_event = next(e for e in sent if isinstance(e, ToolResultsEvent))
+    history = await stream.history.get_events()
+    [results_event] = [e for e in history if isinstance(e, ToolResultsEvent)]
     # Both calls represented: one success, one error — nothing silently dropped.
     assert len(results_event.results) == 2
+    # The escaping failure surfaced as a tool error carrying the middleware exception.
+    errors = [r for r in results_event.results if isinstance(r, events.ToolErrorEvent)]
+    assert any(e.result is not None and "middleware exploded" in e.result.parts[0].content for e in errors)
 
 
 @pytest.mark.asyncio
 async def test_execute_tools_propagates_cancellation() -> None:
-    """A cancelled tool call must propagate, not be masked as a ToolResultsEvent.
-
-    FunctionTool.__call__ only catches Exception (not BaseException), so
-    asyncio.CancelledError propagates through _execute_call to the gather,
-    where the guard at executor.py:69 re-raises it unconditionally.
-    """
+    """A cancelled tool call must propagate, not be swallowed into a results event."""
 
     @tool(name="cancel_tool")
     async def cancel_tool() -> str:
