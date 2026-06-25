@@ -44,11 +44,8 @@ alice.initiate_chat(manager, message="Topic: should every dev learn Rust?")
 
 **Beta network:**
 
-```python linenums="1" hl_lines="6-9 11-16"
-from autogen.beta.network import (
-    Hub, HubClient, LocalLink, Passport, Resume,
-    TransitionGraph,
-)
+```python linenums="1" hl_lines="3-6 8-13"
+from autogen.beta.network import TransitionGraph
 
 graph = TransitionGraph.round_robin(
     participants=[alice.agent_id, bob.agent_id, carol.agent_id],
@@ -225,7 +222,7 @@ A few changes that will affect how you architect the migration:
 ## Migration Checklist
 
 1. Stand up a hub: `#!python hub = await Hub.open(MemoryKnowledgeStore())`. (Pick a `KnowledgeStore` based on whether you need persistence.)
-2. Wrap each existing `Agent` in an `#!python AgentClient` via `#!python hc.register(...)`. Provide a `#!python Passport` (name) and a `#!python Resume` (claimed capabilities).
+2. Wrap each existing `Agent` in an `#!python AgentClient` via `#!python hub.register(agent, passport, resume)`. Provide a `#!python Passport` (name) and a `#!python Resume` (claimed capabilities).
 3. Translate your `Handoffs` configuration into a `#!python TransitionGraph`. Use `#!python round_robin` / `#!python sequence` factories where they fit; build the graph manually for conditional logic.
 4. Replace `initiate_chat(...)` with `#!python alice.open(type="workflow", target=[...], knobs={"graph": graph.to_dict()})` followed by `#!python channel.send(text)`.
 5. Wait for termination with `#!python alice.wait_for_channel_event(channel_id=..., predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED)`.
