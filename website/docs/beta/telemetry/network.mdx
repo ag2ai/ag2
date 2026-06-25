@@ -175,17 +175,27 @@ Beyond the resource attributes, spans carry `ag2.network.*` and `ag2.agent.*` at
 | Attribute | Span types | Description |
 |---|---|---|
 | `ag2.network.channel_id` | envelope, channel, task | Channel the span belongs to |
-| `ag2.network.event_type` | envelope | Envelope event type (e.g. `ag2.text`) |
+| `ag2.network.event_type` | envelope | Envelope event type (e.g. `ag2.msg.text`) |
 | `ag2.network.sender_id` | envelope | Sender agent ID |
 | `ag2.network.envelope_id` | envelope | Envelope ID |
+| `ag2.network.audience` | envelope | Recipient agent IDs the envelope was addressed to |
+| `ag2.network.causation_id` | envelope | ID of the envelope that caused this one (reply chains) |
+| `ag2.network.dispatch_failures` | envelope | Count of failed deliveries — set only when non-zero; also flips span status to ERROR |
 | `ag2.network.manifest_type` | channel | Channel type (e.g. `workflow`, `discussion`) |
+| `ag2.network.creator_id` | channel | Agent that opened the channel |
 | `ag2.network.capability` | task | The task's declared capability |
 | `ag2.network.outcome` | task | Terminal outcome (e.g. `completed`, `expired`) |
 | `ag2.network.task_id` | task | Task ID |
+| `ag2.network.owner_id` | task | Agent that owns the task |
 | `ag2.agent.id` | agent_lifetime, agent_event | Agent ID |
 | `ag2.agent.resume_source` | agent_event | `tenant` (set by an operator) or `observed` (earned via a task) |
+| `ag2.agent.capability` | agent_event | Capability observed (on an `observed` resume update) |
+| `ag2.agent.outcome` | agent_event | Task outcome that drove the observation |
+| `ag2.agent.skill_removed` | agent_event | `true` when a `skill_set` event removed (rather than set) the skill |
 
-Channel spans also record diagnostic span **events** — `dispatch_failed`, `turn_failed`, `envelope_rejected`, and expectation violations — and `agent.lifetime` spans record `inbox_pressure`, so failures and back-pressure surface in the trace without their own spans.
+Channel spans also record diagnostic span **events** — `dispatch_failed` (carrying `ag2.network.recipient_id` + `ag2.error.type` / `ag2.error.message`), `turn_failed`, `envelope_rejected`, and expectation violations — and `agent.lifetime` spans record `inbox_pressure` (`ag2.inbox.pending` / `ag2.inbox.cap`), so failures and back-pressure surface in the trace without their own spans.
+
+Owner code that checkpoints a task adds `checkpoint.write` / `checkpoint.read` span events on the active span — see [Checkpoint events](#checkpoint-events) above.
 
 ## Custom Span Attributes
 
