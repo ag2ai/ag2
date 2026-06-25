@@ -18288,6 +18288,588 @@ grpc_server = server.build_grpc(bind=f"127.0.0.1:{port}", grpc_url=f"grpc://127.
 
 ---
 
+# A2UI Protocol Overview
+
+Source: https://docs.ag2.ai/latest/docs/beta/a2ui/overview/
+
+The `autogen.beta.a2ui` module lets an AG2 `Agent` produce **rich, interactive user interfaces** - cards, forms, lists, buttons - instead of plain text, using the [A2UI protocol](https://a2ui.org). The LLM emits conversational prose plus a validated A2UI message block; AG2 surfaces each message as a typed event and serializes it to A2UI's transport-agnostic wire format, so any A2UI-capable client can render it.
+
+A2UI is a **transport over a plain `Agent`** (mirroring A2A and AG-UI): you build a normal `autogen.beta.Agent` and wrap it in an A2UI transport - `A2UIServer` (REST/SSE) or `A2UIAgentExecutor` (A2A) - configured with flat A2UI kwargs. There is no special agent subclass.
+
+## When To Use A2UI
+
+Reach for A2UI when a text answer isn't enough and the user needs to **see and act on** something:
+
+- A booking or settings **form** the user fills in and submits.
+- A **list** of results with per-item actions (approve, schedule, open).
+- A **card** summarising data with clickable buttons that drive the next turn.
+
+If you only need a conversational reply, serve a plain `autogen.beta.Agent` directly. A2UI is additive: an A2UI-wrapped agent still answers in prose when a UI wouldn't help.
+
+## Mental Model
+
+```
+   ┌────────────────────────────┐                       ┌─────────────────────────┐
+   │ Agent + A2UI transport     │   server->client        │ A2UI client             │
+   │  prose + <a2ui-json> block │   createSurface /       │  renders surfaces       │
+   │  ── validate vs catalog ── │   updateComponents ...    │  & components           │
+   │  emits A2UIMessageEvent     │ ────────────────────▶  │                         │
+   │                            │                         │  user clicks a button   │
+   │  action -> handler / prompt │   client->server         │                         │
+   │  ◀──────────────────────── │   action / functionResp │ ◀──────────────────────│
+   └────────────────────────────┘   (the next request)    └─────────────────────────┘
+```
+
+The transport applies A2UI behaviour to the plain agent per turn (prompt + validation middleware) and validates every A2UI message against the chosen **catalog** schema (with retry-on-error), so malformed UI never reaches the client - on repeated failure it gracefully degrades to prose. A button click travels back as a client->server `action` (or v1.0 `functionResponse`) envelope, which the transport rewrites into the next turn.
+
+## Core Concepts
+
+| Concept | Lives in | Purpose |
+|---|---|---|
+| `Agent` | `autogen.beta` | A plain agent - wrap it in an A2UI transport to emit validated A2UI output |
+| `a2ui_action` | `autogen.beta.a2ui` | Decorator turning a function into a clickable button (server `event` action). A click runs the handler **on the server** - the agent is not invoked. Declared on the transport via `actions=[...]` |
+| `A2UIMessageEvent` | `autogen.beta.a2ui` | One validated A2UI server->client message on the stream - the event seam every transport consumes |
+| `A2UIClientEvent` | `autogen.beta.a2ui` | One client->server interaction received from the renderer (click / `functionResponse` / error) - the inbound observability seam |
+| `A2UIValidationFailedEvent` | `autogen.beta.a2ui` | Observability signal that validation exhausted its retries and the turn degraded to prose |
+| `A2UIClientCapabilities` | `autogen.beta.a2ui` | Catalog negotiation - tells the agent which catalogs/components the client can render |
+| `A2UIServer` | `autogen.beta.a2ui` | Wraps a plain `Agent` into an ASGI app and serves it over HTTP, using a `transport=` for the wire encoding (REST/SSE or AG-UI) |
+| `A2UIAgentExecutor` | `autogen.beta.a2ui.a2a` | Wraps a plain `Agent` for the A2A transport, carrying A2UI as `DataPart`s |
+
+## Protocol Versions
+
+The A2UI transports accept three protocol versions via `protocol_version=`:
+
+- `"v0.9"` (default) and `"v0.9.1"` - server->client surfaces and components, plus server `event` actions.
+- `"v1.0"` - adds the `callFunction` / `functionResponse` / `actionResponse` round-trip for richer client->server interaction.
+
+!!! note
+    A2UI's wire is **transport-agnostic**. The same validated messages serialize identically whether served over the built-in [REST/SSE adapter](server.md), embedded in an [A2A `DataPart`](a2a.md), or carried by AG-UI events.
+
+## Public API
+
+The broadly-reusable surface is re-exported from `autogen.beta.a2ui`:
+
+```python
+from autogen.beta.a2ui import (
+    a2ui_action,
+    A2UIClientCapabilities,
+    A2UIMessageEvent,
+    A2UIClientEvent,
+    A2UIValidationFailedEvent,
+)
+```
+
+The agent itself is a plain `autogen.beta.Agent`. The HTTP server picks its wire encoding from a `transport=`, and the A2A executor lives in its own submodule (kept out of the core import so the package never pulls in the a2a-sdk):
+
+```python
+from autogen.beta.a2ui import A2UIServer                       # HTTP server (ASGI app)
+from autogen.beta.a2ui.transports import RestTransport, AgUiTransport
+from autogen.beta.a2ui.a2a import A2UIAgentExecutor            # A2A
+```
+
+## Quickstart
+
+Build a plain `Agent`, then wrap it in an `A2UIServer` - the server **is** the ASGI app, the wire encoding comes from `transport=`, and clickable buttons are declared via `actions=` (the agent stays plain):
+
+```python
+import uvicorn
+
+from autogen.beta import Agent
+from autogen.beta.a2ui import A2UIServer, a2ui_action
+from autogen.beta.a2ui.transports import RestTransport
+from autogen.beta.config import AnthropicConfig
+
+@a2ui_action(description="Book the selected dinner reservation")
+def book_table(time: str, party_size: int) -> str:
+    return f"booked a table for {party_size} at {time}"
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+app = A2UIServer(
+    agent,
+    transport=RestTransport(encoding="jsonl"),  # POST /a2ui  ->  A2UI NDJSON
+    actions=[book_table],
+    protocol_version="v0.9",
+)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+See [Server](server.md) for the request/response contract and a client that drives this app.
+
+## Reading Order
+
+1. [Server](server.md) - wrap an `Agent` in `A2UIServer` and drive it over HTTP (SSE / NDJSON).
+2. [A2A Transport](a2a.md) - serve the same agent over A2A, carrying A2UI messages as canonical `DataPart`s.
+3. [Actions](actions.md) - clickable buttons backed by server-side `@a2ui_action` handlers, the click round-trip, and the inbound `A2UIClientEvent`.
+4. [Catalogs & Capabilities](capabilities.md) - the component schema the agent validates against, custom catalogs, and client capability negotiation.
+
+---
+
+# Serving A2UI over HTTP
+
+Source: https://docs.ag2.ai/latest/docs/beta/a2ui/server/
+
+`A2UIServer` wraps a plain `autogen.beta.Agent` and **is** a ready-to-serve [Starlette](https://www.starlette.io) ASGI app that speaks **canonical A2UI** over HTTP. It mirrors `autogen.beta.a2a.A2AServer`: hold the agent, configure A2UI with flat kwargs, pick a `transport=` for the wire encoding, and bring your own `uvicorn` (or any ASGI server) to run the `A2UIServer` instance directly.
+
+A2UI's wire is transport-agnostic, so one deployment serves one frontend over one `transport`:
+
+- `RestTransport(encoding="sse")` - Server-Sent Events (`text/event-stream`), suited to browser `EventSource` clients and reconnection.
+- `RestTransport(encoding="jsonl")` - canonical A2UI NDJSON (`application/x-ndjson`), suited to generic A2UI clients that consume the native JSON Lines wire.
+- `AgUiTransport()` - [AG-UI](https://docs.ag-ui.com) events for CopilotKit's renderer (see [Serving over AG-UI](#serving-over-ag-ui-copilotkit) below).
+
+The transports live in `autogen.beta.a2ui.transports`.
+
+!!! note
+    `A2UIServer` is re-exported from the top-level `autogen.beta.a2ui`. It depends on Starlette (declared as an additional dependency, not a core extra); a missing install surfaces as a clear hint rather than an opaque `ImportError`.
+
+## Minimal Server
+
+The `A2UIServer` instance is itself the ASGI app - hand it straight to `uvicorn`:
+
+```python
+import uvicorn
+
+from autogen.beta import Agent
+from autogen.beta.a2ui import A2UIServer
+from autogen.beta.a2ui.transports import RestTransport
+from autogen.beta.config import AnthropicConfig
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+app = A2UIServer(
+    agent,
+    transport=RestTransport(encoding="jsonl"),  # POST /a2ui  ->  A2UI NDJSON
+    protocol_version="v0.9",
+)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+The turn is served at `POST /a2ui` by default; pass `RestTransport(encoding="jsonl", path="/chat")` to change it. Swap `encoding="jsonl"` for `encoding="sse"` to stream Server-Sent Events instead.
+
+## The Request Contract
+
+The adapter speaks a minimal, dependency-free JSON body (no `ag-ui` / `a2a-sdk` types) so any client that can POST JSON can drive the agent:
+
+```json
+{
+  "messages":  [{"role": "user", "content": "show a booking form"}],
+  "variables": {"locale": "en"},
+  "a2ui":      [{"version": "v0.9", "action": {"name": "confirm", "...": "..."{{ "}}" }}],
+  "a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": ["..."]{{ "}}" }}
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `messages` | The conversation. A trailing run of `user` messages is the current turn; earlier messages become history. `system` / `developer` roles become prompt; `assistant` becomes a prior response. |
+| `variables` | Context variables merged into the turn (e.g. locale, user id). |
+| `a2ui` | Client->server envelopes - button clicks (`action`), v1.0 `functionResponse`, and client errors - rewritten into corrective prompts for the turn. See [Actions](actions.md). |
+| `a2uiClientCapabilities` | Optional catalog negotiation, nested under the protocol version. Folded into the prompt so the LLM only targets components the client can render. |
+
+A body that is not valid JSON, not a JSON object, or has a mistyped field returns **400** with an `{"error": ...}` payload. A failure *during* the turn (after the 200 has been sent) surfaces as a final `event: error` (SSE) or `{"error": ...}` (NDJSON) frame and is logged - the connection is not torn down silently.
+
+!!! note "The server is stateless"
+    There is no session store: the client resends the full conversation on every request. Each turn runs on a fresh stream, so horizontal scaling needs no sticky sessions - but the client owns the history.
+
+## Response Frames
+
+Each turn streams the conversational prose first (when present), then one frame per validated A2UI message.
+
+=== "NDJSON"
+    ```text
+    {"text": "Here is your booking form."}
+    {"version":"v0.9","createSurface":{"surfaceId":"s1","catalogId":"https://a2ui.org/..."{{ "}}" }}
+    {"version":"v0.9","updateComponents":{"surfaceId":"s1","components":[...]{{ "}}" }}
+    ```
+    The optional leading `{"text": ...}` line is AG2 framing (the prose), not itself an A2UI message. The remaining lines are canonical A2UI messages, one per line, ending at EOF.
+
+=== "SSE"
+    ```text
+    event: text
+    data: {"text": "Here is your booking form."}
+
+    data: {"version":"v0.9","createSurface":{"surfaceId":"s1","catalogId":"https://a2ui.org/..."{{ "}}" }}
+
+    event: done
+    data: {}
+    ```
+    The prose arrives as an `event: text` frame, each A2UI message as a default (unnamed) `data:` frame, and the turn closes with `event: done`.
+
+When the agent answers in plain prose (or validation degrades after exhausting retries), only the prose frame is emitted - there are no A2UI message frames.
+
+## Driving It From a Client
+
+Any HTTP client works. Here is a full round-trip with `httpx`, reading the NDJSON stream line by line:
+
+```python
+import json
+
+import httpx
+
+async def ask_ui(text: str) -> tuple[str, list[dict]]:
+    prose, messages = "", []
+    async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
+        async with client.stream("POST", "/a2ui", json={"messages": [{"role": "user", "content": text}]}) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                frame = json.loads(line)
+                if "text" in frame:
+                    prose = frame["text"]
+                elif "error" in frame:
+                    raise RuntimeError(frame["error"])
+                else:
+                    messages.append(frame)  # a canonical A2UI message
+    return prose, messages
+```
+
+Because the server is stateless, a follow-up turn just resends the prior messages plus the new one:
+
+```python
+json={
+    "messages": [
+        {"role": "user", "content": "show a booking form"},
+        {"role": "assistant", "content": "Here is your booking form."},
+        {"role": "user", "content": "make it for 4 people"},
+    ]
+}
+```
+
+!!! tip
+    For an end-to-end, runnable example that exercises both the NDJSON and SSE encodings over a real HTTP transport - including a button-click round-trip - see `test/beta/a2ui/transports/test_e2e_rest.py` in the repository.
+
+## Serving over AG-UI (CopilotKit)
+
+Swap `RestTransport` for `AgUiTransport` to serve the **same agent** as [AG-UI](https://docs.ag-ui.com) events - the protocol CopilotKit's [`@copilotkit/a2ui-renderer`](https://docs.copilotkit.ai) consumes. Nothing about the agent changes; only the wire encoding does:
+
+```python
+import uvicorn
+
+from autogen.beta import Agent
+from autogen.beta.a2ui import A2UIServer
+from autogen.beta.a2ui.transports import AgUiTransport
+from autogen.beta.config import AnthropicConfig
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+app = A2UIServer(agent, transport=AgUiTransport())  # POST /  ->  AG-UI SSE events
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+The turn is served at `POST /` by default (pass `AgUiTransport(path="/agent")` to change it) and the request body is an AG-UI `RunAgentInput`. Each validated A2UI message reaches the renderer as an `ACTIVITY_SNAPSHOT` event with `activityType="a2ui-surface"` and the operations under `content["a2ui_operations"]`; the prose arrives as `TEXT_MESSAGE_CHUNK`. A CopilotKit button click rides `forwardedProps.a2uiAction` and is rewritten into the next turn - the same click round-trip as REST (see [Actions](actions.md)).
+
+!!! tip
+    For a runnable AG-UI round-trip - text + `ACTIVITY_SNAPSHOT` emission and a `forwardedProps` button click - see `test/beta/a2ui/transports/test_e2e_ag_ui.py` in the repository.
+
+---
+
+# Serving A2UI over A2A
+
+Source: https://docs.ag2.ai/latest/docs/beta/a2ui/a2a/
+
+A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](../a2a/advanced.md) exchange instead of the built-in [REST adapter](server.md). The `autogen.beta.a2ui.a2a` submodule wraps a plain `autogen.beta.Agent` in an `A2UIAgentExecutor`, plugs it into a standard `A2AServer`, and carries each turn's A2UI messages as a canonical A2A `DataPart`.
+
+!!! note
+    This page assumes familiarity with the [A2A server](../a2a/server.md). The A2UI integration is a drop-in `executor` for the same `A2AServer` - everything you know about cards, transports, and tasks still applies.
+
+## How It Maps
+
+| A2UI concept | A2A representation |
+|---|---|
+| Validated server->client messages | One `DataPart` (MIME `application/a2ui+json`) carrying the full message list, alongside a text `Part` for the prose |
+| Button click / `functionResponse` / client error | An inbound A2UI `DataPart` on the request message - a registered action runs its handler on the server; anything else is rewritten into the turn's prompt |
+| Catalog negotiation | `a2uiClientCapabilities` on the A2A message `metadata` |
+| Protocol support advertised | An `AgentExtension` on the agent card's `capabilities.extensions` |
+
+The executor splits each completed turn into a text `Part` (the conversational prose) plus a single A2UI `DataPart` whose `data` is the JSON array of validated messages - the canonical A2A v1.0 encoding for A2UI.
+
+## Public API
+
+```python
+from autogen.beta.a2ui.a2a import (
+    A2UIAgentExecutor,        # the A2A executor wrapping a plain Agent
+    get_a2ui_agent_extension, # build the AgentExtension for the card
+    create_a2ui_parts,        # wrap A2UI messages into A2A Parts
+    get_a2ui_data,            # decode an A2UI DataPart's payload
+    is_a2ui_part,             # check whether a Part carries A2UI data
+)
+```
+
+## Minimal Server
+
+Wrap a plain `Agent` in `A2UIAgentExecutor` (with the same flat A2UI kwargs as `A2UIServer`, including `actions=` for clickable buttons), pass it to `A2AServer` via `executor=`, and advertise A2UI support on the card with a `card_modifier` that appends the extension:
+
+```python
+import uvicorn
+from a2a.types import AgentCard
+
+from autogen.beta import Agent
+from autogen.beta.a2a import A2AServer
+from autogen.beta.a2ui import a2ui_action
+from autogen.beta.a2ui.a2a import A2UIAgentExecutor, get_a2ui_agent_extension
+from autogen.beta.config import AnthropicConfig
+
+@a2ui_action(description="Book the selected dinner reservation")
+def book_table(time: str) -> str:
+    return f"booked a table for {time}"
+
+def build_app():
+    agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+    # Buttons are declared on the executor via actions=, just like A2UIServer -
+    # the agent stays plain.
+    executor = A2UIAgentExecutor(agent, actions=[book_table], protocol_version="v0.9")
+
+    async def advertise_a2ui(card: AgentCard) -> AgentCard:
+        card.capabilities.extensions.append(get_a2ui_agent_extension(version=executor.protocol_version))
+        return card
+
+    server = A2AServer(agent, executor=executor, card_modifier=advertise_a2ui)
+    return server.build_jsonrpc(url="http://127.0.0.1:8000")
+
+app = build_app()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+A client connects by pointing `A2AConfig(card_url=...)` at the card URL, exactly as for any A2A agent - see the [A2A client](../a2a/client.md) page.
+
+!!! tip
+    `get_a2ui_agent_extension()` takes `supported_catalog_ids=` and `accepts_inline_catalogs=` to describe which [catalogs](capabilities.md) the agent renders. With no arguments it advertises the version's default "basic" catalog.
+
+## Reading A2UI From the Client
+
+The A2UI messages ride a `DataPart` on the finalization message. Use `is_a2ui_part` to find it and `get_a2ui_data` to decode the payload (a list of canonical A2UI messages):
+
+```python
+from autogen.beta.a2ui.a2a import get_a2ui_data, is_a2ui_part
+
+# `message` is the A2A agent message from the completed task.
+for part in message.parts:
+    if is_a2ui_part(part):
+        messages = get_a2ui_data(part)  # list[dict] - createSurface, updateComponents, ...
+```
+
+`get_a2ui_data` decodes both the canonical v1.0 form (a JSON array in one `DataPart`) and the legacy form (one object per `DataPart`), returning `None` for any part that is not A2UI-typed.
+
+## The Click Round-Trip
+
+A button click is sent back as an inbound A2UI `DataPart` on the next request message - an `action` envelope, or a `functionResponse` (v1.0) for a server-initiated `callFunction`. A click on a **registered** `@a2ui_action` runs that handler on the server (its messages lead the `DataPart`, the agent is not invoked); a click on any other button - plus `error` and `functionResponse` envelopes - is rewritten into the turn's prompt so the agent continues. A turn carrying only registered server-action clicks finalizes without invoking the agent. See [Actions](actions.md) for the envelope shapes.
+
+!!! note "v1.0 pause/resume"
+    With `protocol_version="v1.0"`, a `callFunction(wantResponse=true)` transitions the A2A task to `input-required`, carrying the `callFunction` `DataPart` on the finalization message so the client knows which function to run. The client's `functionResponse` arrives on the next request and resumes the task - standard A2A task lifecycle, no extra bookkeeping.
+
+## Manually Building Parts
+
+If you serialize A2UI messages onto an A2A message yourself (outside the executor), `create_a2ui_parts` wraps one or many messages into `DataPart`s:
+
+```python
+from autogen.beta.a2ui.a2a import create_a2ui_parts
+
+parts = create_a2ui_parts(messages)                    # one DataPart, data = [msg, ...]
+parts = create_a2ui_parts(messages, legacy_split=True) # one DataPart per message (pre-v1.0 renderers)
+```
+
+---
+
+# A2UI Actions & Round-Trips
+
+Source: https://docs.ag2.ai/latest/docs/beta/a2ui/actions/
+
+A2UI **actions** are the clickable parts of a UI - buttons that, when pressed, drive what happens next. A clickable button is a function you decorate with `@a2ui_action` and **declare on the transport** via `actions=[...]` - the agent stays a plain `Agent`. The transport advertises the button to the LLM so it can render it; a click runs your function **on the server**, the agent is not invoked.
+
+## Server-Side Buttons (`@a2ui_action`)
+
+Decorate a function with `@a2ui_action`, then declare it on the server with `actions=`. The button is declared to the LLM so it can render it, but a **click runs the function on the server** with the click's `event.context` as keyword arguments - the agent is **not** invoked. Inside the handler you can do anything: hit a backend, call a tool, update a surface.
+
+```python
+from autogen.beta import Agent
+from autogen.beta.a2ui import A2UIServer, a2ui_action
+from autogen.beta.a2ui.transports import RestTransport
+from autogen.beta.config import AnthropicConfig
+
+@a2ui_action(description="Schedule all posts for the given time")
+def schedule_posts(time: str) -> dict:
+    # ... do the work on the server ...
+    return {"updateComponents": {"surfaceId": "s1", "components": [
+        {"id": "root", "component": "Text", "text": f"Scheduled for {time}"},
+    ]{{ "}}" }}
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+app = A2UIServer(agent, transport=RestTransport(encoding="jsonl"), actions=[schedule_posts])
+```
+
+When the LLM renders a button whose `action.event.name` is `"schedule_posts"`, a click sends the button's `event.context` back as the handler's keyword arguments and runs it on the server. The decorator derives an example context from the function's parameter schema (here `{"time": "<string>"}`) and injects it into the system prompt so the LLM emits the right keys; pass `example_context=` to override it.
+
+What the handler returns is mapped to the client per the A2UI spec:
+
+- one A2UI server->client message - or a list of them (e.g. `updateComponents` / `updateDataModel`) - is sent to the renderer as a **surface update** (works on every protocol version);
+- any other JSON value becomes an `actionResponse` **only** when the client asked for one (`wantResponse` + `actionId`, v1.0); otherwise it is fire-and-forget.
+
+A turn whose only input is registered server-action clicks **skips the agent entirely** - the handlers' messages are the whole response.
+
+Declaring the button on the transport - not on the agent - keeps the `Agent` plain and reusable across deployments. The same `actions=[...]` is accepted by `A2UIAgentExecutor` for the [A2A transport](a2a.md), so a button is declared the same way wherever the agent is served.
+
+## Other Kinds of Buttons
+
+A2UI components support two button shapes the spec distinguishes by what the click does:
+
+- **Server `event`** - sends a client->server message; the server handles it. This is what `@a2ui_action` produces.
+- **Client `functionCall`** - runs a function **on the renderer with no network round-trip** (e.g. `openUrl`, copy-to-clipboard).
+
+Client `functionCall` buttons execute entirely in the client, so they are **not registered on the server**. The LLM learns which client functions it may target from the active **catalog** and from the client's advertised [capabilities](capabilities.md) - not from server-side code. You can also render a button whose `event.name` isn't backed by a registered action: a click on it is rewritten generically into the next prompt so the LLM simply continues the conversation.
+
+## The Click Round-Trip
+
+The server is stateless, so a click is just another request. The client posts the conversation plus an `a2ui` envelope describing what was pressed; the server runs the matching handler - or, for an unregistered button, rewrites the click into the current turn:
+
+```python
+import httpx
+
+body = {
+    "messages": [],  # plus any prior conversation
+    "a2ui": [
+        {
+            "version": "v0.9",
+            "action": {
+                "name": "schedule_posts",
+                "surfaceId": "s1",
+                "sourceComponentId": "schedule_btn",
+                "timestamp": "2026-06-17T12:00:00Z",
+                "context": {"time": "2:00 PM"},
+            },
+        }
+    ],
+}
+
+async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
+    resp = await client.post("/a2ui", json=body)
+```
+
+When the action name matches a registered `@a2ui_action`, the click runs that handler on the server (the agent is not invoked); otherwise the click is rewritten into a plain instruction so the LLM continues the conversation.
+
+!!! note "v1.0 round-trip"
+    With `protocol_version="v1.0"`, a client's reply to a server `callFunction` arrives as a `functionResponse` envelope in the next request and is rewritten to a continuation prompt - the stateless transport needs no pause/resume bookkeeping. The same applies to `actionResponse`.
+
+## Observing Client Interactions
+
+Each client->server interaction the server receives - a button `action`, a v1.0 `functionResponse`, or an `error` - is surfaced on the turn's stream as an `A2UIClientEvent`, the inbound mirror of `A2UIMessageEvent`. Subscribe to react to or log client interactions (beyond what the LLM sees in its prompt):
+
+```python
+from autogen.beta.a2ui import A2UIClientEvent
+
+@stream.subscribe
+async def on_client_event(event):
+    if isinstance(event, A2UIClientEvent):
+        log.info("client interaction: %r", event.interaction)
+```
+
+!!! note
+    A purely client-side `functionCall` button (e.g. `openUrl`) runs on the renderer with no network round-trip per the A2UI spec, so it produces no envelope and therefore no `A2UIClientEvent`.
+
+## Observing Validation Failures
+
+A2UI has no server->client error message, so when the model can't produce schema-valid UI within `validation_retries + 1` attempts, the agent **gracefully degrades** to prose and emits no `A2UIMessageEvent`. To tell "couldn't build UI" apart from "intentionally answered with text", subscribe to `A2UIValidationFailedEvent` on the stream:
+
+```python
+from autogen.beta.a2ui import A2UIValidationFailedEvent
+
+@stream.subscribe
+async def on_validation_failed(event):
+    if isinstance(event, A2UIValidationFailedEvent):
+        log.warning("A2UI validation failed after %d attempts: %s", event.attempts, event.errors)
+```
+
+---
+
+# Catalogs & Client Capabilities
+
+Source: https://docs.ag2.ai/latest/docs/beta/a2ui/capabilities/
+
+A **catalog** is the schema that defines which components and functions an A2UI message may use - buttons, forms, lists, cards, and so on. An A2UI transport validates the agent's output against a catalog, and the catalog's id is stamped into each `createSurface` message so the client knows how to render it. **Client capabilities** are the other half: the client tells the agent which catalogs *it* can render, and the transport folds that into the prompt so it only targets components the client supports.
+
+## The Default Catalog
+
+Out of the box a transport uses the protocol version's **basic** catalog. Selecting `protocol_version=` on the transport picks the matching catalog id, which is stamped into every `createSurface` message - for `"v0.9"`:
+
+```text
+https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json
+```
+
+The basic catalog covers the common building blocks (surfaces, text, buttons, inputs, lists). It's enough for most forms, lists, and cards - reach for a custom catalog only when you need components the basic one doesn't define.
+
+!!! note
+    `"v0.9"` and `"v0.9.1"` share the same basic-catalog id on purpose - the upstream v0.9.1 catalog file declares the v0.9 `$id`. `"v1.0"` has its own. Selecting `protocol_version=` picks the matching catalog automatically.
+
+## Extending With a Custom Catalog
+
+To let the LLM emit components beyond the basic set, pass a `custom_catalog` that **extends** the basic catalog. It can be a dict or a path to a JSON file, and must declare a `$id` - that id becomes the active catalog id. Pair it with `custom_catalog_rules` to tell the LLM how to use the new components. These are flat kwargs on the transport:
+
+```python
+from autogen.beta import Agent
+from autogen.beta.a2ui import A2UIServer
+from autogen.beta.a2ui.transports import RestTransport
+from autogen.beta.config import AnthropicConfig
+
+custom_catalog = {
+    "$id": "https://example.com/catalogs/charts/catalog.json",
+    "components": {
+        # component definitions that extend the basic catalog ...
+    },
+}
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+server = A2UIServer(
+    agent,
+    transport=RestTransport(encoding="jsonl"),
+    custom_catalog=custom_catalog,
+    custom_catalog_rules="Use `chart` to visualize numeric series; never for text.",
+)
+```
+
+The custom catalog's rules are appended to the basic catalog's rules in the system prompt, and its component schemas are added to the validation registry - so malformed uses of your components are caught and retried just like the built-ins.
+
+!!! tip
+    Two knobs control prompt size: `include_schema_in_prompt` (the full JSON schema - better validation, more tokens) and `include_rules_in_prompt` (the plain-text catalog rules). Both default to `True`; turn them off to trade strictness for a shorter prompt.
+
+## Client Capability Negotiation
+
+A client advertises what its renderer supports via `A2UIClientCapabilities` - a list of `supported_catalog_ids` and, optionally, `inline_catalogs` (catalog definitions the client supplies inline). The transport renders this into a per-turn prompt fragment so the LLM targets only components the client can render.
+
+Negotiation is **advisory**: if the client's supported catalogs don't include the active catalog id, the mismatch is noted in the prompt and logged as a warning - it never blocks output. The A2UI spec frames capabilities as a hint, not a contract.
+
+How capabilities reach the agent depends on the transport:
+
+=== "REST"
+    Send them in the request body under `a2uiClientCapabilities`, nested by protocol version (see the [Server](server.md) request contract):
+
+    ```json
+    {
+      "messages": [{"role": "user", "content": "show a booking form"}],
+      "a2uiClientCapabilities": {
+        "v0.9": {
+          "supportedCatalogIds": ["https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"]
+        }
+      }
+    }
+    ```
+
+=== "A2A"
+    The client puts the same shape on the A2A message `metadata`. The [A2A executor](a2a.md) reads it off the incoming message and folds it into the turn's system prompt automatically.
+
+Whatever the transport, the capabilities become a short prompt section listing the supported catalogs (and a summary of any inline catalogs), so the LLM steers toward what the client can render.
+
+---
+
 # Exa Search
 
 Source: https://docs.ag2.ai/latest/docs/beta/extensions/tools/search/exa/
