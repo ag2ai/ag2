@@ -14,7 +14,7 @@ import asyncio
 
 import pytest
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 
 from autogen.beta import Agent
 from autogen.beta.knowledge import MemoryKnowledgeStore
