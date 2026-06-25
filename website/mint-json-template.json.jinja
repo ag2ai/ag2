@@ -338,10 +338,8 @@
       "pages": [
         "docs/beta/motivation",
         "docs/beta/agents",
-        "docs/beta/agent_harness",
-        "docs/beta/resume",
-        "docs/beta/structured_output",
         "docs/beta/model_configuration",
+        "docs/beta/resume",
         {
           "group": "Multimodality",
           "pages": [
@@ -349,9 +347,47 @@
             "docs/beta/multimodal/image_generation"
           ]
         },
+        "docs/beta/structured_output",
         "docs/beta/system_prompts",
-        "docs/beta/tasks",
-        "docs/beta/task_delegation",
+        {
+          "group": "Tools",
+          "pages": [
+            "docs/beta/tools/tools",
+            "docs/beta/tools/toolkits",
+            "docs/beta/tools/common_toolkits",
+            "docs/beta/tools/mcp_servers",
+            "docs/beta/tools/builtin_tools",
+            "docs/beta/tools/code_execution",
+            "docs/beta/tools/local_shell",
+            "docs/beta/tools/tool_middleware",
+            "docs/beta/tools/approval_required"
+          ]
+        },
+        {
+          "group": "Context Features",
+          "pages": [
+            "docs/beta/context/variables",
+            "docs/beta/context/inject",
+            "docs/beta/context/human_in_the_loop"
+          ]
+        },
+        "docs/beta/depends",
+        "docs/beta/skills",
+        "docs/beta/middleware",
+        "docs/beta/telemetry",
+        "docs/beta/testing",
+        {
+          "group": "Evaluation",
+          "pages": [
+            "docs/beta/evaluation/evaluation",
+            "docs/beta/evaluation/getting-started",
+            "docs/beta/evaluation/scorers",
+            "docs/beta/evaluation/runs",
+            "docs/beta/evaluation/variants",
+            "docs/beta/evaluation/pairwise",
+            "docs/beta/evaluation/persistence"
+          ]
+        },
         {
           "group": "Voice & Realtime",
           "pages": [
@@ -360,6 +396,22 @@
             "docs/beta/live/live_agent"
           ]
         },
+        {
+          "group": "Advanced Features",
+          "pages": [
+            "docs/beta/advanced/files",
+            "docs/beta/advanced/stream",
+            "docs/beta/advanced/observers",
+            "docs/beta/advanced/watches",
+            "docs/beta/advanced/knowledge_store",
+            "docs/beta/advanced/assembly",
+            "docs/beta/advanced/compaction",
+            "docs/beta/advanced/aggregation"
+          ]
+        },
+        "docs/beta/agent_harness",
+        "docs/beta/tasks",
+        "docs/beta/subagents",
         {
           "group": "Multi-Agent Network",
           "pages": [
@@ -405,20 +457,34 @@
           ]
         },
         {
-          "group": "Tools",
+          "group": "AG-UI",
           "pages": [
-            "docs/beta/tools/tools",
-            "docs/beta/tools/toolkits",
-            "docs/beta/tools/common_toolkits",
-            "docs/beta/tools/mcp_servers",
-            "docs/beta/tools/builtin_tools",
-            "docs/beta/tools/code_execution",
-            "docs/beta/tools/local_shell",
-            "docs/beta/tools/tool_middleware",
-            "docs/beta/tools/approval_required"
+            "docs/beta/ag-ui/index",
+            "docs/beta/ag-ui/copilotkit-quickstart",
+            "docs/beta/ag-ui/backend-deepdive"
           ]
         },
-        "docs/beta/skills",
+        {
+          "group": "A2A",
+          "pages": [
+            "docs/beta/a2a/overview",
+            "docs/beta/a2a/server",
+            "docs/beta/a2a/client",
+            "docs/beta/a2a/tasks_and_push",
+            "docs/beta/a2a/advanced"
+          ]
+        },
+        {
+          "group": "A2UI",
+          "pages": [
+            "docs/beta/a2ui/overview",
+            "docs/beta/a2ui/server",
+            "docs/beta/a2ui/a2a",
+            "docs/beta/a2ui/actions",
+            "docs/beta/a2ui/capabilities"
+          ]
+        },
+        "docs/beta/ag2_compatibility",
         {
           "group": "Extensions",
           "pages": [
@@ -437,65 +503,6 @@
           ]
         },
         {
-          "group": "Context Features",
-          "pages": [
-            "docs/beta/context/variables",
-            "docs/beta/context/inject",
-            "docs/beta/context/human_in_the_loop"
-          ]
-        },
-        "docs/beta/depends",
-        "docs/beta/middleware",
-        "docs/beta/telemetry",
-        "docs/beta/testing",
-        {
-          "group": "Evaluation",
-          "pages": [
-            "docs/beta/evaluation/evaluation",
-            "docs/beta/evaluation/getting-started",
-            "docs/beta/evaluation/scorers",
-            "docs/beta/evaluation/runs",
-            "docs/beta/evaluation/variants",
-            "docs/beta/evaluation/pairwise",
-            "docs/beta/evaluation/persistence"
-          ]
-        },
-        {
-          "group": "Advanced Features",
-          "pages": [
-            "docs/beta/advanced/files",
-            "docs/beta/advanced/stream",
-            "docs/beta/advanced/observers",
-            "docs/beta/advanced/watches",
-            "docs/beta/advanced/knowledge_store",
-            "docs/beta/advanced/assembly",
-            "docs/beta/advanced/compaction",
-            "docs/beta/advanced/aggregation"
-          ]
-        },
-        {
-          "group": "AG-UI",
-          "pages": [
-            "docs/beta/ag-ui/index",
-            "docs/beta/ag-ui/copilotkit-quickstart",
-            "docs/beta/ag-ui/backend-deepdive"
-          ]
-        },
-        {
-          "group": "A2A",
-          "pages": [
-            "docs/beta/a2a/overview",
-            "docs/beta/a2a/server",
-            "docs/beta/a2a/client",
-            "docs/beta/a2a/tasks_and_push",
-            "docs/beta/a2a/advanced"
-          ]
-        },
-        "docs/beta/ag2_compatibility",
-        "docs/beta/roadmap",
-        "docs/beta/coding_with_ai",
-        "docs/beta/contribution_policy",
-        {
           "group": "Code Examples",
           "pages": [
             "docs/beta/code_examples/code_examples",
@@ -508,7 +515,10 @@
             "docs/beta/code_examples/07_long_doc_chat",
             "docs/beta/code_examples/08_safety_guard"
           ]
-        }
+        },
+        "docs/beta/coding_with_ai",
+        "docs/beta/contribution_policy",
+        "docs/beta/roadmap"
       ]
     },
     {

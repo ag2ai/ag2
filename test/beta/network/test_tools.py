@@ -26,9 +26,6 @@ from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_TASK_CANCEL_REQUEST,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     Resume,
 )
 from autogen.beta.network.client.tools.channels import make_channels_tool
@@ -77,22 +74,15 @@ async def _invoke(tool: Any, args: dict, *, dependencies: dict | None = None) ->
 async def test_peers_find_returns_other_peers_summary() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(claimed_capabilities=["debate"]))
-    await bob_hc.register(
+    alice = await hub.register(_agent("alice"), resume=Resume(claimed_capabilities=["debate"]))
+    await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(summary="senior coder", claimed_capabilities=["coding"]),
+        resume=Resume(summary="senior coder", claimed_capabilities=["coding"]),
     )
-    await carol_hc.register(
+    await hub.register(
         _agent("carol"),
-        Passport(name="carol"),
-        Resume(summary="qa lead", claimed_capabilities=["testing"]),
+        resume=Resume(summary="qa lead", claimed_capabilities=["testing"]),
     )
 
     tool = make_peers_tool(alice)
@@ -104,9 +94,6 @@ async def test_peers_find_returns_other_peers_summary() -> None:
     assert "carol" in names
     assert "alice" not in names  # excludes the calling agent
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 
@@ -114,16 +101,11 @@ async def test_peers_find_returns_other_peers_summary() -> None:
 async def test_peers_find_filters_by_capability() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(
+    alice = await hub.register(_agent("alice"))
+    await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(claimed_capabilities=["coding"]),
+        resume=Resume(claimed_capabilities=["coding"]),
     )
 
     tool = make_peers_tool(alice)
@@ -134,8 +116,6 @@ async def test_peers_find_filters_by_capability() -> None:
     assert [r["name"] for r in coders] == ["bob"]
     assert other == []
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -143,25 +123,18 @@ async def test_peers_find_filters_by_capability() -> None:
 async def test_peers_describe_returns_skill_md_or_fallback() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     # Bob has an explicit SKILL.md.
-    await bob_hc.register(
+    await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(claimed_capabilities=["coding"]),
+        resume=Resume(claimed_capabilities=["coding"]),
         skill_md="---\nname: bob\ndescription: hand-written\n---\n## Notes\n",
     )
     # Carol falls back to the rendered version.
-    await carol_hc.register(
+    await hub.register(
         _agent("carol"),
-        Passport(name="carol"),
-        Resume(claimed_capabilities=["qa"], summary="qa lead"),
+        resume=Resume(claimed_capabilities=["qa"], summary="qa lead"),
     )
 
     tool = make_peers_tool(alice)
@@ -175,9 +148,6 @@ async def test_peers_describe_returns_skill_md_or_fallback() -> None:
     assert "name: carol" in carol_profile["skill_md"]
     assert "qa lead" in carol_profile["skill_md"]
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 
@@ -188,12 +158,9 @@ async def test_peers_describe_returns_skill_md_or_fallback() -> None:
 async def test_channels_open_and_list_and_close() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     tool = make_channels_tool(alice)
     deps = {AGENT_CLIENT_DEP: alice}
@@ -220,8 +187,6 @@ async def test_channels_open_and_list_and_close() -> None:
     closed = await _invoke(tool, {"action": "close", "channel_id": sid}, dependencies=deps)
     assert closed["state"] == "closed"
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -232,12 +197,9 @@ async def test_channels_open_and_list_and_close() -> None:
 async def test_context_search_finds_substring_in_channel_wal() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("policy framework adoption")
@@ -249,8 +211,6 @@ async def test_context_search_finds_substring_in_channel_wal() -> None:
     assert len(results) == 1
     assert "framework" in results[0]["excerpt"]
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -258,12 +218,9 @@ async def test_context_search_finds_substring_in_channel_wal() -> None:
 async def test_context_quote_returns_recent_n_from_speaker() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), attach_plugin=False)
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), attach_plugin=False)
+    alice = await hub.register(_agent("alice"), attach_plugin=False)
+    bob = await hub.register(_agent("bob"), attach_plugin=False)
 
     # Auto-ack on bob so the conversation activates.
     from autogen.beta.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, Envelope
@@ -294,8 +251,6 @@ async def test_context_quote_returns_recent_n_from_speaker() -> None:
     quotes = await _invoke(tool, {"action": "quote", "speaker": "alice", "recent_n": 2}, dependencies=deps)
     assert [q["text"] for q in quotes] == ["alice 2", "alice 3"]
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -309,11 +264,9 @@ async def test_tasks_status_and_list_and_wait() -> None:
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    bob_hc = HubClient(link, hub=hub)
     bob_agent = Agent(name="bob", config=TestConfig())
-    bob = await bob_hc.register(bob_agent, Passport(name="bob"), Resume())
+    bob = await hub.register(bob_agent)
 
     # Start + complete a task through the mirror so the hub sees it.
     stream = MemoryStream()
@@ -343,7 +296,6 @@ async def test_tasks_status_and_list_and_wait() -> None:
     )
     assert waited["state"] == "completed"
 
-    await bob_hc.close()
     await hub.close()
 
 
@@ -351,10 +303,8 @@ async def test_tasks_status_and_list_and_wait() -> None:
 async def test_tasks_status_unknown_task_returns_error() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     tool = make_tasks_tool(alice)
     deps = {AGENT_CLIENT_DEP: alice}
@@ -362,7 +312,6 @@ async def test_tasks_status_unknown_task_returns_error() -> None:
     assert isinstance(result, str)
     assert "not found" in result
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -374,13 +323,9 @@ async def test_tasks_cancel_posts_cancel_request_envelope_to_owner() -> None:
     """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob")
 
@@ -413,8 +358,6 @@ async def test_tasks_cancel_posts_cancel_request_envelope_to_owner() -> None:
     assert requests[0].audience == [bob.agent_id]
     assert requests[0].sender_id == alice.agent_id
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -422,10 +365,8 @@ async def test_tasks_cancel_posts_cancel_request_envelope_to_owner() -> None:
 async def test_tasks_cancel_without_task_id_returns_error() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     tool = make_tasks_tool(alice)
     deps = {AGENT_CLIENT_DEP: alice}
@@ -433,7 +374,6 @@ async def test_tasks_cancel_without_task_id_returns_error() -> None:
     assert isinstance(result, str)
     assert "requires `task_id`" in result
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -441,10 +381,8 @@ async def test_tasks_cancel_without_task_id_returns_error() -> None:
 async def test_tasks_cancel_unknown_task_returns_error() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     tool = make_tasks_tool(alice)
     deps = {AGENT_CLIENT_DEP: alice}
@@ -452,7 +390,6 @@ async def test_tasks_cancel_unknown_task_returns_error() -> None:
     assert isinstance(result, str)
     assert "not found" in result
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -460,12 +397,9 @@ async def test_tasks_cancel_unknown_task_returns_error() -> None:
 async def test_tasks_cancel_terminal_task_is_a_no_op_with_message() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     # Plant a COMPLETED task; cancel must report it without posting an envelope.
     await hub.observe_task(
@@ -483,8 +417,6 @@ async def test_tasks_cancel_terminal_task_is_a_no_op_with_message() -> None:
     assert isinstance(result, str)
     assert "already completed" in result
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -494,12 +426,9 @@ async def test_tasks_cancel_task_without_channel_returns_error() -> None:
     nowhere to address the envelope."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     await hub.observe_task(
         TaskMetadata(
@@ -516,8 +445,6 @@ async def test_tasks_cancel_task_without_channel_returns_error() -> None:
     assert isinstance(result, str)
     assert "no associated channel" in result
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -535,13 +462,10 @@ async def test_network_plugin_attaches_identity_level_tools() -> None:
     """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     tool_names = {t.name for t in alice.agent.tools}
     assert {"delegate", "peers", "channels", "tasks", "context"} <= tool_names
     assert "say" not in tool_names
 
-    await alice_hc.close()
     await hub.close()

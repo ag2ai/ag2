@@ -188,15 +188,12 @@ async def test_register_rejects_duplicate_name_raises_protocol_error() -> None:
     prior passport / resume / rule do not get orphaned on disk."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    hc = HubClient(link, hub=hub)
-    await hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await hub.register(_agent("alice"))
 
     with pytest.raises(ProtocolError, match="already registered"):
-        await hc.register(_agent("alice"), Passport(name="alice"), Resume())
+        await hub.register(_agent("alice"))
 
-    await hc.close()
     await hub.close()
 
 
@@ -227,24 +224,17 @@ async def test_create_channel_enforces_max_concurrent_channels() -> None:
     channels than ``max_concurrent_channels``. ``0`` disables."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     capped = Rule(limits=LimitsBlock(max_concurrent_channels=1))
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=capped)
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    carol = await carol_hc.register(_agent("carol"), Passport(name="carol"), Resume())
+    alice = await hub.register(_agent("alice"), rule=capped)
+    bob = await hub.register(_agent("bob"))
+    carol = await hub.register(_agent("carol"))
 
     await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
 
     with pytest.raises(AccessDeniedError, match="max_concurrent_channels"):
         await alice.open(type=CONVERSATION_TYPE, target=carol.agent_id)
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 
@@ -254,11 +244,9 @@ async def test_observe_task_enforces_max_concurrent_tasks() -> None:
     ``max_concurrent_tasks`` non-terminal tasks observed."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     capped = Rule(limits=LimitsBlock(max_concurrent_tasks=1))
-    hc = HubClient(link, hub=hub)
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=capped)
+    alice = await hub.register(_agent("alice"), rule=capped)
 
     await hub.observe_task(
         TaskMetadata(
@@ -293,7 +281,6 @@ async def test_observe_task_enforces_max_concurrent_tasks() -> None:
         )
     )
 
-    await hc.close()
     await hub.close()
 
 
@@ -303,16 +290,11 @@ async def test_post_envelope_enforces_inbox_max_pending() -> None:
     is at capacity. The counter decrements when the recipient sends."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     bob_capped = Rule(limits=LimitsBlock(inbox=InboxBlock(max_pending=2)))
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(),
         rule=bob_capped,
         attach_plugin=False,
     )
@@ -349,8 +331,6 @@ async def test_post_envelope_enforces_inbox_max_pending() -> None:
     )
     await hub.post_envelope(_make("three"))  # accepted now
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -398,14 +378,11 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
     immediately after ``channel.send`` (the inbox is pre-created)."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     from autogen.beta.network.policies import AGENT_CLIENT_DEP
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob", "the answer is 42"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob", "the answer is 42"))
 
     delegate_tool = make_delegate_tool(alice)
     result = await _invoke(
@@ -415,8 +392,6 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
     )
     assert "42" in result
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -433,12 +408,10 @@ async def test_delegate_to_self_returns_actionable_error() -> None:
     """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     from autogen.beta.network.policies import AGENT_CLIENT_DEP
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     delegate_tool = make_delegate_tool(alice)
     result = await _invoke(
@@ -453,7 +426,6 @@ async def test_delegate_to_self_returns_actionable_error() -> None:
     # No channel should have been opened for the doomed self-consult.
     assert await hub.list_channels(state=ChannelState.ACTIVE) == []
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -463,14 +435,11 @@ async def test_delegate_fails_fast_when_channel_closes_before_reply() -> None:
     delegate returns immediately with an error — not after the 300s timeout."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     from autogen.beta.network.policies import AGENT_CLIENT_DEP
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), attach_plugin=False)
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"), attach_plugin=False)
     # Bob acks the invite so the channel opens, but never replies to
     # the prompt — alice's delegate would block until timeout without
     # the fail-fast path.
@@ -507,8 +476,6 @@ async def test_delegate_fails_fast_when_channel_closes_before_reply() -> None:
     lowered = result.lower()
     assert "channel closed" in lowered or "prompt send failed" in lowered, result
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -595,10 +562,8 @@ async def test_record_observation_dedups_by_task_id() -> None:
     must update ``Resume.observed.n`` only once."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    hc = HubClient(link, hub=hub)
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     await hub.record_observation(
         owner_id=alice.agent_id,
@@ -628,7 +593,6 @@ async def test_record_observation_dedups_by_task_id() -> None:
     assert resume.observed["math"].n == 2
     assert resume.observed["math"].failed == 1
 
-    await hc.close()
     await hub.close()
 
 
@@ -642,18 +606,13 @@ async def test_concurrency_caps_zero_disables() -> None:
     convention used elsewhere (delegation_depth, inbox.max_pending)."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     no_caps = Rule(limits=LimitsBlock(max_concurrent_channels=0, max_concurrent_tasks=0))
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=no_caps)
+    alice = await hub.register(_agent("alice"), rule=no_caps)
 
     # Five concurrent conversations open without raising.
-    peer_handles: list[HubClient] = []
     for name in ("bob", "carol", "dave", "erin", "frank"):
-        peer_hc = HubClient(link, hub=hub)
-        peer = await peer_hc.register(_agent(name), Passport(name=name), Resume())
-        peer_handles.append(peer_hc)
+        peer = await hub.register(_agent(name))
         await alice.open(type=CONVERSATION_TYPE, target=peer.agent_id)
 
     # Five concurrent tasks observed without raising.
@@ -668,9 +627,6 @@ async def test_concurrency_caps_zero_disables() -> None:
             )
         )
 
-    for hc in peer_handles:
-        await hc.close()
-    await alice_hc.close()
     await hub.close()
 
 
@@ -682,22 +638,16 @@ async def test_inbox_capacity_does_not_block_protocol_events() -> None:
     learn about a new invite."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     bob_capped = Rule(limits=LimitsBlock(inbox=InboxBlock(max_pending=1)))
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(),
         rule=bob_capped,
         attach_plugin=False,
     )
     bob.on_envelope(_ack_only_handler(bob))
-    carol = await carol_hc.register(_agent("carol"), Passport(name="carol"), Resume())
+    carol = await hub.register(_agent("carol"))
 
     # Saturate bob's substantive-inbox budget via channel 1.
     s1 = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
@@ -718,9 +668,6 @@ async def test_inbox_capacity_does_not_block_protocol_events() -> None:
     s2 = await carol.open(type=CONVERSATION_TYPE, target=bob.agent_id)
     assert s2.state == ChannelState.ACTIVE
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 
@@ -787,10 +734,8 @@ async def test_set_resume_rewrites_by_capability_disk_file() -> None:
     in sync with in-memory ``_capability_index``."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    hc = HubClient(link, hub=hub)
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     initial = await store.read(by_capability_path())
     assert initial is not None
@@ -812,7 +757,6 @@ async def test_set_resume_rewrites_by_capability_disk_file() -> None:
     after_remove = json.loads(await store.read(by_capability_path()))
     assert after_remove == {"policy": [alice.agent_id]}
 
-    await hc.close()
     await hub.close()
 
 
@@ -829,14 +773,11 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     from autogen.beta.network.policies import AGENT_CLIENT_DEP
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), attach_plugin=False)
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"), attach_plugin=False)
     bob.on_envelope(_ack_only_handler(bob))
 
     delegate_tool = make_delegate_tool(alice)
@@ -873,8 +814,6 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
     assert "channel closed" in lowered or "prompt send failed" in lowered, result
     assert "expired" in lowered, result
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 

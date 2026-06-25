@@ -28,9 +28,6 @@ from autogen.beta.events import ToolCallEvent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     Resume,
 )
 from autogen.beta.network.adapters.conversation import ConversationAdapter
@@ -116,12 +113,9 @@ async def test_expectation_sweeper_fires_violations_in_background() -> None:
     # Sweeper runs every 50ms; default expectation evaluator is registered.
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0.05)
     hub.register_adapter(_ImmediateAdapter())
-    link = LocalLink(hub)
 
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     pre_audit = len(await hub._audit_log.read_all())
     channel = await alice.open(type="conversation_immediate", target=bob.agent_id)
@@ -137,8 +131,6 @@ async def test_expectation_sweeper_fires_violations_in_background() -> None:
     assert len(violations) >= 1
     assert violations[0]["expectation"] == "max_silence"
 
-    await a_hc.close()
-    await b_hc.close()
     await hub.close()
 
 
@@ -210,19 +202,14 @@ async def test_cross_tool_flow_exercises_all_six_tools() -> None:
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(claimed_capabilities=["lead"]),
+        resume=Resume(claimed_capabilities=["lead"]),
     )
-    bob = await b_hc.register(
+    bob = await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(claimed_capabilities=["math"]),
+        resume=Resume(claimed_capabilities=["math"]),
     )
 
     say = make_say_tool(alice)
@@ -286,8 +273,6 @@ async def test_cross_tool_flow_exercises_all_six_tools() -> None:
     assert len(found_msgs) == 1
     assert "hello" in found_msgs[0]["excerpt"]
 
-    await a_hc.close()
-    await b_hc.close()
     await hub.close()
 
 

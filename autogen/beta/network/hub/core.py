@@ -34,6 +34,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
 from autogen.beta.knowledge import KnowledgeStore
 from autogen.beta.task import TERMINAL_TASK_STATES, TaskMetadata, TaskState
@@ -51,6 +52,7 @@ from ..channel import (
     ParticipantRole,
     is_terminal_channel_state,
 )
+from ..client.hub_client import HubClient
 from ..envelope import (
     EV_CHANNEL_CLOSED,
     EV_CHANNEL_EXPIRED,
@@ -85,6 +87,7 @@ from ..transport.frames import (
     WelcomeFrame,
 )
 from ..transport.link import LinkEndpoint
+from ..transport.local import LocalLink
 from ..views.base import ViewPolicy
 from .arbiter import Deny, HubArbiter, RuleBasedArbiter
 from .audit import AuditLog
@@ -112,6 +115,14 @@ from .layout import (
 )
 from .listener import HubListener
 from .sweepers import _IntervalSweeper
+
+if TYPE_CHECKING:
+    # Annotation-only — the hub forwards these to ``HubClient`` and never
+    # touches a tenant ``Agent`` at runtime, preserving the trust boundary.
+    from autogen.beta.agent import Agent
+
+    from ..client.agent_client import AgentClient
+    from ..transport.link import LinkFactory
 
 __all__ = ("Hub", "PendingTurn")
 
@@ -304,6 +315,13 @@ class Hub:
         self._endpoint_to_agents: dict[str, set[str]] = {}
         self._endpoint_tasks: set[asyncio.Task[None]] = set()
 
+        # Clients created by the ``register(agent)`` convenience — one per
+        # call, each owned by its returned ``AgentClient``. The hub tracks
+        # them so ``close()`` can drain any the caller left open;
+        # ``AgentClient.close`` closes (and is free to leave tracked —
+        # ``HubClient.close`` is idempotent) the rest.
+        self._owned_clients: list[HubClient] = []
+
         # Per-channel locks for WAL append + dispatch ordering.
         self._channel_locks: dict[str, asyncio.Lock] = {}
         self._registration_lock = asyncio.Lock()
@@ -468,6 +486,13 @@ class Hub:
         for sweeper in list(self._custom_sweepers.values()):
             await sweeper.stop()
         self._custom_sweepers.clear()
+        # Close clients created by ``register(agent)`` first — closing a
+        # client's link signals its hub-side endpoint loop to terminate
+        # cleanly before the remaining endpoint tasks are cancelled.
+        # Idempotent, so already-``AgentClient.close``d ones are no-ops.
+        for client in self._owned_clients:
+            await client.close()
+        self._owned_clients.clear()
         for task in list(self._endpoint_tasks):
             task.cancel()
         if self._endpoint_tasks:
@@ -877,12 +902,75 @@ class Hub:
 
     async def register(
         self,
+        agent: "Agent",
+        passport: "Passport | None" = None,
+        resume: "Resume | None" = None,
+        *,
+        skill_md: str | None = None,
+        rule: Rule | None = None,
+        attach_plugin: bool = True,
+        link: "LinkFactory | None" = None,
+    ) -> "AgentClient":
+        """Register an ``Agent`` directly against this in-process hub.
+
+        Convenience over the explicit
+        ``HubClient(LocalLink(hub), hub=hub).register(agent)`` flow: each
+        call creates a dedicated :class:`HubClient` (on a ``LocalLink(self)``
+        by default, or the supplied ``link``) and returns the
+        :class:`AgentClient` handle. The handle **owns** that connection —
+        :meth:`AgentClient.close` unregisters the agent and closes it, and
+        :meth:`close` closes any handles left open.
+
+        Mirrors :meth:`HubClient.register`: ``passport`` / ``resume``
+        default from ``agent.name`` / an empty :class:`Resume`, and a
+        ``kind="human"`` passport is rejected with a pointer to
+        ``HubClient.register_human``. The explicit ``HubClient`` flow
+        remains available for custom transports and multi-agent-per-client
+        topologies; to register a low-level identity without an agent, use
+        :meth:`register_identity`.
+        """
+        hub_client = HubClient(link if link is not None else LocalLink(self), hub=self)
+        self._owned_clients.append(hub_client)
+        try:
+            client = await hub_client.register(
+                agent,
+                passport,
+                resume,
+                skill_md=skill_md,
+                rule=rule,
+                attach_plugin=attach_plugin,
+            )
+        # BaseException (not Exception) so an ``asyncio.CancelledError``
+        # raised during the ``await`` above — which is a BaseException
+        # since Python 3.8 — still triggers cleanup. We re-raise it
+        # unchanged below, so cancellation/shutdown is not swallowed.
+        except BaseException:
+            # Registration failed (e.g. a human passport) — don't leak the
+            # freshly-created client; close and untrack it before re-raising.
+            self._owned_clients.remove(hub_client)
+            await hub_client.close()
+            raise
+        # The handle exclusively owns this connection, so its ``close``
+        # may tear the transport down without affecting other agents.
+        client._owns_client = True
+        return client
+
+    async def register_identity(
+        self,
         passport: Passport,
         resume: Resume,
         *,
         skill_md: str | None = None,
         rule: Rule | None = None,
     ) -> Passport:
+        """Register a low-level participant identity; return the stamped passport.
+
+        Stamps an ``agent_id``, persists the passport / resume / rule
+        (and optional SKILL.md), and indexes the name + capabilities. This
+        is the identity primitive underneath :meth:`register` — most
+        callers want :meth:`register`, which attaches an ``Agent`` and
+        returns an ``AgentClient``.
+        """
         # Remote-agent passports represent participants on another hub
         # and ``auth.scheme`` is a routing label consumed by the
         # registered ``RemoteAgentProxy`` — not a credential to be
@@ -2178,7 +2266,7 @@ class Hub:
             passport = Passport.from_dict(params["passport"])
             resume = Resume.from_dict(params["resume"])
             rule = Rule.from_dict(params["rule"]) if params.get("rule") is not None else None
-            registered = await self.register(
+            registered = await self.register_identity(
                 passport,
                 resume,
                 skill_md=params.get("skill_md"),

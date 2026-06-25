@@ -47,6 +47,11 @@ try:
 except ImportError as e:
     XAIConfig = missing_optional_dependency("XAIConfig", "xai", e)  # type: ignore[misc]
 
+try:
+    from .zai import ZAIConfig
+except ImportError as e:
+    ZAIConfig = missing_optional_dependency("ZAIConfig", "zai", e)  # type: ignore[misc]
+
 __all__ = (
     "AnthropicConfig",
     "BedrockConfig",
@@ -62,4 +67,5 @@ __all__ = (
     "OpenAIResponsesConfig",
     "VertexAIConfig",
     "XAIConfig",
+    "ZAIConfig",
 )
