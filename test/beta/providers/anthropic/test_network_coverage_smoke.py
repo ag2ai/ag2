@@ -33,9 +33,6 @@ from autogen.beta.network import (
     EV_TEXT,
     Handoff,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     Resume,
 )
 from autogen.beta.network.adapters.conversation import CONVERSATION_TYPE
@@ -108,7 +105,6 @@ async def test_conversation_adapter_bidirectional_two_turns(
         ttl_sweep_interval=0,
         expectation_sweep_interval=0,
     )
-    link = LocalLink(hub)
 
     alice = Agent(
         name="alice",
@@ -121,10 +117,8 @@ async def test_conversation_adapter_bidirectional_two_turns(
         config=anthropic_config,
     )
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice_c = await alice_hc.register(alice, Passport(name="alice"), Resume())
-    bob_c = await bob_hc.register(bob, Passport(name="bob"), Resume())
+    alice_c = await hub.register(alice)
+    bob_c = await hub.register(bob)
 
     channel = await alice_c.open(type=CONVERSATION_TYPE, target=bob_c.agent_id)
 
@@ -142,8 +136,6 @@ async def test_conversation_adapter_bidirectional_two_turns(
     metadata = await hub.get_channel(channel.channel_id)
     assert metadata.state == ChannelState.CLOSED
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -165,8 +157,6 @@ async def test_peers_describe_returns_fallback_skill(
         ttl_sweep_interval=0,
         expectation_sweep_interval=0,
     )
-    link = LocalLink(hub)
-
     alice = Agent(
         name="alice",
         prompt=(
@@ -182,14 +172,10 @@ async def test_peers_describe_returns_fallback_skill(
         config=anthropic_config,
     )
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice_c = await alice_hc.register(alice, Passport(name="alice"), Resume())
-    await bob_hc.register(
+    alice_c = await hub.register(alice)
+    await hub.register(
         bob,
-        Passport(name="bob"),
-        Resume(
+        resume=Resume(
             claimed_capabilities=["arithmetic"],
             domains=["mathematics"],
             summary="bob handles arithmetic word problems.",
@@ -203,8 +189,6 @@ async def test_peers_describe_returns_fallback_skill(
         f"expected fallback skill render to expose 'arithmetic', got: {reply.body!r}"
     )
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -224,8 +208,6 @@ async def test_channels_close_invoked_by_llm(
         ttl_sweep_interval=0,
         expectation_sweep_interval=0,
     )
-    link = LocalLink(hub)
-
     alice = Agent(
         name="alice",
         prompt=(
@@ -237,11 +219,8 @@ async def test_channels_close_invoked_by_llm(
     )
     bob = Agent(name="bob", prompt="You are bob.", config=anthropic_config)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice_c = await alice_hc.register(alice, Passport(name="alice"), Resume())
-    bob_c = await bob_hc.register(bob, Passport(name="bob"), Resume())
+    alice_c = await hub.register(alice)
+    bob_c = await hub.register(bob)
 
     channel = await alice_c.open(type=CONVERSATION_TYPE, target=bob_c.agent_id)
 
@@ -266,8 +245,6 @@ async def test_channels_close_invoked_by_llm(
     metadata = await hub.get_channel(channel.channel_id)
     assert metadata.state == ChannelState.CLOSED, f"expected channel to be CLOSED, got {metadata.state}"
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -287,8 +264,6 @@ async def test_context_search_finds_earlier_turn(
         ttl_sweep_interval=0,
         expectation_sweep_interval=0,
     )
-    link = LocalLink(hub)
-
     alice = Agent(
         name="alice",
         prompt=(
@@ -301,11 +276,8 @@ async def test_context_search_finds_earlier_turn(
     )
     bob = Agent(name="bob", prompt="You are bob.", config=anthropic_config)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice_c = await alice_hc.register(alice, Passport(name="alice"), Resume())
-    bob_c = await bob_hc.register(bob, Passport(name="bob"), Resume())
+    alice_c = await hub.register(alice)
+    bob_c = await hub.register(bob)
 
     channel = await alice_c.open(type=CONVERSATION_TYPE, target=bob_c.agent_id)
 
@@ -330,8 +302,6 @@ async def test_context_search_finds_earlier_turn(
         f"expected reply to include 'QUARTZSTONE-2026', got: {reply.body!r}"
     )
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -359,8 +329,6 @@ async def test_workflow_graph_with_two_handoff_tools(
         ttl_sweep_interval=0,
         expectation_sweep_interval=0,
     )
-    link = LocalLink(hub)
-
     user_agent = Agent(name="user", config=TestConfig())
     triage = Agent(
         name="triage",
@@ -375,15 +343,10 @@ async def test_workflow_graph_with_two_handoff_tools(
     eng = Agent(name="eng", prompt="You are engineering.", config=anthropic_config)
     billing = Agent(name="billing", prompt="You are billing.", config=anthropic_config)
 
-    user_hc = HubClient(link, hub=hub)
-    triage_hc = HubClient(link, hub=hub)
-    eng_hc = HubClient(link, hub=hub)
-    billing_hc = HubClient(link, hub=hub)
-
-    user_c = await user_hc.register(user_agent, Passport(name="user"), Resume())
-    triage_c = await triage_hc.register(triage, Passport(name="triage"), Resume())
-    eng_c = await eng_hc.register(eng, Passport(name="eng"), Resume())
-    billing_c = await billing_hc.register(billing, Passport(name="billing"), Resume())
+    user_c = await hub.register(user_agent)
+    triage_c = await hub.register(triage)
+    eng_c = await hub.register(eng)
+    billing_c = await hub.register(billing)
 
     eng_id = eng_c.agent_id
     billing_id = billing_c.agent_id
@@ -441,8 +404,4 @@ async def test_workflow_graph_with_two_handoff_tools(
     chosen_tool = (handoffs[0].event_data.get("routing", {}) or {}).get("tool")
     assert chosen_tool == "transfer_to_billing", f"expected billing routing, got tool={chosen_tool!r}"
 
-    await user_hc.close()
-    await triage_hc.close()
-    await eng_hc.close()
-    await billing_hc.close()
     await hub.close()

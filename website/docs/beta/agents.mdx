@@ -7,10 +7,11 @@ Agents are the central primitive in **AG2 Beta**. They maintain state, interact 
 
 ## Core Communication Primitives
 
-The API is built around two simple methods:
+The API is built around a few simple methods:
 
-* `Agent.ask(...)` initiates a new turn and returns an `AgentReply` object.
+* `Agent.ask(...)` initiates a new turn and **blocks** until it finishes, returning an `AgentReply`.
 * `AgentReply.ask(...)` continues an existing conversation, preserving its context and history.
+* `Agent.run(...)` / `AgentReply.run(...)` are the **observable** counterparts: they open a turn you can watch live and drive on demand, returning an `AgentRun` handle. See [Watching a Turn Live with `run`](#watching-a-turn-live-with-run) below.
 
 The final result of any turn is safely stored in `reply.response`; use `reply.body` for the text.
 
@@ -129,6 +130,90 @@ reply = await agent.ask(
     stream=stream
 )
 ```
+
+## Watching a Turn Live with `run`
+
+`ask()` blocks until the whole turn is done. When you want to *watch* a turn unfold — stream tokens to a UI as they arrive, or steer the agent mid-turn — use `run()` instead. It returns an `AgentRun` async context manager.
+
+The turn does **not** advance on its own. Call `run.start()` to drive it in the background, then read `run.stream.join()` — an async iterator of live events — at the same time. `await run.result()` returns the turn's final `AgentReply`.
+
+### Iterating over events while the turn runs
+
+```python linenums="1" hl_lines="9-16"
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+
+agent = Agent(
+    "assistant",
+    config=OpenAIConfig("gpt-4o-mini", streaming=True),
+)
+
+async with agent.run("Tell me about Paris in two sentences.") as run:
+    run.start()  # drive the turn in the background
+
+    with run.stream.join() as events:
+        async for event in events:
+            print(event)  # every event the turn emits
+
+    reply = await run.result()
+
+print("\n", reply.body)
+```
+
+How it behaves:
+
+* `run.start()` drives the turn in a scope-owned background task; it returns immediately (it is **not** awaited). Without it, `run.stream.join()` would block forever — nothing advances the turn.
+* `run.stream.join()` yields every event the turn emits;
+* **Token streaming needs `#!python streaming=True` on the model config** (as above); the model then emits `ModelMessageChunk` events as it generates.
+* `await run.result()` returns the same `AgentReply` the started turn produced (idempotent, re-raising the same failure on retry). Leaving the block without awaiting it cancels a still-running turn.
+* To drive **inline** instead, skip `start()` and `await run.result()` directly; cancelling that await — e.g. `#!python await asyncio.wait_for(run.result(), timeout=5)` — cancels the turn.
+
+!!! warning "Do not timeout individual `join()` items"
+    Consume `#!python run.stream.join()` with a plain `#!python async for`, or use `#!python join(max_events=N)` when you know how many events you need. Avoid wrapping individual pulls such as `#!python await asyncio.wait_for(events.__anext__(), timeout=...)`: cancelling one `__anext__()` closes the current iterator, so later events will not be yielded by that iterator. If you need a time limit, put one `#!python asyncio.timeout(...)` around the whole loop instead of around each item.
+
+`AgentReply.run(...)` is the same thing for a **continuation**: it watches a follow-up turn on an existing conversation, just as `AgentReply.ask(...)` continues one with a blocking call.
+
+!!! note "`ask` is `run` you don't have to drive"
+    `await agent.ask(...)` is exactly `run()` + `await result()` rolled into one call. Reach for `ask` when you just want the answer, and `run` when you need to observe or steer the turn.
+
+### Feeding the turn while it runs
+
+A running turn keeps an **inbox**. Call `run.enqueue(...)` to push a follow-up message into it — from a concurrent task or while iterating events — and the turn consumes it at its next model call, without starting a new turn. Here we wait for the first tool result, then steer the turn:
+
+```python linenums="1" hl_lines="18-22"
+from autogen.beta import Agent, tool
+from autogen.beta.events import ToolResultEvent
+from autogen.beta.config import OpenAIConfig
+
+@tool
+async def search(query: str) -> str:
+    """Looks up a query."""
+    return f"results for {query}"
+
+agent = Agent(
+    "assistant",
+    prompt="Use the search tool when helpful.",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[search],
+)
+
+async with agent.run("Search for AG2.") as run:
+    run.start()
+
+    with run.stream.where(ToolResultEvent).join(max_events=1) as results:
+        async for _ in results:
+            run.enqueue("Now summarize the result in one line.")  # lands at the next model call
+
+    reply = await run.result()
+
+print(await reply.content())
+```
+
+`enqueue` is non-blocking — it only appends to the inbox. When the message is consumed depends on timing:
+
+* **before** `result()` → merged into the turn's first model call;
+* **while the turn is running** → consumed by that same turn's next or final model call;
+* **after** the turn finishes → waits for the next turn on this stream.
 
 !!! tip "Building with an AI coding assistant?"
     See [Coding with AI Assistants](/docs/beta/coding_with_ai) to set up Claude Code, Cursor, Copilot, or another assistant with AG2 Beta skills and project rules so it writes against the current `autogen.beta` API.

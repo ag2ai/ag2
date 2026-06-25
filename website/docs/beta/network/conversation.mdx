@@ -51,24 +51,16 @@ sequenceDiagram
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
-from autogen.beta.network import Hub, HubClient, LocalLink, Passport, Resume
+from autogen.beta.network import Hub
 
 config = AnthropicConfig(model="claude-sonnet-4-6")
 hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-link = LocalLink(hub)
 
-alice_hc = HubClient(link, hub=hub)
-bob_hc = HubClient(link, hub=hub)
-
-alice = await alice_hc.register(
+alice = await hub.register(
     Agent("alice", prompt="Curious novice. One short sentence with a follow-up.", config=config),
-    Passport(name="alice"),
-    Resume(),
 )
-bob = await bob_hc.register(
+bob = await hub.register(
     Agent("bob", prompt="Patient expert. One short sentence, no questions back.", config=config),
-    Passport(name="bob"),
-    Resume(),
 )
 
 channel = await alice.open(type="conversation", target="bob")

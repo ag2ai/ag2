@@ -24,9 +24,6 @@ from autogen.beta.knowledge import DiskKnowledgeStore
 from autogen.beta.network import (
     Envelope,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     Resume,
 )
 from autogen.beta.network.adapters.conversation import (
@@ -63,19 +60,14 @@ async def test_hydrate_round_trips_many_channels(tmp_path) -> None:
 
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link1 = LocalLink(hub1)
 
-    alice_hc = HubClient(link1, hub=hub1)
-    bob_hc = HubClient(link1, hub=hub1)
-    alice = await alice_hc.register(
+    alice = await hub1.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(claimed_capabilities=["analysis"]),
+        resume=Resume(claimed_capabilities=["analysis"]),
     )
-    bob = await bob_hc.register(
+    bob = await hub1.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(claimed_capabilities=["coding"]),
+        resume=Resume(claimed_capabilities=["coding"]),
     )
 
     # Build conversation channels in parallel batches; each channel
@@ -105,8 +97,6 @@ async def test_hydrate_round_trips_many_channels(tmp_path) -> None:
             "last_speaker_id": cached.last_speaker_id,
         }
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub1.close()
 
     # Round 1: re-open and verify everything matches.
@@ -146,13 +136,11 @@ async def test_hydrate_refolds_discussion_round_robin_state(tmp_path) -> None:
     """Multi-party discussion rotation survives hub restart deterministically."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link1 = LocalLink(hub1)
 
     names = ["alice", "bob", "carol", "dave", "erin"]
     clients = []
     for name in names:
-        hc = HubClient(link1, hub=hub1)
-        client = await hc.register(_agent(name), Passport(name=name), Resume())
+        client = await hub1.register(_agent(name))
         clients.append(client)
     alice = clients[0]
 
@@ -179,8 +167,6 @@ async def test_hydrate_refolds_discussion_round_robin_state(tmp_path) -> None:
     expected_next = expected.expected_next_speaker
     expected_last = expected.last_speaker_id
 
-    for hc in [c._hub_client for c in clients]:
-        await hc.close()
     await hub1.close()
 
     store2 = DiskKnowledgeStore(str(tmp_path))

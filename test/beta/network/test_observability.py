@@ -111,12 +111,8 @@ async def test_listener_receives_envelope_posted() -> None:
     listener = _RecordingListener()
     hub.register_listener(listener)
 
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hi there")
@@ -124,8 +120,6 @@ async def test_listener_receives_envelope_posted() -> None:
     text_posts = [t for t, _ in listener.envelope_posted if t == EV_TEXT]
     assert len(text_posts) >= 1
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -136,20 +130,14 @@ async def test_listener_receives_envelope_rejected_on_access_denied() -> None:
     listener = _RecordingListener()
     hub.register_listener(listener)
 
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
     # bob blocks alice inbound — channel.open will fail at create_channel.
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     bob_rule = Rule(access=AccessBlock(inbound_from=["carol"], outbound_to=["*"]))
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), rule=bob_rule)
+    await hub.register(_agent("bob"), rule=bob_rule)
 
     with pytest.raises(AccessDeniedError):
         await alice.open(type="consulting", target="bob")
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -166,12 +154,8 @@ async def test_listener_exception_does_not_break_dispatch() -> None:
     hub.register_listener(_BadListener())
     hub.register_listener(good)
 
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hi")
@@ -180,8 +164,6 @@ async def test_listener_exception_does_not_break_dispatch() -> None:
     # good listener still got the events.
     assert good.envelope_posted
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -216,12 +198,9 @@ class _DenyArbiter:
 async def test_custom_arbiter_can_deny_send() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
 
     # Swap in the deny-everything arbiter AFTER the channel is open.
@@ -233,8 +212,6 @@ async def test_custom_arbiter_can_deny_send() -> None:
             audience=[next(p.agent_id for p in channel.metadata.participants if p.agent_id != alice.agent_id)],
         )
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -243,12 +220,9 @@ async def test_default_arbiter_preserves_rule_based_behavior() -> None:
     """Default ``RuleBasedArbiter`` matches the prior inline-check semantics."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
 
     # Tighten alice's rule after the channel is open: outbound only to "carol".
@@ -259,8 +233,6 @@ async def test_default_arbiter_preserves_rule_based_behavior() -> None:
     with pytest.raises(AccessDeniedError):
         await channel.send("nope", audience=[bob_id])
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -269,12 +241,9 @@ async def test_resolve_unknown_audience_silent_drop_default() -> None:
     """Default arbiter silently drops envelopes for unknown audience ids."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
 
     # Audience with one real id + one unknown — only real id gets delivery.
@@ -282,8 +251,6 @@ async def test_resolve_unknown_audience_silent_drop_default() -> None:
     envelope_id = await channel.send("partial", audience=[bob_id, "ghost-id"])
     assert envelope_id  # accepted into WAL despite unknown audience member
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -301,14 +268,11 @@ async def test_audit_subscribe_taps_live_stream() -> None:
 
     hub.audit_log.subscribe(tap)
 
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await hub.register(_agent("alice"))
 
     kinds = [r.get("kind") for r in captured]
     assert "agent_registered" in kinds
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -323,17 +287,13 @@ async def test_handler_exception_does_not_crash_channel() -> None:
     listener = _RecordingListener()
     hub.register_listener(listener)
 
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     # Bob's agent will raise inside agent.ask. The default handler's
     # trap must observe + report the failure without re-raising and
     # the channel must keep accepting envelopes.
     bob_agent = Agent(name="bob", config=TestConfig(RuntimeError("intentional")))
-    await bob_hc.register(bob_agent, Passport(name="bob"), Resume())
+    await hub.register(bob_agent)
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hello bob")
@@ -348,8 +308,6 @@ async def test_handler_exception_does_not_crash_channel() -> None:
     envelope_id = await channel.send("still alive?")
     assert envelope_id
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -360,7 +318,6 @@ async def test_handler_exception_does_not_crash_channel() -> None:
 async def test_health_snapshot_shape() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
     initial = hub.health()
     assert initial == {
@@ -376,10 +333,8 @@ async def test_health_snapshot_shape() -> None:
         "telemetry_log_bytes": 0,
     }
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     await alice.open(type="conversation", target="bob")
 
     snapshot = hub.health()
@@ -389,8 +344,6 @@ async def test_health_snapshot_shape() -> None:
     # Registering 2 agents + opening 1 channel emits >0 audit bytes.
     assert snapshot["audit_log_bytes"] > 0
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -402,18 +355,13 @@ async def test_hub_logs_state_transitions(caplog) -> None:
     caplog.set_level(logging.INFO, logger="autogen.beta.network.hub.core")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
-    await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
 
     messages = [r.getMessage() for r in caplog.records]
     assert any("agent registered" in m for m in messages)
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -422,12 +370,9 @@ async def test_hub_logs_warning_on_rejection(caplog) -> None:
     caplog.set_level(logging.WARNING, logger="autogen.beta.network.hub.core")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
     await hub.set_rule(alice.agent_id, Rule(access=AccessBlock(inbound_from=["*"], outbound_to=["nope"])))
 
@@ -458,18 +403,13 @@ async def test_multiple_bad_listeners_do_not_break_dispatch() -> None:
     hub.register_listener(good)
     hub.register_listener(_Bad())
 
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hi")
 
     assert good.envelope_posted, "good listener should have fired despite bad siblings"
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -479,22 +419,17 @@ async def test_base_hub_arbiter_allows_everything_by_default() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
     hub.register_arbiter(BaseHubArbiter())
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
     # Even with an inbound-block rule, the BaseHubArbiter (which allows
     # everything) lets the channel open and the envelope land.
     blocking_rule = Rule(access=AccessBlock(inbound_from=["nobody"], outbound_to=["*"]))
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), rule=blocking_rule)
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"), rule=blocking_rule)
     channel = await alice.open(type="conversation", target="bob")
     bob_id = next(p.agent_id for p in channel.metadata.participants if p.agent_id != alice.agent_id)
     envelope_id = await channel.send("through", audience=[bob_id])
     assert envelope_id
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -515,11 +450,8 @@ async def test_custom_arbiter_authorize_send_overrides_rule_based() -> None:
     """A subclass of ``BaseHubArbiter`` can deny based on envelope depth."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
 
     # Install the deny-everything arbiter after the channel is open so
@@ -529,8 +461,6 @@ async def test_custom_arbiter_authorize_send_overrides_rule_based() -> None:
     with pytest.raises(AccessDeniedError, match="cap"):
         await channel.send("blocked")
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -539,14 +469,10 @@ async def test_hub_health_on_populated_hub() -> None:
     """3 channels × 5 agents — counters reflect realistic operational load."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    clients = []
     agents = []
     for name in ("a", "b", "c", "d", "e"):
-        hc = HubClient(link, hub=hub)
-        ac = await hc.register(_agent(name), Passport(name=name), Resume())
-        clients.append(hc)
+        ac = await hub.register(_agent(name))
         agents.append(ac)
 
     # 3 channels: a→b, a→c, b→d.
@@ -560,8 +486,6 @@ async def test_hub_health_on_populated_hub() -> None:
     # AuditLog has written register + channel-create records.
     assert snapshot["audit_log_bytes"] > 0
 
-    for hc in clients:
-        await hc.close()
     await hub.close()
 
 
@@ -587,11 +511,8 @@ async def test_widened_trap_catches_pre_ask_failures() -> None:
     # Force every view resolution to return the bad view.
     hub.default_view_policy = lambda channel_id, participant_id: _BadView()  # type: ignore[method-assign]
 
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob", "ok"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob", "ok"))
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hi bob")
@@ -604,8 +525,6 @@ async def test_widened_trap_catches_pre_ask_failures() -> None:
     # Channel survives — subsequent send still works.
     assert await channel.send("still alive?")
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -644,14 +563,11 @@ async def test_replace_audit_log_swaps_listener_chain() -> None:
     hub.replace_audit_log(replacement)
     assert hub.audit_log is replacement
 
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
-    await hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await hub.register(_agent("alice"))
 
     # The replacement listener saw the register event.
     records = await replacement.read_all()
     kinds = [r.get("kind") for r in records]
     assert "agent_registered" in kinds
 
-    await hc.close()
     await hub.close()

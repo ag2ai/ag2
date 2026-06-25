@@ -126,20 +126,16 @@ class TestRenderFallbackSkill:
 async def test_register_populates_capability_index() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(claimed_capabilities=["debate", "analysis"]),
+        resume=Resume(claimed_capabilities=["debate", "analysis"]),
     )
 
     assert hub.agents_with_capability("debate") == [alice.agent_id]
     assert hub.agents_with_capability("analysis") == [alice.agent_id]
     assert hub.agents_with_capability("missing") == []
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -147,12 +143,9 @@ async def test_register_populates_capability_index() -> None:
 async def test_unregister_removes_from_capability_index() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(claimed_capabilities=["debate"]))
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(claimed_capabilities=["debate"]))
+    alice = await hub.register(_agent("alice"), resume=Resume(claimed_capabilities=["debate"]))
+    bob = await hub.register(_agent("bob"), resume=Resume(claimed_capabilities=["debate"]))
 
     assert set(hub.agents_with_capability("debate")) == {alice.agent_id, bob.agent_id}
 
@@ -164,8 +157,6 @@ async def test_unregister_removes_from_capability_index() -> None:
     # Empty bucket pruned from the index entirely.
     assert "debate" not in hub._capability_index
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -173,13 +164,10 @@ async def test_unregister_removes_from_capability_index() -> None:
 async def test_capability_index_persisted_to_disk(tmp_path) -> None:
     store = DiskKnowledgeStore(str(tmp_path))
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(claimed_capabilities=["debate"]),
+        resume=Resume(claimed_capabilities=["debate"]),
     )
 
     raw = await store.read(by_capability_path())
@@ -187,7 +175,6 @@ async def test_capability_index_persisted_to_disk(tmp_path) -> None:
     snapshot = json.loads(raw)
     assert snapshot == {"debate": [alice.agent_id]}
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -195,19 +182,15 @@ async def test_capability_index_persisted_to_disk(tmp_path) -> None:
 async def test_capability_index_rebuilt_on_hydrate(tmp_path) -> None:
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link1 = LocalLink(hub1)
 
-    alice_hc = HubClient(link1, hub=hub1)
-    alice = await alice_hc.register(
+    alice = await hub1.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(
+        resume=Resume(
             claimed_capabilities=["debate"],
             observed={"reviews": ObservedStat(n=5, completed=4, failed=1)},
         ),
     )
 
-    await alice_hc.close()
     await hub1.close()
 
     store2 = DiskKnowledgeStore(str(tmp_path))
@@ -227,13 +210,10 @@ async def test_capability_index_rebuilt_on_hydrate(tmp_path) -> None:
 async def test_record_observation_updates_resume_observed_counters() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(claimed_capabilities=["analysis"]),
+        resume=Resume(claimed_capabilities=["analysis"]),
     )
 
     await hub.record_observation(
@@ -261,7 +241,6 @@ async def test_record_observation_updates_resume_observed_counters() -> None:
     assert stat.expired == 1
     assert stat.p50_latency_ms == 420  # last observed value (V1 placeholder)
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -269,14 +248,8 @@ async def test_record_observation_updates_resume_observed_counters() -> None:
 async def test_record_observation_adds_unclaimed_capability_to_index() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
-        _agent("alice"),
-        Passport(name="alice"),
-        Resume(),  # no claims
-    )
+    alice = await hub.register(_agent("alice"))  # no claims
 
     assert hub.agents_with_capability("emergent") == []
 
@@ -288,7 +261,6 @@ async def test_record_observation_adds_unclaimed_capability_to_index() -> None:
 
     assert hub.agents_with_capability("emergent") == [alice.agent_id]
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -296,10 +268,8 @@ async def test_record_observation_adds_unclaimed_capability_to_index() -> None:
 async def test_record_observation_ignores_non_terminal_state() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     await hub.record_observation(
         owner_id=alice.agent_id,
@@ -310,7 +280,6 @@ async def test_record_observation_ignores_non_terminal_state() -> None:
     resume = await hub.get_resume(alice.agent_id)
     assert "x" not in resume.observed
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -321,10 +290,8 @@ async def test_record_observation_ignores_non_terminal_state() -> None:
 async def test_agent_client_set_resume_refreshes_local_cache() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(summary="initial"))
+    alice = await hub.register(_agent("alice"), resume=Resume(summary="initial"))
 
     await alice.set_resume(Resume(summary="updated", claimed_capabilities=["x"]))
 
@@ -339,7 +306,6 @@ async def test_agent_client_set_resume_refreshes_local_cache() -> None:
     await alice.set_resume(Resume(summary="updated2", claimed_capabilities=[]))
     assert hub.agents_with_capability("x") == []
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -347,10 +313,8 @@ async def test_agent_client_set_resume_refreshes_local_cache() -> None:
 async def test_agent_client_add_example_appends() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     assert alice.resume.examples == []
 
     await alice.add_example(ResumeExample(title="reviewed PR #42", outcome="completed"))
@@ -360,7 +324,6 @@ async def test_agent_client_add_example_appends() -> None:
     titles = [e.title for e in fresh.examples]
     assert titles == ["reviewed PR #42", "triaged incident #7"]
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -382,14 +345,11 @@ async def test_task_mirror_records_observation_on_capability_tagged_task() -> No
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    bob_hc = HubClient(link, hub=hub)
     bob_agent = Agent(name="bob", config=ScriptedConfig("ack"))
-    bob = await bob_hc.register(
+    bob = await hub.register(
         bob_agent,
-        Passport(name="bob"),
-        Resume(claimed_capabilities=["analysis"]),
+        resume=Resume(claimed_capabilities=["analysis"]),
     )
 
     stream = MemoryStream()
@@ -412,7 +372,6 @@ async def test_task_mirror_records_observation_on_capability_tagged_task() -> No
     assert stat.completed == 1
     assert bob.agent_id in hub.agents_with_capability("analysis")
 
-    await bob_hc.close()
     await hub.close()
 
 
@@ -486,13 +445,10 @@ async def test_task_capability_survives_hub_hydrate() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         store = DiskKnowledgeStore(Path(tmpdir))
         hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-        link = LocalLink(hub)
-        bob_hc = HubClient(link, hub=hub)
         bob_agent = Agent(name="bob", config=ScriptedConfig("ack"))
-        bob = await bob_hc.register(
+        bob = await hub.register(
             bob_agent,
-            Passport(name="bob"),
-            Resume(claimed_capabilities=["analysis"]),
+            resume=Resume(claimed_capabilities=["analysis"]),
         )
 
         # Start a capability-tagged task; mirror persists metadata.
@@ -508,7 +464,6 @@ async def test_task_capability_survives_hub_hydrate() -> None:
             await task.complete(result="done")
         mirror.detach(stream, sub_ids)
 
-        await bob_hc.close()
         await hub.close()
 
         # Restart: new Hub, same store. ``_load_task`` rehydrates
@@ -528,15 +483,9 @@ async def test_task_mirror_no_observation_when_capability_absent() -> None:
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    bob_hc = HubClient(link, hub=hub)
     bob_agent = Agent(name="bob", config=ScriptedConfig("ack"))
-    bob = await bob_hc.register(
-        bob_agent,
-        Passport(name="bob"),
-        Resume(),
-    )
+    bob = await hub.register(bob_agent)
 
     stream = MemoryStream()
     mirror = TaskMirror(hub=hub, owner_id=bob.agent_id)
@@ -553,5 +502,4 @@ async def test_task_mirror_no_observation_when_capability_absent() -> None:
     fresh = await hub.get_resume(bob.agent_id)
     assert fresh.observed == {}
 
-    await bob_hc.close()
     await hub.close()

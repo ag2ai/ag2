@@ -25,9 +25,6 @@ from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     Resume,
 )
 from autogen.beta.network.adapters.discussion import (
@@ -84,11 +81,6 @@ async def test_peers_then_delegate_consults_a_specialist(
         ttl_sweep_interval=0,
         expectation_sweep_interval=0,
     )
-    link = LocalLink(hub)
-
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
     alice_agent = Agent(
         name="alice",
         prompt=(
@@ -106,15 +98,13 @@ async def test_peers_then_delegate_consults_a_specialist(
         config=anthropic_config,
     )
 
-    alice = await alice_hc.register(
+    alice = await hub.register(
         alice_agent,
-        Passport(name="alice"),
-        Resume(summary="multi-agent coordinator"),
+        resume=Resume(summary="multi-agent coordinator"),
     )
-    await bob_hc.register(
+    await hub.register(
         bob_agent,
-        Passport(name="bob"),
-        Resume(claimed_capabilities=["math"], summary="math specialist"),
+        resume=Resume(claimed_capabilities=["math"], summary="math specialist"),
     )
 
     reply = await alice.agent.ask("Find a math specialist on the network and ask them: what is 12 times 17?")
@@ -122,8 +112,6 @@ async def test_peers_then_delegate_consults_a_specialist(
     assert reply.body is not None
     assert "204" in reply.body, f"expected 204 in alice's reply, got: {reply.body!r}"
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -141,8 +129,6 @@ async def test_5way_discussion_round_robin(
         ttl_sweep_interval=0,
         expectation_sweep_interval=0,
     )
-    link = LocalLink(hub)
-
     names = ["alice", "bob", "carol", "dave", "erin"]
     clients = []
     for name in names:
@@ -157,8 +143,7 @@ async def test_5way_discussion_round_robin(
             ),
             config=anthropic_config,
         )
-        hc = HubClient(link, hub=hub)
-        client = await hc.register(agent, Passport(name=name), Resume())
+        client = await hub.register(agent)
         clients.append(client)
 
     alice = clients[0]
@@ -189,6 +174,4 @@ async def test_5way_discussion_round_robin(
     for i, text in enumerate(contributions):
         assert len(text) > 10, f"{names[i]}'s turn was empty/trivial: {text!r}"
 
-    for hc in [c._hub_client for c in clients]:
-        await hc.close()
     await hub.close()

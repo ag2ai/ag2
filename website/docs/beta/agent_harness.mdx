@@ -178,7 +178,7 @@ The LLM is told (via the tool descriptions) that it can call `run_subtask` multi
 
 For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agent-as-tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
 
-See [Task Delegation](/docs/beta/task_delegation) for the full sub-task delegation guide — context flow and custom streams for self-delegation via `as_tool()`.
+See [Subagents](/docs/beta/subagents) for the full sub-task delegation guide — context flow and custom streams for self-delegation via `as_tool()`.
 
 ## Agent.as_tool()
 
@@ -200,7 +200,7 @@ parent = Agent(
 reply = await parent.ask("Find out where Melbourne is.")
 ```
 
-`as_tool()` returns a `FunctionTool` named `task_{child.name}` that accepts an `objective` parameter and forwards it into the child's stream. See [Task Delegation](/docs/beta/task_delegation) for sub-task streams, depth limiting, and stream factories.
+`as_tool()` returns a `FunctionTool` named `task_{child.name}` that accepts an `objective` parameter and forwards it into the child's stream. See [Subagents](/docs/beta/subagents) for sub-task streams, depth limiting, and stream factories.
 
 ## Turn lifecycle
 

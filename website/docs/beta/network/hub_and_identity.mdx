@@ -84,7 +84,7 @@ resume = Resume(
 
 ## Rule — per-agent governance
 
-Optional per-agent policy. Pass to `#!python hc.register(agent, passport, resume, rule=...)`.
+Optional per-agent policy. Pass to `#!python hub.register(agent, passport, resume, rule=...)`.
 
 ```python linenums="1"
 from autogen.beta.network import Rule, AccessBlock, LimitsBlock, RateBlock, InboxBlock
@@ -153,7 +153,7 @@ Audit kinds (re-exported from `#!python autogen.beta.network`):
 
 | Kind | When |
 |---|---|
-| `#!python AUDIT_KIND_AGENT_REGISTERED` | `#!python hc.register(...)` |
+| `#!python AUDIT_KIND_AGENT_REGISTERED` | `#!python hub.register(...)` |
 | `#!python AUDIT_KIND_AGENT_UNREGISTERED` | `#!python hc.unregister(...)` |
 | `#!python AUDIT_KIND_RESUME_SET` | `#!python hub.set_resume(...)` |
 | `#!python AUDIT_KIND_SKILL_SET` | `#!python hub.set_skill(...)` |

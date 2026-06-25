@@ -27,9 +27,6 @@ from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     Resume,
 )
 from autogen.beta.network.adapters.consulting import CONSULTING_TYPE
@@ -70,22 +67,17 @@ async def test_consulting_two_agents_real_llm(anthropic_config: AnthropicConfig)
     consulting adapter's ``on_accepted`` returning ``CLOSED``.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice", "You are alice, a curious user.", anthropic_config),
-        Passport(name="alice"),
-        Resume(),
     )
-    bob = await hc.register(
+    bob = await hub.register(
         _agent(
             "bob",
             "You are bob, a math tutor. Reply with ONLY the numeric answer, nothing else.",
             anthropic_config,
         ),
-        Passport(name="bob"),
-        Resume(claimed_capabilities=["math"]),
+        resume=Resume(claimed_capabilities=["math"]),
     )
 
     channel = await alice.open(type=CONSULTING_TYPE, target="bob")
@@ -123,7 +115,6 @@ async def test_consulting_two_agents_real_llm(anthropic_config: AnthropicConfig)
     assert AUDIT_KIND_CHANNEL_CREATED in kinds
     assert AUDIT_KIND_CHANNEL_CLOSED in kinds
 
-    await hc.close()
     await hub.close()
 
 
@@ -137,26 +128,20 @@ async def test_conversation_bidirectional_real_llm(anthropic_config: AnthropicCo
     ~3 turns by polling and closing once the floor reaches a target.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent(
             "alice",
             "You are alice, a brief and polite chat partner. Always reply in one short sentence.",
             anthropic_config,
         ),
-        Passport(name="alice"),
-        Resume(),
     )
-    bob = await hc.register(
+    bob = await hub.register(
         _agent(
             "bob",
             "You are bob, a brief and polite chat partner. Always reply in one short sentence.",
             anthropic_config,
         ),
-        Passport(name="bob"),
-        Resume(),
     )
 
     channel = await alice.open(type=CONVERSATION_TYPE, target="bob")
@@ -175,7 +160,6 @@ async def test_conversation_bidirectional_real_llm(anthropic_config: AnthropicCo
     info = await channel.info()
     assert info.is_terminal()
 
-    await hc.close()
     await hub.close()
 
 
@@ -187,23 +171,15 @@ async def test_discussion_round_robin_three_real_agents(anthropic_config: Anthro
     ``can_send`` probe), so the rotation is naturally synchronous.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice", "You are alice. Reply briefly in one sentence.", anthropic_config),
-        Passport(name="alice"),
-        Resume(),
     )
-    bob = await hc.register(
+    bob = await hub.register(
         _agent("bob", "You are bob. Reply briefly in one sentence.", anthropic_config),
-        Passport(name="bob"),
-        Resume(),
     )
-    carol = await hc.register(
+    carol = await hub.register(
         _agent("carol", "You are carol. Reply briefly in one sentence.", anthropic_config),
-        Passport(name="carol"),
-        Resume(),
     )
 
     channel = await alice.open(
@@ -223,5 +199,4 @@ async def test_discussion_round_robin_three_real_agents(anthropic_config: Anthro
     )
 
     await channel.close()
-    await hc.close()
     await hub.close()
