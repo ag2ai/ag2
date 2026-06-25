@@ -77,7 +77,7 @@ def zai_config() -> ZAIConfig:
         pytest.param("openai", marks=pytest.mark.openai),
         pytest.param("anthropic", marks=pytest.mark.anthropic),
         pytest.param("gemini", marks=pytest.mark.gemini),
-        pytest.param("zai", marks=pytest.mark.zai),
+        pytest.param("zai", marks=[pytest.mark.zai, pytest.mark.timeout(180)]),
     ]
 )
 def streaming_config(request):
@@ -120,7 +120,7 @@ def streaming_config(request):
         pytest.param("openai", marks=pytest.mark.openai),
         pytest.param("anthropic", marks=pytest.mark.anthropic),
         pytest.param("gemini", marks=pytest.mark.gemini),
-        pytest.param("zai", marks=pytest.mark.zai),
+        pytest.param("zai", marks=[pytest.mark.zai, pytest.mark.timeout(180)]),
     ]
 )
 def provider_config(request):
