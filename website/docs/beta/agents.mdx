@@ -168,6 +168,9 @@ How it behaves:
 * `await run.result()` returns the same `AgentReply` the started turn produced (idempotent, re-raising the same failure on retry). Leaving the block without awaiting it cancels a still-running turn.
 * To drive **inline** instead, skip `start()` and `await run.result()` directly; cancelling that await — e.g. `#!python await asyncio.wait_for(run.result(), timeout=5)` — cancels the turn.
 
+!!! warning "Do not timeout individual `join()` items"
+    Consume `#!python run.stream.join()` with a plain `#!python async for`, or use `#!python join(max_events=N)` when you know how many events you need. Avoid wrapping individual pulls such as `#!python await asyncio.wait_for(events.__anext__(), timeout=...)`: cancelling one `__anext__()` closes the current iterator, so later events will not be yielded by that iterator. If you need a time limit, put one `#!python asyncio.timeout(...)` around the whole loop instead of around each item.
+
 `AgentReply.run(...)` is the same thing for a **continuation**: it watches a follow-up turn on an existing conversation, just as `AgentReply.ask(...)` continues one with a blocking call.
 
 !!! note "`ask` is `run` you don't have to drive"

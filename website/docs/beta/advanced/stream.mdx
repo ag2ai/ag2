@@ -142,6 +142,21 @@ async def wait_for_human(stream: MemoryStream):
         print(f"User said: {event.content}")
 ```
 
+## Iterate over stream events
+
+Use `join()` as a context manager when you want an async iterator of events for a bounded block of code. The iterator receives events published after the `with` block starts. Pass `max_events` to stop automatically after a fixed number of events.
+
+```python linenums="1"
+from autogen.beta.events import ToolResultEvent
+
+with stream.where(ToolResultEvent).join(max_events=1) as results:
+    async for event in results:
+        print(f"Tool result: {event.result}")
+```
+
+!!! warning "Do not timeout individual `join()` pulls"
+    Consume the iterator with a plain `#!python async for`. Avoid wrapping individual pulls such as `#!python await asyncio.wait_for(events.__anext__(), timeout=...)`: cancelling one `__anext__()` closes the current iterator, so later events will not be yielded by that iterator. For bounded consumption, use `#!python join(max_events=N)` or put one `#!python asyncio.timeout(...)` around the whole loop.
+
 ## Raise events manually
 
 To raise or publish events to the stream, you should always use the `Context` object rather than sending them to the stream directly. The `Context` ensures that dependencies and the stream scope are properly propagated.
