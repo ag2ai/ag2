@@ -115,10 +115,6 @@ from autogen.beta.network import (
     FromSpeaker,
     Handoff,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
     ChannelInject,
     TerminateTarget,
     ToolCalled,
@@ -156,12 +152,6 @@ async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub_obj)
-
-    user_hc = HubClient(link, hub=hub_obj)
-    tier1_hc = HubClient(link, hub=hub_obj)
-    tier2_hc = HubClient(link, hub=hub_obj)
-    senior_hc = HubClient(link, hub=hub_obj)
 
     user_agent = Agent("user", config=TestConfig())
 
@@ -216,10 +206,10 @@ async def main() -> None:
     )
     senior_agent.tool(resolve)
 
-    user = await user_hc.register(user_agent, Passport(name="user"), Resume())
-    tier1 = await tier1_hc.register(tier1_agent, Passport(name="tier1"), Resume())
-    tier2 = await tier2_hc.register(tier2_agent, Passport(name="tier2"), Resume())
-    senior = await senior_hc.register(senior_agent, Passport(name="senior"), Resume())
+    user = await hub_obj.register(user_agent)
+    tier1 = await hub_obj.register(tier1_agent)
+    tier2 = await hub_obj.register(tier2_agent)
+    senior = await hub_obj.register(senior_agent)
 
     graph = TransitionGraph(
         initial_speaker=user.agent_id,
@@ -285,10 +275,6 @@ async def main() -> None:
     state = hub_obj._adapter_states[channel.channel_id]
     print(state.context_vars.get("resolution", "(no resolution)"))
 
-    await user_hc.close()
-    await tier1_hc.close()
-    await tier2_hc.close()
-    await senior_hc.close()
     await hub_obj.close()
 
 if __name__ == "__main__":

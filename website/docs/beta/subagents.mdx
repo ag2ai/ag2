@@ -1,9 +1,9 @@
 ---
-title: Sub-task Delegation
-sidebarTitle: Sub-task Delegation
+title: Subagents
+sidebarTitle: Subagents
 ---
 
-Sub-task delegation allows agents to delegate work to other agents through tool calling. The calling agent's LLM decides when and what to delegate, and each sub-task runs on its own isolated stream with independent history.
+Subagents let agents delegate work to other agents through tool calling. The calling agent's LLM decides when and what to delegate, and each sub-task runs on its own isolated stream with independent history.
 
 ## Why Use Subagents
 
@@ -91,6 +91,46 @@ coordinator = Agent(
     ],
 )
 ```
+
+## Background Subagents
+
+`#!python as_tool()` and `#!python subagent_tool()` are **blocking**: the tool call doesn't return until the sub-task finishes, so the calling LLM waits for the result before doing anything else. `#!python background_agent_tool()` is **fire-and-forget** — it starts the sub-task, returns a task id immediately, and lets the parent LLM keep working in the same turn. The result is delivered later as a follow-up message to the parent.
+
+```python linenums="1" hl_lines="1 8"
+from autogen.beta.tools.subagents import background_agent_tool
+
+coordinator = Agent(
+    "coordinator",
+    prompt="Kick off long-running research in the background, then keep helping the user.",
+    config=config,
+    tools=[
+        background_agent_tool(researcher, description="Research a topic in the background."),
+    ],
+)
+
+reply = await coordinator.ask("Start deep research on Rust async runtimes, then outline the article.")
+```
+
+The calling LLM sees a tool named `#!python background_task_{agent.name}` with the same `objective` (required) and `context` (optional) parameters as `as_tool()`. Calling it returns `#!python "Background task started: {task_id}"` right away, so the LLM can issue other tool calls or continue reasoning while the sub-task runs.
+
+How it behaves:
+
+- The sub-task runs concurrently via `#!python run_task` on its own stream (a fresh `#!python MemoryStream` by default, or one built by the `stream` factory).
+- The parent `#!python Agent.ask` loop **keeps running and will not return** until the background task finishes. Once it does, its result is pushed back into the parent's inbox as a follow-up turn (via `#!python context.enqueue`), so the parent LLM can react to it.
+- On success the follow-up message reports the task result; on failure it reports the error — the exception does not propagate to the parent.
+
+`background_agent_tool()` accepts these parameters:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `agent` | `Agent` | The agent to run as a background sub-task (positional) |
+| `description` | `str` | Tool description shown to the LLM (required) |
+| `name` | `str | None` | Override the default `background_task_{agent.name}` tool name |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
+
+!!! note
+    Background sub-tasks are for work the parent can fire off and revisit later within the *same* turn — the `ask` call still awaits their completion before returning. They are not detached jobs that outlive the turn.
 
 ## Self-Delegation
 

@@ -89,10 +89,6 @@ from autogen.beta.network import (
     EV_TEXT,
     WORKFLOW_TYPE,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
     TransitionGraph,
 )
 from autogen.beta.testing import TestConfig
@@ -103,12 +99,6 @@ async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
 
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub)
-
-    intake_hc = HubClient(link, hub=hub)
-    validator_hc = HubClient(link, hub=hub)
-    enricher_hc = HubClient(link, hub=hub)
-    fulfilment_hc = HubClient(link, hub=hub)
 
     intake_agent = Agent("intake", config=TestConfig())
 
@@ -150,10 +140,10 @@ async def main() -> None:
         config=config,
     )
 
-    intake = await intake_hc.register(intake_agent, Passport(name="intake"), Resume())
-    validator = await validator_hc.register(validator_agent, Passport(name="validator"), Resume())
-    enricher = await enricher_hc.register(enricher_agent, Passport(name="enricher"), Resume())
-    fulfilment = await fulfilment_hc.register(fulfilment_agent, Passport(name="fulfilment"), Resume())
+    intake = await hub.register(intake_agent)
+    validator = await hub.register(validator_agent)
+    enricher = await hub.register(enricher_agent)
+    fulfilment = await hub.register(fulfilment_agent)
 
     graph = TransitionGraph.sequence([
         intake.agent_id,
@@ -203,10 +193,6 @@ async def main() -> None:
 
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
-    await intake_hc.close()
-    await validator_hc.close()
-    await enricher_hc.close()
-    await fulfilment_hc.close()
     await hub.close()
 
 if __name__ == "__main__":

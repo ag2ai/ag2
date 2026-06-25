@@ -110,7 +110,7 @@ async def test_list_agents_filter_by_kind() -> None:
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
 
-    await hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await hub.register(_agent("alice"))
     await hc.register_human(Passport(name="reviewer"))
 
     agents = await hub.list_agents(kind="agent")
@@ -132,10 +132,9 @@ async def test_consulting_human_responds_to_agent() -> None:
     hub = await Hub.open(store, ttl_sweep_interval=0)
     link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
     human_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     human = await human_hc.register_human(Passport(name="reviewer"))
 
     # Human reacts to the inbound prompt by replying once.
@@ -165,7 +164,6 @@ async def test_consulting_human_responds_to_agent() -> None:
     assert close_env is not None
     assert received == ["Please review payout #42"]
 
-    await alice_hc.close()
     await human_hc.close()
     await hub.close()
 
@@ -176,10 +174,9 @@ async def test_pull_surface_returns_envelopes_in_order() -> None:
     hub = await Hub.open(store, ttl_sweep_interval=0)
     link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
     human_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     human = await human_hc.register_human(Passport(name="reviewer"))
 
     channel = await alice.open(type="conversation", target="reviewer")
@@ -195,7 +192,6 @@ async def test_pull_surface_returns_envelopes_in_order() -> None:
     )
     assert envelope.event_data["text"] == "hello, reviewer"
 
-    await alice_hc.close()
     await human_hc.close()
     await hub.close()
 
@@ -206,10 +202,9 @@ async def test_envelopes_iterator_streams_until_disconnect() -> None:
     hub = await Hub.open(store, ttl_sweep_interval=0)
     link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
     human_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     human = await human_hc.register_human(Passport(name="reviewer"))
 
     channel = await alice.open(type="conversation", target="reviewer")
@@ -229,7 +224,6 @@ async def test_envelopes_iterator_streams_until_disconnect() -> None:
     await asyncio.wait_for(consume(), timeout=5.0)
     assert seen == ["one", "two"]
 
-    await alice_hc.close()
     await human_hc.close()
     await hub.close()
 
@@ -240,10 +234,9 @@ async def test_callback_exception_does_not_break_dispatch() -> None:
     hub = await Hub.open(store, ttl_sweep_interval=0)
     link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
     human_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     human = await human_hc.register_human(Passport(name="reviewer"))
 
     good_calls = 0
@@ -273,7 +266,6 @@ async def test_callback_exception_does_not_break_dispatch() -> None:
     assert good_calls == 2
     assert [e.event_data["text"] for e in text_envs] == ["first", "second"]
 
-    await alice_hc.close()
     await human_hc.close()
     await hub.close()
 
@@ -286,14 +278,9 @@ async def test_human_initiates_consulting() -> None:
     link = LocalLink(hub)
 
     human_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
     human = await human_hc.register_human(Passport(name="ops"))
-    await bob_hc.register(
-        _agent("bob", "bob's reply"),
-        Passport(name="bob"),
-        Resume(),
-    )
+    await hub.register(_agent("bob", "bob's reply"))
 
     channel = await human.open(type="consulting", target="bob")
     assert isinstance(channel, Channel)
@@ -309,7 +296,6 @@ async def test_human_initiates_consulting() -> None:
     assert reply.event_data["text"] == "bob's reply"
 
     await human_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -326,20 +312,10 @@ async def test_discussion_round_robin_with_human() -> None:
     hub = await Hub.open(store, ttl_sweep_interval=0)
     link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
     human_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(
-        _agent("alice", "alice says hi"),
-        Passport(name="alice"),
-        Resume(),
-    )
-    await bob_hc.register(
-        _agent("bob", "bob says hi"),
-        Passport(name="bob"),
-        Resume(),
-    )
+    alice = await hub.register(_agent("alice", "alice says hi"))
+    await hub.register(_agent("bob", "bob says hi"))
     human = await human_hc.register_human(Passport(name="reviewer"))
 
     posted = {"done": False}
@@ -374,8 +350,6 @@ async def test_discussion_round_robin_with_human() -> None:
     assert text_only[0].sender_id == alice.agent_id
     assert text_only[2].sender_id == human.agent_id
 
-    await alice_hc.close()
-    await bob_hc.close()
     await human_hc.close()
     await hub.close()
 

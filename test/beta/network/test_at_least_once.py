@@ -81,7 +81,7 @@ async def _raw_bob(hub: Hub, name: str = "bob"):
     """Register an agent directly via ``Hub.register`` and bind a bare
     ``LocalLinkClient`` to it. The returned link can be driven with
     arbitrary frames without the default auto-ack interfering."""
-    passport = await hub.register(Passport(name=name), Resume())
+    passport = await hub.register_identity(Passport(name=name), Resume())
     link = LocalLink(hub)
     raw_client = link.client()
     hub.bind_endpoint(raw_client.endpoint_id, passport.agent_id)
@@ -136,11 +136,8 @@ class TestReceiptCursorAdvance:
         """End-to-end: a HubClient-served recipient auto-acks every
         delivery, so the cursor follows the WAL head."""
         hub = await _new_hub()
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -155,8 +152,6 @@ class TestReceiptCursorAdvance:
             cursor_blob = await hub._store.read(f"/agents/{bob.agent_id}/inbox.cursors.json")
             assert json.loads(cursor_blob)[channel.channel_id] == text_env.envelope_id
         finally:
-            await alice_hc.close()
-            await bob_hc.close()
             await hub.close()
 
     @pytest.mark.asyncio
@@ -172,11 +167,8 @@ class TestReceiptCursorAdvance:
             fake_time.time_ns.return_value = 1_700_000_000_000_000_000
 
             hub = await _new_hub()
-            link = LocalLink(hub)
-            alice_hc = HubClient(link, hub=hub)
-            bob_hc = HubClient(link, hub=hub)
-            alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-            bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+            alice = await hub.register(_agent("alice"))
+            bob = await hub.register(_agent("bob"))
 
             try:
                 # conversation channel: no turn-taking, so one sender may
@@ -195,17 +187,13 @@ class TestReceiptCursorAdvance:
                 await _await_cursor(hub, bob.agent_id, channel.channel_id, lambda c: c == last_text.envelope_id)
                 assert hub.inbox_cursor(bob.agent_id, channel.channel_id) == last_text.envelope_id
             finally:
-                await alice_hc.close()
-                await bob_hc.close()
                 await hub.close()
 
     @pytest.mark.asyncio
     async def test_ack_is_monotonic_under_out_of_order_receipts(self) -> None:
         """Acks for older envelope ids must not rewind the cursor."""
         hub = await _new_hub()
-        alice_link = LocalLink(hub)
-        alice_hc = HubClient(alice_link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+        alice = await hub.register(_agent("alice"))
 
         bob_passport, bob_raw = await _raw_bob(hub)
 
@@ -250,7 +238,6 @@ class TestReceiptCursorAdvance:
             assert hub.inbox_cursor(bob_passport.agent_id, channel_id) == text_env.envelope_id
         finally:
             await bob_raw.close()
-            await alice_hc.close()
             await hub.close()
 
     @pytest.mark.asyncio
@@ -258,9 +245,7 @@ class TestReceiptCursorAdvance:
         """A NACK does not advance the cursor — without an ack later,
         the envelope will be replayed on the next reconnect."""
         hub = await _new_hub()
-        alice_link = LocalLink(hub)
-        alice_hc = HubClient(alice_link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+        alice = await hub.register(_agent("alice"))
 
         bob_passport, bob_raw = await _raw_bob(hub)
 
@@ -290,7 +275,6 @@ class TestReceiptCursorAdvance:
             assert cursor_after == cursor_before
         finally:
             await bob_raw.close()
-            await alice_hc.close()
             await hub.close()
 
     @pytest.mark.asyncio
@@ -299,9 +283,7 @@ class TestReceiptCursorAdvance:
         must not affect any cursor — defensive against legacy or
         malformed clients."""
         hub = await _new_hub()
-        alice_link = LocalLink(hub)
-        alice_hc = HubClient(alice_link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+        alice = await hub.register(_agent("alice"))
 
         bob_passport, bob_raw = await _raw_bob(hub)
 
@@ -325,7 +307,6 @@ class TestReceiptCursorAdvance:
             assert cursor_after == cursor_before
         finally:
             await bob_raw.close()
-            await alice_hc.close()
             await hub.close()
 
     @pytest.mark.asyncio
@@ -333,9 +314,7 @@ class TestReceiptCursorAdvance:
         """An ack the hub can't attribute to a channel cannot advance any
         per-channel cursor — receipts must name their channel."""
         hub = await _new_hub()
-        alice_link = LocalLink(hub)
-        alice_hc = HubClient(alice_link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+        alice = await hub.register(_agent("alice"))
 
         bob_passport, bob_raw = await _raw_bob(hub)
 
@@ -364,7 +343,6 @@ class TestReceiptCursorAdvance:
             assert cursor_after == cursor_before == ""
         finally:
             await bob_raw.close()
-            await alice_hc.close()
             await hub.close()
 
 
@@ -372,11 +350,8 @@ class TestCausationIndex:
     @pytest.mark.asyncio
     async def test_find_returns_prior_envelope_for_same_causation_id(self) -> None:
         hub = await _new_hub()
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -392,18 +367,13 @@ class TestCausationIndex:
             assert found.event_data.get("text") == "hello"
             assert found.sender_id == alice.agent_id
         finally:
-            await alice_hc.close()
-            await bob_hc.close()
             await hub.close()
 
     @pytest.mark.asyncio
     async def test_find_returns_none_when_causation_id_unseen(self) -> None:
         hub = await _new_hub()
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -417,8 +387,6 @@ class TestCausationIndex:
             )
             assert found is None
         finally:
-            await alice_hc.close()
-            await bob_hc.close()
             await hub.close()
 
     @pytest.mark.asyncio
@@ -426,11 +394,8 @@ class TestCausationIndex:
         """Envelopes posted without a causation_id (the default) must
         not consume an index slot under any falsy key."""
         hub = await _new_hub()
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -449,18 +414,13 @@ class TestCausationIndex:
                     # envelopes (invite carries no causation; opened carries none).
                     assert env_id != text_env.envelope_id
         finally:
-            await alice_hc.close()
-            await bob_hc.close()
             await hub.close()
 
     @pytest.mark.asyncio
     async def test_terminal_channel_prunes_index_entries(self) -> None:
         hub = await _new_hub()
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -478,8 +438,6 @@ class TestCausationIndex:
             )
             assert found is None
         finally:
-            await alice_hc.close()
-            await bob_hc.close()
             await hub.close()
 
     @pytest.mark.asyncio
@@ -488,11 +446,8 @@ class TestCausationIndex:
         causation index from each active channel's persisted WAL."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
 
         # Use two separate channels so alice can post two causation-keyed
         # texts back-to-back without round-robin interference.
@@ -507,8 +462,6 @@ class TestCausationIndex:
         chan_b_id = chan_b.channel_id
         alice_id = alice.agent_id
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
         # Re-open against the same store: fresh memory, identical disk.
@@ -792,11 +745,8 @@ class TestCursorPersistence:
     async def test_hydrate_restores_cursor(self) -> None:
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
         channel = await alice.open(type="discussion", target=["bob"])
         await channel.send("hello")
         await wait_for_text_count(hub, channel.channel_id, 1)
@@ -808,8 +758,6 @@ class TestCursorPersistence:
         expected_cursor = hub.inbox_cursor(bob_id, channel_id)
         assert expected_cursor == text_env.envelope_id
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
         hub2 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -821,11 +769,8 @@ class TestCursorPersistence:
     @pytest.mark.asyncio
     async def test_unregister_clears_cursor_and_disk_file(self) -> None:
         hub = await _new_hub()
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -839,8 +784,6 @@ class TestCursorPersistence:
             assert bob_id not in hub._inbox_cursors
             assert await hub._store.read(f"/agents/{bob_id}/inbox.cursors.json") is None
         finally:
-            await alice_hc.close()
-            await bob_hc.close()
             await hub.close()
 
 
@@ -853,11 +796,8 @@ class TestRedeliveryIdempotency:
         conversation channel (free-form turns) so only the dedup guard —
         not turn ordering — can prevent the second reply."""
         hub = await _new_hub()
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob", "reply-A", "reply-B"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob", "reply-A", "reply-B"))
 
         try:
             channel = await alice.open(type="conversation", target=["bob"])
@@ -879,6 +819,4 @@ class TestRedeliveryIdempotency:
             assert len(bob_after) == 1, f"redelivery double-posted: {[e.event_data for e in bob_after]}"
             assert bob_after[0].event_data.get("text") == "reply-A"
         finally:
-            await alice_hc.close()
-            await bob_hc.close()
             await hub.close()

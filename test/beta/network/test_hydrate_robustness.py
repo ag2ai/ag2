@@ -31,10 +31,7 @@ from autogen.beta.network import (
     EV_TEXT,
     Envelope,
     Hub,
-    HubClient,
     LimitsBlock,
-    LocalLink,
-    Passport,
     ProtocolError,
     Resume,
     Rule,
@@ -71,14 +68,10 @@ async def test_hydrate_idempotent(tmp_path) -> None:
     """Calling hydrate twice produces the same in-memory state."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub1)
-    hc = HubClient(link, hub=hub1)
-    alice = await hc.register(
+    alice = await hub1.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(claimed_capabilities=["a", "b"]),
+        resume=Resume(claimed_capabilities=["a", "b"]),
     )
-    await hc.close()
     await hub1.close()
 
     hub2 = await Hub.open(DiskKnowledgeStore(str(tmp_path)), ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -95,16 +88,11 @@ async def test_hydrate_missing_rule_falls_back_to_default(tmp_path) -> None:
     """If rule.json is deleted out of band, hydrate restores Rule() default."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub1)
-    hc = HubClient(link, hub=hub1)
-    alice = await hc.register(
+    alice = await hub1.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(channel_ttl_default="6h")),
     )
     alice_id = alice.agent_id
-    await hc.close()
     await hub1.close()
 
     # Out-of-band delete of rule.json — simulates corruption / partial backup.
@@ -125,11 +113,8 @@ async def test_hydrate_missing_skill_returns_none(tmp_path) -> None:
     """get_skill returns None when SKILL.md was never written."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub1)
-    hc = HubClient(link, hub=hub1)
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub1.register(_agent("alice"))
     alice_id = alice.agent_id
-    await hc.close()
     await hub1.close()
 
     hub2 = await Hub.open(DiskKnowledgeStore(str(tmp_path)), ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -144,16 +129,11 @@ async def test_hydrate_skill_deleted_out_of_band(tmp_path) -> None:
     """SKILL.md deleted post-registration → get_skill returns None on next hydrate."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub1)
-    hc = HubClient(link, hub=hub1)
-    alice = await hc.register(
+    alice = await hub1.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         skill_md="# Alice\nuse for X",
     )
     alice_id = alice.agent_id
-    await hc.close()
     await hub1.close()
 
     deleted_store = DiskKnowledgeStore(str(tmp_path))
@@ -172,19 +152,14 @@ async def test_hydrate_rebuilds_capability_index_from_resumes(tmp_path) -> None:
     must not lose discovery — hydrate rebuilds from authoritative resumes."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub1)
-    hc = HubClient(link, hub=hub1)
-    await hc.register(
+    await hub1.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(claimed_capabilities=["math", "research"]),
+        resume=Resume(claimed_capabilities=["math", "research"]),
     )
-    await hc.register(
+    await hub1.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(claimed_capabilities=["math", "writing"]),
+        resume=Resume(claimed_capabilities=["math", "writing"]),
     )
-    await hc.close()
     await hub1.close()
 
     nuked_store = DiskKnowledgeStore(str(tmp_path))
@@ -239,14 +214,11 @@ async def test_hydrate_channel_with_unregistered_adapter_keeps_metadata(tmp_path
     ``ProtocolError`` rather than crashing with ``KeyError``."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub1)
-    hc = HubClient(link, hub=hub1)
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub1.register(_agent("alice"))
+    bob = await hub1.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
     channel_id = channel.channel_id
     alice_id = alice.agent_id
-    await hc.close()
     await hub1.close()
 
     # Open a hub WITHOUT auto-registering the conversation adapter.
@@ -273,13 +245,10 @@ async def test_hydrate_channel_metadata_with_no_adapter_state_not_active(tmp_pat
     ``_active_channels``, even if the persisted state was ACTIVE."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub1)
-    hc = HubClient(link, hub=hub1)
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub1.register(_agent("alice"))
+    await hub1.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
     channel_id = channel.channel_id
-    await hc.close()
     await hub1.close()
 
     hub2 = Hub(DiskKnowledgeStore(str(tmp_path)))
@@ -297,12 +266,9 @@ async def test_hydrate_resume_observed_stats_survive(tmp_path) -> None:
 
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub1)
-    hc = HubClient(link, hub=hub1)
-    alice = await hc.register(
+    alice = await hub1.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(claimed_capabilities=["existing"]),
+        resume=Resume(claimed_capabilities=["existing"]),
     )
     await hub1.observe_task(
         TaskMetadata(
@@ -320,7 +286,6 @@ async def test_hydrate_resume_observed_stats_survive(tmp_path) -> None:
         latency_ms=42,
         task_id="t1",
     )
-    await hc.close()
     await hub1.close()
 
     hub2 = await Hub.open(DiskKnowledgeStore(str(tmp_path)), ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -343,10 +308,8 @@ async def test_hydrate_terminal_channel_not_in_active_cache(tmp_path) -> None:
     """Closed channels load into _channels but not _active_channels."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub1)
-    hc = HubClient(link, hub=hub1)
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub1.register(_agent("alice"))
+    await hub1.register(_agent("bob"))
 
     closed_channel = await alice.open(type="conversation", target="bob")
     closed_id = closed_channel.channel_id
@@ -355,7 +318,6 @@ async def test_hydrate_terminal_channel_not_in_active_cache(tmp_path) -> None:
     open_channel = await alice.open(type="conversation", target="bob")
     open_id = open_channel.channel_id
 
-    await hc.close()
     await hub1.close()
 
     hub2 = await Hub.open(DiskKnowledgeStore(str(tmp_path)), ttl_sweep_interval=0, expectation_sweep_interval=0)

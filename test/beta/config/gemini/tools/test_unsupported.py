@@ -10,6 +10,7 @@ from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.tools.builtin.image_generation import ImageGenerationTool
 from autogen.beta.tools.builtin.mcp_server import MCPServerTool
 from autogen.beta.tools.builtin.memory import MemoryTool
+from autogen.beta.tools.builtin.retrieval import RetrievalTool
 from autogen.beta.tools.builtin.shell import ShellTool
 from autogen.beta.tools.builtin.skills import SkillsTool
 from autogen.beta.tools.builtin.x_search import XSearchTool
@@ -68,6 +69,16 @@ async def test_skills(context: Context) -> None:
 @pytest.mark.asyncio
 async def test_x_search(context: Context) -> None:
     tool = XSearchTool()
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(UnsupportedToolError):
+        build_tools([schema])
+
+
+@pytest.mark.asyncio
+async def test_retrieval(context: Context) -> None:
+    tool = RetrievalTool("kb_123")
 
     [schema] = await tool.schemas(context)
 

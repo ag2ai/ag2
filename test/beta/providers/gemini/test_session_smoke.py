@@ -33,9 +33,6 @@ from autogen.beta.network import (
     EV_CHANNEL_CLOSED,
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     Resume,
 )
 from autogen.beta.network.adapters.consulting import CONSULTING_TYPE
@@ -89,22 +86,17 @@ async def test_persisted_consulting_survives_hub_restart(gemini_config: GeminiCo
     with tempfile.TemporaryDirectory() as tmp:
         store = DiskKnowledgeStore(tmp)
         hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-        link = LocalLink(hub1)
-        hc = HubClient(link, hub=hub1)
 
-        alice = await hc.register(
+        alice = await hub1.register(
             _agent("alice", "You are alice, asking a math question.", gemini_config),
-            Passport(name="alice"),
-            Resume(),
         )
-        bob = await hc.register(
+        bob = await hub1.register(
             _agent(
                 "bob",
                 "You are bob, a math tutor. Reply with ONLY the numeric answer.",
                 gemini_config,
             ),
-            Passport(name="bob"),
-            Resume(claimed_capabilities=["math"]),
+            resume=Resume(claimed_capabilities=["math"]),
         )
 
         channel = await alice.open(type=CONSULTING_TYPE, target="bob")
@@ -119,7 +111,6 @@ async def test_persisted_consulting_survives_hub_restart(gemini_config: GeminiCo
         live_text = [e.event_data["text"] for e in live_wal if e.event_type == EV_TEXT]
         assert any("56" in t for t in live_text), f"expected '56' in bob's reply, got: {live_text!r}"
 
-        await hc.close()
         await hub1.close()
 
         # Reopen — fresh in-memory state, must rebuild from disk.
@@ -164,31 +155,23 @@ async def test_concurrent_consultings_isolated(gemini_config: GeminiConfig) -> N
     stay isolated — each respondent's reply lands in its own WAL, no
     envelope leak across channels."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice", "You are alice.", gemini_config),
-        Passport(name="alice"),
-        Resume(),
     )
-    bob = await hc.register(
+    bob = await hub.register(
         _agent(
             "bob",
             "Reply with ONLY the numeric answer. No words, no punctuation, just the number.",
             gemini_config,
         ),
-        Passport(name="bob"),
-        Resume(),
     )
-    carol = await hc.register(
+    carol = await hub.register(
         _agent(
             "carol",
             "Reply with ONLY the numeric answer. No words, no punctuation, just the number.",
             gemini_config,
         ),
-        Passport(name="carol"),
-        Resume(),
     )
 
     s_bob = await alice.open(type=CONSULTING_TYPE, target="bob")
@@ -226,7 +209,6 @@ async def test_concurrent_consultings_isolated(gemini_config: GeminiConfig) -> N
     await _wait_for_terminal(s_bob)
     await _wait_for_terminal(s_carol)
 
-    await hc.close()
     await hub.close()
 
 
@@ -238,18 +220,12 @@ async def test_close_during_llm_turn_rejects_late_reply(gemini_config: GeminiCon
     bob's notify handler (caught by the per-frame error path) and only
     alice's prompt + the close envelope remain."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice", "You are alice.", gemini_config),
-        Passport(name="alice"),
-        Resume(),
     )
-    bob = await hc.register(
+    bob = await hub.register(
         _agent("bob", "You are bob, a thoughtful assistant. Reply briefly.", gemini_config),
-        Passport(name="bob"),
-        Resume(),
     )
 
     channel = await alice.open(type=CONSULTING_TYPE, target="bob")
@@ -282,5 +258,4 @@ async def test_close_during_llm_turn_rejects_late_reply(gemini_config: GeminiCon
     assert len(closed_envelopes) == 1
     assert closed_envelopes[0].event_data.get("reason") == "abort_during_turn"
 
-    await hc.close()
     await hub.close()
