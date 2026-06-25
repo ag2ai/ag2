@@ -99,6 +99,17 @@ Agents instrumented with `#!python TelemetryMiddleware` add their own `agent` / 
 !!! note
     `#!python network.task` spans cover capability-tagged tasks — the same `#!python agent.task(..., capability="X")` mechanism described in [Task Observation](/docs/beta/network/task_observation). The span records the task's `capability`, `outcome`, and latency, which is what feeds task-level evaluation views.
 
+### Checkpoint events
+
+Task checkpoints are written straight to the hub's store, so they bypass the envelope path and are **not** their own spans. Instead, `#!python HubBackedCheckpointStore` pins them as **span-events** on whatever span is active when a checkpoint is saved or loaded — typically the owning agent's turn span:
+
+| Event | Attributes | Meaning |
+|---|---|---|
+| `checkpoint.write` | `ag2.checkpoint.task_id`, `ag2.checkpoint.bytes` | Owner saved a resume snapshot. |
+| `checkpoint.read` | `ag2.checkpoint.task_id`, `ag2.checkpoint.hit` | Snapshot loaded; `hit=false` when none existed. On a resume read, `task_id` is the prior task being resumed from — the link back to the original run. |
+
+These are no-ops when no tracer is configured, so checkpointing carries no tracing cost unless you opt in.
+
 ## Bounded Traces, Joined by Links
 
 Rather than forcing everything onto one enormous hub-wide trace, each entity is its **own bounded trace** — an envelope, a channel, an agent's lifetime, and a task each root a separate trace. This matches how OTLP collectors and trace viewers expect to ingest data (a long-lived channel that stays open for hours does not hold one trace open indefinitely).

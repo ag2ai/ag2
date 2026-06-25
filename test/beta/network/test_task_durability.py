@@ -13,6 +13,8 @@ canonical default; tenants may plug in any compatible store.
 import asyncio
 
 import pytest
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 
 from autogen.beta import Agent, Context
 from autogen.beta.events import TaskCancelled
@@ -261,6 +263,81 @@ class TestHubBackedCheckpointStore:
         # only stores it without using it during the isinstance check.
         store = HubBackedCheckpointStore.__new__(HubBackedCheckpointStore)
         assert isinstance(store, CheckpointStore)
+
+
+class _CapturingExporter(SpanExporter):
+    """Minimal in-memory span sink for asserting on emitted spans."""
+
+    def __init__(self) -> None:
+        self.spans: list[ReadableSpan] = []
+
+    def export(self, spans) -> SpanExportResult:
+        self.spans.extend(spans)
+        return SpanExportResult.SUCCESS
+
+    def shutdown(self) -> None:
+        self.spans.clear()
+
+
+def _events_named(span: ReadableSpan, name: str) -> list:
+    return [e for e in span.events if e.name == name]
+
+
+class TestCheckpointTracing:
+    """``HubBackedCheckpointStore`` pins span-events on the active span so
+    checkpoint save/restore — which bypass the envelope path — still surface
+    in a trace."""
+
+    @pytest.mark.asyncio
+    async def test_write_and_read_emit_span_events(self) -> None:
+        exporter = _CapturingExporter()
+        provider = TracerProvider()
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+        tracer = provider.get_tracer("test")
+
+        hub = await Hub.open(
+            MemoryKnowledgeStore(),
+            ttl_sweep_interval=0,
+            expectation_sweep_interval=0,
+        )
+        try:
+            store = HubBackedCheckpointStore(hub)
+            with tracer.start_as_current_span("run"):
+                await store.write("task-42", {"step": 7, "buffer": ["a", "b"]})
+                # Hit: a checkpoint exists for this id.
+                assert await store.read("task-42") == {"step": 7, "buffer": ["a", "b"]}
+                # Miss: nothing written for this id.
+                assert await store.read("never-written") is None
+        finally:
+            await hub.close()
+
+        [span] = exporter.spans
+
+        [write_ev] = _events_named(span, "checkpoint.write")
+        assert write_ev.attributes["ag2.checkpoint.task_id"] == "task-42"
+        assert write_ev.attributes["ag2.checkpoint.bytes"] > 0
+
+        read_evs = _events_named(span, "checkpoint.read")
+        assert len(read_evs) == 2
+        hit, miss = read_evs
+        assert hit.attributes == {"ag2.checkpoint.task_id": "task-42", "ag2.checkpoint.hit": True}
+        assert miss.attributes == {"ag2.checkpoint.task_id": "never-written", "ag2.checkpoint.hit": False}
+
+    @pytest.mark.asyncio
+    async def test_no_provider_is_safe_noop(self) -> None:
+        """With no tracer provider configured, write/read still work — the
+        span-event call lands on a non-recording span and is a no-op."""
+        hub = await Hub.open(
+            MemoryKnowledgeStore(),
+            ttl_sweep_interval=0,
+            expectation_sweep_interval=0,
+        )
+        try:
+            store = HubBackedCheckpointStore(hub)
+            await store.write("task-1", {"v": 1})
+            assert await store.read("task-1") == {"v": 1}
+        finally:
+            await hub.close()
 
     def test_in_memory_double_also_satisfies_protocol(self) -> None:
         assert isinstance(_InMemoryCheckpointStore(), CheckpointStore)

@@ -110,3 +110,11 @@ ATTR_INBOX_CAP = "ag2.inbox.cap"
 # eval trace reconstructor to rebuild HITL turns.
 ATTR_HUMAN_INPUT_PROMPT = "ag2.human_input.prompt"
 ATTR_HUMAN_INPUT_RESPONSE = "ag2.human_input.response"
+
+# ── Checkpoint capture (span-events on the active span) ──────────────────────
+# Emitted by ``HubBackedCheckpointStore`` write/read so task checkpoint
+# save/restore surface as markers on the active task/turn span — checkpoints
+# bypass the envelope path, so this is the only place they show up in a trace.
+ATTR_CHECKPOINT_TASK_ID = "ag2.checkpoint.task_id"
+ATTR_CHECKPOINT_BYTES = "ag2.checkpoint.bytes"
+ATTR_CHECKPOINT_HIT = "ag2.checkpoint.hit"
