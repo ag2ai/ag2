@@ -68,6 +68,7 @@ def zai_config() -> ZAIConfig:
         model="glm-5.2",
         api_key=_require("ZAI_API_KEY"),
         temperature=0,
+        thinking=False,
     )
 
 
@@ -104,6 +105,7 @@ def streaming_config(request):
             api_key=_require("ZAI_API_KEY"),
             temperature=0,
             streaming=True,
+            thinking=False,
         )
     return GeminiConfig(
         model="gemini-3.1-flash-lite",
