@@ -18,8 +18,10 @@ from typing import Annotated, Any
 
 import httpx
 import pytest
-from ag_ui.core import RunAgentInput
 from dirty_equals import IsPartialDict
+
+pytest.importorskip("ag_ui")
+from ag_ui.core import RunAgentInput
 
 from autogen.beta import Agent, Depends
 from autogen.beta.a2ui import A2UIServer, a2ui_action
