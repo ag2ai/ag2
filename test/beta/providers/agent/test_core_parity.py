@@ -4,8 +4,8 @@
 
 """Cross-provider smoke: every core Agent feature exercised once per provider.
 
-Each test takes ``provider_config`` and runs on all three providers
-(OpenAI, Anthropic, Gemini). Tests hit the real APIs — no mocks.
+Each test takes ``provider_config`` and runs on all four providers
+(OpenAI, Anthropic, Gemini, Z.AI). Tests hit the real APIs — no mocks.
 
 Covers: basic ask, static and dynamic system prompts, sync and async
 tools, multi-tool dispatch, tool errors, structured output (primitive /

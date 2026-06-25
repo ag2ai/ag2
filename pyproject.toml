@@ -433,6 +433,7 @@ markers = [
     "gemini",
     "gemini_realtime",
     "anthropic",
+    "zai",
     "deepseek",
     "cosmosdb",
     "ollama",
