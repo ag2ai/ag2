@@ -25,7 +25,9 @@ from ag2.events import ToolCallEvent
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_TASK_CANCEL_REQUEST,
+    CostProfile,
     Hub,
+    Passport,
     Resume,
 )
 from ag2.network.client.tools.channels import make_channels_tool
@@ -115,6 +117,39 @@ async def test_peers_find_filters_by_capability() -> None:
 
     assert [r["name"] for r in coders] == ["bob"]
     assert other == []
+
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_peers_find_sort_by_cost_ranks_free_peer_cheapest() -> None:
+    """``sort_by="cost"`` ranks a 0.0-priced peer as cheapest, not most expensive.
+
+    ``input_per_mtok`` is ``float | None``: ``0.0`` is a real price (free /
+    local model) and must sort ahead of paid peers, while an unknown cost
+    (``None``) sorts last.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+
+    alice = await hub.register(_agent("alice"))
+    await hub.register(
+        _agent("free"),
+        passport=Passport(name="free", cost=CostProfile(input_per_mtok=0.0)),
+    )
+    await hub.register(
+        _agent("paid"),
+        passport=Passport(name="paid", cost=CostProfile(input_per_mtok=3.0)),
+    )
+    await hub.register(
+        _agent("unknown"),
+        passport=Passport(name="unknown"),  # no cost profile → unknown price
+    )
+
+    tool = make_peers_tool(alice)
+    result = await _invoke(tool, {"action": "find", "sort_by": "cost"}, dependencies={AGENT_CLIENT_DEP: alice})
+
+    assert [r["name"] for r in result] == ["free", "paid", "unknown"]
 
     await hub.close()
 
