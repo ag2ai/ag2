@@ -33,19 +33,35 @@ from autogen.beta.tools.schemas import ToolSchema
 PROVIDER = "zai"
 
 
+_SCHEMA_INSTRUCTION = (
+    "You must respond with valid JSON that conforms to the following JSON schema:\n"
+    "```json\n{schema}\n```\n"
+    "Respond with only the JSON object — no markdown code fences, no commentary."
+)
+
+
 def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] | None:
+    """Map a response schema to Z.AI's ``response_format``.
+
+    Z.AI only supports JSON mode via (``{"type": "json_object"}``); it does not
+    support OpenAI-style ``{"type": "json_schema"}``, so the schema itself is
+    conveyed to the model via injection into the system prompt (see ``schema_instruction``).
+    """
     if not response or not response.json_schema:
         return None
+    return {"type": "json_object"}
 
-    schema: dict[str, Any] = {
-        "name": response.name,
-        "schema": _ensure_additional_properties_false(response.json_schema),
-        "strict": True,
-    }
-    if response.description:
-        schema["description"] = response.description
 
-    return {"type": "json_schema", "json_schema": schema}
+def schema_instruction(response: ResponseProto | None) -> str | None:
+    """System-prompt text describing the JSON schema for Z.AI's JSON mode.
+
+    Returns ``None`` when the schema already supplies its own prompt (e.g.
+    ``PromptedSchema``) or when there is no native schema to describe.
+    """
+    if not response or response.system_prompt or not response.json_schema:
+        return None
+    schema = _ensure_additional_properties_false(response.json_schema)
+    return _SCHEMA_INSTRUCTION.format(schema=json.dumps(schema, indent=2))
 
 
 def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any]:

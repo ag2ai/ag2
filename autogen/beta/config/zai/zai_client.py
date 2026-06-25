@@ -34,6 +34,7 @@ from .mappers import (
     convert_messages,
     normalize_usage,
     response_proto_to_format,
+    schema_instruction,
     tool_call_event,
     tool_call_index,
     tool_to_api,
@@ -132,8 +133,11 @@ class ZAIClient(LLMClient):
         response_schema: ResponseProto | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
-        if response_schema and response_schema.system_prompt:
-            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        schema_prompt = (
+            (response_schema.system_prompt or schema_instruction(response_schema)) if response_schema else None
+        )
+        if schema_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (schema_prompt,))
         else:
             prompt = context.prompt
 

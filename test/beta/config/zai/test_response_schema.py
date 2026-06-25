@@ -8,7 +8,7 @@ from fast_depends.use import SerializerCls
 from pydantic import BaseModel
 
 from autogen.beta.config.zai import ZAIClient
-from autogen.beta.config.zai.mappers import response_proto_to_format
+from autogen.beta.config.zai.mappers import response_proto_to_format, schema_instruction
 from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.response import PromptedSchema, ResponseSchema
 from test.beta.config.zai._helpers import FakeCompletions, FakeZAIClient, make_call_context
@@ -26,41 +26,32 @@ class Nested(BaseModel):
 
 def test_none_response_schema_returns_none() -> None:
     assert response_proto_to_format(None) is None
+    # PromptedSchema carries no native json_schema — it prompts for JSON itself.
     assert response_proto_to_format(PromptedSchema(Verdict)) is None
 
 
-def test_json_schema_conversion() -> None:
-    result = response_proto_to_format(ResponseSchema(Verdict))
-
-    assert result == IsPartialDict({
-        "type": "json_schema",
-        "json_schema": IsPartialDict({
-            "name": "Verdict",
-            "strict": True,
-            "schema": IsPartialDict({
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {"answer": IsPartialDict({}), "confidence": IsPartialDict({})},
-            }),
-        }),
-    })
+def test_native_schema_uses_json_mode() -> None:
+    # Z.AI only supports JSON mode; the schema travels in the prompt, not response_format.
+    assert response_proto_to_format(ResponseSchema(Verdict)) == {"type": "json_object"}
 
 
-def test_nested_additional_properties() -> None:
-    result = response_proto_to_format(ResponseSchema(Nested))
+def test_schema_instruction_describes_schema() -> None:
+    instruction = schema_instruction(ResponseSchema(Nested))
 
-    assert result == IsPartialDict({
-        "json_schema": IsPartialDict({
-            "schema": IsPartialDict({
-                "additionalProperties": False,
-                "$defs": IsPartialDict({"Verdict": IsPartialDict({"additionalProperties": False})}),
-            })
-        })
-    })
+    assert instruction is not None
+    assert '"additionalProperties": false' in instruction
+    assert '"verdict"' in instruction
+    assert '"tags"' in instruction
+
+
+def test_schema_instruction_skips_prompted_schema() -> None:
+    # PromptedSchema supplies its own system prompt; don't double up.
+    assert schema_instruction(PromptedSchema(Verdict)) is None
+    assert schema_instruction(None) is None
 
 
 @pytest.mark.asyncio
-async def test_schema_sends_response_format() -> None:
+async def test_schema_sends_json_mode_and_prompt() -> None:
     completions = FakeCompletions()
     client = ZAIClient(create_options={"model": "glm-test"})
     client._client = FakeZAIClient(completions)
@@ -73,6 +64,7 @@ async def test_schema_sends_response_format() -> None:
         serializer=SerializerCls,
     )
 
-    assert completions.kwargs == IsPartialDict({
-        "response_format": IsPartialDict({"json_schema": IsPartialDict({"name": "Verdict"})})
-    })
+    assert completions.kwargs == IsPartialDict({"response_format": {"type": "json_object"}})
+    system = next(m for m in completions.kwargs["messages"] if m["role"] == "system")
+    assert "JSON schema" in system["content"]
+    assert '"answer"' in system["content"]
