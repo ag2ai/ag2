@@ -302,13 +302,11 @@ class A2UIAgentExecutor(AgentExecutor):
         has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
         if wants_client_response:
             if has_pending or pending_client_calls:
-                # By construction these are mutually exclusive (the validation
-                # middleware skips A2UI parsing when the response carries tool
-                # calls), so reaching here means a malformed turn — surface it
-                # rather than silently dropping the pending tool-call state.
+                # A callFunction(wantResponse) and pending tool calls can co-occur in
+                # a turn; give the callFunction precedence and defer the tool calls.
                 logger.warning(
                     "callFunction(wantResponse) emitted alongside pending tool calls; "
-                    "pausing for the client function and not handling the pending tool calls this turn.",
+                    "pausing for the client function and deferring the pending tool calls this turn.",
                 )
             await updater.requires_input(message=agent_msg)
             await lifecycle_ctx.send(

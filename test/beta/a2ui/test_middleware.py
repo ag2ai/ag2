@@ -12,7 +12,7 @@ from autogen.beta.a2ui import A2UIMessageEvent, A2UIValidationFailedEvent
 from autogen.beta.a2ui._runtime import _A2UIRuntime
 from autogen.beta.a2ui.middleware import _to_prose_message
 from autogen.beta.config import LLMClient, ModelConfig
-from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse
+from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
@@ -69,6 +69,23 @@ INVALID_RESPONSE_MISSING_CATALOG = (
 )
 
 INVALID_RESPONSE_BROKEN_JSON = "Text.\n<a2ui-json>\n{not valid json}\n</a2ui-json>"
+
+# The single createSurface message inside VALID_RESPONSE, as it lands on the stream.
+SURFACE_MESSAGE = {
+    "version": "v0.9",
+    "createSurface": {
+        "surfaceId": "s1",
+        "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+    },
+}
+
+
+def _mixed_tool_and_ui_response() -> ModelResponse:
+    """A single response carrying BOTH an <a2ui-json> block and a tool call."""
+    return ModelResponse(
+        message=ModelMessage(VALID_RESPONSE),
+        tool_calls=ToolCallsEvent([ToolCallEvent(name="ping", arguments="{}")]),
+    )
 
 
 def _build(
@@ -274,6 +291,32 @@ class TestA2UIValidationMiddleware:
         reply = await agent.ask("Show UI", middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section])
         assert reply.body == "Here is your UI."
 
+    async def test_tool_call_response_still_emits_a2ui(self) -> None:
+        # A response with BOTH a tool call and a UI block publishes the UI and runs
+        # the tool (concern #3).
+        ran: list[str] = []
+        agent, rt = _build(
+            TestConfig(_mixed_tool_and_ui_response(), "Done."),
+            validate_responses=True,
+            validation_retries=2,
+        )
+
+        @agent.tool
+        def ping() -> str:
+            ran.append("ping")
+            return "pong"
+
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask(
+            "Show UI", stream=stream, middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section]
+        )
+
+        assert ran == ["ping"]  # the tool executed
+        assert reply.body == "Done."  # the loop continued past the tool call
+        assert [e.message for e in events] == [SURFACE_MESSAGE]  # the UI from the tool-calling response
+
 
 @pytest.mark.asyncio()
 class TestA2UIExtractionMiddleware:
@@ -338,6 +381,28 @@ class TestA2UIExtractionMiddleware:
 
         assert reply.body == "Text."
         assert events == []
+
+    async def test_tool_call_response_still_extracts_a2ui(self) -> None:
+        # As above with validate_responses=False: extraction runs on a tool-calling
+        # response, and the tool executes.
+        ran: list[str] = []
+        agent, rt = _build(TestConfig(_mixed_tool_and_ui_response(), "Done."), validate_responses=False)
+
+        @agent.tool
+        def ping() -> str:
+            ran.append("ping")
+            return "pong"
+
+        events: list[A2UIMessageEvent] = []
+        stream = _make_collecting_stream(events)
+
+        reply = await agent.ask(
+            "Show UI", stream=stream, middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section]
+        )
+
+        assert ran == ["ping"]
+        assert reply.body == "Done."
+        assert [e.message for e in events] == [SURFACE_MESSAGE]
 
 
 class TestToProseMessage:

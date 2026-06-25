@@ -83,9 +83,8 @@ class _A2UIExtractionMiddleware(BaseMiddleware):
         context: Context,
     ) -> ModelResponse:
         response = await call_next(events, context)
-        # Tool calls / empty content — nothing to extract.
-        if response.tool_calls and response.tool_calls.calls:
-            return response
+        # A2UI lives in `content`, tool calls in `tool_calls` — orthogonal. Publish
+        # any UI from content (a no-op if none) and leave tool_calls for the executor.
         text = response.content
         if not text:
             return response
@@ -182,8 +181,17 @@ class _A2UIValidationMiddleware(BaseMiddleware):
         for attempt in range(self._max_retries + 1):
             response = await call_next(current_events, context)
 
-            # Tool calls / empty content — middleware is not concerned.
+            # Tool-call turns aren't retried (that fights the executor): extract the
+            # UI once — publish if valid, else degrade — and return with tool_calls.
             if response.tool_calls and response.tool_calls.calls:
+                text = response.content
+                if text:
+                    parse_result, validation_errors = self._validate(text)
+                    if validation_errors is None:
+                        await _publish_a2ui(parse_result, response, context)
+                    else:
+                        await context.send(A2UIValidationFailedEvent(validation_errors, attempt + 1))
+                        response.message = _to_prose_message(response.message, parse_result.text)
                 return response
             text = response.content
             if not text:
