@@ -69,6 +69,7 @@ def zai_config() -> ZAIConfig:
         api_key=_require("ZAI_API_KEY"),
         temperature=0,
         thinking=False,
+        request_timeout=45,
     )
 
 
@@ -106,6 +107,7 @@ def streaming_config(request):
             temperature=0,
             streaming=True,
             thinking=False,
+            request_timeout=45,
         )
     return GeminiConfig(
         model="gemini-3.1-flash-lite",
