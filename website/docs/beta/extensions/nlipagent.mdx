@@ -11,7 +11,7 @@ sidebarTitle: NLIP Agent
 Two entry points cover the full lifecycle:
 
 | Class | Role |
-|---|---|
+|-------|---|
 | [`NlipServer`](#server-expose-an-agent-via-nlip) | Wraps an `Agent` as an ASGI callable — pass it directly to `uvicorn.run` |
 | [`NlipConfig`](#client-connect-to-a-remote-nlip-endpoint) | A `ModelConfig` — connects to any remote NLIP endpoint and turns it into the LLM provider for a local `Agent` |
 
@@ -155,7 +155,6 @@ from autogen.beta.extensions.nlip import NlipServer
 NWS_API_BASE = "https://api.weather.gov"
 NWS_HEADERS = {"User-Agent": "ag2-weather-nlip/1.0", "Accept": "application/geo+json"}
 
-
 async def get_weather_alerts(state: str) -> str:
     """Get active weather alerts for a US state (2-letter code)."""
     url = f"{NWS_API_BASE}/alerts/active/area/{state.upper()}"
@@ -177,7 +176,6 @@ async def get_weather_alerts(state: str) -> str:
             f"{p.get('description', '')}"
         )
     return "\n---\n".join(parts)
-
 
 async def get_weather_forecast(latitude: float, longitude: float) -> str:
     """Get weather forecast for a latitude/longitude location."""
@@ -247,7 +245,7 @@ curl -X POST http://127.0.0.1:8014/nlip/ \
 In the coordinator file, we define a `geocode_location` tool, a `weather_agent` backed by `NlipConfig`, and a coordinator `Agent` that delegates between them.
 
 
-```python title="coordinator.py" hl_lines="29-32 34-37"
+```python title="coordinator.py" hl_lines="35-38 40-43"
 import argparse
 import asyncio
 
@@ -280,7 +278,6 @@ async def geocode_location(location: str) -> dict:
             "longitude": float(result["lon"]),
             "display_name": result["display_name"],
         }
-
 
 async def run_weather_task(task: str, weather_server_url: str = "http://localhost:8014") -> None:
     weather_agent = Agent(
@@ -329,7 +326,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-The coordinator connects to the NLIP weather agent through `weather_agent`, a regular `Agent` configured with `NlipConfig` (highlighted lines 29-32), and delegates to it via the plain tool function `ask_weather_agent` (highlighted lines 34-37).
+The coordinator connects to the NLIP weather agent through `weather_agent`, a regular `Agent` configured with `NlipConfig` (highlighted lines 35-38), and delegates to it via the plain tool function `ask_weather_agent` (highlighted lines 40-43).
 
 ```bash
 python coordinator.py
