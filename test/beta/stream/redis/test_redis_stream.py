@@ -367,6 +367,19 @@ class TestRedisStream:
         assert len(received_b) == 1
         assert len(received_c) == 1
 
+    async def test_listener_propagates_cancellation(self, redis_stream):
+        """Cancelling the pub/sub listener must propagate CancelledError so the
+        task is marked cancelled, preserving structured cancellation."""
+        stream = redis_stream()
+        stream._ensure_listener()
+        await stream._listener_ready.wait()
+
+        task = stream._listener_task
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert task.cancelled()
+
     async def test_local_dispatch_survives_listener_failure(self, redis_stream):
         """Local subscribers keep receiving events after the pub/sub listener dies."""
         stream = redis_stream()

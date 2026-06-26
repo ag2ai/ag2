@@ -98,7 +98,7 @@ class RedisStream(MemoryStream):
                     ctx = self._base_context or Context(self)
                     await super().send(event, ctx)
         except asyncio.CancelledError:
-            pass
+            raise
         finally:
             await pubsub.unsubscribe(self._channel)
             await pubsub.aclose()
