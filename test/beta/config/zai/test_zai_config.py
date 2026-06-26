@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fast_depends.use import SerializerCls
 from zai.api_resource.chat.completions import Completions as RealCompletions
 
 import autogen.beta.config.zai.zai_client as zai_client_module
-from autogen.beta.config.zai import ZAIClient, ZAIConfig
+from autogen.beta.config.zai import ZAIClient, ZAIConfig, ZAIFilesClient
 from autogen.beta.events import ModelRequest, TextInput
 from test.beta.config.zai._helpers import FakeCompletions, FakeZAIClient, make_call_context
 
@@ -198,11 +199,13 @@ async def test_client_connection_params_reach_sdk_client(monkeypatch: pytest.Mon
     }
 
 
-def test_create_files_client_not_supported() -> None:
+@patch("autogen.beta.config.zai.files.ZaiClient")
+def test_create_files_client(_mock_zai_client: MagicMock) -> None:
     config = ZAIConfig(model="glm-5.2")
 
-    with pytest.raises(NotImplementedError, match="ZAIConfig does not support Files API"):
-        config.create_files_client()
+    client = config.create_files_client()
+
+    assert isinstance(client, ZAIFilesClient)
 
 
 def test_unsupported_penalty_fields_are_rejected() -> None:

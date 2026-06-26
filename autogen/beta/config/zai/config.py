@@ -10,6 +10,7 @@ from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 
+from .files import ZAIFilesClient
 from .zai_client import CreateOptions, ZAIClient
 
 
@@ -79,6 +80,9 @@ class ZAIConfig(ModelConfig):
 
     def copy(self, /, **overrides: Unpack[ZAIConfigOverrides]) -> "ZAIConfig":
         return replace(self, **overrides)
+
+    def create_files_client(self) -> ZAIFilesClient:
+        return ZAIFilesClient(self)
 
     def create(self) -> ZAIClient:
         options = CreateOptions(
