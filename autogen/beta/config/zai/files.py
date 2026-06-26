@@ -13,11 +13,26 @@ from autogen.beta.files.types import FileContent, FileProvider, UploadedFile, _c
 if TYPE_CHECKING:
     from autogen.beta.config.zai.config import ZAIConfig
 
-_DEFAULT_PURPOSE = "retrieval"
+# Default upload purpose; see ZAIFilesClient.upload for why "batch".
+_DEFAULT_PURPOSE = "batch"
+
+# Purposes that GET /files can enumerate without extra params; see ZAIFilesClient.list.
+_LISTABLE_PURPOSES = ("batch", "fine-tune", "voice-clone-input")
 
 
 class ZAIFilesClient:
-    """Files API client for Z.AI."""
+    """Files API client for Z.AI.
+
+    Unlike OpenAI/xAI, Z.AI's Files API is *purpose-bound* — it is not a general blob
+    store, and each ``purpose`` has its own rules:
+
+    - ``"batch"``     — a ``.jsonl``/``.xlsx`` batch-input file; the only purpose that
+      supports the full upload/list/read(download)/delete round-trip.
+    - ``"fine-tune"`` — a conversational ``.jsonl``; upload/list/delete work, but the
+      server rejects content download.
+    - ``"retrieval"`` — Doc/Docx/PDF/Xlsx/URL, but it REQUIRES a ``knowledge_id`` (a
+      pre-existing knowledge base) or the server returns 400 "知识库id不能为空".
+    """
 
     __slots__ = ("_client",)
 
@@ -39,11 +54,33 @@ class ZAIFilesClient:
             kwargs["source_channel"] = config.source_channel
         self._client = ZaiClient(**kwargs)
 
-    async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:
+    async def upload(
+        self,
+        data: bytes,
+        filename: str,
+        purpose: str | None = None,
+        *,
+        knowledge_id: str | None = None,
+        sentence_size: int | None = None,
+        custom_separator: list[str] | None = None,
+    ) -> UploadedFile:
+        """Upload a file. Defaults to the "batch" purpose so a plain upload works out of
+        the box; pass another ``purpose`` (and ``knowledge_id``/``sentence_size``/
+        ``custom_separator`` for "retrieval") to opt into the other modes.
+        """
+        # Forward only the extras the caller actually set; the SDK rejects unexpected None.
+        extra: dict[str, Any] = {}
+        if knowledge_id is not None:
+            extra["knowledge_id"] = knowledge_id
+        if sentence_size is not None:
+            extra["sentence_size"] = sentence_size
+        if custom_separator is not None:
+            extra["custom_separator"] = custom_separator
         result = await asyncio.to_thread(
             self._client.files.create,
             file=(filename, BytesIO(data)),
             purpose=purpose or _DEFAULT_PURPOSE,
+            **extra,
         )
         return UploadedFile(
             file_id=result.id,
@@ -61,7 +98,17 @@ class ZAIFilesClient:
         return FileContent(name=None, data=response.content, media_type=None)
 
     async def list(self) -> list[UploadedFile]:
-        result = await asyncio.to_thread(self._client.files.list)
+        """List uploaded files.
+
+        Z.AI's GET /files requires a ``purpose`` filter (an unfiltered list returns
+        nothing), and "retrieval" additionally needs a ``knowledge_id``. So we query
+        each purpose that is listable without extra params and merge the results;
+        "retrieval" files are not enumerable here.
+        """
+        results = await asyncio.gather(
+            *(asyncio.to_thread(self._client.files.list, purpose=p) for p in _LISTABLE_PURPOSES),
+            return_exceptions=True,
+        )
         return [
             UploadedFile(
                 file_id=f.id,
@@ -71,6 +118,8 @@ class ZAIFilesClient:
                 purpose=f.purpose,
                 created_at=_created_at_to_float(f.created_at),
             )
+            for result in results
+            if not isinstance(result, BaseException)
             for f in result.data
         ]
 
