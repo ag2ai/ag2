@@ -117,6 +117,7 @@ async def test_peers_then_delegate_consults_a_specialist(
 
 @pytest.mark.anthropic
 @pytest.mark.asyncio()
+@pytest.mark.timeout(120)
 async def test_5way_discussion_round_robin(
     anthropic_config: AnthropicConfig,
 ) -> None:
