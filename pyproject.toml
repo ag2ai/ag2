@@ -111,7 +111,11 @@ mcp = [
     "mcp>=1.11.0,<2",
 ]
 
-## dev dependencies
+[dependency-groups]
+# Dev dependency groups (PEP 735). These replace the former dev *extras* and are
+# NOT published with the package — install with `uv pip install --group <name>`
+# (or `uv sync`). Feature extras (openai, gemini, redis, …) stay in
+# [project.optional-dependencies] because they are part of the published API.
 
 # test dependencies
 test-core = [
@@ -124,7 +128,7 @@ test-core = [
 ]
 
 test = [
-    "ag2[test-core]",
+    { include-group = "test-core" },
     "docker>=6.0.0,<8",
     "ag2[mcp]",
     "ipykernel==7.3.0",
@@ -135,6 +139,35 @@ test = [
     "respx>=0.23.0,<0.24.0", # search tests
     # test utilities
     "aiofiles>=24.1.0,<26.0.0",
+]
+
+# All optional feature deps needed so the full (non-LLM) beta test suite can be
+# collected and run. This has no dev-extra equivalent; it is consumed directly
+# by the beta-test CI workflow alongside the `test` group.
+optionals = [
+    "ag2[redis]",
+    "ag2[ag-ui]",
+    "ag2[a2ui]", # provides starlette/jsonschema for AG-UI / a2ui serving tests
+    "ag2[mcp]", # autogen.mcp — serve an Agent as an MCP server
+    "ag2[tracing]",
+    # search tools
+    "ag2[tavily,ddgs,perplexity]",
+    # extensions are not shipped as extras; install their packages directly for testing
+    "watchdog>=4.0,<7",  # DiskKnowledgeStore (autogen.knowledge)
+    "websockets>=14.0,<17",  # WsLink (autogen.network)
+    "docker>=6.0.0,<8",  # code execution (autogen.extensions.docker)
+    "daytona>=0.171.0,<1",
+    "tinyfish>=0.2.3; python_version>='3.11'",
+    "exa-py>=2.12.1,<3",
+    # providers
+    "ag2[openai]",
+    "ag2[anthropic]",
+    "ag2[bedrock]",
+    "ag2[gemini]",
+    "ag2[ollama]",
+    "ag2[dashscope]",
+    "ag2[xai]",
+    "ag2[zai]",
 ]
 
 docs = [
@@ -186,60 +219,21 @@ types = [
     "types-requests",
     "types-ujson",
     "types-aiofiles",
-    "ag2[test, openai, a2a, ag-ui]",
+    { include-group = "test" },
+    "ag2[openai, a2a, ag-ui]",
 ]
 
 lint = ["ruff==0.14.14", "codespell==2.4.2", "zizmor==1.25.2"]
 
 dev = [
     "toml==0.10.2",
-    "ag2[lint,test,types,docs]",
+    { include-group = "lint" },
+    { include-group = "test" },
+    { include-group = "types" },
+    { include-group = "docs" },
     "prek==0.4.5",
     "detect-secrets==1.5.0",
     "uv==0.11.21",
-]
-
-[dependency-groups]
-# Beta groups
-optionals = [
-    "ag2[redis]",
-    "ag2[ag-ui]",
-    "ag2[mcp]", # autogen.mcp — serve an Agent as an MCP server
-    "ag2[tracing]",
-    # search tools
-    "ag2[tavily,ddgs,perplexity]",
-    # extensions are not shipped as extras; install their packages directly for testing
-    "watchdog>=4.0,<7",  # DiskKnowledgeStore (autogen.knowledge)
-    "websockets>=14.0,<17",  # WsLink (autogen.network)
-    "docker>=6.0.0,<8",  # code execution (autogen.extensions.docker)
-    "daytona>=0.171.0,<1",
-    "tinyfish>=0.2.3; python_version>='3.11'",
-    "exa-py>=2.12.1,<3",
-    # providers
-    "ag2[openai]",
-    "ag2[anthropic]",
-    "ag2[bedrock]",
-    "ag2[gemini]",
-    "ag2[ollama]",
-    "ag2[dashscope]",
-    "ag2[xai]",
-    "ag2[zai]",
-]
-
-testing = [
-    "ag2[test-core]",
-    "starlette",             # AG-UI tests require starlette
-    "respx>=0.23.0,<0.24.0", # search tests
-]
-
-lint = ["ag2[lint]"]
-
-dev = [
-    { include-group = "optionals" },
-    { include-group = "lint" },
-    { include-group = "testing" },
-    "prek==0.4.5",
-    "detect-secrets==1.5.0",
 ]
 
 [tool.pytest.ini_options]

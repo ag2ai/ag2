@@ -36,7 +36,7 @@ jobs:
         run: |
           uv venv
           . .venv/bin/activate
-          uv pip install -e ".[docs]"
+          uv pip install --group docs -e .
           just docs-build --force
         working-directory: .
 
