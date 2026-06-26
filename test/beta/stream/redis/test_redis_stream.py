@@ -368,8 +368,6 @@ class TestRedisStream:
         assert len(received_c) == 1
 
     async def test_listener_propagates_cancellation(self, redis_stream):
-        """Cancelling the pub/sub listener must propagate CancelledError so the
-        task is marked cancelled, preserving structured cancellation."""
         stream = redis_stream()
         stream._ensure_listener()
         await stream._listener_ready.wait()
