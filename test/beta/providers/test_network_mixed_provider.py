@@ -108,7 +108,6 @@ async def test_consulting_anthropic_initiator_openai_specialist() -> None:
         ttl_sweep_interval=0,
         expectation_sweep_interval=0,
     )
-    link = LocalLink(hub)
 
     alice = Agent(
         name="alice",
@@ -127,19 +126,14 @@ async def test_consulting_anthropic_initiator_openai_specialist() -> None:
         config=OpenAIConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
     )
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice_c = await alice_hc.register(alice, Passport(name="alice"), Resume(summary="multi-agent coordinator"))
-    await bob_hc.register(bob, Passport(name="bob"), Resume(claimed_capabilities=["math"], summary="math"))
+    alice_c = await hub.register(alice, resume=Resume(summary="multi-agent coordinator"))
+    await hub.register(bob, resume=Resume(claimed_capabilities=["math"], summary="math"))
 
     reply = await alice_c.agent.ask("Find a math specialist on the network and ask them: what is 14 times 19?")
 
     assert reply.body is not None
     assert "266" in reply.body, f"expected 266 in alice's reply, got: {reply.body!r}"
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -162,7 +156,6 @@ async def test_3way_discussion_one_per_provider() -> None:
         ttl_sweep_interval=0,
         expectation_sweep_interval=0,
     )
-    link = LocalLink(hub)
 
     configs = {
         "alice": AnthropicConfig(model="claude-haiku-4-5", api_key=anth_key, temperature=0),
@@ -182,8 +175,7 @@ async def test_3way_discussion_one_per_provider() -> None:
             ),
             config=cfg,
         )
-        hc = HubClient(link, hub=hub)
-        client = await hc.register(agent, Passport(name=name), Resume())
+        client = await hub.register(agent)
         clients.append(client)
 
     alice = clients[0]
@@ -211,8 +203,6 @@ async def test_3way_discussion_one_per_provider() -> None:
     for i, text in enumerate(contributions):
         assert len(text) > 5, f"turn {i} from {list(configs)[i]} was empty/trivial: {text!r}"
 
-    for c in clients:
-        await c._hub_client.close()
     await hub.close()
 
 
@@ -275,11 +265,9 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
         config=OpenAIConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
     )
 
-    triage_hc = HubClient(link, hub=hub)
-    eng_hc = HubClient(link, hub=hub)
     user_hc = HubClient(link, hub=hub)
-    triage = await triage_hc.register(triage_agent, Passport(name="triage"), Resume(claimed_capabilities=["triage"]))
-    eng = await eng_hc.register(eng_agent, Passport(name="eng"), Resume(claimed_capabilities=["engineering"]))
+    triage = await hub.register(triage_agent, resume=Resume(claimed_capabilities=["triage"]))
+    eng = await hub.register(eng_agent, resume=Resume(claimed_capabilities=["engineering"]))
     user = await user_hc.register_human(Passport(name="user"))
 
     graph = TransitionGraph(
@@ -338,7 +326,5 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
     state = hub.adapter_state(channel.channel_id)
     assert state.expected_next_speaker == triage.agent_id
 
-    await triage_hc.close()
-    await eng_hc.close()
     await user_hc.close()
     await hub.close()

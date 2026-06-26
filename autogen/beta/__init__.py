@@ -4,7 +4,7 @@
 
 from fast_depends import Depends
 
-from .agent import Agent, AgentReply, KnowledgeConfig, TaskConfig
+from .agent import Agent, AgentReply, AgentRun, KnowledgeConfig, TaskConfig
 from .annotations import Context, Inject, Variable
 from .events import (
     AudioInput,
@@ -28,6 +28,7 @@ from .tools import ToolResult, Toolkit, tool
 __all__ = (
     "Agent",
     "AgentReply",
+    "AgentRun",
     "AgentSpec",
     "AudioInput",
     "BinaryInput",

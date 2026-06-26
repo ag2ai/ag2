@@ -27,10 +27,6 @@ from autogen.beta.network import (
     EV_TEXT,
     Envelope,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
 from autogen.beta.network.adapters.workflow import (
     WORKFLOW_TYPE,
@@ -288,14 +284,10 @@ async def test_workflow_round_robin_advances_through_participants() -> None:
     """3-agent round_robin via WorkflowAdapter: alice → bob → carol → alice."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    carol = await carol_hc.register(_agent("carol"), Passport(name="carol"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    carol = await hub.register(_agent("carol"))
 
     graph = TransitionGraph.round_robin([alice.agent_id, bob.agent_id, carol.agent_id])
     channel = await alice.open(
@@ -335,9 +327,6 @@ async def test_workflow_round_robin_advances_through_participants() -> None:
     with pytest.raises(ProtocolError, match="expects"):
         await hub.post_envelope(bad)
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 
@@ -346,14 +335,10 @@ async def test_workflow_sequence_pipeline_terminates_after_last_step() -> None:
     """Sequential pipeline a → b → c via TransitionGraph.sequence."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    c_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    carol = await c_hc.register(_agent("carol"), Passport(name="carol"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    carol = await hub.register(_agent("carol"))
 
     graph = TransitionGraph.sequence([alice.agent_id, bob.agent_id, carol.agent_id])
     channel = await alice.open(
@@ -380,9 +365,6 @@ async def test_workflow_sequence_pipeline_terminates_after_last_step() -> None:
     assert final.state == ChannelState.CLOSED
     assert final.close_reason == "sequence_complete"
 
-    await a_hc.close()
-    await b_hc.close()
-    await c_hc.close()
     await hub.close()
 
 
@@ -392,12 +374,9 @@ async def test_workflow_swarm_with_tool_handoff_and_revert() -> None:
     reverts to triage via FromSpeaker(eng) → RevertToInitiatorTarget."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    triage_hc = HubClient(link, hub=hub)
-    eng_hc = HubClient(link, hub=hub)
-    triage = await triage_hc.register(_agent("triage"), Passport(name="triage"), Resume())
-    eng = await eng_hc.register(_agent("eng"), Passport(name="eng"), Resume())
+    triage = await hub.register(_agent("triage"))
+    eng = await hub.register(_agent("eng"))
 
     graph = TransitionGraph(
         initial_speaker=triage.agent_id,
@@ -462,8 +441,6 @@ async def test_workflow_swarm_with_tool_handoff_and_revert() -> None:
     assert closed.state == ChannelState.CLOSED
     assert closed.close_reason == "triage_done"
 
-    await triage_hc.close()
-    await eng_hc.close()
     await hub.close()
 
 
@@ -475,12 +452,9 @@ async def test_workflow_finish_routing_closes_channel() -> None:
     finish's ``reason`` as the close reason."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     graph = TransitionGraph(
         initial_speaker=alice.agent_id,
@@ -528,8 +502,6 @@ async def test_workflow_finish_routing_closes_channel() -> None:
     assert refreshed.state == ChannelState.CLOSED
     assert refreshed.close_reason == "all_done"
 
-    await a_hc.close()
-    await b_hc.close()
     await hub.close()
 
 
@@ -539,12 +511,9 @@ async def test_workflow_finish_default_reason_uses_finished() -> None:
     ``"finished"`` default close reason."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     graph = TransitionGraph(
         initial_speaker=alice.agent_id,
@@ -576,8 +545,6 @@ async def test_workflow_finish_default_reason_uses_finished() -> None:
     assert refreshed.state == ChannelState.CLOSED
     assert refreshed.close_reason == "finished"
 
-    await a_hc.close()
-    await b_hc.close()
     await hub.close()
 
 
@@ -589,14 +556,10 @@ async def test_workflow_manager_as_initiator_auto_pattern() -> None:
     revert to the manager."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    mgr_hc = HubClient(link, hub=hub)
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    mgr = await mgr_hc.register(_agent("mgr"), Passport(name="mgr"), Resume())
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    mgr = await hub.register(_agent("mgr"))
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     graph = TransitionGraph(
         initial_speaker=mgr.agent_id,
@@ -635,9 +598,6 @@ async def test_workflow_manager_as_initiator_auto_pattern() -> None:
             f"after {sender.agent_id} sent {et}, expected_next was {state.expected_next_speaker}, expected {exp}"
         )
 
-    await mgr_hc.close()
-    await a_hc.close()
-    await b_hc.close()
     await hub.close()
 
 
@@ -647,12 +607,9 @@ async def test_workflow_hydrate_recovers_expected_next_speaker(tmp_path) -> None
     the WAL through WorkflowAdapter.fold."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link1 = LocalLink(hub1)
 
-    triage_hc = HubClient(link1, hub=hub1)
-    eng_hc = HubClient(link1, hub=hub1)
-    triage = await triage_hc.register(_agent("triage"), Passport(name="triage"), Resume())
-    eng = await eng_hc.register(_agent("eng"), Passport(name="eng"), Resume())
+    triage = await hub1.register(_agent("triage"))
+    eng = await hub1.register(_agent("eng"))
 
     graph = TransitionGraph(
         initial_speaker=triage.agent_id,
@@ -689,8 +646,6 @@ async def test_workflow_hydrate_recovers_expected_next_speaker(tmp_path) -> None
     pre_state = hub1._adapter_states[channel.channel_id]
     assert pre_state.expected_next_speaker == eng.agent_id
 
-    await triage_hc.close()
-    await eng_hc.close()
     await hub1.close()
 
     # Reopen a fresh hub against the same store.
@@ -716,11 +671,9 @@ async def test_workflow_hydrate_recovers_expected_next_speaker(tmp_path) -> None
 async def test_workflow_validate_create_rejects_missing_graph() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     with pytest.raises(ProtocolError, match="graph"):
         await hub.create_channel(
@@ -730,6 +683,4 @@ async def test_workflow_validate_create_rejects_missing_graph() -> None:
             knobs={},
         )
 
-    await a_hc.close()
-    await b_hc.close()
     await hub.close()

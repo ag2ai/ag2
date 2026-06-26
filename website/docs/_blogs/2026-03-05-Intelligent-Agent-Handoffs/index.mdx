@@ -348,7 +348,7 @@ Context conditions are checked first because they're deterministic and free. Thi
 5. **Layer your handoffs.** Combine types for robust routing: context conditions for fast deterministic checks, LLM conditions for nuanced intent, tool handoffs for logic-dependent routing, and after-work for the safety net.
 
 <Note>
-AG2's handoff system evolved from the earlier Swarm-based approach. If you're working with older AG2 code that uses `initiate_swarm_chat` or `SwarmAgent`, see the [migration guide](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation) for upgrading to the current Group Chat API.
+AG2's handoff system evolved from the earlier Swarm-based approach. The Swarm API (`initiate_swarm_chat`, `SwarmAgent`) was removed in v0.14 — its functionality is now fully provided by the Group Chat API described above. See the [release roadmap](/docs/user-guide/release-roadmap) for details.
 </Note>
 
 ## Try It Yourself

@@ -10,7 +10,7 @@ from autogen.llm_config import LLMConfig
 from test.credentials import Credentials
 
 
-@run_for_optional_imports(["crewai_tools", "langchain", "pydantic_ai"], "commsagent-slack")
+@run_for_optional_imports(["langchain", "pydantic_ai"], "commsagent-slack")
 @pytest.mark.commsagent_slack
 class TestSlackAgent:
     def test_init(self, mock_credentials: Credentials) -> None:

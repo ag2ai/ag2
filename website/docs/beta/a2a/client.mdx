@@ -105,7 +105,7 @@ writer = Agent(
 reply = await writer.ask("Write a 3-paragraph brief on the latest A2A spec changes.")
 ```
 
-This composes naturally with several remotes — give each `#!python as_tool()` a distinct `name=` and let the local LLM route by capability. See [Sub-task Delegation](/docs/beta/task_delegation) for the general `#!python as_tool()` semantics.
+This composes naturally with several remotes — give each `#!python as_tool()` a distinct `name=` and let the local LLM route by capability. See [Subagents](/docs/beta/subagents) for the general `#!python as_tool()` semantics.
 
 !!! note
     Each `#!python task_<name>` call spawns a fresh sub-agent stream; history between calls is not preserved on the sub-task side. For a remote that remembers prior turns, prefer the `#!python reply.ask(...)` pattern above instead of `#!python as_tool()`.

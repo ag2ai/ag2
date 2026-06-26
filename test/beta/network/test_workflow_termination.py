@@ -26,10 +26,6 @@ from autogen.beta.network import (
     AgentTarget,
     FromSpeaker,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
     TerminateTarget,
     Transition,
     TransitionGraph,
@@ -52,17 +48,12 @@ class TestWorkflowTerminationReason:
         both fire on the same envelope; the specific reason must win."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        carol_hc = HubClient(link, hub=hub)
 
         # alice's first turn is the kickoff via channel.send (no Agent.ask).
         # bob and carol each speak exactly once via the default handler.
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob", "bob-reply"), Passport(name="bob"), Resume())
-        carol = await carol_hc.register(_agent("carol", "carol-reply"), Passport(name="carol"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob", "bob-reply"))
+        carol = await hub.register(_agent("carol", "carol-reply"))
 
         graph = TransitionGraph.sequence([alice.agent_id, bob.agent_id, carol.agent_id])
 
@@ -83,9 +74,6 @@ class TestWorkflowTerminationReason:
         metadata = await hub.get_channel(channel.channel_id)
         assert metadata.close_reason == "sequence_complete"
 
-        await alice_hc.close()
-        await bob_hc.close()
-        await carol_hc.close()
         await hub.close()
 
     async def test_round_robin_closes_with_max_turns(self) -> None:
@@ -94,17 +82,12 @@ class TestWorkflowTerminationReason:
         ``max_turns`` is the only path to close."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        carol_hc = HubClient(link, hub=hub)
 
         # 6 turns total: kickoff (alice) + 5 Agent.ask calls.
         # alice speaks turn 4 (1 reply), bob 2/5 (2 replies), carol 3/6 (2 replies).
-        alice = await alice_hc.register(_agent("alice", "alice-2"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob", "bob-1", "bob-2"), Passport(name="bob"), Resume())
-        carol = await carol_hc.register(_agent("carol", "carol-1", "carol-2"), Passport(name="carol"), Resume())
+        alice = await hub.register(_agent("alice", "alice-2"))
+        bob = await hub.register(_agent("bob", "bob-1", "bob-2"))
+        carol = await hub.register(_agent("carol", "carol-1", "carol-2"))
 
         graph = TransitionGraph.round_robin(
             participants=[alice.agent_id, bob.agent_id, carol.agent_id],
@@ -125,9 +108,6 @@ class TestWorkflowTerminationReason:
         )
         assert close_env.event_data.get("reason") == "max_turns"
 
-        await alice_hc.close()
-        await bob_hc.close()
-        await carol_hc.close()
         await hub.close()
 
     async def test_explicit_terminate_target_wins_over_max_turns(self) -> None:
@@ -136,15 +116,10 @@ class TestWorkflowTerminationReason:
         ``"max_turns"``."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
 
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        carol_hc = HubClient(link, hub=hub)
-
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob", "bob-reply"), Passport(name="bob"), Resume())
-        carol = await carol_hc.register(_agent("carol", "carol-reply"), Passport(name="carol"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob", "bob-reply"))
+        carol = await hub.register(_agent("carol", "carol-reply"))
 
         # Pipeline alice → bob → carol → terminate("custom_done");
         # max_turns=3 so the cap also fires on carol's turn. Must prefer
@@ -177,9 +152,6 @@ class TestWorkflowTerminationReason:
         )
         assert close_env.event_data.get("reason") == "custom_done"
 
-        await alice_hc.close()
-        await bob_hc.close()
-        await carol_hc.close()
         await hub.close()
 
     async def test_max_turns_wins_when_no_terminate_fires(self) -> None:
@@ -187,14 +159,10 @@ class TestWorkflowTerminationReason:
         ``max_turns`` is the only thing left to fire."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
 
         # 4 turns: kickoff (alice) + 3 Agent.ask. alice and bob alternate.
-        alice = await alice_hc.register(_agent("alice", "alice-2"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob", "bob-1", "bob-2"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice", "alice-2"))
+        bob = await hub.register(_agent("bob", "bob-1", "bob-2"))
 
         # Two-step ping-pong, no TerminateTarget anywhere; default_target
         # could only fire if a turn produced no FromSpeaker match, which
@@ -223,6 +191,4 @@ class TestWorkflowTerminationReason:
         )
         assert close_env.event_data.get("reason") == "max_turns"
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()

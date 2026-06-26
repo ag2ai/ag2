@@ -221,7 +221,7 @@ class TestDispatchRouting:
             kind="remote_agent",
             hub_id="other-hub",
         )
-        bob_passport = await hub.register(bob_passport, Resume())
+        bob_passport = await hub.register_identity(bob_passport, Resume())
 
         proxy = _RecordingProxy("a2a", hub=hub)
         hub.register_remote_proxy(proxy)
@@ -265,7 +265,7 @@ class TestDispatchRouting:
             Passport(name="alice"),
             Resume(),
         )
-        bob_passport = await hub.register(
+        bob_passport = await hub.register_identity(
             Passport(name="bob", auth=AuthBlock(scheme="grpc", claim={}), kind="remote_agent"),
             Resume(),
         )
@@ -323,7 +323,7 @@ class TestDispatchRouting:
             Passport(name="alice"),
             Resume(),
         )
-        bob_passport = await hub.register(
+        bob_passport = await hub.register_identity(
             Passport(name="bob", auth=AuthBlock(scheme="a2a"), kind="remote_agent"),
             Resume(),
         )
@@ -388,7 +388,7 @@ class TestDispatchRouting:
             Passport(name="carol"),
             Resume(),
         )
-        bob_passport = await hub.register(
+        bob_passport = await hub.register_identity(
             Passport(name="bob", auth=AuthBlock(scheme="a2a"), kind="remote_agent"),
             Resume(),
         )

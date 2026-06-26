@@ -100,10 +100,6 @@ from autogen.beta.network import (
     EV_TEXT,
     WORKFLOW_TYPE,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
     TransitionGraph,
 )
 from autogen.beta.testing import TestConfig
@@ -114,13 +110,6 @@ async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub_obj)
-
-    intake_hc = HubClient(link, hub=hub_obj)
-    safe_hc = HubClient(link, hub=hub_obj)
-    clever_hc = HubClient(link, hub=hub_obj)
-    nerdy_hc = HubClient(link, hub=hub_obj)
-    evaluator_hc = HubClient(link, hub=hub_obj)
 
     intake_agent = Agent("intake", config=TestConfig())
 
@@ -170,11 +159,11 @@ async def main() -> None:
         config=config,
     )
 
-    intake = await intake_hc.register(intake_agent, Passport(name="intake"), Resume())
-    safe = await safe_hc.register(safe_agent, Passport(name="safe"), Resume())
-    clever = await clever_hc.register(clever_agent, Passport(name="clever"), Resume())
-    nerdy = await nerdy_hc.register(nerdy_agent, Passport(name="nerdy"), Resume())
-    evaluator = await evaluator_hc.register(evaluator_agent, Passport(name="evaluator"), Resume())
+    intake = await hub_obj.register(intake_agent)
+    safe = await hub_obj.register(safe_agent)
+    clever = await hub_obj.register(clever_agent)
+    nerdy = await hub_obj.register(nerdy_agent)
+    evaluator = await hub_obj.register(evaluator_agent)
 
     graph = TransitionGraph.sequence([
         intake.agent_id,
@@ -229,11 +218,6 @@ async def main() -> None:
 
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
-    await intake_hc.close()
-    await safe_hc.close()
-    await clever_hc.close()
-    await nerdy_hc.close()
-    await evaluator_hc.close()
     await hub_obj.close()
 
 if __name__ == "__main__":

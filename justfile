@@ -10,7 +10,7 @@ default:
 
 # Tests
 
-_beta_llm_filter := "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)"
+_beta_llm_filter := "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or zai or deepseek or ollama or bedrock or cerebras)"
 
 [doc("Run beta tests")]
 [group("tests")]
@@ -28,7 +28,7 @@ test-beta-cov *params:
     test/beta/ {{ params }}
   coverage report -m --include="autogen/beta/*"
 
-_beta_llm_default_mark := "openai or gemini or anthropic or ollama or dashscope"
+_beta_llm_default_mark := "openai or gemini or anthropic or zai or ollama or dashscope"
 
 [doc("Run beta tests with LLM (e.g. just test-beta-llm openai)")]
 [group("tests")]

@@ -514,7 +514,7 @@ async def test_remote_agent_proxy_federation_over_wire() -> None:
     async with _network() as (hub, url, clients):
         # Register the remote-agent identity + its proxy directly on the
         # hub (this is the federation operator's side of the seam).
-        echo = await hub.register(
+        echo = await hub.register_identity(
             Passport(name="echo", kind="remote_agent", auth=AuthBlock(scheme="rpc", claim={})),
             Resume(claimed_capabilities=["math"]),
         )

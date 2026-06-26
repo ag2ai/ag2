@@ -23,10 +23,6 @@ from autogen.beta import Agent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
 from autogen.beta.testing import TestConfig
 
@@ -46,11 +42,8 @@ async def test_adapter_state_retained_after_close_for_analysis() -> None:
     """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
     channel_id = channel.channel_id
 
@@ -65,8 +58,6 @@ async def test_adapter_state_retained_after_close_for_analysis() -> None:
     metadata = await hub.get_channel(channel_id)
     assert metadata.is_terminal()
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -75,11 +66,8 @@ async def test_channel_locks_pruned_on_close() -> None:
     """``_channel_locks`` drops the entry on terminal transition."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
     channel_id = channel.channel_id
 
@@ -90,8 +78,6 @@ async def test_channel_locks_pruned_on_close() -> None:
     await hub.close_channel(channel_id, reason="explicit")
     assert channel_id not in hub._channel_locks  # post-close
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -100,11 +86,8 @@ async def test_fired_violations_pruned_on_close() -> None:
     """``_fired_violations`` (already pre-existing prune) keeps the contract."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
     channel_id = channel.channel_id
 
@@ -113,8 +96,6 @@ async def test_fired_violations_pruned_on_close() -> None:
     await hub.close_channel(channel_id, reason="explicit")
     assert channel_id not in hub._fired_violations
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -128,11 +109,8 @@ async def test_pruning_under_many_short_channels_keeps_caches_bounded() -> None:
     """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
 
     for _ in range(20):
         channel = await alice.open(type="conversation", target="bob")
@@ -148,6 +126,4 @@ async def test_pruning_under_many_short_channels_keeps_caches_bounded() -> None:
     assert hub._fired_violations == {}
     assert hub._channel_open_waiters == {}
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()

@@ -30,10 +30,6 @@ from autogen.beta.network import (
     EV_TEXT,
     Envelope,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
 from autogen.beta.network.adapters.base import default_render_envelope
 from autogen.beta.network.adapters.conversation import (
@@ -67,13 +63,9 @@ async def test_conversation_handshake_transitions_to_active() -> None:
     """alice.open(type=conversation) → bob auto-acks → ACTIVE."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type=CONVERSATION_TYPE, target="bob")
     assert channel.state == ChannelState.ACTIVE
@@ -90,8 +82,6 @@ async def test_conversation_handshake_transitions_to_active() -> None:
     assert EV_CHANNEL_INVITE_ACK in event_types
     assert EV_CHANNEL_OPENED in event_types
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -100,23 +90,11 @@ async def test_conversation_back_and_forth_multi_turn() -> None:
     """Bidirectional LLM-driven exchange runs until one side returns empty."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
     # alice replies to bob's first answer with a follow-up, then halts.
-    alice = await alice_hc.register(
-        _scripted_agent("alice", "follow up question"),
-        Passport(name="alice"),
-        Resume(),
-    )
+    alice = await hub.register(_scripted_agent("alice", "follow up question"))
     # bob answers alice twice; second reply is empty → halts the chain.
-    bob = await bob_hc.register(
-        _scripted_agent("bob", "initial reply", "second answer"),
-        Passport(name="bob"),
-        Resume(),
-    )
+    bob = await hub.register(_scripted_agent("bob", "initial reply", "second answer"))
 
     channel = await alice.open(type=CONVERSATION_TYPE, target="bob")
     await channel.send("hello bob")
@@ -143,8 +121,6 @@ async def test_conversation_back_and_forth_multi_turn() -> None:
     assert state.turn_count == 4
     assert state.last_speaker_id == bob.agent_id
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -153,13 +129,9 @@ async def test_conversation_explicit_close_terminates() -> None:
     """``channel.close()`` transitions to ``CLOSED`` regardless of activity."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type=CONVERSATION_TYPE, target="bob")
     closed = await channel.close(reason="done")
@@ -178,8 +150,6 @@ async def test_conversation_explicit_close_terminates() -> None:
     with pytest.raises(ProtocolError):
         await hub.post_envelope(extra)
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -188,15 +158,10 @@ async def test_conversation_rejects_send_from_non_participant() -> None:
     """``validate_send`` blocks sends from agents not in ``participants``."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    eve_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    eve = await eve_hc.register(_agent("eve"), Passport(name="eve"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
+    eve = await hub.register(_agent("eve"))
 
     channel = await alice.open(type=CONVERSATION_TYPE, target="bob")
 
@@ -210,9 +175,6 @@ async def test_conversation_rejects_send_from_non_participant() -> None:
     with pytest.raises(ProtocolError, match="participants"):
         await hub.post_envelope(intruder)
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await eve_hc.close()
     await hub.close()
 
 
@@ -221,13 +183,9 @@ async def test_conversation_hydrate_refolds_active_channel(tmp_path) -> None:
     """Re-opening the hub mid-conversation rebuilds adapter state from WAL."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0)
-    link1 = LocalLink(hub1)
 
-    alice_hc = HubClient(link1, hub=hub1)
-    bob_hc = HubClient(link1, hub=hub1)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub1.register(_agent("alice"))
+    await hub1.register(_agent("bob"))
 
     channel = await alice.open(type=CONVERSATION_TYPE, target="bob")
     await channel.send("first turn")
@@ -235,8 +193,6 @@ async def test_conversation_hydrate_refolds_active_channel(tmp_path) -> None:
     # quiesces with one EV_TEXT in WAL.
     await wait_for_text_count(hub1, channel.channel_id, expected=1)
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub1.close()
 
     store2 = DiskKnowledgeStore(str(tmp_path))

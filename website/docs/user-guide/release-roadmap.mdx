@@ -35,14 +35,15 @@ The beta framework (temporarily `autogen.beta`, with Agent) will, at v1.0, becom
 | `SwarmAgent` | `ConversableAgent` (already incorporated) |
 | `RealtimeAgent` | Relies on deprecated realtime API endpoints |
 
-### Deprecated swarm functions and aliases
+### Deprecated swarm functions and the swarm module
+
+The entire `autogen.agentchat.contrib.swarm_agent` module has been removed in v0.14. All swarm orchestration is now provided by group chat.
 
 | Feature | Alternative |
 |---------|-------------|
-| `initiate_swarm_chat()` | `run_group_chat` |
-| `run_swarm()` | `run_group_chat` |
-| `AFTER_WORK` | `AfterWork` |
-| `ON_CONDITION` | `OnCondition` |
+| `initiate_swarm_chat()`, `run_swarm()` (and async variants) | `run_group_chat` |
+| `AFTER_WORK`, `AfterWork`, `AfterWorkOption` | Group chat handoffs (`Handoffs`, transition targets) |
+| `ON_CONDITION`, `OnCondition` | `autogen.agentchat.group.OnCondition` / `OnContextCondition` |
 
 ### Deprecated capabilities and modules
 
@@ -71,28 +72,28 @@ The beta framework (temporarily `autogen.beta`, with Agent) will, at v1.0, becom
 The core framework and actively maintained features continue without change:
 
 - **Core agents**: `ConversableAgent`, `AssistantAgent`, `UserProxyAgent`
-- **Group chat**: `GroupChat`, `GroupChatManager`, `run_group_chat`, and all orchestration patterns including handoffs (`AfterWork`, `OnCondition`, `OnContextCondition`)
+- **Group chat**: `GroupChat`, `GroupChatManager`, `run_group_chat`, and all orchestration patterns including handoffs (`Handoffs`, `OnCondition`, `OnContextCondition`, and transition targets)
 - **RAG**: `RetrieveUserProxyAgent`, vector database integrations (ChromaDB, Qdrant, MongoDB, Couchbase, PGVector), graph RAG (Neo4j, FalkorDB)
 - **Capabilities**: `Teachability`, `VisionCapability`, `TransformMessages`, `ToolsCapability`
 - **Experimental agents**: `WebSurferAgent` (experimental), `DeepResearchAgent`, `ReasoningAgent`, `DocAgent`, `CaptainAgent`, `A2UIAgent`, and platform agents (Discord, Slack, Telegram)
 
 ### Notebooks using outdated models
 
-A number of notebooks that reference unavailable or outdated models (e.g. `gpt-3.5-turbo`, `gpt-4-vision-preview`, `gpt-4-turbo-preview`) have also been deprecated and will be removed in v0.14.
+A number of notebooks that reference unavailable or outdated models (e.g. `gpt-3.5-turbo`, `gpt-4-vision-preview`, `gpt-4-turbo-preview`) have also been removed in v0.14.
 
-### Documentation to be removed in v0.14
+### Documentation removed in v0.14
 
-Associated blog posts, user guide pages, and notebooks for the above deprecated features will also be removed in v0.14. Each affected page and notebook now displays a deprecation warning.
+Associated blog posts, user guide pages, and notebooks for the above deprecated features have been removed in v0.14.
 
-## v0.13 — Transition period  <-- We are here
+## v0.13 — Transition period
 
-- **Community feedback incorporated.** Deprecation decisions will be revisited based on feedback.
+- **Community feedback incorporated.** Deprecation decisions were revisited based on feedback.
 - **Beta API refinements.** Continued development and stabilisation of the beta API. Orchestration capabilities are introduced.
-- Last release where deprecated features are still available.
+- Last release where deprecated features were still available.
 
-## v0.14 — Final current-line release
+## v0.14 — Final current-line release  <-- We are here
 
-- **Deprecated features removed.** Anything marked deprecated in v0.12 (and not rescued by community feedback) will be removed.
+- **Deprecated features removed.** Everything marked deprecated in v0.12 (and not rescued by community feedback) has been removed. See the lists above.
 - **Beta moves to Release Candidate (RC).** The beta API is feature-complete and enters final testing.
 - This is the last release of the original AG2 codebase on `main`.
 

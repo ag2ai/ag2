@@ -4,8 +4,8 @@
 
 """Fixtures for end-to-end Agent smoke tests that hit real provider APIs.
 
-Every test parametrizes over ``openai`` / ``anthropic`` / ``gemini`` via
-``provider_config`` or ``streaming_config``, so each instance carries
+Every test parametrizes over ``openai`` / ``anthropic`` / ``gemini`` / ``zai``
+via ``provider_config`` or ``streaming_config``, so each instance carries
 the corresponding per-provider mark and is excluded from
 ``test-beta-cov`` by ``_beta_llm_filter``.
 
@@ -18,7 +18,7 @@ import os
 
 import pytest
 
-from autogen.beta.config import AnthropicConfig, GeminiConfig, OpenAIConfig
+from autogen.beta.config import AnthropicConfig, GeminiConfig, OpenAIConfig, ZAIConfig
 
 
 def _require(env: str) -> str:
@@ -62,11 +62,23 @@ def gemini_config() -> GeminiConfig:
     )
 
 
+@pytest.fixture()
+def zai_config() -> ZAIConfig:
+    return ZAIConfig(
+        model="glm-5.2",
+        api_key=_require("ZAI_API_KEY"),
+        temperature=0,
+        thinking=False,
+        request_timeout=45,
+    )
+
+
 @pytest.fixture(
     params=[
         pytest.param("openai", marks=pytest.mark.openai),
         pytest.param("anthropic", marks=pytest.mark.anthropic),
         pytest.param("gemini", marks=pytest.mark.gemini),
+        pytest.param("zai", marks=[pytest.mark.zai, pytest.mark.timeout(180)]),
     ]
 )
 def streaming_config(request):
@@ -88,6 +100,15 @@ def streaming_config(request):
             temperature=0,
             streaming=True,
         )
+    if request.param == "zai":
+        return ZAIConfig(
+            model="glm-5.2",
+            api_key=_require("ZAI_API_KEY"),
+            temperature=0,
+            streaming=True,
+            thinking=False,
+            request_timeout=45,
+        )
     return GeminiConfig(
         model="gemini-3.1-flash-lite",
         api_key=_require_gemini_key(),
@@ -101,6 +122,7 @@ def streaming_config(request):
         pytest.param("openai", marks=pytest.mark.openai),
         pytest.param("anthropic", marks=pytest.mark.anthropic),
         pytest.param("gemini", marks=pytest.mark.gemini),
+        pytest.param("zai", marks=[pytest.mark.zai, pytest.mark.timeout(180)]),
     ]
 )
 def provider_config(request):

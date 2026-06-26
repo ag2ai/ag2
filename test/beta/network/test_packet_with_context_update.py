@@ -30,10 +30,6 @@ from autogen.beta.network import (
     Envelope,
     FromSpeaker,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
     TerminateTarget,
     ToolCalled,
     Transition,
@@ -92,15 +88,10 @@ class TestPacketWithContextUpdate:
         ``context_updates.set`` writes in the same fold."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
 
-        router_hc = HubClient(link, hub=hub)
-        billing_hc = HubClient(link, hub=hub)
-        technical_hc = HubClient(link, hub=hub)
-
-        router = await router_hc.register(_agent("router"), Passport(name="router"), Resume())
-        billing = await billing_hc.register(_agent("billing"), Passport(name="billing"), Resume())
-        technical = await technical_hc.register(_agent("technical"), Passport(name="technical"), Resume())
+        router = await hub.register(_agent("router"))
+        billing = await hub.register(_agent("billing"))
+        technical = await hub.register(_agent("technical"))
 
         graph = TransitionGraph(
             initial_speaker=router.agent_id,
@@ -135,21 +126,15 @@ class TestPacketWithContextUpdate:
         # technical specialist, NOT routed to billing or terminated.
         assert state.expected_next_speaker == technical.agent_id
 
-        await router_hc.close()
-        await billing_hc.close()
-        await technical_hc.close()
         await hub.close()
 
     async def test_delete_applied_before_select_next(self) -> None:
         """``context_updates.delete`` removes keys atomically with the packet."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
 
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         graph = TransitionGraph(
             initial_speaker=alice.agent_id,
@@ -191,8 +176,6 @@ class TestPacketWithContextUpdate:
         assert state.expected_next_speaker is None
         assert state.pending_close_reason == "cleared"
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
     async def test_packet_without_context_updates_unchanged(self) -> None:
@@ -201,12 +184,9 @@ class TestPacketWithContextUpdate:
         untouched."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
 
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         graph = TransitionGraph(
             initial_speaker=alice.agent_id,
@@ -238,8 +218,6 @@ class TestPacketWithContextUpdate:
         assert state.context_vars == {"existing": "kept"}
         assert state.expected_next_speaker == bob.agent_id
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
     async def test_dynamic_handoff_target_supersedes_select_next(self) -> None:
@@ -247,15 +225,10 @@ class TestPacketWithContextUpdate:
         ``Handoff`` return) routes there directly, bypassing graph rules."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
 
-        router_hc = HubClient(link, hub=hub)
-        a_hc = HubClient(link, hub=hub)
-        b_hc = HubClient(link, hub=hub)
-
-        router = await router_hc.register(_agent("router"), Passport(name="router"), Resume())
-        a = await a_hc.register(_agent("a"), Passport(name="a"), Resume())
-        b = await b_hc.register(_agent("b"), Passport(name="b"), Resume())
+        router = await hub.register(_agent("router"))
+        a = await hub.register(_agent("a"))
+        b = await hub.register(_agent("b"))
 
         # Graph would route smart_route to A via ToolCalled rule, but
         # the packet's pre-resolved routing.target=b should win.
@@ -285,7 +258,4 @@ class TestPacketWithContextUpdate:
         state = hub._adapter_states[channel.channel_id]
         assert state.expected_next_speaker == b.agent_id
 
-        await router_hc.close()
-        await a_hc.close()
-        await b_hc.close()
         await hub.close()

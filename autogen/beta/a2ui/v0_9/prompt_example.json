@@ -1,0 +1,22 @@
+[
+  {
+    "version": "v0.9",
+    "createSurface": {
+      "surfaceId": "s1",
+      "catalogId": "{catalog_id}"
+    }
+  },
+  {
+    "version": "v0.9",
+    "updateComponents": {
+      "surfaceId": "s1",
+      "components": [
+        {"id": "root", "component": "Card", "child": "layout1"},
+        {"id": "layout1", "component": "Column", "children": ["text1", "btn1"]},
+        {"id": "text1", "component": "Text", "text": "Hello World"},
+        {"id": "btn1", "component": "Button", "child": "btn1_text", "action": {"event": {"name": "click"}}},
+        {"id": "btn1_text", "component": "Text", "text": "Click Me"}
+      ]
+    }
+  }
+]

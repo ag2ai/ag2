@@ -6,6 +6,7 @@ from .code_execution import CodeExecutionTool
 from .image_generation import ImageGenerationTool
 from .mcp_server import MCPServerTool
 from .memory import MemoryTool
+from .retrieval import RetrievalTool
 from .shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, NetworkPolicy, ShellTool
 from .skills import Skill, SkillsTool
 from .web_fetch import WebFetchTool
@@ -20,6 +21,7 @@ __all__ = (
     "MCPServerTool",
     "MemoryTool",
     "NetworkPolicy",
+    "RetrievalTool",
     "ShellTool",
     "Skill",
     "SkillsTool",

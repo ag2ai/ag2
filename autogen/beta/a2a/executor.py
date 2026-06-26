@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -23,9 +24,11 @@ from autogen.beta.events import (
     TextInput,
     ToolResultsEvent,
 )
+from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final.client_tool import ClientTool
 from autogen.beta.tools.final.function_tool import FunctionToolSchema
+from autogen.beta.tools.tool import Tool
 
 from .events import A2AEvent, A2ATaskStatusUpdate
 from .extension import CONTEXT_UPDATE_METADATA_KEY
@@ -183,6 +186,7 @@ class AgentExecutor(A2AAgentExecutorBase):
                 pending_client_calls,
                 task_id,
                 context_id,
+                extra_prompt=self._extra_system_prompt(request_context),
             )
         except Exception:
             await updater.failed()
@@ -209,6 +213,17 @@ class AgentExecutor(A2AAgentExecutorBase):
         updater = TaskUpdater(event_queue, task_id, context_id)
         await updater.cancel()
 
+    def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
+        """Per-request system-prompt fragments to fold into the turn.
+
+        Extension point: ``execute`` calls this once per request and threads the
+        result through ``_run_one_turn`` into the agent's prompt, so a subclass
+        can inject request-derived instructions without reimplementing the
+        shared turn machinery. ``request_context`` is per-request, so this is
+        safe to read on a shared executor instance. The base returns nothing.
+        """
+        return ()
+
     async def _run_one_turn(
         self,
         parsed: ParsedMessage,
@@ -219,6 +234,7 @@ class AgentExecutor(A2AAgentExecutorBase):
         pending_client_calls: list[ClientToolCallEvent],
         task_id: str,
         context_id: str,
+        extra_prompt: Sequence[str] = (),
     ) -> None:
         client_tools = [self._make_client_tool(s) for s in parsed.tool_schemas]
         initial_event = self._build_initial_event(parsed)
@@ -228,6 +244,7 @@ class AgentExecutor(A2AAgentExecutorBase):
             stream,
             client_tools,
             incoming_variables=parsed.context_update,
+            extra_prompt=extra_prompt,
         )
 
         has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
@@ -307,9 +324,11 @@ class AgentExecutor(A2AAgentExecutorBase):
         self,
         initial_event: BaseEvent,
         stream: MemoryStream,
-        client_tools: list[ClientTool],
+        client_tools: Sequence[Tool],
         *,
         incoming_variables: dict[str, Any],
+        extra_prompt: Sequence[str] = (),
+        additional_middleware: Iterable[MiddlewareFactory] = (),
     ) -> tuple[ModelResponse, dict[str, Any]]:
         agent = self._agent
         if agent.config is None:
@@ -319,7 +338,7 @@ class AgentExecutor(A2AAgentExecutorBase):
         merged_variables = {**dict(agent._agent_variables), **incoming_variables}
         ctx = ConversationContext(
             stream,
-            prompt=list(agent._system_prompt),
+            prompt=[*agent._system_prompt, *extra_prompt],
             dependencies=dict(agent._agent_dependencies),
             variables=merged_variables,
             dependency_provider=agent.dependency_provider,
@@ -328,10 +347,13 @@ class AgentExecutor(A2AAgentExecutorBase):
         # ``_execute`` is private but is the only entry point that accepts
         # a non-``ModelRequest`` initial event (``ToolResultsEvent`` for
         # continuation turns). See the class-level docstring for context.
+        # ``additional_middleware`` lets a subclass (e.g. the A2UI executor)
+        # inject per-turn middleware onto a plain agent without baking it in.
         reply = await agent._execute(
             initial_event,
             context=ctx,
             client=client,
             additional_tools=client_tools,
+            additional_middleware=additional_middleware,
         )
         return reply.response, dict(ctx.variables)

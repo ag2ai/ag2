@@ -109,11 +109,9 @@ async def test_workflow_swarm_handoff_revert_close(
         config=anthropic_config,
     )
 
-    triage_hc = HubClient(link, hub=hub)
-    eng_hc = HubClient(link, hub=hub)
     user_hc = HubClient(link, hub=hub)
-    triage = await triage_hc.register(triage_agent, Passport(name="triage"), Resume(claimed_capabilities=["triage"]))
-    eng = await eng_hc.register(eng_agent, Passport(name="eng"), Resume(claimed_capabilities=["engineering"]))
+    triage = await hub.register(triage_agent, resume=Resume(claimed_capabilities=["triage"]))
+    eng = await hub.register(eng_agent, resume=Resume(claimed_capabilities=["engineering"]))
     user = await user_hc.register_human(Passport(name="user"))
 
     graph = TransitionGraph(
@@ -197,8 +195,6 @@ async def test_workflow_swarm_handoff_revert_close(
     assert state.expected_next_speaker == triage.agent_id
 
     # ── Hub.hydrate() mid-flow: tear down + re-open against the same store.
-    await triage_hc.close()
-    await eng_hc.close()
     await user_hc.close()
     await hub.close()
 

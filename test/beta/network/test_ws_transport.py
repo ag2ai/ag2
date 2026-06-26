@@ -68,7 +68,7 @@ class TestHandshake:
     @pytest.mark.asyncio
     async def test_hello_welcome_round_trip(self) -> None:
         hub = await _new_hub()
-        await hub.register(Passport(name="alice"), Resume())
+        await hub.register_identity(Passport(name="alice"), Resume())
 
         async with serve_ws(hub, "127.0.0.1", 0) as server:
             port = _bound_port(server)
@@ -111,7 +111,7 @@ class TestAuthOverWire:
             ttl_sweep_interval=0,
             expectation_sweep_interval=0,
         )
-        await hub.register(
+        await hub.register_identity(
             Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "k-alice"})),
             Resume(),
         )
@@ -138,7 +138,7 @@ class TestAuthOverWire:
             ttl_sweep_interval=0,
             expectation_sweep_interval=0,
         )
-        passport = await hub.register(
+        passport = await hub.register_identity(
             Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "k-alice"})),
             Resume(),
         )
@@ -298,7 +298,7 @@ class TestConnectionLifecycle:
     @pytest.mark.asyncio
     async def test_client_close_drops_server_endpoint(self) -> None:
         hub = await _new_hub()
-        passport = await hub.register(Passport(name="alice"), Resume())
+        passport = await hub.register_identity(Passport(name="alice"), Resume())
         async with serve_ws(hub, "127.0.0.1", 0) as server:
             port = _bound_port(server)
             client = WsLinkClient(f"ws://127.0.0.1:{port}")

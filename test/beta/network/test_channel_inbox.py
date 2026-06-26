@@ -30,10 +30,6 @@ from autogen.beta.network import (
     EV_CHANNEL_CLOSED,
     Envelope,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
 from autogen.beta.network.adapters.consulting import CONSULTING_TYPE
 from autogen.beta.testing import TestConfig
@@ -50,18 +46,13 @@ class TestChannelInboxInvariant:
     async def test_creator_has_inbox_after_open(self) -> None:
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
 
         channel = await alice.open(type=CONSULTING_TYPE, target="bob")
 
         assert channel.channel_id in alice._channel_inboxes
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
     async def test_default_handler_joiner_has_inbox(self) -> None:
@@ -69,18 +60,13 @@ class TestChannelInboxInvariant:
         which creates the inbox before _auto_ack_invite runs."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         channel = await alice.open(type=CONSULTING_TYPE, target="bob")
 
         assert channel.channel_id in bob._channel_inboxes
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
     async def test_custom_handler_joiner_has_inbox(self) -> None:
@@ -93,18 +79,13 @@ class TestChannelInboxInvariant:
         """
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+        alice = await hub.register(_agent("alice"))
 
         async def silent(_envelope: Envelope) -> None:
             return
 
-        bob = await bob_hc.register(
+        bob = await hub.register(
             _agent("bob"),
-            Passport(name="bob"),
-            Resume(),
             attach_plugin=False,
         )
         bob.on_envelope(silent)
@@ -125,23 +106,18 @@ class TestChannelInboxInvariant:
         with contextlib.suppress(BaseException):
             await open_task
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
     async def test_ensure_channel_inbox_is_idempotent(self) -> None:
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-        hc = HubClient(link, hub=hub)
-        ac = await hc.register(_agent("solo"), Passport(name="solo"), Resume())
+        ac = await hub.register(_agent("solo"))
 
         sid = "fake-channel"
         q1 = ac.ensure_channel_inbox(sid)
         q2 = ac.ensure_channel_inbox(sid)
         assert q1 is q2
 
-        await hc.close()
         await hub.close()
 
     async def test_send_sleep_wait_no_race(self) -> None:
@@ -151,15 +127,8 @@ class TestChannelInboxInvariant:
         wait would then time out."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(
-            _agent("bob", "ok"),  # bob's TestConfig replies with "ok"
-            Passport(name="bob"),
-            Resume(),
-        )
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob", "ok"))  # bob's TestConfig replies with "ok"
 
         channel = await alice.open(type=CONSULTING_TYPE, target=bob.agent_id)
         await channel.send("hi", audience=[bob.agent_id])
@@ -176,6 +145,4 @@ class TestChannelInboxInvariant:
         )
         assert close_env.event_data.get("reason") == "consulting_complete"
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()

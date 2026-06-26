@@ -283,7 +283,7 @@ class TestMirrorCancellation:
             expectation_sweep_interval=0,
         )
         try:
-            bob_passport = await hub.register(Passport(name="bob"), Resume())
+            bob_passport = await hub.register_identity(Passport(name="bob"), Resume())
             agent = Agent(name="bob", config=TestConfig())
             stream = MemoryStream()
             mirror = TaskMirror(hub=hub, owner_id=bob_passport.agent_id)
@@ -314,7 +314,7 @@ class TestMirrorCancellation:
             expectation_sweep_interval=0,
         )
         try:
-            bob_passport = await hub.register(
+            bob_passport = await hub.register_identity(
                 Passport(name="bob"),
                 Resume(claimed_capabilities=["indexing"]),
             )
@@ -356,7 +356,7 @@ class TestHubAccessors:
             expectation_sweep_interval=0,
         )
         try:
-            passport = await hub.register(Passport(name="alice"), Resume())
+            passport = await hub.register_identity(Passport(name="alice"), Resume())
             assert hub.find_agent_id("alice") == passport.agent_id
         finally:
             await hub.close()
@@ -381,7 +381,7 @@ class TestHubAccessors:
             expectation_sweep_interval=0,
         )
         try:
-            passport = await hub.register(Passport(name="alice"), Resume())
+            passport = await hub.register_identity(Passport(name="alice"), Resume())
             rule = await hub.get_rule(passport.agent_id)
             assert isinstance(rule, Rule)
         finally:

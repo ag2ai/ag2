@@ -214,6 +214,7 @@ OPENAI_FALLBACK_KWARGS = {
     "http_client",
     "_strict_response_validation",
     "webhook_secret",
+    "provider",
     "workload_identity",
     "_enforce_credentials",
     "admin_api_key",

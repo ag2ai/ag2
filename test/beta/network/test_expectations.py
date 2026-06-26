@@ -32,9 +32,6 @@ from autogen.beta.network import (
     EV_TEXT,
     Envelope,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     Resume,
     Rule,
 )
@@ -279,14 +276,11 @@ async def test_auto_close_handler_terminates_channel_with_audit() -> None:
         expectation_sweep_interval=0,
         invite_ack_timeout=300.0,  # long enough that the sweeper closes first
     )
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     # Bob registers without the auto-ack default handler — install a
     # silent handler explicitly so invites are never acked.
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), attach_plugin=False)
+    bob = await hub.register(_agent("bob"), attach_plugin=False)
     bob.on_envelope(_silent_handler)
 
     # Open in background; the sweeper auto_closes via ProtocolError on the waiter.
@@ -316,8 +310,6 @@ async def test_auto_close_handler_terminates_channel_with_audit() -> None:
     kinds = [r["kind"] for r in audit]
     assert AUDIT_KIND_EXPECTATION_VIOLATED in kinds
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -327,12 +319,9 @@ async def test_audit_handler_records_without_envelope_or_close() -> None:
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
     pre_audit = len(await hub._audit_log.read_all())
@@ -354,8 +343,6 @@ async def test_audit_handler_records_without_envelope_or_close() -> None:
     assert len(violation_records) == 1
     assert violation_records[0]["expectation"] == "max_silence"
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -392,11 +379,8 @@ async def test_notify_channel_handler_broadcasts_envelope() -> None:
 
     hub.register_adapter(_NotifyAdapter())
 
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation_notify", target=bob.agent_id)
 
@@ -412,8 +396,6 @@ async def test_notify_channel_handler_broadcasts_envelope() -> None:
     state = await hub.get_channel(channel.channel_id)
     assert state.state == ChannelState.ACTIVE
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -423,12 +405,9 @@ async def test_violation_dedup_within_channel_lifetime() -> None:
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
     pre_audit = len(await hub._audit_log.read_all())
@@ -442,8 +421,6 @@ async def test_violation_dedup_within_channel_lifetime() -> None:
     violations = [r for r in audit[pre_audit:] if r["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED]
     assert len(violations) == 1  # deduped across 3 ticks
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -454,10 +431,8 @@ async def test_violation_dedup_within_channel_lifetime() -> None:
 async def test_audit_log_records_register_and_unregister() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     await hub.unregister(alice.agent_id)
 
     audit = await hub._audit_log.read_all()
@@ -465,7 +440,6 @@ async def test_audit_log_records_register_and_unregister() -> None:
     assert AUDIT_KIND_AGENT_REGISTERED in kinds
     assert AUDIT_KIND_AGENT_UNREGISTERED in kinds
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -473,10 +447,8 @@ async def test_audit_log_records_register_and_unregister() -> None:
 async def test_audit_log_records_set_resume_skill_rule() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     pre_audit = len(await hub._audit_log.read_all())
 
@@ -490,7 +462,6 @@ async def test_audit_log_records_set_resume_skill_rule() -> None:
     assert AUDIT_KIND_SKILL_SET in new_kinds
     assert AUDIT_KIND_RULE_SET in new_kinds
 
-    await alice_hc.close()
     await hub.close()
 
 

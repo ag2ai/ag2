@@ -70,6 +70,12 @@ class AgentClient:
         self._hub_client = hub_client
         self._on_envelope: EnvelopeHandler | None = self._run_default_handler if attach_default_handler else None
         self._disconnected = False
+        # True only for handles minted by ``Hub.register``, which gives
+        # each agent a dedicated ``HubClient``. Gates whether ``close``
+        # may tear the transport down: in the explicit ``HubClient`` flow
+        # the connection is caller-owned and shared, so ``close`` there
+        # only unregisters the agent.
+        self._owns_client = False
 
         # Per-channel inbox queues for ``wait_for_channel_event``
         # (used by the ``delegate`` tool to await consulting replies).
@@ -337,8 +343,22 @@ class AgentClient:
             await self._hub_client.unregister_agent(self.agent_id)
             self._disconnected = True
 
+    async def close(self) -> None:
+        """Unregister this agent and, if it owns one, close its connection.
+
+        Handles minted by :meth:`Hub.register` each own a dedicated
+        ``HubClient``: ``close`` unregisters the agent from the hub
+        registry and closes that connection. Handles from the explicit
+        ``HubClient`` flow share a caller-owned connection, so ``close``
+        only unregisters — the shared transport stays up for its owner and
+        any sibling agents. Idempotent.
+        """
+        await self.unregister()
+        if self._owns_client:
+            await self._hub_client.close()
+
     async def __aenter__(self) -> "AgentClient":
         return self
 
     async def __aexit__(self, *exc: object) -> None:
-        await self.unregister()
+        await self.close()

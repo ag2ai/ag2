@@ -23,11 +23,7 @@ from autogen.beta.network import (
     EV_TEXT,
     Envelope,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     ProtocolError,
-    Resume,
 )
 from autogen.beta.network.adapters.consulting import ConsultingAdapter, ConsultingState
 from autogen.beta.network.adapters.conversation import ConversationAdapter
@@ -397,12 +393,10 @@ async def test_validate_send_rejection_does_not_append_to_wal() -> None:
     appending. A rejected envelope must leave the WAL exactly as it was.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    await hc.register(_agent("carol"), Passport(name="carol"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    await hub.register(_agent("carol"))
 
     channel = await alice.open(type="discussion", target=["bob", "carol"])
     pre_wal = await hub.read_wal(channel.channel_id)
@@ -424,7 +418,6 @@ async def test_validate_send_rejection_does_not_append_to_wal() -> None:
     # And no envelope from bob with the rejected text.
     assert all(e.event_data.get("text") != "out of turn" for e in post_wal)
 
-    await hc.close()
     await hub.close()
 
 
@@ -439,11 +432,9 @@ async def test_hydrate_refolds_discussion_state_deterministically() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         store = DiskKnowledgeStore(tmp)
         hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-        link = LocalLink(hub1)
-        hc = HubClient(link, hub=hub1)
-        alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
-        carol = await hc.register(_agent("carol"), Passport(name="carol"), Resume())
+        alice = await hub1.register(_agent("alice"))
+        bob = await hub1.register(_agent("bob"))
+        carol = await hub1.register(_agent("carol"))
 
         channel = await alice.open(type="discussion", target=["bob", "carol"])
         sid = channel.channel_id
@@ -478,7 +469,6 @@ async def test_hydrate_refolds_discussion_state_deterministically() -> None:
             live_state.participant_order,
         )
 
-        await hc.close()
         await hub1.close()
 
         hub2 = await Hub.open(DiskKnowledgeStore(tmp), ttl_sweep_interval=0, expectation_sweep_interval=0)

@@ -6,5 +6,9 @@ implementation-free list of the domain terms that context uses, kept here
 
 ## Contexts
 
+- [Agent invocation](./beta-agent-invocation.md) — how callers invoke an
+  `autogen.beta` agent and consume its result (`ask`, `run`, replies, streams).
 - [Skills](./skills.md) — `agentskills.io` progressive-disclosure: discover skill
   folders, surface them to the model, load / read / execute on demand.
+
+System-wide architectural decisions live in [`docs/adr/`](../adr/).

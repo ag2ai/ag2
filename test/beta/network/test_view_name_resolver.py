@@ -35,13 +35,9 @@ from autogen.beta.network import (
     Envelope,
     FullTranscript,
     Hub,
-    HubClient,
-    LocalLink,
     NameResolver,
     NamedTranscript,
     NamedWindowedSummary,
-    Passport,
-    Resume,
     WindowedSummary,
     default_name_resolver,
 )
@@ -152,13 +148,9 @@ async def test_hub_name_for_resolves_registered_passport_name() -> None:
         expectation_sweep_interval=0,
     )
     try:
-        hc = HubClient(LocalLink(hub), hub=hub)
-        try:
-            agent = Agent(name="alice", prompt="x", config=TestConfig([], "ok"))
-            client = await hc.register(agent, Passport(name="alice"), Resume(), attach_plugin=False)
-            assert hub.name_for(client.agent_id) == "alice"
-        finally:
-            await hc.close()
+        agent = Agent(name="alice", prompt="x", config=TestConfig([], "ok"))
+        client = await hub.register(agent, attach_plugin=False)
+        assert hub.name_for(client.agent_id) == "alice"
     finally:
         await hub.close()
 
@@ -212,25 +204,21 @@ async def test_handler_passes_real_resolver_to_view_project() -> None:
         expectation_sweep_interval=0,
     )
     try:
-        hc = HubClient(LocalLink(hub), hub=hub)
-        try:
-            agent = Agent(name="alice", prompt="x", config=TestConfig([], "ok"))
-            client = await hc.register(agent, Passport(name="alice"), Resume(), attach_plugin=False)
+        agent = Agent(name="alice", prompt="x", config=TestConfig([], "ok"))
+        client = await hub.register(agent, attach_plugin=False)
 
-            metadata = _two_party_metadata(client.agent_id, "bob")
-            view = RecordingView()
-            await view.project(
-                [],
-                participant_id=client.agent_id,
-                channel=metadata,
-                render_envelope=default_render_envelope,
-                name_for=hub.name_for,
-            )
+        metadata = _two_party_metadata(client.agent_id, "bob")
+        view = RecordingView()
+        await view.project(
+            [],
+            participant_id=client.agent_id,
+            channel=metadata,
+            render_envelope=default_render_envelope,
+            name_for=hub.name_for,
+        )
 
-            assert seen["name_for_alice_known"] == "alice"
-            assert seen["name_for_unknown"] == "definitely-not-an-agent-id"
-        finally:
-            await hc.close()
+        assert seen["name_for_alice_known"] == "alice"
+        assert seen["name_for_unknown"] == "definitely-not-an-agent-id"
     finally:
         await hub.close()
 

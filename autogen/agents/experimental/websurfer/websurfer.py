@@ -11,9 +11,7 @@ from ....tools.experimental import (
     BrowserUseTool,
     Crawl4AITool,
     DuckDuckGoSearchTool,
-    FirecrawlTool,
     PerplexitySearchTool,
-    SearxngSearchTool,
     TavilySearchTool,
 )
 
@@ -28,9 +26,7 @@ class WebSurferAgent(ConversableAgent):
         *,
         llm_config: LLMConfig | dict[str, Any] | None = None,
         web_tool_llm_config: LLMConfig | dict[str, Any] | None = None,
-        web_tool: Literal[
-            "browser_use", "crawl4ai", "duckduckgo", "firecrawl", "perplexity", "tavily", "searxng"
-        ] = "browser_use",
+        web_tool: Literal["browser_use", "crawl4ai", "duckduckgo", "perplexity", "tavily"] = "browser_use",
         web_tool_kwargs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
@@ -49,16 +45,12 @@ class WebSurferAgent(ConversableAgent):
             self.tool: Tool = BrowserUseTool(llm_config=web_tool_llm_config, **web_tool_kwargs)  # type: ignore[arg-type]
         elif web_tool == "crawl4ai":
             self.tool = Crawl4AITool(llm_config=web_tool_llm_config, **web_tool_kwargs)
-        elif web_tool == "firecrawl":
-            self.tool = FirecrawlTool(llm_config=web_tool_llm_config, **web_tool_kwargs)
         elif web_tool == "perplexity":
             self.tool = PerplexitySearchTool(**web_tool_kwargs)
         elif web_tool == "tavily":
             self.tool = TavilySearchTool(llm_config=web_tool_llm_config, **web_tool_kwargs)
         elif web_tool == "duckduckgo":
             self.tool = DuckDuckGoSearchTool(**web_tool_kwargs)
-        elif web_tool == "searxng":
-            self.tool = SearxngSearchTool(**web_tool_kwargs)
         else:
             raise ValueError(f"Unsupported {web_tool=}.")
 

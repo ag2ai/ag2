@@ -102,13 +102,9 @@ async def test_discussion_validate_create_rejects_unsupported_ordering() -> None
     """V1 only ships round_robin; dynamic / static raise at create time."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     with pytest.raises(ProtocolError, match="ordering"):
         await hub.create_channel(
@@ -118,8 +114,6 @@ async def test_discussion_validate_create_rejects_unsupported_ordering() -> None
             knobs={"ordering": "dynamic"},
         )
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -172,32 +166,12 @@ async def test_discussion_round_robin_advances_through_participants() -> None:
     """Manual sends in turn order succeed; out-of-turn raises ProtocolError."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
 
     # Use plain TestConfig agents and skip the LLM auto-handler — we
     # only exercise the adapter by posting envelopes manually.
-    alice = await alice_hc.register(
-        _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
-        attach_plugin=False,
-    )
-    bob = await bob_hc.register(
-        _agent("bob"),
-        Passport(name="bob"),
-        Resume(),
-        attach_plugin=False,
-    )
-    carol = await carol_hc.register(
-        _agent("carol"),
-        Passport(name="carol"),
-        Resume(),
-        attach_plugin=False,
-    )
+    alice = await hub.register(_agent("alice"), attach_plugin=False)
+    bob = await hub.register(_agent("bob"), attach_plugin=False)
+    carol = await hub.register(_agent("carol"), attach_plugin=False)
 
     # Auto-ack invites (handlers are off — install minimal ackers).
     for client in (bob, carol):
@@ -239,9 +213,6 @@ async def test_discussion_round_robin_advances_through_participants() -> None:
     assert state.turn_count == 3
     assert state.last_speaker_id == carol.agent_id
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 
@@ -250,15 +221,10 @@ async def test_discussion_rejects_out_of_turn_send() -> None:
     """Sending out of round-robin order raises ProtocolError before WAL write."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    carol = await carol_hc.register(_agent("carol"), Passport(name="carol"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    carol = await hub.register(_agent("carol"))
 
     channel = await alice.open(
         type=DISCUSSION_TYPE,
@@ -277,9 +243,6 @@ async def test_discussion_rejects_out_of_turn_send() -> None:
     with pytest.raises(ProtocolError, match="expects"):
         await hub.post_envelope(bad)
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 
@@ -288,21 +251,11 @@ async def test_discussion_partial_reject_fails_channel() -> None:
     """V1 all-or-nothing: any reject during handshake closes the channel."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, invite_ack_timeout=2.0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
     # Carol rejects every invite.
-    carol = await carol_hc.register(
-        _agent("carol"),
-        Passport(name="carol"),
-        Resume(),
-        attach_plugin=False,
-    )
+    carol = await hub.register(_agent("carol"), attach_plugin=False)
     carol.on_envelope(_make_rejecter(carol))
 
     with pytest.raises(ProtocolError, match="rejected"):
@@ -312,9 +265,6 @@ async def test_discussion_partial_reject_fails_channel() -> None:
             knobs={"ordering": ORDERING_ROUND_ROBIN},
         )
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 
@@ -323,30 +273,10 @@ async def test_discussion_hydrate_refolds_round_robin_state(tmp_path) -> None:
     """Re-opening hub mid-discussion recovers expected_next_speaker."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0)
-    link1 = LocalLink(hub1)
 
-    alice_hc = HubClient(link1, hub=hub1)
-    bob_hc = HubClient(link1, hub=hub1)
-    carol_hc = HubClient(link1, hub=hub1)
-
-    alice = await alice_hc.register(
-        _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
-        attach_plugin=False,
-    )
-    bob = await bob_hc.register(
-        _agent("bob"),
-        Passport(name="bob"),
-        Resume(),
-        attach_plugin=False,
-    )
-    carol = await carol_hc.register(
-        _agent("carol"),
-        Passport(name="carol"),
-        Resume(),
-        attach_plugin=False,
-    )
+    alice = await hub1.register(_agent("alice"), attach_plugin=False)
+    bob = await hub1.register(_agent("bob"), attach_plugin=False)
+    carol = await hub1.register(_agent("carol"), attach_plugin=False)
     bob.on_envelope(_make_auto_acker(bob))
     carol.on_envelope(_make_auto_acker(carol))
 
@@ -358,9 +288,6 @@ async def test_discussion_hydrate_refolds_round_robin_state(tmp_path) -> None:
     await channel.send("alice opens the floor")
 
     # Mid-discussion (bob is up next) → tear down the hub.
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub1.close()
 
     # Reopen against the same store.
@@ -383,28 +310,11 @@ async def test_discussion_llm_driven_round_robin_3_way() -> None:
     only when the adapter's validate_send would accept their reply."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
 
     # alice's manual send opens turn 1; her LLM speaks again on her turn 2.
-    alice = await alice_hc.register(
-        _scripted_agent("alice", "alice 2"),
-        Passport(name="alice"),
-        Resume(),
-    )
-    bob = await bob_hc.register(
-        _scripted_agent("bob", "bob 1"),
-        Passport(name="bob"),
-        Resume(),
-    )
-    carol = await carol_hc.register(
-        _scripted_agent("carol", "carol 1"),
-        Passport(name="carol"),
-        Resume(),
-    )
+    alice = await hub.register(_scripted_agent("alice", "alice 2"))
+    bob = await hub.register(_scripted_agent("bob", "bob 1"))
+    carol = await hub.register(_scripted_agent("carol", "carol 1"))
 
     channel = await alice.open(
         type=DISCUSSION_TYPE,
@@ -434,9 +344,6 @@ async def test_discussion_llm_driven_round_robin_3_way() -> None:
     assert state.expected_next_speaker == bob.agent_id
     assert state.turn_count == 4
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 

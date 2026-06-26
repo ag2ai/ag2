@@ -12,12 +12,16 @@ from ....formatting_utils import colored
 from ....import_utils import optional_import_block, require_optional_import
 from ....llm_config import LLMConfig
 from ...assistant_agent import ConversableAgent
-from ..text_analyzer_agent import TextAnalyzerAgent
 from .agent_capability import AgentCapability
 
 with optional_import_block():
     import chromadb
     from chromadb.config import Settings
+
+_ANALYZER_SYSTEM_MESSAGE = """You are an expert in text analysis.
+The user will give you TEXT to analyze.
+The user will give you analysis INSTRUCTIONS copied twice, at both the beginning and the end.
+You will follow these INSTRUCTIONS in analyzing the TEXT, then give the results of your expert analysis in the format requested."""
 
 
 class Teachability(AgentCapability):
@@ -51,8 +55,8 @@ class Teachability(AgentCapability):
         path_to_db_dir (Optional, str): path to the directory where this particular agent's DB is stored. Default "./tmp/teachable_agent_db"
         recall_threshold (Optional, float): The maximum distance for retrieved memos, where 0.0 is exact match. Default 1.5. Larger values allow more (but less relevant) memos to be recalled.
         max_num_retrievals (Optional, int): The maximum number of memos to retrieve from the DB. Default 10.
-        llm_config (LLMConfig or dict or False): llm inference configuration passed to TextAnalyzerAgent.
-            If None, TextAnalyzerAgent uses llm_config from the teachable agent.
+        llm_config (LLMConfig or dict or False): llm inference configuration passed to the analyzer agent.
+            If None, the analyzer agent uses llm_config from the teachable agent.
         """
         self.verbosity = verbosity
         self.path_to_db_dir = path_to_db_dir
@@ -79,8 +83,13 @@ class Teachability(AgentCapability):
             self.llm_config = agent.llm_config
         assert self.llm_config, "Teachability requires a valid llm_config."
 
-        # Create the analyzer agent.
-        self.analyzer = TextAnalyzerAgent(llm_config=self.llm_config)
+        # Create the analyzer agent (a ConversableAgent dedicated to text analysis).
+        self.analyzer = ConversableAgent(
+            name="analyzer",
+            system_message=_ANALYZER_SYSTEM_MESSAGE,
+            human_input_mode="NEVER",
+            llm_config=self.llm_config,
+        )
 
         # Append extra info to the system message.
         agent.update_system_message(
@@ -94,7 +103,7 @@ class Teachability(AgentCapability):
 
     def process_last_received_message(self, text: dict[str, Any] | str):
         """Appends any relevant memos to the message text, and stores any apparent teachings in new memos.
-        Uses TextAnalyzerAgent to make decisions about memo storage and retrieval.
+        Uses the analyzer agent to make decisions about memo storage and retrieval.
         """
         # Try to retrieve relevant memos from the DB.
         expanded_text = text
@@ -229,15 +238,14 @@ class Teachability(AgentCapability):
         return memo_texts
 
     def _analyze(self, text_to_analyze: dict[str, Any] | str, analysis_instructions: dict[str, Any] | str):
-        """Asks TextAnalyzerAgent to analyze the given text according to specific instructions."""
+        """Asks the analyzer agent to analyze the given text according to specific instructions."""
         self.analyzer.reset()  # Clear the analyzer's list of messages.
-        self.teachable_agent.send(
-            recipient=self.analyzer, message=text_to_analyze, request_reply=False, silent=(self.verbosity < 2)
-        )  # Put the message in the analyzer's list.
-        self.teachable_agent.send(
-            recipient=self.analyzer, message=analysis_instructions, request_reply=True, silent=(self.verbosity < 2)
-        )  # Request the reply.
-        return self.teachable_agent.last_message(self.analyzer)["content"]
+        # Assemble the message: instructions are repeated at both the start and the end of the text.
+        text = "# TEXT\n" + str(text_to_analyze) + "\n"
+        instructions = "# INSTRUCTIONS\n" + str(analysis_instructions) + "\n"
+        msg_text = "\n".join([instructions, text, instructions])
+        # Generate and return the analysis string.
+        return self.analyzer.generate_oai_reply([{"role": "user", "content": msg_text}], None, None)[1]
 
 
 @require_optional_import("chromadb", "teachable")

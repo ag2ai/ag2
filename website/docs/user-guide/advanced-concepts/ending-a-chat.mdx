@@ -13,7 +13,7 @@ There are a number of ways a chat can end:
 7. Custom reply functions
 
 ### 1. Maximum turns
-For GroupChat and swarm, use `max_round` to set a limit on the number of replies. Each round represents an agent speaking and includes the initial message.
+For a GroupChat, use `max_round` to set a limit on the number of replies. Each round represents an agent speaking and includes the initial message.
 
 ```python
 # GroupChat with a maximum of 5 rounds
@@ -28,16 +28,6 @@ gcm = GroupChatManager(
 )
 agent_a.initiate_chat(gcm, "first message")
 # 1. agent_a with "first message" > 2. agent_b > 3. agent_c > 4. agent_a > 5. agent_b > end
-
-# Swarm with a maximum of 5 rounds
-initiate_swarm_chat(
-    agents=[agent_a, agent_b, agent_c],
-    max_round=5,
-    messages="first message"
-    ...
-)
-# When initial agent is set to agent_a and agents hand off to the next agent.
-# 1. User with "first message" > 2. agent_a > 3. agent_b > 4. agent_c > 5. agent_a > end
 ```
 
 For `initiate_chat` use `max_turns`. Each turn represents a round trip of both agents speaking and includes the initial message.

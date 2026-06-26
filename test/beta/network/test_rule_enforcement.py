@@ -93,17 +93,13 @@ async def test_outbound_to_glob_allows_pattern() -> None:
     channels and receive their own channel-state notifications.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(access=AccessBlock(outbound_to=["bot-*"])),  # alice not in own whitelist
     )
-    bob = await hc.register(_agent("bot-bob"), Passport(name="bot-bob"), Resume())
-    eve = await hc.register(_agent("user-eve"), Passport(name="user-eve"), Resume())
+    bob = await hub.register(_agent("bot-bob"))
+    eve = await hub.register(_agent("user-eve"))
 
     # Reaching bot-bob is allowed.
     channel_ok = await alice.open(type="conversation", target="bot-bob")
@@ -120,7 +116,6 @@ async def test_outbound_to_glob_allows_pattern() -> None:
     with pytest.raises(AccessDeniedError):
         await alice.send_envelope(envelope)
 
-    await hc.close()
     await hub.close()
 
 
@@ -170,11 +165,9 @@ async def test_inbound_from_blocks_dispatch_not_post() -> None:
     in-flight dispatch filter.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     received_by_bob: list[Envelope] = []
 
@@ -205,7 +198,6 @@ async def test_inbound_from_blocks_dispatch_not_post() -> None:
     post_text_received = [e for e in received_by_bob if e.event_data.get("text") == "filtered text"]
     assert post_text_received == []
 
-    await hc.close()
     await hub.close()
 
 
@@ -220,14 +212,10 @@ async def test_inbound_from_blocks_create_channel_fast_fails() -> None:
     never acks, and the creator times out with a generic ``ProtocolError``.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await hc.register(
+    alice = await hub.register(_agent("alice"))
+    await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(),
         rule=Rule(access=AccessBlock(inbound_from=["carol-*"])),
     )
 
@@ -237,7 +225,6 @@ async def test_inbound_from_blocks_create_channel_fast_fails() -> None:
     # No channel leaked into the registry.
     assert await hub.list_channels() == []
 
-    await hc.close()
     await hub.close()
 
 
@@ -248,16 +235,12 @@ async def test_inbound_from_blocks_create_channel_fast_fails() -> None:
 async def test_delegation_depth_at_cap_accepted_above_rejected() -> None:
     """depth == cap is accepted (`>` check); depth == cap+1 is rejected."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(delegation_depth=3)),
     )
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob")
 
@@ -267,7 +250,6 @@ async def test_delegation_depth_at_cap_accepted_above_rejected() -> None:
     with pytest.raises(AccessDeniedError, match="delegation_depth"):
         await channel.send("over-cap", audience=[bob.agent_id], depth=4)
 
-    await hc.close()
     await hub.close()
 
 
@@ -275,22 +257,17 @@ async def test_delegation_depth_at_cap_accepted_above_rejected() -> None:
 async def test_delegation_depth_zero_disables_cap() -> None:
     """delegation_depth=0 means unlimited."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(delegation_depth=0)),
     )
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob")
     # Even an absurd depth should pass.
     await channel.send("any-depth", audience=[bob.agent_id], depth=99999)
 
-    await hc.close()
     await hub.close()
 
 
@@ -300,18 +277,14 @@ async def test_delegation_depth_zero_disables_cap() -> None:
 @pytest.mark.asyncio
 async def test_max_concurrent_channels_cap_blocks_new_creates() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(max_concurrent_channels=2)),
     )
-    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    await hc.register(_agent("carol"), Passport(name="carol"), Resume())
-    await hc.register(_agent("dave"), Passport(name="dave"), Resume())
+    await hub.register(_agent("bob"))
+    await hub.register(_agent("carol"))
+    await hub.register(_agent("dave"))
 
     # 2 concurrent channels ok.
     s1 = await alice.open(type="conversation", target="bob")
@@ -325,24 +298,19 @@ async def test_max_concurrent_channels_cap_blocks_new_creates() -> None:
     await s1.close()
     await alice.open(type="conversation", target="dave")  # ok now
 
-    await hc.close()
     await hub.close()
 
 
 @pytest.mark.asyncio
 async def test_max_concurrent_channels_zero_disables() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(max_concurrent_channels=0)),
     )
     for name in ("bob", "carol", "dave", "erin"):
-        await hc.register(_agent(name), Passport(name=name), Resume())
+        await hub.register(_agent(name))
 
     # Open 4 — no cap.
     for name in ("bob", "carol", "dave", "erin"):
@@ -351,7 +319,6 @@ async def test_max_concurrent_channels_zero_disables() -> None:
     channels = await hub.list_channels(agent_id=alice.agent_id)
     assert len(channels) == 4
 
-    await hc.close()
     await hub.close()
 
 
@@ -361,13 +328,9 @@ async def test_max_concurrent_channels_zero_disables() -> None:
 @pytest.mark.asyncio
 async def test_max_concurrent_tasks_blocks_observe() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(max_concurrent_tasks=2)),
     )
 
@@ -404,7 +367,6 @@ async def test_max_concurrent_tasks_blocks_observe() -> None:
         )
     )
 
-    await hc.close()
     await hub.close()
 
 
@@ -420,14 +382,10 @@ async def test_inbox_max_pending_rejects_when_full() -> None:
     is rejected before WAL append.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(inbox=InboxBlock(max_pending=2))),
     )
 
@@ -442,7 +400,6 @@ async def test_inbox_max_pending_rejects_when_full() -> None:
     with pytest.raises(InboxFull):
         await channel.send("msg-3", audience=[bob.agent_id])
 
-    await hc.close()
     await hub.close()
 
 
@@ -452,16 +409,12 @@ async def test_inbox_protocol_events_bypass_capacity() -> None:
     recipient, regardless of inbox capacity. Otherwise a blocked invite
     ack would deadlock the channel machine."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     # Cap of 1 — easy to overflow with substantive but invites must
     # still be dispatched.
-    await hc.register(
+    await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(inbox=InboxBlock(max_pending=1))),
     )
 
@@ -470,7 +423,6 @@ async def test_inbox_protocol_events_bypass_capacity() -> None:
     channel = await alice.open(type="conversation", target="bob")
     assert channel.metadata.state.value == "active"
 
-    await hc.close()
     await hub.close()
 
 
@@ -480,16 +432,12 @@ async def test_inbox_protocol_events_bypass_capacity() -> None:
 @pytest.mark.asyncio
 async def test_channel_ttl_default_drives_expires_at() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(channel_ttl_default="1h")),
     )
-    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob")
     assert channel.metadata.expires_at is not None
@@ -499,23 +447,18 @@ async def test_channel_ttl_default_drives_expires_at() -> None:
     # 1h ± 1s
     assert 3599 <= delta <= 3601
 
-    await hc.close()
     await hub.close()
 
 
 @pytest.mark.asyncio
 async def test_channel_ttl_per_channel_override_wins() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(limits=LimitsBlock(channel_ttl_default="1h")),
     )
-    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob", ttl="30m")
     expires = datetime.fromisoformat(channel.metadata.expires_at)
@@ -523,7 +466,6 @@ async def test_channel_ttl_per_channel_override_wins() -> None:
     delta = (expires - created).total_seconds()
     assert 1799 <= delta <= 1801
 
-    await hc.close()
     await hub.close()
 
 
@@ -531,14 +473,11 @@ async def test_channel_ttl_per_channel_override_wins() -> None:
 async def test_channel_ttl_zero_no_expiry() -> None:
     """ttl=0 → no expires_at stamped."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob", ttl=0)
     assert channel.metadata.expires_at is None
 
-    await hc.close()
     await hub.close()

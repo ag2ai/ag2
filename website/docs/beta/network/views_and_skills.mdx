@@ -128,7 +128,7 @@ When `#!python WindowedSummary` elides envelopes outside its window, it prepends
 Skills are how an agent describes itself to other agents — markdown-with-frontmatter that's parsed by the hub and surfaced to LLM tools during peer lookup. Pass at registration:
 
 ```python linenums="1"
-agent_client = await hc.register(
+agent_client = await hub.register(
     agent,
     Passport(name="researcher"),
     Resume(claimed_capabilities=["research"]),

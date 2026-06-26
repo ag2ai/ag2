@@ -77,7 +77,7 @@ AG2 supports many providers. Common patterns:
 {"model": "claude-sonnet-4-20250514", "api_type": "anthropic", "api_key": os.environ["ANTHROPIC_API_KEY"]}
 
 # Google Gemini
-{"model": "gemini-2.0-flash", "api_type": "google", "api_key": os.environ["GOOGLE_API_KEY"]}
+{"model": "gemini-3.5-flash", "api_type": "google", "api_key": os.environ["GOOGLE_API_KEY"]}
 
 # Mistral
 {"model": "mistral-large-latest", "api_type": "mistral", "api_key": os.environ["MISTRAL_API_KEY"]}

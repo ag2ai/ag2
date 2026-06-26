@@ -121,7 +121,7 @@ config_list = [
         "location": "us-west1"
     },
     {
-        "model": "gemini-2.0-flash",
+        "model": "gemini-3.5-flash",
         "api_type": "google",
         "project_id": "ag2-with-gemini",
         "location": "us-west1",
@@ -151,7 +151,7 @@ from autogen.code_utils import content_str
 seed = 25  # for caching
 llm_config_gemini = LLMConfig.from_json(path="OAI_CONFIG_LIST", seed=seed).where(model="gemini-2.5-flash")
 
-llm_config_gemini_vision = LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model="gemini-2.0-flash")
+llm_config_gemini_vision = LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model="gemini-3.5-flash")
 
 for llm_config in [llm_config_gemini, llm_config_gemini_vision]:
     for config_list_item in llm_config.config_list:
@@ -258,7 +258,7 @@ scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 credentials, project_id = google.auth.default(scopes)
 
 llm_config_gemini_vision = LLMConfig({
-    "model": "gemini-2.0-flash",
+    "model": "gemini-3.5-flash",
     "api_type": "google",
     "project_id": project_id,
     "credentials": credentials,

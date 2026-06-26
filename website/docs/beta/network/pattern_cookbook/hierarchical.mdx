@@ -112,10 +112,6 @@ from autogen.beta.network import (
     FromSpeaker,
     Handoff,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
     TerminateTarget,
     Transition,
     TransitionGraph,
@@ -143,12 +139,6 @@ async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
 
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub)
-
-    intake_hc = HubClient(link, hub=hub)
-    coord_hc = HubClient(link, hub=hub)
-    researcher_hc = HubClient(link, hub=hub)
-    writer_hc = HubClient(link, hub=hub)
 
     intake_agent = Agent("intake", config=TestConfig())
 
@@ -200,10 +190,10 @@ async def main() -> None:
         config=config,
     )
 
-    intake = await intake_hc.register(intake_agent, Passport(name="intake"), Resume())
-    coord = await coord_hc.register(coord_agent, Passport(name="coord"), Resume())
-    researcher = await researcher_hc.register(researcher_agent, Passport(name="researcher"), Resume())
-    writer = await writer_hc.register(writer_agent, Passport(name="writer"), Resume())
+    intake = await hub.register(intake_agent)
+    coord = await hub.register(coord_agent)
+    researcher = await hub.register(researcher_agent)
+    writer = await hub.register(writer_agent)
 
     graph = TransitionGraph(
         initial_speaker=intake.agent_id,
@@ -263,10 +253,6 @@ async def main() -> None:
 
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
-    await intake_hc.close()
-    await coord_hc.close()
-    await researcher_hc.close()
-    await writer_hc.close()
     await hub.close()
 
 if __name__ == "__main__":

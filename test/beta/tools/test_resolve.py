@@ -11,6 +11,7 @@ from autogen.beta.tools import ImageGenerationTool, UserLocation, WebSearchTool
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
 from autogen.beta.tools.builtin.mcp_server import MCPServerTool, MCPServerToolSchema
+from autogen.beta.tools.builtin.retrieval import RetrievalTool, RetrievalToolSchema
 from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ShellTool, ShellToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchTool, WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
@@ -168,4 +169,23 @@ class TestXSearchToolVariable:
         tool = XSearchTool(allowed_x_handles=Variable("handles"))
 
         with pytest.raises(KeyError, match="handles"):
+            await tool.schemas(context)
+
+
+class TestRetrievalToolVariable:
+    @pytest.mark.asyncio
+    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
+        ctx = make_context(kid="kb_from_ctx")
+        tool = RetrievalTool(Variable("kid"))
+
+        [schema] = await tool.schemas(ctx)
+
+        assert isinstance(schema, RetrievalToolSchema)
+        assert schema.knowledge_id == "kb_from_ctx"
+
+    @pytest.mark.asyncio
+    async def test_missing_raises(self, context: Context) -> None:
+        tool = RetrievalTool(Variable("kid"))
+
+        with pytest.raises(KeyError, match="kid"):
             await tool.schemas(context)

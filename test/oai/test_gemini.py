@@ -1221,7 +1221,7 @@ class TestGeminiClient:
             extras: dict[str, Extra]
 
         gemini_client.create({
-            "model": "gemini-2.0-flash",
+            "model": "gemini-3.5-flash",
             "messages": [{"content": "Give me a report", "role": "user"}],
             "response_format": Report,
         })
@@ -1267,7 +1267,7 @@ class TestGeminiClient:
             extras: dict[str, Extra]
 
         gemini_client_with_credentials.create({
-            "model": "gemini-2.0-flash",
+            "model": "gemini-3.5-flash",
             "messages": [{"content": "Give me a report", "role": "user"}],
             "response_format": Report,
         })

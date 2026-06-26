@@ -21,7 +21,7 @@ __all__ = (
 class TestClient(LLMClient):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str) -> None:
+    def __init__(self, *events: str | ModelResponse | ToolCallEvent | Iterable[ToolCallEvent]) -> None:
         self.events = iter(events)
 
     async def __call__(
@@ -83,7 +83,7 @@ class TrackingConfig(ModelConfig):
 class TestConfig(ModelConfig):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str) -> None:
+    def __init__(self, *events: str | ModelResponse | ToolCallEvent | Iterable[ToolCallEvent]) -> None:
         self.events = events
 
     def copy(self) -> Self:

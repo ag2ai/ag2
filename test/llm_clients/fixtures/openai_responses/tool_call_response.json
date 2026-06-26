@@ -1,5 +1,5 @@
 {
-  "id": "chatcmpl-CbWQa0mx5CsXNw2NfmQ5pcF5EByfV",
+  "id": "chatcmpl-DtjcXMlby7LILoeDyqQ7WYrSP3f5o",
   "choices": [
     {
       "finish_reason": "tool_calls",
@@ -14,7 +14,7 @@
         "function_call": null,
         "tool_calls": [
           {
-            "id": "call_P13l3Hx6NldT1W8g44X9ViSe",
+            "id": "call_feFacZIXllW5IkoOhufyWeA0",
             "function": {
               "arguments": "{\"location\":\"San Francisco\"}",
               "name": "get_weather"
@@ -25,11 +25,12 @@
       }
     }
   ],
-  "created": 1763058824,
+  "created": 1782175777,
   "model": "gpt-4o-mini-2024-07-18",
   "object": "chat.completion",
+  "moderation": null,
   "service_tier": "default",
-  "system_fingerprint": "fp_560af6e559",
+  "system_fingerprint": "fp_795bd00303",
   "usage": {
     "completion_tokens": 15,
     "prompt_tokens": 68,

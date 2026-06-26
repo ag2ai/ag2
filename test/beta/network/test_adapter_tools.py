@@ -24,10 +24,6 @@ from autogen.beta.network import (
     EV_TEXT,
     Handoff,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
 from autogen.beta.network.adapters.consulting import ConsultingAdapter
 from autogen.beta.network.adapters.conversation import ConversationAdapter
@@ -47,16 +43,13 @@ def _agent(name: str, *replies: str) -> Agent:
 async def test_plugin_does_not_attach_say() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
 
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     names = {t.name for t in alice.agent.tools}
     assert "say" not in names
     # Identity-level set still present.
     assert {"delegate", "peers", "channels", "tasks", "context"} <= names
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -68,12 +61,9 @@ async def test_consulting_tools_for_gates_by_turn() -> None:
     """Consulting offers ``say`` to the participant whose turn it is."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
     channel = await alice.open(type="consulting", target="bob")
 
     adapter = ConsultingAdapter()
@@ -85,8 +75,6 @@ async def test_consulting_tools_for_gates_by_turn() -> None:
     respondent_tools = adapter.tools_for(bob, channel.metadata, state, bob.agent_id)
     assert respondent_tools == []
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -94,12 +82,9 @@ async def test_consulting_tools_for_gates_by_turn() -> None:
 async def test_conversation_tools_for_always_offers_say() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target="bob")
 
     adapter = ConversationAdapter()
@@ -107,8 +92,6 @@ async def test_conversation_tools_for_always_offers_say() -> None:
     assert [t.name for t in adapter.tools_for(alice, channel.metadata, state, alice.agent_id)] == ["say"]
     assert [t.name for t in adapter.tools_for(bob, channel.metadata, state, bob.agent_id)] == ["say"]
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -120,15 +103,10 @@ async def test_discussion_tools_for_returns_empty() -> None:
     """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    carol_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    carol = await carol_hc.register(_agent("carol"), Passport(name="carol"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    carol = await hub.register(_agent("carol"))
 
     channel = await alice.open(
         type="discussion",
@@ -143,9 +121,6 @@ async def test_discussion_tools_for_returns_empty() -> None:
     assert adapter.tools_for(bob, channel.metadata, state, bob.agent_id) == []
     assert adapter.tools_for(carol, channel.metadata, state, carol.agent_id) == []
 
-    await alice_hc.close()
-    await bob_hc.close()
-    await carol_hc.close()
     await hub.close()
 
 
@@ -154,15 +129,12 @@ async def test_workflow_tools_for_returns_empty() -> None:
     """Workflow ships no adapter tools — handoff is user-authored."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
 
     adapter = WorkflowAdapter()
     # No active workflow channel needed — tools_for is pure.
     assert adapter.tools_for(alice, None, None, alice.agent_id) == []
 
-    await alice_hc.close()
     await hub.close()
 
 
@@ -222,10 +194,6 @@ async def test_channels_open_with_seed_message() -> None:
     """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
     alice_agent = Agent(
         name="alice",
@@ -244,8 +212,8 @@ async def test_channels_open_with_seed_message() -> None:
             "done",
         ),
     )
-    alice = await alice_hc.register(alice_agent, Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(alice_agent)
+    await hub.register(_agent("bob"))
 
     reply = await alice.agent.ask("Open a conversation with bob.")
     assert reply.body
@@ -259,6 +227,4 @@ async def test_channels_open_with_seed_message() -> None:
     # Seed envelope present alongside any default-handler-generated turns.
     assert any(e.event_data.get("text") == "kickoff" for e in text_envs)
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()

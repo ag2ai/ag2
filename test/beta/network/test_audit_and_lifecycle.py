@@ -23,11 +23,7 @@ from autogen.beta.network import (
     AccessDeniedError,
     Envelope,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
     ProtocolError,
-    Resume,
     Rule,
 )
 from autogen.beta.network.adapters.conversation import ConversationAdapter
@@ -62,13 +58,10 @@ async def test_post_envelope_rejects_envelope_above_delegation_depth() -> None:
     ``Rule.limits.delegation_depth`` cap. ``0`` disables the check."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     capped_rule = Rule(limits=LimitsBlock(delegation_depth=2))
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=capped_rule)
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"), rule=capped_rule)
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target=bob.agent_id)
 
@@ -95,8 +88,6 @@ async def test_post_envelope_rejects_envelope_above_delegation_depth() -> None:
     )
     await hub.post_envelope(at_cap)
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -105,13 +96,10 @@ async def test_delegation_depth_zero_disables_cap() -> None:
     """``delegation_depth=0`` means no cap; arbitrary depth is allowed."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
     no_cap = Rule(limits=LimitsBlock(delegation_depth=0))
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=no_cap)
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"), rule=no_cap)
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target=bob.agent_id)
     deep = Envelope(
@@ -124,8 +112,6 @@ async def test_delegation_depth_zero_disables_cap() -> None:
     )
     await hub.post_envelope(deep)  # accepted
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -157,17 +143,12 @@ async def test_post_envelope_after_hydrate_without_adapter_state_raises_protocol
     # First boot: register custom adapter, open channel, persist.
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     hub1.register_adapter(_CustomAdapter())
-    link1 = LocalLink(hub1)
-    alice_hc = HubClient(link1, hub=hub1)
-    bob_hc = HubClient(link1, hub=hub1)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub1.register(_agent("alice"))
+    bob = await hub1.register(_agent("bob"))
     channel = await alice.open(type="custom_recovery", target=bob.agent_id)
     channel_id = channel.channel_id
     alice_id = alice.agent_id
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub1.close()
 
     # Second boot: hydrate WITHOUT the custom adapter. Channel is
@@ -233,16 +214,11 @@ async def test_expectation_tick_processes_all_channels_when_one_auto_closes() ->
             self.manifest = aggressive_manifest
 
     hub.register_adapter(_AggressiveAdapter())
-    link = LocalLink(hub)
 
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    c_hc = HubClient(link, hub=hub)
-    d_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    carol = await c_hc.register(_agent("carol"), Passport(name="carol"), Resume())
-    dave = await d_hc.register(_agent("dave"), Passport(name="dave"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    carol = await hub.register(_agent("carol"))
+    dave = await hub.register(_agent("dave"))
 
     sess_ab = await alice.open(type="conversation_aggressive", target=bob.agent_id)
     sess_cd = await carol.open(type="conversation_aggressive", target=dave.agent_id)
@@ -263,10 +239,6 @@ async def test_expectation_tick_processes_all_channels_when_one_auto_closes() ->
     assert sess_ab.channel_id in violation_channel_ids
     assert sess_cd.channel_id in violation_channel_ids
 
-    await a_hc.close()
-    await b_hc.close()
-    await c_hc.close()
-    await d_hc.close()
     await hub.close()
 
 
@@ -277,12 +249,9 @@ async def test_expectation_tick_processes_all_channels_when_one_auto_closes() ->
 async def test_audit_log_records_channel_created_and_closed() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     pre_audit = len(await hub._audit_log.read_all())
     channel = await alice.open(type="conversation", target=bob.agent_id)
@@ -298,8 +267,6 @@ async def test_audit_log_records_channel_created_and_closed() -> None:
     assert closed_record["channel_id"] == channel.channel_id
     assert closed_record["reason"] == "explicit"
 
-    await a_hc.close()
-    await b_hc.close()
     await hub.close()
 
 
@@ -309,12 +276,9 @@ async def test_audit_log_records_channel_expired_on_ttl_sweep() -> None:
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target=bob.agent_id, ttl="60s")
     pre_audit = len(await hub._audit_log.read_all())
@@ -329,8 +293,6 @@ async def test_audit_log_records_channel_expired_on_ttl_sweep() -> None:
     assert len(expired) == 1
     assert expired[0]["reason"] == "ttl_expired"
 
-    await a_hc.close()
-    await b_hc.close()
     await hub.close()
 
 
@@ -342,12 +304,9 @@ async def test_audit_log_records_task_terminated_on_channel_cascade() -> None:
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
 
-    a_hc = HubClient(link, hub=hub)
-    b_hc = HubClient(link, hub=hub)
-    alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
     channel = await alice.open(type="conversation", target=bob.agent_id)
 
     # Plant a non-terminal capability-tagged task under the channel.
@@ -374,6 +333,4 @@ async def test_audit_log_records_task_terminated_on_channel_cascade() -> None:
     assert rec["capability"] == "analysis"
     assert rec["outcome"] == TaskState.EXPIRED.value
 
-    await a_hc.close()
-    await b_hc.close()
     await hub.close()

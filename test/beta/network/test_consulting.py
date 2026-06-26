@@ -31,10 +31,6 @@ from autogen.beta.network import (
     EV_TEXT,
     Envelope,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
 from autogen.beta.network.adapters.consulting import ConsultingAdapter, ConsultingState
 from autogen.beta.network.channel import ChannelState
@@ -51,13 +47,9 @@ async def test_consulting_handshake_transitions_to_active() -> None:
     """alice.open → hub posts invite → bob auto-acks → channel ACTIVE."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    await hub.register(_agent("bob"))
 
     channel = await alice.open(type="consulting", target="bob")
     assert channel.state == ChannelState.ACTIVE
@@ -71,8 +63,6 @@ async def test_consulting_handshake_transitions_to_active() -> None:
     assert EV_CHANNEL_INVITE_ACK in event_types
     assert EV_CHANNEL_OPENED in event_types
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -81,16 +71,10 @@ async def test_consulting_full_flow_auto_closes() -> None:
     """Initiator sends prompt → respondent replies via default handler → CLOSED."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(
         _agent("bob", "Hi, this is bob's reply."),
-        Passport(name="bob"),
-        Resume(),
     )
 
     channel = await alice.open(type="consulting", target="bob")
@@ -116,8 +100,6 @@ async def test_consulting_full_flow_auto_closes() -> None:
     assert text_events[1].sender_id == bob.agent_id
     assert text_events[1].event_data["text"] == "Hi, this is bob's reply."
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -126,13 +108,9 @@ async def test_consulting_rejects_out_of_order_send() -> None:
     """Respondent cannot send before initiator's first envelope."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     channel = await alice.open(type="consulting", target="bob")
 
@@ -147,8 +125,6 @@ async def test_consulting_rejects_out_of_order_send() -> None:
     with pytest.raises(ProtocolError, match="initiator"):
         await hub.post_envelope(bad)
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -157,16 +133,10 @@ async def test_consulting_rejects_send_after_complete() -> None:
     """Adapter rejects any send after both turns have happened."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(
         _agent("bob", "ok"),
-        Passport(name="bob"),
-        Resume(),
     )
 
     channel = await alice.open(type="consulting", target="bob")
@@ -188,8 +158,6 @@ async def test_consulting_rejects_send_after_complete() -> None:
     with pytest.raises(ProtocolError):
         await hub.post_envelope(extra)
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -198,20 +166,14 @@ async def test_hub_hydrate_refolds_active_channel(tmp_path) -> None:
     """Close hub mid-flight, reopen, verify adapter state survives."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0)
-    link1 = LocalLink(hub1)
 
-    alice_hc = HubClient(link1, hub=hub1)
-    bob_hc = HubClient(link1, hub=hub1)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub1.register(_agent("alice"))
+    bob = await hub1.register(_agent("bob"))
 
     channel = await alice.open(type="consulting", target="bob")
     await channel.send("the question", audience=[bob.agent_id])
 
     # Don't wait for bob's reply — close hub mid-flight.
-    await alice_hc.close()
-    await bob_hc.close()
     await hub1.close()
 
     # Reopen with a fresh hub against the same store.
@@ -238,17 +200,11 @@ async def test_consulting_invite_timeout_when_no_handler() -> None:
     """If bob has no auto-ack handler, hub times out and fails the open."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, invite_ack_timeout=0.2)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await hub.register(_agent("alice"))
     # Bob registers with attach_plugin=False to skip the default handler.
-    bob = await bob_hc.register(
+    bob = await hub.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(),
         attach_plugin=False,
     )
     # And clear the auto-installed default handler — bob ignores invites.
@@ -257,8 +213,6 @@ async def test_consulting_invite_timeout_when_no_handler() -> None:
     with pytest.raises(ProtocolError, match="ack timeout"):
         await alice.open(type="consulting", target="bob")
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -291,10 +245,6 @@ async def test_delegate_tool_end_to_end() -> None:
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    link = LocalLink(hub)
-
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
     alice_agent = Agent(
         name="alice",
@@ -310,13 +260,11 @@ async def test_delegate_tool_end_to_end() -> None:
     )
     bob_agent = Agent(name="bob", config=TestConfig("4"))
 
-    await alice_hc.register(alice_agent, Passport(name="alice"), Resume())
-    await bob_hc.register(bob_agent, Passport(name="bob"), Resume())
+    await hub.register(alice_agent)
+    await hub.register(bob_agent)
 
     reply = await alice_agent.ask("ask bob to do math for me")
 
     assert reply.body == "The answer is 4."
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()

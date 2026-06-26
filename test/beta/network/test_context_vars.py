@@ -26,10 +26,6 @@ from autogen.beta.network import (
     Envelope,
     FromSpeaker,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
     TerminateTarget,
     Transition,
     TransitionGraph,
@@ -61,13 +57,9 @@ class TestContextVars:
         """One EV_CONTEXT_SET envelope merges into context_vars."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
 
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         graph = TransitionGraph(
             initial_speaker=alice.agent_id,
@@ -93,20 +85,15 @@ class TestContextVars:
         state = hub._adapter_states[channel.channel_id]
         assert state.context_vars == {"priority": "high", "ticket_id": "T-481"}
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
     async def test_set_then_delete(self) -> None:
         """Subsequent envelopes can both set and remove keys."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
 
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         graph = TransitionGraph(
             initial_speaker=alice.agent_id,
@@ -139,20 +126,15 @@ class TestContextVars:
         state = hub._adapter_states[channel.channel_id]
         assert state.context_vars == {"priority": "high", "resolved": True}
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
     async def test_loose_semantics_any_participant(self) -> None:
         """Non-current speaker can still post EV_CONTEXT_SET."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
 
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         # alice is initial speaker — bob is NOT expected_next_speaker.
         graph = TransitionGraph(
@@ -180,8 +162,6 @@ class TestContextVars:
         state = hub._adapter_states[channel.channel_id]
         assert state.context_vars == {"observer_flag": True}
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
     async def test_context_equals_drives_transition(self) -> None:
@@ -189,15 +169,9 @@ class TestContextVars:
         a value set via EV_CONTEXT_SET."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-
-        triage_hc = HubClient(link, hub=hub)
-        security_hc = HubClient(link, hub=hub)
-        legal_hc = HubClient(link, hub=hub)
-
-        triage = await triage_hc.register(_agent("triage", "triaged"), Passport(name="triage"), Resume())
-        security = await security_hc.register(_agent("security", "handled"), Passport(name="security"), Resume())
-        legal = await legal_hc.register(_agent("legal", "legal-reviewed"), Passport(name="legal"), Resume())
+        triage = await hub.register(_agent("triage", "triaged"))
+        security = await hub.register(_agent("security", "handled"))
+        legal = await hub.register(_agent("legal", "legal-reviewed"))
 
         # Terminate transitions are listed first so the post-handoff
         # speaker hits them before the ContextEquals rule (which would
@@ -251,9 +225,6 @@ class TestContextVars:
         # Routed to security, not legal.
         assert close_env.event_data.get("reason") == "security_done"
 
-        await triage_hc.close()
-        await security_hc.close()
-        await legal_hc.close()
         await hub.close()
 
     async def test_hydrate_replays_context_vars(self) -> None:
@@ -261,11 +232,8 @@ class TestContextVars:
         reconstructs ``context_vars`` via WAL replay."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         graph = TransitionGraph(
             initial_speaker=alice.agent_id,
@@ -299,8 +267,6 @@ class TestContextVars:
         # Snapshot before close.
         before = dict(hub._adapter_states[channel_id].context_vars)
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()
 
         # Re-open against the same store and re-fold the WAL.
@@ -316,11 +282,8 @@ class TestContextVars:
         """EV_CONTEXT_SET must not increment turn_count or rotate the speaker."""
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
-        link = LocalLink(hub)
-        alice_hc = HubClient(link, hub=hub)
-        bob_hc = HubClient(link, hub=hub)
-        alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
 
         graph = TransitionGraph(
             initial_speaker=alice.agent_id,
@@ -350,6 +313,4 @@ class TestContextVars:
         assert after.turn_count == before_turn
         assert after.expected_next_speaker == before_speaker
 
-        await alice_hc.close()
-        await bob_hc.close()
         await hub.close()

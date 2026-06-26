@@ -63,26 +63,22 @@ async def test_hydrate_reloads_identities_from_disk(tmp_path) -> None:
     """Close hub, reopen with same store, verify identities + resumes survive."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store)
-    link1 = LocalLink(hub1)
-    hc1 = HubClient(link1, hub=hub1)
 
-    alice = await hc1.register(
+    alice = await hub1.register(
         _agent("alice"),
         Passport(name="alice", owner="acme"),
-        Resume(claimed_capabilities=["analysis", "research"], summary="senior analyst"),
+        resume=Resume(claimed_capabilities=["analysis", "research"], summary="senior analyst"),
         skill_md="# Alice\nuse for research",
     )
-    bob = await hc1.register(
+    bob = await hub1.register(
         _agent("bob"),
-        Passport(name="bob"),
-        Resume(claimed_capabilities=["debate"]),
+        resume=Resume(claimed_capabilities=["debate"]),
         rule=Rule(limits=LimitsBlock(channel_ttl_default="4h")),
     )
 
     alice_id = alice.agent_id
     bob_id = bob.agent_id
 
-    await hc1.close()
     await hub1.close()
 
     # Reopen — no shared in-memory state with hub1.
@@ -119,16 +115,12 @@ async def test_outbound_access_denied() -> None:
     """Sender's outbound_to whitelist blocks the recipient."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(
+    alice = await hub.register(
         _agent("alice"),
-        Passport(name="alice"),
-        Resume(),
         rule=Rule(access=AccessBlock(outbound_to=["carol"])),  # bob not allowed
     )
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    bob = await hub.register(_agent("bob"))
 
     envelope = Envelope(
         channel_id="s1",
@@ -140,7 +132,6 @@ async def test_outbound_access_denied() -> None:
     with pytest.raises(AccessDeniedError):
         await alice.send_envelope(envelope)
 
-    await hc.close()
     await hub.close()
 
 
@@ -155,11 +146,9 @@ async def test_unregister_makes_send_fail() -> None:
     """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store)
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
 
-    alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
 
     await alice.unregister()
 
@@ -179,7 +168,6 @@ async def test_unregister_makes_send_fail() -> None:
     remaining_names = {p.name for p in await hub.list_agents()}
     assert remaining_names == {"bob"}
 
-    await hc.close()
     await hub.close()
 
 
