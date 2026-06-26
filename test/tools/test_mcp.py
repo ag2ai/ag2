@@ -23,11 +23,11 @@ from mcp.types import (
 )
 from mcp.types import Tool as MCPTool
 
-from autogen import Agent, Context
-from autogen.events import BinaryInput, BinaryType, TextInput, ToolCallEvent, ToolResultEvent, UrlInput
-from autogen.testing import TestConfig
-from autogen.tools import MCPStdioServerConfig, MCPToolkit
-from autogen.tools.toolkits.mcp_server import toolkit as _toolkit_module
+from ag2 import Agent, Context
+from ag2.events import BinaryInput, BinaryType, TextInput, ToolCallEvent, ToolResultEvent, UrlInput
+from ag2.testing import TestConfig
+from ag2.tools import MCPStdioServerConfig, MCPToolkit
+from ag2.tools.toolkits.mcp_server import toolkit as _toolkit_module
 
 MCPSessionPatch = Callable[[list[MCPTool], dict[str, CallToolResult] | None], "_FakeMCPSession"]
 

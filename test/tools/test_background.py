@@ -6,16 +6,16 @@ import asyncio
 
 import pytest
 
-from autogen import Agent, Context, MemoryStream, tool
-from autogen.events import (
+from ag2 import Agent, Context, MemoryStream, tool
+from ag2.events import (
     DrainedModelRequest,
     ModelMessage,
     ModelRequest,
     ModelResponse,
     ToolCallEvent,
 )
-from autogen.testing import TestConfig
-from autogen.tools.subagents import background_agent_tool
+from ag2.testing import TestConfig
+from ag2.tools.subagents import background_agent_tool
 
 
 @pytest.mark.asyncio
@@ -152,7 +152,7 @@ class TestBackgroundDelivery:
             tools=[start_failing],
         )
 
-        with caplog.at_level("ERROR", logger="autogen.context"):
+        with caplog.at_level("ERROR", logger="ag2.context"):
             reply = await asyncio.wait_for(agent.ask("go"), timeout=1.0)
 
         # Give the done-callback a chance to fire after the task raised.

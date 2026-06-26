@@ -10,10 +10,10 @@ import pytest
 
 pytest.importorskip("opentelemetry.sdk")
 
-from autogen import Agent
-from autogen.eval import Suite, run_pairwise
-from autogen.eval.pairwise import PairwiseOutcome
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.eval import Suite, run_pairwise
+from ag2.eval.pairwise import PairwiseOutcome
+from ag2.testing import TestConfig
 
 
 class _Scripted:

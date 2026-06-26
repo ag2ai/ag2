@@ -2,20 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Public-API tests for the prebuilt scorers in ``autogen.eval.scorers``."""
+"""Public-API tests for the prebuilt scorers in ``ag2.eval.scorers``."""
 
 from typing import Any
 
 import pytest
 
-from autogen.eval import Feedback, Scorer, Task, Trace
-from autogen.eval.scorers import (
+from ag2.eval import Feedback, Scorer, Task, Trace
+from ag2.eval.scorers import (
     final_answer_matches,
     no_tool_errors,
     token_budget,
     tool_called,
 )
-from autogen.events import (
+from ag2.events import (
     BaseEvent,
     ModelResponse,
     ToolCallEvent,

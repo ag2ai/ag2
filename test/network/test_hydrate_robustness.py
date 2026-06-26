@@ -25,9 +25,9 @@ import json
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     Envelope,
     Hub,
@@ -36,8 +36,8 @@ from autogen.network import (
     Resume,
     Rule,
 )
-from autogen.network.hub.audit import AuditLog
-from autogen.network.hub.layout import (
+from ag2.network.hub.audit import AuditLog
+from ag2.network.hub.layout import (
     audit_path,
     by_capability_path,
     rule_path,
@@ -262,7 +262,7 @@ async def test_hydrate_channel_metadata_with_no_adapter_state_not_active(tmp_pat
 @pytest.mark.asyncio
 async def test_hydrate_resume_observed_stats_survive(tmp_path) -> None:
     """Resume.observed (capability stats from record_observation) round-trip."""
-    from autogen.task import TaskMetadata, TaskSpec, TaskState
+    from ag2.task import TaskMetadata, TaskSpec, TaskState
 
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)

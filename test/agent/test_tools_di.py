@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from autogen import Agent, Context, Depends, Inject, Toolkit
-from autogen.events import ToolCallEvent
-from autogen.testing import TestConfig
+from ag2 import Agent, Context, Depends, Inject, Toolkit
+from ag2.events import ToolCallEvent
+from ag2.testing import TestConfig
 
 
 @pytest.fixture()

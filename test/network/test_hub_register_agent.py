@@ -16,19 +16,19 @@ agents) is untouched.
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     Hub,
     HubClient,
     LocalLink,
     Passport,
     Resume,
 )
-from autogen.network.adapters.conversation import CONVERSATION_TYPE
-from autogen.network.channel import ChannelState
-from autogen.network.errors import NotFoundError
-from autogen.testing import TestConfig
+from ag2.network.adapters.conversation import CONVERSATION_TYPE
+from ag2.network.channel import ChannelState
+from ag2.network.errors import NotFoundError
+from ag2.testing import TestConfig
 
 
 def _agent(name: str) -> Agent:

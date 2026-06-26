@@ -6,8 +6,8 @@ from contextlib import ExitStack
 
 import pytest
 
-from autogen import Context
-from autogen.tools.builtin.skills import Skill, SkillsTool, SkillsToolSchema
+from ag2 import Context
+from ag2.tools.builtin.skills import Skill, SkillsTool, SkillsToolSchema
 
 
 @pytest.mark.asyncio

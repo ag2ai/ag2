@@ -1,14 +1,14 @@
 from a2a.types import ClientCredentialsOAuthFlow, OAuthFlows
 
-from autogen import Agent
-from autogen.a2a import build_card
-from autogen.a2a.security import (
+from ag2 import Agent
+from ag2.a2a import build_card
+from ag2.a2a.security import (
     api_key_scheme,
     bearer_scheme,
     oauth2_scheme,
     require,
 )
-from autogen.config import AnthropicConfig
+from ag2.config import AnthropicConfig
 
 agent = Agent(
     name="claude",

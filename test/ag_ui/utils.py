@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from ag_ui.core import Message, RunAgentInput, Tool
 
-from autogen.ag_ui import AGUIStream
+from ag2.ag_ui import AGUIStream
 
 
 def uuid_str() -> str:

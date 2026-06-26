@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Context
+from ag2 import Context
 
 
 @pytest.fixture

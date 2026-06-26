@@ -1,6 +1,6 @@
 """Single agent for testing ag2 run / ag2 chat."""
 
-from autogen import AssistantAgent, LLMConfig
+from ag2 import AssistantAgent, LLMConfig
 
 config = LLMConfig(
     {"model": "gemini-3.1-flash-lite", "api_type": "google"},

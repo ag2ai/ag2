@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for TraceSource backends (``autogen.eval.sources.trace_source``)."""
+"""Tests for TraceSource backends (``ag2.eval.sources.trace_source``)."""
 
 import pytest
 
-from autogen._telemetry_consts import ATTR_SPAN_TYPE, SPAN_TYPE_AGENT, SPAN_TYPE_TOOL
-from autogen.eval.sources._spans import SpanData
-from autogen.eval.sources.trace_source import DirectoryTraceSource, InMemoryTraceSource, TraceRef, save_trace
-from autogen.eval.trace import Trace
-from autogen.events import ToolCallEvent, ToolResultEvent
+from ag2._telemetry_consts import ATTR_SPAN_TYPE, SPAN_TYPE_AGENT, SPAN_TYPE_TOOL
+from ag2.eval.sources._spans import SpanData
+from ag2.eval.sources.trace_source import DirectoryTraceSource, InMemoryTraceSource, TraceRef, save_trace
+from ag2.eval.trace import Trace
+from ag2.events import ToolCallEvent, ToolResultEvent
 
 _MS = 1_000_000
 

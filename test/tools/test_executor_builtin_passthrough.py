@@ -7,13 +7,13 @@ from contextlib import ExitStack
 import pytest
 from fast_depends.use import SerializerCls
 
-from autogen import Context, MemoryStream, ToolResult
-from autogen.events import (
+from ag2 import Context, MemoryStream, ToolResult
+from ag2.events import (
     ToolCallEvent,
     ToolNotFoundEvent,
 )
-from autogen.exceptions import ToolNotFoundError
-from autogen.tools.executor import ToolExecutor
+from ag2.exceptions import ToolNotFoundError
+from ag2.tools.executor import ToolExecutor
 
 
 def _not_found_events(events: list) -> list[ToolNotFoundEvent]:

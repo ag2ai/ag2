@@ -7,10 +7,10 @@ import datetime
 
 import pytest
 
-from autogen import Context
-from autogen.events import ModelMessage, ToolCallEvent
-from autogen.stream import MemoryStream
-from autogen.watch import (
+from ag2 import Context
+from ag2.events import ModelMessage, ToolCallEvent
+from ag2.stream import MemoryStream
+from ag2.watch import (
     AllOf,
     AnyOf,
     CadenceWatch,

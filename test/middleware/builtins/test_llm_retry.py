@@ -6,9 +6,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Context
-from autogen.events import BaseEvent, ModelMessage, ModelResponse, TextInput
-from autogen.middleware import RetryMiddleware
+from ag2 import Context
+from ag2.events import BaseEvent, ModelMessage, ModelResponse, TextInput
+from ag2.middleware import RetryMiddleware
 
 
 class TransientError(Exception):

@@ -12,8 +12,8 @@ reacts to a tool result mid-loop without the tool being re-executed.
 
 import pytest
 
-from autogen import Agent
-from autogen.events import (
+from ag2 import Agent
+from ag2.events import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -23,8 +23,8 @@ from autogen.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig, TrackingConfig
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig, TrackingConfig
 
 
 def _seed_through_tool_call(question: str, tool_name: str, args: str, tc_id: str):

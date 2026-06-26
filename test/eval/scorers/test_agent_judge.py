@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the Agent-as-judge scorer (``autogen.eval.scorers.judge``)."""
+"""Tests for the Agent-as-judge scorer (``ag2.eval.scorers.judge``)."""
 
 import pytest
 
@@ -12,14 +12,14 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from autogen._telemetry_consts import ATTR_SPAN_TYPE, SPAN_TYPE_AGENT, SPAN_TYPE_LLM
-from autogen.eval import InMemoryTraceSource, Suite, TraceRef, evaluate_traces
-from autogen.eval.dataset.task import Task
-from autogen.eval.scorers import agent_judge
-from autogen.eval.trace import Trace
-from autogen.events import ModelMessage, ModelResponse, ToolCallEvent
-from autogen.middleware.builtin.telemetry import TelemetryMiddleware
-from autogen.testing import TestConfig, TrackingConfig
+from ag2._telemetry_consts import ATTR_SPAN_TYPE, SPAN_TYPE_AGENT, SPAN_TYPE_LLM
+from ag2.eval import InMemoryTraceSource, Suite, TraceRef, evaluate_traces
+from ag2.eval.dataset.task import Task
+from ag2.eval.scorers import agent_judge
+from ag2.eval.trace import Trace
+from ag2.events import ModelMessage, ModelResponse, ToolCallEvent
+from ag2.middleware.builtin.telemetry import TelemetryMiddleware
+from ag2.testing import TestConfig, TrackingConfig
 
 
 def _empty_trace() -> Trace:

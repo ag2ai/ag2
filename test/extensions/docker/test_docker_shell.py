@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen import Context, Variable
-from autogen.extensions.docker import DockerEnvironment
-from autogen.tools.sandbox.adapter import ShellAdapter
+from ag2 import Context, Variable
+from ag2.extensions.docker import DockerEnvironment
+from ag2.tools.sandbox.adapter import ShellAdapter
 
 
 def _exec_result(output: bytes = b"ok\n", exit_code: int = 0) -> SimpleNamespace:
@@ -31,7 +31,7 @@ def _patch_docker(container: Any) -> Any:
         containers=SimpleNamespace(run=MagicMock(return_value=container)),
         close=MagicMock(return_value=None),
     )
-    return patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client)
+    return patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client)
 
 
 @pytest.mark.asyncio
@@ -82,7 +82,7 @@ class TestVariableResolution:
             close=MagicMock(return_value=None),
         )
         ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             shell = ShellAdapter(DockerEnvironment(image=Variable("tenant_image")))
             await shell.run("echo hi", context=ctx)
 

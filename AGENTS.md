@@ -22,9 +22,9 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 - Do not use `from __future__ import annotations`.
 - Do not use global variables or top-level side-effect function calls unless the user explicitly allows it.
 - For filesystem paths, use `pathlib.Path` internally. Public signatures should accept `str | os.PathLike[str]`.
-- Top-level imports from `autogen.*` are for common APIs that are broadly reusable across scenarios and core agent flows.
-  Good: `autogen.[Input]` — common structures usable in `await agent.ask(Input())` and as tool results.
-  Bad: `autogen.middleware.BaseMiddleware` — this is advanced/specialized and should be imported only when implementing custom middleware.
+- Top-level imports from `ag2.*` are for common APIs that are broadly reusable across scenarios and core agent flows.
+  Good: `ag2.[Input]` — common structures usable in `await agent.ask(Input())` and as tool results.
+  Bad: `ag2.middleware.BaseMiddleware` — this is advanced/specialized and should be imported only when implementing custom middleware.
 - Do not use function-level imports unless the user explicitly allows it.
   ```python
   # === BAD - import inside function ===
@@ -84,7 +84,7 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 
 ## Package Structure
 
-`autogen/` is a protocol-driven async agent framework. Key modules:
+`ag2/` is a protocol-driven async agent framework. Key modules:
 
 | Module | Purpose | Key Exports |
 |--------|---------|-------------|
@@ -103,32 +103,32 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 | `hitl.py` | Human-in-the-loop hooks | — |
 | `streams/` | Persistent stream backends (e.g. Redis) | — |
 
-### Public API (`autogen`)
+### Public API (`ag2`)
 
 Top-level modules:
-- `autogen` - top-level module with most basic functionality
-- `autogen.types` - Type aliases and constants
-- `autogen.config` - LLM provider clients (see [below](#llm-provider-clients))
-- `autogen.tools` - Tool system — builtin + user-defined (see [below](#builtin-tools))
-- `autogen.tools.subagents` - Agent-to-agent delegation (see [below](#subagent-delegation))
-- `autogen.testing` - Testing utilities
-- `autogen.middleware` - Request/response interception (see [below](#middleware))
-- `autogen.observer` - Reusable observer implementations
-- `autogen.eval` - Offline evaluation framework (datasets, scorers, runner, persistence)
+- `ag2` - top-level module with most basic functionality
+- `ag2.types` - Type aliases and constants
+- `ag2.config` - LLM provider clients (see [below](#llm-provider-clients))
+- `ag2.tools` - Tool system — builtin + user-defined (see [below](#builtin-tools))
+- `ag2.tools.subagents` - Agent-to-agent delegation (see [below](#subagent-delegation))
+- `ag2.testing` - Testing utilities
+- `ag2.middleware` - Request/response interception (see [below](#middleware))
+- `ag2.observer` - Reusable observer implementations
+- `ag2.eval` - Offline evaluation framework (datasets, scorers, runner, persistence)
 
 Advanced modules:
-- `autogen.events` - Event types for the agent loop
-- `autogen.streams` - Persistent stream backends (e.g. Redis)
-- `autogen.watch` - Watch system for triggering observers
-- `autogen.knowledge` - Knowledge management
-- `autogen.plugin` - Plugin system
+- `ag2.events` - Event types for the agent loop
+- `ag2.streams` - Persistent stream backends (e.g. Redis)
+- `ag2.watch` - Watch system for triggering observers
+- `ag2.knowledge` - Knowledge management
+- `ag2.plugin` - Plugin system
 
 ### Re-export rules
 
-All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires third-party dependencies, wrap the import in a `try/except ImportError` block and register a missing-dependency fallback so users get a clear install hint instead of an unexplained `ImportError` (see `autogen/config/__init__.py`, `autogen/middleware/builtin/__init__.py` as the reference pattern). Two fallbacks exist:
+All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires third-party dependencies, wrap the import in a `try/except ImportError` block and register a missing-dependency fallback so users get a clear install hint instead of an unexplained `ImportError` (see `ag2/config/__init__.py`, `ag2/middleware/builtin/__init__.py` as the reference pattern). Two fallbacks exist:
 
 - **Core modules** use **optional dependencies** shipped as pyproject extras — fall back via `missing_optional_dependency`, which hints `pip install "ag2[<extra>]"`.
-- **Extensions** (`autogen/extensions/`) are **not** shipped as extras — declare their third-party packages as **additional dependencies** and fall back via `missing_additional_dependency`, which hints the upstream package directly (e.g. `pip install "daytona>=0.171.0,<1"`).
+- **Extensions** (`ag2/extensions/`) are **not** shipped as extras — declare their third-party packages as **additional dependencies** and fall back via `missing_additional_dependency`, which hints the upstream package directly (e.g. `pip install "daytona>=0.171.0,<1"`).
 
 ### Design principles
 
@@ -139,7 +139,7 @@ All implementations must be re-exported from their public module's `__init__.py`
 
 ## Builtin Tools
 
-Builtin tools live in `autogen/tools/builtin/`. Each tool has:
+Builtin tools live in `ag2/tools/builtin/`. Each tool has:
 - A `ToolSchema` dataclass (provider-neutral capability flag)
 - A `Tool` class (constructs the schema, resolves Variables)
 
@@ -148,11 +148,11 @@ Builtin tools live in `autogen/tools/builtin/`. Each tool has:
 - Use `version` as the public parameter name on Tool constructors for provider-versioned tools (e.g., `WebSearchTool(version="web_search_20260209")`). The schema field may use a more specific name internally (e.g., `web_search_version`) — the Tool maps between them.
 - Tool constructor parameters that accept runtime values must also accept `Variable` for deferred context resolution (e.g., `max_uses: int | Variable | None`).
 - Tools with no configurable parameters (e.g., `MemoryTool`, `CodeExecutionTool`) should still accept a `version` keyword argument to allow version pinning.
-- Provider mappers in `autogen/config/{provider}/mappers.py` convert `ToolSchema` instances to provider-specific API dicts. Use `t.version` instead of hardcoding version strings.
+- Provider mappers in `ag2/config/{provider}/mappers.py` convert `ToolSchema` instances to provider-specific API dicts. Use `t.version` instead of hardcoding version strings.
 
 ### Adding a New Builtin Tool
 
-1. Create `autogen/tools/builtin/{tool_name}.py` with a `ToolSchema` dataclass and `Tool` class.
+1. Create `ag2/tools/builtin/{tool_name}.py` with a `ToolSchema` dataclass and `Tool` class.
 2. Add mapper handling in every provider's mapper:
    - Supported: add an `elif isinstance(t, YourToolSchema)` branch returning the provider-specific dict.
    - Unsupported: the existing fallback `raise UnsupportedToolError(t.type, "provider")` handles it.
@@ -161,7 +161,7 @@ Builtin tools live in `autogen/tools/builtin/`. Each tool has:
 
 ## Subagent Delegation
 
-Subagent tools live in `autogen/tools/subagents/` and are imported from `autogen.tools.subagents` (not re-exported from `autogen.tools`).
+Subagent tools live in `ag2/tools/subagents/` and are imported from `ag2.tools.subagents` (not re-exported from `ag2.tools`).
 
 | File | Purpose |
 |------|---------|
@@ -204,7 +204,7 @@ agent.as_tool(description="...", stream=persistent_stream())
 
 ## LLM Provider Clients
 
-Provider clients live in `autogen/config/{provider}/`. Each provider has at least three files:
+Provider clients live in `ag2/config/{provider}/`. Each provider has at least three files:
 - `config.py` — a `@dataclass(slots=True)` implementing the `ModelConfig` protocol
 - `{provider}_client.py` — a concrete class satisfying the `LLMClient` protocol (async `__call__`)
 - `mappers.py` — pure functions for converting messages, tools, response schemas, and usage between internal and provider-specific formats
@@ -225,7 +225,7 @@ Provider clients live in `autogen/config/{provider}/`. Each provider has at leas
 
 ### Adding a new provider
 
-1. Create `autogen/config/{provider}/` with `config.py`, `{provider}_client.py`, and `mappers.py`.
-2. Register the config in `autogen/config/__init__.py`: import inside a `try/except ImportError` block and add a `_missing_optional_dependency_config` fallback.
+1. Create `ag2/config/{provider}/` with `config.py`, `{provider}_client.py`, and `mappers.py`.
+2. Register the config in `ag2/config/__init__.py`: import inside a `try/except ImportError` block and add a `_missing_optional_dependency_config` fallback.
 3. Add the config to `__all__`.
 4. Add mapper tests under `test/config/{provider}/`

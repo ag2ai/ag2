@@ -4,8 +4,8 @@
 
 from xai_sdk.proto import usage_pb2
 
-from autogen.config.xai.mappers import normalize_usage
-from autogen.events import Usage
+from ag2.config.xai.mappers import normalize_usage
+from ag2.events import Usage
 
 
 def test_none_returns_empty_usage() -> None:

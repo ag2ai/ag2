@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.config.openai.mappers import tool_to_api, tool_to_responses_api
+from ag2.config.openai.mappers import tool_to_api, tool_to_responses_api
 from test.config._helpers import make_parameterless_tool, make_tool
 
 

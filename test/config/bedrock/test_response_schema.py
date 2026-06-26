@@ -10,10 +10,10 @@ import pytest
 from fast_depends.use import SerializerCls
 from pydantic import BaseModel
 
-from autogen.config.bedrock import BedrockClient
-from autogen.config.bedrock.mappers import response_proto_to_output_config
-from autogen.events import ModelRequest, TextInput
-from autogen.response import PromptedSchema, ResponseSchema
+from ag2.config.bedrock import BedrockClient
+from ag2.config.bedrock.mappers import response_proto_to_output_config
+from ag2.events import ModelRequest, TextInput
+from ag2.response import PromptedSchema, ResponseSchema
 from test.config.bedrock._helpers import FakeBedrockRuntime, StubSession, make_call_context
 
 

@@ -8,8 +8,8 @@ pytest.importorskip("google.genai")
 
 from google.genai import types as gtypes
 
-from autogen.events import Usage
-from autogen.live.gemini import normalize_realtime_usage
+from ag2.events import Usage
+from ag2.live.gemini import normalize_realtime_usage
 
 
 def test_maps_live_fields() -> None:

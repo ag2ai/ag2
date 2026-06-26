@@ -18,8 +18,8 @@ its promised non-AG2 surface, not just adapter-gated AG2-only tools.
 
 import pytest
 
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_PACKET,
     AgentTarget,
     FromSpeaker,
@@ -36,8 +36,8 @@ from autogen.network import (
     WorkflowState,
     default_build_packet_envelope,
 )
-from autogen.network.adapters.workflow import WORKFLOW_TYPE
-from autogen.network.channel import ChannelState
+from ag2.network.adapters.workflow import WORKFLOW_TYPE
+from ag2.network.channel import ChannelState
 
 
 @pytest.mark.asyncio

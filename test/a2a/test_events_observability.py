@@ -5,13 +5,13 @@
 import pytest
 from a2a.types import Part, TaskState
 
-from autogen.a2a.events import (
+from ag2.a2a.events import (
     A2AEvent,
     A2ATaskSnapshot,
     A2ATaskStatusUpdate,
 )
-from autogen.events import BaseEvent
-from autogen.stream import MemoryStream
+from ag2.events import BaseEvent
+from ag2.stream import MemoryStream
 
 from ._helpers import make_pair
 

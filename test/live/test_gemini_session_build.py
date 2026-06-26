@@ -11,8 +11,8 @@ pytest.importorskip("google.genai")
 from google.genai import Client
 from google.genai.types import Modality
 
-from autogen.live import gemini
-from autogen.tools.final import FunctionDefinition, FunctionToolSchema
+from ag2.live import gemini
+from ag2.tools.final import FunctionDefinition, FunctionToolSchema
 
 pytestmark = pytest.mark.gemini
 

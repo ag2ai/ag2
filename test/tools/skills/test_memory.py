@@ -9,11 +9,11 @@ from typing import Annotated
 import pytest
 from pydantic import ValidationError
 
-from autogen import Agent, Context, Depends, Variable
-from autogen.events import ToolCallEvent, ToolResultsEvent
-from autogen.exceptions import ToolNotFoundError
-from autogen.testing import TestConfig, TrackingConfig
-from autogen.tools.skills import MemoryRuntime, MemorySkill, SkillPlugin
+from ag2 import Agent, Context, Depends, Variable
+from ag2.events import ToolCallEvent, ToolResultsEvent
+from ag2.exceptions import ToolNotFoundError
+from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.skills import MemoryRuntime, MemorySkill, SkillPlugin
 
 
 def _call(tool: str, **arguments: object) -> ToolCallEvent:

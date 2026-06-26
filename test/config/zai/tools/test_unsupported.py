@@ -4,17 +4,17 @@
 
 import pytest
 
-from autogen import Context
-from autogen.config.zai.mappers import tool_to_api
-from autogen.exceptions import UnsupportedToolError
-from autogen.tools.builtin.code_execution import CodeExecutionTool
-from autogen.tools.builtin.image_generation import ImageGenerationTool
-from autogen.tools.builtin.mcp_server import MCPServerTool
-from autogen.tools.builtin.memory import MemoryTool
-from autogen.tools.builtin.shell import ShellTool
-from autogen.tools.builtin.skills import SkillsTool
-from autogen.tools.builtin.web_fetch import WebFetchTool
-from autogen.tools.builtin.x_search import XSearchTool
+from ag2 import Context
+from ag2.config.zai.mappers import tool_to_api
+from ag2.exceptions import UnsupportedToolError
+from ag2.tools.builtin.code_execution import CodeExecutionTool
+from ag2.tools.builtin.image_generation import ImageGenerationTool
+from ag2.tools.builtin.mcp_server import MCPServerTool
+from ag2.tools.builtin.memory import MemoryTool
+from ag2.tools.builtin.shell import ShellTool
+from ag2.tools.builtin.skills import SkillsTool
+from ag2.tools.builtin.web_fetch import WebFetchTool
+from ag2.tools.builtin.x_search import XSearchTool
 
 
 @pytest.mark.asyncio

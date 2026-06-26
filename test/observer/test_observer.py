@@ -8,11 +8,11 @@ from contextlib import ExitStack
 
 import pytest
 
-from autogen import Context
-from autogen.events import ModelMessage, ObserverAlert, Severity, ToolCallEvent
-from autogen.observers import BaseObserver
-from autogen.stream import MemoryStream
-from autogen.watch import EventWatch
+from ag2 import Context
+from ag2.events import ModelMessage, ObserverAlert, Severity, ToolCallEvent
+from ag2.observers import BaseObserver
+from ag2.stream import MemoryStream
+from ag2.watch import EventWatch
 
 
 class DummyObserver(BaseObserver):

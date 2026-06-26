@@ -12,10 +12,10 @@ exercised in the higher-level adapter tests.
 
 import pytest
 
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     AccessBlock,
     AccessDeniedError,

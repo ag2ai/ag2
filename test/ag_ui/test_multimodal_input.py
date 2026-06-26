@@ -19,10 +19,10 @@ from ag_ui.core import (
 )
 from typing_extensions import Self
 
-from autogen import Agent, Context
-from autogen.ag_ui import AGUIStream
-from autogen.config import LLMClient, ModelConfig
-from autogen.events import (
+from ag2 import Agent, Context
+from ag2.ag_ui import AGUIStream
+from ag2.config import LLMClient, ModelConfig
+from ag2.events import (
     AudioInput,
     BaseEvent,
     BinaryInput,

@@ -15,11 +15,11 @@ from a2a.types import (
     SecurityScheme,
 )
 
-from autogen import Agent
-from autogen.a2a import build_card
-from autogen.a2a.security import bearer_scheme, oauth2_scheme, require
-from autogen.testing import TestConfig
-from autogen.tools.skills import LocalRuntime, SkillsToolkit
+from ag2 import Agent
+from ag2.a2a import build_card
+from ag2.a2a.security import bearer_scheme, oauth2_scheme, require
+from ag2.testing import TestConfig
+from ag2.tools.skills import LocalRuntime, SkillsToolkit
 
 
 def _agent() -> Agent:

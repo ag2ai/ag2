@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autogen.config.gemini.files import GeminiFilesClient
-from autogen.files.types import FileContent, FileProvider, UploadedFile
+from ag2.config.gemini.files import GeminiFilesClient
+from ag2.files.types import FileContent, FileProvider, UploadedFile
 
 
 @pytest.mark.asyncio
 class TestGeminiFilesClient:
-    @patch("autogen.config.gemini.files.genai")
+    @patch("ag2.config.gemini.files.genai")
     async def test_upload(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client
@@ -37,7 +37,7 @@ class TestGeminiFilesClient:
         call_kwargs = mock_client.aio.files.upload.await_args.kwargs
         assert call_kwargs["config"] == {"display_name": "recording.mp3", "mime_type": "audio/mpeg"}
 
-    @patch("autogen.config.gemini.files.genai")
+    @patch("ag2.config.gemini.files.genai")
     async def test_upload_unknown_mime_falls_back_to_octet_stream(
         self, mock_genai: MagicMock, gemini_config: MagicMock
     ) -> None:
@@ -53,7 +53,7 @@ class TestGeminiFilesClient:
             "mime_type": "application/octet-stream",
         }
 
-    @patch("autogen.config.gemini.files.genai")
+    @patch("ag2.config.gemini.files.genai")
     async def test_read_downloadable(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client
@@ -69,7 +69,7 @@ class TestGeminiFilesClient:
 
         assert result == FileContent(name="video.mp4", data=b"video-bytes", media_type="video/mp4")
 
-    @patch("autogen.config.gemini.files.genai")
+    @patch("ag2.config.gemini.files.genai")
     async def test_read_uploaded_raises(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client
@@ -83,7 +83,7 @@ class TestGeminiFilesClient:
         with pytest.raises(NotImplementedError, match="user-uploaded files"):
             await GeminiFilesClient(gemini_config).read("files/abc123")
 
-    @patch("autogen.config.gemini.files.genai")
+    @patch("ag2.config.gemini.files.genai")
     async def test_list(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client
@@ -112,7 +112,7 @@ class TestGeminiFilesClient:
         ]
         assert result[0].created_at == 1735689600.0
 
-    @patch("autogen.config.gemini.files.genai")
+    @patch("ag2.config.gemini.files.genai")
     async def test_delete(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client

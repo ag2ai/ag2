@@ -6,9 +6,9 @@ import importlib.metadata
 
 from pydantic import BaseModel
 
-from autogen import Agent
-from autogen.mcp import MCPServer, build_ask_tool
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.mcp import MCPServer, build_ask_tool
+from ag2.testing import TestConfig
 
 
 class Weather(BaseModel):

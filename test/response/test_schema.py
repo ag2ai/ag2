@@ -12,9 +12,9 @@ from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
-from autogen.response import ResponseSchema
-from autogen.response.schema import RawSchema
-from autogen.types import ClassInfo
+from ag2.response import ResponseSchema
+from ag2.response.schema import RawSchema
+from ag2.types import ClassInfo
 
 
 class TestEmbeddedTypes:

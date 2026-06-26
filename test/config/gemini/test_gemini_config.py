@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 from google.genai import types
 from google.oauth2 import service_account
 
-from autogen.config import GeminiConfig, VertexAIConfig
-from autogen.config.gemini import GeminiClient
+from ag2.config import GeminiConfig, VertexAIConfig
+from ag2.config.gemini import GeminiClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
@@ -71,7 +71,7 @@ def test_max_output_tokens_can_be_set() -> None:
     assert config.max_output_tokens == 8192
 
 
-@patch("autogen.config.gemini.gemini_client.genai.Client")
+@patch("ag2.config.gemini.gemini_client.genai.Client")
 def test_gemini_config_forces_vertexai_false(mock_client) -> None:
     GeminiConfig(model="gemini-2.5-flash", api_key="key").create()
 
@@ -83,7 +83,7 @@ def test_gemini_config_forces_vertexai_false(mock_client) -> None:
     assert kwargs["credentials"] is None
 
 
-@patch("autogen.config.gemini.gemini_client.genai.Client")
+@patch("ag2.config.gemini.gemini_client.genai.Client")
 def test_vertex_config_forces_vertexai_true(mock_client) -> None:
     VertexAIConfig(
         model="gemini-2.5-pro",
@@ -98,8 +98,8 @@ def test_vertex_config_forces_vertexai_true(mock_client) -> None:
     assert kwargs["api_key"] is None
 
 
-@patch("autogen.config.gemini.gemini_client.genai.Client")
-@patch("autogen.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
+@patch("ag2.config.gemini.gemini_client.genai.Client")
+@patch("ag2.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
 def test_credentials_string_loads_service_account_file(mock_from_file, mock_client) -> None:
     loaded = MagicMock(spec=service_account.Credentials)
     mock_from_file.return_value = loaded
@@ -119,8 +119,8 @@ def test_credentials_string_loads_service_account_file(mock_from_file, mock_clie
     assert kwargs["credentials"] is loaded
 
 
-@patch("autogen.config.gemini.gemini_client.genai.Client")
-@patch("autogen.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
+@patch("ag2.config.gemini.gemini_client.genai.Client")
+@patch("ag2.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
 def test_credentials_object_passed_through_unchanged(mock_from_file, mock_client) -> None:
     creds = MagicMock(spec=service_account.Credentials)
 
@@ -136,8 +136,8 @@ def test_credentials_object_passed_through_unchanged(mock_from_file, mock_client
     assert kwargs["credentials"] is creds
 
 
-@patch("autogen.config.gemini.gemini_client.genai.Client")
-@patch("autogen.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
+@patch("ag2.config.gemini.gemini_client.genai.Client")
+@patch("ag2.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
 def test_credentials_none_passes_through(mock_from_file, mock_client) -> None:
     VertexAIConfig(model="gemini-2.5-flash", project="proj", location="us-central1").create()
 

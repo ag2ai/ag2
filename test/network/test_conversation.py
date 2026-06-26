@@ -19,11 +19,11 @@ This suite uses ``TestConfig`` so it runs offline and fast.
 
 import pytest
 
-from autogen import Agent
-from autogen.compact import CompactionSummary
-from autogen.events import ModelMessage, ModelRequest, TextInput
-from autogen.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.compact import CompactionSummary
+from ag2.events import ModelMessage, ModelRequest, TextInput
+from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_INVITE,
     EV_CHANNEL_INVITE_ACK,
     EV_CHANNEL_OPENED,
@@ -31,21 +31,21 @@ from autogen.network import (
     Envelope,
     Hub,
 )
-from autogen.network.adapters.base import default_render_envelope
-from autogen.network.adapters.conversation import (
+from ag2.network.adapters.base import default_render_envelope
+from ag2.network.adapters.conversation import (
     CONVERSATION_TYPE,
     ConversationAdapter,
     ConversationState,
 )
-from autogen.network.channel import (
+from ag2.network.channel import (
     ChannelMetadata,
     ChannelState,
     Participant,
     ParticipantRole,
 )
-from autogen.network.errors import ProtocolError
-from autogen.network.views.builtin import WindowedSummary
-from autogen.testing import TestConfig
+from ag2.network.errors import ProtocolError
+from ag2.network.views.builtin import WindowedSummary
+from ag2.testing import TestConfig
 
 from ._helpers import ScriptedConfig, wait_for_text_count
 

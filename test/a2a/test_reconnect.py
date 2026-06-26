@@ -20,13 +20,13 @@ from a2a.types import (
     TaskStatusUpdateEvent,
 )
 
-from autogen import Agent, Context
-from autogen.a2a.client import A2AClient, A2ADriveState
-from autogen.a2a.errors import A2AReconnectError
-from autogen.a2a.mappers.messages import build_user_message
-from autogen.events import TextInput
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2 import Agent, Context
+from ag2.a2a.client import A2AClient, A2ADriveState
+from ag2.a2a.errors import A2AReconnectError
+from ag2.a2a.mappers.messages import build_user_message
+from ag2.events import TextInput
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 def _make_agent_card() -> AgentCard:

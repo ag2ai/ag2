@@ -20,22 +20,22 @@ from typing import Any
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import ToolCallEvent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent, Context
+from ag2.events import ToolCallEvent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TASK_CANCEL_REQUEST,
     Hub,
     Resume,
 )
-from autogen.network.client.tools.channels import make_channels_tool
-from autogen.network.client.tools.context import make_context_tool
-from autogen.network.client.tools.peers import make_peers_tool
-from autogen.network.client.tools.tasks import make_tasks_tool
-from autogen.network.policies import AGENT_CLIENT_DEP, CHANNEL_DEP
-from autogen.stream import MemoryStream
-from autogen.task import TaskMetadata, TaskSpec, TaskState
-from autogen.testing import TestConfig
+from ag2.network.client.tools.channels import make_channels_tool
+from ag2.network.client.tools.context import make_context_tool
+from ag2.network.client.tools.peers import make_peers_tool
+from ag2.network.client.tools.tasks import make_tasks_tool
+from ag2.network.policies import AGENT_CLIENT_DEP, CHANNEL_DEP
+from ag2.stream import MemoryStream
+from ag2.task import TaskMetadata, TaskSpec, TaskState
+from ag2.testing import TestConfig
 
 
 def _agent(name: str, *events: object) -> Agent:
@@ -223,7 +223,7 @@ async def test_context_quote_returns_recent_n_from_speaker() -> None:
     bob = await hub.register(_agent("bob"), attach_plugin=False)
 
     # Auto-ack on bob so the conversation activates.
-    from autogen.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, Envelope
+    from ag2.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, Envelope
 
     async def _ack(envelope: Envelope) -> None:
         if envelope.event_type != EV_CHANNEL_INVITE:
@@ -260,7 +260,7 @@ async def test_context_quote_returns_recent_n_from_speaker() -> None:
 @pytest.mark.asyncio
 async def test_tasks_status_and_list_and_wait() -> None:
     """Status / list / wait operate on hub-observed tasks."""
-    from autogen.network.task_mirror import TaskMirror
+    from ag2.network.task_mirror import TaskMirror
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)

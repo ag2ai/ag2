@@ -5,7 +5,7 @@
 import httpx
 import pytest
 
-from autogen.a2a.transports._http import make_httpx_client
+from ag2.a2a.transports._http import make_httpx_client
 
 
 def test_factory_client_headers_not_mutated() -> None:

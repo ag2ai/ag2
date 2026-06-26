@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context, MemoryStream, Variable, tool
-from autogen import agent as actor_mod
-from autogen.agent import TaskConfig
-from autogen.events import (
+from ag2 import Agent, Context, MemoryStream, Variable, tool
+from ag2 import agent as actor_mod
+from ag2.agent import TaskConfig
+from ag2.events import (
     HumanInputRequest,
     HumanMessage,
     ModelMessage,
@@ -24,12 +24,12 @@ from autogen.events import (
     Usage,
     UsageEvent,
 )
-from autogen.testing import TestConfig
-from autogen.tools import Toolkit
-from autogen.tools.subagents import run_task as run_task_mod
-from autogen.tools.subagents import subagent_tool
-from autogen.tools.subagents.run_task import run_task
-from autogen.usage import UsageReport
+from ag2.testing import TestConfig
+from ag2.tools import Toolkit
+from ag2.tools.subagents import run_task as run_task_mod
+from ag2.tools.subagents import subagent_tool
+from ag2.tools.subagents.run_task import run_task
+from ag2.usage import UsageReport
 
 
 def _tool_names(tools: list) -> set[str]:

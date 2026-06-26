@@ -14,7 +14,7 @@ from a2a.types import (
     SecurityScheme,
 )
 
-from autogen.a2a.security import (
+from ag2.a2a.security import (
     Requirement,
     Scheme,
     api_key_scheme,

@@ -29,10 +29,10 @@ pytest.importorskip("anthropic")
 pytest.importorskip("openai")
 pytest.importorskip("google.genai")
 
-from autogen import Agent
-from autogen.config import AnthropicConfig, GeminiConfig, OpenAIConfig
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig, GeminiConfig, OpenAIConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_PACKET,
     EV_TEXT,
     Handoff,
@@ -42,12 +42,12 @@ from autogen.network import (
     Passport,
     Resume,
 )
-from autogen.network.adapters.discussion import (
+from ag2.network.adapters.discussion import (
     DISCUSSION_TYPE,
     ORDERING_ROUND_ROBIN,
 )
-from autogen.network.adapters.workflow import WORKFLOW_TYPE
-from autogen.network.transitions import (
+from ag2.network.adapters.workflow import WORKFLOW_TYPE
+from ag2.network.transitions import (
     AgentTarget,
     FromSpeaker,
     RevertToInitiatorTarget,

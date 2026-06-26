@@ -20,8 +20,8 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 pytest.importorskip("opentelemetry.sdk")
 
-from autogen import Agent, tool
-from autogen.eval import (
+from ag2 import Agent, tool
+from ag2.eval import (
     BudgetThresholds,
     Feedback,
     InMemoryTraceSource,
@@ -33,8 +33,8 @@ from autogen.eval import (
     run_agent,
     scorer,
 )
-from autogen.events import ModelResponse, ToolCallEvent
-from autogen.testing import TestConfig
+from ag2.events import ModelResponse, ToolCallEvent
+from ag2.testing import TestConfig
 
 
 @tool
@@ -295,8 +295,8 @@ async def test_inline_list_dataset_is_loaded(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_user_middleware_and_observers_still_fire(tmp_path: Path) -> None:
     """The runner's capture observer composes with user-supplied observers."""
-    from autogen.events import BaseEvent
-    from autogen.observers import observer as observer_factory
+    from ag2.events import BaseEvent
+    from ag2.observers import observer as observer_factory
 
     user_events: list[BaseEvent] = []
 

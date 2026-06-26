@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context, MemoryStream
-from autogen.config import LLMClient
-from autogen.events import BaseEvent, ModelMessage, ModelResponse
+from ag2 import Agent, Context, MemoryStream
+from ag2.config import LLMClient
+from ag2.events import BaseEvent, ModelMessage, ModelResponse
 
 
 class CustomEvent(BaseEvent):

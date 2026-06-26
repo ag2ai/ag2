@@ -26,11 +26,11 @@ These tests pin:
 
 import pytest
 
-from autogen import Agent
-from autogen.compact import CompactionSummary
-from autogen.events import ModelMessage, ModelRequest, TextInput
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.compact import CompactionSummary
+from ag2.events import ModelMessage, ModelRequest, TextInput
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     Envelope,
     FullTranscript,
@@ -41,19 +41,19 @@ from autogen.network import (
     WindowedSummary,
     default_name_resolver,
 )
-from autogen.network.adapters.base import default_render_envelope
-from autogen.network.adapters.consulting import ConsultingAdapter
-from autogen.network.adapters.conversation import ConversationAdapter
-from autogen.network.adapters.discussion import DiscussionAdapter
-from autogen.network.adapters.workflow import WorkflowAdapter
-from autogen.network.channel import (
+from ag2.network.adapters.base import default_render_envelope
+from ag2.network.adapters.consulting import ConsultingAdapter
+from ag2.network.adapters.conversation import ConversationAdapter
+from ag2.network.adapters.discussion import DiscussionAdapter
+from ag2.network.adapters.workflow import WorkflowAdapter
+from ag2.network.channel import (
     ChannelMetadata,
     ChannelState,
     Participant,
     ParticipantRole,
 )
-from autogen.network.client.handlers import _render_current_input
-from autogen.testing import TestConfig
+from ag2.network.client.handlers import _render_current_input
+from ag2.testing import TestConfig
 
 
 def _two_party_metadata(a_id: str, b_id: str) -> ChannelMetadata:

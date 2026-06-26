@@ -9,9 +9,9 @@ import pytest
 from fast_depends.use import SerializerCls
 from zai.api_resource.chat.completions import Completions as RealCompletions
 
-import autogen.config.zai.zai_client as zai_client_module
-from autogen.config.zai import ZAIClient, ZAIConfig, ZAIFilesClient
-from autogen.events import ModelRequest, TextInput
+import ag2.config.zai.zai_client as zai_client_module
+from ag2.config.zai import ZAIClient, ZAIConfig, ZAIFilesClient
+from ag2.events import ModelRequest, TextInput
 from test.config.zai._helpers import FakeCompletions, FakeZAIClient, make_call_context
 
 
@@ -199,7 +199,7 @@ async def test_client_connection_params_reach_sdk_client(monkeypatch: pytest.Mon
     }
 
 
-@patch("autogen.config.zai.files.ZaiClient")
+@patch("ag2.config.zai.files.ZaiClient")
 def test_create_files_client(_mock_zai_client: MagicMock) -> None:
     config = ZAIConfig(model="glm-5.2")
 

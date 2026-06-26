@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autogen.config.anthropic.files import AnthropicFilesClient
-from autogen.files.types import FileContent, FileProvider, UploadedFile
+from ag2.config.anthropic.files import AnthropicFilesClient
+from ag2.files.types import FileContent, FileProvider, UploadedFile
 
 
 @pytest.mark.asyncio
 class TestAnthropicFilesClient:
-    @patch("autogen.config.anthropic.files.AsyncAnthropic")
+    @patch("ag2.config.anthropic.files.AsyncAnthropic")
     async def test_upload(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_anthropic_cls.return_value = mock_client
@@ -36,7 +36,7 @@ class TestAnthropicFilesClient:
         )
         assert result.created_at == 1735689600.0
 
-    @patch("autogen.config.anthropic.files.AsyncAnthropic")
+    @patch("ag2.config.anthropic.files.AsyncAnthropic")
     async def test_read(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_anthropic_cls.return_value = mock_client
@@ -50,7 +50,7 @@ class TestAnthropicFilesClient:
 
         assert result == FileContent(name="output.csv", data=b"file-data", media_type="text/csv")
 
-    @patch("autogen.config.anthropic.files.AsyncAnthropic")
+    @patch("ag2.config.anthropic.files.AsyncAnthropic")
     async def test_list(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_anthropic_cls.return_value = mock_client
@@ -79,7 +79,7 @@ class TestAnthropicFilesClient:
         ]
         assert result[0].created_at == 1735689600.0
 
-    @patch("autogen.config.anthropic.files.AsyncAnthropic")
+    @patch("ag2.config.anthropic.files.AsyncAnthropic")
     async def test_delete(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_anthropic_cls.return_value = mock_client

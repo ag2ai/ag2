@@ -16,20 +16,20 @@ import json
 
 import pytest
 
-from autogen import Agent
-from autogen.events import ToolCallEvent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.events import ToolCallEvent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_PACKET,
     EV_TEXT,
     Handoff,
     Hub,
 )
-from autogen.network.adapters.consulting import ConsultingAdapter
-from autogen.network.adapters.conversation import ConversationAdapter
-from autogen.network.adapters.discussion import DiscussionAdapter
-from autogen.network.adapters.workflow import WorkflowAdapter
-from autogen.testing import TestConfig
+from ag2.network.adapters.consulting import ConsultingAdapter
+from ag2.network.adapters.conversation import ConversationAdapter
+from ag2.network.adapters.discussion import DiscussionAdapter
+from ag2.network.adapters.workflow import WorkflowAdapter
+from ag2.testing import TestConfig
 
 
 def _agent(name: str, *replies: str) -> Agent:

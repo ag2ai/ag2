@@ -4,8 +4,8 @@
 
 from typing import Any
 
-from autogen import Agent
-from autogen.tools import tool
+from ag2 import Agent
+from ag2.tools import tool
 
 
 @tool

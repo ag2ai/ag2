@@ -5,11 +5,11 @@
 import httpx
 import pytest
 
-from autogen import Agent
-from autogen.mcp import MCPServer
-from autogen.mcp.security import AccessToken, Requirement, oauth2_scheme, require
-from autogen.mcp.testing import serve
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.mcp import MCPServer
+from ag2.mcp.security import AccessToken, Requirement, oauth2_scheme, require
+from ag2.mcp.testing import serve
+from ag2.testing import TestConfig
 
 _INIT_BODY = {
     "jsonrpc": "2.0",

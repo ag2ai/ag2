@@ -15,10 +15,10 @@ import asyncio
 
 import pytest
 
-from autogen import Agent, tool
-from autogen.events import ModelMessage, ModelResponse, ToolCallEvent
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2 import Agent, tool
+from ag2.events import ModelMessage, ModelResponse, ToolCallEvent
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 @pytest.mark.asyncio

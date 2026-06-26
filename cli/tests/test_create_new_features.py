@@ -472,7 +472,7 @@ class TestTestCmdChanges:
         import sys
         from unittest.mock import patch as p
 
-        with p.dict(sys.modules, {"autogen": MagicMock()}):
+        with p.dict(sys.modules, {"ag2": MagicMock()}):
             result = runner.invoke(
                 app,
                 ["test", "eval", "fake.py", "--eval", "fake.yaml", "--baseline", "old.json"],
@@ -485,7 +485,7 @@ class TestTestCmdChanges:
         import sys
 
         with (
-            patch.dict(sys.modules, {"autogen": MagicMock()}),
+            patch.dict(sys.modules, {"ag2": MagicMock()}),
             patch("ag2_cli.commands.test._run_single_case") as mock_run,
         ):
             from ag2_cli.testing import CaseResult

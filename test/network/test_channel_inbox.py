@@ -24,15 +24,15 @@ import contextlib
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_CLOSED,
     Envelope,
     Hub,
 )
-from autogen.network.adapters.consulting import CONSULTING_TYPE
-from autogen.testing import TestConfig
+from ag2.network.adapters.consulting import CONSULTING_TYPE
+from ag2.testing import TestConfig
 
 
 def _agent(name: str, *events: object) -> Agent:

@@ -19,11 +19,11 @@ import httpx
 import pytest
 from dirty_equals import IsPartialDict
 
-from autogen import Agent
-from autogen.a2ui import A2UIServer, a2ui_action
-from autogen.a2ui.transports import RestTransport
-from autogen.events import ModelRequest, TextInput
-from autogen.testing import TestConfig, TrackingConfig
+from ag2 import Agent
+from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui.transports import RestTransport
+from ag2.events import ModelRequest, TextInput
+from ag2.testing import TestConfig, TrackingConfig
 
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 _A2UI_RESPONSE = (

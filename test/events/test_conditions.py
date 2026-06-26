@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.events import BaseEvent, Field
+from ag2.events import BaseEvent, Field
 
 
 class TestEvent(BaseEvent):

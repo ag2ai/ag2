@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from autogen.events import HaltEvent, ObserverAlert, Severity
+from ag2.events import HaltEvent, ObserverAlert, Severity
 
 
 class TestObserverAlertCreation:
@@ -34,4 +34,4 @@ class TestHaltEvent:
 
 
 # NOTE: InjectToPrompt, EmitToStream, CallHandler, HaltOnFatal are REMOVED.
-# Their functionality is now covered by AlertPolicy (from autogen.policies).
+# Their functionality is now covered by AlertPolicy (from ag2.policies).

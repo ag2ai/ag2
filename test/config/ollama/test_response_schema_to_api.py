@@ -9,8 +9,8 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field
 
-from autogen.config.ollama.mappers import response_proto_to_format
-from autogen.response import ResponseSchema
+from ag2.config.ollama.mappers import response_proto_to_format
+from ag2.response import ResponseSchema
 
 
 def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]

@@ -1,8 +1,8 @@
 import asyncio
 
-from autogen import Agent
-from autogen.a2a import A2AConfig, build_card
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.a2a import A2AConfig, build_card
+from ag2.config import AnthropicConfig
 
 agent = Agent(
     name="claude",

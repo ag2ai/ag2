@@ -23,10 +23,10 @@ test *params:
 [group("tests")]
 test-cov *params:
   pytest -vv --durations=10 --durations-min=1.0 \
-    --cov=autogen --cov-branch --cov-report=xml \
+    --cov=ag2 --cov-branch --cov-report=xml \
     -m "{{ _llm_filter }}" \
     test/ {{ params }}
-  coverage report -m --include="autogen/*"
+  coverage report -m --include="ag2/*"
 
 _llm_default_mark := "openai or gemini or anthropic or zai or ollama or dashscope"
 
@@ -41,10 +41,10 @@ test-llm mark=_llm_default_mark *params:
 [group("tests")]
 test-llm-cov mark=_llm_default_mark *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
-    --cov=autogen/config --cov-branch --cov-report=xml \
+    --cov=ag2/config --cov-branch --cov-report=xml \
     -m "{{ mark }}" \
     test/ {{ params }}
-  coverage report -m --include="autogen/config/*"
+  coverage report -m --include="ag2/config/*"
 
 [doc("Run all tests (with and without LLMs)")]
 [group("tests")]
@@ -56,9 +56,9 @@ test-all *params:
 [group("tests")]
 test-all-cov *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
-    --cov=autogen --cov-branch --cov-report=xml \
+    --cov=ag2 --cov-branch --cov-report=xml \
     test/ {{ params }}
-  coverage report -m --include="autogen/*"
+  coverage report -m --include="ag2/*"
 
 
 # Linter

@@ -21,9 +21,9 @@ This suite uses ``TestConfig`` so it runs offline and fast.
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_CLOSED,
     EV_CHANNEL_INVITE,
     EV_CHANNEL_INVITE_ACK,
@@ -32,10 +32,10 @@ from autogen.network import (
     Envelope,
     Hub,
 )
-from autogen.network.adapters.consulting import ConsultingAdapter, ConsultingState
-from autogen.network.channel import ChannelState
-from autogen.network.errors import ProtocolError
-from autogen.testing import TestConfig
+from ag2.network.adapters.consulting import ConsultingAdapter, ConsultingState
+from ag2.network.channel import ChannelState
+from ag2.network.errors import ProtocolError
+from ag2.testing import TestConfig
 
 
 def _agent(name: str, *events: object) -> Agent:
@@ -241,7 +241,7 @@ async def test_delegate_tool_end_to_end() -> None:
     to Alice, Alice's second LLM call to incorporate the reply — runs
     without any real LLM calls.
     """
-    from autogen.events import ToolCallEvent
+    from ag2.events import ToolCallEvent
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)

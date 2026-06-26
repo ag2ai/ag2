@@ -1,13 +1,13 @@
 import asyncio
 
-from autogen.events import ModelMessageChunk, TranscriptionChunkEvent
-from autogen.live import (
+from ag2.events import ModelMessageChunk, TranscriptionChunkEvent
+from ag2.live import (
     LiveAgent,
     SoundDevicePlayer,
     SoundDeviceRecorder,
     gemini,
 )
-from autogen.tools import ToolResult, tool
+from ag2.tools import ToolResult, tool
 
 
 @tool

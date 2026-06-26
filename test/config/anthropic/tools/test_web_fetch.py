@@ -4,9 +4,9 @@
 
 import pytest
 
-from autogen import Context
-from autogen.config.anthropic.mappers import tool_to_api
-from autogen.tools.builtin.web_fetch import WebFetchTool
+from ag2 import Context
+from ag2.config.anthropic.mappers import tool_to_api
+from ag2.tools.builtin.web_fetch import WebFetchTool
 
 
 @pytest.mark.asyncio

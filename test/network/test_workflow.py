@@ -20,24 +20,24 @@ Two layers:
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
+from ag2.network import (
     EV_PACKET,
     EV_TEXT,
     Envelope,
     Hub,
 )
-from autogen.network.adapters.workflow import (
+from ag2.network.adapters.workflow import (
     WORKFLOW_TYPE,
     WorkflowAdapter,
     WorkflowState,
 )
-from autogen.network.channel import (
+from ag2.network.channel import (
     ChannelState,
 )
-from autogen.network.errors import ProtocolError
-from autogen.network.transitions import (
+from ag2.network.errors import ProtocolError
+from ag2.network.transitions import (
     AgentTarget,
     Always,
     FromSpeaker,
@@ -52,7 +52,7 @@ from autogen.network.transitions import (
     WorkflowGraphError,
     register_target,
 )
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 
 def _agent(name: str, *events: object) -> Agent:

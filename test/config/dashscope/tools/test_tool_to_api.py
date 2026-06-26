@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.config.dashscope.mappers import tool_to_api
+from ag2.config.dashscope.mappers import tool_to_api
 from test.config._helpers import make_tool
 
 

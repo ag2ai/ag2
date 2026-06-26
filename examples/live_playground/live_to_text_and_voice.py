@@ -1,7 +1,7 @@
 import asyncio
 
-from autogen.events import ModelMessageChunk
-from autogen.live import (
+from ag2.events import ModelMessageChunk
+from ag2.live import (
     LiveAgent,
     OpenAIRealTimeConfig,
     SoundDevicePlayer,

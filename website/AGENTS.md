@@ -20,7 +20,7 @@ sidebarTitle: "Short Name"
 - Start each page with a brief 1-2 sentence overview of the concept before diving into details.
 - Use MkDocs Material admonition syntax for callouts: `!!! note`, `!!! warning`, `!!! tip`. Do **not** use Docusaurus-style `:::` fences or HTML `<Note>`/`<Warning>` JSX components.
 - Use ```` ```python linenums="1" ```` for code blocks that benefit from line numbers.
-- All Python imports in examples must use the `autogen` module path (e.g., `from autogen import Agent, tool`).
+- All Python imports in examples must use the `ag2` module path (e.g., `from ag2 import Agent, tool`).
 - When showing the same concept across multiple providers or alternatives, use `<Tabs>` and `<Tab title="...">` components. Each tab should be self-contained with its own code block.
 
 Example:
@@ -29,7 +29,7 @@ Example:
 <Tabs>
   <Tab title="OpenAI">
 ```python linenums="1"
-from autogen.config import OpenAIConfig
+from ag2.config import OpenAIConfig
 
 config = OpenAIConfig(model="gpt-5")
 ```
@@ -37,7 +37,7 @@ config = OpenAIConfig(model="gpt-5")
 
   <Tab title="Anthropic">
 ```python linenums="1"
-from autogen.config import AnthropicConfig
+from ag2.config import AnthropicConfig
 
 config = AnthropicConfig(model="claude-haiku-4-5-20251001")
 ```
@@ -62,13 +62,13 @@ Examples:
 
 ````
 ```python linenums="1"
-from autogen import Agent
+from ag2 import Agent
 ```
 ````
 
 ````
 ```python linenums="1" hl_lines="3"
-from autogen import Agent
+from ag2 import Agent
 
 agent = Agent(name="Assistant")  # this line is highlighted
 ```
@@ -76,8 +76,8 @@ agent = Agent(name="Assistant")  # this line is highlighted
 
 ````
 ```python linenums="1" hl_lines="1-2 5"
-from autogen import Agent, tool  # highlighted
-from autogen import Context       # highlighted
+from ag2 import Agent, tool  # highlighted
+from ag2 import Context       # highlighted
 
 @tool
 def greet(name: str) -> str:  # highlighted

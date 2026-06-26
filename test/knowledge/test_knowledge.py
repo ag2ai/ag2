@@ -14,10 +14,10 @@ import pytest
 
 pytest.importorskip("watchdog")
 
-from autogen import Agent
-from autogen.agent import KnowledgeConfig
-from autogen.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TextInput, UnknownEvent
-from autogen.knowledge import (
+from ag2 import Agent
+from ag2.agent import KnowledgeConfig
+from ag2.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TextInput, UnknownEvent
+from ag2.knowledge import (
     DefaultBootstrap,
     DiskKnowledgeStore,
     EventLogWriter,
@@ -25,8 +25,8 @@ from autogen.knowledge import (
     MemoryKnowledgeStore,
     SqliteKnowledgeStore,
 )
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 class TestMemoryKnowledgeStore:

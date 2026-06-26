@@ -4,16 +4,16 @@
 
 import pytest
 
-from autogen import Context
-from autogen.config.gemini.mappers import build_tools
-from autogen.exceptions import UnsupportedToolError
-from autogen.tools.builtin.image_generation import ImageGenerationTool
-from autogen.tools.builtin.mcp_server import MCPServerTool
-from autogen.tools.builtin.memory import MemoryTool
-from autogen.tools.builtin.retrieval import RetrievalTool
-from autogen.tools.builtin.shell import ShellTool
-from autogen.tools.builtin.skills import SkillsTool
-from autogen.tools.builtin.x_search import XSearchTool
+from ag2 import Context
+from ag2.config.gemini.mappers import build_tools
+from ag2.exceptions import UnsupportedToolError
+from ag2.tools.builtin.image_generation import ImageGenerationTool
+from ag2.tools.builtin.mcp_server import MCPServerTool
+from ag2.tools.builtin.memory import MemoryTool
+from ag2.tools.builtin.retrieval import RetrievalTool
+from ag2.tools.builtin.shell import ShellTool
+from ag2.tools.builtin.skills import SkillsTool
+from ag2.tools.builtin.x_search import XSearchTool
 
 
 @pytest.mark.asyncio

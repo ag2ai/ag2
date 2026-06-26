@@ -26,9 +26,9 @@ from collections.abc import Awaitable, Callable
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_INVITE,
     EV_CHANNEL_INVITE_ACK,
     EV_CHANNEL_INVITE_REJECT,
@@ -41,16 +41,16 @@ from autogen.network import (
     Passport,
     Resume,
 )
-from autogen.network.adapters.discussion import (
+from ag2.network.adapters.discussion import (
     DISCUSSION_TYPE,
     ORDERING_ROUND_ROBIN,
     DiscussionAdapter,
     DiscussionState,
 )
-from autogen.network.channel import ChannelState
-from autogen.network.client.agent_client import AgentClient
-from autogen.network.errors import ProtocolError
-from autogen.testing import TestConfig
+from ag2.network.channel import ChannelState
+from ag2.network.client.agent_client import AgentClient
+from ag2.network.errors import ProtocolError
+from ag2.testing import TestConfig
 
 from ._helpers import ScriptedConfig, wait_for_text_count
 

@@ -8,11 +8,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context, MemoryStream, tool
-from autogen.events import ClientToolCallEvent, ToolCallEvent
-from autogen.middleware import ToolExecution, ToolResultType
-from autogen.testing import TestConfig
-from autogen.tools.final.client_tool import ClientTool
+from ag2 import Agent, Context, MemoryStream, tool
+from ag2.events import ClientToolCallEvent, ToolCallEvent
+from ag2.middleware import ToolExecution, ToolResultType
+from ag2.testing import TestConfig
+from ag2.tools.final.client_tool import ClientTool
 
 
 @pytest.fixture()

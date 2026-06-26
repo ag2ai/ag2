@@ -5,8 +5,8 @@
 import pytest
 from fast_depends.use import SerializerCls
 
-from autogen.config.bedrock import BedrockClient
-from autogen.events import (
+from ag2.config.bedrock import BedrockClient
+from ag2.events import (
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,

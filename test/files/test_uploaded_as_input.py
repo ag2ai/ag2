@@ -4,9 +4,9 @@
 
 import pytest
 
-from autogen import Agent
-from autogen.files import FileProvider, UploadedFile
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.files import FileProvider, UploadedFile
+from ag2.testing import TestConfig
 
 
 @pytest.mark.asyncio

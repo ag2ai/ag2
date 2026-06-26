@@ -13,7 +13,7 @@ unchanged.
 import json
 from pathlib import Path
 
-from autogen.eval import (
+from ag2.eval import (
     Feedback,
     RunResult,
     Suite,
@@ -21,8 +21,8 @@ from autogen.eval import (
     Trace,
     TraceRef,
 )
-from autogen.eval.results.store import load_run, to_dict
-from autogen.events import HumanMessage, ModelResponse, ToolCallEvent, Usage
+from ag2.eval.results.store import load_run, to_dict
+from ag2.events import HumanMessage, ModelResponse, ToolCallEvent, Usage
 
 
 def _make_result(

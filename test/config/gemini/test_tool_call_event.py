@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.config.gemini.events import GeminiToolCallEvent
-from autogen.events._serialization import deserialize_value, serialize_value
+from ag2.config.gemini.events import GeminiToolCallEvent
+from ag2.events._serialization import deserialize_value, serialize_value
 
 
 def test_thought_signature_round_trip() -> None:

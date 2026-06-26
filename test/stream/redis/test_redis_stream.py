@@ -11,9 +11,9 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
-from autogen import Context
-from autogen.events import ImageInput, ModelMessage, TextInput, ToolCallEvent
-from autogen.streams.redis.serializer import Serializer
+from ag2 import Context
+from ag2.events import ImageInput, ModelMessage, TextInput, ToolCallEvent
+from ag2.streams.redis.serializer import Serializer
 
 pytestmark = [
     pytest.mark.redis,
@@ -117,7 +117,7 @@ def mock_redis():
 
 @pytest_asyncio.fixture(params=[Serializer.JSON, Serializer.PICKLE], ids=["json", "pickle"])
 async def redis_stream(mock_redis, request):
-    from autogen.streams.redis import RedisStream
+    from ag2.streams.redis import RedisStream
 
     serializer = request.param
     streams: list = []
@@ -126,8 +126,8 @@ async def redis_stream(mock_redis, request):
         kwargs.setdefault("prefix", f"ag2:test:{uuid4()}")
         kwargs.setdefault("serializer", serializer)
         with (
-            patch("autogen.streams.redis.stream.aioredis", create=True) as mock_aioredis,
-            patch("autogen.streams.redis.storage.aioredis", create=True) as mock_storage_aioredis,
+            patch("ag2.streams.redis.stream.aioredis", create=True) as mock_aioredis,
+            patch("ag2.streams.redis.storage.aioredis", create=True) as mock_storage_aioredis,
         ):
             mock_aioredis.from_url.return_value = mock_redis
             mock_storage_aioredis.from_url.return_value = mock_redis
@@ -143,12 +143,12 @@ async def redis_stream(mock_redis, request):
 
 @pytest.fixture(params=[Serializer.JSON, Serializer.PICKLE], ids=["json", "pickle"])
 def redis_storage(mock_redis, request):
-    from autogen.streams.redis import RedisStorage
+    from ag2.streams.redis import RedisStorage
 
     serializer = request.param
 
     def _make(prefix=None):
-        with patch("autogen.streams.redis.storage.aioredis", create=True) as mock_aioredis:
+        with patch("ag2.streams.redis.storage.aioredis", create=True) as mock_aioredis:
             mock_aioredis.from_url.return_value = mock_redis
             return RedisStorage(REDIS_URL, prefix=prefix or f"ag2:test:{uuid4()}", serializer=serializer)
 
@@ -163,7 +163,7 @@ def stream_id():
 class TestRedisStorage:
     async def test_save_and_get_history(self, redis_storage, stream_id):
         storage = redis_storage()
-        from autogen.stream import MemoryStream
+        from ag2.stream import MemoryStream
 
         stream = MemoryStream(storage, id=stream_id)
         ctx = Context(stream)
@@ -408,7 +408,7 @@ class TestBinaryRoundTrip:
     async def test_gemini_server_tool_call_event(self, redis_storage, stream_id):
         """Gemini grounding/code-exec events embed a google.genai.types.Part."""
         google_genai = pytest.importorskip("google.genai")
-        from autogen.config.gemini.events import GeminiServerToolCallEvent
+        from ag2.config.gemini.events import GeminiServerToolCallEvent
 
         storage = redis_storage()
         part = google_genai.types.Part(text="search results for ag2")
@@ -428,7 +428,7 @@ class TestBinaryRoundTrip:
     async def test_anthropic_server_tool_call_event(self, redis_storage, stream_id):
         """Anthropic server-tool events embed an anthropic.types.ServerToolUseBlock."""
         anthropic_types = pytest.importorskip("anthropic.types")
-        from autogen.config.anthropic.events import AnthropicServerToolCallEvent
+        from ag2.config.anthropic.events import AnthropicServerToolCallEvent
 
         storage = redis_storage()
         block = anthropic_types.ServerToolUseBlock(
@@ -449,7 +449,7 @@ class TestBinaryRoundTrip:
     async def test_openai_reasoning_event(self, redis_storage, stream_id):
         """OpenAI reasoning events must round-trip — they explicitly opt into persistence."""
         openai_responses = pytest.importorskip("openai.types.responses")
-        from autogen.config.openai.events import OpenAIReasoningEvent
+        from ag2.config.openai.events import OpenAIReasoningEvent
 
         storage = redis_storage()
         item = openai_responses.ResponseReasoningItem(

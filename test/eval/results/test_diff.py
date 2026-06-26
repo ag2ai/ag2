@@ -6,7 +6,7 @@
 
 import pytest
 
-from autogen.eval import (
+from ag2.eval import (
     Feedback,
     RunResult,
     RunsNotComparableError,

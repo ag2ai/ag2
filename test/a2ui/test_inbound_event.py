@@ -6,13 +6,13 @@
 
 import pytest
 
-from autogen import Agent
-from autogen.a2ui import A2UIClientEvent
-from autogen.a2ui.incoming import A2UIIncomingActionResult, parse_incoming_interactions
-from autogen.a2ui.middleware import A2UIInboundMiddleware
-from autogen.events import BaseEvent
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.a2ui import A2UIClientEvent
+from ag2.a2ui.incoming import A2UIIncomingActionResult, parse_incoming_interactions
+from ag2.a2ui.middleware import A2UIInboundMiddleware
+from ag2.events import BaseEvent
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 _ACTION_ENVELOPE = {
     "version": "v0.9",

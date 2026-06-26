@@ -25,9 +25,9 @@ from datetime import datetime
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_EXPECTATION_VIOLATED,
     EV_TEXT,
     Envelope,
@@ -35,12 +35,12 @@ from autogen.network import (
     Resume,
     Rule,
 )
-from autogen.network.adapters.consulting import CONSULTING_TYPE
-from autogen.network.adapters.conversation import (
+from ag2.network.adapters.consulting import CONSULTING_TYPE
+from ag2.network.adapters.conversation import (
     CONVERSATION_TYPE,
     ConversationAdapter,
 )
-from autogen.network.channel import (
+from ag2.network.channel import (
     ChannelManifest,
     ChannelMetadata,
     ChannelState,
@@ -49,7 +49,7 @@ from autogen.network.channel import (
     ParticipantRole,
     ParticipantSchema,
 )
-from autogen.network.hub import (
+from ag2.network.hub import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_AGENT_UNREGISTERED,
     AUDIT_KIND_EXPECTATION_VIOLATED,
@@ -62,7 +62,7 @@ from autogen.network.hub import (
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
 )
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 from ._helpers import _MockClock
 
@@ -356,8 +356,8 @@ async def test_notify_channel_handler_broadcasts_envelope() -> None:
 
     # Register a custom adapter with notify_channel on max_silence so we
     # don't have to wait for conversation's 1h default.
-    from autogen.network.adapters.conversation import ConversationAdapter
-    from autogen.network.views.builtin import WindowedSummary
+    from ag2.network.adapters.conversation import ConversationAdapter
+    from ag2.network.views.builtin import WindowedSummary
 
     class _NotifyAdapter(ConversationAdapter):
         def __init__(self) -> None:

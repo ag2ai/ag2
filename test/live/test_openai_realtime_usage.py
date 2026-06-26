@@ -11,8 +11,8 @@ from openai.types.realtime.realtime_response_usage_input_token_details import (
     RealtimeResponseUsageInputTokenDetails,
 )
 
-from autogen.events import Usage
-from autogen.live.openai import normalize_realtime_usage
+from ag2.events import Usage
+from ag2.live.openai import normalize_realtime_usage
 
 
 def test_maps_standard_fields() -> None:

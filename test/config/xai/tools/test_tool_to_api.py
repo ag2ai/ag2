@@ -6,7 +6,7 @@ import json
 
 from xai_sdk.chat import chat_pb2
 
-from autogen.config.xai.mappers import tool_to_api
+from ag2.config.xai.mappers import tool_to_api
 from test.config._helpers import make_tool
 
 

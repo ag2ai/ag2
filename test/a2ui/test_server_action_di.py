@@ -11,10 +11,10 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from autogen import Agent, Context, Depends, Inject, Variable
-from autogen.a2ui import A2UIServer, a2ui_action
-from autogen.a2ui.transports import RestTransport
-from autogen.testing import TestConfig
+from ag2 import Agent, Context, Depends, Inject, Variable
+from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui.transports import RestTransport
+from ag2.testing import TestConfig
 
 
 class Database:

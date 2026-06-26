@@ -6,11 +6,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import BaseEvent, ToolCallEvent, ToolResultEvent, ToolResultsEvent
-from autogen.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddleware
-from autogen.testing import TestConfig, TrackingConfig
-from autogen.tools import Toolkit, tool
+from ag2 import Agent, Context
+from ag2.events import BaseEvent, ToolCallEvent, ToolResultEvent, ToolResultsEvent
+from ag2.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddleware
+from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools import Toolkit, tool
 
 
 class OrderingMiddleware(BaseMiddleware):

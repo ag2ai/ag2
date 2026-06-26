@@ -4,8 +4,8 @@
 
 import pytest
 
-from autogen import Context, ToolResult
-from autogen.events import (
+from ag2 import Context, ToolResult
+from ag2.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -14,7 +14,7 @@ from autogen.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.policies.sliding_window import SlidingWindowPolicy
+from ag2.policies.sliding_window import SlidingWindowPolicy
 
 
 def _tool_response(call_id: str = "tc_1", name: str = "get") -> ModelResponse:

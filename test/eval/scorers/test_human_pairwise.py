@@ -8,10 +8,10 @@ import json
 
 import pytest
 
-from autogen.eval import InMemoryTraceSource, TraceRef, evaluate_pairwise
-from autogen.eval.scorers import export_pairwise_cases, human_labels, human_pairwise
-from autogen.eval.trace import Trace
-from autogen.events import ModelMessage, ModelResponse
+from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_pairwise
+from ag2.eval.scorers import export_pairwise_cases, human_labels, human_pairwise
+from ag2.eval.trace import Trace
+from ag2.events import ModelMessage, ModelResponse
 
 
 def _trace(answer: str) -> Trace:

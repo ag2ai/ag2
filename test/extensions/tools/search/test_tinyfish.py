@@ -14,10 +14,10 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("tinyfish")
 
-from autogen import Agent, Context, DataInput, Variable
-from autogen.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.extensions.tools.search import tinyfish as tinyfish_module
-from autogen.extensions.tools.search.tinyfish import (
+from ag2 import Agent, Context, DataInput, Variable
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
+from ag2.extensions.tools.search import tinyfish as tinyfish_module
+from ag2.extensions.tools.search.tinyfish import (
     _API_INTEGRATION_ENV_VAR,
     TinyFishFetchError,
     TinyFishFetchResponse,
@@ -27,7 +27,7 @@ from autogen.extensions.tools.search.tinyfish import (
     TinyFishSearchToolkit,
     _safe_url,
 )
-from autogen.testing import TestConfig, TrackingConfig
+from ag2.testing import TestConfig, TrackingConfig
 
 TINYFISH_BASE_URL = "https://agent.tinyfish.ai"
 

@@ -7,12 +7,12 @@ from dataclasses import dataclass
 
 import pytest
 
-from autogen import Agent
-from autogen.events import BinaryResult, ModelMessage, ModelResponse
-from autogen.mcp import MCPServer
-from autogen.mcp.mappers import reply_to_content, to_structured_dict
-from autogen.mcp.testing import connect
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.events import BinaryResult, ModelMessage, ModelResponse
+from ag2.mcp import MCPServer
+from ag2.mcp.mappers import reply_to_content, to_structured_dict
+from ag2.mcp.testing import connect
+from ag2.testing import TestConfig
 
 _IMG = b"\x89PNG\r\n\x1a\n"
 _AUDIO = b"RIFFxxxxWAVE"

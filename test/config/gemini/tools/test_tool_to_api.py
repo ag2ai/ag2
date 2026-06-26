@@ -4,8 +4,8 @@
 
 from google.genai import types
 
-from autogen.config.gemini.mappers import build_tools
-from autogen.tools.final import FunctionDefinition, FunctionToolSchema
+from ag2.config.gemini.mappers import build_tools
+from ag2.tools.final import FunctionDefinition, FunctionToolSchema
 from test.config._helpers import make_tool
 
 

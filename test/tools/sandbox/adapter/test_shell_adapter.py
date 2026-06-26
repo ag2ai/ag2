@@ -9,10 +9,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Context
-from autogen.tools.sandbox import ExecResult, Sandbox
-from autogen.tools.sandbox.adapter import ShellAdapter
-from autogen.tools.sandbox.local import LocalSandbox
+from ag2 import Context
+from ag2.tools.sandbox import ExecResult, Sandbox
+from ag2.tools.sandbox.adapter import ShellAdapter
+from ag2.tools.sandbox.local import LocalSandbox
 
 
 class _RecordingFactory:

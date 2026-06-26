@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from autogen import Agent
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.config import AnthropicConfig
 
 
 @pytest.fixture()

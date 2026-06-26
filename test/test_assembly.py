@@ -6,10 +6,10 @@
 
 import pytest
 
-from autogen import Context
-from autogen.assembly import AssemblerMiddleware
-from autogen.compact import CompactionSummary
-from autogen.events import (
+from ag2 import Context
+from ag2.assembly import AssemblerMiddleware
+from ag2.compact import CompactionSummary
+from ag2.events import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -19,15 +19,15 @@ from autogen.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from autogen.knowledge import KnowledgeStore, MemoryKnowledgeStore
-from autogen.policies import (
+from ag2.knowledge import KnowledgeStore, MemoryKnowledgeStore
+from ag2.policies import (
     ConversationPolicy,
     EpisodicMemoryPolicy,
     SlidingWindowPolicy,
     TokenBudgetPolicy,
     WorkingMemoryPolicy,
 )
-from autogen.stream import MemoryStream
+from ag2.stream import MemoryStream
 
 
 class TestConversationPolicy:

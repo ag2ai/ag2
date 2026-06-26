@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import ToolCallEvent, ToolResultsEvent
-from autogen.testing import TestConfig, TrackingConfig
-from autogen.tools import FilesystemToolkit
-from autogen.tools.toolkits.filesystem import _resolve_path
+from ag2 import Agent, Context
+from ag2.events import ToolCallEvent, ToolResultsEvent
+from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools import FilesystemToolkit
+from ag2.tools.toolkits.filesystem import _resolve_path
 
 
 def test_path_traversal_blocked(tmp_path: Path) -> None:

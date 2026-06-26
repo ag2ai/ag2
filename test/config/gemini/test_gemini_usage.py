@@ -6,8 +6,8 @@
 
 from unittest.mock import MagicMock
 
-from autogen.config.gemini.mappers import normalize_usage
-from autogen.events import Usage
+from ag2.config.gemini.mappers import normalize_usage
+from ag2.events import Usage
 
 
 def _make_metadata(prompt=100, candidates=20, total=120, cached=None, thoughts=None):

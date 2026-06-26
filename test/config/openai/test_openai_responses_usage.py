@@ -6,8 +6,8 @@
 
 from openai.types.responses.response_usage import InputTokensDetails, OutputTokensDetails, ResponseUsage
 
-from autogen.config.openai.mappers import normalize_responses_usage
-from autogen.events import Usage
+from ag2.config.openai.mappers import normalize_responses_usage
+from ag2.events import Usage
 
 
 class TestNormalizeUsage:

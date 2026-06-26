@@ -25,9 +25,9 @@ from unittest import mock
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_INVITE,
     EV_CHANNEL_INVITE_ACK,
     EV_TEXT,
@@ -43,7 +43,7 @@ from autogen.network import (
     Resume,
     WelcomeFrame,
 )
-from autogen.network.ids import make_id
+from ag2.network.ids import make_id
 
 from ._helpers import ScriptedConfig, wait_for_text_count
 
@@ -163,7 +163,7 @@ class TestReceiptCursorAdvance:
         WAL head instead of landing on whichever same-tick envelope drew the
         largest random suffix. Frozen here (the worst case of a coarse clock)
         so the assertion would fail ~always without strict monotonicity."""
-        with mock.patch("autogen.network.ids.time") as fake_time:
+        with mock.patch("ag2.network.ids.time") as fake_time:
             fake_time.time_ns.return_value = 1_700_000_000_000_000_000
 
             hub = await _new_hub()

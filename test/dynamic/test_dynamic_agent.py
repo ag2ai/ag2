@@ -6,16 +6,16 @@ import json
 
 import pytest
 
-from autogen import Agent, MemoryStream, tool
-from autogen.events import (
+from ag2 import Agent, MemoryStream, tool
+from ag2.events import (
     TaskCompleted,
     TaskFailed,
     TaskStarted,
     ToolCallEvent,
     ToolResultEvent,
 )
-from autogen.testing import TestConfig
-from autogen.tools.dynamic import dynamic_agent
+from ag2.testing import TestConfig
+from ag2.tools.dynamic import dynamic_agent
 
 
 @tool

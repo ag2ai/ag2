@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.config import OpenAIResponsesConfig
-from autogen.config.openai import OpenAIResponsesClient
+from ag2.config import OpenAIResponsesConfig
+from ag2.config.openai import OpenAIResponsesClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:

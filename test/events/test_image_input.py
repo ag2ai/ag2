@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from autogen.events import BinaryInput, FileIdInput, ImageInput, UrlInput
+from ag2.events import BinaryInput, FileIdInput, ImageInput, UrlInput
 
 
 def test_url_returns_image_url_input() -> None:

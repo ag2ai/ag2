@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.events import BaseEvent
-from autogen.events.conditions import TypeCondition
+from ag2.events import BaseEvent
+from ag2.events.conditions import TypeCondition
 
 
 class TestEvent(BaseEvent):

@@ -5,7 +5,7 @@
 """Shared scaffolding for network integration tests.
 
 * :class:`ScriptedConfig` — ``ModelConfig`` whose script persists across
-  multiple ``create()`` calls, unlike ``autogen.testing.TestConfig``
+  multiple ``create()`` calls, unlike ``ag2.testing.TestConfig``
   which resets its iterator each turn (breaks multi-turn LLM tests).
 * :func:`wait_for_text_count` — poll a channel's WAL until ``EV_TEXT``
   count reaches a threshold; conversation/discussion adapters have no
@@ -17,10 +17,10 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from autogen import Context
-from autogen.config import LLMClient, ModelConfig
-from autogen.events import BaseEvent, ModelMessage, ModelResponse
-from autogen.network import EV_TEXT, Envelope, Hub
+from ag2 import Context
+from ag2.config import LLMClient, ModelConfig
+from ag2.events import BaseEvent, ModelMessage, ModelResponse
+from ag2.network import EV_TEXT, Envelope, Hub
 
 __all__ = ("ScriptedConfig", "_MockClock", "wait_for_text_count")
 

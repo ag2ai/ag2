@@ -5,8 +5,8 @@
 import pytest
 from dirty_equals import IsFloat
 
-from autogen.events import BinaryResult, FileIdInput, Input
-from autogen.files import FileContent, FileProvider, UploadedFile
+from ag2.events import BinaryResult, FileIdInput, Input
+from ag2.files import FileContent, FileProvider, UploadedFile
 
 
 class TestUploadedFile:

@@ -15,8 +15,8 @@ import asyncio
 
 import pytest
 
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     ApiKeyAuth,
     AuthBlock,
     AuthError,

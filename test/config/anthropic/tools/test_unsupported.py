@@ -4,13 +4,13 @@
 
 import pytest
 
-from autogen import Context
-from autogen.config.anthropic.mappers import tool_to_api
-from autogen.exceptions import UnsupportedToolError
-from autogen.tools.builtin.image_generation import ImageGenerationTool
-from autogen.tools.builtin.retrieval import RetrievalTool
-from autogen.tools.builtin.shell import ShellTool
-from autogen.tools.builtin.x_search import XSearchTool
+from ag2 import Context
+from ag2.config.anthropic.mappers import tool_to_api
+from ag2.exceptions import UnsupportedToolError
+from ag2.tools.builtin.image_generation import ImageGenerationTool
+from ag2.tools.builtin.retrieval import RetrievalTool
+from ag2.tools.builtin.shell import ShellTool
+from ag2.tools.builtin.x_search import XSearchTool
 
 
 @pytest.mark.asyncio

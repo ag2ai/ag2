@@ -8,10 +8,10 @@ import pytest
 from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
-from autogen import ToolResult
-from autogen.compact import CompactionSummary
-from autogen.config.openai.mappers import convert_messages, events_to_responses_input
-from autogen.events import (
+from ag2 import ToolResult
+from ag2.compact import CompactionSummary
+from ag2.config.openai.mappers import convert_messages, events_to_responses_input
+from ag2.events import (
     AudioInput,
     BinaryInput,
     BinaryType,
@@ -26,8 +26,8 @@ from autogen.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.exceptions import ToolNotFoundError, UnsupportedInputError
-from autogen.files.types import FileProvider, UploadedFile
+from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
+from ag2.files.types import FileProvider, UploadedFile
 
 
 class TestTextInput:
@@ -604,7 +604,7 @@ def test_responses_hallucinated_tool_call_maps_with_error_text() -> None:
         {
             "type": "function_call_output",
             "call_id": "c1",
-            "output": "autogen.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
+            "output": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
         }
     ]
 
@@ -617,7 +617,7 @@ def test_completions_hallucinated_tool_call_maps_with_error_text() -> None:
         {
             "role": "tool",
             "tool_call_id": "c1",
-            "content": "autogen.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
+            "content": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
         },
     ]
 

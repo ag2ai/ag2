@@ -10,11 +10,11 @@ import pytest
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 
-from autogen import Agent
-from autogen.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
-from autogen.middleware.builtin.telemetry import TelemetryMiddleware
-from autogen.testing import TestConfig
-from autogen.tools import tool
+from ag2 import Agent
+from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
+from ag2.middleware.builtin.telemetry import TelemetryMiddleware
+from ag2.testing import TestConfig
+from ag2.tools import tool
 
 
 class _InMemorySpanExporter(SpanExporter):

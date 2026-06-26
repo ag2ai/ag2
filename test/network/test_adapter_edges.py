@@ -17,18 +17,18 @@ the existing per-adapter integration tests don't cover directly.
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     Envelope,
     Hub,
     ProtocolError,
 )
-from autogen.network.adapters.consulting import ConsultingAdapter, ConsultingState
-from autogen.network.adapters.conversation import ConversationAdapter
-from autogen.network.adapters.discussion import DiscussionAdapter, DiscussionState
-from autogen.network.channel import (
+from ag2.network.adapters.consulting import ConsultingAdapter, ConsultingState
+from ag2.network.adapters.conversation import ConversationAdapter
+from ag2.network.adapters.discussion import DiscussionAdapter, DiscussionState
+from ag2.network.channel import (
     ChannelMetadata,
     ChannelState,
     Participant,
@@ -253,7 +253,7 @@ class TestConversationAdapter:
         assert state.last_envelope_id == "e3"
 
     def test_fold_ignores_protocol_envelopes(self) -> None:
-        from autogen.network.envelope import EV_CHANNEL_OPENED
+        from ag2.network.envelope import EV_CHANNEL_OPENED
 
         adapter = ConversationAdapter()
         meta = _make_metadata(
@@ -427,7 +427,7 @@ async def test_hydrate_refolds_discussion_state_deterministically() -> None:
     would produce live."""
     import tempfile
 
-    from autogen.knowledge import DiskKnowledgeStore
+    from ag2.knowledge import DiskKnowledgeStore
 
     with tempfile.TemporaryDirectory() as tmp:
         store = DiskKnowledgeStore(tmp)

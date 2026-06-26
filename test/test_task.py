@@ -5,16 +5,16 @@
 """Tests for the framework-core ``Task`` primitive.
 
 Covers standalone usage with no hub or network — pure
-``autogen.task`` lifecycle, event emission, dependency stamping
+``ag2.task`` lifecycle, event emission, dependency stamping
 for ``TaskInject``, and TTL field population.
 """
 
 import pytest
 
-from autogen import Agent, TaskSpec
-from autogen.config import AnthropicConfig
-from autogen.context import ConversationContext
-from autogen.events import (
+from ag2 import Agent, TaskSpec
+from ag2.config import AnthropicConfig
+from ag2.context import ConversationContext
+from ag2.events import (
     BaseEvent,
     TaskCompleted,
     TaskExpired,
@@ -22,8 +22,8 @@ from autogen.events import (
     TaskProgress,
     TaskStarted,
 )
-from autogen.stream import MemoryStream
-from autogen.task import TERMINAL_TASK_STATES, TaskState
+from ag2.stream import MemoryStream
+from ag2.task import TERMINAL_TASK_STATES, TaskState
 
 
 def _agent() -> Agent:

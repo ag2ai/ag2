@@ -1,7 +1,7 @@
 import asyncio
 
-from autogen import Agent, config
-from autogen.live import OpenAITTSConfig, OpenAITranscriber, SoundDevicePlayer, SoundDeviceRecorder, TTSObserver
+from ag2 import Agent, config
+from ag2.live import OpenAITTSConfig, OpenAITranscriber, SoundDevicePlayer, SoundDeviceRecorder, TTSObserver
 
 agent = Agent(
     name="assistant",

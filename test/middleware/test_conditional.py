@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import (
+from ag2 import Agent, Context
+from ag2.events import (
     BaseEvent,
     HumanInputRequest,
     HumanMessage,
@@ -16,7 +16,7 @@ from autogen.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from autogen.middleware import (
+from ag2.middleware import (
     AgentTurn,
     BaseMiddleware,
     ConditionalMiddleware,
@@ -25,7 +25,7 @@ from autogen.middleware import (
     Middleware,
     ToolExecution,
 )
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 
 class TrackingMiddleware(BaseMiddleware):

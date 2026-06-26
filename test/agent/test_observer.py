@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context, Depends, Inject, Variable, observer
-from autogen.events import BaseEvent, ModelRequest, ModelResponse, ToolCallEvent
-from autogen.testing import TestConfig
+from ag2 import Agent, Context, Depends, Inject, Variable, observer
+from ag2.events import BaseEvent, ModelRequest, ModelResponse, ToolCallEvent
+from ag2.testing import TestConfig
 
 
 @pytest.fixture()

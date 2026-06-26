@@ -8,34 +8,34 @@ aggregation — every opt-in Agent primitive exercised against a real LLM.
 
 import pytest
 
-from autogen import Agent
-from autogen.agent import KnowledgeConfig
-from autogen.aggregate import (
+from ag2 import Agent
+from ag2.agent import KnowledgeConfig
+from ag2.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
     WorkingMemoryAggregate,
 )
-from autogen.compact import (
+from ag2.compact import (
     CompactTrigger,
     SummarizeCompact,
     TailWindowCompact,
 )
-from autogen.events import (
+from ag2.events import (
     AggregationCompleted,
     CompactionCompleted,
     ModelRequest,
     TextInput,
 )
-from autogen.knowledge import (
+from ag2.knowledge import (
     DefaultBootstrap,
     MemoryKnowledgeStore,
 )
-from autogen.policies import (
+from ag2.policies import (
     ConversationPolicy,
     SlidingWindowPolicy,
     TokenBudgetPolicy,
 )
-from autogen.stream import MemoryStream
+from ag2.stream import MemoryStream
 
 pytestmark = pytest.mark.asyncio
 

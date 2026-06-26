@@ -10,12 +10,12 @@ from typing import Any
 import pytest
 from typing_extensions import Self
 
-from autogen import Agent, Context
-from autogen.config import LLMClient, ModelConfig
-from autogen.events import BaseEvent, ModelResponse
-from autogen.mcp.executor import AgentExecutor, _session_id
-from autogen.mcp.sessions import STDIO_SESSION, SessionConfig, SessionStore
-from autogen.testing import TestConfig
+from ag2 import Agent, Context
+from ag2.config import LLMClient, ModelConfig
+from ag2.events import BaseEvent, ModelResponse
+from ag2.mcp.executor import AgentExecutor, _session_id
+from ag2.mcp.sessions import STDIO_SESSION, SessionConfig, SessionStore
+from ag2.testing import TestConfig
 
 
 class _RecordingClient(LLMClient):

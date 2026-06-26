@@ -9,9 +9,9 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import Field
 
-from autogen import Context, Depends, Variable
-from autogen.response import response_schema
-from autogen.stream import MemoryStream
+from ag2 import Context, Depends, Variable
+from ag2.response import response_schema
+from ag2.stream import MemoryStream
 
 
 class TestNameDescription:

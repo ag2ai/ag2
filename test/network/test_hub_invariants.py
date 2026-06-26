@@ -32,10 +32,10 @@ from typing import Any
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import ToolCallEvent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent, Context
+from ag2.events import ToolCallEvent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_INVITE,
     EV_CHANNEL_INVITE_ACK,
     EV_TEXT,
@@ -50,10 +50,10 @@ from autogen.network import (
     Resume,
     Rule,
 )
-from autogen.network.adapters.conversation import (
+from ag2.network.adapters.conversation import (
     CONVERSATION_TYPE,
 )
-from autogen.network.channel import (
+from ag2.network.channel import (
     ChannelManifest,
     ChannelMetadata,
     ChannelState,
@@ -62,25 +62,25 @@ from autogen.network.channel import (
     ParticipantRole,
     ParticipantSchema,
 )
-from autogen.network.client.tools.delegate import make_delegate_tool
-from autogen.network.hub.expectations import (
+from ag2.network.client.tools.delegate import make_delegate_tool
+from ag2.network.hub.expectations import (
     AcksWithinEvaluator,
 )
-from autogen.network.hub.layout import (
+from ag2.network.hub.layout import (
     by_capability_path,
     passport_path,
     resume_path,
     rule_path,
     skill_path,
 )
-from autogen.network.rule import InboxBlock, LimitsBlock
-from autogen.stream import MemoryStream
-from autogen.task import (
+from ag2.network.rule import InboxBlock, LimitsBlock
+from ag2.stream import MemoryStream
+from ag2.task import (
     TaskMetadata,
     TaskSpec,
     TaskState,
 )
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 from ._helpers import _MockClock
 
@@ -378,7 +378,7 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    from autogen.network.policies import AGENT_CLIENT_DEP
+    from ag2.network.policies import AGENT_CLIENT_DEP
 
     alice = await hub.register(_agent("alice"))
     await hub.register(_agent("bob", "the answer is 42"))
@@ -408,7 +408,7 @@ async def test_delegate_to_self_returns_actionable_error() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    from autogen.network.policies import AGENT_CLIENT_DEP
+    from ag2.network.policies import AGENT_CLIENT_DEP
 
     alice = await hub.register(_agent("alice"))
 
@@ -435,7 +435,7 @@ async def test_delegate_fails_fast_when_channel_closes_before_reply() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    from autogen.network.policies import AGENT_CLIENT_DEP
+    from ag2.network.policies import AGENT_CLIENT_DEP
 
     alice = await hub.register(_agent("alice"))
     bob = await hub.register(_agent("bob"), attach_plugin=False)
@@ -773,7 +773,7 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    from autogen.network.policies import AGENT_CLIENT_DEP
+    from ag2.network.policies import AGENT_CLIENT_DEP
 
     alice = await hub.register(_agent("alice"))
     bob = await hub.register(_agent("bob"), attach_plugin=False)

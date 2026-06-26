@@ -12,9 +12,9 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("exa_py")
 
-from autogen import Agent, Context, DataInput, Variable
-from autogen.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.extensions.tools.search.exa import (
+from ag2 import Agent, Context, DataInput, Variable
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
+from ag2.extensions.tools.search.exa import (
     ExaAnswerCitation,
     ExaAnswerResult,
     ExaContentResult,
@@ -22,7 +22,7 @@ from autogen.extensions.tools.search.exa import (
     ExaSearchResult,
     ExaToolkit,
 )
-from autogen.testing import TestConfig, TrackingConfig
+from ag2.testing import TestConfig, TrackingConfig
 
 EXA_BASE_URL = "https://api.exa.ai"
 

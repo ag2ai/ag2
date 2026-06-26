@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.a2ui.incoming import (
+from ag2.a2ui.incoming import (
     A2UIIncomingAction,
     A2UIIncomingActionResult,
     A2UIIncomingErrorResult,

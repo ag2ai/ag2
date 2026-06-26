@@ -11,10 +11,10 @@ from a2a.client.client_factory import TransportProtocol
 from a2a.types import AgentCapabilities, AgentCard, AgentInterface
 from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
 
-from autogen import Agent
-from autogen.a2a import A2AConfig
-from autogen.a2a.errors import A2AIncompatibleProtocolVersionError
-from autogen.a2a.transports._http import select_interface, validate_protocol_version
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+from ag2.a2a.errors import A2AIncompatibleProtocolVersionError
+from ag2.a2a.transports._http import select_interface, validate_protocol_version
 
 
 def _iface(*, url: str, version: str, binding: str = TransportProtocol.JSONRPC.value) -> AgentInterface:

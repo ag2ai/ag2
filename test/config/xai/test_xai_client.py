@@ -10,10 +10,10 @@ from fast_depends.use import SerializerCls
 from xai_sdk.chat import chat_pb2
 from xai_sdk.proto import usage_pb2
 
-from autogen import Context
-from autogen.config.xai import XAIConfig
-from autogen.config.xai.events import XAIAssistantEvent
-from autogen.events import (
+from ag2 import Context
+from ag2.config.xai import XAIConfig
+from ag2.config.xai.events import XAIAssistantEvent
+from ag2.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelRequest,
@@ -23,8 +23,8 @@ from autogen.events import (
     ToolCallsEvent,
     Usage,
 )
-from autogen.response import ResponseSchema
-from autogen.stream import MemoryStream
+from ag2.response import ResponseSchema
+from ag2.stream import MemoryStream
 
 
 def _fake_response(
@@ -62,7 +62,7 @@ def _fake_tool_call(
 
 
 def _make_client_with_stub_chat(stub_chat: MagicMock) -> tuple[object, Context]:
-    with patch("autogen.config.xai.xai_client.AsyncClient") as mock_async_client:
+    with patch("ag2.config.xai.xai_client.AsyncClient") as mock_async_client:
         instance = MagicMock()
         instance.chat.create.return_value = stub_chat
         mock_async_client.return_value = instance
@@ -170,7 +170,7 @@ async def test_streaming_accumulates_chunks() -> None:
     stub_chat = MagicMock()
     stub_chat.stream = MagicMock(return_value=fake_stream())
 
-    with patch("autogen.config.xai.xai_client.AsyncClient") as mock_async_client:
+    with patch("ag2.config.xai.xai_client.AsyncClient") as mock_async_client:
         instance = MagicMock()
         instance.chat.create.return_value = stub_chat
         mock_async_client.return_value = instance
@@ -228,7 +228,7 @@ async def test_response_format_passed_to_chat_create() -> None:
     stub_chat = MagicMock()
     stub_chat.sample = AsyncMock(return_value=_fake_response(content="42"))
 
-    with patch("autogen.config.xai.xai_client.AsyncClient") as mock_async_client:
+    with patch("ag2.config.xai.xai_client.AsyncClient") as mock_async_client:
         instance = MagicMock()
         instance.chat.create.return_value = stub_chat
         mock_async_client.return_value = instance

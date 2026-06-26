@@ -6,14 +6,14 @@ import pytest
 from fast_depends.use import SerializerCls
 from google.genai import types
 
-from autogen import ToolResult
-from autogen.compact import CompactionSummary
-from autogen.config.gemini.events import (
+from ag2 import ToolResult
+from ag2.compact import CompactionSummary
+from ag2.config.gemini.events import (
     GeminiServerToolCallEvent,
     GeminiServerToolResultEvent,
 )
-from autogen.config.gemini.mappers import convert_messages
-from autogen.events import (
+from ag2.config.gemini.mappers import convert_messages
+from ag2.events import (
     AudioInput,
     BinaryInput,
     DocumentInput,
@@ -29,7 +29,7 @@ from autogen.events import (
     ToolResultsEvent,
     VideoInput,
 )
-from autogen.exceptions import ToolNotFoundError, UnsupportedInputError
+from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -503,7 +503,7 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
             {
                 "function_response": {
                     "name": "ghost_tool",
-                    "response": {"result": "autogen.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"},
+                    "response": {"result": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"},
                 }
             }
         ],

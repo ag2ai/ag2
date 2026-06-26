@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from autogen.events import ToolCallEvent, ToolResultEvent
-from autogen.middleware import approval_required
-from autogen.middleware.builtin.tools.approval import BYPASS_KEY
+from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.middleware import approval_required
+from ag2.middleware.builtin.tools.approval import BYPASS_KEY
 
 
 def make_context(

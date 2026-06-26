@@ -6,7 +6,7 @@ import pytest
 from a2a.server.tasks import InMemoryPushNotificationConfigStore, InMemoryTaskStore
 from a2a.types import TaskState
 
-from autogen.a2a.push import (
+from ag2.a2a.push import (
     A2APushAuthentication,
     A2APushConfig,
     create_push_notification_config,
@@ -14,8 +14,8 @@ from autogen.a2a.push import (
     get_push_notification_config,
     list_push_notification_configs,
 )
-from autogen.a2a.tasks import ListedTasks, cancel_task, get_task, list_tasks
-from autogen.exceptions import HumanInputNotProvidedError
+from ag2.a2a.tasks import ListedTasks, cancel_task, get_task, list_tasks
+from ag2.exceptions import HumanInputNotProvidedError
 
 from ._helpers import PromptThenAckExecutor, make_executor_pair, make_pair
 

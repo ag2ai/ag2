@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autogen import Context, Variable
-from autogen.extensions.daytona import DaytonaEnvironment
-from autogen.extensions.daytona.sandbox import DaytonaSandbox
-from autogen.tools import SandboxShellTool
-from autogen.tools.sandbox import SandboxFactory
+from ag2 import Context, Variable
+from ag2.extensions.daytona import DaytonaEnvironment
+from ag2.extensions.daytona.sandbox import DaytonaSandbox
+from ag2.tools import SandboxShellTool
+from ag2.tools.sandbox import SandboxFactory
 
 
 def _fake_daytona_client() -> Any:
@@ -43,7 +43,7 @@ def _fake_client(sandbox: Any) -> Any:
 
 def _patch_async_daytona(sandbox: Any) -> Any:
     return patch(
-        "autogen.extensions.daytona.environment.AsyncDaytona",
+        "ag2.extensions.daytona.environment.AsyncDaytona",
         return_value=_fake_client(sandbox),
     )
 

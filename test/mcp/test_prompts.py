@@ -5,11 +5,11 @@
 import pytest
 from mcp.server.lowlevel import NotificationOptions
 
-from autogen import Agent
-from autogen.mcp import MCPServer, Prompt, PromptArgument, PromptMessage
-from autogen.mcp.errors import MCPPromptNotFoundError
-from autogen.mcp.prompts import PromptProvider
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.mcp import MCPServer, Prompt, PromptArgument, PromptMessage
+from ag2.mcp.errors import MCPPromptNotFoundError
+from ag2.mcp.prompts import PromptProvider
+from ag2.testing import TestConfig
 
 
 @pytest.mark.asyncio

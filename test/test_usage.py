@@ -4,8 +4,8 @@
 
 import pytest
 
-from autogen.events import ModelMessage, ModelResponse, Usage, UsageEvent
-from autogen.usage import UsageRecord, UsageReport
+from ag2.events import ModelMessage, ModelResponse, Usage, UsageEvent
+from ag2.usage import UsageRecord, UsageReport
 
 
 def _usage_event(prompt: int, completion: int, *, model: str, provider: str) -> UsageEvent:

@@ -9,7 +9,7 @@ import re
 import shutil
 from pathlib import Path
 
-from autogen._import_utils import optional_import_block, require_optional_import
+from ag2._import_utils import optional_import_block, require_optional_import
 
 from .llms_txt import generate_llms_txt
 from .utils import (

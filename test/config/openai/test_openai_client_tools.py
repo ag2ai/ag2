@@ -8,10 +8,10 @@ import httpx
 import pytest
 from fast_depends.use import SerializerCls
 
-from autogen import Context, MemoryStream
-from autogen.config.openai import OpenAIClient
-from autogen.events import ModelRequest, TextInput
-from autogen.tools import tool
+from ag2 import Context, MemoryStream
+from ag2.config.openai import OpenAIClient
+from ag2.events import ModelRequest, TextInput
+from ag2.tools import tool
 
 
 def _capturing_client(captured: dict[str, object]) -> httpx.AsyncClient:

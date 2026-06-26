@@ -4,9 +4,9 @@
 
 import json
 
-from autogen.a2ui.constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
-from autogen.a2ui.parser import A2UIResponseParser
-from autogen.a2ui.serialize import to_jsonl
+from ag2.a2ui.constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
+from ag2.a2ui.parser import A2UIResponseParser
+from ag2.a2ui.serialize import to_jsonl
 
 SAMPLE_OPS = [
     {

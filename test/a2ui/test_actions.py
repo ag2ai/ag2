@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.a2ui import A2UIAction, a2ui_action
-from autogen.a2ui.actions import A2UIEventAction, collect_action_declarations, collect_server_actions
+from ag2.a2ui import A2UIAction, a2ui_action
+from ag2.a2ui.actions import A2UIEventAction, collect_action_declarations, collect_server_actions
 
 
 class TestDecorator:

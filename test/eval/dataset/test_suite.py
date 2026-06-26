@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from autogen.eval import Suite, Task
+from ag2.eval import Suite, Task
 
 
 class _RefModel(BaseModel):

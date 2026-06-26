@@ -11,8 +11,8 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import BaseModel
 
-from autogen.events import BaseEvent, ModelMessage, ToolCallEvent
-from autogen.events._serialization import (
+from ag2.events import BaseEvent, ModelMessage, ToolCallEvent
+from ag2.events._serialization import (
     deserialize_value,
     import_event_class,
     serialize_value,

@@ -21,17 +21,17 @@ import os
 
 import pytest
 
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     Hub,
     Resume,
 )
-from autogen.network.adapters.consulting import CONSULTING_TYPE
-from autogen.network.adapters.conversation import CONVERSATION_TYPE
-from autogen.network.adapters.discussion import DISCUSSION_TYPE
+from ag2.network.adapters.consulting import CONSULTING_TYPE
+from ag2.network.adapters.conversation import CONVERSATION_TYPE
+from ag2.network.adapters.discussion import DISCUSSION_TYPE
 
 
 @pytest.fixture()
@@ -102,7 +102,7 @@ async def test_consulting_two_agents_real_llm(anthropic_config: AnthropicConfig)
     assert info.close_reason == "consulting_complete"
 
     # Audit log records CHANNEL_CREATED + CHANNEL_CLOSED for this channel.
-    from autogen.network.hub import (
+    from ag2.network.hub import (
         AUDIT_KIND_CHANNEL_CLOSED,
         AUDIT_KIND_CHANNEL_CREATED,
         AuditLog,

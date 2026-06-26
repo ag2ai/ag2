@@ -4,9 +4,9 @@
 
 import pytest
 
-from autogen.a2ui.actions import A2UIEventAction
-from autogen.a2ui.parser import A2UIResponseParser
-from autogen.a2ui.schema_manager import A2UISchemaManager
+from ag2.a2ui.actions import A2UIEventAction
+from ag2.a2ui.parser import A2UIResponseParser
+from ag2.a2ui.schema_manager import A2UISchemaManager
 
 
 class TestA2UISchemaManager:

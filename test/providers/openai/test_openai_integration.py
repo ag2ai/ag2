@@ -7,10 +7,10 @@ from dataclasses import dataclass
 
 import pytest
 
-from autogen import Agent
-from autogen.config import OpenAIConfig, OpenAIResponsesConfig
-from autogen.events import ImageInput
-from autogen.tools import ImageGenerationTool
+from ag2 import Agent
+from ag2.config import OpenAIConfig, OpenAIResponsesConfig
+from ag2.events import ImageInput
+from ag2.tools import ImageGenerationTool
 
 
 @pytest.fixture()

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from autogen.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
-from autogen.tools.skills.runtime.local.loader import SkillLoader, parse_frontmatter
+from ag2.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
+from ag2.tools.skills.runtime.local.loader import SkillLoader, parse_frontmatter
 
 
 def test_parse_frontmatter_basic() -> None:

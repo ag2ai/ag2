@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
-from autogen.a2a.mappers.messages import build_user_message, extract_context_update
-from autogen.a2a.mappers.parts import struct_to_dict
-from autogen.events import TextInput
+from ag2.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
+from ag2.a2a.mappers.messages import build_user_message, extract_context_update
+from ag2.a2a.mappers.parts import struct_to_dict
+from ag2.events import TextInput
 
 
 class TestExtraMetadata:

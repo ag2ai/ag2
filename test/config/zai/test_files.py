@@ -7,11 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen.config.zai.files import ZAIFilesClient
-from autogen.files.types import FileContent, FileProvider, UploadedFile
+from ag2.config.zai.files import ZAIFilesClient
+from ag2.files.types import FileContent, FileProvider, UploadedFile
 
 
-@patch("autogen.config.zai.files.ZaiClient")
+@patch("ag2.config.zai.files.ZaiClient")
 def test_files_client_construction_omits_none_options(mock_zai_client: MagicMock, zai_config: MagicMock) -> None:
     ZAIFilesClient(zai_config)
 
@@ -27,7 +27,7 @@ class TestZAIFilesClient:
     # The zai SDK is synchronous (wrapped via asyncio.to_thread), so the inner client is a
     # MagicMock, not an AsyncMock.
 
-    @patch("autogen.config.zai.files.ZaiClient")
+    @patch("ag2.config.zai.files.ZaiClient")
     async def test_upload_defaults_to_batch(self, mock_zai_client: MagicMock, zai_config: MagicMock) -> None:
         mock_client = MagicMock()
         mock_zai_client.return_value = mock_client
@@ -57,7 +57,7 @@ class TestZAIFilesClient:
         assert name == "hello.jsonl"
         assert buffer.read() == b"hello"
 
-    @patch("autogen.config.zai.files.ZaiClient")
+    @patch("ag2.config.zai.files.ZaiClient")
     async def test_upload_forwards_retrieval_options(self, mock_zai_client: MagicMock, zai_config: MagicMock) -> None:
         mock_client = MagicMock()
         mock_zai_client.return_value = mock_client
@@ -80,7 +80,7 @@ class TestZAIFilesClient:
         assert kwargs["sentence_size"] == 256
         assert kwargs["custom_separator"] == ["\n"]
 
-    @patch("autogen.config.zai.files.ZaiClient")
+    @patch("ag2.config.zai.files.ZaiClient")
     async def test_upload_with_explicit_purpose(self, mock_zai_client: MagicMock, zai_config: MagicMock) -> None:
         mock_client = MagicMock()
         mock_zai_client.return_value = mock_client
@@ -104,7 +104,7 @@ class TestZAIFilesClient:
         )
         assert mock_client.files.create.call_args.kwargs["purpose"] == "batch"
 
-    @patch("autogen.config.zai.files.ZaiClient")
+    @patch("ag2.config.zai.files.ZaiClient")
     async def test_read_returns_bytes_without_metadata(self, mock_zai_client: MagicMock, zai_config: MagicMock) -> None:
         mock_client = MagicMock()
         mock_zai_client.return_value = mock_client
@@ -115,7 +115,7 @@ class TestZAIFilesClient:
         assert result == FileContent(name=None, data=b"file-bytes", media_type=None)
         mock_client.files.content.assert_called_once_with("file_123")
 
-    @patch("autogen.config.zai.files.ZaiClient")
+    @patch("ag2.config.zai.files.ZaiClient")
     async def test_list_aggregates_across_purposes(self, mock_zai_client: MagicMock, zai_config: MagicMock) -> None:
         mock_client = MagicMock()
         mock_zai_client.return_value = mock_client
@@ -151,7 +151,7 @@ class TestZAIFilesClient:
             ),
         ]
 
-    @patch("autogen.config.zai.files.ZaiClient")
+    @patch("ag2.config.zai.files.ZaiClient")
     async def test_delete(self, mock_zai_client: MagicMock, zai_config: MagicMock) -> None:
         mock_client = MagicMock()
         mock_zai_client.return_value = mock_client

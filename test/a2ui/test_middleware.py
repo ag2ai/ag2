@@ -7,14 +7,14 @@ from typing import Any
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.a2ui import A2UIMessageEvent, A2UIValidationFailedEvent
-from autogen.a2ui._runtime import _A2UIRuntime
-from autogen.a2ui.middleware import _to_prose_message
-from autogen.config import LLMClient, ModelConfig
-from autogen.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2 import Agent, Context
+from ag2.a2ui import A2UIMessageEvent, A2UIValidationFailedEvent
+from ag2.a2ui._runtime import _A2UIRuntime
+from ag2.a2ui.middleware import _to_prose_message
+from ag2.config import LLMClient, ModelConfig
+from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 class _RecordingClient(LLMClient):

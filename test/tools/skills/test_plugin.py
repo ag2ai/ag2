@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from autogen import Agent
-from autogen.events import ToolCallEvent, ToolResultsEvent
-from autogen.exceptions import ToolNotFoundError
-from autogen.testing import TestConfig, TrackingConfig
-from autogen.tools.skills import LocalRuntime, SkillPlugin
+from ag2 import Agent
+from ag2.events import ToolCallEvent, ToolResultsEvent
+from ag2.exceptions import ToolNotFoundError
+from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.skills import LocalRuntime, SkillPlugin
 
 
 def _write_skill(base: Path, name: str, *, script: bool = False, resource: bool = False) -> Path:

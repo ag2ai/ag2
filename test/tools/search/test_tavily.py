@@ -12,10 +12,10 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("tavily")
 
-from autogen import Agent, Context, DataInput, Variable
-from autogen.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.testing import TestConfig, TrackingConfig
-from autogen.tools.search.tavily import SearchResponse, SearchResult, TavilySearchTool
+from ag2 import Agent, Context, DataInput, Variable
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
+from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.search.tavily import SearchResponse, SearchResult, TavilySearchTool
 
 TAVILY_BASE_URL = "https://api.tavily.com"
 

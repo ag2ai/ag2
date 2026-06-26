@@ -1,8 +1,8 @@
 import asyncio
 
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import MCPToolkit
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import MCPToolkit
 
 
 async def main() -> None:

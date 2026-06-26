@@ -6,11 +6,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import BaseEvent, HumanInputRequest, HumanMessage, ToolCallEvent
-from autogen.middleware import BaseMiddleware, Middleware
-from autogen.middleware.base import HumanInputHook
-from autogen.testing import TestConfig
+from ag2 import Agent, Context
+from ag2.events import BaseEvent, HumanInputRequest, HumanMessage, ToolCallEvent
+from ag2.middleware import BaseMiddleware, Middleware
+from ag2.middleware.base import HumanInputHook
+from ag2.testing import TestConfig
 
 
 @pytest.fixture()

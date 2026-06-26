@@ -4,8 +4,8 @@
 
 import logging
 
-from autogen.a2ui import A2UIClientCapabilities
-from autogen.a2ui.capabilities import (
+from ag2.a2ui import A2UIClientCapabilities
+from ag2.a2ui.capabilities import (
     A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
     capabilities_to_prompt,
     parse_client_capabilities,

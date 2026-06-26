@@ -8,9 +8,9 @@ import pytest
 from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
-from autogen.compact import CompactionSummary
-from autogen.config.ollama.mappers import convert_messages
-from autogen.events import (
+from ag2.compact import CompactionSummary
+from ag2.config.ollama.mappers import convert_messages
+from ag2.events import (
     AudioInput,
     BinaryInput,
     DocumentInput,
@@ -24,7 +24,7 @@ from autogen.events import (
     ToolNotFoundEvent,
     ToolResultsEvent,
 )
-from autogen.exceptions import ToolNotFoundError, UnsupportedInputError
+from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -170,9 +170,7 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
 
     result = convert_messages([], [event], SerializerCls)
 
-    assert result == [
-        {"role": "tool", "content": "autogen.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"}
-    ]
+    assert result == [{"role": "tool", "content": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"}]
 
 
 def test_compaction_summary_renders_as_user_turn() -> None:

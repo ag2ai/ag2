@@ -15,13 +15,13 @@ from typing import Any
 
 import pytest
 
-from autogen.config import LLMClient, ModelConfig
-from autogen.eval.dataset.task import Task
-from autogen.eval.pairwise import PairwiseComparator
-from autogen.eval.scorers import pairwise_judge
-from autogen.eval.trace import Trace
-from autogen.events import ModelMessage, ModelResponse
-from autogen.testing import TestConfig, TrackingConfig
+from ag2.config import LLMClient, ModelConfig
+from ag2.eval.dataset.task import Task
+from ag2.eval.pairwise import PairwiseComparator
+from ag2.eval.scorers import pairwise_judge
+from ag2.eval.trace import Trace
+from ag2.events import ModelMessage, ModelResponse
+from ag2.testing import TestConfig, TrackingConfig
 
 _TASK = Task(task_id="t", inputs={"input": "Which is better?"})
 

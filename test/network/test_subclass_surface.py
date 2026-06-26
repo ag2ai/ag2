@@ -16,10 +16,10 @@ import asyncio
 
 import pytest
 
-from autogen import Agent
-from autogen.events import TaskStarted
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.events import TaskStarted
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     BaseHubListener,
     Hub,
     HubClient,
@@ -28,11 +28,11 @@ from autogen.network import (
     Resume,
     Rule,
 )
-from autogen.network.adapters.consulting import ConsultingAdapter
-from autogen.network.adapters.conversation import ConversationAdapter
-from autogen.network.rule import InboxBlock, LimitsBlock
-from autogen.network.task_mirror import TaskMirror
-from autogen.testing import TestConfig
+from ag2.network.adapters.consulting import ConsultingAdapter
+from ag2.network.adapters.conversation import ConversationAdapter
+from ag2.network.rule import InboxBlock, LimitsBlock
+from ag2.network.task_mirror import TaskMirror
+from ag2.testing import TestConfig
 
 
 def _agent(name: str, *replies: str) -> Agent:

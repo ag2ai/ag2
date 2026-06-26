@@ -19,7 +19,7 @@ runner = CliRunner()
 
 
 def _mock_ag2() -> MagicMock:
-    """Return a minimal mock standing in for the autogen package."""
+    """Return a minimal mock standing in for the ag2 package."""
     m = MagicMock()
     m.UserProxyAgent.return_value = MagicMock(name="user")
     return m

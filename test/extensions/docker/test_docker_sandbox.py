@@ -11,9 +11,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen.annotations import Variable
-from autogen.extensions.docker.sandbox import DockerSandbox
-from autogen.tools.sandbox import ExecResult
+from ag2.annotations import Variable
+from ag2.extensions.docker.sandbox import DockerSandbox
+from ag2.tools.sandbox import ExecResult
 
 
 def _exec_result(output: bytes = b"ok\n", exit_code: int = 0) -> SimpleNamespace:
@@ -40,7 +40,7 @@ def _fake_client(container: Any) -> Any:
 
 def _patch_docker(container: Any) -> Any:
     return patch(
-        "autogen.extensions.docker.sandbox.docker.from_env",
+        "ag2.extensions.docker.sandbox.docker.from_env",
         return_value=_fake_client(container),
     )
 
@@ -94,7 +94,7 @@ class TestExec:
     async def test_container_created_only_once(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             sandbox = DockerSandbox()
             await sandbox.exec(["echo", "1"])
             await sandbox.exec(["echo", "2"])
@@ -104,7 +104,7 @@ class TestExec:
     async def test_host_path_is_bind_mounted(self, tmp_path: Path) -> None:
         container = _fake_container()
         client = _fake_client(container)
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             sandbox = DockerSandbox(host_path=tmp_path)
             await sandbox.exec(["pwd"])
 
@@ -118,7 +118,7 @@ class TestLifecycle:
     async def test_aenter_starts_container(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             async with DockerSandbox() as _sandbox:
                 pass
 
@@ -128,7 +128,7 @@ class TestLifecycle:
     async def test_aclose_stops_container_and_closes_client(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             sandbox = DockerSandbox()
             await sandbox.exec(["echo", "1"])
             await sandbox.aclose()

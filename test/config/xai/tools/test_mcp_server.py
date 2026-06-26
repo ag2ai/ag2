@@ -4,9 +4,9 @@
 
 import pytest
 
-from autogen import Context
-from autogen.config.xai.mappers import tool_to_api
-from autogen.tools.builtin.mcp_server import MCPServerTool
+from ag2 import Context
+from ag2.config.xai.mappers import tool_to_api
+from ag2.tools.builtin.mcp_server import MCPServerTool
 
 
 @pytest.mark.asyncio

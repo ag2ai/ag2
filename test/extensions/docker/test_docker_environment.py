@@ -9,11 +9,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen import Context, Variable
-from autogen.extensions.docker import DockerEnvironment
-from autogen.extensions.docker.sandbox import DockerSandbox
-from autogen.tools import SandboxShellTool
-from autogen.tools.sandbox import SandboxFactory
+from ag2 import Context, Variable
+from ag2.extensions.docker import DockerEnvironment
+from ag2.extensions.docker.sandbox import DockerSandbox
+from ag2.tools import SandboxShellTool
+from ag2.tools.sandbox import SandboxFactory
 
 
 def _exec_result(output: bytes = b"ok\n", exit_code: int = 0) -> SimpleNamespace:
@@ -48,7 +48,7 @@ class TestOpen:
     async def test_open_yields_docker_sandbox(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             factory = DockerEnvironment(image="python:3.12-slim")
             async with factory.open() as sandbox:
                 assert isinstance(sandbox, DockerSandbox)
@@ -57,7 +57,7 @@ class TestOpen:
         container = _fake_container()
         client = _fake_client(container)
         ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             factory = DockerEnvironment(image=Variable("tenant_image"))
             async with factory.open(ctx) as sandbox:
                 await sandbox.exec(["python", "--version"])
@@ -67,7 +67,7 @@ class TestOpen:
     async def test_open_concrete_values_work_without_context(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             factory = DockerEnvironment(image="python:3.12-slim")
             async with factory.open() as sandbox:
                 await sandbox.exec(["python", "--version"])
@@ -94,7 +94,7 @@ class TestOpen:
         # it (state persists). Only aclose() tears it down.
         container = _fake_container()
         client = _fake_client(container)
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             factory = DockerEnvironment()
             async with factory.open() as sandbox:
                 await sandbox.exec(["echo", "hi"])
@@ -111,7 +111,7 @@ class TestOpen:
     async def test_aclose_tears_down_cached_container(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
-        with patch("autogen.extensions.docker.sandbox.docker.from_env", return_value=client):
+        with patch("ag2.extensions.docker.sandbox.docker.from_env", return_value=client):
             factory = DockerEnvironment()
             async with factory.open() as sandbox:
                 await sandbox.exec(["echo", "hi"])

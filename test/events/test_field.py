@@ -4,7 +4,7 @@
 
 import pytest
 
-from autogen.events import BaseEvent, Field
+from ag2.events import BaseEvent, Field
 
 
 class TestFieldBasics:

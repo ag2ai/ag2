@@ -11,10 +11,10 @@ from typing import Annotated
 
 import pytest
 
-from autogen import Agent, Context, Inject, Variable
-from autogen.events import HumanInputRequest, HumanMessage
-from autogen.middleware import BaseMiddleware, LoggingMiddleware
-from autogen.plugin import Plugin
+from ag2 import Agent, Context, Inject, Variable
+from ag2.events import HumanInputRequest, HumanMessage
+from ag2.middleware import BaseMiddleware, LoggingMiddleware
+from ag2.plugin import Plugin
 
 pytestmark = pytest.mark.asyncio
 

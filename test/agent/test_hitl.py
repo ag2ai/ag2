@@ -6,10 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import HumanInputRequest, HumanMessage, ToolCallEvent
-from autogen.exceptions import HumanInputNotProvidedError
-from autogen.testing import TestConfig
+from ag2 import Agent, Context
+from ag2.events import HumanInputRequest, HumanMessage, ToolCallEvent
+from ag2.exceptions import HumanInputNotProvidedError
+from ag2.testing import TestConfig
 
 
 @pytest.fixture()

@@ -5,10 +5,10 @@
 import pytest
 from pydantic import BaseModel
 
-from autogen import Agent
-from autogen.events import ModelResponse
-from autogen.mcp.executor import AgentExecutor, AskContext
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.events import ModelResponse
+from ag2.mcp.executor import AgentExecutor, AskContext
+from ag2.testing import TestConfig
 
 
 class _Weather(BaseModel):

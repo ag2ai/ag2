@@ -1,6 +1,6 @@
 import asyncio
 
-from autogen.live import (
+from ag2.live import (
     LiveAgent,
     SoundDevicePlayer,
     SoundDeviceRecorder,

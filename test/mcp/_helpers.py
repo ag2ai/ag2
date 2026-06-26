@@ -7,10 +7,10 @@ from typing import Any
 
 from typing_extensions import Self
 
-from autogen import Agent, Context
-from autogen.config.client import LLMClient
-from autogen.config.config import ModelConfig
-from autogen.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse
+from ag2 import Agent, Context
+from ag2.config.client import LLMClient
+from ag2.config.config import ModelConfig
+from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse
 
 
 class ChunkConfig(ModelConfig):

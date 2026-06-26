@@ -18,9 +18,9 @@ from unittest.mock import MagicMock
 import pytest
 from typing_extensions import Self
 
-from autogen import Agent, Context
-from autogen.config import LLMClient, ModelConfig
-from autogen.events import (
+from ag2 import Agent, Context
+from ag2.config import LLMClient, ModelConfig
+from ag2.events import (
     BaseEvent,
     HaltEvent,
     ModelMessage,
@@ -30,11 +30,11 @@ from autogen.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
-from autogen.observers import BaseObserver
-from autogen.policies import AlertPolicy
-from autogen.stream import MemoryStream
-from autogen.tools.final import tool
-from autogen.watch import EventWatch
+from ag2.observers import BaseObserver
+from ag2.policies import AlertPolicy
+from ag2.stream import MemoryStream
+from ag2.tools.final import tool
+from ag2.watch import EventWatch
 
 
 @tool
@@ -445,8 +445,8 @@ class TestAlertPolicyOrdering:
 
     def test_alert_before_reduction_no_warning(self) -> None:
         """AlertPolicy before SlidingWindowPolicy produces no warnings."""
-        from autogen.assembly import AssemblerMiddleware
-        from autogen.policies import SlidingWindowPolicy
+        from ag2.assembly import AssemblerMiddleware
+        from ag2.policies import SlidingWindowPolicy
 
         policies = [AlertPolicy(), SlidingWindowPolicy(50)]
         warnings = AssemblerMiddleware.validate_order(policies)
@@ -454,8 +454,8 @@ class TestAlertPolicyOrdering:
 
     def test_reduction_before_alert_warns(self) -> None:
         """SlidingWindowPolicy before AlertPolicy produces a warning."""
-        from autogen.assembly import AssemblerMiddleware
-        from autogen.policies import SlidingWindowPolicy
+        from ag2.assembly import AssemblerMiddleware
+        from ag2.policies import SlidingWindowPolicy
 
         policies = [SlidingWindowPolicy(50), AlertPolicy()]
         warnings = AssemblerMiddleware.validate_order(policies)

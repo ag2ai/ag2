@@ -5,9 +5,9 @@
 import pytest
 from dirty_equals import IsPartialDict
 
-from autogen import Context
-from autogen.config.anthropic.mappers import extract_mcp_servers, tool_to_api
-from autogen.tools.builtin.mcp_server import MCPServerTool
+from ag2 import Context
+from ag2.config.anthropic.mappers import extract_mcp_servers, tool_to_api
+from ag2.tools.builtin.mcp_server import MCPServerTool
 
 
 @pytest.mark.asyncio
@@ -99,7 +99,7 @@ async def test_blocked_tools(context: Context) -> None:
 
 @pytest.mark.asyncio
 async def test_extract_mcp_servers_skips_non_mcp(context: Context) -> None:
-    from autogen.tools.builtin.web_search import WebSearchTool
+    from ag2.tools.builtin.web_search import WebSearchTool
 
     mcp_tool = MCPServerTool(server_url="https://mcp.example.com/sse", server_label="example-mcp")
     ws_tool = WebSearchTool()

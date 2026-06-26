@@ -26,18 +26,18 @@ import tempfile
 
 import pytest
 
-from autogen import Agent
-from autogen.config import GeminiConfig
-from autogen.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.config import GeminiConfig
+from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_CLOSED,
     EV_TEXT,
     Hub,
     Resume,
 )
-from autogen.network.adapters.consulting import CONSULTING_TYPE
-from autogen.network.channel import ChannelState
-from autogen.network.hub import (
+from ag2.network.adapters.consulting import CONSULTING_TYPE
+from ag2.network.channel import ChannelState
+from ag2.network.hub import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_CHANNEL_CLOSED,
     AUDIT_KIND_CHANNEL_CREATED,

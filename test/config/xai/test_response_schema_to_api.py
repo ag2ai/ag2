@@ -9,8 +9,8 @@ import pytest
 from dirty_equals import IsPartialDict
 from xai_sdk.chat import chat_pb2
 
-from autogen.config.xai.mappers import response_proto_to_format
-from autogen.response import ResponseSchema
+from ag2.config.xai.mappers import response_proto_to_format
+from ag2.response import ResponseSchema
 
 
 def test_none_returns_none() -> None:

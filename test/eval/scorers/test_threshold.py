@@ -2,17 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the threshold combinator (``autogen.eval.scorers.threshold``)."""
+"""Tests for the threshold combinator (``ag2.eval.scorers.threshold``)."""
 
 import pytest
 from dirty_equals import IsPartialDict
 
-from autogen.eval import InMemoryTraceSource, Suite, TraceRef, evaluate_traces, scorer
-from autogen.eval.dataset.task import Task
-from autogen.eval.scorers import agent_judge, threshold
-from autogen.eval.trace import Trace
-from autogen.events import ModelMessage, ModelResponse
-from autogen.testing import TestConfig
+from ag2.eval import InMemoryTraceSource, Suite, TraceRef, evaluate_traces, scorer
+from ag2.eval.dataset.task import Task
+from ag2.eval.scorers import agent_judge, threshold
+from ag2.eval.trace import Trace
+from ag2.events import ModelMessage, ModelResponse
+from ag2.testing import TestConfig
 
 
 def _empty_trace() -> Trace:

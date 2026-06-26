@@ -4,7 +4,7 @@
 
 from dataclasses import dataclass
 
-from autogen.tools.final import FunctionDefinition, FunctionToolSchema
+from ag2.tools.final import FunctionDefinition, FunctionToolSchema
 
 
 @dataclass

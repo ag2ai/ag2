@@ -10,11 +10,11 @@ import pytest
 from PIL import Image
 from google.genai import types
 
-from autogen import Agent
-from autogen.config import GeminiConfig
-from autogen.config.gemini.events import GeminiToolCallEvent
-from autogen.events import ImageInput
-from autogen.streams.redis.serializer import Serializer, deserialize, serialize
+from ag2 import Agent
+from ag2.config import GeminiConfig
+from ag2.config.gemini.events import GeminiToolCallEvent
+from ag2.events import ImageInput
+from ag2.streams.redis.serializer import Serializer, deserialize, serialize
 
 
 @pytest.fixture()

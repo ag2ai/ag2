@@ -5,10 +5,10 @@
 import pytest
 from fast_depends.use import SerializerCls
 
-from autogen import ToolResult
-from autogen.compact import CompactionSummary
-from autogen.config.bedrock.mappers import convert_messages
-from autogen.events import (
+from ag2 import ToolResult
+from ag2.compact import CompactionSummary
+from ag2.config.bedrock.mappers import convert_messages
+from ag2.events import (
     BinaryInput,
     BinaryType,
     DataInput,
@@ -24,7 +24,7 @@ from autogen.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.exceptions import UnsupportedInputError
+from ag2.exceptions import UnsupportedInputError
 
 
 def _model_response_with_tool_call(arguments: str | None, text: str | None = None) -> ModelResponse:

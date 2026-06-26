@@ -20,15 +20,15 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from autogen import Agent
-from autogen.eval.runtime._capture import EventCapture
-from autogen.eval.scorers import no_tool_errors, tool_called
-from autogen.eval.sources._otel import readable_spans_to_trace
-from autogen.eval.trace import Trace
-from autogen.events import ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent, ToolResultEvent, Usage
-from autogen.middleware.builtin.telemetry import TelemetryMiddleware
-from autogen.testing import TestConfig
-from autogen.tools import tool
+from ag2 import Agent
+from ag2.eval.runtime._capture import EventCapture
+from ag2.eval.scorers import no_tool_errors, tool_called
+from ag2.eval.sources._otel import readable_spans_to_trace
+from ag2.eval.trace import Trace
+from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent, ToolResultEvent, Usage
+from ag2.middleware.builtin.telemetry import TelemetryMiddleware
+from ag2.testing import TestConfig
+from ag2.tools import tool
 
 
 def _live_trace(capture: EventCapture) -> Trace:

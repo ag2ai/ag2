@@ -15,8 +15,8 @@ from typing import Any
 
 import pytest
 
-from autogen.eval import Feedback, Scorer, ScorerReturnTypeError, Task, Trace, scorer
-from autogen.events import ToolCallEvent
+from ag2.eval import Feedback, Scorer, ScorerReturnTypeError, Task, Trace, scorer
+from ag2.events import ToolCallEvent
 
 
 def _trace(*events: Any, duration_ms: int = 0) -> Trace:

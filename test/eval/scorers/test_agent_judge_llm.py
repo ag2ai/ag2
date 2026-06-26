@@ -18,11 +18,11 @@ import os
 
 import pytest
 
-from autogen.config import AnthropicConfig, GeminiConfig, OpenAIConfig
-from autogen.eval.dataset.task import Task
-from autogen.eval.scorers import agent_judge
-from autogen.eval.trace import Trace
-from autogen.events import ModelMessage, ModelResponse
+from ag2.config import AnthropicConfig, GeminiConfig, OpenAIConfig
+from ag2.eval.dataset.task import Task
+from ag2.eval.scorers import agent_judge
+from ag2.eval.trace import Trace
+from ag2.events import ModelMessage, ModelResponse
 
 
 def _require(*envs: str) -> str:

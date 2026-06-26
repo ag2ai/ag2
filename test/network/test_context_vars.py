@@ -15,9 +15,9 @@ Pins the contract that ``EV_CONTEXT_SET`` envelopes:
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_CLOSED,
     EV_CONTEXT_SET,
     WORKFLOW_TYPE,
@@ -30,7 +30,7 @@ from autogen.network import (
     Transition,
     TransitionGraph,
 )
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 
 def _agent(name: str, *replies: str) -> Agent:

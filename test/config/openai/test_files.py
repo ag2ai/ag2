@@ -8,13 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from dirty_equals import IsFloat
 
-from autogen.config.openai.files import OpenAIFilesClient
-from autogen.files.types import FileContent, FileProvider, UploadedFile
+from ag2.config.openai.files import OpenAIFilesClient
+from ag2.files.types import FileContent, FileProvider, UploadedFile
 
 
 @pytest.mark.asyncio
 class TestOpenAIFilesClient:
-    @patch("autogen.config.openai.files.AsyncOpenAI")
+    @patch("ag2.config.openai.files.AsyncOpenAI")
     async def test_upload(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_openai_cls.return_value = mock_client
@@ -38,7 +38,7 @@ class TestOpenAIFilesClient:
         )
         assert result.created_at == 1700000000.0
 
-    @patch("autogen.config.openai.files.AsyncOpenAI")
+    @patch("ag2.config.openai.files.AsyncOpenAI")
     async def test_read(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_openai_cls.return_value = mock_client
@@ -49,7 +49,7 @@ class TestOpenAIFilesClient:
 
         assert result == FileContent(name="doc.pdf", data=b"file-bytes")
 
-    @patch("autogen.config.openai.files.AsyncOpenAI")
+    @patch("ag2.config.openai.files.AsyncOpenAI")
     async def test_list(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_openai_cls.return_value = mock_client
@@ -94,7 +94,7 @@ class TestOpenAIFilesClient:
         assert result[0].created_at == IsFloat()
         assert result[1].created_at == 1700000000.0
 
-    @patch("autogen.config.openai.files.AsyncOpenAI")
+    @patch("ag2.config.openai.files.AsyncOpenAI")
     async def test_delete(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_openai_cls.return_value = mock_client

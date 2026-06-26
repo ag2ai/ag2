@@ -23,9 +23,9 @@ from datetime import datetime
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     AccessBlock,
     AccessDeniedError,
@@ -39,8 +39,8 @@ from autogen.network import (
     Resume,
     Rule,
 )
-from autogen.network.rule import InboxBlock, parse_duration
-from autogen.task import TaskMetadata, TaskSpec, TaskState
+from ag2.network.rule import InboxBlock, parse_duration
+from ag2.task import TaskMetadata, TaskSpec, TaskState
 
 from ._helpers import ScriptedConfig
 

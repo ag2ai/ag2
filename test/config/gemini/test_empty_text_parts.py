@@ -15,9 +15,9 @@ from unittest.mock import patch
 import pytest
 from google.genai import types
 
-from autogen import Context, MemoryStream
-from autogen.config.gemini.gemini_client import GeminiClient
-from autogen.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelReasoning
+from ag2 import Context, MemoryStream
+from ag2.config.gemini.gemini_client import GeminiClient
+from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelReasoning
 
 
 def _candidate(parts: list) -> SimpleNamespace:
@@ -34,7 +34,7 @@ def _response(candidates: list[SimpleNamespace]) -> SimpleNamespace:
 
 @pytest.fixture
 def client() -> GeminiClient:
-    with patch("autogen.config.gemini.gemini_client.genai.Client"):
+    with patch("ag2.config.gemini.gemini_client.genai.Client"):
         return GeminiClient(model="gemini-2.5-flash", api_key="test-key")
 
 

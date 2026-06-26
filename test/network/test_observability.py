@@ -11,9 +11,9 @@ import logging
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     AccessDeniedError,
     Allow,
@@ -30,8 +30,8 @@ from autogen.network import (
     Resume,
     Rule,
 )
-from autogen.network.rule import AccessBlock
-from autogen.testing import TestConfig
+from ag2.network.rule import AccessBlock
+from ag2.testing import TestConfig
 
 
 def _agent(name: str, *replies: str) -> Agent:
@@ -350,7 +350,7 @@ async def test_health_snapshot_shape() -> None:
 
 @pytest.mark.asyncio
 async def test_hub_logs_state_transitions(caplog) -> None:
-    caplog.set_level(logging.INFO, logger="autogen.network.hub.core")
+    caplog.set_level(logging.INFO, logger="ag2.network.hub.core")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
 
@@ -365,7 +365,7 @@ async def test_hub_logs_state_transitions(caplog) -> None:
 
 @pytest.mark.asyncio
 async def test_hub_logs_warning_on_rejection(caplog) -> None:
-    caplog.set_level(logging.WARNING, logger="autogen.network.hub.core")
+    caplog.set_level(logging.WARNING, logger="ag2.network.hub.core")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
 

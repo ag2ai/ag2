@@ -9,9 +9,9 @@ import pytest
 from ag_ui.core import UserMessage
 from dirty_equals import IsInt, IsPartialDict
 
-from autogen import Agent
-from autogen.ag_ui import AGUIStream
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.ag_ui import AGUIStream
+from ag2.testing import TestConfig
 from test.ag_ui.utils import assert_event_type, create_run_input
 
 try:

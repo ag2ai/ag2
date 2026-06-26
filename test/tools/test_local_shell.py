@@ -11,12 +11,12 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from autogen import Agent, MemoryStream
-from autogen.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
-from autogen.testing import TestConfig
-from autogen.tools import LocalEnvironment, SandboxShellTool
-from autogen.tools.sandbox import ExecResult, SandboxFactory
-from autogen.tools.sandbox.filter import check_ignore, matches
+from ag2 import Agent, MemoryStream
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
+from ag2.testing import TestConfig
+from ag2.tools import LocalEnvironment, SandboxShellTool
+from ag2.tools.sandbox import ExecResult, SandboxFactory
+from ag2.tools.sandbox.filter import check_ignore, matches
 
 
 class TestMatches:

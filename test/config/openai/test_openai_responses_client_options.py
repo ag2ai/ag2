@@ -8,9 +8,9 @@ import httpx
 import pytest
 from fast_depends.use import SerializerCls
 
-from autogen import Context, MemoryStream
-from autogen.config.openai import OpenAIResponsesConfig
-from autogen.events import ModelRequest, TextInput
+from ag2 import Context, MemoryStream
+from ag2.config.openai import OpenAIResponsesConfig
+from ag2.events import ModelRequest, TextInput
 
 # Optional generation params that must never be serialized as an explicit
 # `null`: strict OpenAI-compatible servers (e.g. vLLM) reject e.g.

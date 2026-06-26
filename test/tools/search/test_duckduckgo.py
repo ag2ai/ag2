@@ -10,10 +10,10 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("ddgs")
 
-from autogen import Agent, Context, DataInput, Variable
-from autogen.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.testing import TestConfig, TrackingConfig
-from autogen.tools.search.duckduckgo import DuckDuckSearchTool, SearchResponse, SearchResult
+from ag2 import Agent, Context, DataInput, Variable
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
+from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.search.duckduckgo import DuckDuckSearchTool, SearchResponse, SearchResult
 
 SAMPLE_RESULTS = [
     {"title": "AG2 Framework", "href": "https://ag2.ai", "body": "AG2 is an agent framework."},

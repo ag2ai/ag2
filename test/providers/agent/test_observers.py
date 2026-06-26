@@ -10,8 +10,8 @@ All real LLM calls via Gemini 3 Flash Preview.
 
 import pytest
 
-from autogen import Agent, observer
-from autogen.events import (
+from ag2 import Agent, observer
+from ag2.events import (
     BaseEvent,
     HaltEvent,
     ModelMessageChunk,
@@ -21,10 +21,10 @@ from autogen.events import (
     ObserverStarted,
     Severity,
 )
-from autogen.observers import BaseObserver, LoopDetector, TokenMonitor
-from autogen.policies import AlertPolicy
-from autogen.stream import MemoryStream
-from autogen.watch import EventWatch
+from ag2.observers import BaseObserver, LoopDetector, TokenMonitor
+from ag2.policies import AlertPolicy
+from ag2.stream import MemoryStream
+from ag2.watch import EventWatch
 
 pytestmark = pytest.mark.asyncio
 

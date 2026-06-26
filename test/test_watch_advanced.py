@@ -7,9 +7,9 @@ import asyncio
 import pytest
 from dirty_equals import IsList
 
-from autogen import Agent, Context, MemoryStream, testing
-from autogen.events import BaseEvent, ToolCallEvent
-from autogen.watch import CadenceWatch, CronWatch
+from ag2 import Agent, Context, MemoryStream, testing
+from ag2.events import BaseEvent, ToolCallEvent
+from ag2.watch import CadenceWatch, CronWatch
 
 
 @pytest.mark.asyncio

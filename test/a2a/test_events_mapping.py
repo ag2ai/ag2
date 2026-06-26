@@ -19,7 +19,7 @@ from a2a.types import (
     TaskStatusUpdateEvent,
 )
 
-from autogen.a2a.events import (
+from ag2.a2a.events import (
     A2AMessage,
     A2ATaskArtifactUpdate,
     A2ATaskSnapshot,
@@ -27,8 +27,8 @@ from autogen.a2a.events import (
     A2ATextArtifact,
     A2AToolCallArtifact,
 )
-from autogen.a2a.extension import MIME_TOOL_CALL
-from autogen.a2a.mappers.events import (
+from ag2.a2a.extension import MIME_TOOL_CALL
+from ag2.a2a.mappers.events import (
     a2a_event_to_sdk,
     chunk_to_text_artifact,
     client_call_to_artifact,
@@ -37,9 +37,9 @@ from autogen.a2a.mappers.events import (
     parse_task_artifact,
     task_state_to_status_update,
 )
-from autogen.a2a.mappers.parts import data_part, struct_to_dict
-from autogen.a2a.mappers.tools import call_to_payload
-from autogen.events import ClientToolCallEvent, ModelMessageChunk, ToolCallEvent
+from ag2.a2a.mappers.parts import data_part, struct_to_dict
+from ag2.a2a.mappers.tools import call_to_payload
+from ag2.events import ClientToolCallEvent, ModelMessageChunk, ToolCallEvent
 
 
 class TestAg2ToA2A:

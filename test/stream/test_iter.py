@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Context, MemoryStream
-from autogen.events import BaseEvent, ModelMessage, ToolCallEvent
+from ag2 import Context, MemoryStream
+from ag2.events import BaseEvent, ModelMessage, ToolCallEvent
 
 
 class TestStreamSend:

@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.config import AnthropicConfig
-from autogen.config.anthropic import AnthropicClient
+from ag2.config import AnthropicConfig
+from ag2.config.anthropic import AnthropicClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:

@@ -4,9 +4,9 @@
 
 import pytest
 
-from autogen import Agent
-from autogen.events import ModelMessage, ModelResponse, Usage
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.events import ModelMessage, ModelResponse, Usage
+from ag2.testing import TestConfig
 
 
 def _response(text: str, prompt: int, completion: int) -> ModelResponse:

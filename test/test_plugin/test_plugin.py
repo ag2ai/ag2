@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context, observer
-from autogen.events import BaseEvent, HumanInputRequest, HumanMessage, ModelMessage, ModelResponse, ToolCallEvent
-from autogen.middleware import BaseMiddleware, Middleware
-from autogen.middleware.base import AgentTurn
-from autogen.plugin import Plugin
-from autogen.testing import TestConfig
+from ag2 import Agent, Context, observer
+from ag2.events import BaseEvent, HumanInputRequest, HumanMessage, ModelMessage, ModelResponse, ToolCallEvent
+from ag2.middleware import BaseMiddleware, Middleware
+from ag2.middleware.base import AgentTurn
+from ag2.plugin import Plugin
+from ag2.testing import TestConfig
 
 
 class MockClient:

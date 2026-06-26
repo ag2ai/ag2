@@ -6,12 +6,12 @@
 
 import pytest
 
-from autogen.eval import InMemoryTraceSource, TraceRef, evaluate_traces
-from autogen.eval.dataset.task import Task
-from autogen.eval.scorers import failure_attribution
-from autogen.eval.trace import Trace
-from autogen.events import ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent
-from autogen.testing import TestConfig
+from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_traces
+from ag2.eval.dataset.task import Task
+from ag2.eval.scorers import failure_attribution
+from ag2.eval.trace import Trace
+from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent
+from ag2.testing import TestConfig
 
 
 def _trace(events: list, *, exception: BaseException | None = None) -> Trace:

@@ -4,9 +4,9 @@
 
 """Public-API tests for :class:`Trace` and :class:`TokenUsage`."""
 
-from autogen.eval import Trace
-from autogen.eval.trace import TokenUsage
-from autogen.events import (
+from ag2.eval import Trace
+from ag2.eval.trace import TokenUsage
+from ag2.events import (
     BaseEvent,
     ModelMessage,
     ModelResponse,

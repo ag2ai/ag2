@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.config.zai.mappers import normalize_usage
-from autogen.events import Usage
+from ag2.config.zai.mappers import normalize_usage
+from ag2.events import Usage
 from test.config.zai._helpers import make_usage
 
 

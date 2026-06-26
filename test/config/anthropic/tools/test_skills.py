@@ -4,10 +4,10 @@
 
 import pytest
 
-from autogen import Context
-from autogen.config.anthropic.mappers import extract_skills_for_container, tool_to_api
-from autogen.exceptions import UnsupportedToolError
-from autogen.tools import Skill, SkillsTool, WebSearchTool
+from ag2 import Context
+from ag2.config.anthropic.mappers import extract_skills_for_container, tool_to_api
+from ag2.exceptions import UnsupportedToolError
+from ag2.tools import Skill, SkillsTool, WebSearchTool
 
 
 @pytest.mark.asyncio

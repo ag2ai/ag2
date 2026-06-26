@@ -21,9 +21,9 @@ from typing import Annotated, Any
 import pytest
 from pydantic import BaseModel
 
-from autogen import Agent, Context, Inject, Variable
-from autogen.events import ModelMessageChunk
-from autogen.stream import MemoryStream
+from ag2 import Agent, Context, Inject, Variable
+from ag2.events import ModelMessageChunk
+from ag2.stream import MemoryStream
 
 pytestmark = pytest.mark.asyncio
 
@@ -286,7 +286,7 @@ async def test_context_variables_injected_into_tool(provider_config) -> None:
 async def test_per_ask_tool_injection(provider_config) -> None:
     """Tools passed to ask() override/augment agent-level tools for that turn only."""
 
-    from autogen import tool
+    from ag2 import tool
 
     @tool
     def secret_word() -> str:

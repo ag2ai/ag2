@@ -8,9 +8,9 @@ from unittest.mock import patch
 import pytest
 from google.genai import types
 
-from autogen import Context, MemoryStream
-from autogen.config.gemini.gemini_client import GeminiClient
-from autogen.events import BinaryResult
+from ag2 import Context, MemoryStream
+from ag2.config.gemini.gemini_client import GeminiClient
+from ag2.events import BinaryResult
 
 _PNG = b"\x89PNG\r\n\x1a\nfake-image-bytes"
 
@@ -25,7 +25,7 @@ def _response(candidates: list[SimpleNamespace]) -> SimpleNamespace:
 
 @pytest.fixture
 def client() -> GeminiClient:
-    with patch("autogen.config.gemini.gemini_client.genai.Client"):
+    with patch("ag2.config.gemini.gemini_client.genai.Client"):
         return GeminiClient(model="gemini-3.1-flash-image", api_key="test-key")
 
 

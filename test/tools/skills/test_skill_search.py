@@ -11,14 +11,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from autogen import Context
-from autogen.events import ToolCallEvent, ToolErrorEvent
-from autogen.exceptions import InvalidSkillError, SkillInstallError
-from autogen.tools.skills import LocalRuntime, SkillSearchToolkit
-from autogen.tools.skills.skill_search.client import SkillsClient
-from autogen.tools.skills.skill_search.extractor import extract_skill
-from autogen.tools.skills.skill_search.lock import SkillsLock
-from autogen.tools.skills.skill_types import SkillMetadata
+from ag2 import Context
+from ag2.events import ToolCallEvent, ToolErrorEvent
+from ag2.exceptions import InvalidSkillError, SkillInstallError
+from ag2.tools.skills import LocalRuntime, SkillSearchToolkit
+from ag2.tools.skills.skill_search.client import SkillsClient
+from ag2.tools.skills.skill_search.extractor import extract_skill
+from ag2.tools.skills.skill_search.lock import SkillsLock
+from ag2.tools.skills.skill_types import SkillMetadata
 
 MONOREPO_SKILL_MD = textwrap.dedent("""\
     ---

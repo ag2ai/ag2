@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock
 import daytona
 import pytest
 
-from autogen.annotations import Variable
-from autogen.extensions.daytona.sandbox import DaytonaSandbox
-from autogen.tools.sandbox import ExecResult
+from ag2.annotations import Variable
+from ag2.extensions.daytona.sandbox import DaytonaSandbox
+from ag2.tools.sandbox import ExecResult
 
 
 def _fake_sandbox(result: str = "ok", exit_code: int = 0) -> Any:

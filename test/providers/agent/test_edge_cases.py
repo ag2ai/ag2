@@ -11,14 +11,14 @@ import asyncio
 
 import pytest
 
-from autogen import Agent
-from autogen.agent import KnowledgeConfig, TaskConfig
-from autogen.compact import CompactTrigger, TailWindowCompact
-from autogen.events import CompactionCompleted
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.middleware import BaseMiddleware
-from autogen.middleware.builtin import HistoryLimiter, RetryMiddleware
-from autogen.stream import MemoryStream
+from ag2 import Agent
+from ag2.agent import KnowledgeConfig, TaskConfig
+from ag2.compact import CompactTrigger, TailWindowCompact
+from ag2.events import CompactionCompleted
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.middleware import BaseMiddleware
+from ag2.middleware.builtin import HistoryLimiter, RetryMiddleware
+from ag2.stream import MemoryStream
 
 pytestmark = pytest.mark.asyncio
 
@@ -92,7 +92,7 @@ async def test_concurrent_tool_calls_via_run_subtasks(provider_config) -> None:
     be far smaller than a single LLM round trip. Sequential dispatch would
     space them by 1+ seconds each.
     """
-    from autogen.events import TaskStarted
+    from ag2.events import TaskStarted
 
     starts: list[TaskStarted] = []
     stream = MemoryStream()

@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from autogen import Agent, Context, tool
-from autogen.events import ToolCallEvent
-from autogen.exceptions import ToolConflictError
-from autogen.middleware import ToolExecution, ToolResultType
-from autogen.testing import TestConfig
-from autogen.tools import Toolkit
+from ag2 import Agent, Context, tool
+from ag2.events import ToolCallEvent
+from ag2.exceptions import ToolConflictError
+from ag2.middleware import ToolExecution, ToolResultType
+from ag2.testing import TestConfig
+from ag2.tools import Toolkit
 
 
 @pytest.mark.asyncio
@@ -112,7 +112,7 @@ async def test_toolkit_mixed_with_standalone_tool(mock: MagicMock) -> None:
 
 @pytest.mark.asyncio()
 async def test_toolkit_with_context(mock: MagicMock) -> None:
-    from autogen import Context
+    from ag2 import Context
 
     @tool
     def greet(name: str, ctx: Context) -> str:

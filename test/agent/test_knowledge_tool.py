@@ -11,12 +11,12 @@ These tests exercise each action of that tool.
 
 import pytest
 
-from autogen import Agent
-from autogen.agent import KnowledgeConfig
-from autogen.events import EventLogFailed, ModelMessage, ModelResponse
-from autogen.knowledge import LOG_PREFIX, DefaultBootstrap, MemoryKnowledgeStore
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.agent import KnowledgeConfig
+from ag2.events import EventLogFailed, ModelMessage, ModelResponse
+from ag2.knowledge import LOG_PREFIX, DefaultBootstrap, MemoryKnowledgeStore
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 def _knowledge_tool_call(agent: Agent):

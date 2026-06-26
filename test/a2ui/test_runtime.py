@@ -4,10 +4,10 @@
 
 import pytest
 
-from autogen.a2ui import a2ui_action
-from autogen.a2ui._runtime import _A2UIRuntime
-from autogen.a2ui.actions import A2UIEventAction, collect_action_declarations
-from autogen.a2ui.middleware import A2UIExtractionMiddleware, A2UIValidationMiddleware
+from ag2.a2ui import a2ui_action
+from ag2.a2ui._runtime import _A2UIRuntime
+from ag2.a2ui.actions import A2UIEventAction, collect_action_declarations
+from ag2.a2ui.middleware import A2UIExtractionMiddleware, A2UIValidationMiddleware
 
 
 class TestRuntimeConstruction:

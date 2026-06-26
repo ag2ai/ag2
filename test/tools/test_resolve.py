@@ -6,16 +6,16 @@ from collections.abc import Callable
 
 import pytest
 
-from autogen import Context, Variable
-from autogen.tools import ImageGenerationTool, UserLocation, WebSearchTool
-from autogen.tools.builtin._resolve import resolve_variable
-from autogen.tools.builtin.image_generation import ImageGenerationToolSchema
-from autogen.tools.builtin.mcp_server import MCPServerTool, MCPServerToolSchema
-from autogen.tools.builtin.retrieval import RetrievalTool, RetrievalToolSchema
-from autogen.tools.builtin.shell import ContainerAutoEnvironment, ShellTool, ShellToolSchema
-from autogen.tools.builtin.web_fetch import WebFetchTool, WebFetchToolSchema
-from autogen.tools.builtin.web_search import WebSearchToolSchema
-from autogen.tools.builtin.x_search import XSearchTool, XSearchToolSchema
+from ag2 import Context, Variable
+from ag2.tools import ImageGenerationTool, UserLocation, WebSearchTool
+from ag2.tools.builtin._resolve import resolve_variable
+from ag2.tools.builtin.image_generation import ImageGenerationToolSchema
+from ag2.tools.builtin.mcp_server import MCPServerTool, MCPServerToolSchema
+from ag2.tools.builtin.retrieval import RetrievalTool, RetrievalToolSchema
+from ag2.tools.builtin.shell import ContainerAutoEnvironment, ShellTool, ShellToolSchema
+from ag2.tools.builtin.web_fetch import WebFetchTool, WebFetchToolSchema
+from ag2.tools.builtin.web_search import WebSearchToolSchema
+from ag2.tools.builtin.x_search import XSearchTool, XSearchToolSchema
 
 
 class TestResolveVariable:

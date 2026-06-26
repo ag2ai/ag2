@@ -8,13 +8,13 @@ from typing import Annotated
 import pytest
 from a2a.types import Part, TaskState
 
-from autogen import Agent, Depends
-from autogen.a2a.extension import EXTRA_PARTS_DEPENDENCY_KEY
-from autogen.a2ui import a2ui_action
-from autogen.a2ui.a2a import create_a2ui_parts
-from autogen.a2ui.a2a.executor import _extract_a2ui_envelopes
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2 import Agent, Depends
+from ag2.a2a.extension import EXTRA_PARTS_DEPENDENCY_KEY
+from ag2.a2ui import a2ui_action
+from ag2.a2ui.a2a import create_a2ui_parts
+from ag2.a2ui.a2a.executor import _extract_a2ui_envelopes
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 from ._helpers import (
     FUNCTION_RESULT_MARK,

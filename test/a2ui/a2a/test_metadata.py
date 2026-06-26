@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.a2ui.a2a import (
+from ag2.a2ui.a2a import (
     A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
     A2UIClientCapabilities,
     parse_client_capabilities,

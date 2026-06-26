@@ -14,25 +14,25 @@ import asyncio
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import TaskCancelled
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent, Context
+from ag2.events import TaskCancelled
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     Hub,
     HubBackedCheckpointStore,
     Passport,
     Resume,
 )
-from autogen.network.task_mirror import TaskMirror
-from autogen.stream import MemoryStream
-from autogen.task import (
+from ag2.network.task_mirror import TaskMirror
+from ag2.stream import MemoryStream
+from ag2.task import (
     TERMINAL_TASK_STATES,
     CheckpointStore,
     Task,
     TaskSpec,
     TaskState,
 )
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 
 class _InMemoryCheckpointStore:
@@ -64,7 +64,7 @@ class TestTaskCancel:
         events: list = []
         stream.subscribe(lambda ev: events.append(ev))
 
-        from autogen.context import ConversationContext
+        from ag2.context import ConversationContext
 
         task = Task(
             owner_id="alice",
@@ -83,7 +83,7 @@ class TestTaskCancel:
 
     @pytest.mark.asyncio
     async def test_cancel_is_idempotent_on_terminal_task(self) -> None:
-        from autogen.context import ConversationContext
+        from ag2.context import ConversationContext
 
         stream = MemoryStream()
         events: list = []
@@ -116,7 +116,7 @@ class TestCheckpointStandalone:
     async def test_checkpoint_writes_via_store_and_resume_reads_it_back(self) -> None:
         store = _InMemoryCheckpointStore()
 
-        from autogen.context import ConversationContext
+        from ag2.context import ConversationContext
 
         first = Task(
             owner_id="alice",
@@ -143,7 +143,7 @@ class TestCheckpointStandalone:
     async def test_checkpoint_without_store_is_a_silent_noop(self) -> None:
         """Standalone agents that never wire a store can still call
         ``Task.checkpoint`` — the call is just dropped."""
-        from autogen.context import ConversationContext
+        from ag2.context import ConversationContext
 
         task = Task(
             owner_id="alice",
@@ -156,7 +156,7 @@ class TestCheckpointStandalone:
     @pytest.mark.asyncio
     async def test_resume_from_unknown_task_yields_none(self) -> None:
         store = _InMemoryCheckpointStore()
-        from autogen.context import ConversationContext
+        from ag2.context import ConversationContext
 
         task = Task(
             owner_id="alice",
@@ -171,7 +171,7 @@ class TestCheckpointStandalone:
     @pytest.mark.asyncio
     async def test_checkpoint_after_terminal_is_a_noop(self) -> None:
         store = _InMemoryCheckpointStore()
-        from autogen.context import ConversationContext
+        from ag2.context import ConversationContext
 
         task = Task(
             owner_id="alice",
@@ -373,7 +373,7 @@ class TestHubAccessors:
             await hub.close()
 
     async def test_get_rule_returns_default_rule_for_registered_agent(self) -> None:
-        from autogen.network import Rule
+        from ag2.network import Rule
 
         hub = await Hub.open(
             MemoryKnowledgeStore(),
@@ -388,7 +388,7 @@ class TestHubAccessors:
             await hub.close()
 
     async def test_get_rule_raises_not_found_for_unknown_agent(self) -> None:
-        from autogen.network import NotFoundError
+        from ag2.network import NotFoundError
 
         hub = await Hub.open(
             MemoryKnowledgeStore(),

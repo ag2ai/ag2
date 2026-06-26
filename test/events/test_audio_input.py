@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from autogen.events import AudioInput, BinaryInput, FileIdInput, UrlInput
+from ag2.events import AudioInput, BinaryInput, FileIdInput, UrlInput
 
 
 def test_url_returns_audio_url_input() -> None:

@@ -16,10 +16,10 @@ from ag_ui.core import (
 )
 from dirty_equals import IsInt, IsPartialDict, IsStr
 
-from autogen import Agent, Context, Variable
-from autogen.ag_ui import AGUIEvent, AGUIStream
-from autogen.events import ToolCallEvent
-from autogen.testing import TestConfig
+from ag2 import Agent, Context, Variable
+from ag2.ag_ui import AGUIEvent, AGUIStream
+from ag2.events import ToolCallEvent
+from ag2.testing import TestConfig
 
 from .utils import (
     assert_event_type,

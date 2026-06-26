@@ -5,10 +5,10 @@
 import pytest
 from fast_depends.use import SerializerCls
 
-from autogen import ToolResult
-from autogen.compact import CompactionSummary
-from autogen.config.zai.mappers import convert_messages
-from autogen.events import (
+from ag2 import ToolResult
+from ag2.compact import CompactionSummary
+from ag2.config.zai.mappers import convert_messages
+from ag2.events import (
     DataInput,
     ImageInput,
     ModelMessage,
@@ -21,7 +21,7 @@ from autogen.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.exceptions import UnsupportedInputError
+from ag2.exceptions import UnsupportedInputError
 
 
 def test_user_text_input() -> None:

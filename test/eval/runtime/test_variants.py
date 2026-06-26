@@ -8,10 +8,10 @@ import pytest
 
 pytest.importorskip("opentelemetry.sdk")
 
-from autogen import Agent
-from autogen.eval import Suite, Variants, run_variants, scorer
-from autogen.eval.scorers import final_answer_matches
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.eval import Suite, Variants, run_variants, scorer
+from ag2.eval.scorers import final_answer_matches
+from ag2.testing import TestConfig
 
 
 def _build(*, config=None) -> Agent:

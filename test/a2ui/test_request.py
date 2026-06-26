@@ -4,10 +4,10 @@
 
 import pytest
 
-from autogen.a2ui import A2UIClientCapabilities
-from autogen.a2ui.actions import A2UIEventAction
-from autogen.a2ui.request import parse_request
-from autogen.events import ModelRequest, ModelResponse
+from ag2.a2ui import A2UIClientCapabilities
+from ag2.a2ui.actions import A2UIEventAction
+from ag2.a2ui.request import parse_request
+from ag2.events import ModelRequest, ModelResponse
 
 
 def _no_actions(name: str) -> None:

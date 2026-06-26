@@ -1,9 +1,9 @@
 import asyncio
 
-from autogen import Agent
-from autogen.a2a import A2AConfig
-from autogen.config import AnthropicConfig
-from autogen.tools.subagents import persistent_stream
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+from ag2.config import AnthropicConfig
+from ag2.tools.subagents import persistent_stream
 
 researcher = Agent(
     "researcher",

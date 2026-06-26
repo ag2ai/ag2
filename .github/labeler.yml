@@ -1,7 +1,7 @@
 A2A:
   - changed-files:
     - any-glob-to-any-file:
-      - autogen/a2a/**
+      - ag2/a2a/**
       - test/a2a/**
       - website/docs/a2a/**
 
@@ -25,6 +25,6 @@ github_actions:
 ui:
   - changed-files:
     - any-glob-to-any-file:
-      - autogen/ag_ui/**
+      - ag2/ag_ui/**
       - test/ag_ui/**
       - website/docs/ag-ui/**

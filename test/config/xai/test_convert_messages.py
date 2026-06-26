@@ -8,11 +8,11 @@ import pytest
 from fast_depends.use import SerializerCls
 from xai_sdk.chat import chat_pb2
 
-from autogen import ToolResult
-from autogen.compact import CompactionSummary
-from autogen.config.xai.events import XAIAssistantEvent
-from autogen.config.xai.mappers import convert_messages
-from autogen.events import (
+from ag2 import ToolResult
+from ag2.compact import CompactionSummary
+from ag2.config.xai.events import XAIAssistantEvent
+from ag2.config.xai.mappers import convert_messages
+from ag2.events import (
     AudioInput,
     BinaryInput,
     BinaryType,
@@ -30,7 +30,7 @@ from autogen.events import (
     ToolResultsEvent,
     VideoInput,
 )
-from autogen.exceptions import ToolNotFoundError, UnsupportedInputError
+from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
 
 
 def _content_texts(msg: chat_pb2.Message) -> list[str]:
@@ -203,7 +203,7 @@ class TestToolResult:
 
         assert msg.role == chat_pb2.ROLE_TOOL
         assert msg.tool_call_id == "tc_1"
-        assert _content_texts(msg) == ["autogen.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"]
+        assert _content_texts(msg) == ["ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"]
 
 
 class TestAssistantRoundTrip:

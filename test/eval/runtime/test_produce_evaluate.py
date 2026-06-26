@@ -15,15 +15,15 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from autogen import Agent
-from autogen.eval import DirectoryTraceSource, Suite, evaluate_traces
-from autogen.eval.scorers import final_answer_matches, no_tool_errors, tool_called
-from autogen.eval.sources._otel import readable_span_to_data
-from autogen.eval.sources.trace_source import save_trace
-from autogen.events import ToolCallEvent
-from autogen.middleware.builtin.telemetry import TelemetryMiddleware
-from autogen.testing import TestConfig
-from autogen.tools import tool
+from ag2 import Agent
+from ag2.eval import DirectoryTraceSource, Suite, evaluate_traces
+from ag2.eval.scorers import final_answer_matches, no_tool_errors, tool_called
+from ag2.eval.sources._otel import readable_span_to_data
+from ag2.eval.sources.trace_source import save_trace
+from ag2.events import ToolCallEvent
+from ag2.middleware.builtin.telemetry import TelemetryMiddleware
+from ag2.testing import TestConfig
+from ag2.tools import tool
 
 
 @pytest.mark.asyncio()

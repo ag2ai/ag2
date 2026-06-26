@@ -28,15 +28,15 @@ from datetime import datetime
 
 import pytest
 
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     Envelope,
     Hub,
 )
-from autogen.network.adapters.base import AdapterResult
-from autogen.network.adapters.conversation import ConversationAdapter
-from autogen.network.channel import (
+from ag2.network.adapters.base import AdapterResult
+from ag2.network.adapters.conversation import ConversationAdapter
+from ag2.network.channel import (
     ChannelManifest,
     ChannelMetadata,
     ChannelState,
@@ -45,7 +45,7 @@ from autogen.network.channel import (
     ParticipantRole,
     ParticipantSchema,
 )
-from autogen.network.hub import (
+from ag2.network.hub import (
     AUDIT_KIND_EXPECTATION_VIOLATED,
     AcksWithinEvaluator,
     AuditLog,
@@ -53,7 +53,7 @@ from autogen.network.hub import (
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
 )
-from autogen.network.views.builtin import FullTranscript
+from ag2.network.views.builtin import FullTranscript
 
 from ._helpers import _MockClock
 

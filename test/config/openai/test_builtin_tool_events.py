@@ -26,15 +26,15 @@ from openai.types.responses.response_output_item import ImageGenerationCall
 from openai.types.responses.response_output_text import ResponseOutputText
 from openai.types.responses.response_reasoning_item import Summary
 
-from autogen import Context, MemoryStream
-from autogen.config.openai import OpenAIResponsesClient
-from autogen.config.openai.events import (
+from ag2 import Context, MemoryStream
+from ag2.config.openai import OpenAIResponsesClient
+from ag2.config.openai.events import (
     OpenAIReasoningEvent,
     OpenAIServerToolCallEvent,
     OpenAIServerToolResultEvent,
 )
-from autogen.config.openai.mappers import events_to_responses_input
-from autogen.events import (
+from ag2.config.openai.mappers import events_to_responses_input
+from ag2.events import (
     BaseEvent,
     BinaryInput,
     BinaryType,
@@ -46,9 +46,9 @@ from autogen.events import (
     ToolResult,
     UrlInput,
 )
-from autogen.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
-from autogen.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
-from autogen.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
+from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
+from ag2.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
+from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
 
 async def _process(output: Iterable[Any]) -> tuple[ModelResponse, list[BaseEvent]]:

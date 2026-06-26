@@ -18,7 +18,7 @@ import os
 
 import pytest
 
-from autogen.config import AnthropicConfig, GeminiConfig, OpenAIConfig, ZAIConfig
+from ag2.config import AnthropicConfig, GeminiConfig, OpenAIConfig, ZAIConfig
 
 
 def _require(env: str) -> str:

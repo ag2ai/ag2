@@ -5,10 +5,10 @@
 import pytest
 from a2a.server.tasks import InMemoryTaskStore, TaskStore
 
-from autogen import Agent
-from autogen.a2a import A2AServer
-from autogen.a2a.tasks import list_tasks
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.a2a import A2AServer
+from ag2.a2a.tasks import list_tasks
+from ag2.testing import TestConfig
 
 from ._helpers import make_pair
 

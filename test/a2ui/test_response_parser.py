@@ -4,13 +4,13 @@
 
 import pytest
 
-from autogen.a2ui.parser import (
+from ag2.a2ui.parser import (
     A2UIParseResult,
     A2UIResponseParser,
     A2UIValidationResult,
     strip_markdown_fences,
 )
-from autogen.a2ui.schema_manager import A2UISchemaManager
+from ag2.a2ui.schema_manager import A2UISchemaManager
 
 
 class TestA2UIResponseParser:

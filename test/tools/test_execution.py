@@ -10,7 +10,7 @@ import pytest
 from fast_depends import Depends
 from pydantic import BaseModel
 
-from autogen import (
+from ag2 import (
     Agent,
     Context,
     DataInput,
@@ -22,7 +22,7 @@ from autogen import (
     testing,
     tool,
 )
-from autogen.exceptions import ToolNotFoundError
+from ag2.exceptions import ToolNotFoundError
 
 
 @pytest.mark.asyncio

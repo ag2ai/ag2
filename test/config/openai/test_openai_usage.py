@@ -6,8 +6,8 @@
 
 from openai.types.completion_usage import CompletionTokensDetails, CompletionUsage, PromptTokensDetails
 
-from autogen.config.openai.mappers import normalize_usage
-from autogen.events import Usage
+from ag2.config.openai.mappers import normalize_usage
+from ag2.events import Usage
 
 
 class TestNormalizeUsage:

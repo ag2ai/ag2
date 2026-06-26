@@ -6,10 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent
-from autogen.events import ToolCallEvent
-from autogen.exceptions import ConfigNotProvidedError, ToolNotFoundError
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.events import ToolCallEvent
+from ag2.exceptions import ConfigNotProvidedError, ToolNotFoundError
+from ag2.testing import TestConfig
 
 
 @pytest.fixture()

@@ -23,22 +23,22 @@ import pytest
 
 pytest.importorskip("opentelemetry.sdk")
 
-from autogen import Agent, tool
-from autogen.eval import (
+from ag2 import Agent, tool
+from ag2.eval import (
     BudgetThresholds,
     Suite,
     Trace,
     run_agent,
     scorer,
 )
-from autogen.eval.scorers import (
+from ag2.eval.scorers import (
     final_answer_matches,
     no_tool_errors,
     token_budget,
     tool_called,
 )
-from autogen.events import ModelResponse, ToolCallEvent
-from autogen.testing import TestConfig
+from ag2.events import ModelResponse, ToolCallEvent
+from ag2.testing import TestConfig
 
 _DATASET_PATH = Path(__file__).parent / "weather_dataset.jsonl"
 

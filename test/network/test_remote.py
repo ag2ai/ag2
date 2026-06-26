@@ -14,8 +14,8 @@ import asyncio
 
 import pytest
 
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_INVITE,
     EV_CHANNEL_INVITE_ACK,
     EV_TEXT,
@@ -202,7 +202,7 @@ class TestDispatchRouting:
         link = LocalLink(hub)
         alice_hc = HubClient(link, hub=hub)
 
-        from autogen import Agent
+        from ag2 import Agent
 
         from ._helpers import ScriptedConfig
 
@@ -256,7 +256,7 @@ class TestDispatchRouting:
         link = LocalLink(hub)
         alice_hc = HubClient(link, hub=hub)
 
-        from autogen import Agent
+        from ag2 import Agent
 
         from ._helpers import ScriptedConfig
 
@@ -314,7 +314,7 @@ class TestDispatchRouting:
         link = LocalLink(hub)
         alice_hc = HubClient(link, hub=hub)
 
-        from autogen import Agent
+        from ag2 import Agent
 
         from ._helpers import ScriptedConfig
 
@@ -374,7 +374,7 @@ class TestDispatchRouting:
         alice_hc = HubClient(link, hub=hub)
         carol_hc = HubClient(link, hub=hub)
 
-        from autogen import Agent
+        from ag2 import Agent
 
         from ._helpers import ScriptedConfig
 

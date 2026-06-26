@@ -2,9 +2,9 @@ import asyncio
 import os
 import sys
 
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import MCPStdioServerConfig, MCPToolkit
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import MCPStdioServerConfig, MCPToolkit
 
 
 async def main() -> None:

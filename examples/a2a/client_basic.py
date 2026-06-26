@@ -1,7 +1,7 @@
 import asyncio
 
-from autogen import Agent
-from autogen.a2a import A2AConfig
+from ag2 import Agent
+from ag2.a2a import A2AConfig
 
 
 async def main() -> None:

@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.a2ui import A2UIMessageEvent
-from autogen.events import BaseEvent
+from ag2.a2ui import A2UIMessageEvent
+from ag2.events import BaseEvent
 
 
 class TestA2UIMessageEvent:

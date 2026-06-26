@@ -12,8 +12,8 @@ Verifies that events marked ``__transient__ = True`` are:
 
 import pytest
 
-from autogen import Context, MemoryStream
-from autogen.events import (
+from ag2 import Context, MemoryStream
+from ag2.events import (
     AggregationCompleted,
     BaseEvent,
     CompactionCompleted,

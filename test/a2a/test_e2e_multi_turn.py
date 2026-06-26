@@ -4,7 +4,7 @@
 
 import pytest
 
-from autogen.events import (
+from ag2.events import (
     ModelMessage,
     ModelRequest,
     ModelResponse,

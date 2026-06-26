@@ -12,8 +12,8 @@ wins across both static (``ToolCalled`` graph rule) and dynamic
 
 import json
 
-from autogen.events import DataInput, ToolCallEvent, ToolResult, ToolResultEvent
-from autogen.network import (
+from ag2.events import DataInput, ToolCallEvent, ToolResult, ToolResultEvent
+from ag2.network import (
     AgentTarget,
     Finish,
     Handoff,
@@ -22,7 +22,7 @@ from autogen.network import (
     Transition,
     TransitionGraph,
 )
-from autogen.network.adapters.workflow import _resolve_routing
+from ag2.network.adapters.workflow import _resolve_routing
 
 
 def _call(name: str, *, call_id: str = "id1", reason: str = "") -> ToolCallEvent:

@@ -37,10 +37,10 @@ from anthropic.types.bash_code_execution_tool_result_error import BashCodeExecut
 from anthropic.types.code_execution_output_block import CodeExecutionOutputBlock
 from anthropic.types.document_block import DocumentBlock
 
-from autogen import Context, MemoryStream
-from autogen.config.anthropic import AnthropicClient
-from autogen.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
-from autogen.events import (
+from ag2 import Context, MemoryStream
+from ag2.config.anthropic import AnthropicClient
+from ag2.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
+from ag2.events import (
     BaseEvent,
     BinaryInput,
     BinaryType,
@@ -53,9 +53,9 @@ from autogen.events import (
     ToolResult,
     UrlInput,
 )
-from autogen.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
-from autogen.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
-from autogen.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
+from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
+from ag2.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
+from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
 
 async def _process(content: Iterable[Any]) -> tuple[ModelResponse, list[BaseEvent]]:

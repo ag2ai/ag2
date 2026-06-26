@@ -6,11 +6,11 @@ import json
 
 import pytest
 
-from autogen import Agent, MemoryStream
-from autogen.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
-from autogen.testing import TestConfig
-from autogen.tools import SandboxCodeTool
-from autogen.tools.code import CodeEnvironment, CodeLanguage, CodeRunResult
+from ag2 import Agent, MemoryStream
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
+from ag2.testing import TestConfig
+from ag2.tools import SandboxCodeTool
+from ag2.tools.code import CodeEnvironment, CodeLanguage, CodeRunResult
 
 
 class FakeEnv:

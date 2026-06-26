@@ -8,17 +8,17 @@ from unittest.mock import patch
 import pytest
 from google.genai import types
 
-from autogen import Context, MemoryStream, ToolResult
-from autogen.config.gemini.events import (
+from ag2 import Context, MemoryStream, ToolResult
+from ag2.config.gemini.events import (
     GeminiServerToolCallEvent,
     GeminiServerToolResultEvent,
 )
-from autogen.config.gemini.gemini_client import GeminiClient
-from autogen.config.gemini.mappers import grounding_tool_name
-from autogen.events import BinaryType, TextInput, UrlInput
-from autogen.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
-from autogen.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
-from autogen.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
+from ag2.config.gemini.gemini_client import GeminiClient
+from ag2.config.gemini.mappers import grounding_tool_name
+from ag2.events import BinaryType, TextInput, UrlInput
+from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
+from ag2.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
+from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
 
 def _candidate(parts: list, grounding_metadata=None) -> SimpleNamespace:
@@ -35,7 +35,7 @@ def _response(candidates: list[SimpleNamespace]) -> SimpleNamespace:
 
 @pytest.fixture
 def client() -> GeminiClient:
-    with patch("autogen.config.gemini.gemini_client.genai.Client"):
+    with patch("ag2.config.gemini.gemini_client.genai.Client"):
         return GeminiClient(model="gemini-2.5-flash", api_key="test-key")
 
 

@@ -11,13 +11,13 @@ from pathlib import Path, PurePosixPath
 import pytest
 from dirty_equals import IsPartialDict
 
-from autogen import Context
-from autogen.events import ToolCallEvent, ToolErrorEvent
-from autogen.tools import SkillsToolkit
-from autogen.tools.sandbox import ExecResult, Sandbox
-from autogen.tools.sandbox.adapter import ShellAdapter
-from autogen.tools.sandbox.local import LocalSandbox
-from autogen.tools.skills import LocalRuntime
+from ag2 import Context
+from ag2.events import ToolCallEvent, ToolErrorEvent
+from ag2.tools import SkillsToolkit
+from ag2.tools.sandbox import ExecResult, Sandbox
+from ag2.tools.sandbox.adapter import ShellAdapter
+from ag2.tools.sandbox.local import LocalSandbox
+from ag2.tools.skills import LocalRuntime
 
 
 def _write_script_skill(base: Path, name: str, script_body: str | None = None) -> Path:

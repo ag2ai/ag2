@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.a2ui.incoming import sanitize_for_prompt
+from ag2.a2ui.incoming import sanitize_for_prompt
 
 
 class TestSanitizeForPrompt:

@@ -65,7 +65,7 @@ jobs:
       pull-requests: read
     runs-on: ubuntu-latest
     outputs:
-      hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.website == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' || steps.filter.outputs.scripts == 'true' }}
+      hasChanges: ${{ steps.filter.outputs.ag2 == 'true' || steps.filter.outputs.website == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' || steps.filter.outputs.scripts == 'true' }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -74,8 +74,8 @@ jobs:
         id: filter
         with:
           filters: |
-            autogen:
-              - "autogen/**"
+            ag2:
+              - "ag2/**"
             website:
               - "website/**"
             workflows:

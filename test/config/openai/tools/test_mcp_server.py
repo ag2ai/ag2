@@ -4,10 +4,10 @@
 
 import pytest
 
-from autogen import Context
-from autogen.config.openai.mappers import tool_to_api, tool_to_responses_api
-from autogen.exceptions import UnsupportedToolError
-from autogen.tools.builtin.mcp_server import MCPServerTool
+from ag2 import Context
+from ag2.config.openai.mappers import tool_to_api, tool_to_responses_api
+from ag2.exceptions import UnsupportedToolError
+from ag2.tools.builtin.mcp_server import MCPServerTool
 
 
 @pytest.mark.asyncio

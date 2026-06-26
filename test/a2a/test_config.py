@@ -7,8 +7,8 @@ from a2a.client.client_factory import TransportProtocol
 from a2a.types import AgentCapabilities, AgentCard, AgentInterface
 from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
 
-from autogen.a2a import A2AConfig
-from autogen.a2a.errors import A2AInvalidCardError
+from ag2.a2a import A2AConfig
+from ag2.a2a.errors import A2AInvalidCardError
 
 
 def _card_with_interfaces(*urls: str) -> AgentCard:

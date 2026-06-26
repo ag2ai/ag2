@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fast_depends.pydantic import PydanticSerializer
 
-from autogen.config.anthropic import AnthropicClient
-from autogen.events import ModelResponse, Usage
+from ag2.config.anthropic import AnthropicClient
+from ag2.events import ModelResponse, Usage
 
 
 def _make_usage(

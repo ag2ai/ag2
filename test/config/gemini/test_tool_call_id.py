@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from autogen import Context
-from autogen.config.gemini.gemini_client import GeminiClient
+from ag2 import Context
+from ag2.config.gemini.gemini_client import GeminiClient
 
 
 def _part(*, function_call=None, text=None, thought=None, thought_signature=None, inline_data=None) -> SimpleNamespace:
@@ -46,7 +46,7 @@ def _response(parts: list[SimpleNamespace]) -> SimpleNamespace:
 
 @pytest.fixture
 def client() -> GeminiClient:
-    with patch("autogen.config.gemini.gemini_client.genai.Client"):
+    with patch("ag2.config.gemini.gemini_client.genai.Client"):
         return GeminiClient(model="gemini-2.5-flash", api_key="test-key")
 
 

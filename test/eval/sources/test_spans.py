@@ -2,12 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the span -> Trace adapter (``autogen.eval.sources._spans``)."""
+"""Tests for the span -> Trace adapter (``ag2.eval.sources._spans``)."""
 
 import json
 import logging
 
-from autogen._telemetry_consts import (
+from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
     ATTR_HUMAN_INPUT_RESPONSE,
     ATTR_SPAN_TYPE,
@@ -16,15 +16,15 @@ from autogen._telemetry_consts import (
     SPAN_TYPE_LLM,
     SPAN_TYPE_TOOL,
 )
-from autogen.eval.scorers import no_tool_errors, tool_called
-from autogen.eval.sources._spans import (
+from ag2.eval.scorers import no_tool_errors, tool_called
+from ag2.eval.sources._spans import (
     AG2GenAIConvention,
     OpenInferenceConvention,
     SpanData,
     SpanEvent,
     spans_to_trace,
 )
-from autogen.events import (
+from ag2.events import (
     HumanInputRequest,
     HumanMessage,
     ModelResponse,

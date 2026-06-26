@@ -25,26 +25,26 @@ from pathlib import Path
 
 import pytest
 
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_PACKET,
     EV_TEXT,
     Handoff,
     Hub,
     Resume,
 )
-from autogen.network.adapters.conversation import CONVERSATION_TYPE
-from autogen.network.adapters.workflow import WORKFLOW_TYPE
-from autogen.network.channel import ChannelState
-from autogen.network.client.channel import Channel
-from autogen.network.policies import (
+from ag2.network.adapters.conversation import CONVERSATION_TYPE
+from ag2.network.adapters.workflow import WORKFLOW_TYPE
+from ag2.network.channel import ChannelState
+from ag2.network.client.channel import Channel
+from ag2.network.policies import (
     AGENT_CLIENT_DEP,
     CHANNEL_DEP,
     HUB_DEP,
 )
-from autogen.network.transitions import (
+from ag2.network.transitions import (
     AgentTarget,
     FromSpeaker,
     StayTarget,
@@ -52,7 +52,7 @@ from autogen.network.transitions import (
     Transition,
     TransitionGraph,
 )
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 try:
     from dotenv import load_dotenv

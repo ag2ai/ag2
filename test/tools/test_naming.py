@@ -9,9 +9,9 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import Field
 
-from autogen import Depends, Inject
-from autogen.tools import tool
-from autogen.tools.final import FunctionTool
+from ag2 import Depends, Inject
+from ag2.tools import tool
+from ag2.tools.final import FunctionTool
 
 DEFAULT_SCHEMA = {
     "function": {

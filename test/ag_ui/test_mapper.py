@@ -24,9 +24,9 @@ from ag_ui.core import (
     VideoInputContent,
 )
 
-from autogen import ToolResult
-from autogen.ag_ui.stream import AGStreamInput, map_agui_messages_to_events
-from autogen.events import (
+from ag2 import ToolResult
+from ag2.ag_ui.stream import AGStreamInput, map_agui_messages_to_events
+from ag2.events import (
     AudioInput,
     BinaryInput,
     BinaryType,

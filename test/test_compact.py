@@ -6,10 +6,10 @@
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.agent import KnowledgeConfig
-from autogen.compact import CompactTrigger, CompactionSummary, TailWindowCompact
-from autogen.events import (
+from ag2 import Agent, Context
+from ag2.agent import KnowledgeConfig
+from ag2.compact import CompactTrigger, CompactionSummary, TailWindowCompact
+from ag2.events import (
     CompactionCompleted,
     CompactionFailed,
     CompactionStarted,
@@ -23,9 +23,9 @@ from autogen.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 class TestTailWindowCompact:

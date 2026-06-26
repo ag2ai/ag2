@@ -23,38 +23,38 @@ from typing import Any, ClassVar
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import ToolCallEvent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent, Context
+from ag2.events import ToolCallEvent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     Hub,
     Resume,
 )
-from autogen.network.adapters.conversation import ConversationAdapter
-from autogen.network.channel import (
+from ag2.network.adapters.conversation import ConversationAdapter
+from ag2.network.channel import (
     ChannelManifest,
     Expectation,
     ParticipantSchema,
 )
-from autogen.network.client.tools import (
+from ag2.network.client.tools import (
     make_channels_tool,
     make_context_tool,
     make_peers_tool,
     make_tasks_tool,
 )
-from autogen.network.hub.audit import (
+from ag2.network.hub.audit import (
     AUDIT_KIND_EXPECTATION_VIOLATED,
 )
-from autogen.network.policies import AGENT_CLIENT_DEP
-from autogen.network.transitions import (
+from ag2.network.policies import AGENT_CLIENT_DEP
+from ag2.network.transitions import (
     AgentTarget,
     TransitionDecision,
     TransitionGraph,
     TransitionRegistry,
     WorkflowGraphError,
 )
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 async def _invoke(tool: Any, args: dict, *, dependencies: dict | None = None) -> Any:
@@ -197,8 +197,8 @@ async def test_cross_tool_flow_exercises_all_six_tools() -> None:
     """One alice registers; she uses ``peers(find)``, ``channels(open)``,
     ``say``, ``tasks(list)``, ``context(search)``. The grouped+flat
     surface composes via the same DI wiring."""
-    from autogen.network.client.tools.delegate import make_delegate_tool
-    from autogen.network.client.tools.say import make_say_tool
+    from ag2.network.client.tools.delegate import make_delegate_tool
+    from ag2.network.client.tools.say import make_say_tool
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -287,7 +287,7 @@ def test_handlers_module_does_not_touch_hub_privates() -> None:
     / task lookups, audit-log appends, listener fan-out, or any other
     underscore-prefixed attribute reach-through.
     """
-    handlers_path = Path(__file__).parent.parent.parent / "autogen" / "network" / "client" / "handlers.py"
+    handlers_path = Path(__file__).parent.parent.parent / "ag2" / "network" / "client" / "handlers.py"
     text = handlers_path.read_text()
     forbidden = (
         "_hub._adapter_for",

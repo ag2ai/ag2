@@ -65,8 +65,8 @@ async def test_collects_events_in_window(self) -> None:
     ]
 ```
 
-- Always use `autogen.beta.testing.TestConfig` to mock LLM responses in agent-based tests.
-- Always use `autogen.beta.testing.TrackingConfig` to validate messages the framework sends to the LLM (for example: tool results and user input).
+- Always use `ag2.testing.TestConfig` to mock LLM responses in agent-based tests.
+- Always use `ag2.testing.TrackingConfig` to validate messages the framework sends to the LLM (for example: tool results and user input).
 
 ### Assertion style
 

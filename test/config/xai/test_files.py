@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autogen.config import XAIConfig
-from autogen.config.xai import XAIFilesClient
-from autogen.files.types import FileContent, FileProvider, UploadedFile
+from ag2.config import XAIConfig
+from ag2.config.xai import XAIFilesClient
+from ag2.files.types import FileContent, FileProvider, UploadedFile
 
 
-@patch("autogen.config.xai.files.AsyncClient")
+@patch("ag2.config.xai.files.AsyncClient")
 def test_files_api_can_be_created_for_xai(mock_async_client: MagicMock) -> None:
     config = XAIConfig(model="grok-4-fast", api_key="test-key")
 
@@ -30,7 +30,7 @@ def test_files_api_can_be_created_for_xai(mock_async_client: MagicMock) -> None:
 
 @pytest.mark.asyncio
 class TestXAIFilesClient:
-    @patch("autogen.config.xai.files.AsyncClient")
+    @patch("ag2.config.xai.files.AsyncClient")
     async def test_upload(self, mock_async_client: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_async_client.return_value = mock_client
@@ -57,7 +57,7 @@ class TestXAIFilesClient:
         )
         mock_client.files.upload.assert_awaited_once_with(b"hello", filename="hello.txt")
 
-    @patch("autogen.config.xai.files.AsyncClient")
+    @patch("ag2.config.xai.files.AsyncClient")
     async def test_read(self, mock_async_client: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_async_client.return_value = mock_client
@@ -68,7 +68,7 @@ class TestXAIFilesClient:
 
         assert result == FileContent(name="hello.txt", data=b"file-bytes")
 
-    @patch("autogen.config.xai.files.AsyncClient")
+    @patch("ag2.config.xai.files.AsyncClient")
     async def test_list(self, mock_async_client: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_async_client.return_value = mock_client
@@ -95,7 +95,7 @@ class TestXAIFilesClient:
             ),
         ]
 
-    @patch("autogen.config.xai.files.AsyncClient")
+    @patch("ag2.config.xai.files.AsyncClient")
     async def test_delete(self, mock_async_client: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_async_client.return_value = mock_client

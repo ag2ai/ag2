@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.a2a.mappers.history import events_to_payload, payload_to_events
-from autogen.events import (
+from ag2.a2a.mappers.history import events_to_payload, payload_to_events
+from ag2.events import (
     ToolCallEvent,
     ToolCallsEvent,
     ToolResult,

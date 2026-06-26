@@ -15,15 +15,15 @@ from a2a.server.tasks import InMemoryPushNotificationConfigStore, TaskUpdater
 from a2a.types import Task, TaskState, TaskStatus
 from typing_extensions import Self
 
-from autogen import Agent, Context
-from autogen.a2a import A2AConfig, A2AServer, build_card
-from autogen.a2a.client import A2AClient
-from autogen.a2a.errors import A2ATaskFailedError
-from autogen.a2a.testing import make_test_client_factory
-from autogen.config.client import LLMClient
-from autogen.config.config import ModelConfig
-from autogen.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse
-from autogen.testing import TestConfig
+from ag2 import Agent, Context
+from ag2.a2a import A2AConfig, A2AServer, build_card
+from ag2.a2a.client import A2AClient
+from ag2.a2a.errors import A2ATaskFailedError
+from ag2.a2a.testing import make_test_client_factory
+from ag2.config.client import LLMClient
+from ag2.config.config import ModelConfig
+from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse
+from ag2.testing import TestConfig
 
 
 class _SpyAsyncClient(httpx.AsyncClient):

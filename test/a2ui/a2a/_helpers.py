@@ -4,7 +4,7 @@
 
 """Shared harness for A2UI ⇄ A2A round-trip tests.
 
-A client :class:`~autogen.Agent` talks to an :class:`A2AServer` wired with
+A client :class:`~ag2.Agent` talks to an :class:`A2AServer` wired with
 an :class:`A2UIAgentExecutor` over an in-process httpx ``ASGITransport`` (the
 same path the ``test/a2a`` E2E suite uses). The mock LLM doubles here
 mirror the sanctioned pattern in ``test/a2a/_helpers.py`` (``RecordingConfig``):
@@ -21,16 +21,16 @@ from a2a.client.interceptors import BeforeArgs
 from a2a.types import TaskState
 from typing_extensions import Self
 
-from autogen import Agent, Context
-from autogen.a2a import A2AConfig, A2AServer
-from autogen.a2a.events import A2ATaskStatusUpdate
-from autogen.a2a.testing import make_test_client_factory
-from autogen.a2ui._types import A2UIVersion
-from autogen.a2ui.a2a import get_a2ui_data, is_a2ui_part
-from autogen.a2ui.a2a.executor import A2UIAgentExecutor
-from autogen.config import LLMClient, ModelConfig
-from autogen.events import BaseEvent, ModelMessage, ModelResponse
-from autogen.stream import MemoryStream
+from ag2 import Agent, Context
+from ag2.a2a import A2AConfig, A2AServer
+from ag2.a2a.events import A2ATaskStatusUpdate
+from ag2.a2a.testing import make_test_client_factory
+from ag2.a2ui._types import A2UIVersion
+from ag2.a2ui.a2a import get_a2ui_data, is_a2ui_part
+from ag2.a2ui.a2a.executor import A2UIAgentExecutor
+from ag2.config import LLMClient, ModelConfig
+from ag2.events import BaseEvent, ModelMessage, ModelResponse
+from ag2.stream import MemoryStream
 
 # Marker the HITL continuation feeds back so a paused turn can complete instead
 # of pausing forever (see CallFunctionThenComplete).
@@ -144,7 +144,7 @@ def client_for(
 ) -> Agent:
     """A client Agent talking to ``agent`` via the A2UI executor over in-process HTTP.
 
-    ``agent`` is a plain ``autogen.Agent``; A2UI config (protocol version,
+    ``agent`` is a plain ``ag2.Agent``; A2UI config (protocol version,
     validation) lives on the :class:`A2UIAgentExecutor`. Clickable buttons
     (``@a2ui_action`` tools) are declared via ``actions=`` on the executor — the
     same way they are on :class:`A2UIServer` — so the agent stays plain.

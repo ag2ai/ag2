@@ -4,8 +4,8 @@
 
 from a2a.types import Part
 
-from autogen.a2ui.a2a import create_a2ui_parts, get_a2ui_data, is_a2ui_part
-from autogen.a2ui.constants import A2UI_MIME_TYPE
+from ag2.a2ui.a2a import create_a2ui_parts, get_a2ui_data, is_a2ui_part
+from ag2.a2ui.constants import A2UI_MIME_TYPE
 
 SAMPLE_OPS = [
     {

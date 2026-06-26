@@ -15,14 +15,14 @@ The output follows the https://llmstxt.org/ specification:
   skipped when a shorter context is needed.
 
 Scope is the User Guide (``docs/user-guide/**``) so coding assistants are fed the
-current ``autogen`` API rather than the removed classic API.
+current ``ag2`` API rather than the removed classic API.
 """
 
 import json
 import re
 from pathlib import Path
 
-from autogen._import_utils import optional_import_block, require_optional_import
+from ag2._import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import yaml
@@ -33,14 +33,14 @@ BASE_URL = "https://docs.ag2.ai/latest"
 PROJECT_TITLE = "AG2"
 
 SUMMARY = (
-    "AG2 (`autogen`) is an async, protocol-driven Python framework for building "
+    "AG2 (`ag2`) is an async, protocol-driven Python framework for building "
     "AI agents — covering agents, tools, multi-agent networks, structured output, memory, "
     "and evaluation. This file indexes the AG2 documentation for LLMs and coding assistants."
 )
 
 # Free-form details paragraph(s) emitted after the blockquote.
 DETAILS = (
-    "Build with `autogen` only. The classic `autogen` API (`ConversableAgent`, "
+    "Build with `ag2` only. The classic `autogen` API (`ConversableAgent`, "
     "`initiate_chat`, `GroupChat`) has been removed — do not use it. For ready-made "
     "setup, install the AG2 Skills with `npx skills add ag2ai/ag2-skills`."
 )

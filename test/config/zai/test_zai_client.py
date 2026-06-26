@@ -7,8 +7,8 @@ from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 from pydantic import BaseModel
 
-from autogen.config.zai import ZAIClient
-from autogen.events import (
+from ag2.config.zai import ZAIClient
+from ag2.events import (
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
@@ -17,7 +17,7 @@ from autogen.events import (
     ToolCallEvent,
     Usage,
 )
-from autogen.response import PromptedSchema
+from ag2.response import PromptedSchema
 from test.config._helpers import make_tool
 from test.config.zai._helpers import (
     FakeCompletions,

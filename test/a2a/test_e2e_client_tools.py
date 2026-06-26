@@ -4,7 +4,7 @@
 
 import pytest
 
-from autogen.events import ToolCallEvent, ToolResultEvent, ToolResultsEvent
+from ag2.events import ToolCallEvent, ToolResultEvent, ToolResultsEvent
 
 from ._helpers import make_pair
 

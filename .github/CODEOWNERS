@@ -2,21 +2,21 @@
 # About code owners https://docs.github.com/ru/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Framework
-/autogen/ @Lancetnik
+/ag2/ @Lancetnik
 /test/ @Lancetnik
 
 # A2A and AG-UI
-/autogen/a2a/ @vvlrff
+/ag2/a2a/ @vvlrff
 /test/a2a/ @vvlrff
-/autogen/ag_ui/ @Lancetnik
+/ag2/ag_ui/ @Lancetnik
 /test/ag_ui/ @Lancetnik
 
 # Provider configs
-/autogen/config/ @marklysze
+/ag2/config/ @marklysze
 /test/config/ @marklysze
 
 # Shell Tool
-/autogen/tools/shell/ @priyansh4320
+/ag2/tools/shell/ @priyansh4320
 
 # Observability
 /website/docs/user-guide/a2a/ @Lancetnik

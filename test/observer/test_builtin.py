@@ -6,8 +6,8 @@ from contextlib import ExitStack
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import (
+from ag2 import Agent, Context
+from ag2.events import (
     ModelMessage,
     ModelResponse,
     ObserverAlert,
@@ -18,10 +18,10 @@ from autogen.events import (
     ToolCallEvent,
     Usage,
 )
-from autogen.observers import BaseObserver, LoopDetector, TokenMonitor
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
-from autogen.watch import EventWatch
+from ag2.observers import BaseObserver, LoopDetector, TokenMonitor
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
+from ag2.watch import EventWatch
 
 
 @pytest.mark.asyncio

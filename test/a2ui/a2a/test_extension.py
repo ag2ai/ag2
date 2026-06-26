@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 from google.protobuf.json_format import MessageToDict
 
-from autogen.a2ui._types import A2UIVersion
-from autogen.a2ui.a2a import get_a2ui_agent_extension
-from autogen.a2ui.a2a.extension import try_activate_a2ui_extension
-from autogen.a2ui.constants import (
+from ag2.a2ui._types import A2UIVersion
+from ag2.a2ui.a2a import get_a2ui_agent_extension
+from ag2.a2ui.a2a.extension import try_activate_a2ui_extension
+from ag2.a2ui.constants import (
     A2UI_DEFAULT_CATALOG_ID_BY_VERSION,
     A2UI_EXTENSION_URI_BY_VERSION,
 )

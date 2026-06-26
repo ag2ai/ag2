@@ -12,10 +12,10 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("perplexity")
 
-from autogen import Agent, Context, DataInput, ImageInput, Variable
-from autogen.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.testing import TestConfig, TrackingConfig
-from autogen.tools.search.perplexity import (
+from ag2 import Agent, Context, DataInput, ImageInput, Variable
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
+from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.search.perplexity import (
     PerplexityImageMeta,
     PerplexitySearchResponse,
     PerplexitySearchResult,

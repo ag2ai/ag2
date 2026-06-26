@@ -4,9 +4,9 @@
 
 import pytest
 
-from autogen import Context
-from autogen.config.openai.mappers import tool_to_responses_api
-from autogen.tools.builtin.image_generation import ImageGenerationTool
+from ag2 import Context
+from ag2.config.openai.mappers import tool_to_responses_api
+from ag2.tools.builtin.image_generation import ImageGenerationTool
 
 
 @pytest.mark.asyncio

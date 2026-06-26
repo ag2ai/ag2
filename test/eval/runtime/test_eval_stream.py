@@ -8,11 +8,11 @@ import pytest
 
 pytest.importorskip("opentelemetry.sdk")
 
-from autogen import Agent
-from autogen.eval import Suite, Variants, console_reporter, run_agent, run_pairwise, run_variants, scorer
-from autogen.eval.pairwise import PairwiseOutcome
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.eval import Suite, Variants, console_reporter, run_agent, run_pairwise, run_variants, scorer
+from ag2.eval.pairwise import PairwiseOutcome
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 @scorer

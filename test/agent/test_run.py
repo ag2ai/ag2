@@ -24,8 +24,8 @@ import asyncio
 import pytest
 from pydantic import BaseModel
 
-from autogen import Agent, tool
-from autogen.events import (
+from ag2 import Agent, tool
+from ag2.events import (
     BaseEvent,
     ModelMessage,
     ModelRequest,
@@ -34,8 +34,8 @@ from autogen.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig, TrackingConfig
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig, TrackingConfig
 
 
 def _texts(event: BaseEvent) -> list[str]:

@@ -6,7 +6,7 @@
 
 import pytest
 
-from autogen.eval import (
+from ag2.eval import (
     BudgetThresholds,
     InMemoryTraceSource,
     Suite,
@@ -14,9 +14,9 @@ from autogen.eval import (
     evaluate_traces,
     scorer,
 )
-from autogen.eval.scorers import final_answer_matches, tool_called
-from autogen.eval.trace import Trace
-from autogen.events import ModelMessage, ModelResponse, ToolCallEvent, Usage
+from ag2.eval.scorers import final_answer_matches, tool_called
+from ag2.eval.trace import Trace
+from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, Usage
 
 
 def _trace(answer: str, *, tool_name: str | None = None, in_tok: int = 0, out_tok: int = 0) -> Trace:

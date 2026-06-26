@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from autogen import PromptedSchema, ResponseSchema, response_schema
-from autogen.response import ResponseProto
+from ag2 import PromptedSchema, ResponseSchema, response_schema
+from ag2.response import ResponseProto
 
 
 class TestPromptedSchemaFromType:

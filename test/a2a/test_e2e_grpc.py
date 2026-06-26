@@ -4,7 +4,7 @@
 
 import pytest
 
-from autogen.events import ModelRequest, TextInput
+from ag2.events import ModelRequest, TextInput
 
 from ._helpers import start_grpc_pair
 

@@ -10,9 +10,9 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
-from autogen import Agent, ToolResult, tool
-from autogen.events import ModelResponse, ToolCallEvent, ToolCallsEvent
-from autogen.testing import TestConfig
+from ag2 import Agent, ToolResult, tool
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent
+from ag2.testing import TestConfig
 
 DEFAULT_SCHEMA = {
     "function": {

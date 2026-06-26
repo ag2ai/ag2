@@ -1,9 +1,9 @@
 import asyncio
 from datetime import datetime
 
-from autogen import Agent
-from autogen.a2a import A2AConfig
-from autogen.tools import tool
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+from ag2.tools import tool
 
 
 @tool(description="Return the user's local wall-clock time.")

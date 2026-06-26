@@ -6,9 +6,9 @@ from datetime import datetime
 
 import pytest
 
-from autogen import Context
-from autogen.config.xai.mappers import tool_to_api
-from autogen.tools.builtin.x_search import XSearchTool
+from ag2 import Context
+from ag2.config.xai.mappers import tool_to_api
+from ag2.tools.builtin.x_search import XSearchTool
 
 
 @pytest.mark.asyncio

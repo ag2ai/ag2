@@ -10,10 +10,10 @@ any LLM; the dual-order swap is unit-tested separately in test_pairwise_judge.
 
 import pytest
 
-from autogen.eval import InMemoryTraceSource, TraceRef, evaluate_pairwise
-from autogen.eval.pairwise import PairwiseComparator, PairwiseOutcome
-from autogen.eval.trace import Trace
-from autogen.events import ModelMessage, ModelResponse
+from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_pairwise
+from ag2.eval.pairwise import PairwiseComparator, PairwiseOutcome
+from ag2.eval.trace import Trace
+from ag2.events import ModelMessage, ModelResponse
 
 _TASKS = ("t1", "t2", "t3", "t4")
 

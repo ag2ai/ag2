@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Context
-from autogen.events import (
+from ag2 import Context
+from ag2.events import (
     BaseEvent,
     ModelMessage,
     ModelRequest,
@@ -18,7 +18,7 @@ from autogen.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.middleware import TokenLimiter
+from ag2.middleware import TokenLimiter
 
 
 @pytest.mark.asyncio()

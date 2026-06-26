@@ -19,25 +19,25 @@ Correctness benchmark, not a perf benchmark. Default: 100 channels ×
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import DiskKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.network import (
     Envelope,
     Hub,
     Resume,
 )
-from autogen.network.adapters.conversation import (
+from ag2.network.adapters.conversation import (
     CONVERSATION_TYPE,
     ConversationState,
 )
-from autogen.network.adapters.discussion import (
+from ag2.network.adapters.discussion import (
     DISCUSSION_TYPE,
     ORDERING_ROUND_ROBIN,
     DiscussionState,
 )
-from autogen.network.channel import ChannelState
-from autogen.network.envelope import EV_TEXT
-from autogen.testing import TestConfig
+from ag2.network.channel import ChannelState
+from ag2.network.envelope import EV_TEXT
+from ag2.testing import TestConfig
 
 # Scale chosen for unit-run speed: 100 channels × 100 envelopes ≈
 # 10k envelopes, ~1s populate, instant hydrate. Bump

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from autogen.eval import (
+from ag2.eval import (
     Aggregates,
     Feedback,
     RunResult,

@@ -8,14 +8,14 @@ delegation, no-recursion guarantee, persistent_stream. Real LLM calls.
 
 import pytest
 
-from autogen import Agent
-from autogen import agent as actor_mod
-from autogen.agent import TaskConfig
-from autogen.events import TaskCompleted, TaskStarted
-from autogen.history import MemoryStorage
-from autogen.stream import MemoryStream
-from autogen.tools.subagents import persistent_stream
-from autogen.tools.subagents import run_task as run_task_mod
+from ag2 import Agent
+from ag2 import agent as actor_mod
+from ag2.agent import TaskConfig
+from ag2.events import TaskCompleted, TaskStarted
+from ag2.history import MemoryStorage
+from ag2.stream import MemoryStream
+from ag2.tools.subagents import persistent_stream
+from ag2.tools.subagents import run_task as run_task_mod
 
 pytestmark = pytest.mark.asyncio
 

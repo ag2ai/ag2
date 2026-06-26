@@ -4,11 +4,11 @@
 
 import pytest
 
-from autogen.context import ConversationContext
-from autogen.events import Usage, UsageEvent
-from autogen.live import LiveAgent
-from autogen.stream import MemoryStream
-from autogen.usage import UsageReport
+from ag2.context import ConversationContext
+from ag2.events import Usage, UsageEvent
+from ag2.live import LiveAgent
+from ag2.stream import MemoryStream
+from ag2.usage import UsageReport
 
 
 @pytest.mark.asyncio

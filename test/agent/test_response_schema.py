@@ -8,8 +8,8 @@ from dataclasses import dataclass
 import pytest
 from pydantic import BaseModel
 
-from autogen import Agent, PromptedSchema, ResponseSchema, response_schema
-from autogen.testing import TestConfig, TrackingConfig
+from ag2 import Agent, PromptedSchema, ResponseSchema, response_schema
+from ag2.testing import TestConfig, TrackingConfig
 
 
 @pytest.mark.asyncio()

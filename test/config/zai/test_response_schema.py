@@ -7,10 +7,10 @@ from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 from pydantic import BaseModel
 
-from autogen.config.zai import ZAIClient
-from autogen.config.zai.mappers import response_proto_to_format, schema_instruction
-from autogen.events import ModelRequest, TextInput
-from autogen.response import PromptedSchema, ResponseSchema
+from ag2.config.zai import ZAIClient
+from ag2.config.zai.mappers import response_proto_to_format, schema_instruction
+from ag2.events import ModelRequest, TextInput
+from ag2.response import PromptedSchema, ResponseSchema
 from test.config.zai._helpers import FakeCompletions, FakeZAIClient, make_call_context
 
 

@@ -15,10 +15,10 @@ agent turn without hitting a real provider:
 
 import pytest
 
-from autogen import Agent, observer
-from autogen.events import ModelResponse, ObserverCompleted, ObserverStarted
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2 import Agent, observer
+from ag2.events import ModelResponse, ObserverCompleted, ObserverStarted
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 pytestmark = pytest.mark.asyncio
 

@@ -16,9 +16,9 @@ Covers:
 
 import pytest
 
-from autogen import Agent
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     AccessDeniedError,
     Envelope,
@@ -26,21 +26,21 @@ from autogen.network import (
     ProtocolError,
     Rule,
 )
-from autogen.network.adapters.conversation import ConversationAdapter
-from autogen.network.channel import (
+from ag2.network.adapters.conversation import ConversationAdapter
+from ag2.network.channel import (
     ChannelManifest,
     Expectation,
     ParticipantSchema,
 )
-from autogen.network.hub.audit import (
+from ag2.network.hub.audit import (
     AUDIT_KIND_CHANNEL_CLOSED,
     AUDIT_KIND_CHANNEL_CREATED,
     AUDIT_KIND_CHANNEL_EXPIRED,
     AUDIT_KIND_EXPECTATION_VIOLATED,
     AUDIT_KIND_TASK_TERMINATED,
 )
-from autogen.network.rule import LimitsBlock
-from autogen.testing import TestConfig
+from ag2.network.rule import LimitsBlock
+from ag2.testing import TestConfig
 
 from ._helpers import _MockClock
 
@@ -300,7 +300,7 @@ async def test_audit_log_records_channel_expired_on_ttl_sweep() -> None:
 async def test_audit_log_records_task_terminated_on_channel_cascade() -> None:
     """Tasks under a closing channel cascade to ``EXPIRED`` and emit
     ``task_terminated`` audit records carrying ``capability``."""
-    from autogen.task import TaskMetadata, TaskSpec, TaskState
+    from ag2.task import TaskMetadata, TaskSpec, TaskState
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)

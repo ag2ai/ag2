@@ -5,9 +5,9 @@
 import pytest
 from google.genai import types
 
-from autogen import Context
-from autogen.config.gemini.mappers import build_tools
-from autogen.tools.builtin.web_fetch import WebFetchTool
+from ag2 import Context
+from ag2.config.gemini.mappers import build_tools
+from ag2.tools.builtin.web_fetch import WebFetchTool
 
 
 @pytest.mark.asyncio

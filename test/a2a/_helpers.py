@@ -19,16 +19,16 @@ from a2a.server.tasks import (
 from a2a.types import Part, Task, TaskState, TaskStatus
 from typing_extensions import Self
 
-from autogen import Agent, Context
-from autogen.a2a import A2AConfig, A2AServer, build_card
-from autogen.a2a.testing import (
+from ag2 import Agent, Context
+from ag2.a2a import A2AConfig, A2AServer, build_card
+from ag2.a2a.testing import (
     make_test_client_factory,
     make_test_rest_client_factory,
     pick_free_port,
 )
-from autogen.config.client import LLMClient
-from autogen.config.config import ModelConfig
-from autogen.events import (
+from ag2.config.client import LLMClient
+from ag2.config.config import ModelConfig
+from ag2.events import (
     BaseEvent,
     ModelMessage,
     ModelResponse,
@@ -36,7 +36,7 @@ from autogen.events import (
     ToolCallsEvent,
     ToolResultEvent,
 )
-from autogen.testing import TestConfig, TrackingConfig
+from ag2.testing import TestConfig, TrackingConfig
 
 
 @dataclass(slots=True)

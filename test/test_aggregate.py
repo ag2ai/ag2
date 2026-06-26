@@ -8,15 +8,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autogen import Agent
-from autogen import Context as Context
-from autogen.agent import KnowledgeConfig
-from autogen.aggregate import (
+from ag2 import Agent
+from ag2 import Context as Context
+from ag2.agent import KnowledgeConfig
+from ag2.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
     WorkingMemoryAggregate,
 )
-from autogen.events import (
+from ag2.events import (
     AggregationCompleted,
     AggregationFailed,
     AggregationStarted,
@@ -26,9 +26,9 @@ from autogen.events import (
     TextInput,
     Usage,
 )
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.stream import MemoryStream
-from autogen.testing import TestConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 class TestAggregateTrigger:
@@ -119,14 +119,14 @@ class TestConversationSummaryAggregate:
         # Write two summaries with different streams
         stream1 = MemoryStream()
         ctx1 = Context(stream=stream1)
-        with patch("autogen.aggregate.datetime") as mock_dt:
+        with patch("ag2.aggregate.datetime") as mock_dt:
             mock_dt.now.return_value.strftime.return_value = "20260101T120000"
             mock_dt.side_effect = None
             await strategy.aggregate([ModelRequest([TextInput("first")])], ctx1, store)
 
         stream2 = MemoryStream()
         ctx2 = Context(stream=stream2)
-        with patch("autogen.aggregate.datetime") as mock_dt:
+        with patch("ag2.aggregate.datetime") as mock_dt:
             mock_dt.now.return_value.strftime.return_value = "20260201T120000"
             mock_dt.side_effect = None
             await strategy.aggregate([ModelRequest([TextInput("second")])], ctx2, store)

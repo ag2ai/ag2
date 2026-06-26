@@ -4,8 +4,8 @@
 
 from unittest.mock import patch
 
-from autogen.config import XAIConfig
-from autogen.config.xai import XAIClient, XAIFilesClient
+from ag2.config import XAIConfig
+from ag2.config.xai import XAIClient, XAIFilesClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
@@ -36,7 +36,7 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
 def test_create_returns_xai_client() -> None:
     config = XAIConfig(model="grok-4-fast", api_key="test-key")
 
-    with patch("autogen.config.xai.xai_client.AsyncClient"):
+    with patch("ag2.config.xai.xai_client.AsyncClient"):
         client = config.create()
 
     assert isinstance(client, XAIClient)
@@ -76,7 +76,7 @@ def test_include_can_be_set() -> None:
 def test_create_files_client_returns_xai_files_client() -> None:
     config = XAIConfig(model="grok-4-fast")
 
-    with patch("autogen.config.xai.files.AsyncClient"):
+    with patch("ag2.config.xai.files.AsyncClient"):
         client = config.create_files_client()
 
     assert isinstance(client, XAIFilesClient)

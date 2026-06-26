@@ -4,9 +4,9 @@
 
 import pytest
 
-from autogen import Context
-from autogen.config.zai.mappers import tool_to_api
-from autogen.tools.builtin.retrieval import RetrievalTool
+from ag2 import Context
+from ag2.config.zai.mappers import tool_to_api
+from ag2.tools.builtin.retrieval import RetrievalTool
 
 
 @pytest.mark.asyncio

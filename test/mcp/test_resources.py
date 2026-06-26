@@ -6,11 +6,11 @@ import pytest
 from mcp.server.lowlevel import NotificationOptions
 from mcp.types import ListResourceTemplatesRequest
 
-from autogen import Agent
-from autogen.mcp import MCPServer, Resource, ResourceTemplate
-from autogen.mcp.errors import MCPResourceNotFoundError
-from autogen.mcp.resources import ResourceProvider
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.mcp import MCPServer, Resource, ResourceTemplate
+from ag2.mcp.errors import MCPResourceNotFoundError
+from ag2.mcp.resources import ResourceProvider
+from ag2.testing import TestConfig
 
 
 @pytest.mark.asyncio

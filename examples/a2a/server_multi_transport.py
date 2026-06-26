@@ -2,9 +2,9 @@ import asyncio
 
 import uvicorn
 
-from autogen import Agent
-from autogen.a2a import A2AServer, build_card
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.a2a import A2AServer, build_card
+from ag2.config import AnthropicConfig
 
 agent = Agent(
     name="claude",

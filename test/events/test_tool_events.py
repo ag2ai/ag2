@@ -5,7 +5,7 @@
 import json
 from unittest.mock import patch
 
-from autogen.events import (
+from ag2.events import (
     ClientToolCallEvent,
     ToolCallEvent,
     ToolErrorEvent,

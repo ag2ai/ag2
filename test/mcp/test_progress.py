@@ -4,11 +4,11 @@
 
 import pytest
 
-from autogen import Agent
-from autogen.events import ToolCallEvent
-from autogen.mcp import MCPServer
-from autogen.mcp.testing import connect
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.events import ToolCallEvent
+from ag2.mcp import MCPServer
+from ag2.mcp.testing import connect
+from ag2.testing import TestConfig
 
 from ._helpers import ChunkConfig, make_agent
 

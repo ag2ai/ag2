@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Agent, Context
-from autogen.events import BaseEvent, ModelRequest, ModelResponse, TextInput
-from autogen.middleware import AgentTurn, BaseMiddleware, LLMCall, Middleware
-from autogen.testing import TestConfig, TrackingConfig
+from ag2 import Agent, Context
+from ag2.events import BaseEvent, ModelRequest, ModelResponse, TextInput
+from ag2.middleware import AgentTurn, BaseMiddleware, LLMCall, Middleware
+from ag2.testing import TestConfig, TrackingConfig
 
 
 class MockMiddleware(BaseMiddleware):

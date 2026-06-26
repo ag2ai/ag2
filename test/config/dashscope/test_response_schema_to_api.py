@@ -9,9 +9,9 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field
 
-from autogen.config.dashscope.mappers import response_proto_to_format
-from autogen.response import ResponseSchema
-from autogen.response.schema import RawSchema
+from ag2.config.dashscope.mappers import response_proto_to_format
+from ag2.response import ResponseSchema
+from ag2.response.schema import RawSchema
 
 
 def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]

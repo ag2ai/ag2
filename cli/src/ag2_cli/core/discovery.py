@@ -68,7 +68,7 @@ def import_agent_file(path: Path) -> ModuleType:
 def _is_agent_instance(obj: Any) -> bool:
     """Check if an object is a ConversableAgent instance (or duck-types as one)."""
     try:
-        from autogen import ConversableAgent
+        from ag2 import ConversableAgent
 
         if isinstance(obj, ConversableAgent):
             return True
@@ -169,7 +169,7 @@ def build_agents_from_yaml(config: dict[str, Any]) -> DiscoveredAgent:
           max_rounds: 10
     """
     try:
-        from autogen import AssistantAgent, LLMConfig
+        from ag2 import AssistantAgent, LLMConfig
     except ImportError as exc:
         raise ImportError("ag2 is required to run YAML configs. Install with: pip install ag2") from exc
 

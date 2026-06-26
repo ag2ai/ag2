@@ -8,11 +8,11 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
-from autogen import Agent, AgentSpec
-from autogen.exceptions import ToolResolutionError
-from autogen.response import ResponseSchema
-from autogen.spec import ResponseSchemaSpec
-from autogen.tools import FilesystemToolkit, WebSearchTool
+from ag2 import Agent, AgentSpec
+from ag2.exceptions import ToolResolutionError
+from ag2.response import ResponseSchema
+from ag2.spec import ResponseSchemaSpec
+from ag2.tools import FilesystemToolkit, WebSearchTool
 
 from .helpers import add, greet, make_agent, multiply
 

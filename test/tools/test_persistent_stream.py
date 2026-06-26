@@ -6,10 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import Context
-from autogen.history import MemoryStorage
-from autogen.stream import MemoryStream
-from autogen.tools.subagents.persistent_stream import persistent_stream
+from ag2 import Context
+from ag2.history import MemoryStorage
+from ag2.stream import MemoryStream
+from ag2.tools.subagents.persistent_stream import persistent_stream
 
 
 @pytest.fixture()

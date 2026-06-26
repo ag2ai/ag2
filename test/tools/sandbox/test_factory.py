@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from autogen.tools.sandbox import SandboxFactory
-from autogen.tools.sandbox.factory import SingletonFactory
-from autogen.tools.sandbox.local import LocalSandbox
+from ag2.tools.sandbox import SandboxFactory
+from ag2.tools.sandbox.factory import SingletonFactory
+from ag2.tools.sandbox.local import LocalSandbox
 
 
 @pytest.mark.asyncio

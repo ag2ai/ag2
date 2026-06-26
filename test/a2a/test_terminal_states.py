@@ -11,7 +11,7 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import Task, TaskState, TaskStatus
 
-from autogen.a2a.errors import (
+from ag2.a2a.errors import (
     A2ATaskAuthRequiredError,
     A2ATaskFailedError,
     A2ATaskRejectedError,
