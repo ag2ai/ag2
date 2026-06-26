@@ -3,9 +3,9 @@ title: A2UI Protocol Overview
 sidebarTitle: Overview
 ---
 
-The `#!python autogen.a2ui` module lets an AG2 `#!python Agent` produce **rich, interactive user interfaces** — cards, forms, lists, buttons — instead of plain text, using the [A2UI protocol](https://a2ui.org){.external-link target="_blank"}. The LLM emits conversational prose plus a validated A2UI message block; AG2 surfaces each message as a typed event and serializes it to A2UI's transport-agnostic wire format, so any A2UI-capable client can render it.
+The `#!python ag2.a2ui` module lets an AG2 `#!python Agent` produce **rich, interactive user interfaces** — cards, forms, lists, buttons — instead of plain text, using the [A2UI protocol](https://a2ui.org){.external-link target="_blank"}. The LLM emits conversational prose plus a validated A2UI message block; AG2 surfaces each message as a typed event and serializes it to A2UI's transport-agnostic wire format, so any A2UI-capable client can render it.
 
-A2UI is a **transport over a plain `#!python Agent`** (mirroring A2A and AG-UI): you build a normal `#!python autogen.Agent` and wrap it in an A2UI transport — `#!python A2UIServer` (REST/SSE) or `#!python A2UIAgentExecutor` (A2A) — configured with flat A2UI kwargs. There is no special agent subclass.
+A2UI is a **transport over a plain `#!python Agent`** (mirroring A2A and AG-UI): you build a normal `#!python ag2.Agent` and wrap it in an A2UI transport — `#!python A2UIServer` (REST/SSE) or `#!python A2UIAgentExecutor` (A2A) — configured with flat A2UI kwargs. There is no special agent subclass.
 
 ## When To Use A2UI
 
@@ -15,7 +15,7 @@ Reach for A2UI when a text answer isn't enough and the user needs to **see and a
 - A **list** of results with per-item actions (approve, schedule, open).
 - A **card** summarising data with clickable buttons that drive the next turn.
 
-If you only need a conversational reply, serve a plain `#!python autogen.Agent` directly. A2UI is additive: an A2UI-wrapped agent still answers in prose when a UI wouldn't help.
+If you only need a conversational reply, serve a plain `#!python ag2.Agent` directly. A2UI is additive: an A2UI-wrapped agent still answers in prose when a UI wouldn't help.
 
 ## Mental Model
 
@@ -38,13 +38,13 @@ The transport applies A2UI behaviour to the plain agent per turn (prompt + valid
 | Concept | Lives in | Purpose |
 |---|---|---|
 | `#!python Agent` | `#!python autogen` | A plain agent — wrap it in an A2UI transport to emit validated A2UI output |
-| `#!python a2ui_action` | `#!python autogen.a2ui` | Decorator turning a function into a clickable button (server `#!python event` action). A click runs the handler **on the server** — the agent is not invoked. Declared on the transport via `#!python actions=[...]` |
-| `#!python A2UIMessageEvent` | `#!python autogen.a2ui` | One validated A2UI server→client message on the stream — the event seam every transport consumes |
-| `#!python A2UIClientEvent` | `#!python autogen.a2ui` | One client→server interaction received from the renderer (click / `#!python functionResponse` / error) — the inbound observability seam |
-| `#!python A2UIValidationFailedEvent` | `#!python autogen.a2ui` | Observability signal that validation exhausted its retries and the turn degraded to prose |
-| `#!python A2UIClientCapabilities` | `#!python autogen.a2ui` | Catalog negotiation — tells the agent which catalogs/components the client can render |
-| `#!python A2UIServer` | `#!python autogen.a2ui` | Wraps a plain `#!python Agent` into an ASGI app and serves it over HTTP, using a `#!python transport=` for the wire encoding (REST/SSE or AG-UI) |
-| `#!python A2UIAgentExecutor` | `#!python autogen.a2ui.a2a` | Wraps a plain `#!python Agent` for the A2A transport, carrying A2UI as `#!python DataPart`s |
+| `#!python a2ui_action` | `#!python ag2.a2ui` | Decorator turning a function into a clickable button (server `#!python event` action). A click runs the handler **on the server** — the agent is not invoked. Declared on the transport via `#!python actions=[...]` |
+| `#!python A2UIMessageEvent` | `#!python ag2.a2ui` | One validated A2UI server→client message on the stream — the event seam every transport consumes |
+| `#!python A2UIClientEvent` | `#!python ag2.a2ui` | One client→server interaction received from the renderer (click / `#!python functionResponse` / error) — the inbound observability seam |
+| `#!python A2UIValidationFailedEvent` | `#!python ag2.a2ui` | Observability signal that validation exhausted its retries and the turn degraded to prose |
+| `#!python A2UIClientCapabilities` | `#!python ag2.a2ui` | Catalog negotiation — tells the agent which catalogs/components the client can render |
+| `#!python A2UIServer` | `#!python ag2.a2ui` | Wraps a plain `#!python Agent` into an ASGI app and serves it over HTTP, using a `#!python transport=` for the wire encoding (REST/SSE or AG-UI) |
+| `#!python A2UIAgentExecutor` | `#!python ag2.a2ui.a2a` | Wraps a plain `#!python Agent` for the A2A transport, carrying A2UI as `#!python DataPart`s |
 
 ## Protocol Versions
 
@@ -58,10 +58,10 @@ The A2UI transports accept three protocol versions via `#!python protocol_versio
 
 ## Public API
 
-The broadly-reusable surface is re-exported from `#!python autogen.a2ui`:
+The broadly-reusable surface is re-exported from `#!python ag2.a2ui`:
 
 ```python linenums="1"
-from autogen.a2ui import (
+from ag2.a2ui import (
     a2ui_action,
     A2UIClientCapabilities,
     A2UIMessageEvent,
@@ -70,12 +70,12 @@ from autogen.a2ui import (
 )
 ```
 
-The agent itself is a plain `#!python autogen.Agent`. The HTTP server picks its wire encoding from a `#!python transport=`, and the A2A executor lives in its own submodule (kept out of the core import so the package never pulls in the a2a-sdk):
+The agent itself is a plain `#!python ag2.Agent`. The HTTP server picks its wire encoding from a `#!python transport=`, and the A2A executor lives in its own submodule (kept out of the core import so the package never pulls in the a2a-sdk):
 
 ```python linenums="1"
-from autogen.a2ui import A2UIServer                       # HTTP server (ASGI app)
-from autogen.a2ui.transports import RestTransport, AgUiTransport
-from autogen.a2ui.a2a import A2UIAgentExecutor            # A2A
+from ag2.a2ui import A2UIServer                       # HTTP server (ASGI app)
+from ag2.a2ui.transports import RestTransport, AgUiTransport
+from ag2.a2ui.a2a import A2UIAgentExecutor            # A2A
 ```
 
 ## Quickstart
@@ -85,10 +85,10 @@ Build a plain `#!python Agent`, then wrap it in an `#!python A2UIServer` — the
 ```python linenums="1" hl_lines="16 17 18"
 import uvicorn
 
-from autogen import Agent
-from autogen.a2ui import A2UIServer, a2ui_action
-from autogen.a2ui.transports import RestTransport
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui.transports import RestTransport
+from ag2.config import AnthropicConfig
 
 @a2ui_action(description="Book the selected dinner reservation")
 def book_table(time: str, party_size: int) -> str:

@@ -40,8 +40,8 @@ Autogen supports both ways MCP servers are typically wired into an agent:
 The simplest form takes a URL string and uses the streamable-http transport:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.tools import MCPToolkit
+from ag2 import Agent
+from ag2.tools import MCPToolkit
 
 agent_with_mcp = Agent(
     name="Weather bot",
@@ -52,8 +52,8 @@ agent_with_mcp = Agent(
 Most real-world MCP servers require authentication. Use `MCPServerConfig` for typed configuration:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.tools import MCPToolkit, MCPServerConfig
+from ag2 import Agent
+from ag2.tools import MCPToolkit, MCPServerConfig
 
 agent_with_mcp = Agent(
     name="Weather bot",
@@ -75,8 +75,8 @@ agent_with_mcp = Agent(
 Many MCP servers ship as CLIs that speak MCP over their own stdin/stdout — `npx -y @modelcontextprotocol/server-filesystem`, `uvx some-mcp-server`, a Python script in your repo, etc. Use `MCPStdioServerConfig` to launch one as a subprocess; Autogen pipes the MCP protocol through its stdio.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.tools import MCPToolkit, MCPStdioServerConfig
+from ag2 import Agent
+from ag2.tools import MCPToolkit, MCPStdioServerConfig
 
 agent_with_local_mcp = Agent(
     name="Filesystem bot",
@@ -94,8 +94,8 @@ agent_with_local_mcp = Agent(
 You can pass environment variables, a working directory, and the usual filtering options:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.tools import MCPToolkit, MCPStdioServerConfig
+from ag2 import Agent
+from ag2.tools import MCPToolkit, MCPStdioServerConfig
 
 agent_with_local_mcp = Agent(
     name="GitHub bot",
@@ -124,8 +124,8 @@ agent_with_local_mcp = Agent(
 `MCPToolkit` is just a toolkit, so you can register as many as you need — and freely mix remote and local ones:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.tools import MCPToolkit, MCPStdioServerConfig
+from ag2 import Agent
+from ag2.tools import MCPToolkit, MCPStdioServerConfig
 
 agent_with_mcp = Agent(
     name="Mixed bot",
@@ -147,8 +147,8 @@ agent_with_mcp = Agent(
 `MCPServerTool` does not open a connection — it ships the server URL and credentials to the LLM provider as part of the request. The provider is then responsible for connecting to the MCP server and dispatching tool calls. Because the provider only accepts a URL, this path does **not** support local stdio servers — use `MCPToolkit` with `MCPStdioServerConfig` for those.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.tools import MCPServerTool
+from ag2 import Agent
+from ag2.tools import MCPServerTool
 
 agent_with_mcp = Agent(
     name="Weather bot",

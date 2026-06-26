@@ -2,7 +2,7 @@
 title: Testing
 ---
 
-AG2 provides a built-in `TestConfig` utility in the `autogen.testing` module to help you write unit tests for your agents. It allows you to mock LLM responses and simulate tool execution scenarios without making actual API calls.
+AG2 provides a built-in `TestConfig` utility in the `ag2.testing` module to help you write unit tests for your agents. It allows you to mock LLM responses and simulate tool execution scenarios without making actual API calls.
 
 ## How to mock LLM answers
 
@@ -11,8 +11,8 @@ To mock LLM answers, you can use `TestConfig` in place of a standard model confi
 ```python linenums="1" hl_lines="4 14 18"
 import pytest
 
-from autogen import Agent
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.testing import TestConfig
 
 @pytest.mark.asyncio
 async def test_mock_llm_answer():
@@ -40,9 +40,9 @@ To test a successful tool execution, pass a `ToolCallEvent` followed by the fina
 ```python linenums="1" hl_lines="16-19 24"
 import pytest
 
-from autogen import Agent
-from autogen.events import ToolCallEvent
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.events import ToolCallEvent
+from ag2.testing import TestConfig
 
 @pytest.mark.asyncio
 async def test_tool_success():
@@ -73,9 +73,9 @@ If a tool raises an exception during execution, it will propagate up to the `ask
 ```python linenums="1" hl_lines="10-11 24-25"
 import pytest
 
-from autogen import Agent
-from autogen.events import ToolCallEvent
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.events import ToolCallEvent
+from ag2.testing import TestConfig
 
 @pytest.mark.asyncio
 async def test_tool_raise_exc():
@@ -105,10 +105,10 @@ If the LLM attempts to call a tool that hasn't been registered with the agent, a
 ```python linenums="1"
 import pytest
 
-from autogen import Agent
-from autogen.events import ToolCallEvent
-from autogen.exceptions import ToolNotFoundError
-from autogen.testing import TestConfig
+from ag2 import Agent
+from ag2.events import ToolCallEvent
+from ag2.exceptions import ToolNotFoundError
+from ag2.testing import TestConfig
 
 @pytest.mark.asyncio
 async def test_tool_not_found():

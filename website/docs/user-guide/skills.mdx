@@ -51,9 +51,9 @@ An agent with 20 installed skills doesn't load 20 full instruction sets upfront 
 `SkillPlugin` is the recommended way to give an agent local skills. Instead of spending a `list_skills` tool round-trip, it injects the catalog into the system prompt at startup, so the model can decide which skill is relevant immediately.
 
 ```python linenums="1" hl_lines="8"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import SkillPlugin
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SkillPlugin
 
 agent = Agent(
     "assistant",
@@ -104,9 +104,9 @@ So an agent whose skills are pure instructions never sees a `run_skill_script` t
 `SkillsToolkit` is the lower-level building block behind `SkillPlugin`. It exposes the same activation tools plus an explicit `list_skills` tool, but does **not** inject anything into the prompt — the model discovers skills by calling `list_skills` itself. Prefer [`SkillPlugin`](#skillplugin) unless you need that control.
 
 ```python linenums="1" hl_lines="8"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import SkillsToolkit
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SkillsToolkit
 
 agent = Agent(
     "assistant",
@@ -141,8 +141,8 @@ agent = Agent(
 A **runtime** owns where skills live and how their scripts run — it discovers skills, reads their content, and executes their scripts. `LocalRuntime` is the default: it backs skills with the filesystem and runs scripts in a local subprocess (or a sandbox you supply). Pass one to a toolkit or plugin as a path string or an explicit `LocalRuntime`:
 
 ```python linenums="1" hl_lines="4 6"
-from autogen.tools import SkillsToolkit
-from autogen.tools.skills import LocalRuntime
+from ag2.tools import SkillsToolkit
+from ag2.tools.skills import LocalRuntime
 
 skills = SkillsToolkit(LocalRuntime("./my-skills"))
 # or just a path string
@@ -167,8 +167,8 @@ skills = SkillsToolkit(
 `SkillPlugin` and `SkillsToolkit` both accept **more than one runtime**, so you can serve skills from several locations at once — each with its own configuration. A common pattern is a read-only global library plus a writable project directory:
 
 ```python linenums="1" hl_lines="6-7"
-from autogen.tools import SkillPlugin
-from autogen.tools.skills import LocalRuntime
+from ag2.tools import SkillPlugin
+from ag2.tools.skills import LocalRuntime
 
 plugins = [
     SkillPlugin(
@@ -188,9 +188,9 @@ When the same skill name exists in more than one runtime, the **last runtime win
 Not every skill needs to live on disk. A `MemorySkill` defines a skill **inline in code** — its instructions, resources, and scripts are Python values rather than files. It's backed by an in-memory runtime (`MemoryRuntime`) instead of `LocalRuntime`, but the agent activates it through the same progressive-disclosure flow.
 
 ```python linenums="1" hl_lines="11 16 24"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import SkillPlugin, MemorySkill
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SkillPlugin, MemorySkill
 
 unit_converter = MemorySkill(
     name="unit-converter",
@@ -228,8 +228,8 @@ Both forms support dependency injection — a callable can declare `Context`, `V
 
 ```python linenums="1" hl_lines="8"
 from typing import Annotated
-from autogen import Variable
-from autogen.tools import MemorySkill
+from ag2 import Variable
+from ag2.tools import MemorySkill
 
 project = MemorySkill(name="project-info", description="Project status and configuration.")
 
@@ -257,9 +257,9 @@ Grouping is associative: passing loose `MemorySkill`s, wrapping each in its own 
 
 ```python linenums="1" hl_lines="10"
 import asyncio
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import SkillSearchToolkit
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SkillSearchToolkit
 
 agent = Agent(
     "coder",
@@ -296,8 +296,8 @@ export GITHUB_TOKEN=ghp_...
 You can also pass the token (and other settings) directly via `SkillsClientConfig`:
 
 ```python linenums="1" hl_lines="6-9"
-from autogen.tools import SkillSearchToolkit
-from autogen.tools.skills import LocalRuntime, SkillsClientConfig
+from ag2.tools import SkillSearchToolkit
+from ag2.tools.skills import LocalRuntime, SkillsClientConfig
 
 skills = SkillSearchToolkit(
     LocalRuntime(dir="./my-skills", timeout=30),

@@ -8,10 +8,10 @@ The smallest possible end-to-end network scenario: one in-process hub, two agent
 ```python linenums="1"
 import asyncio
 
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_CLOSED,
     EV_TEXT,
     Hub,

@@ -19,7 +19,7 @@ AG2 agents can process images, audio, video, and documents alongside text. The i
 Each factory function supports multiple ways to provide the data:
 
 ```python linenums="1"
-from autogen.events import ImageInput, AudioInput, VideoInput, DocumentInput
+from ag2.events import ImageInput, AudioInput, VideoInput, DocumentInput
 
 # From a URL
 image = ImageInput("https://example.com/photo.jpg")
@@ -41,9 +41,9 @@ image = ImageInput(file_id="file-abc123")
 Pass inputs directly to `#!python agent.ask()` as positional arguments alongside text:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import GeminiConfig
-from autogen.events import ImageInput
+from ag2 import Agent
+from ag2.config import GeminiConfig
+from ag2.events import ImageInput
 
 agent = Agent(
     "vision_agent",
@@ -97,7 +97,7 @@ Gemini has the broadest multimodal support — it accepts images, audio, video, 
 **YouTube URLs** are supported directly:
 
 ```python linenums="1"
-from autogen.events import VideoInput
+from ag2.events import VideoInput
 
 video = VideoInput("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 reply = await agent.ask("Summarize this video.", video)
@@ -107,7 +107,7 @@ reply = await agent.ask("Summarize this video.", video)
 
 ```python linenums="1"
 from google import genai
-from autogen.events import VideoInput
+from ag2.events import VideoInput
 
 client = genai.Client()
 uploaded = client.files.upload(file="large_video.mp4")
@@ -135,7 +135,7 @@ Gemini supports provider-specific settings via `#!python vendor_metadata` on bin
 **Media resolution** — control quality vs cost tradeoff for images and video frames:
 
 ```python linenums="1"
-from autogen.events import ImageInput
+from ag2.events import ImageInput
 
 # Lower resolution = fewer tokens = lower cost
 image = ImageInput(
@@ -150,7 +150,7 @@ Available values: `MEDIA_RESOLUTION_LOW`, `MEDIA_RESOLUTION_MEDIUM`, `MEDIA_RESO
 **Video clipping and frame rate** — process only a portion of a video or adjust the sampling rate:
 
 ```python linenums="1"
-from autogen.events import VideoInput
+from ag2.events import VideoInput
 
 video = VideoInput(
     path="lecture.mp4",
@@ -168,7 +168,7 @@ reply = await agent.ask("Summarize this section of the video.", video)
 **Display name** — attach a name to the file for reference:
 
 ```python linenums="1"
-from autogen.events import DocumentInput
+from ag2.events import DocumentInput
 
 doc = DocumentInput(
     path="report.pdf",
@@ -185,7 +185,7 @@ OpenAI supports images via both the Completions and Responses APIs. Audio binary
 OpenAI supports `#!python vendor_metadata` for image detail control:
 
 ```python linenums="1"
-from autogen.events import ImageInput
+from ag2.events import ImageInput
 
 image = ImageInput(
     data=raw_bytes,
@@ -202,7 +202,7 @@ Anthropic supports images (JPEG, PNG, GIF, WebP) and documents (PDF) via URL, ba
 
 ```python linenums="1"
 import anthropic
-from autogen.events import ImageInput, DocumentInput
+from ag2.events import ImageInput, DocumentInput
 
 client = anthropic.Anthropic()
 
@@ -221,7 +221,7 @@ reply = await agent.ask("Describe this image.", image)
 Anthropic supports `#!python vendor_metadata` for prompt caching on content blocks:
 
 ```python linenums="1"
-from autogen.events import DocumentInput
+from ag2.events import DocumentInput
 
 doc = DocumentInput(
     path="report.pdf",
@@ -236,7 +236,7 @@ xAI supports images (URL and binary), documents (URL and binary), and pre-upload
 **File ID** — reference a file previously uploaded via the xAI Files API:
 
 ```python linenums="1"
-from autogen.events import ImageInput, DocumentInput
+from ag2.events import ImageInput, DocumentInput
 
 image = ImageInput(file_id="file-abc123", filename="photo.jpg")
 doc = DocumentInput(file_id="file-xyz789", filename="report.pdf")
@@ -249,7 +249,7 @@ xAI reads `detail` for image quality control from two **different** attributes d
 **Binary image** — set `detail` via `#!python vendor_metadata`:
 
 ```python linenums="1"
-from autogen.events import BinaryInput, BinaryType
+from ag2.events import BinaryInput, BinaryType
 
 image = BinaryInput(
     raw_bytes,
@@ -262,7 +262,7 @@ image = BinaryInput(
 **URL image** — set `detail` via `#!python metadata` (not `vendor_metadata`):
 
 ```python linenums="1"
-from autogen.events import UrlInput, BinaryType
+from ag2.events import UrlInput, BinaryType
 
 image = UrlInput(
     "https://example.com/photo.jpg",
@@ -277,7 +277,7 @@ image = UrlInput(
 **Document filename** — xAI requires a filename for binary documents. When sending raw bytes, either provide one via `#!python vendor_metadata={"filename": ...}`, or rely on the auto-derived fallback (`file.<subtype>` from the media type, e.g. `file.pdf` for `application/pdf`):
 
 ```python linenums="1"
-from autogen.events import BinaryInput, BinaryType
+from ag2.events import BinaryInput, BinaryType
 
 doc = BinaryInput(
     pdf_bytes,
@@ -292,9 +292,9 @@ doc = BinaryInput(
 The Bedrock Converse API accepts **binary sources only** — images (JPEG, PNG, GIF, WebP), documents (PDF, CSV, DOC, DOCX, XLS, XLSX, HTML, TXT, Markdown), and video (MP4, WebM, MOV, MKV, and more; Amazon Nova models). URL inputs and file IDs raise `#!python UnsupportedInputError` — Bedrock has no Files API, so source data from a URL must be downloaded and passed as bytes:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import BedrockConfig
-from autogen.events import DocumentInput, ImageInput
+from ag2 import Agent
+from ag2.config import BedrockConfig
+from ag2.events import DocumentInput, ImageInput
 
 agent = Agent(
     "vision_agent",
@@ -313,7 +313,7 @@ reply = await agent.ask("Describe the image and summarize the document.", image,
 **Document name** — Converse requires a name for document blocks. It is taken from `#!python vendor_metadata={"filename": ...}` (set automatically when using `path=`), sanitized to the characters Converse allows (alphanumerics, single spaces, hyphens, parentheses, brackets), and falls back to `"document"` when absent:
 
 ```python linenums="1"
-from autogen.events import BinaryInput, BinaryType
+from ag2.events import BinaryInput, BinaryType
 
 doc = BinaryInput(
     pdf_bytes,

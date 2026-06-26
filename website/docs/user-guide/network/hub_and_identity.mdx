@@ -10,8 +10,8 @@ This page covers the registry-side primitives — what you stand up before any a
 ## Hub.open
 
 ```python linenums="1"
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import Hub
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import Hub
 
 hub = await Hub.open(
     MemoryKnowledgeStore(),
@@ -40,7 +40,7 @@ hub = await Hub.open(
 Three small dataclasses describe an agent on the network:
 
 ```python linenums="1"
-from autogen.network import Passport, Resume, ResumeExample
+from ag2.network import Passport, Resume, ResumeExample
 
 passport = Passport(
     name="alice",
@@ -87,7 +87,7 @@ resume = Resume(
 Optional per-agent policy. Pass to `#!python hub.register(agent, passport, resume, rule=...)`.
 
 ```python linenums="1"
-from autogen.network import Rule, AccessBlock, LimitsBlock, RateBlock, InboxBlock
+from ag2.network import Rule, AccessBlock, LimitsBlock, RateBlock, InboxBlock
 
 rule = Rule(
     access=AccessBlock(
@@ -119,7 +119,7 @@ When a rule's check fails, the hub raises `#!python AccessDeniedError` (deny by 
 ## Authentication
 
 ```python linenums="1"
-from autogen.network import AuthAdapter, AuthRegistry, NoAuth
+from ag2.network import AuthAdapter, AuthRegistry, NoAuth
 
 # default: NoAuth registered for the empty scheme
 hub = await Hub.open(store)
@@ -149,7 +149,7 @@ for r in records:
     print(r["kind"], r["at"], r)
 ```
 
-Audit kinds (re-exported from `#!python autogen.network`):
+Audit kinds (re-exported from `#!python ag2.network`):
 
 | Kind | When |
 |---|---|

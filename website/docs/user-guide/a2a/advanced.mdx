@@ -10,8 +10,8 @@ Topics that aren't part of the day-to-day A2A path: human-in-the-loop, transpare
 When a server-side executor raises `#!python requires_input(...)` mid-task, the A2A server transitions the task to `#!python TASK_STATE_INPUT_REQUIRED` and surfaces the prompt to the client. The AG2 client invokes the local agent's `#!python hitl_hook` with the prompt and continues the same turn with the reply — the server prompt does **not** leak into the final response text.
 
 ```python linenums="1" hl_lines="4-5 10"
-from autogen import Agent
-from autogen.a2a import A2AConfig
+from ag2 import Agent
+from ag2.a2a import A2AConfig
 
 async def hitl_hook() -> str:
     return input("server asks input> ")
@@ -62,7 +62,7 @@ When attempts are exhausted the client raises `#!python A2AReconnectError(attemp
 ```python linenums="1" hl_lines="1 5-7 9-10 12"
 from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
 
-from autogen.a2a import A2AServer
+from ag2.a2a import A2AServer
 
 class MyExecutor(A2AAgentExecutorBase):
     async def execute(self, request_context, event_queue) -> None:
@@ -78,7 +78,7 @@ The executor owns the entire request lifecycle: parsing the inbound message, emi
 
 ## Errors
 
-All A2A errors live in `#!python autogen.a2a.errors` and inherit from `#!python A2AError`. Catch `#!python A2AError` for everything; catch the specifics when you want to react differently.
+All A2A errors live in `#!python ag2.a2a.errors` and inherit from `#!python A2AError`. Catch `#!python A2AError` for everything; catch the specifics when you want to react differently.
 
 | Exception | Raised when |
 |---|---|
@@ -95,12 +95,12 @@ Catch `#!python A2ATaskTerminalError` to handle any terminal failure uniformly; 
 
 ## Testing Helpers
 
-`#!python autogen.a2a.testing` provides utilities for in-process A2A tests — no real socket, no port binding.
+`#!python ag2.a2a.testing` provides utilities for in-process A2A tests — no real socket, no port binding.
 
 ```python linenums="1" hl_lines="6-7"
-from autogen import Agent
-from autogen.a2a import A2AConfig, A2AServer
-from autogen.a2a.testing import make_test_client_factory
+from ag2 import Agent
+from ag2.a2a import A2AConfig, A2AServer
+from ag2.a2a.testing import make_test_client_factory
 
 server = A2AServer(agent)
 factory = make_test_client_factory(server, url="http://test")
@@ -115,7 +115,7 @@ await remote.ask("ping")
 | `#!python pick_free_port(host="127.0.0.1")` | Probe a free TCP port. Used by gRPC tests since gRPC has no in-process transport equivalent |
 
 ```python linenums="1"
-from autogen.a2a.testing import pick_free_port
+from ag2.a2a.testing import pick_free_port
 
 port = pick_free_port()
 grpc_server = server.build_grpc(bind=f"127.0.0.1:{port}", grpc_url=f"grpc://127.0.0.1:{port}")

@@ -9,7 +9,7 @@ Before using Google APIs, you need to enable them in your Google Cloud project. 
     ```bash
     pip install -U ag2[openai,google-api]
     ```
-    > **Note:** If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+    > **Note:** If you have been using `ag2` or `ag2`, all you need to do is upgrade it using:
     > ```bash
     > pip install -U autogen[openai,google-api]
     > ```
@@ -17,7 +17,7 @@ Before using Google APIs, you need to enable them in your Google Cloud project. 
     > ```bash
     > pip install -U ag2[openai,google-api]
     > ```
-    > as `autogen` and `ag2` are aliases for the same PyPI package.
+    > as `ag2` and `ag2` are aliases for the same PyPI package.
 
 You're all set! Now you can start using Google Drive with AG2.
 
@@ -25,10 +25,10 @@ You're all set! Now you can start using Google Drive with AG2.
 ```python
 from typing import Annotated, Optional
 
-from autogen import AssistantAgent, LLMConfig
-from autogen.tools import tool
-from autogen.tools.experimental.google import GoogleCredentialsLocalProvider, GoogleDriveToolkit
-from autogen.tools.experimental.google.model import GoogleFileInfo
+from ag2 import AssistantAgent, LLMConfig
+from ag2.tools import tool
+from ag2.tools.experimental.google import GoogleCredentialsLocalProvider, GoogleDriveToolkit
+from ag2.tools.experimental.google.model import GoogleFileInfo
 ```
 
 ## Google Authentication
@@ -107,7 +107,7 @@ Arguments:
 >>>>>>>> EXECUTING FUNCTION list_drive_files_and_folders...
 Call ID: call_8Y7ebDznG8SxLwPvpZPsoF3C
 Input arguments: {'page_size': 3}
-/Users/robert/projects/ag2/autogen/agentchat/conversable_agent.py:3091: UserWarning: Function 'download_file_from_drive' is being overridden.
+/Users/robert/projects/ag2/ag2/agentchat/conversable_agent.py:3091: UserWarning: Function 'download_file_from_drive' is being overridden.
   warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
 user (to assistant):
 
@@ -273,7 +273,7 @@ Arguments:
 >>>>>>>> EXECUTING FUNCTION list_docs...
 Call ID: call_kGLlthRV0NJ5OyZJQMnJ0rtj
 Input arguments: {'page_size': 3}
-/Users/robert/projects/ag2/autogen/agentchat/conversable_agent.py:3091: UserWarning: Function 'list_docs' is being overridden.
+/Users/robert/projects/ag2/ag2/agentchat/conversable_agent.py:3091: UserWarning: Function 'list_docs' is being overridden.
   warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
 user (to assistant):
 

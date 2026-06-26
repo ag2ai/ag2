@@ -10,8 +10,8 @@ A scorer is a function that grades one agent run and produces a structured feedb
 Decorate a function with `#!python @scorer`. The framework calls it once per task; the return value becomes feedback.
 
 ```python linenums="1" hl_lines="4-6"
-from autogen.events import ToolCallEvent
-from autogen.eval import scorer
+from ag2.events import ToolCallEvent
+from ag2.eval import scorer
 
 @scorer
 def called_get_weather(trace) -> bool:
@@ -117,7 +117,7 @@ def under_token_budget(trace) -> bool:
 
 ## Prebuilt scorers
 
-Six ship under `autogen.eval.scorers`. Four are simple, deterministic checks (below); two richer ones — `agent_judge` and `failure_attribution` — get their own sections after.
+Six ship under `ag2.eval.scorers`. Four are simple, deterministic checks (below); two richer ones — `agent_judge` and `failure_attribution` — get their own sections after.
 
 | Scorer | Question | Type | When to use |
 |---|---|---|---|
@@ -129,7 +129,7 @@ Six ship under `autogen.eval.scorers`. Four are simple, deterministic checks (be
 Each is a *factory* — calling it returns a `Scorer`. Drop them straight into the `scorers=` list:
 
 ```python linenums="1" hl_lines="8-13"
-from autogen.eval.scorers import (
+from ag2.eval.scorers import (
     final_answer_matches,
     no_tool_errors,
     token_budget,
@@ -152,8 +152,8 @@ scorers = [
 Some properties can't be checked with `==`: *is the answer helpful? well-reasoned? on-brand?* `agent_judge` hands the answer plus a criterion you write to a judge model, which returns a numeric score. This is a more capable take on a LLM-as-a-judge evaluation.
 
 ```python linenums="1"
-from autogen.config import OpenAIConfig
-from autogen.eval.scorers import agent_judge
+from ag2.config import OpenAIConfig
+from ag2.eval.scorers import agent_judge
 
 scorers = [
     agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer resolves the user's request.", key="helpfulness"),
@@ -184,7 +184,7 @@ agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer is helpful.
 `threshold=0.7` is shorthand for wrapping the judge in the generic `threshold(...)` combinator, which gates **any** numeric scorer (a judge, or your own `@scorer`) into a Pass/Fail — `scorer → scorer`:
 
 ```python linenums="1"
-from autogen.eval.scorers import agent_judge, threshold
+from ag2.eval.scorers import agent_judge, threshold
 
 quality = agent_judge(config, criterion="...", key="quality")   # numeric scorer
 gate = threshold(quality, at_least=0.7)                          # → Pass/Fail scorer
@@ -200,7 +200,7 @@ A gated criterion emits one `Feedback`: `score` is the boolean (so it feeds `pas
 When a task fails, *why?* `failure_attribution` labels each run with a failure mode (a `str`, so it rolls up in `result.value_counts(key)`):
 
 ```python linenums="1"
-from autogen.eval.scorers import failure_attribution
+from ag2.eval.scorers import failure_attribution
 
 scorers = [failure_attribution(key="failure_mode")]
 # result.value_counts("failure_mode")  ->  {"none": 41, "tool_failure": 6, "crash": 3}
@@ -256,7 +256,7 @@ Most scorers consume an in-memory `Trace` and stay sync; async is there for scor
 If you want a key independent of the function name, construct a `Scorer` yourself:
 
 ```python linenums="1"
-from autogen.eval import Scorer, Trace
+from ag2.eval import Scorer, Trace
 
 def _check(trace: Trace) -> bool:
     return len(trace.events_of(ToolCallEvent, name="get_weather")) == 1

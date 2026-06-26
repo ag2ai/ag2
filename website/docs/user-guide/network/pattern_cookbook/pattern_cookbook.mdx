@@ -4,7 +4,7 @@ sidebarTitle: Overview
 ---
 
 Side-by-side translations of the canonical multi-agent orchestration
-patterns from classic AG2 (`#!python autogen.agentchat.group`) onto the
+patterns from classic AG2 (`#!python ag2.agentchat.group`) onto the
 AG2 `#!python WorkflowAdapter`. Each pattern lists the classic primitives
 it used, an AG2 translation, the full runnable source, and any gaps
 that don't yet have a clean equivalent.
@@ -87,14 +87,14 @@ condition the graph can't express declaratively.
 State mutations are independent of routing and use the workflow-scoped
 helpers `#!python set_context(channel, key, value)` and
 `#!python delete_context(channel, key)`. They live in
-`#!python autogen.network.workflow_helpers` rather than the
-top-level `#!python autogen.network` namespace — they only operate
+`#!python ag2.network.workflow_helpers` rather than the
+top-level `#!python ag2.network` namespace — they only operate
 on `#!python WorkflowState.context_vars` and raise `#!python RuntimeError`
 on a non-workflow channel, so the import path itself signals the
 adapter scope.
 
 ```python linenums="1" hl_lines="1"
-from autogen.network.workflow_helpers import set_context
+from ag2.network.workflow_helpers import set_context
 
 async def classify_as_billing(reason: str, channel: ChannelInject) -> str:
     """Classify the request as billing. Sets context_vars['category']."""

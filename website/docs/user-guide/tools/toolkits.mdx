@@ -7,8 +7,8 @@ title: Toolkits
 A `Toolkit` groups related tools into a single, reusable unit. Instead of passing individual tools one by one, you can bundle them into a toolkit and pass the whole collection to an agent. This is useful for organizing domain-specific capabilities (e.g., all database tools, all file-system tools) and sharing them across multiple agents.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.tools import Toolkit
+from ag2 import Agent
+from ag2.tools import Toolkit
 
 def search_orders(query: str) -> str:
     """Searches the order database."""
@@ -30,7 +30,7 @@ A toolkit accepts both plain functions and `@tool`-decorated functions in its `t
 You can also add tools to a toolkit using the `@toolkit.tool` decorator, following the same pattern as `@agent.tool`:
 
 ```python linenums="1"
-from autogen.tools import Toolkit
+from ag2.tools import Toolkit
 
 inventory = Toolkit()
 
@@ -50,7 +50,7 @@ def reorder(item_id: str, quantity: int) -> str:
 The toolkit can then be passed to any number of agents:
 
 ```python linenums="1"
-from autogen import Agent
+from ag2 import Agent
 
 warehouse_agent = Agent(name="WarehouseBot", tools=[inventory])
 sales_agent = Agent(name="SalesBot", tools=[inventory])
@@ -61,7 +61,7 @@ sales_agent = Agent(name="SalesBot", tools=[inventory])
 You can freely mix toolkits and individual tools in an agent's `tools` list:
 
 ```python linenums="1"
-from autogen import tool
+from ag2 import tool
 
 @tool
 def escalate(reason: str) -> str:
@@ -79,10 +79,10 @@ agent = Agent(
 Pass `middleware=[...]` to the `Toolkit` constructor to apply hooks to **every** tool in the set — both tools passed to the constructor and tools added later via `@toolkit.tool`:
 
 ```python linenums="1" hl_lines="12"
-from autogen import Context
-from autogen.events import ToolCallEvent, ToolResultEvent
-from autogen.middleware import ToolExecution
-from autogen.tools import Toolkit
+from ag2 import Context
+from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.middleware import ToolExecution
+from ag2.tools import Toolkit
 
 async def log_calls(
     call_next: ToolExecution, event: ToolCallEvent, context: Context,

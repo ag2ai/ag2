@@ -11,7 +11,7 @@ To get started with the `DeepResearchTool`, follow these steps:
     pip install ag2[openai,browser-use]
     ```
     <Tip>
-    If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+    If you have been using `ag2` or `ag2`, all you need to do is upgrade it using:
     ```bash
     pip install -U autogen[openai,browser-use]
     ```
@@ -19,7 +19,7 @@ To get started with the `DeepResearchTool`, follow these steps:
     ```bash
     pip install -U ag2[openai,browser-use]
     ```
-    as `autogen` and `ag2` are aliases for the same PyPI package.
+    as `ag2` and `ag2` are aliases for the same PyPI package.
     </Tip>
 2. Set up Playwright:
 
@@ -43,8 +43,8 @@ You're all set! Now you can start using browsing features in AG2.
 import os
 import nest_asyncio
 
-from autogen import AssistantAgent, UserProxyAgent, LLMConfig
-from autogen.tools.experimental import DeepResearchTool
+from ag2 import AssistantAgent, UserProxyAgent, LLMConfig
+from ag2.tools.experimental import DeepResearchTool
 
 nest_asyncio.apply()
 ```

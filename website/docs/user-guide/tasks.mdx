@@ -21,8 +21,8 @@ For lightweight LLM-driven sub-agent delegation see [Subagents](/docs/user-guide
 ## Quick Start
 
 ```python linenums="1" hl_lines="6"
-from autogen import Agent
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.config import AnthropicConfig
 
 agent = Agent("indexer", config=AnthropicConfig(model="claude-sonnet-4-6"))
 
@@ -53,7 +53,7 @@ CREATED -> RUNNING -> COMPLETED   (terminal, success)
 | `FAILED` | Reached `#!python fail()` or block exited via exception. |
 | `EXPIRED` | TTL elapsed; emitted by an external observer (e.g. a network hub's TTL sweeper). |
 
-The terminal states are immutable — once set, further `#!python complete() / fail() / progress()` calls are silent no-ops. The set is exported as `#!python autogen.task.TERMINAL_TASK_STATES`.
+The terminal states are immutable — once set, further `#!python complete() / fail() / progress()` calls are silent no-ops. The set is exported as `#!python ag2.task.TERMINAL_TASK_STATES`.
 
 ## API Reference
 
@@ -103,8 +103,8 @@ Returns an unentered `#!python Task`. Use as `#!python async with agent.task(...
 ## Bound Context vs. Standalone
 
 ```python linenums="1" hl_lines="4 6"
-from autogen.context import ConversationContext
-from autogen.stream import MemoryStream
+from ag2.context import ConversationContext
+from ag2.stream import MemoryStream
 
 ctx = ConversationContext(stream=MemoryStream())
 
@@ -138,7 +138,7 @@ except ValueError as exc:
 Subscribe directly on the bound stream to capture every lifecycle event in order.
 
 ```python linenums="1" hl_lines="6-9"
-from autogen.events import TaskCompleted, TaskProgress, TaskStarted
+from ag2.events import TaskCompleted, TaskProgress, TaskStarted
 
 stream = MemoryStream()
 ctx = ConversationContext(stream=stream)
@@ -173,8 +173,8 @@ async with agent.task("work", context=ctx) as task:
 `#!python TaskInject` is a fast_depends-resolvable annotation that injects the active Task into any function the dependency-injection machinery resolves — most usefully a `#!python @tool` body.
 
 ```python linenums="1" hl_lines="2 5"
-from autogen import tool
-from autogen.task import TaskInject
+from ag2 import tool
+from ag2.task import TaskInject
 
 @tool
 async def report(message: str, task: TaskInject) -> str:

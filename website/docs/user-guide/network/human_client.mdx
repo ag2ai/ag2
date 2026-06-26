@@ -12,7 +12,7 @@ Use it whenever a person (one or many) needs to join a channel — answering a `
 ## Registering
 
 ```python linenums="1"
-from autogen.network import HubClient, LocalLink, Passport
+from ag2.network import HubClient, LocalLink, Passport
 
 hc = HubClient(LocalLink(hub), hub=hub)
 
@@ -54,7 +54,7 @@ human.remove_envelope_callback(on_inbound)   # detach later
 Block until the next matching envelope arrives, or iterate the inbound stream:
 
 ```python linenums="1"
-from autogen.network import EV_TEXT
+from ag2.network import EV_TEXT
 
 # Wait for the next text reply from a specific peer.
 reply = await human.next_envelope(
@@ -81,7 +81,7 @@ Envelopes that don't match a `#!python next_envelope` predicate are discarded �
 Outbound mirrors `#!python AgentClient`. `#!python human.open(...)` returns the same `#!python Channel` handle, so multi-turn channel code is identical whether the initiator is a human or an agent.
 
 ```python linenums="1"
-from autogen.network import CONVERSATION_TYPE
+from ag2.network import CONVERSATION_TYPE
 
 channel = await human.open(type=CONVERSATION_TYPE, target=expert.agent_id)
 await channel.send("Hi — what's a good first ML concept to learn?")
@@ -109,7 +109,7 @@ When an agent opens a channel to a human, the hub waits for the human's `#!pytho
 Pass `#!python auto_ack_invites=False` if you want a human to *decide* whether to join (an "accept invite?" prompt). If so, your UI is responsible for emitting the ack:
 
 ```python linenums="1"
-from autogen.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, Envelope
+from ag2.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, Envelope
 
 human = await hc.register_human(Passport(name="operator"), auto_ack_invites=False)
 
@@ -170,7 +170,7 @@ async def serve(websocket, human):
 
 ```python linenums="1"
 import asyncio
-from autogen.network import CONVERSATION_TYPE, EV_TEXT
+from ag2.network import CONVERSATION_TYPE, EV_TEXT
 
 channel = await human.open(type=CONVERSATION_TYPE, target=expert.agent_id)
 

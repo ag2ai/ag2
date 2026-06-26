@@ -16,10 +16,10 @@ The `TransformMessages` capability is designed to modify incoming messages befor
 
 <div class="info">
 <Info>
-Install `autogen`:
+Install `ag2`:
 
 ```bash
-pip install autogen[openai]
+pip install ag2[openai]
 ```
 
 For more information, please refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2).
@@ -35,7 +35,7 @@ Let's start by exploring the available transformations and understanding how the
 import copy
 import pprint
 
-from autogen.agentchat.contrib.capabilities import transforms
+from ag2.agentchat.contrib.capabilities import transforms
 ```
 
 #### Example 1: Limiting the Total Number of Messages
@@ -140,8 +140,8 @@ So far, we have only tested the `MessageHistoryLimiter` and `MessageTokenLimiter
 import os
 import copy
 
-import autogen
-from autogen.agentchat.contrib.capabilities import transform_messages, transforms
+import ag2
+from ag2.agentchat.contrib.capabilities import transform_messages, transforms
 from typing import Dict, List
 from dotenv import load_dotenv
 import os
@@ -151,9 +151,9 @@ load_dotenv()
 llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # Define your agent; the user proxy and an assistant
-assistant = autogen.AssistantAgent("assistant", llm_config=llm_config)
+assistant = ag2.AssistantAgent("assistant", llm_config=llm_config)
 
-user_proxy = autogen.UserProxyAgent(
+user_proxy = ag2.UserProxyAgent(
     "user_proxy",
     human_input_mode="NEVER",
     is_termination_msg=lambda x: "TERMINATE" in x.get("content", ""),
@@ -171,7 +171,7 @@ We first need to write the `test` function that creates a very long chat history
 
 ```python
 # Create a very long chat history that is bound to cause a crash for gpt 3.5
-def test(assistant: autogen.ConversableAgent, user_proxy: autogen.UserProxyAgent):
+def test(assistant: ag2.ConversableAgent, user_proxy: ag2.UserProxyAgent):
     for _ in range(1000):
         # define a fake, very long messages
         assistant_msg = {"role": "assistant", "content": "test " * 1000}
@@ -278,8 +278,8 @@ import pprint
 import copy
 import re
 
-import autogen
-from autogen.agentchat.contrib.capabilities import transform_messages, transforms
+import ag2
+from ag2.agentchat.contrib.capabilities import transform_messages, transforms
 from typing import Dict, List
 
 # The transform must adhere to transform_messages.MessageTransform protocol.
@@ -321,7 +321,7 @@ class MessageRedact:
         return count
 
 
-assistant_with_redact = autogen.AssistantAgent(
+assistant_with_redact = ag2.AssistantAgent(
     "assistant",
     llm_config=llm_config,
     max_consecutive_auto_reply=1,
@@ -330,7 +330,7 @@ redact_handling = transform_messages.TransformMessages(transforms=[MessageRedact
 
 redact_handling.add_to_agent(assistant_with_redact)
 
-user_proxy = autogen.UserProxyAgent(
+user_proxy = ag2.UserProxyAgent(
     "user_proxy",
     human_input_mode="NEVER",
     max_consecutive_auto_reply=1,

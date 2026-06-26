@@ -14,9 +14,9 @@ This is useful for tools that perform **irreversible**, **expensive**, or **sens
 ```python linenums="1" hl_lines="5 8 18"
 import asyncio
 
-from autogen import Agent, tool
-from autogen.config import OpenAIConfig
-from autogen.middleware import approval_required
+from ag2 import Agent, tool
+from ag2.config import OpenAIConfig
+from ag2.middleware import approval_required
 
 @tool(
     middleware=[approval_required()],

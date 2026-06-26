@@ -47,11 +47,11 @@ Run::
 import asyncio
 import time
 
-from autogen import Agent
-from autogen.agent import TaskConfig
-from autogen.config import GeminiConfig
-from autogen.events import TaskCompleted, TaskStarted
-from autogen.stream import MemoryStream
+from ag2 import Agent
+from ag2.agent import TaskConfig
+from ag2.config import GeminiConfig
+from ag2.events import TaskCompleted, TaskStarted
+from ag2.stream import MemoryStream
 
 def section(title: str) -> None:
     print(f"\n── {title} ───")

@@ -25,8 +25,8 @@ Every policy implements the same shape:
 
 ```python linenums="1"
 from typing import Protocol
-from autogen import Context
-from autogen.events import BaseEvent
+from ag2 import Context
+from ag2.events import BaseEvent
 
 class AssemblyPolicy(Protocol):
     name: str
@@ -47,13 +47,13 @@ A policy receives the current `prompts` and `events`, returns modified copies. P
 Pass your policy list via the `assembly=` keyword when constructing an Agent. The Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain automatically.
 
 ```python linenums="1" hl_lines="12-16"
-from autogen import Agent
-from autogen.policies import (
+from ag2 import Agent
+from ag2.policies import (
     AlertPolicy,
     WorkingMemoryPolicy,
     SlidingWindowPolicy,
 )
-from autogen.config import OpenAIConfig
+from ag2.config import OpenAIConfig
 
 agent = Agent(
     "assistant",
@@ -74,7 +74,7 @@ Inside each turn the `AssemblerMiddleware`:
 4. Restores the original prompt afterward.
 
 !!! tip
-    `AssemblerMiddleware` and `AssemblyPolicy` live in `#!python autogen.assembly` if you need to wire the middleware manually (for example, inside a custom harness that isn't built on `Agent`).
+    `AssemblerMiddleware` and `AssemblyPolicy` live in `#!python ag2.assembly` if you need to wire the middleware manually (for example, inside a custom harness that isn't built on `Agent`).
 
 ## Ordering matters
 
@@ -90,8 +90,8 @@ The rule: **injection before reduction**. If a reducer runs first, the injection
 `AssemblerMiddleware.validate_order()` catches known bad orderings and returns a list of warnings:
 
 ```python linenums="1" hl_lines="5 8"
-from autogen.assembly import AssemblerMiddleware
-from autogen.policies import AlertPolicy, SlidingWindowPolicy
+from ag2.assembly import AssemblerMiddleware
+from ag2.policies import AlertPolicy, SlidingWindowPolicy
 
 policies = [
     SlidingWindowPolicy(max_events=20),  # reduction first — wrong
@@ -104,14 +104,14 @@ for w in warnings:
 
 ## Built-in policies
 
-All six built-ins are importable from `#!python autogen.policies`.
+All six built-ins are importable from `#!python ag2.policies`.
 
 ### ConversationPolicy
 
 Keeps only conversation and tool events (`ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `ToolResultsEvent`, `ToolErrorEvent`, plus `CompactionSummary`). Drops alerts, lifecycle events, observer output — anything the LLM does not need to see.
 
 ```python linenums="1"
-from autogen.policies import ConversationPolicy
+from ag2.policies import ConversationPolicy
 
 policy = ConversationPolicy()
 ```
@@ -123,7 +123,7 @@ Takes no arguments. Effectively an allowlist — add a new event type to the str
 Keeps only the last `max_events` events. Skips leading orphaned `ToolResultsEvent` entries so the window never starts on an unmatched tool result.
 
 ```python linenums="1"
-from autogen.policies import SlidingWindowPolicy
+from ag2.policies import SlidingWindowPolicy
 
 policy = SlidingWindowPolicy(max_events=50, transparent=True)
 ```
@@ -135,7 +135,7 @@ Set `transparent=True` to append a prompt note like `"[sliding_window] Showing l
 Keeps the newest events that fit in an estimated token budget. Estimation is `#!python len(str(event)) / chars_per_token` — cheap, not perfectly accurate. Use it as a safety net, not an exact meter.
 
 ```python linenums="1"
-from autogen.policies import TokenBudgetPolicy
+from ag2.policies import TokenBudgetPolicy
 
 policy = TokenBudgetPolicy(max_tokens=32_000, chars_per_token=4, transparent=True)
 ```
@@ -145,7 +145,7 @@ policy = TokenBudgetPolicy(max_tokens=32_000, chars_per_token=4, transparent=Tru
 Delivers [ObserverAlerts](/docs/user-guide/advanced/observers) to the model. Each new alert is formatted into the prompt once (deduplicated on `(source, severity, message)`), and **FATAL** alerts additionally emit a `HaltEvent` onto the stream so the surrounding loop can short-circuit.
 
 ```python linenums="1"
-from autogen.policies import AlertPolicy
+from ag2.policies import AlertPolicy
 
 policy = AlertPolicy()
 ```
@@ -160,9 +160,9 @@ Takes no arguments. Dedup state lives on the instance — give each Agent its ow
 Reads `/memory/working.md` from the [KnowledgeStore](/docs/user-guide/advanced/knowledge_store) and injects it into the prompt. Working memory is the agent's persistent state — written between conversations by an aggregation strategy and read on every turn.
 
 ```python linenums="1" hl_lines="6 11 12"
-from autogen.assembly import AssemblerMiddleware
-from autogen.policies import WorkingMemoryPolicy
-from autogen.knowledge import KnowledgeStore, MemoryKnowledgeStore
+from ag2.assembly import AssemblerMiddleware
+from ag2.policies import WorkingMemoryPolicy
+from ag2.knowledge import KnowledgeStore, MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 await store.write("/memory/working.md", "- user prefers metric\n- timezone: Australia/Melbourne")
@@ -182,7 +182,7 @@ The policy looks up the store by type (`#!python context.dependencies.get(Knowle
 Reads the most recent summaries under `/memory/conversations/` and injects them. The companion reader for `ConversationSummaryAggregate`, which writes timestamped summary files to that path after each conversation.
 
 ```python linenums="1"
-from autogen.policies import EpisodicMemoryPolicy
+from ag2.policies import EpisodicMemoryPolicy
 
 policy = EpisodicMemoryPolicy(max_episodes=5, transparent=True)
 ```
@@ -194,8 +194,8 @@ Also requires a `KnowledgeStore` in `#!python context.dependencies`; a no-op oth
 Typical production ordering — injections first, then `AlertPolicy`, then reduce:
 
 ```python linenums="1" hl_lines="9-14"
-from autogen.assembly import AssemblerMiddleware
-from autogen.policies import (
+from ag2.assembly import AssemblerMiddleware
+from ag2.policies import (
     AlertPolicy,
     EpisodicMemoryPolicy,
     SlidingWindowPolicy,
@@ -216,8 +216,8 @@ AssemblerMiddleware.validate_order(policies)  # returns [] — good order
 Any object with a `name` and an `async apply(...)` method satisfies the protocol. Use it for domain-specific injection (project docs, RAG hits, on-call runbooks) or custom filtering:
 
 ```python linenums="1" hl_lines="7 12-18"
-from autogen import Context
-from autogen.events import BaseEvent
+from ag2 import Context
+from ag2.events import BaseEvent
 
 class RunbookPolicy:
     """Inject the on-call runbook as system context."""

@@ -38,9 +38,9 @@ for index, image in enumerate(reply.files):
 Add `ImageGenerationTool` to an agent configured with the **Responses API** (`OpenAIResponsesConfig`). The model decides when to call the tool and the generated image is appended to `#!python reply.files`.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import OpenAIResponsesConfig
-from autogen.tools import ImageGenerationTool
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.tools import ImageGenerationTool
 
 agent = Agent(
     "designer",
@@ -76,8 +76,8 @@ image = reply.files[0]
 Gemini does not use a tool for image generation. Instead, you select an **image-capable model** and request the `IMAGE` response modality via `response_modalities`. The model returns the image inline and AG2 surfaces it on `#!python reply.files`.
 
 ```python linenums="1" hl_lines="5 6"
-from autogen import Agent
-from autogen.config import GeminiConfig
+from ag2 import Agent
+from ag2.config import GeminiConfig
 
 config = GeminiConfig(
     model="gemini-3.1-flash-image",
@@ -102,7 +102,7 @@ Gemini does not take a pixel `size` string like OpenAI. Instead, pass a `#!pytho
 ```python linenums="1" hl_lines="8"
 from google.genai import types
 
-from autogen.config import GeminiConfig
+from ag2.config import GeminiConfig
 
 config = GeminiConfig(
     model="gemini-3.1-flash-image",
@@ -125,10 +125,10 @@ To edit an image instead of generating one from scratch, pass it in as an [`Imag
 <Tabs>
   <Tab title="OpenAI">
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import OpenAIResponsesConfig
-from autogen.events import ImageInput
-from autogen.tools import ImageGenerationTool
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ImageInput
+from ag2.tools import ImageGenerationTool
 
 agent = Agent(
     "editor",
@@ -146,9 +146,9 @@ edited = reply.files[0]
 
   <Tab title="Gemini">
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import GeminiConfig
-from autogen.events import ImageInput
+from ag2 import Agent
+from ag2.config import GeminiConfig
+from ag2.events import ImageInput
 
 config = GeminiConfig(model="gemini-3.1-flash-image", response_modalities=["TEXT", "IMAGE"])
 agent = Agent("editor", config=config)

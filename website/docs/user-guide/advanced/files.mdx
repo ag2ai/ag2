@@ -28,8 +28,8 @@ Use `#!python FilesAPI` when you want to:
 ## Create a Files API client
 
 ```python linenums="1"
-from autogen import FilesAPI
-from autogen.config import OpenAIResponsesConfig
+from ag2 import FilesAPI
+from ag2.config import OpenAIResponsesConfig
 
 config = OpenAIResponsesConfig(
     model="gpt-5-mini",
@@ -89,8 +89,8 @@ content = await uploaded.read(files)
 After upload, pass the returned `#!python file_id` to an input event.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.events import DocumentInput
+from ag2 import Agent
+from ag2.events import DocumentInput
 
 agent = Agent(
     "assistant",

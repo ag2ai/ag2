@@ -10,7 +10,7 @@ The STT → Agent → TTS flow turns any existing `Agent` into a voice agent wit
 `SoundDeviceRecorder` captures microphone input and `SoundDevicePlayer` plays synthesized speech. Both are thin wrappers around the [`sounddevice`](https://python-sounddevice.readthedocs.io/){.external-link target="_blank"} library and share the same event stream.
 
 ```python linenums="1"
-from autogen.live import SoundDevicePlayer, SoundDeviceRecorder
+from ag2.live import SoundDevicePlayer, SoundDeviceRecorder
 
 recorder = SoundDeviceRecorder()
 voice = recorder.record(duration=5)  # blocks for 5s, returns VoiceInput
@@ -28,8 +28,8 @@ The recorder produces a `VoiceInput` containing 16-bit PCM bytes plus the sample
 ```python linenums="1" hl_lines="13 18"
 import asyncio
 
-from autogen import Agent, config
-from autogen.live import OpenAITranscriber, SoundDeviceRecorder
+from ag2 import Agent, config
+from ag2.live import OpenAITranscriber, SoundDeviceRecorder
 
 agent = Agent(
     "assistant",
@@ -66,7 +66,7 @@ if __name__ == "__main__":
 If you want the user's speech transcribed **into English** regardless of input language, swap in `OpenAITranslationTranscriber`. It has the same API as `OpenAITranscriber` but uses OpenAI's translation endpoint.
 
 ```python linenums="1"
-from autogen.live import OpenAITranslationTranscriber
+from ag2.live import OpenAITranslationTranscriber
 
 pipeline = OpenAITranslationTranscriber("whisper-1").pipe(agent)
 ```
@@ -78,8 +78,8 @@ pipeline = OpenAITranslationTranscriber("whisper-1").pipe(agent)
 ```python linenums="1" hl_lines="10-12 16-18"
 import asyncio
 
-from autogen import Agent, config
-from autogen.live import OpenAITTSConfig, SoundDevicePlayer, TTSObserver
+from ag2 import Agent, config
+from ag2.live import OpenAITTSConfig, SoundDevicePlayer, TTSObserver
 
 agent = Agent(
     name="assistant",
@@ -107,7 +107,7 @@ if __name__ == "__main__":
 `OpenAITTSConfig` accepts the standard OpenAI TTS parameters:
 
 ```python linenums="1"
-from autogen.live import OpenAITTSConfig
+from ag2.live import OpenAITTSConfig
 
 config = OpenAITTSConfig(
     model="gpt-4o-mini-tts",
@@ -123,8 +123,8 @@ The full round-trip — voice in, voice out — is just both halves wired up at 
 ```python linenums="1" hl_lines="16-18 22 25 28"
 import asyncio
 
-from autogen import Agent, config
-from autogen.live import (
+from ag2 import Agent, config
+from ag2.live import (
     OpenAITTSConfig,
     OpenAITranscriber,
     SoundDevicePlayer,

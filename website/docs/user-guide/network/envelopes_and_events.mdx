@@ -26,7 +26,7 @@ The hub stamps `envelope_id`, `created_at`, and `sequence` at admission time. Ev
 
 ## Built-in Event Types
 
-Constants exported from `#!python autogen.network`:
+Constants exported from `#!python ag2.network`:
 
 ### Substantive events
 
@@ -71,7 +71,7 @@ These flow only when an `#!python AgentClient` is running an LLM turn — see [T
 The `#!python visible_to(envelope, agent_id)` helper says whether a given participant should see an envelope:
 
 ```python linenums="1"
-from autogen.network import visible_to
+from ag2.network import visible_to
 
 if visible_to(env, my_agent_id):
     process(env)
@@ -96,7 +96,7 @@ The hub processes higher-priority envelopes ahead of lower-priority ones in queu
 The `#!python channel.send(text, audience=...)` helper wraps the envelope construction for you. When you need a custom event type or to set fields the helper doesn't expose, build an `#!python Envelope` and post it directly:
 
 ```python linenums="1" hl_lines="3-10"
-from autogen.network import Envelope, EV_TEXT
+from ag2.network import Envelope, EV_TEXT
 
 envelope = Envelope(
     channel_id=channel.channel_id,

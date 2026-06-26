@@ -23,10 +23,10 @@ The basic catalog covers the common building blocks (surfaces, text, buttons, in
 To let the LLM emit components beyond the basic set, pass a `#!python custom_catalog` that **extends** the basic catalog. It can be a dict or a path to a JSON file, and must declare a `#!python $id` — that id becomes the active catalog id. Pair it with `#!python custom_catalog_rules` to tell the LLM how to use the new components. These are flat kwargs on the transport:
 
 ```python linenums="1" hl_lines="6-11 18 19"
-from autogen import Agent
-from autogen.a2ui import A2UIServer
-from autogen.a2ui.transports import RestTransport
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.a2ui import A2UIServer
+from ag2.a2ui.transports import RestTransport
+from ag2.config import AnthropicConfig
 
 custom_catalog = {
     "$id": "https://example.com/catalogs/charts/catalog.json",

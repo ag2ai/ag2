@@ -293,7 +293,7 @@ The first fix is the more common pattern — terminate transitions are cheap, th
 ```python linenums="1" hl_lines="5-7 9-11 13-15 17"
 from typing import ClassVar
 from dataclasses import dataclass
-from autogen.network import register_condition
+from ag2.network import register_condition
 
 @dataclass(slots=True)
 class ContextThreshold:
@@ -369,7 +369,7 @@ class WorkflowState:
 Implement the Protocol, decorate with a unique `name`, register on the default registry:
 
 ```python linenums="1"
-from autogen.network import (
+from ag2.network import (
     Envelope,
     TransitionTarget,
     TransitionDecision,

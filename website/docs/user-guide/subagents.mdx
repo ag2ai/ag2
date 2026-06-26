@@ -24,8 +24,8 @@ Breaking work across multiple agents gives you:
 Use `#!python Agent.as_tool()` to make one agent available as a tool for another.
 
 ```python linenums="1" hl_lines="24-25"
-from autogen import Agent
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.config import AnthropicConfig
 
 config = AnthropicConfig("claude-sonnet-4-6")
 
@@ -81,7 +81,7 @@ task_writer(
 You can also use `#!python subagent_tool()` directly for more control:
 
 ```python linenums="1" hl_lines="1 7"
-from autogen.tools.subagents import subagent_tool
+from ag2.tools.subagents import subagent_tool
 
 coordinator = Agent(
     "coordinator",
@@ -97,7 +97,7 @@ coordinator = Agent(
 `#!python as_tool()` and `#!python subagent_tool()` are **blocking**: the tool call doesn't return until the sub-task finishes, so the calling LLM waits for the result before doing anything else. `#!python background_agent_tool()` is **fire-and-forget** — it starts the sub-task, returns a task id immediately, and lets the parent LLM keep working in the same turn. The result is delivered later as a follow-up message to the parent.
 
 ```python linenums="1" hl_lines="1 8"
-from autogen.tools.subagents import background_agent_tool
+from ag2.tools.subagents import background_agent_tool
 
 coordinator = Agent(
     "coordinator",
@@ -165,9 +165,9 @@ The analyst's LLM may call `sub_task` multiple times — one per aspect — then
 `#!python dynamic_agent()` lets the calling LLM **construct** an ephemeral agent at runtime — picking a name, system prompt, and a subset of available tools per objective — instead of pre-defining each delegate as a named `#!python as_tool()`. Use it when the orchestrator should compose a focused worker on demand for each sub-task.
 
 ```python linenums="1" hl_lines="2 17"
-from autogen import Agent
-from autogen.tools.dynamic import dynamic_agent
-from autogen.config import OpenAIConfig
+from ag2 import Agent
+from ag2.tools.dynamic import dynamic_agent
+from ag2.config import OpenAIConfig
 
 config = OpenAIConfig(model="gpt-4o-mini")
 
@@ -240,7 +240,7 @@ It means that subagent has no information about previous calls or results. It ju
 `#!python persistent_stream()` gives the same agent a consistent stream across multiple invocations within a context. The sub-task's history accumulates across calls rather than starting fresh each time:
 
 ```python linenums="1" hl_lines="5"
-from autogen.tools.subagents import persistent_stream
+from ag2.tools.subagents import persistent_stream
 
 researcher.as_tool(
     description="Research a topic",
@@ -255,8 +255,8 @@ It stores the stream ID in `#!python context.dependencies` keyed by `#!python f"
 For full control, pass any callable matching `#!python StreamFactory = Callable[[Agent, Context], Stream]`:
 
 ```python linenums="1" hl_lines="4-5 9"
-from autogen import Agent, Context
-from autogen.streams.redis import RedisStream
+from ag2 import Agent, Context
+from ag2.streams.redis import RedisStream
 
 def make_redis_stream(agent: Agent, ctx: Context) -> RedisStream:
     return RedisStream(MY_REDIS_URL, prefix=f"ag2:sub:{agent.name}")

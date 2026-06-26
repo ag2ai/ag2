@@ -3,13 +3,13 @@ title: Managing Tasks and Push Notifications
 sidebarTitle: Tasks & Push
 ---
 
-A2A models every conversation as a `#!python Task` with a server-side lifecycle. `#!python autogen.a2a.tasks` exposes helpers for inspecting and aborting tasks; `#!python autogen.a2a.push` manages webhook subscriptions for asynchronous delivery of task updates. All helpers accept an `#!python A2AConfig` and work over any transport the server's card declares.
+A2A models every conversation as a `#!python Task` with a server-side lifecycle. `#!python ag2.a2a.tasks` exposes helpers for inspecting and aborting tasks; `#!python ag2.a2a.push` manages webhook subscriptions for asynchronous delivery of task updates. All helpers accept an `#!python A2AConfig` and work over any transport the server's card declares.
 
 ## Tasks
 
 ```python linenums="1"
-from autogen.a2a import A2AConfig
-from autogen.a2a.tasks import cancel_task, get_task, list_tasks
+from ag2.a2a import A2AConfig
+from ag2.a2a.tasks import cancel_task, get_task, list_tasks
 
 config = A2AConfig(card_url="http://127.0.0.1:8000")
 ```
@@ -71,7 +71,7 @@ A2A push notifications let the server POST task updates to a webhook the client 
 ### Registering a Webhook
 
 ```python linenums="1"
-from autogen.a2a.push import (
+from ag2.a2a.push import (
     A2APushAuthentication,
     A2APushConfig,
     create_push_notification_config,
@@ -91,7 +91,7 @@ print(created.id)  # server-issued config id
 ### Reading and Deleting
 
 ```python linenums="1"
-from autogen.a2a.push import (
+from ag2.a2a.push import (
     delete_push_notification_config,
     get_push_notification_config,
     list_push_notification_configs,

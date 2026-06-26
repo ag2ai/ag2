@@ -7,7 +7,7 @@ description: "Expose AG2 agents to AG-UI-compatible frontends using AGUIStream."
 ## Overview
 
 The Agent-User Interaction (AG-UI) protocol standardizes how frontend applications communicate with agents.
-In AG2, `autogen.ag_ui.AGUIStream` bridges an `Agent` to AG-UI event streams.
+In AG2, `ag2.ag_ui.AGUIStream` bridges an `Agent` to AG-UI event streams.
 
 This solves common integration problems:
 
@@ -53,9 +53,9 @@ Use the manual-dispatch pattern when you want full control over auth, logging, a
 from fastapi import FastAPI, Header
 from fastapi.responses import StreamingResponse
 
-from autogen import Agent
-from autogen.ag_ui import AGUIStream, RunAgentInput
-from autogen.config import OpenAIConfig
+from ag2 import Agent
+from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.config import OpenAIConfig
 
 agent = Agent(
     name="support_bot",
@@ -87,7 +87,7 @@ uvicorn run_ag_ui:app --reload --port 8000
     If you want to use ASGI endpoint without additional logic, you can use the `AGUIStream.build_asgi()` method to build an ASGI endpoint and mount it to your ASGI application.
 
     ```python linenums="1" hl_lines="5-6"
-    from autogen.ag_ui import AGUIStream
+    from ag2.ag_ui import AGUIStream
     from fastapi import FastAPI
 
     app = FastAPI()

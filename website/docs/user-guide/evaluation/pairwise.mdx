@@ -8,8 +8,8 @@ Sometimes "which answer is better?" is easier and more reliable than scoring eac
 ## `run_pairwise`
 
 ```python linenums="1"
-from autogen.eval import run_pairwise
-from autogen.eval.scorers import pairwise_judge
+from ag2.eval import run_pairwise
+from ag2.eval.scorers import pairwise_judge
 
 result = await run_pairwise(
     suite,
@@ -40,8 +40,8 @@ A human is often the ground truth for "which is better." There are two ways to c
 `human_pairwise` prompts a reviewer for each task. The default prompt prints the question and both answers **blinded** — Response 1 / Response 2, in random order so there's no position bias — and reads `1` / `2` / `tie`:
 
 ```python linenums="1"
-from autogen.eval import run_pairwise
-from autogen.eval.scorers import human_pairwise
+from ag2.eval import run_pairwise
+from ag2.eval.scorers import human_pairwise
 
 result = await run_pairwise(
     suite,
@@ -75,8 +75,8 @@ human_pairwise(key="quality", ask=ask)
 Past a handful of cases — or with several labelers — you don't sit at a terminal. Export a **blinded manifest**, have people label it in any tool, then import the results. This is the workflow for a real human-eval pass.
 
 ```python linenums="1"
-from autogen.eval import DirectoryTraceSource, evaluate_pairwise
-from autogen.eval.scorers import export_pairwise_cases, human_labels
+from ag2.eval import DirectoryTraceSource, evaluate_pairwise
+from ag2.eval.scorers import export_pairwise_cases, human_labels
 
 champion = DirectoryTraceSource("runs/champion")        # two sets of captured traces
 challenger = DirectoryTraceSource("runs/challenger")

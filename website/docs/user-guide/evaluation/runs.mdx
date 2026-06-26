@@ -26,7 +26,7 @@ A `Suite` is an immutable collection of `Task` records. Build one from a JSONL f
 ### From JSONL (recommended)
 
 ```python linenums="1"
-from autogen.eval import Suite
+from ag2.eval import Suite
 
 suite = Suite.from_jsonl("eval/dataset.jsonl")
 ```
@@ -54,7 +54,7 @@ Fields:
 ### From a list (for quick experimentation)
 
 ```python linenums="1"
-from autogen.eval import Suite
+from ag2.eval import Suite
 
 suite = Suite.from_list([
     {"inputs": {"input": "What's the weather in Tokyo?"}, "reference_outputs": {"city": "Tokyo"}},
@@ -69,8 +69,8 @@ Same shape as JSONL lines. Use this in notebooks or for ad-hoc suites that don't
 `run_agent(agent=...)` takes a built **`Agent` instance**, reused across every task. Each task runs on a fresh stream, so conversation history never leaks between tasks — agents are effectively stateless across `ask` calls (history lives on the per-call stream), so reusing one instance is safe for any normal agent.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import GeminiConfig
+from ag2 import Agent
+from ag2.config import GeminiConfig
 
 weather_agent = Agent(
     "weather",
@@ -90,7 +90,7 @@ Need a different model per task — a live `ModelConfig`, or a `TestConfig` cass
 `run_agent` produces traces via OpenTelemetry, so it requires the tracing extra — `pip install "ag2[tracing]"`. Grading pre-existing traces with `evaluate_traces` does not need it.
 
 ```python linenums="1"
-from autogen.eval import BudgetThresholds, run_agent
+from ag2.eval import BudgetThresholds, run_agent
 
 result = await run_agent(
     suite,                                 # a Suite, or a bare str (single-prompt suite)
@@ -247,7 +247,7 @@ Value counts:
 `run_agent` is the *produce-and-grade* path: it runs your agent, then grades the trace. `evaluate_traces` is the *grade-only* path — for traces that already exist, captured elsewhere. The grading is identical; only the source differs.
 
 ```python linenums="1"
-from autogen.eval import DirectoryTraceSource, evaluate_traces
+from ag2.eval import DirectoryTraceSource, evaluate_traces
 
 result = await evaluate_traces(
     DirectoryTraceSource("./captured-traces"),   # a folder of saved traces
@@ -277,9 +277,9 @@ Reconstruction understands **two span dialects**, auto-detected per trace, so tr
 Just like `agent.ask(stream=...)`, `run_agent`, `run_variants`, and `run_pairwise` all accept a `stream`. Pass one and the runner publishes **eval lifecycle events** to it as the run unfolds — so you observe an evaluation with the same machinery you use on an agent (`subscribe`, `where`, the watch system, persistent backends). Nothing is printed for you; you attach the observer and render however you like.
 
 ```python linenums="1"
-from autogen.stream import MemoryStream
-from autogen.eval import run_variants
-from autogen.eval.events import VariantCompleted
+from ag2.stream import MemoryStream
+from ag2.eval import run_variants
+from ag2.eval.events import VariantCompleted
 
 stream = MemoryStream()
 
@@ -291,7 +291,7 @@ stream.where(VariantCompleted).subscribe(on_variant)
 board = await run_variants(suite, variants=variants, scorers=[...], store_dir="runs", stream=stream)
 ```
 
-The events live in `autogen.eval.events` and are all transient — observational only, since the durable record of a run is its persisted JSON:
+The events live in `ag2.eval.events` and are all transient — observational only, since the durable record of a run is its persisted JSON:
 
 | Event | Emitted by | When |
 |---|---|---|
@@ -302,7 +302,7 @@ The events live in `autogen.eval.events` and are all transient — observational
 | `PairwiseStarted` / `PairwiseCompared` / `PairwiseCompleted` | `run_pairwise` | around the run and each head-to-head comparison |
 
 !!! tip "Ready-made console output"
-    For a quick console view without writing a callback, subscribe the built-in `console_reporter` (from `autogen.eval`): `#!python stream.subscribe(console_reporter)`. It's just an opt-in observer — no `run_agent()` flag — so swap in your own callback whenever you want different output.
+    For a quick console view without writing a callback, subscribe the built-in `console_reporter` (from `ag2.eval`): `#!python stream.subscribe(console_reporter)`. It's just an opt-in observer — no `run_agent()` flag — so swap in your own callback whenever you want different output.
 
 ## Exceptions don't abort the run
 

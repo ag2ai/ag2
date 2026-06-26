@@ -23,9 +23,9 @@ Every strategy implements the same shape:
 
 ```python linenums="1"
 from typing import Protocol
-from autogen import Context
-from autogen.events import BaseEvent
-from autogen.knowledge import KnowledgeStore
+from ag2 import Context
+from ag2.events import BaseEvent
+from ag2.knowledge import KnowledgeStore
 
 class CompactStrategy(Protocol):
     async def compact(
@@ -44,7 +44,7 @@ Returns a new event list that **replaces** the current history. Strategies must 
 A dataclass describing when compaction should fire. Any configured threshold that is exceeded triggers compaction.
 
 ```python linenums="1"
-from autogen.compact import CompactTrigger
+from ag2.compact import CompactTrigger
 
 trigger = CompactTrigger(
     max_events=200,           # fire when history exceeds 200 events
@@ -59,15 +59,15 @@ Leaving a field at `0` disables that threshold. `CompactTrigger()` alone does no
 
 ## Built-in strategies
 
-Both built-ins are importable from `#!python autogen.compact`.
+Both built-ins are importable from `#!python ag2.compact`.
 
 ### TailWindowCompact
 
 Keeps the last N events, drops the rest. Zero LLM cost. Suitable when old context has diminishing value and recency is what matters.
 
 ```python linenums="1" hl_lines="5 7"
-from autogen.compact import TailWindowCompact
-from autogen.knowledge import MemoryKnowledgeStore
+from ag2.compact import TailWindowCompact
+from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 compact = TailWindowCompact(target=50)
@@ -84,9 +84,9 @@ Passing a `KnowledgeStore` is optional. If provided, dropped events are persiste
 Summarizes the dropped portion via one LLM call, inserts a `CompactionSummary` event at the head of retained history. Use when you want to keep some sense of the old conversation instead of just forgetting it.
 
 ```python linenums="1" hl_lines="6-9 11"
-from autogen.compact import SummarizeCompact
-from autogen.config import OpenAIConfig
-from autogen.knowledge import MemoryKnowledgeStore
+from ag2.compact import SummarizeCompact
+from ag2.config import OpenAIConfig
+from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 compact = SummarizeCompact(
@@ -108,7 +108,7 @@ The summarization model is independent from the agent's main model — pick a sm
 The synthetic event inserted by `SummarizeCompact` at the head of history.
 
 ```python linenums="1"
-from autogen.compact import CompactionSummary
+from ag2.compact import CompactionSummary
 
 summary = CompactionSummary(
     summary="User asked about gardening and sourdough; decisions made about ...",
@@ -123,10 +123,10 @@ summary = CompactionSummary(
 Pass the strategy + trigger through [`KnowledgeConfig`](/docs/user-guide/agent_harness#knowledge-knowledgeconfig). The Agent wires a `_CompactionMiddleware` that fires the strategy automatically after each turn when the trigger threshold is crossed.
 
 ```python linenums="1" hl_lines="10-14"
-from autogen import Agent, KnowledgeConfig
-from autogen.compact import CompactTrigger, TailWindowCompact
-from autogen.config import OpenAIConfig
-from autogen.knowledge import MemoryKnowledgeStore
+from ag2 import Agent, KnowledgeConfig
+from ag2.compact import CompactTrigger, TailWindowCompact
+from ag2.config import OpenAIConfig
+from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 agent = Agent(
@@ -155,7 +155,7 @@ The failure path is the one that matters: the strategy exception is also logged 
 If you're not using `Agent` (custom harness, tests, one-off scripts), call `#!python await strategy.compact(...)` yourself:
 
 ```python linenums="1"
-from autogen.compact import CompactTrigger, TailWindowCompact
+from ag2.compact import CompactTrigger, TailWindowCompact
 
 trigger = CompactTrigger(max_events=200)
 compact = TailWindowCompact(target=100)
@@ -178,8 +178,8 @@ Any object with an `async compact(events, ctx, store)` method satisfies the prot
 - **Segmented summarization.** Run `SummarizeCompact` in chunks to produce multiple `CompactionSummary` events over time rather than one big one.
 
 ```python linenums="1"
-from autogen.events import BaseEvent, ToolCallEvent, ToolResultEvent
-from autogen.knowledge import KnowledgeStore
+from ag2.events import BaseEvent, ToolCallEvent, ToolResultEvent
+from ag2.knowledge import KnowledgeStore
 
 class DropOldToolEvents:
     """Keep conversation events; drop tool events older than the last K."""

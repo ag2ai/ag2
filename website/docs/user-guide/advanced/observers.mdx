@@ -11,8 +11,8 @@ Use observers when you want to monitor agent behavior (logging, metrics, debuggi
 Use the `#!python observer()` function to pair an event condition with a callback. The first argument is the event type (or condition) to match, the second is an optional callback:
 
 ```python linenums="1" hl_lines="4-5"
-from autogen import observer
-from autogen.events import ModelResponse
+from ag2 import observer
+from ag2.events import ModelResponse
 
 @observer(ModelResponse)
 async def log_response(event: ModelResponse) -> None:
@@ -26,9 +26,9 @@ async def log_response(event: ModelResponse) -> None:
 Pass observers when creating the agent. These observers are active for every `#!python agent.ask()` call:
 
 ```python linenums="1" hl_lines="12"
-from autogen import Agent, observer
-from autogen.config import OpenAIConfig
-from autogen.events import ModelResponse, ToolCallEvent
+from ag2 import Agent, observer
+from ag2.config import OpenAIConfig
+from ag2.events import ModelResponse, ToolCallEvent
 
 @observer(ModelResponse)
 def on_response(event: ModelResponse) -> None:
@@ -48,7 +48,7 @@ reply = await agent.ask("Hello!")
 Use `#!python @agent.observer()` to register an observer after agent creation. This mirrors the `#!python @agent.tool()` and `#!python @agent.prompt()` patterns:
 
 ```python linenums="1" hl_lines="8-10"
-from autogen import Agent
+from ag2 import Agent
 
 agent = Agent(
     "assistant",
@@ -74,7 +74,7 @@ reply = await agent.ask(
 Constructor-level and per-call observers can be combined — both will fire:
 
 ```python linenums="1" hl_lines="6 12"
-from autogen import Agent
+from ag2 import Agent
 
 agent = Agent(
     "assistant",
@@ -94,7 +94,7 @@ reply = await agent.ask(
 Observers support the same condition system as [stream subscriptions](/docs/user-guide/advanced/stream). You can filter by event type, combine types, or match on field values:
 
 ```python linenums="1" hl_lines="4 9 14 19"
-from autogen.events import ModelRequest, ModelResponse, ToolCallEvent
+from ag2.events import ModelRequest, ModelResponse, ToolCallEvent
 
 # Single event type
 @agent.observer(ModelResponse)
@@ -122,8 +122,8 @@ def on_non_tool(event) -> None:
 Observer callbacks support the same dependency injection features as [Agent Tools](/docs/user-guide/tools/tools/) and [stream subscribers](/docs/user-guide/advanced/stream/) — `Context`, `Inject`, `Depends`, and `Variable`:
 
 ```python linenums="1" hl_lines="5"
-from autogen import Context, observer
-from autogen.events import ModelResponse
+from ag2 import Context, observer
+from ag2.events import ModelResponse
 
 @observer(ModelResponse)
 async def track(event: ModelResponse, ctx: Context) -> None:
@@ -183,9 +183,9 @@ Two ready-to-use `BaseObserver` subclasses ship with AG2:
 Detects repetitive tool-call patterns. Maintains a sliding window of recent tool calls and emits a `WARNING` alert when `repeat_threshold` consecutive identical calls (same tool name and arguments) are observed.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.observer import LoopDetector
-from autogen.config import OpenAIConfig
+from ag2 import Agent
+from ag2.observer import LoopDetector
+from ag2.config import OpenAIConfig
 
 agent = Agent(
     "poller",
@@ -199,9 +199,9 @@ agent = Agent(
 Tracks cumulative token usage across `ModelResponse` and `TaskCompleted` events. Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.observer import TokenMonitor
-from autogen.config import OpenAIConfig
+from ag2 import Agent
+from ag2.observer import TokenMonitor
+from ag2.config import OpenAIConfig
 
 agent = Agent(
     "assistant",
@@ -215,8 +215,8 @@ agent = Agent(
 Both built-ins (and any `BaseObserver` you write) emit `ObserverAlert` events on the stream. Subscribe to them like any other event:
 
 ```python linenums="1"
-from autogen import MemoryStream
-from autogen.events import ObserverAlert
+from ag2 import MemoryStream
+from ag2.events import ObserverAlert
 
 stream = MemoryStream()
 
@@ -228,17 +228,17 @@ def surface_alerts(event: ObserverAlert) -> None:
 !!! note
     `ObserverAlert` is emitted to the stream and persisted in history, but **is not rendered back to the LLM** by the default provider mappers. If you want the agent itself to react to alerts, write a [Middleware](/docs/user-guide/middleware) that converts alerts into follow-up messages.
 
-Severity levels live in `autogen.events.Severity`: `INFO`, `WARNING`, `CRITICAL`, `FATAL`.
+Severity levels live in `ag2.events.Severity`: `INFO`, `WARNING`, `CRITICAL`, `FATAL`.
 
 ### Building a custom observer
 
 Subclass `BaseObserver`, pick a [Watch](/docs/user-guide/advanced/watches), implement `process()`:
 
 ```python linenums="1" hl_lines="10 13 17-21"
-from autogen import Context
-from autogen.observer import BaseObserver
-from autogen.watch import CadenceWatch
-from autogen.events import BaseEvent, ModelResponse, ObserverAlert, Severity
+from ag2 import Context
+from ag2.observer import BaseObserver
+from ag2.watch import CadenceWatch
+from ag2.events import BaseEvent, ModelResponse, ObserverAlert, Severity
 
 class AvgCompletionObserver(BaseObserver):
     """Every N responses, emit an INFO alert with the average completion-token count."""
@@ -261,8 +261,8 @@ class AvgCompletionObserver(BaseObserver):
 Register it like any other observer:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import OpenAIConfig
+from ag2 import Agent
+from ag2.config import OpenAIConfig
 
 agent = Agent(
     "assistant",

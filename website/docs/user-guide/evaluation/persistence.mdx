@@ -17,7 +17,7 @@ Every `run_agent()` writes a JSON file to `store_dir/<run_id>.json` before retur
   "created_at": "2026-05-11T14:23:00+00:00",
   "duration_ms": 5292,
   "suite": { "name": "dataset", "size": 5, "source": "eval/dataset.jsonl" },
-  "target": "autogen.agent:Agent",
+  "target": "ag2.agent:Agent",
   "concurrency": 4,
   "tasks": [
     {
@@ -57,7 +57,7 @@ The per-task `trace_ref` is the real OpenTelemetry trace id of that task's spans
 Persistence pays off when you compare two runs: *"did my change make the agent better or worse?"*. Load a past run with `load_run(path)` and `diff` the current one against it.
 
 ```python linenums="1"
-from autogen.eval import load_run, run_agent
+from ag2.eval import load_run, run_agent
 
 baseline = load_run("runs/last_release.json")          # a previously saved run
 current = await run_agent(suite, agent=my_new_agent, scorers=[...], store_dir="runs")
@@ -108,7 +108,7 @@ You now have `runs/blog-writer/v1.json`. Read the scorecard and note what's weak
 You tweak the prompt to always end with a call to action, and re-run against the **same suite** with a new `run_id`:
 
 ```python linenums="1"
-from autogen.eval import load_run
+from ag2.eval import load_run
 
 current = await run_agent(
     suite, agent=agent_v2, scorers=SCORERS,

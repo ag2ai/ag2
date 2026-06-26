@@ -8,8 +8,8 @@ sidebarTitle: Client
 ## Minimal Client
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.a2a import A2AConfig
+from ag2 import Agent
+from ag2.a2a import A2AConfig
 
 async def main() -> None:
     remote = Agent(
@@ -60,9 +60,9 @@ Tools declared on the **client** are advertised to the server in the AG2 client-
 ```python linenums="1" hl_lines="7-9 14"
 from datetime import datetime
 
-from autogen import Agent
-from autogen.a2a import A2AConfig
-from autogen.tools import tool
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+from ag2.tools import tool
 
 @tool(description="Return the user's local wall-clock time as ISO-8601.")
 def get_local_time() -> str:
@@ -86,9 +86,9 @@ The same agent can mix client-side and server-side tools — server tools execut
 A remote A2A agent plugs into a local `#!python Agent` like any other delegate via `#!python Agent.as_tool()`. The local LLM decides when to delegate; the wrapper exposes a `#!python task_<name>` tool that takes an `objective` (and optional `context`).
 
 ```python linenums="1" hl_lines="14"
-from autogen import Agent
-from autogen.a2a import A2AConfig
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+from ag2.config import AnthropicConfig
 
 researcher = Agent(
     "researcher",
@@ -135,7 +135,7 @@ This composes naturally with several remotes — give each `#!python as_tool()` 
 When the card has already been resolved (discovery service, on-disk cache), `#!python A2AConfig.from_card(...)` skips the network round-trip on connect:
 
 ```python linenums="1"
-from autogen.a2a import A2AConfig
+from ag2.a2a import A2AConfig
 
 config = A2AConfig.from_card(card, prefer="jsonrpc", timeout=30.0)
 ```

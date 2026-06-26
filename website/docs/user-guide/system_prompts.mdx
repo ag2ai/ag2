@@ -10,7 +10,7 @@ sidebarTitle: Prompt Management
 Agents can be initialized with a static system prompt. You can provide a single string or a list of strings:
 
 ```python linenums="1" hl_lines="6 12-15"
-from autogen import Agent
+from ag2 import Agent
 
 # Single string prompt
 agent = Agent(
@@ -39,7 +39,7 @@ Dynamic prompt functions support the same powerful execution context capabilitie
 Dynamic prompts are evaluated only once at the beginning of the conversation, and their results are appended to the static prompts and reused for subsequent turns.
 
 ```python linenums="1" hl_lines="5-11"
-from autogen import Agent, Context
+from ag2 import Agent, Context
 
 agent = Agent("assistant")
 
@@ -55,7 +55,7 @@ async def dynamic_sysprompt(ctx: Context) -> str:
 Alternatively, you can pass a callable directly to the `prompt` parameter, or mix static strings and callables in a list:
 
 ```python linenums="1" hl_lines="9"
-from autogen import Agent
+from ag2 import Agent
 
 def get_sysprompt() -> str:
     # Returns a string for the prompt, evaluated at the beginning of the conversation
@@ -95,8 +95,8 @@ reply = await agent.ask(
 For continuous and event-driven prompt updates, you can mutate `context.prompt` dynamically from an event subscriber. This allows you to respond to specific events in the stream and adjust the agent's behavior on the fly during an ongoing conversation. See the [Stream](/docs/user-guide/advanced/stream) documentation for more details on this advanced feature.
 
 ```python linenums="1" hl_lines="11"
-from autogen import Agent, Context, MemoryStream
-from autogen.events import ModelRequest
+from ag2 import Agent, Context, MemoryStream
+from ag2.events import ModelRequest
 
 agent = Agent("assistant", prompt="You are a helpful assistant.")
 stream = MemoryStream()

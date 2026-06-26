@@ -36,8 +36,8 @@ The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prom
 A list of [`AssemblyPolicy`](/docs/user-guide/advanced/assembly) instances. When non-empty, the Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain so your policies transform `(prompts, events)` before every LLM call.
 
 ```python linenums="1" hl_lines="11-15"
-from autogen import Agent
-from autogen.policies import (
+from ag2 import Agent
+from ag2.policies import (
     AlertPolicy,
     SlidingWindowPolicy,
     WorkingMemoryPolicy,
@@ -85,11 +85,11 @@ class KnowledgeConfig:
 | `bootstrap` | Runs once on first use to seed the store. `None` falls back to `#!python DefaultBootstrap(mention_tool=expose_tool)`, so the generated SKILL.md text matches whether the LLM can actually call the `knowledge` tool. |
 
 ```python linenums="1" hl_lines="13-19"
-from autogen import Agent, KnowledgeConfig
-from autogen.aggregate import AggregateTrigger, ConversationSummaryAggregate
-from autogen.compact import CompactTrigger, TailWindowCompact
-from autogen.knowledge import DiskKnowledgeStore
-from autogen.policies import WorkingMemoryPolicy
+from ag2 import Agent, KnowledgeConfig
+from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
+from ag2.compact import CompactTrigger, TailWindowCompact
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.policies import WorkingMemoryPolicy
 from pathlib import Path
 
 store = DiskKnowledgeStore(Path("./knowledge"))
@@ -140,7 +140,7 @@ class TaskConfig:
 By default a sub-task Agent inherits **all** of the parent's user-supplied tools. Sub-tasks are themselves constructed with `tasks=False` (the Agent default), so they have no `run_subtask` / `run_subtasks` tools — recursive delegation is structurally impossible and no depth limit is needed.
 
 ```python linenums="1" hl_lines="7-11"
-from autogen import Agent, TaskConfig
+from ag2 import Agent, TaskConfig
 
 agent = Agent(
     "orchestrator",

@@ -71,7 +71,7 @@ Each method runs at a specific moment:
 | `build_packet_envelope` | 2 | Any time, by any client | Construct an `#!python EV_PACKET` envelope (workflow encodes `handoff` / `context_set` here) |
 | `tools_for` | 3 | Per turn, by the default handler | The LLM tools this participant gets this turn — see [Network Tools → Channel-level tools](/docs/user-guide/network/network_assigned_tools#channel-level-tools-adaptertools_for) |
 
-Module-level defaults are public, so a custom adapter (or a bridge) can delegate to them directly: `#!python default_build_text_envelope` / `#!python default_build_packet_envelope` (emit plain `#!python EV_TEXT` / `#!python EV_PACKET`) and `#!python default_tools_for` (returns `#!python []`). All three are importable from `#!python autogen.network`.
+Module-level defaults are public, so a custom adapter (or a bridge) can delegate to them directly: `#!python default_build_text_envelope` / `#!python default_build_packet_envelope` (emit plain `#!python EV_TEXT` / `#!python EV_PACKET`) and `#!python default_tools_for` (returns `#!python []`). All three are importable from `#!python ag2.network`.
 
 You don't normally implement this protocol yourself — the four built-ins cover most cases, and the workflow adapter is parameterised via `#!python TransitionGraph` for custom orchestrations. The `#!python ChannelAdapter` Protocol is exposed for completeness and for advanced use cases.
 
@@ -133,7 +133,7 @@ flowchart LR
 ## ChannelMetadata
 
 ```python linenums="1"
-from autogen.network import (
+from ag2.network import (
     Participant,
     ParticipantRole,
     ParticipantSchema,

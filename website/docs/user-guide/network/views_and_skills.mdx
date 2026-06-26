@@ -50,7 +50,7 @@ All four views honour audience: an envelope addressed only to `[bob]` doesn't ap
     In a **3+ party** channel (discussion, workflow), every non-self envelope collapses into the same `#!python role: "user"` stream. Without a sender label the LLM can't tell which peer said which message. The `#!python Named*` variants put `#!python [<sender name>]:` on each non-self line so the orchestrator / next speaker can route accurately. This is the default for N-party adapters precisely because the role bit alone isn't enough.
 
 ```python linenums="1"
-from autogen.network import FullTranscript, WindowedSummary
+from ag2.network import FullTranscript, WindowedSummary
 
 view = WindowedSummary(recent_n=12)
 projected = await view.project(
@@ -63,7 +63,7 @@ projected = await view.project(
 ## Resolving the Default
 
 ```python linenums="1"
-from autogen.network import resolve_view_policy
+from ag2.network import resolve_view_policy
 
 policy = resolve_view_policy(client, metadata)
 ```
@@ -76,8 +76,8 @@ Implement the protocol, give it a unique `name`, and pass to the policy resolver
 
 ```python linenums="1"
 from typing import ClassVar
-from autogen.events import BaseEvent, ModelMessage, ModelRequest, TextInput
-from autogen.network import (
+from ag2.events import BaseEvent, ModelMessage, ModelRequest, TextInput
+from ag2.network import (
     ChannelMetadata,
     EV_TEXT,
     Envelope,
@@ -117,11 +117,11 @@ class FromOneOnly(ViewPolicy):
         return out
 ```
 
-The `#!python BaseEvent` types you emit determine how the LLM sees the history: `#!python ModelRequest` for messages "from the user," `#!python ModelMessage` for messages "from the assistant," and so on. Look at `#!python autogen.events` for the full taxonomy.
+The `#!python BaseEvent` types you emit determine how the LLM sees the history: `#!python ModelRequest` for messages "from the user," `#!python ModelMessage` for messages "from the assistant," and so on. Look at `#!python ag2.events` for the full taxonomy.
 
 ## CompactionSummary
 
-When `#!python WindowedSummary` elides envelopes outside its window, it prepends a `#!python CompactionSummary(text="...elided N turns")` event. This is from `autogen.compact` — the LLM sees it as a system-supplied note that "there is earlier history I'm not showing you." This keeps the LLM's behaviour grounded in long-running discussions without exploding the token budget.
+When `#!python WindowedSummary` elides envelopes outside its window, it prepends a `#!python CompactionSummary(text="...elided N turns")` event. This is from `ag2.compact` — the LLM sees it as a system-supplied note that "there is earlier history I'm not showing you." This keeps the LLM's behaviour grounded in long-running discussions without exploding the token budget.
 
 ## Skills (Markdown Frontmatter)
 
@@ -153,7 +153,7 @@ Limitations: not for code review or numerical analysis.
 The hub stores the markdown verbatim and parses the frontmatter via `#!python parse_skill_frontmatter`:
 
 ```python linenums="1"
-from autogen.network import parse_skill_frontmatter, ParsedSkill
+from ag2.network import parse_skill_frontmatter, ParsedSkill
 
 parsed: ParsedSkill = parse_skill_frontmatter(skill_md)
 print(parsed.frontmatter)  # {"title": "Research Assistant", "expertise": [...]}
@@ -165,7 +165,7 @@ print(parsed.body)         # the markdown body
 When no `skill_md` is provided, the hub generates one from the resume so peer lookup doesn't return empty handles:
 
 ```python linenums="1"
-from autogen.network import render_fallback_skill
+from ag2.network import render_fallback_skill
 
 skill_md = render_fallback_skill(passport, resume)
 ```

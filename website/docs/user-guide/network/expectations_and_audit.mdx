@@ -69,8 +69,8 @@ When the hub is open, an expectation sweeper task wakes every `expectation_sweep
 For deterministic tests / examples:
 
 ```python linenums="1" hl_lines="4-7 10-11"
-from autogen.network import Hub
-from autogen.knowledge import MemoryKnowledgeStore
+from ag2.network import Hub
+from ag2.knowledge import MemoryKnowledgeStore
 
 hub = await Hub.open(
     MemoryKnowledgeStore(),
@@ -106,7 +106,7 @@ Each record is a plain dict with at minimum `kind` and `at`; `kind`-specific fie
 
 ### Audit kinds
 
-Re-exported as constants from `#!python autogen.network`:
+Re-exported as constants from `#!python ag2.network`:
 
 | Constant | Notes |
 |---|---|
@@ -152,7 +152,7 @@ A `#!python HubListener` is a **read-only** observer. Attach one with `#!python 
 `#!python BaseHubListener` is a no-op base — subclass it and override only the events you care about (you don't have to implement the full Protocol surface). The built-in `#!python AuditLog` *is* a `#!python HubListener`, pre-registered on every hub, which is why a fresh hub already reports `registered_listeners: 1`.
 
 ```python linenums="1"
-from autogen.network import BaseHubListener
+from ag2.network import BaseHubListener
 
 class MetricsListener(BaseHubListener):
     async def on_envelope_posted(self, envelope, metadata) -> None:
@@ -185,7 +185,7 @@ hub.register_listener(MetricsListener())
 The same `#!python on_*` methods are available on `#!python Hub` itself (with no-op defaults) — so if you're building a custom hub you can override them directly rather than registering the hub as a listener of itself:
 
 ```python linenums="1"
-from autogen.network import Hub
+from ag2.network import Hub
 
 class ObservingHub(Hub):
     async def on_envelope_posted(self, envelope, metadata) -> None:
@@ -239,7 +239,7 @@ The default `#!python RuleBasedArbiter` enforces the per-agent `#!python Rule` (
 - **Start from scratch** — subclass `#!python BaseHubArbiter` (all gates return `#!python Allow` by default) and implement only the ones you need.
 
 ```python linenums="1"
-from autogen.network import RuleBasedArbiter, Allow, Deny, EV_TEXT
+from ag2.network import RuleBasedArbiter, Allow, Deny, EV_TEXT
 
 class ContentGuardArbiter(RuleBasedArbiter):
     BANNED = ("password", "ssn")
@@ -276,7 +276,7 @@ Same shape as the built-ins:
 
 ```python linenums="1"
 from typing import ClassVar
-from autogen.network.hub import (
+from ag2.network.hub import (
     ExpectationContext,
     ExpectationEvaluator,
     Violation,

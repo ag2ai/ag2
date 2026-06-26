@@ -15,7 +15,7 @@ To get started with the `DeepResearchAgent` agent, follow these steps:
     pip install -U ag2[openai,browser-use]
     ```
     <Tip>
-    If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+    If you have been using `ag2` or `ag2`, all you need to do is upgrade it using:
     ```bash
     pip install -U autogen[openai,browser-use]
     ```
@@ -23,7 +23,7 @@ To get started with the `DeepResearchAgent` agent, follow these steps:
     ```bash
     pip install -U ag2[openai,browser-use]
     ```
-    as `autogen` and `ag2` are aliases for the same PyPI package.
+    as `ag2` and `ag2` are aliases for the same PyPI package.
     </Tip>
 2. Set up Playwright:
 
@@ -47,7 +47,7 @@ You're all set! Now you can start solving complex tasks.
 import os
 import nest_asyncio
 
-from autogen.agents.experimental import DeepResearchAgent
+from ag2.agents.experimental import DeepResearchAgent
 
 nest_asyncio.apply()
 ```
@@ -63,7 +63,7 @@ Models like `gpt-5-nano` often don’t perform well enough for complex tasks.
 </Tip>
 
 ```python
-from autogen import LLMConfig
+from ag2 import LLMConfig
 
 llm_config = LLMConfig(config_list={
     "api_type": "openai",

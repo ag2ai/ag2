@@ -55,10 +55,10 @@ The `#!python can_send` probe lets each default handler skip its LLM call when i
 ## Smallest Example
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     ORDERING_ROUND_ROBIN,
     Hub,

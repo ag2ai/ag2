@@ -16,7 +16,7 @@ You can pass variables at different levels depending on how long they need to pe
 When you want a variable to be available across all interactions with a specific agent, you can initialize the agent with default variables.
 
 ```python linenums="1"
-from autogen import Agent
+from ag2 import Agent
 
 # This variable will be available in all tool calls executed by this agent
 agent = Agent(
@@ -59,7 +59,7 @@ await agent.ask(
 The most straightforward way to access variables inside a tool is by requesting the `Context` object. By adding an argument annotated with `Context`, the framework will automatically inject the current execution context, which contains the `.variables` dictionary.
 
 ```python linenums="1" hl_lines="4 6-7"
-from autogen import Context, tool
+from ag2 import Context, tool
 
 @tool
 def process_data(context: Context) -> str:
@@ -76,7 +76,7 @@ Instead of passing the entire `Context` object, you can instruct the framework t
 
 ```python linenums="1" hl_lines="9"
 from typing import Annotated
-from autogen import Variable, tool
+from ag2 import Variable, tool
 
 @tool
 def fetch_user_data(

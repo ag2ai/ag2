@@ -37,7 +37,7 @@ To configure a model, import the specific provider's configuration class and ini
 <Tabs>
   <Tab title="OpenAI Responses">
 ```python linenums="1"
-from autogen.config import OpenAIResponsesConfig
+from ag2.config import OpenAIResponsesConfig
 
 # Configure an OpenAI Responses API model
 config = OpenAIResponsesConfig(
@@ -50,7 +50,7 @@ config = OpenAIResponsesConfig(
 
   <Tab title="OpenAI">
 ```python linenums="1"
-from autogen.config import OpenAIConfig
+from ag2.config import OpenAIConfig
 
 # Configure an OpenAI model
 config = OpenAIConfig(
@@ -64,7 +64,7 @@ config = OpenAIConfig(
 
   <Tab title="Anthropic">
 ```python linenums="1"
-from autogen.config import AnthropicConfig
+from ag2.config import AnthropicConfig
 
 # Configure an Anthropic model
 config = AnthropicConfig(
@@ -77,7 +77,7 @@ config = AnthropicConfig(
 
   <Tab title="Gemini">
 ```python linenums="1"
-from autogen.config import GeminiConfig
+from ag2.config import GeminiConfig
 
 # Configure a Gemini model
 config = GeminiConfig(
@@ -89,7 +89,7 @@ config = GeminiConfig(
   </Tab>
   <Tab title="Amazon Bedrock">
 ```python linenums="1"
-from autogen.config import BedrockConfig
+from ag2.config import BedrockConfig
 
 # Configure an Amazon Bedrock model (Converse API)
 config = BedrockConfig(
@@ -104,7 +104,7 @@ Credentials follow the standard AWS resolution chain: explicit `aws_access_key_i
 
   <Tab title="Ollama">
 ```python linenums="1"
-from autogen.config import OllamaConfig
+from ag2.config import OllamaConfig
 
 # Configure an Ollama model
 config = OllamaConfig(
@@ -116,7 +116,7 @@ config = OllamaConfig(
 
   <Tab title="DashScope">
 ```python linenums="1"
-from autogen.config import DashScopeConfig
+from ag2.config import DashScopeConfig
 
 # Configure a DashScope model
 config = DashScopeConfig(
@@ -129,7 +129,7 @@ config = DashScopeConfig(
 
   <Tab title="xAI">
 ```python linenums="1"
-from autogen.config import XAIConfig
+from ag2.config import XAIConfig
 
 # Configure an xAI Grok model
 config = XAIConfig(
@@ -142,7 +142,7 @@ config = XAIConfig(
 
   <Tab title="Z.AI">
 ```python linenums="1"
-from autogen.config import ZAIConfig
+from ag2.config import ZAIConfig
 
 # Configure a Z.AI GLM model
 config = ZAIConfig(
@@ -166,7 +166,7 @@ For security and convenience, you don't need to hardcode your API keys. If `api_
 The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `ZAI_API_KEY`).
 
 ```python linenums="1"
-from autogen.config import OpenAIConfig
+from ag2.config import OpenAIConfig
 
 # Automatically falls back to OPENAI_API_KEY from the environment
 config = OpenAIConfig(model="gpt-5")
@@ -186,7 +186,7 @@ export AWS_DEFAULT_REGION=us-east-1
 ```
 
 ```python linenums="1"
-from autogen.config import BedrockConfig
+from ag2.config import BedrockConfig
 
 # Auth from AWS_BEARER_TOKEN_BEDROCK, region from AWS_DEFAULT_REGION
 config = BedrockConfig(model="anthropic.claude-sonnet-4-5-20250929-v1:0")
@@ -207,7 +207,7 @@ Authentication accepts any of the following:
 <Tabs>
   <Tab title="Service account key file">
 ```python linenums="1" hl_lines="7"
-from autogen.config import VertexAIConfig
+from ag2.config import VertexAIConfig
 
 config = VertexAIConfig(
     model="gemini-3-flash-preview",
@@ -224,7 +224,7 @@ The service account needs the **Vertex AI User** (`roles/aiplatform.user`) IAM r
 
   <Tab title="Application Default Credentials">
 ```python linenums="1"
-from autogen.config import VertexAIConfig
+from ag2.config import VertexAIConfig
 
 # Run `gcloud auth application-default login` first, or ensure
 # GOOGLE_APPLICATION_CREDENTIALS points to a key file. With nothing
@@ -240,7 +240,7 @@ config = VertexAIConfig(
   <Tab title="Pre-built Credentials object">
 ```python linenums="1" hl_lines="4-6 12"
 import google.auth
-from autogen.config import VertexAIConfig
+from ag2.config import VertexAIConfig
 
 creds, _ = google.auth.default(
     scopes=["https://www.googleapis.com/auth/cloud-platform"],
@@ -279,7 +279,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 ```
 
 ```python linenums="1"
-from autogen.config import VertexAIConfig
+from ag2.config import VertexAIConfig
 
 # All Vertex auth parameters resolved from the environment.
 config = VertexAIConfig(model="gemini-3-flash-preview")
@@ -292,7 +292,7 @@ Gemini 3 Pro models default to **dynamic / unbounded** thinking, which can cause
 Use `thinking_level` for **Gemini 3** models, or `thinking_budget` for **Gemini 2.5** models:
 
 ```python linenums="1" hl_lines="6 14"
-from autogen.config import GeminiConfig, VertexAIConfig
+from ag2.config import GeminiConfig, VertexAIConfig
 
 # Gemini 3 — bound thinking with a level
 gemini3 = GeminiConfig(
@@ -320,7 +320,7 @@ The number of thinking tokens consumed is reported on `ModelResponse.usage.think
 If `api_key` and `base_url` are not passed explicitly, the SDK resolves them from the `ZAI_API_KEY` and `ZAI_BASE_URL` environment variables; `base_url` otherwise defaults to the international endpoint (`https://api.z.ai/api/paas/v4`).
 
 ```python linenums="1"
-from autogen.config import ZAIConfig
+from ag2.config import ZAIConfig
 
 # Auth and endpoint resolved from ZAI_API_KEY / ZAI_BASE_URL when omitted
 config = ZAIConfig(model="glm-4.6", streaming=True)
@@ -331,7 +331,7 @@ config = ZAIConfig(model="glm-4.6", streaming=True)
 GLM models accept reasoning controls that map directly to the Z.AI API. Set `thinking` to toggle the reasoning pass (`True` enables it, `False` disables it, unset uses the model default) and `reasoning_effort` to bound how much the model thinks:
 
 ```python linenums="1" hl_lines="5 6"
-from autogen.config import ZAIConfig
+from ag2.config import ZAIConfig
 
 config = ZAIConfig(
     model="glm-4.6",
@@ -352,7 +352,7 @@ Reasoning content is streamed as `ModelReasoning` events, and reasoning tokens a
 If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAIConfig` class and specify a custom `base_url`.
 
 ```python linenums="1" hl_lines="6"
-from autogen.config import OpenAIConfig
+from ag2.config import OpenAIConfig
 
 # Configure a vLLM or other OpenAI-compatible endpoint
 config = OpenAIConfig(
@@ -368,7 +368,7 @@ config = OpenAIConfig(
 
     ```python linenums="1" hl_lines="8"
     import httpx
-    from autogen.config import OpenAIConfig
+    from ag2.config import OpenAIConfig
 
     config = OpenAIConfig(
         model="qwen-3",
@@ -385,7 +385,7 @@ Some OpenAI API-compatible providers require additional, provider-specific param
 This is useful for enabling features like extended thinking on self-hosted or third-party models:
 
 ```python linenums="1" hl_lines="7"
-from autogen.config import OpenAIConfig
+from ag2.config import OpenAIConfig
 
 # NVIDIA NIM
 nemotron = OpenAIConfig(
@@ -400,8 +400,8 @@ nemotron = OpenAIConfig(
 Model configurations are **immutable**. If you need to reuse a configuration for multiple agents with slight variations (e.g., changing the model version or adjusting the temperature), use the `.copy()` method. This creates a new updated instance without mutating the original configuration.
 
 ```python linenums="1" hl_lines="4 9 15"
-from autogen.agent import Agent
-from autogen.config import OpenAIConfig
+from ag2.agent import Agent
+from ag2.config import OpenAIConfig
 
 base_config = OpenAIConfig(model="gpt-5")
 
@@ -425,8 +425,8 @@ In many use cases, you may want to separate the logic of defining your agent (to
 You can accomplish this by passing the configuration to the `.ask()` method when interacting with the agent. This is especially useful for applications like web servers where the user might bring their own API key or choose a different model on the fly.
 
 ```python linenums="1" hl_lines="15-18"
-from autogen.agent import Agent
-from autogen.config import OpenAIConfig
+from ag2.agent import Agent
+from ag2.config import OpenAIConfig
 
 # Define an agent without an initial model config,
 # or with a default one you plan to override later
@@ -450,8 +450,8 @@ response = await agent.ask(
     Providing a configuration or client directly to the `ask()` method completely **overrides** the original model configuration assigned to the agent for that specific turn.
 
     ```python linenums="1" hl_lines="6 12"
-    from autogen.agent import Agent
-    from autogen.config import OpenAIConfig
+    from ag2.agent import Agent
+    from ag2.config import OpenAIConfig
 
     agent = Agent(
         "Assistant",

@@ -10,9 +10,9 @@ To answer "which is best?" — across models, prompts, tools, middleware, or who
 A `Variants` is a mapping of name → `Agent` instance, plus an `axis` label that records what you varied:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import GeminiConfig, OpenAIConfig
-from autogen.eval import Variants, run_variants
+from ag2 import Agent
+from ag2.config import GeminiConfig, OpenAIConfig
+from ag2.eval import Variants, run_variants
 
 board = await run_variants(
     suite,

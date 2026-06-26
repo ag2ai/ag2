@@ -50,11 +50,11 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from autogen import Agent, KnowledgeConfig
-from autogen.aggregate import AggregateTrigger, WorkingMemoryAggregate
-from autogen.config import GeminiConfig
-from autogen.knowledge import DiskKnowledgeStore
-from autogen.policies import ConversationPolicy, WorkingMemoryPolicy
+from ag2 import Agent, KnowledgeConfig
+from ag2.aggregate import AggregateTrigger, WorkingMemoryAggregate
+from ag2.config import GeminiConfig
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.policies import ConversationPolicy, WorkingMemoryPolicy
 
 def section(title: str) -> None:
     print(f"\n── {title} ───")

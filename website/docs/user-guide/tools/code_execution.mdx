@@ -21,9 +21,9 @@ AG2 supports two ways to let an agent run code: have the LLM provider execute it
 Some providers expose a server-side Python sandbox the model can drive directly. AG2 surfaces this through [`CodeExecutionTool`](/docs/user-guide/tools/builtin_tools#code-execution) — a declaration-only tool that maps to each provider's native capability:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import CodeExecutionTool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import CodeExecutionTool
 
 agent = Agent(
     "analyst",
@@ -39,7 +39,7 @@ See the [Built-in Tools page](/docs/user-guide/tools/builtin_tools#code-executio
 
 ## Remote Code Execution
 
-`SandboxCodeTool` exposes a `run_code(code, language)` function the agent can call. Because it's a regular function tool, it works on **any** model provider. Where the code actually runs is decided by the [`CodeEnvironment`](https://github.com/ag2ai/ag2/blob/main/autogen/tools/code/environment/base.py){.external-link target="_blank"} you hand it.
+`SandboxCodeTool` exposes a `run_code(code, language)` function the agent can call. Because it's a regular function tool, it works on **any** model provider. Where the code actually runs is decided by the [`CodeEnvironment`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/code/environment/base.py){.external-link target="_blank"} you hand it.
 
 !!! note "`environment` is required"
     `SandboxCodeTool` has no default backend. Pass `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation.
@@ -58,10 +58,10 @@ pip install "daytona>=0.171.0,<1"
 ```
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import SandboxCodeTool
-from autogen.extensions.daytona import DaytonaEnvironment
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SandboxCodeTool
+from ag2.extensions.daytona import DaytonaEnvironment
 
 agent = Agent(
     "analyst",
@@ -84,10 +84,10 @@ pip install "ag2[docker]"
 ```
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import SandboxCodeTool
-from autogen.extensions.docker import DockerEnvironment
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SandboxCodeTool
+from ag2.extensions.docker import DockerEnvironment
 
 agent = Agent(
     "analyst",
@@ -110,8 +110,8 @@ Safety defaults are deliberately strict:
 `SandboxCodeTool` only depends on the `CodeEnvironment` protocol, so any backend that satisfies it works — e2b, an SSH host, an internal CI runner.
 
 ```python linenums="1"
-from autogen.tools import SandboxCodeTool
-from autogen.tools.code import CodeEnvironment, CodeLanguage, CodeRunResult
+from ag2.tools import SandboxCodeTool
+from ag2.tools.code import CodeEnvironment, CodeLanguage, CodeRunResult
 
 class MyEnvironment(CodeEnvironment):
     @property
@@ -152,8 +152,8 @@ The same pattern works with `DockerEnvironment` (container stopped + removed) an
 `DaytonaEnvironment` accepts `Variable` markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
 
 ```python linenums="1"
-from autogen import Variable
-from autogen.extensions.daytona import DaytonaEnvironment
+from ag2 import Variable
+from ag2.extensions.daytona import DaytonaEnvironment
 
 env = DaytonaEnvironment(
     api_key=Variable("daytona_key"),  # resolved from ctx.variables["daytona_key"]

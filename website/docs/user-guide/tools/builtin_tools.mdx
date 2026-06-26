@@ -24,9 +24,9 @@ AG2 includes built-in tools that map to server-side capabilities offered by LLM 
 Gives the model access to real-time web search results.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import WebSearchTool, UserLocation
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import WebSearchTool, UserLocation
 
 agent = Agent(
     "researcher",
@@ -60,9 +60,9 @@ Not all parameters are supported by every provider. Unsupported parameters are s
 Fetches full content from specific URLs. Useful for reading documentation, articles, or PDFs.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import WebFetchTool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import WebFetchTool
 
 agent = Agent(
     "researcher",
@@ -93,9 +93,9 @@ agent = Agent(
 Lets the model write and run code inline during a conversation.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import CodeExecutionTool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import CodeExecutionTool
 
 agent = Agent(
     "analyst",
@@ -115,9 +115,9 @@ CodeExecutionTool(version="code_execution_20250825")
 Enables Claude to store and retrieve information across conversations. Claude can create, read, update, and delete files in a `/memories` directory.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import MemoryTool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import MemoryTool
 
 agent = Agent(
     "assistant",
@@ -134,9 +134,9 @@ agent = Agent(
 Gives the model the ability to run shell commands. The execution environment depends on the provider.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import ShellTool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import ShellTool
 
 agent = Agent(
     "devops",
@@ -148,10 +148,10 @@ agent = Agent(
 OpenAI supports configuring the execution environment:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import OpenAIResponsesConfig
-from autogen.tools import ShellTool
-from autogen.tools.builtin.shell import ContainerAutoEnvironment, NetworkPolicy
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.tools import ShellTool
+from ag2.tools.builtin.shell import ContainerAutoEnvironment, NetworkPolicy
 
 agent = Agent(
     "devops",
@@ -179,9 +179,9 @@ agent = Agent(
 Integrates external [MCP (Model Context Protocol)](https://modelcontextprotocol.io/){.external-link target="_blank"} servers, giving the model access to remote tools.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import MCPServerTool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import MCPServerTool
 
 agent = Agent(
     "assistant",
@@ -211,9 +211,9 @@ agent = Agent(
 `ImageGenerationTool` instructs the model to generate images inline during a conversation. Generated images are returned via `#!python reply.files`.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import OpenAIResponsesConfig
-from autogen.tools import ImageGenerationTool
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.tools import ImageGenerationTool
 
 agent = Agent(
     "designer",
@@ -243,9 +243,9 @@ for image in reply.files:
 ```python linenums="1"
 from datetime import datetime
 
-from autogen import Agent
-from autogen.config import XAIConfig
-from autogen.tools import XSearchTool
+from ag2 import Agent
+from ag2.config import XAIConfig
+from ag2.tools import XSearchTool
 
 agent = Agent(
     "researcher",
@@ -276,9 +276,9 @@ agent = Agent(
 `RetrievalTool` lets the model query a Z.AI knowledge base by id, grounding its answers in the retrieved documents.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import ZAIConfig
-from autogen.tools.builtin import RetrievalTool
+from ag2 import Agent
+from ag2.config import ZAIConfig
+from ag2.tools.builtin import RetrievalTool
 
 agent = Agent(
     "researcher",
@@ -307,7 +307,7 @@ Anthropic versions their server-side tools. Newer versions support dynamic filte
 Set the version on each built-in tool (defaults match the older Anthropic tool revisions):
 
 ```python linenums="1"
-from autogen.tools import WebFetchTool, WebSearchTool
+from ag2.tools import WebFetchTool, WebSearchTool
 
 tools = [
     WebSearchTool(version="web_search_20260209"),  # default: web_search_20250305

@@ -23,10 +23,10 @@ Start as small as possible: two questions, an agent, one check. This calls a rea
 ```python linenums="1"
 import asyncio
 
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.eval import Suite, run_agent
-from autogen.eval.scorers import final_answer_matches
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.eval import Suite, run_agent
+from ag2.eval.scorers import final_answer_matches
 
 # 1. the dataset — a couple of tasks, each with the expected answer
 suite = Suite.from_list([
@@ -91,8 +91,8 @@ It's a small labelled record, not a bare string, so a scorer can pick out the fi
 One check is rarely enough. A scorer is just a function that asks **one** question about a run. Mix the prebuilt ones with your own — a function decorated with `@scorer` that declares what it needs by name (`trace`, `outputs`, `reference_outputs`, …; here just `outputs`, the final answer):
 
 ```python linenums="1"
-from autogen.eval import scorer
-from autogen.eval.scorers import no_tool_errors, token_budget
+from ag2.eval import scorer
+from ag2.eval.scorers import no_tool_errors, token_budget
 
 @scorer
 def answered_briefly(outputs) -> bool:
@@ -113,7 +113,7 @@ Keep each scorer to a single, specific question — three small checks tell you 
 You don't want pre-merge CI calling a live model — slow, costly, flaky. Swap the model for a `TestConfig` cassette: a canned reply per task, so the run is deterministic and free.
 
 ```python linenums="1"
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 # Same agent as Step 1 — a canned reply per task_id
 canned = {"france": TestConfig("Paris"), "japan": TestConfig("Tokyo")}

@@ -31,7 +31,7 @@ Use agent **`middleware=[...]`** when the policy is global or shared across most
 
 ## API
 
-The public type alias is **`ToolMiddleware`** in `autogen.middleware`.
+The public type alias is **`ToolMiddleware`** in `ag2.middleware`.
 A hook is an **async** callable with the same parameters as `BaseMiddleware.on_tool_execution`, except the first argument is the inner **`ToolExecution`** (the next step in the chain), not `self`.
 
 - Pass **`middleware=[hook, ...]`** to **`@tool`**, **`Agent.tool`**, or **`Toolkit.tool`**.
@@ -41,10 +41,10 @@ A hook is an **async** callable with the same parameters as `BaseMiddleware.on_t
 ```python linenums="1" hl_lines="8-14 16"
 from typing import Annotated
 
-from autogen import Agent, Context, tool, Variable
-from autogen.config import OpenAIConfig
-from autogen.events import ToolCallEvent, ToolResultEvent
-from autogen.middleware import ToolExecution
+from ag2 import Agent, Context, tool, Variable
+from ag2.config import OpenAIConfig
+from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.middleware import ToolExecution
 
 async def add_request_id(
     call_next: ToolExecution,
@@ -70,9 +70,9 @@ agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
 Use `#!python tool.with_middleware()` to wrap a tool with additional hooks **without modifying** the original. The returned tool is an independent copy with the new middleware as the outermost layer:
 
 ```python linenums="1" hl_lines="16"
-from autogen import tool
-from autogen.events import ToolCallEvent, ToolResultEvent
-from autogen.middleware import ToolExecution
+from ag2 import tool
+from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.middleware import ToolExecution
 
 async def audit(
     call_next: ToolExecution, event: ToolCallEvent, context: Context,

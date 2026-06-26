@@ -10,7 +10,7 @@ Set up your AI coding assistant (Claude Code, Cursor, Copilot, Codex, Windsurf, 
 
 ## Why this matters
 
-AG2 (`autogen`) is an async, protocol-driven API. Models were largely trained on the older `autogen` / `pyautogen` surface, so out of the box an assistant will reach for stale patterns such as synchronous `ConversableAgent`, `initiate_chat`, and the like. The setup on this page gives your assistant three things it otherwise lacks: **AG2-specific skills**, an up-to-date **docs reference**, and **project rules** that keep it on the current AG2 API.
+AG2 (`ag2`) is an async, protocol-driven API. Models were largely trained on the older `autogen` / `pyautogen` surface, so out of the box an assistant will reach for stale patterns such as synchronous `ConversableAgent`, `initiate_chat`, and the like. The setup on this page gives your assistant three things it otherwise lacks: **AG2-specific skills**, an up-to-date **docs reference**, and **project rules** that keep it on the current AG2 API.
 
 !!! warning "Current API only"
     The earlier synchronous `ConversableAgent` / `initiate_chat` API has been removed from the package. Models were trained on it, so point your assistant at the current AG2 docs and skills, not legacy examples it may have memorized.
@@ -59,7 +59,7 @@ Skills teach patterns; the docs keep your assistant honest about the *exact* cur
 - **AG2 docs source (Markdown):** [`ag2ai/ag2/website/docs/user-guide`](https://github.com/ag2ai/ag2/tree/main/website/docs/user-guide){.external-link target="_blank"} — the raw `.mdx` your agent can read directly from GitHub.
 - **AG2 `llms.txt`:** [`https://docs.ag2.ai/latest/llms.txt`](https://docs.ag2.ai/latest/llms.txt){.external-link target="_blank"} — a machine-readable index of the AG2 docs following the [llms.txt standard](https://llmstxt.org/){.external-link target="_blank"}, plus [`llms-full.txt`](https://docs.ag2.ai/latest/llms-full.txt){.external-link target="_blank"} for the entire AG2 docs in one file. Both are AG2-scoped, so they never point your agent at the classic API.
 
-Then anchor your prompt: *"Build with `autogen` only. If a signature is unfamiliar, check the AG2 docs before writing code — do not use the classic `autogen` API."*
+Then anchor your prompt: *"Build with `ag2` only. If a signature is unfamiliar, check the AG2 docs before writing code — do not use the classic `autogen` API."*
 
 !!! warning "Prefer the official skills and docs"
     Generic docs-MCP servers and code indexers may surface outdated `ConversableAgent` / `initiate_chat` examples cached from older AG2 releases. Rely on the AG2 Skills and the docs links above, which always reflect the current API.
@@ -71,11 +71,11 @@ A rules file pins AG2 conventions for every session in your project. The open [A
 ```markdown
 # AGENTS.md
 
-This project is built on **AG2** (`autogen`). Follow these rules.
+This project is built on **AG2** (`ag2`). Follow these rules.
 
 ## API surface
-- Import only from `autogen` and its submodules (`autogen.config`,
-  `autogen.tools`, ...). Do NOT use the legacy `autogen` / `pyautogen`
+- Import only from `ag2` and its submodules (`ag2.config`,
+  `ag2.tools`, ...). Do NOT use the legacy `autogen` / `pyautogen`
   API (`ConversableAgent`, `initiate_chat`) — it has been removed.
 - Agents are async. Use `await agent.ask(...)` and `await reply.ask(...)`.
 
@@ -128,8 +128,8 @@ cp AGENTS.md .github/copilot-instructions.md
 ## Tips & caveats
 
 - **Start from the quickstart.** Have your assistant scaffold from `ag2-quickstart` rather than inventing structure — see [Agent Communication](/docs/user-guide/agents) and [Model Configuration](/docs/user-guide/model_configuration).
-- **Prefer the documented high-level API** (`autogen`, `autogen.tools`, `autogen.config`) over reaching into internals.
-- **Always review generated code.** Models still drift toward legacy `autogen` patterns; verify imports come from `autogen` and that calls are `await`ed.
+- **Prefer the documented high-level API** (`ag2`, `ag2.tools`, `ag2.config`) over reaching into internals.
+- **Always review generated code.** Models still drift toward legacy `autogen` patterns; verify imports come from `ag2` and that calls are `await`ed.
 - **Run the tests.** AG2 is async throughout — encourage your assistant to write and run [tests](/docs/user-guide/testing) with `TestConfig` instead of hitting a live model.
 
 !!! note "Going further"

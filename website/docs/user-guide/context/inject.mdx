@@ -18,7 +18,7 @@ The key difference between [Variables](../variables){.internal-link} and Depende
 If a dependency is required across all conversations for a specific agent, you can provide it directly when initializing the agent.
 
 ```python linenums="1"
-from autogen import Agent
+from ag2 import Agent
 import aiohttp
 
 # The session object is available to all tool calls made by this agent
@@ -62,7 +62,7 @@ await agent.ask(
 The simplest way to access your dependencies inside a tool is through the `Context` object. By adding an argument annotated with `Context`, the framework injects the current execution context, which includes the `.dependencies` dictionary.
 
 ```python linenums="1" hl_lines="1 4 6"
-from autogen import Context, tool
+from ag2 import Context, tool
 
 @tool
 def query_database(query: str, context: Context) -> str:
@@ -81,7 +81,7 @@ Use the `Inject` annotation to pull a dependency from the context dictionary by 
 
 ```python linenums="1" hl_lines="8"
 from typing import Annotated
-from autogen import Inject, tool
+from ag2 import Inject, tool
 
 @tool
 def fetch_data(

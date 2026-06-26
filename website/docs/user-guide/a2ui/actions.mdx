@@ -10,10 +10,10 @@ A2UI **actions** are the clickable parts of a UI — buttons that, when pressed,
 Decorate a function with `#!python @a2ui_action`, then declare it on the server with `#!python actions=`. The button is declared to the LLM so it can render it, but a **click runs the function on the server** with the click's `#!python event.context` as keyword arguments — the agent is **not** invoked. Inside the handler you can do anything: hit a backend, call a tool, update a surface.
 
 ```python linenums="1" hl_lines="6-11 15"
-from autogen import Agent
-from autogen.a2ui import A2UIServer, a2ui_action
-from autogen.a2ui.transports import RestTransport
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui.transports import RestTransport
+from ag2.config import AnthropicConfig
 
 @a2ui_action(description="Schedule all posts for the given time")
 def schedule_posts(time: str) -> dict:
@@ -84,7 +84,7 @@ When the action name matches a registered `#!python @a2ui_action`, the click run
 Each client→server interaction the server receives — a button `#!python action`, a v1.0 `#!python functionResponse`, or an `#!python error` — is surfaced on the turn's stream as an `#!python A2UIClientEvent`, the inbound mirror of `#!python A2UIMessageEvent`. Subscribe to react to or log client interactions (beyond what the LLM sees in its prompt):
 
 ```python linenums="1"
-from autogen.a2ui import A2UIClientEvent
+from ag2.a2ui import A2UIClientEvent
 
 @stream.subscribe
 async def on_client_event(event):
@@ -100,7 +100,7 @@ async def on_client_event(event):
 A2UI has no server→client error message, so when the model can't produce schema-valid UI within `#!python validation_retries + 1` attempts, the agent **gracefully degrades** to prose and emits no `#!python A2UIMessageEvent`. To tell "couldn't build UI" apart from "intentionally answered with text", subscribe to `#!python A2UIValidationFailedEvent` on the stream:
 
 ```python linenums="1"
-from autogen.a2ui import A2UIValidationFailedEvent
+from ag2.a2ui import A2UIValidationFailedEvent
 
 @stream.subscribe
 async def on_validation_failed(event):

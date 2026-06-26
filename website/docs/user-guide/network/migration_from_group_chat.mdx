@@ -3,7 +3,7 @@ title: Migrating from Group Chat
 sidebarTitle: Migration · Group Chat
 ---
 
-This page is for users porting an existing AG2 deployment that uses `GroupChat` plus `Handoffs`-style orchestration onto the new `#!python autogen.network` module. The modern equivalent is the [`#!python WorkflowAdapter`](/docs/user-guide/network/workflow), driven by a declarative `#!python TransitionGraph`.
+This page is for users porting an existing AG2 deployment that uses `GroupChat` plus `Handoffs`-style orchestration onto the new `#!python ag2.network` module. The modern equivalent is the [`#!python WorkflowAdapter`](/docs/user-guide/network/workflow), driven by a declarative `#!python TransitionGraph`.
 
 The translation is mostly mechanical. The two systems share the same vocabulary — speakers, conditions, targets, terminations — but the new one is data-first (a `#!python TransitionGraph` is JSON-serialisable and survives `#!python Hub.hydrate()`) and runs on top of the network's hub-and-spoke architecture instead of an in-process turn manager.
 
@@ -31,7 +31,7 @@ For per-pattern translations of the canonical orchestrations (Pipeline, Star, Fe
 **Classic:**
 
 ```python linenums="1"
-from autogen import GroupChat, GroupChatManager
+from ag2 import GroupChat, GroupChatManager
 
 groupchat = GroupChat(
     agents=[alice, bob, carol],
@@ -45,7 +45,7 @@ alice.initiate_chat(manager, message="Topic: should every dev learn Rust?")
 **AG2 network:**
 
 ```python linenums="1" hl_lines="3-6 8-13"
-from autogen.network import TransitionGraph
+from ag2.network import TransitionGraph
 
 graph = TransitionGraph.round_robin(
     participants=[alice.agent_id, bob.agent_id, carol.agent_id],
@@ -123,7 +123,7 @@ groupchat = GroupChat(agents=[triage, security_reviewer, general_responder])
 **AG2 network:**
 
 ```python linenums="1" hl_lines="6-27"
-from autogen.network import (
+from ag2.network import (
     AgentTarget, Always, FromSpeaker, RevertToInitiatorTarget,
     TerminateTarget, ToolCalled, Transition, TransitionGraph,
 )
@@ -180,7 +180,7 @@ triage.handoffs.add_to([
 from dataclasses import dataclass, field
 from typing import ClassVar
 
-from autogen.network import (
+from ag2.network import (
     Envelope, TransitionDecision, TransitionTarget, register_target,
 )
 

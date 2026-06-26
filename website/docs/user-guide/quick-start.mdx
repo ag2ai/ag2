@@ -57,8 +57,8 @@ AG2 is async throughout, so the example runs inside an `async` function driven b
 
 ```python linenums="1" hl_lines="5-9 12 13"
 import asyncio
-from autogen import Agent
-from autogen.config import OpenAIConfig
+from ag2 import Agent
+from ag2.config import OpenAIConfig
 
 agent = Agent(
     "assistant",
@@ -88,8 +88,8 @@ Decorate a plain Python function with `@tool` and pass it to the agent. AG2 mana
 
 ```python linenums="1" hl_lines="4-7 13"
 import asyncio
-from autogen import Agent, tool
-from autogen.config import OpenAIConfig
+from ag2 import Agent, tool
+from ag2.config import OpenAIConfig
 
 @tool
 async def get_weather(city: str) -> str:

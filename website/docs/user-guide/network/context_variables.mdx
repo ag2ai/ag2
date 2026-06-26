@@ -6,7 +6,7 @@ sidebarTitle: Context Variables
 Channel-scoped mutable state that any participant can read or write,
 auto-persisted on the WAL, and visible to transition conditions. The
 modern equivalent of classic `#!python ContextVariables` from
-`#!python autogen.agentchat.group`, scoped to one workflow channel.
+`#!python ag2.agentchat.group`, scoped to one workflow channel.
 
 ## The Mechanism
 
@@ -54,7 +54,7 @@ rejected by `#!python validate_send`.
 Send the envelope from any participant via the existing `#!python Channel.send`:
 
 ```python linenums="1" hl_lines="7-12"
-from autogen.network import EV_CONTEXT_SET, ChannelInject
+from ag2.network import EV_CONTEXT_SET, ChannelInject
 
 async def set_route(route: str, channel: ChannelInject) -> str:
     """Record the routing decision for this channel."""
@@ -94,7 +94,7 @@ is the WAL's order.
 Transition conditions get the State directly. `#!python ContextEquals` is shipped:
 
 ```python linenums="1"
-from autogen.network import ContextEquals, FromSpeaker, AgentTarget, Transition
+from ag2.network import ContextEquals, FromSpeaker, AgentTarget, Transition
 
 Transition(
     when=ContextEquals(key="route", value="security"),
@@ -110,7 +110,7 @@ For tools that need to read context (e.g. to make their writes
 idempotent), inject the State:
 
 ```python linenums="1"
-from autogen.network import ChannelStateInject
+from ag2.network import ChannelStateInject
 
 async def increment_counter(channel: ChannelInject, state: ChannelStateInject) -> str:
     """Demonstrates reading current state, then writing a new value."""
@@ -134,7 +134,7 @@ and register it. The Protocol is just two attributes:
 ```python linenums="1" hl_lines="11 13-15 17"
 from typing import ClassVar
 from dataclasses import dataclass
-from autogen.network import register_condition
+from ag2.network import register_condition
 
 @dataclass(slots=True)
 class ContextThreshold:
@@ -209,7 +209,7 @@ For a runnable end-to-end example of context-driven routing — a router agent c
 
 ## Comparison to Classic `#!python ContextVariables`
 
-| Capability | Classic (`autogen.agentchat.group`) | AG2 workflow |
+| Capability | Classic (`ag2.agentchat.group`) | AG2 workflow |
 |---|---|---|
 | Mutable channel-scoped dict | `#!python ContextVariables(...)` passed to `#!python initiate_chat` | `#!python WorkflowState.context_vars` |
 | Tool writes context | `#!python ReplyResult(message, context_variables=...)` | Tool emits `#!python EV_CONTEXT_SET` envelope |

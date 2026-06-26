@@ -38,11 +38,11 @@ The simplest plausible eval. Two tasks, one custom scorer, one prebuilt.
 import asyncio
 from pathlib import Path
 
-from autogen import Agent, tool
-from autogen.config import GeminiConfig
-from autogen.events import ToolCallEvent
-from autogen.eval import Suite, run_agent, scorer
-from autogen.eval.scorers import tool_called
+from ag2 import Agent, tool
+from ag2.config import GeminiConfig
+from ag2.events import ToolCallEvent
+from ag2.eval import Suite, run_agent, scorer
+from ag2.eval.scorers import tool_called
 
 # 1. Dataset — inline tasks (or Suite.from_jsonl("tasks.jsonl"))
 dataset = Suite.from_list([
@@ -108,7 +108,7 @@ That's the whole framework in 30 lines. Everything else in these docs is variati
 You don't want your eval suite to depend on a live LLM in pre-merge CI — too slow, too expensive, too flaky. The framework uses [TestConfig](/docs/user-guide/testing/) cassettes to mock the model deterministically:
 
 ```python linenums="1" hl_lines="3-6 12"
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 cassettes = {
     "t1": TestConfig(ToolCallEvent(name="get_weather", arguments='{"city":"Tokyo"}'), "Tokyo is sunny."),

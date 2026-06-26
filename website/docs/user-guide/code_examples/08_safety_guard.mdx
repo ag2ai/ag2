@@ -46,14 +46,14 @@ Run::
 
 import asyncio
 
-from autogen import Agent
-from autogen import Context
-from autogen.config import GeminiConfig
-from autogen.events import BaseEvent, ToolCallEvent, HaltEvent, ObserverAlert, Severity
-from autogen.observer import BaseObserver
-from autogen.policies import AlertPolicy
-from autogen.stream import MemoryStream
-from autogen.watch import EventWatch
+from ag2 import Agent
+from ag2 import Context
+from ag2.config import GeminiConfig
+from ag2.events import BaseEvent, ToolCallEvent, HaltEvent, ObserverAlert, Severity
+from ag2.observer import BaseObserver
+from ag2.policies import AlertPolicy
+from ag2.stream import MemoryStream
+from ag2.watch import EventWatch
 
 def section(title: str) -> None:
     print(f"\n── {title} ───")

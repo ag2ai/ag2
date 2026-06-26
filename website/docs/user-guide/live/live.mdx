@@ -3,7 +3,7 @@ title: "Voice & Realtime Overview"
 sidebarTitle: "Overview"
 ---
 
-`autogen.live` is the AG2 module for building voice-enabled agents. It covers two complementary patterns: a turn-by-turn **STT → Agent → TTS** pipeline built on top of a regular `Agent`, and a full-duplex **`LiveAgent`** that streams audio to and from a provider's realtime API.
+`ag2.live` is the AG2 module for building voice-enabled agents. It covers two complementary patterns: a turn-by-turn **STT → Agent → TTS** pipeline built on top of a regular `Agent`, and a full-duplex **`LiveAgent`** that streams audio to and from a provider's realtime API.
 
 ## When to use which
 
@@ -33,8 +33,8 @@ pip install "ag2[openai,gemini] sounddevice[numpy]"
 ```python linenums="1"
 import asyncio
 
-from autogen import Agent, config
-from autogen.live import (
+from ag2 import Agent, config
+from ag2.live import (
     OpenAITTSConfig,
     OpenAITranscriber,
     SoundDevicePlayer,
@@ -66,7 +66,7 @@ if __name__ == "__main__":
 ```python linenums="1"
 import asyncio
 
-from autogen.live import (
+from ag2.live import (
     LiveAgent,
     SoundDevicePlayer,
     SoundDeviceRecorder,

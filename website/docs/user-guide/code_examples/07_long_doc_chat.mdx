@@ -45,17 +45,17 @@ Run::
 
 import asyncio
 
-from autogen import Agent, KnowledgeConfig
-from autogen.compact import CompactTrigger, TailWindowCompact
-from autogen.config import GeminiConfig
-from autogen.events import CompactionCompleted
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.policies import (
+from ag2 import Agent, KnowledgeConfig
+from ag2.compact import CompactTrigger, TailWindowCompact
+from ag2.config import GeminiConfig
+from ag2.events import CompactionCompleted
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.policies import (
     ConversationPolicy,
     SlidingWindowPolicy,
     TokenBudgetPolicy,
 )
-from autogen.stream import MemoryStream
+from ag2.stream import MemoryStream
 
 def section(title: str) -> None:
     print(f"\n── {title} ───")

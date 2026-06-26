@@ -23,9 +23,9 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.middleware.builtin import TelemetryMiddleware
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.middleware.builtin import TelemetryMiddleware
 
 # 1. Configure OpenTelemetry
 resource = Resource.create(attributes={"service.name": "ag2-quickstart"})
@@ -157,10 +157,10 @@ TelemetryMiddleware(
 ## Tool Execution Example
 
 ```python
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.middleware.builtin import TelemetryMiddleware
-from autogen.tools import tool
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.middleware.builtin import TelemetryMiddleware
+from ag2.tools import tool
 
 @tool
 def get_weather(city: str) -> str:

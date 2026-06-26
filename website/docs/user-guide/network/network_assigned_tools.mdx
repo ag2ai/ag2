@@ -114,8 +114,8 @@ Every grouped tool accepts `#!python AgentClientInject`, `#!python ChannelInject
 If you are testing a tool *outside* the notify-handler context, pass them yourself:
 
 ```python linenums="1"
-from autogen import Context
-from autogen.network import AGENT_CLIENT_DEP, CHANNEL_DEP, Channel
+from ag2 import Context
+from ag2.network import AGENT_CLIENT_DEP, CHANNEL_DEP, Channel
 
 ctx = Context(
     dependencies={

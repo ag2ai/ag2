@@ -12,7 +12,7 @@ A `LiveAgent` holds a `RealtimeConfig` and is opened via `agent.run()`, which yi
 ```python linenums="1" hl_lines="10-17 21-23"
 import asyncio
 
-from autogen.live import (
+from ag2.live import (
     LiveAgent,
     SoundDevicePlayer,
     SoundDeviceRecorder,
@@ -51,8 +51,8 @@ The realtime provider streams both audio and a text transcript. Subscribe to `Mo
 ```python linenums="1" hl_lines="24-26"
 import asyncio
 
-from autogen.events import ModelMessageChunk
-from autogen.live import (
+from ag2.events import ModelMessageChunk
+from ag2.live import (
     LiveAgent,
     OpenAIRealTimeConfig,
     SoundDevicePlayer,
@@ -90,8 +90,8 @@ To keep the realtime session for its low-latency turn detection but disable audi
 ```python linenums="1" hl_lines="13-16 25-27"
 import asyncio
 
-from autogen.events import ModelMessageChunk
-from autogen.live import (
+from ag2.events import ModelMessageChunk
+from ag2.live import (
     LiveAgent,
     SoundDeviceRecorder,
     openai,
@@ -127,7 +127,7 @@ if __name__ == "__main__":
 ```python linenums="1" hl_lines="16-20"
 import asyncio
 
-from autogen.live import (
+from ag2.live import (
     LiveAgent,
     OpenAIRealTimeConfig,
     SoundDevicePlayer,
@@ -166,7 +166,7 @@ if __name__ == "__main__":
 <Tabs>
   <Tab title="OpenAI">
 ```python linenums="1"
-from autogen.live import openai
+from ag2.live import openai
 
 config = openai.RealTimeConfig(
     "gpt-realtime-2",
@@ -187,7 +187,7 @@ Available voices: `alloy`, `ash`, `ballad`, `coral`, `echo`, `sage`, `shimmer`, 
 
   <Tab title="Gemini">
 ```python linenums="1"
-from autogen.live import gemini
+from ag2.live import gemini
 
 config = gemini.RealTimeConfig(
     "gemini-3.1-flash-live-preview",
@@ -210,8 +210,8 @@ Available voices: `Aoede`, `Charon`, `Fenrir`, `Kore`, `Leda`, `Orus`, `Puck`, `
 ```python linenums="1" hl_lines="14-18 25-26"
 import asyncio
 
-from autogen.events import ModelMessageChunk, TranscriptionChunkEvent
-from autogen.live import (
+from ag2.events import ModelMessageChunk, TranscriptionChunkEvent
+from ag2.live import (
     LiveAgent,
     SoundDevicePlayer,
     SoundDeviceRecorder,

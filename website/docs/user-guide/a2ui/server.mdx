@@ -3,7 +3,7 @@ title: Serving A2UI over HTTP
 sidebarTitle: Server
 ---
 
-`#!python A2UIServer` wraps a plain `#!python autogen.Agent` and **is** a ready-to-serve [Starlette](https://www.starlette.io){.external-link target="_blank"} ASGI app that speaks **canonical A2UI** over HTTP. It mirrors `#!python autogen.a2a.A2AServer`: hold the agent, configure A2UI with flat kwargs, pick a `#!python transport=` for the wire encoding, and bring your own `#!python uvicorn` (or any ASGI server) to run the `#!python A2UIServer` instance directly.
+`#!python A2UIServer` wraps a plain `#!python ag2.Agent` and **is** a ready-to-serve [Starlette](https://www.starlette.io){.external-link target="_blank"} ASGI app that speaks **canonical A2UI** over HTTP. It mirrors `#!python ag2.a2a.A2AServer`: hold the agent, configure A2UI with flat kwargs, pick a `#!python transport=` for the wire encoding, and bring your own `#!python uvicorn` (or any ASGI server) to run the `#!python A2UIServer` instance directly.
 
 A2UI's wire is transport-agnostic, so one deployment serves one frontend over one `#!python transport`:
 
@@ -11,10 +11,10 @@ A2UI's wire is transport-agnostic, so one deployment serves one frontend over on
 - `#!python RestTransport(encoding="jsonl")` — canonical A2UI NDJSON (`#!python application/x-ndjson`), suited to generic A2UI clients that consume the native JSON Lines wire.
 - `#!python AgUiTransport()` — [AG-UI](https://docs.ag-ui.com){.external-link target="_blank"} events for CopilotKit's renderer (see [Serving over AG-UI](#serving-over-ag-ui-copilotkit) below).
 
-The transports live in `#!python autogen.a2ui.transports`.
+The transports live in `#!python ag2.a2ui.transports`.
 
 !!! note
-    `#!python A2UIServer` is re-exported from the top-level `#!python autogen.a2ui`. It depends on Starlette (declared as an additional dependency, not a core extra); a missing install surfaces as a clear hint rather than an opaque `#!python ImportError`.
+    `#!python A2UIServer` is re-exported from the top-level `#!python ag2.a2ui`. It depends on Starlette (declared as an additional dependency, not a core extra); a missing install surfaces as a clear hint rather than an opaque `#!python ImportError`.
 
 ## Minimal Server
 
@@ -23,10 +23,10 @@ The `#!python A2UIServer` instance is itself the ASGI app — hand it straight t
 ```python linenums="1" hl_lines="12"
 import uvicorn
 
-from autogen import Agent
-from autogen.a2ui import A2UIServer
-from autogen.a2ui.transports import RestTransport
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.a2ui import A2UIServer
+from ag2.a2ui.transports import RestTransport
+from ag2.config import AnthropicConfig
 
 agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
 
@@ -146,10 +146,10 @@ Swap `#!python RestTransport` for `#!python AgUiTransport` to serve the **same a
 ```python linenums="1" hl_lines="10"
 import uvicorn
 
-from autogen import Agent
-from autogen.a2ui import A2UIServer
-from autogen.a2ui.transports import AgUiTransport
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.a2ui import A2UIServer
+from ag2.a2ui.transports import AgUiTransport
+from ag2.config import AnthropicConfig
 
 agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
 

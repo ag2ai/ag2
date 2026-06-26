@@ -44,9 +44,9 @@ Everything after that is identical to `ask`: the agent calls the model, may issu
 The most common use is multi-turn that outlives the process: persist a conversation, load it back later, and continue with a new user message as the trigger.
 
 ```python linenums="1" hl_lines="12 15-16"
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.events import ModelRequest, TextInput
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.events import ModelRequest, TextInput
 
 agent = Agent(
     "assistant",
@@ -70,9 +70,9 @@ This is `reply.ask("...")`, except you drive it from events you reload yourself 
 A turn can also stop **mid-loop** — the model asked to run a tool whose result is produced elsewhere: a webhook, a queue worker, a long-running job, or a human approving a request. You record the tool call, run the work separately, then hand the result back as the trigger. The model reacts to the result without the tool being re-executed.
 
 ```python linenums="1" hl_lines="18 25 28"
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.events import (
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.events import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -122,7 +122,7 @@ print(reply.body)
     `resume` reads only the events you pass in — it does not load history from a store on its own. The [event log](/docs/user-guide/advanced/knowledge_store) written by `KnowledgeConfig(write_event_log=True)` is one place these trajectories can come from: it persists each turn to `/log/{stream_id}.jsonl`, and `EventLogWriter(store).load(stream_id)` reads it back as typed events ready to pass straight to `resume`.
 
     ```python linenums="1"
-    from autogen.knowledge import EventLogWriter
+    from ag2.knowledge import EventLogWriter
 
     events = await EventLogWriter(store).load(stream_id)
     reply = await agent.resume(*events, ModelRequest([TextInput("Carry on.")]))
@@ -133,7 +133,7 @@ print(reply.body)
 `resume` **replaces** the target stream's history with the seeded prefix. If you omit `stream`, a fresh `MemoryStream` is created. If you pass an existing stream, any history it already held is discarded in favour of the trajectory you provide.
 
 ```python linenums="1" hl_lines="7"
-from autogen.stream import MemoryStream
+from ag2.stream import MemoryStream
 
 stream = MemoryStream()
 await stream.history.replace([ModelRequest([TextInput("stale prior turn")])])

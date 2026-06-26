@@ -33,8 +33,8 @@ Both tools are user-authored on the coordinator agent. Each returns a `#!python 
 
 ```python linenums="1"
 from typing import Literal
-from autogen import ToolResult
-from autogen.network import Finish, Handoff
+from ag2 import ToolResult
+from ag2.network import Finish, Handoff
 
 async def handoff(to: Literal["researcher", "critic", "cost_analyst", "operator"], reason: str = "") -> ToolResult:
     """Hand off the conversation to a participant by name."""
@@ -155,10 +155,10 @@ from typing import Literal
 
 from dotenv import load_dotenv
 
-from autogen import Agent, ToolResult
-from autogen.config import AnthropicConfig
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent, ToolResult
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_CLOSED,
     EV_PACKET,
     EV_TEXT,
@@ -170,7 +170,7 @@ from autogen.network import (
     Resume,
     TransitionGraph,
 )
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 load_dotenv()
 

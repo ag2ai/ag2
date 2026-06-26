@@ -15,7 +15,7 @@ The easiest way to create a tool is by using the `@tool` decorator. This decorat
 For the best results, **always provide clear type hints and a descriptive docstring**. The LLM relies heavily on these to know when and how to invoke your tool.
 
 ```python linenums="1"
-from autogen import tool
+from ag2 import tool
 
 @tool
 def calculate_shipping_cost(destination: str, weight_kg: float) -> str:
@@ -28,7 +28,7 @@ def calculate_shipping_cost(destination: str, weight_kg: float) -> str:
 Once defined, you can equip an agent with this capability by passing the tool to the `tools` list during the agent's initialization.
 
 ```python
-from autogen import Agent
+from ag2 import Agent
 
 agent = Agent(name="ShippingAssistant", tools=[calculate_shipping_cost])
 ```
@@ -37,7 +37,7 @@ agent = Agent(name="ShippingAssistant", tools=[calculate_shipping_cost])
     For simpler use cases, you can pass an undecorated Python function directly to the agent's `tools` list. The framework will automatically convert it into a fully-fledged tool under the hood, extracting the schema from the signature and docstring just like the decorator would.
 
     ```python linenums="1"
-    from autogen import Agent
+    from ag2 import Agent
 
     def get_weather(location: str) -> str:
         """Returns the current weather for a given location."""
@@ -54,7 +54,7 @@ Alternatively, you can register a tool directly with an agent instance using its
 This approach is particularly useful when you need to dynamically add capabilities to an agent after it has been created, or when you are logically organizing your code by attaching specific tools to specific agent instances.
 
 ```python linenums="1"
-from autogen import Agent
+from ag2 import Agent
 
 agent = Agent(name="CalculatorBot")
 
@@ -165,7 +165,7 @@ A complete example combining custom tool properties and strict parameter validat
 ```python linenums="1" hl_lines="6-7 12-17 21-25"
 from typing import Annotated
 from pydantic import Field
-from autogen import tool
+from ag2 import tool
 
 @tool(
     name="create_user_profile",
@@ -234,7 +234,7 @@ Tools often need access to the broader execution context, such as injected depen
 To access the execution context from within your tool, you can simply type-hint an argument with the `Context` object.
 
 ```python linenums="1"
-from autogen import Context, tool
+from ag2 import Context, tool
 
 @tool
 async def my_tool(context: Context) -> str:
@@ -255,7 +255,7 @@ The framework provides typed input classes for text, structured data, images, au
 Return any input type directly from a tool function just like you would a string:
 
 ```python linenums="1"
-from autogen import DataInput, TextInput, tool
+from ag2 import DataInput, TextInput, tool
 
 @tool
 def get_status(task_id: str) -> TextInput:
@@ -273,7 +273,7 @@ def get_user_profile(user_id: str) -> DataInput:
 Use `ImageInput` when a tool needs to hand an image back to the model for further reasoning. The factory accepts a URL, a local file path, a pre-uploaded file ID, or raw bytes:
 
 ```python linenums="1"
-from autogen import ImageInput, ToolResult, tool
+from ag2 import ImageInput, ToolResult, tool
 
 @tool
 def fetch_chart(chart_id: str) -> ImageInput:
@@ -292,7 +292,7 @@ def capture_screenshot(page: str) -> ImageInput:
 When you have raw bytes of an arbitrary format, use `BinaryInput` directly and set the media type explicitly:
 
 ```python linenums="1"
-from autogen import BinaryInput, ToolResult, tool
+from ag2 import BinaryInput, ToolResult, tool
 
 @tool
 def export_pdf(report_id: str) -> ToolResult:
@@ -312,7 +312,7 @@ def export_pdf(report_id: str) -> ToolResult:
 Use `ToolResult` to combine multiple inputs into a single tool response. Each positional argument becomes a separate part the model receives:
 
 ```python linenums="1"
-from autogen import ImageInput, ToolResult, tool
+from ag2 import ImageInput, ToolResult, tool
 
 @tool
 def analyze_product(product_id: str) -> ToolResult:
@@ -331,7 +331,7 @@ When the tool itself already knows the exact final answer, you can return `ToolR
 `ToolResult` accepts any `str` or `Input` as its first positional argument:
 
 ```python linenums="1"
-from autogen import Agent, DataInput, TextInput, ToolResult, tool
+from ag2 import Agent, DataInput, TextInput, ToolResult, tool
 
 @tool
 def handoff_to_human(ticket_id: str) -> ToolResult:

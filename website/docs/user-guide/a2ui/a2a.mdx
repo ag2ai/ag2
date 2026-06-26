@@ -3,7 +3,7 @@ title: Serving A2UI over A2A
 sidebarTitle: A2A Transport
 ---
 
-A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](/docs/user-guide/a2a/) exchange instead of the built-in [REST adapter](/docs/user-guide/a2ui/server). The `#!python autogen.a2ui.a2a` submodule wraps a plain `#!python autogen.Agent` in an `#!python A2UIAgentExecutor`, plugs it into a standard `#!python A2AServer`, and carries each turn's A2UI messages as a canonical A2A `#!python DataPart`.
+A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](/docs/user-guide/a2a/) exchange instead of the built-in [REST adapter](/docs/user-guide/a2ui/server). The `#!python ag2.a2ui.a2a` submodule wraps a plain `#!python ag2.Agent` in an `#!python A2UIAgentExecutor`, plugs it into a standard `#!python A2AServer`, and carries each turn's A2UI messages as a canonical A2A `#!python DataPart`.
 
 !!! note
     This page assumes familiarity with the [A2A server](/docs/user-guide/a2a/server). The A2UI integration is a drop-in `#!python executor` for the same `#!python A2AServer` — everything you know about cards, transports, and tasks still applies.
@@ -22,7 +22,7 @@ The executor splits each completed turn into a text `#!python Part` (the convers
 ## Public API
 
 ```python linenums="1"
-from autogen.a2ui.a2a import (
+from ag2.a2ui.a2a import (
     A2UIAgentExecutor,        # the A2A executor wrapping a plain Agent
     get_a2ui_agent_extension, # build the AgentExtension for the card
     create_a2ui_parts,        # wrap A2UI messages into A2A Parts
@@ -39,11 +39,11 @@ Wrap a plain `#!python Agent` in `#!python A2UIAgentExecutor` (with the same fla
 import uvicorn
 from a2a.types import AgentCard
 
-from autogen import Agent
-from autogen.a2a import A2AServer
-from autogen.a2ui import a2ui_action
-from autogen.a2ui.a2a import A2UIAgentExecutor, get_a2ui_agent_extension
-from autogen.config import AnthropicConfig
+from ag2 import Agent
+from ag2.a2a import A2AServer
+from ag2.a2ui import a2ui_action
+from ag2.a2ui.a2a import A2UIAgentExecutor, get_a2ui_agent_extension
+from ag2.config import AnthropicConfig
 
 @a2ui_action(description="Book the selected dinner reservation")
 def book_table(time: str) -> str:
@@ -78,7 +78,7 @@ A client connects by pointing `#!python A2AConfig(card_url=...)` at the card URL
 The A2UI messages ride a `#!python DataPart` on the finalization message. Use `#!python is_a2ui_part` to find it and `#!python get_a2ui_data` to decode the payload (a list of canonical A2UI messages):
 
 ```python linenums="1"
-from autogen.a2ui.a2a import get_a2ui_data, is_a2ui_part
+from ag2.a2ui.a2a import get_a2ui_data, is_a2ui_part
 
 # `message` is the A2A agent message from the completed task.
 for part in message.parts:
@@ -100,7 +100,7 @@ A button click is sent back as an inbound A2UI `#!python DataPart` on the next r
 If you serialize A2UI messages onto an A2A message yourself (outside the executor), `#!python create_a2ui_parts` wraps one or many messages into `#!python DataPart`s:
 
 ```python linenums="1"
-from autogen.a2ui.a2a import create_a2ui_parts
+from ag2.a2ui.a2a import create_a2ui_parts
 
 parts = create_a2ui_parts(messages)                    # one DataPart, data = [msg, ...]
 parts = create_a2ui_parts(messages, legacy_split=True) # one DataPart per message (pre-v1.0 renderers)

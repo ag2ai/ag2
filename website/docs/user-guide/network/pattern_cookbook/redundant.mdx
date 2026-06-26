@@ -91,10 +91,10 @@ import asyncio
 
 from dotenv import load_dotenv
 
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_PACKET,
     EV_CHANNEL_CLOSED,
     EV_TEXT,
@@ -102,7 +102,7 @@ from autogen.network import (
     Hub,
     TransitionGraph,
 )
-from autogen.testing import TestConfig
+from ag2.testing import TestConfig
 
 load_dotenv()
 

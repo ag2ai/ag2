@@ -35,8 +35,8 @@ Every control-plane call (register, open channel, post envelope, WAL read) trave
 import asyncio
 import contextlib
 
-from autogen.knowledge import MemoryKnowledgeStore
-from autogen.network import Hub, serve_ws
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import Hub, serve_ws
 
 async def main() -> None:
     hub = await Hub.open(MemoryKnowledgeStore())
@@ -59,9 +59,9 @@ From any other process — same machine, different container, or across a real n
 ```python linenums="1"
 import asyncio
 
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.network import HubClient, WsLink
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.network import HubClient, WsLink
 
 async def main() -> None:
     hub_client = HubClient(WsLink("ws://hub-host:8765"))
@@ -85,10 +85,10 @@ Agents backed by different providers can share the same hub and the same channel
 ```python linenums="1"
 import asyncio
 
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.network import EV_TEXT, HubClient, WsLink
-from autogen.network.adapters.consulting import CONSULTING_TYPE
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.network import EV_TEXT, HubClient, WsLink
+from ag2.network.adapters.consulting import CONSULTING_TYPE
 
 async def main() -> None:
     hub_client = HubClient(WsLink("ws://hub-host:8765"))
@@ -123,7 +123,7 @@ All four channel adapters work cross-process without change: `#!python consultin
 For deployments where agents must authenticate at the WebSocket handshake, build the hub with an `#!python AuthRegistry`:
 
 ```python linenums="1"
-from autogen.network import ApiKeyAuth, AuthRegistry, Hub
+from ag2.network import ApiKeyAuth, AuthRegistry, Hub
 
 auth = AuthRegistry([ApiKeyAuth(keys={"token-alice", "token-bob"})])
 hub = await Hub.open(store, auth=auth)
@@ -132,7 +132,7 @@ hub = await Hub.open(store, auth=auth)
 Each agent passes its token inside `#!python Passport.auth`:
 
 ```python linenums="1"
-from autogen.network import AuthBlock, Passport
+from ag2.network import AuthBlock, Passport
 
 passport = Passport(
     name="bob",
@@ -165,7 +165,7 @@ await hub_client.resume_pending_turns(bob)
 Tasks can be checkpointed through the hub so state survives a process restart:
 
 ```python linenums="1"
-from autogen.network import HubBackedCheckpointStore
+from ag2.network import HubBackedCheckpointStore
 
 checkpoint_store = HubBackedCheckpointStore(hub_client)
 

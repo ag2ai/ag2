@@ -15,7 +15,7 @@ Sequential chats run a series of two-agent conversations in order, automatically
 ```python
 import asyncio
 import os
-from autogen import ConversableAgent, LLMConfig
+from ag2 import ConversableAgent, LLMConfig
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}

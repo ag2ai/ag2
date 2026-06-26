@@ -17,9 +17,9 @@ The same environment can back both a `SandboxShellTool` and a [`SandboxCodeTool`
 ## Quick Start
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import SandboxShellTool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SandboxShellTool
 
 agent = Agent(
     "coder",
@@ -39,9 +39,9 @@ With no arguments, `SandboxShellTool` uses a `LocalEnvironment` with a temporary
 The first argument is the environment. Pass a `LocalEnvironment`, `DockerEnvironment`, or `DaytonaEnvironment`:
 
 ```python linenums="1"
-from autogen.tools import SandboxShellTool, LocalEnvironment
-from autogen.extensions.docker import DockerEnvironment
-from autogen.extensions.daytona import DaytonaEnvironment
+from ag2.tools import SandboxShellTool, LocalEnvironment
+from ag2.extensions.docker import DockerEnvironment
+from ag2.extensions.daytona import DaytonaEnvironment
 
 # Local subprocess in a specific directory
 sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"))
@@ -60,7 +60,7 @@ A `LocalEnvironment` directory is created automatically if it does not exist, an
 Filtering policy lives on the tool, not the environment:
 
 ```python linenums="1"
-from autogen.tools import SandboxShellTool, LocalEnvironment
+from ag2.tools import SandboxShellTool, LocalEnvironment
 
 sh = SandboxShellTool(
     LocalEnvironment("/tmp/my_project"),
@@ -107,7 +107,7 @@ Filtering is applied in this order on every `run_shell_command(command)` call:
 Use `readonly=True` to let the agent inspect files without modifying anything:
 
 ```python linenums="1"
-from autogen.tools import SandboxShellTool, LocalEnvironment
+from ag2.tools import SandboxShellTool, LocalEnvironment
 
 sh = SandboxShellTool(LocalEnvironment("/my/codebase"), readonly=True)
 ```
@@ -128,9 +128,9 @@ print(sh.workdir)  # PosixPath('/tmp/my_project')
 Because files persist in `workdir` across `ask()` calls, the agent can build on prior work in a chained conversation:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import SandboxShellTool, LocalEnvironment
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SandboxShellTool, LocalEnvironment
 
 sh = SandboxShellTool(LocalEnvironment("/tmp/counter_demo"))
 agent = Agent("coder", "You manage files.", config=AnthropicConfig(model="claude-sonnet-4-6"), tools=[sh])
@@ -150,4 +150,4 @@ reply3 = await reply2.ask("Read the counter and tell me the value")
 | **Execution** | Client-side, in your environment | Provider-side (Anthropic / OpenAI) |
 | **Provider support** | Any provider | Anthropic, OpenAI only |
 | **Environment control** | Full (`allowed`, `blocked`, `ignore`, backend choice) | Limited (provider-dependent) |
-| **Import** | `autogen.tools.SandboxShellTool` | `autogen.tools.ShellTool` |
+| **Import** | `ag2.tools.SandboxShellTool` | `ag2.tools.ShellTool` |

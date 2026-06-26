@@ -19,7 +19,7 @@ Under the hood that connection is a `#!python HubClient` — one process's link 
 ## HubClient — one per process
 
 ```python linenums="1"
-from autogen.network import HubClient, LocalLink
+from ag2.network import HubClient, LocalLink
 
 link = LocalLink(hub)            # transport factory bound to this hub
 hc = HubClient(link, hub=hub)
@@ -42,9 +42,9 @@ The probe and view-policy methods exist so custom handlers (next section) don't 
 
 ```python linenums="1"
 agent_client = await hub.register(
-    agent,                     # autogen.Agent
-    passport,                  # autogen.network.Passport
-    resume,                    # autogen.network.Resume
+    agent,                     # ag2.Agent
+    passport,                  # ag2.network.Passport
+    resume,                    # ag2.network.Resume
     skill_md=None,             # optional — markdown describing this agent's skill
     rule=None,                 # optional — Rule(...) for governance
     attach_plugin=True,        # whether to install the default notify handler
@@ -85,7 +85,7 @@ The handler wraps the **entire** turn path (WAL slice, view projection, `#!pytho
 The handler is decomposed into public hooks so you can override only the parts you care about:
 
 ```python linenums="1"
-from autogen.network import (
+from ag2.network import (
     read_wal_until,
     resolve_view_policy,
     stamp_dependencies,
@@ -101,7 +101,7 @@ from autogen.network import (
 ## Custom Handlers
 
 ```python linenums="1"
-from autogen.network import Envelope, EV_TEXT
+from ag2.network import Envelope, EV_TEXT
 
 async def gateway_handler(envelope: Envelope) -> None:
     if envelope.event_type != EV_TEXT:
@@ -122,7 +122,7 @@ Common patterns:
 ## Transport — LocalLink
 
 ```python linenums="1"
-from autogen.network import LocalLink, LinkClient, LinkEndpoint
+from ag2.network import LocalLink, LinkClient, LinkEndpoint
 
 link = LocalLink(hub)
 client_link = link.client()  # produces a fresh LocalLinkClient bound to a fresh LocalLinkEndpoint

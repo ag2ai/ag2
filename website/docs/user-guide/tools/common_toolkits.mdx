@@ -12,9 +12,9 @@ AG2 ships with ready-made tools and toolkits that bundle related function tools 
 `FilesystemToolkit` gives an agent the ability to read, write, update, delete, and search files within a sandboxed directory. All paths are resolved relative to a configurable `base_path`, and a path-traversal guard prevents access outside it.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import FilesystemToolkit
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import FilesystemToolkit
 
 fs = FilesystemToolkit(base_path="/tmp/workspace")
 
@@ -63,9 +63,9 @@ For throwaway workspaces, use `#!python tempfile.TemporaryDirectory` so the dire
 
 ```python linenums="1"
 import tempfile
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import FilesystemToolkit
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import FilesystemToolkit
 
 async def main() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -103,9 +103,9 @@ fs = FilesystemToolkit(base_path="/tmp/sandbox")
     Requires the `ddgs` extra: `pip install ag2[ddgs]`
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import DuckDuckSearchTool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import DuckDuckSearchTool
 
 agent = Agent(
     "researcher",
@@ -137,9 +137,9 @@ All parameters accept a `Variable` for dynamic values resolved at execution time
 
 ```python linenums="1"
 import os
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import PerplexitySearchToolkit
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import PerplexitySearchToolkit
 
 agent = Agent(
     "researcher",
@@ -249,9 +249,9 @@ When `return_images=True`, image URLs are also surfaced as `ImageInput` parts on
 
 ```python linenums="1"
 import os
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import TavilySearchTool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import TavilySearchTool
 
 agent = Agent(
     "researcher",
@@ -312,9 +312,9 @@ tool = TavilySearchTool(
     A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run — or a `DockerEnvironment` / `DaytonaEnvironment` for real isolation.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import AnthropicConfig
-from autogen.tools import SandboxShellTool, LocalEnvironment
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SandboxShellTool, LocalEnvironment
 
 agent = Agent(
     "engineer",
@@ -330,7 +330,7 @@ The first argument is the environment; the backend (where commands run) is confi
 Command policy lives on the tool:
 
 ```python linenums="1"
-from autogen.tools import SandboxShellTool, LocalEnvironment
+from ag2.tools import SandboxShellTool, LocalEnvironment
 
 # Allow only specific commands
 sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), allowed=["git", "python", "pip"])

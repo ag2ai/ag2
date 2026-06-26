@@ -6,7 +6,7 @@ sidebarTitle: Contribution Policy
 AG2 is what it is today because of its contributors. This page explains how contributions will work in the v1.0 era — what lives in Core, what lives as an Extension, and what we ask of contributors in each.
 
 !!! note
-    This policy applies to AG2 (`autogen`), which becomes the official AG2 framework at v1.0. See the [Roadmap](/docs/user-guide/roadmap) for the full v1.0 plan.
+    This policy applies to AG2 (`ag2`), which becomes the official AG2 framework at v1.0. See the [Roadmap](/docs/user-guide/roadmap) for the full v1.0 plan.
 
 ## Why a new policy
 
@@ -20,7 +20,7 @@ For v1.0, we want a focused **Core** that AG2 actively maintains, alongside a vi
 
 **Core** is the foundational AG2 framework — maintained by AG2 with contributions from the community and AG2 team, kept lightweight, and held to a strict quality bar.
 
-Today, everything shipped under `autogen` is Core: the Agent runtime, primary LLM providers, common built-in tools, middleware, structured output, telemetry, history management, and the context and dependency-injection primitives.
+Today, everything shipped under `ag2` is Core: the Agent runtime, primary LLM providers, common built-in tools, middleware, structured output, telemetry, history management, and the context and dependency-injection primitives.
 
 **Extensions** are first-class components of the AG2 ecosystem — agents, tools, providers, middleware, and integrations that extend what you can build with Core. Most are community-contributed, but AG2 may also author Extensions where it makes sense (for example, integrations we want to ship without expanding Core's dependency surface). The defining characteristic of an Extension is **who maintains it** — every Extension has a named maintainer (AG2 or community) who commits to keeping it working. Typical Extensions include:
 
@@ -37,7 +37,7 @@ Reliance on a third-party SDK is a strong signal that something belongs in Exten
 
 ## Phase 1 — until v1.0
 
-Core and Extensions live in the same repository. Extensions go under `autogen/extensions/` and ship as part of `pip install ag2`. The contribution flow stays familiar during the transition.
+Core and Extensions live in the same repository. Extensions go under `ag2/extensions/` and ship as part of `pip install ag2`. The contribution flow stays familiar during the transition.
 
 ## Phase 2 — at v1.0
 
@@ -128,7 +128,7 @@ Docs: https://docs.ag2.ai/extensions/search-tools/acme
 Examples: https://github.com/ag2ai/build-with-ag2/extensions/acme-search-tool
 """
 
-from autogen.tools import Tool
+from ag2.tools import Tool
 
 class AcmeSearch(Tool):
     """Tool that performs web searches via the Acme Search API.

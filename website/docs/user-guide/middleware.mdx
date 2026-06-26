@@ -148,9 +148,9 @@ Use `on_human_input()` when you want to:
 To make middleware apply to every turn for an agent, pass it through the `middleware` argument when constructing the agent.
 
 ```python linenums="1" hl_lines="9-12"
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.middleware import LoggingMiddleware, RetryMiddleware
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.middleware import LoggingMiddleware, RetryMiddleware
 
 agent = Agent(
     "assistant",
@@ -173,9 +173,9 @@ This is useful when you want temporary behavior without changing the agent's def
 Both `Agent.ask(...)` and `AgentReply.ask(...)` accept a `middleware` argument.
 
 ```python linenums="1" hl_lines="13 18"
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.middleware import LoggingMiddleware, TokenLimiter
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.middleware import LoggingMiddleware, TokenLimiter
 
 agent = Agent(
     "assistant",
@@ -204,10 +204,10 @@ If you register `[A, B, C]`, they enter in the order `A -> B -> C` and unwind in
 This matters when you combine behaviors such as logging, mutation, and retries.
 
 ```python linenums="1"
-from autogen import Agent, Context
-from autogen.config import OpenAIConfig
-from autogen.events import BaseEvent, ModelResponse
-from autogen.middleware import AgentTurn, BaseMiddleware
+from ag2 import Agent, Context
+from ag2.config import OpenAIConfig
+from ag2.events import BaseEvent, ModelResponse
+from ag2.middleware import AgentTurn, BaseMiddleware
 
 class A(BaseMiddleware):
     async def on_turn(
@@ -277,10 +277,10 @@ If it does need configuration, wrap it with `Middleware(...)` when registering i
 import logging
 from collections.abc import Sequence
 
-from autogen import Agent, Context
-from autogen.config import OpenAIConfig
-from autogen.events import BaseEvent, ModelResponse, ToolCallEvent
-from autogen.middleware import BaseMiddleware, LLMCall, Middleware, ToolExecution
+from ag2 import Agent, Context
+from ag2.config import OpenAIConfig
+from ag2.events import BaseEvent, ModelResponse, ToolCallEvent
+from ag2.middleware import BaseMiddleware, LLMCall, Middleware, ToolExecution
 
 class AuditMiddleware(BaseMiddleware):
     def __init__(
@@ -331,13 +331,13 @@ agent = Agent(
 
 ## Built-In Middleware
 
-AG2 currently includes four built-in middleware in `autogen.middleware`:
+AG2 currently includes four built-in middleware in `ag2.middleware`:
 
 ### `LoggingMiddleware`
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.middleware import LoggingMiddleware
+from ag2 import Agent
+from ag2.middleware import LoggingMiddleware
 
 agent = Agent(..., middleware=[LoggingMiddleware()])
 ```
@@ -353,8 +353,8 @@ Use it for quick debugging or application-level observability.
 ### `RetryMiddleware`
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.middleware import RetryMiddleware
+from ag2 import Agent
+from ag2.middleware import RetryMiddleware
 
 agent = Agent(..., middleware=[RetryMiddleware(max_retries=2)])
 ```
@@ -367,8 +367,8 @@ Use it for transient failures such as provider timeouts or flaky network issues.
 ### `HistoryLimiter`
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.middleware import HistoryLimiter
+from ag2 import Agent
+from ag2.middleware import HistoryLimiter
 
 agent = Agent(..., middleware=[HistoryLimiter(max_events=100)])
 ```
@@ -381,8 +381,8 @@ Use it when you want a simple, deterministic cap on context length by event coun
 ### `TokenLimiter`
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.middleware import TokenLimiter
+from ag2 import Agent
+from ag2.middleware import TokenLimiter
 
 agent = Agent(..., middleware=[TokenLimiter(max_tokens=1000)])
 ```
@@ -399,10 +399,10 @@ Use it when you need lightweight context budgeting without depending on a model-
 This is useful when you have middleware that should only run for certain event types — for example, approval middleware that only fires for a specific tool — without writing condition checks inside every hook method.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.events import ToolCallEvent
-from autogen.middleware import ConditionalMiddleware, Middleware
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.events import ToolCallEvent
+from ag2.middleware import ConditionalMiddleware, Middleware
 
 agent = Agent(
     "assistant",
@@ -426,8 +426,8 @@ Each hook — `on_turn`, `on_tool_execution`, `on_human_input` — checks the co
 Conditions support `&` (and), `|` (or), and `~` (not) operators, so you can build expressive gates:
 
 ```python linenums="1"
-from autogen.events import ToolCallEvent
-from autogen.middleware import ConditionalMiddleware, Middleware
+from ag2.events import ToolCallEvent
+from ag2.middleware import ConditionalMiddleware, Middleware
 
 # Activate only for tool calls named "search" or "browse"
 conditional = ConditionalMiddleware(

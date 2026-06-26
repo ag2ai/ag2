@@ -15,8 +15,8 @@ By default, agents create a `MemoryStream` instance internally for each conversa
 However, you can pass a custom stream to an agent when calling its `ask` method. This allows you to set up subscribers on the stream before the conversation starts, letting you observe or intercept the agent's internal events.
 
 ```python linenums="1"
-from autogen import Agent, MemoryStream
-from autogen.events import ModelRequest, ModelResponse
+from ag2 import Agent, MemoryStream
+from ag2.events import ModelRequest, ModelResponse
 
 agent = Agent("my_agent")
 
@@ -47,8 +47,8 @@ You can listen to events flowing through the stream using the `subscribe` method
 To subscribe to events of a specific type, pass the event class to `stream.where()`.
 
 ```python linenums="1"
-from autogen import MemoryStream
-from autogen.events import ToolCallEvent
+from ag2 import MemoryStream
+from ag2.events import ToolCallEvent
 
 stream = MemoryStream()
 
@@ -64,7 +64,7 @@ stream.where(ToolCallEvent).subscribe(handle_tool_call)
 You can subscribe to multiple event types using the bitwise OR operator (`|`).
 
 ```python linenums="1"
-from autogen.events import ToolCallEvent, ModelMessage
+from ag2.events import ToolCallEvent, ModelMessage
 
 def handle_event(event):
     print(f"Received event: {event}")
@@ -133,7 +133,7 @@ with stream.where(ModelMessage).sub_scope(temp_listener):
 To wait for and get the next occurrence of a specific event asynchronously, use the `get` async context manager. This yields a future that resolves to the matched event.
 
 ```python linenums="1"
-from autogen.events import HumanMessage
+from ag2.events import HumanMessage
 
 async def wait_for_human(stream: MemoryStream):
     async with stream.get(HumanMessage) as response:
@@ -147,7 +147,7 @@ async def wait_for_human(stream: MemoryStream):
 Use `join()` as a context manager when you want an async iterator of events for a bounded block of code. The iterator receives events published after the `with` block starts. Pass `max_events` to stop automatically after a fixed number of events.
 
 ```python linenums="1"
-from autogen.events import ToolResultEvent
+from ag2.events import ToolResultEvent
 
 with stream.where(ToolResultEvent).join(max_events=1) as results:
     async for event in results:
@@ -162,8 +162,8 @@ with stream.where(ToolResultEvent).join(max_events=1) as results:
 To raise or publish events to the stream, you should always use the `Context` object rather than sending them to the stream directly. The `Context` ensures that dependencies and the stream scope are properly propagated.
 
 ```python
-from autogen import Context
-from autogen.events import ModelMessage
+from ag2 import Context
+from ag2.events import ModelMessage
 
 async def publish_message(context: Context):
     event = ModelMessage(content="Hello from the agent!")
@@ -208,9 +208,9 @@ pip install "ag2[redis]"
 ### Basic Usage
 
 ```python linenums="1" hl_lines="2 5 13"
-from autogen import Agent
-from autogen.streams.redis import RedisStream
-from autogen.config import OpenAIConfig
+from ag2 import Agent
+from ag2.streams.redis import RedisStream
+from ag2.config import OpenAIConfig
 
 stream = RedisStream("redis://localhost:6379")
 
@@ -233,7 +233,7 @@ All the same subscription patterns (`subscribe`, `where`, `sub_scope`, `get`, in
 By default, events are serialized as **JSON** for human readability. You can switch to **pickle** for full Python object fidelity:
 
 ```python linenums="1"
-from autogen.streams.redis import RedisStream, Serializer
+from ag2.streams.redis import RedisStream, Serializer
 
 # JSON (default) — readable in Redis tools
 stream = RedisStream("redis://localhost:6379")
@@ -248,7 +248,7 @@ Multiple `RedisStream` instances sharing the same `id` automatically receive eac
 
 ```python linenums="1"
 from uuid import UUID
-from autogen.streams.redis import RedisStream
+from ag2.streams.redis import RedisStream
 
 STREAM_ID = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
@@ -274,7 +274,7 @@ await stream.close()
 You can create your own custom events by subclassing `BaseEvent`. Because of its metaclass, field definitions automatically support value-based filtering in `where` clauses.
 
 ```python linenums="1"
-from autogen.events import BaseEvent
+from ag2.events import BaseEvent
 
 class PaymentProcessed(BaseEvent):
     amount: float

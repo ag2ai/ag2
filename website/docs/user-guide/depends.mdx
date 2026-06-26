@@ -19,7 +19,7 @@ To do this, simply declare the dependency in your tool's signature. The framewor
 
 ```python linenums="1" hl_lines="13"
 from typing import Annotated
-from autogen import Depends, tool
+from ag2 import Depends, tool
 
 def verify_permissions(user_id: int) -> None:
     # Perform complex verification here
@@ -68,7 +68,7 @@ A powerful pattern is to combine `Depends` with `Inject`. You can use `Inject` t
 
 ```python linenums="1" hl_lines="5 7-9 13 20"
 from typing import Annotated
-from autogen import Depends, Inject, tool, Agent
+from ag2 import Depends, Inject, tool, Agent
 
 def get_db_session(
     db_pool: Annotated[Pool, Inject("database_pool")],
@@ -132,7 +132,7 @@ During testing, you often need to mock or override complex dependencies (like re
 You can easily override any `Depends` function at the agent level using the `dependency_provider`. When the agent executes, it will automatically route all requests for the original dependency to your override function.
 
 ```python linenums="1" hl_lines="3-4 13-14 17"
-from autogen import Agent, tool
+from ag2 import Agent, tool
 
 def get_production_db():
     raise Exception("Do not call this in tests!")

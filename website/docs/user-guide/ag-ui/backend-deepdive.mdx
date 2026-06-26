@@ -20,9 +20,9 @@ from typing import Annotated
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
-from autogen import Agent
-from autogen.ag_ui import AGUIStream, RunAgentInput
-from autogen.config import OpenAIConfig
+from ag2 import Agent
+from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.config import OpenAIConfig
 
 agent = Agent(
     name="support_bot",
@@ -60,9 +60,9 @@ You often need to pass **per-request context** (user ID, org ID, plan, permissio
 AG2 supports this via `ContextVariables`. Your tool can accept a `context` parameter, and you provide values when dispatching.
 
 ```python title="tools_context.py" linenums="1" hl_lines="1 6-7 20"
-from autogen import Agent, Context, tool
-from autogen.ag_ui import AGUIStream, RunAgentInput
-from autogen.config import OpenAIConfig
+from ag2 import Agent, Context, tool
+from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.config import OpenAIConfig
 
 @tool
 def get_user_profile(user_id: Context) -> str:
@@ -89,8 +89,8 @@ Backend tools are regular Python callables registered on the agent (for example 
 Example backend tool:
 
 ```python title="backend_tools.py" linenums="1"
-from autogen import Agent, tool
-from autogen.config import OpenAIConfig
+from ag2 import Agent, tool
+from ag2.config import OpenAIConfig
 
 @tool
 def calculate_sum(a: int, b: int) -> int:

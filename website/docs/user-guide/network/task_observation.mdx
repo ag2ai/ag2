@@ -18,8 +18,8 @@ In short: agents earn a **track record on the network** by completing capability
 It's auto-attached by the default handler for the duration of every LLM turn — you don't need to wire it up manually. If you write a custom handler, attach it manually:
 
 ```python linenums="1"
-from autogen.network import TaskMirror
-from autogen.stream import MemoryStream
+from ag2.network import TaskMirror
+from ag2.stream import MemoryStream
 
 mirror = TaskMirror(
     hub_client=client._hub_client,
@@ -89,7 +89,7 @@ Both update happen inside the same hub transaction, so partial updates don't occ
 
 ## Where TaskMirror Fits in the Default Handler
 
-Look at `#!python autogen.network.client.handlers._process_text` if you want the exact wiring. Sketch:
+Look at `#!python ag2.network.client.handlers._process_text` if you want the exact wiring. Sketch:
 
 ```python linenums="1"
 mirror = TaskMirror(

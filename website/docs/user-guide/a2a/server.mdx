@@ -12,10 +12,10 @@ The smallest end-to-end setup: an `#!python Agent` with a tool, served over JSON
 ```python linenums="1"
 import uvicorn
 
-from autogen import Agent
-from autogen.a2a import A2AServer, build_card
-from autogen.config import AnthropicConfig
-from autogen.tools import tool
+from ag2 import Agent
+from ag2.a2a import A2AServer, build_card
+from ag2.config import AnthropicConfig
+from ag2.tools import tool
 
 @tool(description="Add two integers and return the sum as a string.")
 async def calc_add(a: int, b: int) -> str:
@@ -59,11 +59,11 @@ After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.we
 Tools attached to the wrapped `#!python Agent` execute on the server, just as they would for a local agent. The remote LLM picks them up automatically.
 
 ```python linenums="1" hl_lines="10-13"
-from autogen import Agent
-from autogen.a2a import A2AServer
-from autogen.config import AnthropicConfig
-from autogen.tools import tool
-from autogen.tools.builtin import WebSearchTool
+from ag2 import Agent
+from ag2.a2a import A2AServer
+from ag2.config import AnthropicConfig
+from ag2.tools import tool
+from ag2.tools.builtin import WebSearchTool
 
 agent = Agent(
     name="claude",
@@ -169,11 +169,11 @@ await asyncio.gather(
 
 ### Declaring Authentication
 
-`#!python autogen.a2a.security` ships factories for every A2A-recognised scheme. Each factory returns a typed `#!python Scheme` object that carries its card-level binding name. Pass them to `#!python require(...)` to build `#!python Requirement` entries; `#!python build_card` auto-derives the card's `#!python security_schemes` from the schemes referenced in `#!python security=` — no duplicate declarations.
+`#!python ag2.a2a.security` ships factories for every A2A-recognised scheme. Each factory returns a typed `#!python Scheme` object that carries its card-level binding name. Pass them to `#!python require(...)` to build `#!python Requirement` entries; `#!python build_card` auto-derives the card's `#!python security_schemes` from the schemes referenced in `#!python security=` — no duplicate declarations.
 
 ```python linenums="1" hl_lines="8-9 14"
-from autogen.a2a import A2AServer, build_card
-from autogen.a2a.security import (
+from ag2.a2a import A2AServer, build_card
+from ag2.a2a.security import (
     bearer_scheme,
     api_key_scheme,
     require,
