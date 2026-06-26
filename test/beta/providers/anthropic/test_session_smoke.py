@@ -165,21 +165,35 @@ async def test_conversation_bidirectional_real_llm(anthropic_config: AnthropicCo
 
 @pytest.mark.anthropic
 @pytest.mark.asyncio
+@pytest.mark.timeout(90)
 async def test_discussion_round_robin_three_real_agents(anthropic_config: AnthropicConfig) -> None:
     """3-way discussion. Each agent's default handler engages only
     when the adapter's ``expected_next_speaker`` matches them (via the
     ``can_send`` probe), so the rotation is naturally synchronous.
+
+    Four sequential real LLM round-trips (alice → bob → carol → alice)
+    exceed the suite-wide 45s ``pytest-timeout``, so this test carries
+    its own 90s marker. Prompts give each agent a concrete opinion to
+    state so every turn yields a substantive non-empty reply — an empty
+    reply posts no envelope and would dead-stall the rotation.
     """
+    _opinion_prompt = (
+        "You are {name}, a participant in a round-robin discussion about "
+        "whether remote work is good for software teams. When it is your "
+        "turn, reply with exactly one short opinion (one sentence) as "
+        "plain text. Do not ask questions and do not call any tools — just "
+        "state your opinion."
+    )
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
 
     alice = await hub.register(
-        _agent("alice", "You are alice. Reply briefly in one sentence.", anthropic_config),
+        _agent("alice", _opinion_prompt.format(name="alice"), anthropic_config),
     )
     bob = await hub.register(
-        _agent("bob", "You are bob. Reply briefly in one sentence.", anthropic_config),
+        _agent("bob", _opinion_prompt.format(name="bob"), anthropic_config),
     )
     carol = await hub.register(
-        _agent("carol", "You are carol. Reply briefly in one sentence.", anthropic_config),
+        _agent("carol", _opinion_prompt.format(name="carol"), anthropic_config),
     )
 
     channel = await alice.open(
@@ -187,11 +201,13 @@ async def test_discussion_round_robin_three_real_agents(anthropic_config: Anthro
         target=["bob", "carol"],
         knobs={"ordering": "round_robin"},
     )
-    await channel.send("Each of you say hello with your name.")
+    await channel.send("Let's debate: is remote work good for software teams?")
 
     # Expect alice (kickoff) → bob → carol → alice (cycle wraps).
-    # Stop at 4 EV_TEXT envelopes.
-    wal = await _wait_text_count(hub, channel.channel_id, expected=4, timeout=60.0)
+    # Stop at 4 EV_TEXT envelopes. Poll budget sits under the 90s
+    # per-test timeout marker so a stall surfaces the assertion below
+    # rather than a signal kill.
+    wal = await _wait_text_count(hub, channel.channel_id, expected=4, timeout=75.0)
     text_envelopes = [e for e in wal if e.event_type == EV_TEXT]
     senders = [e.sender_id for e in text_envelopes[:4]]
     assert senders == [alice.agent_id, bob.agent_id, carol.agent_id, alice.agent_id], (
