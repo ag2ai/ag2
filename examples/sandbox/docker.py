@@ -1,9 +1,9 @@
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.extensions.docker import DockerEnvironment
-from autogen.beta.tools import SandboxCodeTool, SandboxShellTool
+from autogen import Agent
+from autogen.config import AnthropicConfig
+from autogen.extensions.docker import DockerEnvironment
+from autogen.tools import SandboxCodeTool, SandboxShellTool
 
 env = DockerEnvironment(image="python:3.12-slim")
 

@@ -33,14 +33,14 @@ BASE_URL = "https://docs.ag2.ai/latest"
 PROJECT_TITLE = "AG2 Beta"
 
 SUMMARY = (
-    "AG2 Beta (`autogen.beta`) is an async, protocol-driven Python framework for building "
+    "AG2 Beta (`autogen`) is an async, protocol-driven Python framework for building "
     "AI agents — covering agents, tools, multi-agent networks, structured output, memory, "
     "and evaluation. This file indexes the Beta documentation for LLMs and coding assistants."
 )
 
 # Free-form details paragraph(s) emitted after the blockquote.
 DETAILS = (
-    "Build with `autogen.beta` only. The classic `autogen` API (`ConversableAgent`, "
+    "Build with `autogen` only. The classic `autogen` API (`ConversableAgent`, "
     "`initiate_chat`, `GroupChat`) is retired at v1.0 — do not use it. For ready-made "
     "setup, install the AG2 Skills with `npx skills add ag2ai/ag2-skills`."
 )

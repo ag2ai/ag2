@@ -1,8 +1,8 @@
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import LocalEnvironment, SandboxCodeTool, SandboxShellTool
+from autogen import Agent
+from autogen.config import AnthropicConfig
+from autogen.tools import LocalEnvironment, SandboxCodeTool, SandboxShellTool
 
 env = LocalEnvironment()
 

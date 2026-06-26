@@ -1,9 +1,9 @@
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.a2a import A2AConfig
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools.subagents import persistent_stream
+from autogen import Agent
+from autogen.a2a import A2AConfig
+from autogen.config import AnthropicConfig
+from autogen.tools.subagents import persistent_stream
 
 researcher = Agent(
     "researcher",

@@ -1,8 +1,8 @@
 import uvicorn
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.mcp import MCPServer, Prompt, PromptArgument, Resource, ResourceTemplate, SessionConfig
+from autogen import Agent
+from autogen.config import AnthropicConfig
+from autogen.mcp import MCPServer, Prompt, PromptArgument, Resource, ResourceTemplate, SessionConfig
 
 agent = Agent(
     name="claude",

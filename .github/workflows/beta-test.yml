@@ -30,9 +30,9 @@ jobs:
         with:
           filters: |
             autogen:
-              - "autogen/beta/**"
+              - "autogen/**"
             test:
-              - "test/beta/**"
+              - "test/**"
             workflows:
               - ".github/workflows/beta-test.yml"
             setup:

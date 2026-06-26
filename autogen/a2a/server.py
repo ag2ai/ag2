@@ -1,297 +1,207 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
-from collections.abc import Callable
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from a2a.compat.v0_3 import conversions as _v03_conversions
-from a2a.compat.v0_3.types import AgentCapabilities, AgentCard, AgentExtension, AgentSkill
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
-from a2a.server.tasks import InMemoryTaskStore
-from pydantic import Field
-from starlette.applications import Starlette
+from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
+from a2a.server.tasks import (
+    InMemoryTaskStore,
+    PushNotificationConfigStore,
+    PushNotificationSender,
+    TaskStore,
+)
+from a2a.types import AgentCard
 
-from autogen import ConversableAgent
+from autogen.agent import Agent
 
-from .agent_executor import AutogenAgentExecutor
-from .utils import make_async_card_modifier, make_async_extended_card_modifier
+from .card import build_card
+from .executor import AgentExecutor
+from .transports._common import (
+    DEFAULT_AGENT_CARD_PATH,
+    LEGACY_AGENT_CARD_PATH,
+    CardModifier,
+    ExtendedCardModifier,
+)
+from .transports.grpc import build_grpc_server
+from .transports.jsonrpc import build_jsonrpc_asgi
+from .transports.rest import build_rest_asgi
 
 if TYPE_CHECKING:
-    from a2a.server.agent_execution import RequestContextBuilder
-    from a2a.server.context import ServerCallContext
-    from a2a.server.events import QueueManager
-    from a2a.server.request_handlers import RequestHandler
-    from a2a.server.routes.common import ServerCallContextBuilder
-    from a2a.server.tasks import PushNotificationConfigStore, PushNotificationSender, TaskStore
-    from starlette.middleware.base import BaseHTTPMiddleware
-
-    from autogen import ConversableAgent
+    from grpc.aio import Server
+    from starlette.applications import Starlette
 
 
-class CardSettings(AgentCard):
-    """Original A2A AgentCard object inheritor making some fields optional."""
+class A2AServer:
+    """Wrap an AG2 ``Agent`` as an A2A endpoint.
 
-    name: str | None = None  # type: ignore[assignment]
-    """
-    A human-readable name for the agent. Uses original agent name if not set.
-    """
+    Holds transport-agnostic state (executor, task/push stores, extended
+    card, per-card modifier hooks). Transport-specific parameters (URL,
+    ports, paths) live on the ``build_*`` methods — one server can be
+    exposed on different URLs through different transports.
 
-    description: str | None = None  # type: ignore[assignment]
-    """
-    A human-readable description of the agent, assisting users and other agents
-    in understanding its purpose. Uses original agent description if not set.
-    """
+    ``extended_card``, when supplied, is served via the JSON-RPC
+    ``GetExtendedAgentCard`` method; the public card automatically flips
+    ``capabilities.extended_agent_card`` when an extended card is provided.
 
-    url: str | None = None  # type: ignore[assignment]
-    """
-    The preferred endpoint URL for interacting with the agent.
-    This URL MUST support the transport specified by 'preferredTransport'.
-    Uses original A2aAgentServer url if not set.
-    """
+    Each builder returns a ready-to-serve transport object:
+    :py:meth:`build_jsonrpc` and :py:meth:`build_rest` return a Starlette
+    ASGI app; :py:meth:`build_grpc` returns a ``grpc.aio.Server``.
 
-    version: str = "0.1.0"
-    """
-    The agent's own version number. The format is defined by the provider.
+    A2A spec doesn't define middleware — attach cross-cutting concerns
+    (CORS, auth, tracing) to the returned transport object directly.
     """
 
-    default_input_modes: list[str] = Field(default_factory=lambda: ["text"])
-    """
-    Default set of supported input MIME types for all skills, which can be
-    overridden on a per-skill basis.
-    """
-
-    default_output_modes: list[str] = Field(default_factory=lambda: ["text"])
-    """
-    Default set of supported output MIME types for all skills, which can be
-    overridden on a per-skill basis.
-    """
-
-    capabilities: AgentCapabilities = Field(default_factory=lambda: AgentCapabilities(streaming=True))
-    """
-    A declaration of optional capabilities supported by the agent.
-    """
-
-    skills: list[AgentSkill] = Field(default_factory=list)
-    """
-    The set of skills, or distinct capabilities, that the agent can perform.
-    """
-
-
-class A2aAgentServer:
-    """A server wrapper for running an AG2 agent via the A2A protocol.
-
-    This class provides functionality to wrap an AG2 ConversableAgent into an A2A server
-    that can be used to interact with the agent through A2A requests.
-    """
+    __slots__ = (
+        "_agent",
+        "_card_modifier",
+        "_executor",
+        "_extended_card",
+        "_extended_card_modifier",
+        "_push_config_store",
+        "_push_sender",
+        "_task_store",
+    )
 
     def __init__(
         self,
-        agent: "ConversableAgent",
+        agent: Agent,
         *,
-        url: str | None = "http://localhost:8000",
-        agent_card: CardSettings | None = None,
-        card_modifier: Callable[["AgentCard"], "AgentCard"] | None = None,
-        extended_agent_card: CardSettings | None = None,
-        extended_card_modifier: Callable[["AgentCard", "ServerCallContext"], "AgentCard"] | None = None,
+        extended_card: AgentCard | None = None,
+        card_modifier: CardModifier | None = None,
+        extended_card_modifier: ExtendedCardModifier | None = None,
+        task_store: TaskStore | None = None,
+        push_config_store: PushNotificationConfigStore | None = None,
+        push_sender: PushNotificationSender | None = None,
+        executor: A2AAgentExecutorBase | None = None,
     ) -> None:
-        """Initialize the A2aAgentServer.
-
-        Args:
-            agent: The Autogen ConversableAgent to serve.
-            url: The base URL for the A2A server.
-            agent_card: Configuration for the base agent card.
-            card_modifier: Function to modify the base agent card.
-            extended_agent_card: Configuration for the extended agent card.
-            extended_card_modifier: Function to modify the extended agent card.
-        """
-        self.agent = agent
-
-        if not agent_card:
-            agent_card = CardSettings()
-
-        if agent_card.url and url != "http://localhost:8000":
-            warnings.warn(
-                (
-                    "You can't use `agent_card.url` and `url` options in the same time. "
-                    f"`agent_card.url` has a higher priority, so `{agent_card.url}` will be used."
-                ),
-                RuntimeWarning,
-                stacklevel=2,
-            )
-
-        self.card = AgentCard.model_validate({
-            # use agent options by default
-            "name": agent.name,
-            "description": agent.description,
-            "url": url,
-            "supports_authenticated_extended_card": extended_agent_card is not None,
-            # exclude name and description if not provided
-            **agent_card.model_dump(exclude_none=True),
-        })
-
-        self.extended_agent_card: AgentCard | None = None
-        if extended_agent_card:
-            if extended_agent_card.url and url != "http://localhost:8000":
-                warnings.warn(
-                    (
-                        "You can't use `extended_agent_card.url` and `url` options in the same time. "
-                        f"`agent_card.url` has a higher priority, so `{extended_agent_card.url}` will be used."
-                    ),
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-
-            self.extended_agent_card = AgentCard.model_validate({
-                "name": agent.name,
-                "description": agent.description,
-                "url": url,
-                **extended_agent_card.model_dump(exclude_none=True),
-            })
-
-        # Auto-add A2UI extension to card if wrapping an A2UIAgent.
-        # Declares the extension URI and supportedCatalogIds in the agent card
-        # so clients know what A2UI version and catalogs this agent supports.
-        try:
-            from autogen.agents.experimental.a2ui import A2UIAgent
-            from autogen.agents.experimental.a2ui.a2a_helpers import A2UI_EXTENSION_URI
-
-            if isinstance(agent, A2UIAgent):
-                existing_extensions = list(self.card.capabilities.extensions or [])
-                if not any(e.uri == A2UI_EXTENSION_URI for e in existing_extensions):
-                    # Build params with supportedCatalogIds per A2UI extension spec
-                    params: dict[str, Any] = {
-                        "supportedCatalogIds": [agent.catalog_id],
-                    }
-                    existing_extensions.append(
-                        AgentExtension(
-                            uri=A2UI_EXTENSION_URI,
-                            description="Provides agent-driven UI using the A2UI v0.9 JSON format.",
-                            params=params,
-                        )
-                    )
-                    self.card.capabilities.extensions = existing_extensions
-        except (ImportError, NameError):
-            pass
-
-        self.card_modifier = card_modifier
-        self.extended_card_modifier = extended_card_modifier
-        self.middlewares: list[tuple[BaseHTTPMiddleware, dict[str, Any]]] = []
-
-    def add_middleware(self, middleware: "BaseHTTPMiddleware", **kwargs: Any) -> None:
-        """Add a middleware to the A2A server."""
-        self.middlewares.append((middleware, kwargs))
+        self._agent = agent
+        self._extended_card = extended_card
+        self._card_modifier = card_modifier
+        self._extended_card_modifier = extended_card_modifier
+        # Materialise the store eagerly so multi-transport setups (same
+        # server exposed via JSON-RPC + REST + gRPC) all share one task
+        # store. Otherwise each builder defaults to its own.
+        self._task_store = task_store or InMemoryTaskStore()
+        self._push_config_store = push_config_store
+        self._push_sender = push_sender
+        # ``executor`` is escape-hatch for tests / advanced use cases that
+        # need a custom ``AgentExecutor``. Default wraps the supplied agent.
+        self._executor = executor if executor is not None else AgentExecutor(agent)
 
     @property
-    def executor(self) -> AutogenAgentExecutor:
-        """Get the A2A agent executor.
+    def agent(self) -> Agent:
+        return self._agent
 
-        Auto-detects ``A2UIAgent`` and returns an ``A2UIAgentExecutor`` that
-        preserves A2UI DataParts in responses and handles extension negotiation.
+    @property
+    def extended_card(self) -> AgentCard | None:
+        return self._extended_card
+
+    @property
+    def task_store(self) -> TaskStore:
+        """The shared task store used across all transport builders."""
+        return self._task_store
+
+    def _shared_kwargs(self, *, include_card_modifier: bool) -> dict[str, Any]:
+        """Wiring shared by every ``build_*`` method.
+
+        gRPC has no HTTP card route, so ``card_modifier`` is dropped there.
         """
-        try:
-            from autogen.agents.experimental.a2ui import A2UIAgent
-            from autogen.agents.experimental.a2ui.a2a_executor import A2UIAgentExecutor
+        kwargs: dict[str, Any] = {
+            "agent_executor": self._executor,
+            "extended_agent_card": self._extended_card,
+            "extended_card_modifier": self._extended_card_modifier,
+            "task_store": self._task_store,
+            "push_config_store": self._push_config_store,
+            "push_sender": self._push_sender,
+        }
+        if include_card_modifier:
+            kwargs["card_modifier"] = self._card_modifier
+        return kwargs
 
-            if isinstance(self.agent, A2UIAgent):
-                return A2UIAgentExecutor(  # type: ignore[return-value]
-                    self.agent,
-                    delimiter=self.agent._response_delimiter,
-                    version_string=self.agent.protocol_version,
-                )
-        except (ImportError, NameError):
-            pass
-        return AutogenAgentExecutor(self.agent)
-
-    def build_request_handler(
+    def build_jsonrpc(
         self,
         *,
-        task_store: "TaskStore | None" = None,
-        queue_manager: "QueueManager | None" = None,
-        push_config_store: "PushNotificationConfigStore | None" = None,
-        push_sender: "PushNotificationSender | None" = None,
-        request_context_builder: "RequestContextBuilder | None" = None,
-    ) -> "RequestHandler":
-        """Build a request handler for A2A application.
-
-        Args:
-            task_store: The task store to use.
-            queue_manager: The queue manager to use.
-            push_config_store: The push notification config store to use.
-            push_sender: The push notification sender to use.
-            request_context_builder: The request context builder to use.
-
-        Returns:
-            A configured RequestHandler instance.
-        """
-        # Bridge our public sync v0.3-pydantic extended_card_modifier to the
-        # async proto-pydantic-proto signature SDK 1.0 expects, so the user
-        # callback runs per request with a real ServerCallContext.
-        extended_card_modifier_bridge = (
-            make_async_extended_card_modifier(self.extended_card_modifier)
-            if self.extended_card_modifier is not None
-            else None
+        url: str,
+        card: AgentCard | None = None,
+        rpc_url: str = "/",
+        card_url: str = DEFAULT_AGENT_CARD_PATH,
+        legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
+    ) -> "Starlette":
+        """Starlette ASGI app exposing JSON-RPC routes + agent card."""
+        resolved_card = card or build_card(
+            self._agent,
+            url=url,
+            transports=("jsonrpc",),
+            push_notifications=self._push_config_store is not None,
+        )
+        return build_jsonrpc_asgi(
+            agent_card=resolved_card,
+            rpc_url=rpc_url,
+            card_url=card_url,
+            legacy_card_url=legacy_card_url,
+            **self._shared_kwargs(include_card_modifier=True),
         )
 
-        return DefaultRequestHandler(
-            agent_executor=self.executor,
-            task_store=task_store or InMemoryTaskStore(),
-            agent_card=_v03_conversions.to_core_agent_card(self.card),
-            queue_manager=queue_manager,
-            push_config_store=push_config_store,
-            push_sender=push_sender,
-            request_context_builder=request_context_builder,
-            extended_agent_card=(
-                _v03_conversions.to_core_agent_card(self.extended_agent_card)
-                if self.extended_agent_card is not None
-                else None
-            ),
-            extended_card_modifier=extended_card_modifier_bridge,
-        )
-
-    def build_starlette_app(
+    def build_rest(
         self,
         *,
-        request_handler: "RequestHandler | None" = None,
-        context_builder: "ServerCallContextBuilder | None" = None,
-    ) -> Starlette:
-        """Build a Starlette A2A application for ASGI server.
+        url: str,
+        card: AgentCard | None = None,
+        path_prefix: str = "",
+        card_url: str = DEFAULT_AGENT_CARD_PATH,
+        legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
+    ) -> "Starlette":
+        """Starlette ASGI app exposing REST routes + agent card.
 
-        Args:
-            request_handler: The request handler to use.
-            context_builder: The context builder to use.
-
-        Returns:
-            A configured Starlette application instance.
+        ``path_prefix`` mounts REST under a sub-path (e.g. ``"/v1"``); both
+        the AgentCard interface URL and the dispatcher respect it.
         """
-        handler = request_handler or self.build_request_handler()
-
-        # Bridge sync v0.3-pydantic card_modifier to async proto-pydantic-proto
-        # so SDK 1.0 invokes it per request when the well-known card is fetched.
-        card_modifier_bridge = make_async_card_modifier(self.card_modifier) if self.card_modifier is not None else None
-
-        routes = list(
-            create_agent_card_routes(
-                _v03_conversions.to_core_agent_card(self.card),
-                card_modifier=card_modifier_bridge,
-            )
+        resolved_card = card or build_card(
+            self._agent,
+            url=url,
+            transports=("rest",),
+            rest_path_prefix=path_prefix,
+            push_notifications=self._push_config_store is not None,
         )
-        routes.extend(
-            create_jsonrpc_routes(
-                handler,
-                rpc_url="/",
-                context_builder=context_builder,
-                enable_v0_3_compat=True,
-            )
+        return build_rest_asgi(
+            agent_card=resolved_card,
+            path_prefix=path_prefix,
+            card_url=card_url,
+            legacy_card_url=legacy_card_url,
+            **self._shared_kwargs(include_card_modifier=True),
         )
 
-        app = Starlette(routes=routes)
+    def build_grpc(
+        self,
+        *,
+        bind: str,
+        grpc_url: str,
+        card: AgentCard | None = None,
+        options: Sequence[tuple[str, Any]] = (),
+    ) -> "Server":
+        """``grpc.aio.Server`` bound to ``bind``; caller starts/awaits it.
 
-        for middleware, kwargs in self.middlewares:
-            app.add_middleware(middleware, **kwargs)  # type: ignore[arg-type]
+        ``bind`` is the listener address (e.g. ``"0.0.0.0:50051"``).
+        ``grpc_url`` is the public URL clients will connect to (used in
+        the AgentCard interface entry — usually identical to ``bind``,
+        but not when behind a load balancer). Insecure binding only.
 
-        return app
-
-    build = build_starlette_app  # default alias for build_starlette_app
+        ``card_modifier`` does not apply: A2A v1.x has no ``GetAgentCard``
+        gRPC method — the public card is served over HTTP only.
+        ``extended_card_modifier`` does apply (gRPC has ``GetExtendedAgentCard``).
+        """
+        resolved_card = card or build_card(
+            self._agent,
+            url=grpc_url,
+            transports=("grpc",),
+            grpc_url=grpc_url,
+            push_notifications=self._push_config_store is not None,
+        )
+        return build_grpc_server(
+            agent_card=resolved_card,
+            bind=bind,
+            options=options,
+            **self._shared_kwargs(include_card_modifier=False),
+        )

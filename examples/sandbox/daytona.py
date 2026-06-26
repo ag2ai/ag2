@@ -1,9 +1,9 @@
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.extensions.daytona import DaytonaEnvironment
-from autogen.beta.tools import SandboxCodeTool, SandboxShellTool
+from autogen import Agent
+from autogen.config import AnthropicConfig
+from autogen.extensions.daytona import DaytonaEnvironment
+from autogen.tools import SandboxCodeTool, SandboxShellTool
 
 env = DaytonaEnvironment(image="python:3.12")
 

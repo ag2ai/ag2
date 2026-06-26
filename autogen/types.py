@@ -1,29 +1,103 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-#
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
-# SPDX-License-Identifier: MIT
 
-from typing import Any, Literal, TypedDict
+import types
+from collections.abc import Sequence
+from datetime import datetime
+from decimal import Decimal
+from typing import (
+    Any,
+    ClassVar,
+    Literal,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+)
 
-MessageContentType = str | list[dict[str, Any] | str] | None
+AudioMediaType: TypeAlias = Literal[
+    "audio/wav",
+    "audio/mpeg",
+    "audio/ogg",
+    "audio/flac",
+    "audio/aiff",
+    "audio/aac",
+]
+ImageMediaType: TypeAlias = Literal[
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+]
+DocumentMediaType: TypeAlias = Literal[
+    "application/pdf",
+    # Text and code
+    "text/plain",
+    "text/csv",
+    "text/tsv",
+    "text/html",
+    "text/markdown",
+    "text/xml",
+    "text/css",
+    "text/javascript",
+    "text/calendar",
+    "text/vcard",
+    "text/srt",
+    "text/vtt",
+    "application/json",
+    "application/sql",
+    "message/rfc822",
+    # Rich documents
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/rtf",
+    "application/vnd.oasis.opendocument.text",
+    # Spreadsheets
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    # Presentations
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]
+VideoMediaType: TypeAlias = Literal[
+    "video/x-matroska",
+    "video/quicktime",
+    "video/mp4",
+    "video/webm",
+    "video/x-flv",
+    "video/mpeg",
+    "video/x-ms-wmv",
+    "video/3gpp",
+]
+
+MediaType: TypeAlias = AudioMediaType | ImageMediaType | DocumentMediaType | VideoMediaType
+
+ClassInfo: TypeAlias = type | types.UnionType | tuple["ClassInfo", ...]
 
 
-class UserMessageTextContentPart(TypedDict):
-    """Represents a text content part of a user message"""
-
-    type: Literal["text"]
-    """The type of the content part. Always "text" for text content parts."""
-    text: str
-    """The text content of the part."""
+class Omit:
+    def __bool__(self) -> Literal[False]:
+        return False
 
 
-class UserMessageImageContentPart(TypedDict):
-    """Represents an image content part of a user message"""
+omit = Omit()
 
-    type: Literal["image_url"]
-    """The type of the content part. Always "image_url" for image content parts."""
-    # Ignoring the other "detail param for now"
-    image_url: dict[Literal["url"], str]
-    """The URL of the image."""
+_T = TypeVar("_T")
+
+Omittable = _T | Omit
+
+
+JsonDecodable: TypeAlias = bool | bytes | bytearray | float | int | str | None
+
+SendableArray: TypeAlias = Sequence["SendableMessage"]
+
+SendableTable: TypeAlias = dict[str, "SendableMessage"]
+
+
+class StandardDataclass(Protocol):
+    """Protocol to check type is dataclass."""
+
+    __dataclass_fields__: ClassVar[dict[str, Any]]
+
+
+SendableMessage: TypeAlias = JsonDecodable | StandardDataclass | SendableTable | SendableArray | Decimal | datetime

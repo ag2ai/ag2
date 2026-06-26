@@ -25,5 +25,5 @@ done
 
 echo "Running beta tests with mark: $MARK"
 
-# Call the test script targeting only test/beta
-bash scripts/test.sh test/beta "$@" -m "$MARK"
+# Call the test script targeting only test
+bash scripts/test.sh test "$@" -m "$MARK"

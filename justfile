@@ -17,16 +17,16 @@ _beta_llm_filter := "not (openai or openai_realtime or gemini or gemini_realtime
 test-beta *params:
   pytest -vv --durations=10 --durations-min=1.0 \
     -m "{{ _beta_llm_filter }}" \
-    test/beta/ {{ params }}
+    test/ {{ params }}
 
 [doc("Run beta tests with coverage")]
 [group("tests")]
 test-beta-cov *params:
   pytest -vv --durations=10 --durations-min=1.0 \
-    --cov=autogen/beta --cov-branch --cov-report=xml \
+    --cov=autogen --cov-branch --cov-report=xml \
     -m "{{ _beta_llm_filter }}" \
-    test/beta/ {{ params }}
-  coverage report -m --include="autogen/beta/*"
+    test/ {{ params }}
+  coverage report -m --include="autogen/*"
 
 _beta_llm_default_mark := "openai or gemini or anthropic or zai or ollama or dashscope"
 
@@ -35,30 +35,30 @@ _beta_llm_default_mark := "openai or gemini or anthropic or zai or ollama or das
 test-beta-llm mark=_beta_llm_default_mark *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
     -m "{{ mark }}" \
-    test/beta/ {{ params }}
+    test/ {{ params }}
 
 [doc("Run beta tests with LLM and coverage (e.g. just test-beta-llm-cov openai)")]
 [group("tests")]
 test-beta-llm-cov mark=_beta_llm_default_mark *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
-    --cov=autogen/beta/config --cov-branch --cov-report=xml \
+    --cov=autogen/config --cov-branch --cov-report=xml \
     -m "{{ mark }}" \
-    test/beta/ {{ params }}
-  coverage report -m --include="autogen/beta/config/*"
+    test/ {{ params }}
+  coverage report -m --include="autogen/config/*"
 
 [doc("Run all beta tests (with and without LLMs)")]
 [group("tests")]
 test-beta-all *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
-    test/beta/ {{ params }}
+    test/ {{ params }}
 
 [doc("Run all beta tests with coverage")]
 [group("tests")]
 test-beta-all-cov *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
-    --cov=autogen/beta --cov-branch --cov-report=xml \
-    test/beta/ {{ params }}
-  coverage report -m --include="autogen/beta/*"
+    --cov=autogen --cov-branch --cov-report=xml \
+    test/ {{ params }}
+  coverage report -m --include="autogen/*"
 
 
 # Linter

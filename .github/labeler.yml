@@ -5,13 +5,6 @@ A2A:
       - test/a2a/**
       - website/docs/a2a/**
 
-beta:
-  - changed-files:
-    - any-glob-to-any-file:
-      - autogen/beta/**
-      - test/beta/**
-      - website/docs/beta/**
-
 dependencies:
   - changed-files:
     - any-glob-to-any-file:
@@ -28,12 +21,6 @@ github_actions:
   - changed-files:
     - any-glob-to-any-file:
       - .github/workflows/**
-
-telemetry:
-  - changed-files:
-    - any-glob-to-any-file:
-      - autogen/opentelemetry/**
-      - test/opentelemetry/**
 
 ui:
   - changed-files:

@@ -1,6 +1,6 @@
 import asyncio
 
-from autogen.beta.live import (
+from autogen.live import (
     LiveAgent,
     OpenAIRealTimeConfig,
     SoundDevicePlayer,

@@ -1,7 +1,7 @@
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.a2a import A2AConfig
+from autogen import Agent
+from autogen.a2a import A2AConfig
 
 
 async def hitl_hook() -> str:

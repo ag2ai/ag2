@@ -1,13 +1,13 @@
 import asyncio
 
-from autogen.beta.events import ModelMessageChunk, TranscriptionChunkEvent
-from autogen.beta.live import (
+from autogen.events import ModelMessageChunk, TranscriptionChunkEvent
+from autogen.live import (
     LiveAgent,
     SoundDevicePlayer,
     SoundDeviceRecorder,
     gemini,
 )
-from autogen.beta.tools import ToolResult, tool
+from autogen.tools import ToolResult, tool
 
 
 @tool

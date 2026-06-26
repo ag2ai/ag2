@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from importlib.metadata import version
+
 __all__ = ("__version__",)
 
-__version__ = "0.14.0"
+__version__ = version("ag2")

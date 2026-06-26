@@ -1,44 +1,23 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-try:
-    from a2a.compat.v0_3.types import AgentCard
-except ImportError as e:
-    raise ImportError("a2a-sdk is not installed. Please install it with:\npip install ag2[a2a]") from e
+
+from autogen.exceptions import missing_additional_dependency, missing_optional_dependency
 
 try:
-    import httpx  # noqa: F401
+    from .card import build_card
+    from .config import A2AConfig
 except ImportError as e:
-    raise ImportError("httpx is not installed. Please install it with:\npip install httpx") from e
-
-import warnings
+    build_card = missing_optional_dependency("build_card", "a2a", e)  # type: ignore[misc]
+    A2AConfig = missing_optional_dependency("A2AConfig", "a2a", e)  # type: ignore[misc]
 
 try:
-    from .agent_executor import AutogenAgentExecutor
-    from .client import A2aRemoteAgent
-    from .client_factory import HttpxClientFactory, MockClient
-    from .server import A2aAgentServer, CardSettings
+    from .server import A2AServer
 except ImportError as e:
-    raise ImportError(
-        'a2a-sdk[http-server] is not installed. Please install it with:\npip install "a2a-sdk[http-server]"'
-    ) from e
-
-warnings.warn(
-    (
-        "AG2 Implementation for A2A support is in experimental mode "
-        "and is subjected to breaking changes. Once it's stable enough the "
-        "experimental mode will be removed. Your feedback is welcome."
-    ),
-    ImportWarning,
-    stacklevel=2,
-)
+    A2AServer = missing_additional_dependency("A2AServer", "a2a-sdk[http-server]", e)  # type: ignore[misc]
 
 __all__ = (
-    "A2aAgentServer",
-    "A2aRemoteAgent",
-    "AgentCard",
-    "AutogenAgentExecutor",
-    "CardSettings",
-    "HttpxClientFactory",
-    "MockClient",
+    "A2AConfig",
+    "A2AServer",
+    "build_card",
 )

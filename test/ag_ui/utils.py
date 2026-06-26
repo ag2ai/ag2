@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -50,9 +50,9 @@ def get_weather_tool() -> Tool:
     )
 
 
-async def collect_events(stream: AGUIStream, run_input: RunAgentInput) -> list[dict[str, Any]]:
+async def collect_events(stream: AGUIStream, run_input: RunAgentInput, **kwargs: Any) -> list[dict[str, Any]]:
     events = []
-    async for event in stream.dispatch(run_input):
+    async for event in stream.dispatch(run_input, **kwargs):
         event_str = event.removeprefix("data: ").strip()
         if event_str:
             events.append(json.loads(event_str))

@@ -1,28 +1,24 @@
 # AG2 code owners
 # About code owners https://docs.github.com/ru/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-# A2A, AG-UI, beta and Remote
-/autogen/a2a/ @Lancetnik
+# Framework
+/autogen/ @Lancetnik
+/test/ @Lancetnik
+
+# A2A and AG-UI
+/autogen/a2a/ @vvlrff
+/test/a2a/ @vvlrff
 /autogen/ag_ui/ @Lancetnik
-/autogen/agentchat/remote/ @Lancetnik
-/autogen/beta/ @Lancetnik
-/autogen/beta/a2a/ @vvlrff
-/autogen/beta/config/ @marklysze
-
-/test/a2a/ @Lancetnik
 /test/ag_ui/ @Lancetnik
-/test/agentchat/remote/ @Lancetnik
-/test/beta/ @Lancetnik
-/test/beta/config/ @marklysze
 
-/website/docs/user-guide/a2a/ @Lancetnik
-/website/docs/user-guide/ag-ui/ @Lancetnik
+# Provider configs
+/autogen/config/ @marklysze
+/test/config/ @marklysze
+
+# Shell Tool
+/autogen/tools/shell/ @priyansh4320
 
 # Observability
+/website/docs/user-guide/a2a/ @Lancetnik
+/website/docs/user-guide/ag-ui/ @Lancetnik
 /website/docs/user-guide/observability/ @priyansh4320
-
-# GPT Apply Patch Tool & Shell Tool
-/autogen/tools/experimental/apply_patch/ @priyansh4320
-/autogen/tools/experimental/shell/ @priyansh4320
-/test/tools/experimental/apply_patch/ @priyansh4320
-/test/tools/experimental/shell/ @priyansh4320
