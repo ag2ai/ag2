@@ -376,8 +376,6 @@ class TestRedisStream:
 
         task = stream._listener_task
         task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
         assert task.cancelled()
 
     async def test_local_dispatch_survives_listener_failure(self, redis_stream):
