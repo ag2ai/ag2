@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-echo "Running beta tests with mark: $MARK"
+echo "Running LLM tests with mark: $MARK"
 
 # Call the test script targeting only test
 bash scripts/test.sh test "$@" -m "$MARK"

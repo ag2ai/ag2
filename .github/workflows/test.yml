@@ -1,4 +1,4 @@
-name: Beta tests
+name: Tests
 
 on:
   pull_request:
@@ -34,7 +34,7 @@ jobs:
             test:
               - "test/**"
             workflows:
-              - ".github/workflows/beta-test.yml"
+              - ".github/workflows/test.yml"
             setup:
               - "pyproject.toml"
 
@@ -64,13 +64,13 @@ jobs:
           uv pip install --system --group=test --group=optionals -e .
       - name: Test with pytest
         run: |
-          just test-beta-cov
+          just test-cov
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ./coverage.xml
-          flags: beta, ubuntu-latest, ${{ matrix.python-version }}
+          flags: ubuntu-latest, ${{ matrix.python-version }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -95,13 +95,13 @@ jobs:
           uv pip install --system --group=test --group=optionals -e .
       - name: Test with pytest
         run: |
-          just test-beta-cov
+          just test-cov
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ./coverage.xml
-          flags: beta, macos-latest, 3.13
+          flags: macos-latest, 3.13
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -126,13 +126,13 @@ jobs:
           uv pip install --system --group=test --group=optionals -e .
       - name: Test with pytest
         run: |
-          just test-beta-cov
+          just test-cov
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ./coverage.xml
-          flags: beta, windows-latest, 3.13
+          flags: windows-latest, 3.13
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 

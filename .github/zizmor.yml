@@ -8,8 +8,8 @@ rules:
       - dependabot.yml
   secrets-outside-env:
     ignore:
-      - beta-test.yml
-      - beta-llm-test.yml
+      - test.yml
+      - llm-test.yml
       - claude-code-review.yml
       - claude.yml
       - pr-checks.yml

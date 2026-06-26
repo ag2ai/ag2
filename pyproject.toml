@@ -60,7 +60,7 @@ dependencies = [
     "packaging",
     "httpx>=0.28.1,<1",
     "anyio>=4.0.0,<5.0.0",
-    # for beta tools
+    # for tools
     "fast-depends[pydantic]>=3.0.8,<4.0.0",
 ]
 
@@ -141,9 +141,9 @@ test = [
     "aiofiles>=24.1.0,<26.0.0",
 ]
 
-# All optional feature deps needed so the full (non-LLM) beta test suite can be
+# All optional feature deps needed so the full (non-LLM) test suite can be
 # collected and run. This has no dev-extra equivalent; it is consumed directly
-# by the beta-test CI workflow alongside the `test` group.
+# by the test CI workflow alongside the `test` group.
 optionals = [
     "ag2[redis]",
     "ag2[ag-ui]",
@@ -174,12 +174,12 @@ docs = [
     "ag2[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` module
     "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.middleware` module
     "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
-    # Beta extensions are not shipped as extras; install their packages directly so docs can import the modules
+    # Extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.2.3; python_version>='3.11'",
     "daytona>=0.171.0,<1",
     "exa-py>=2.12.1,<3",
     "docker>=6.0.0,<8",                     # Code execution tools are exposed in the public API by the optional `autogen.tools` module
-    # Beta optional dependencies
+    # Optional dependencies
     "ag2[openai]",                     # OpenAI is exposed in the public API by the optional `autogen.config` module
     "ag2[anthropic]",                  # Anthropic is exposed in the public API by the optional `autogen.config` module
     "ag2[gemini]",                     # Gemini is exposed in the public API by the optional `autogen.config` module
@@ -189,7 +189,7 @@ docs = [
     "ag2[redis]",                      # Redis is exposed in the public API by the optional `autogen.streams` module
     "watchdog>=4.0,<7",                # DiskKnowledgeStore (autogen.knowledge) — additional dependency
     "websockets>=14.0,<17",            # WsLink (autogen.network) — additional dependency
-    "ag2[tavily,ddgs,perplexity]",     # Search tools are exposed by optional beta search modules
+    "ag2[tavily,ddgs,perplexity]",     # Search tools are exposed by optional search modules
     "mkdocs-material==9.7.6",
     "mkdocs-literate-nav==0.6.3",
     "mdx-include==1.4.2",
