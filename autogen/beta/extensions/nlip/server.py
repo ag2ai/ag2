@@ -21,12 +21,15 @@ class _AgentNlipSession(NLIP_Session):
 
     def __init__(self, agent: Agent) -> None:
         super().__init__()
+        self._agent = agent
         self._executor = NlipExecutor(agent)
 
     async def start(self) -> None:
         await super().start()
+        logger.info(f"Started NLIP session for agent: {self._agent.name}")
 
     async def execute(self, msg: NLIP_Message) -> NLIP_Message:
+        logger.info(f"Executing agent {self._agent.name} with NLIP message")
         return await self._executor.execute(msg)
 
     async def stop(self) -> None:
