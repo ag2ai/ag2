@@ -25,6 +25,7 @@ from .parts import (
     is_data_part_with_mime,
     part_data_to_python,
     struct_from_dict,
+    struct_to_dict,
 )
 from .tools import call_to_payload, payload_to_call
 
@@ -49,5 +50,6 @@ __all__ = [
     "payload_to_call",
     "payload_to_events",
     "struct_from_dict",
+    "struct_to_dict",
     "task_state_to_status_update",
 ]
