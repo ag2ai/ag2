@@ -170,12 +170,6 @@ async def test_discussion_round_robin_three_real_agents(anthropic_config: Anthro
     """3-way discussion. Each agent's default handler engages only
     when the adapter's ``expected_next_speaker`` matches them (via the
     ``can_send`` probe), so the rotation is naturally synchronous.
-
-    Four sequential real LLM round-trips (alice → bob → carol → alice)
-    exceed the suite-wide 45s ``pytest-timeout``, so this test carries
-    its own 90s marker. Prompts give each agent a concrete opinion to
-    state so every turn yields a substantive non-empty reply — an empty
-    reply posts no envelope and would dead-stall the rotation.
     """
     _opinion_prompt = (
         "You are {name}, a participant in a round-robin discussion about "
