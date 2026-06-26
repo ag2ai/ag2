@@ -37,7 +37,7 @@ The transport applies A2UI behaviour to the plain agent per turn (prompt + valid
 
 | Concept | Lives in | Purpose |
 |---|---|---|
-| `#!python Agent` | `#!python autogen` | A plain agent — wrap it in an A2UI transport to emit validated A2UI output |
+| `#!python Agent` | `#!python ag2` | A plain agent — wrap it in an A2UI transport to emit validated A2UI output |
 | `#!python a2ui_action` | `#!python ag2.a2ui` | Decorator turning a function into a clickable button (server `#!python event` action). A click runs the handler **on the server** — the agent is not invoked. Declared on the transport via `#!python actions=[...]` |
 | `#!python A2UIMessageEvent` | `#!python ag2.a2ui` | One validated A2UI server→client message on the stream — the event seam every transport consumes |
 | `#!python A2UIClientEvent` | `#!python ag2.a2ui` | One client→server interaction received from the renderer (click / `#!python functionResponse` / error) — the inbound observability seam |
