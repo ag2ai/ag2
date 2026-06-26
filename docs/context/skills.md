@@ -1,6 +1,6 @@
 # Skills
 
-The local-skills subsystem (`autogen/beta/tools/skills/`) implements the
+The local-skills subsystem (`autogen/tools/skills/`) implements the
 agentskills.io progressive-disclosure pattern: skills are directories discovered
 on the filesystem, surfaced to the model as a catalog, and loaded / read /
 executed on demand through tools.
