@@ -68,6 +68,44 @@ async def test_collects_events_in_window(self) -> None:
 - Always use `autogen.beta.testing.TestConfig` to mock LLM responses in agent-based tests.
 - Always use `autogen.beta.testing.TrackingConfig` to validate messages the framework sends to the LLM (for example: tool results and user input).
 
+### No monkeypatching internals
+
+Do not use `monkeypatch.setattr`, `setattr` on an instance, or `unittest.mock.patch` to swap out a private function, method, or attribute (anything `_prefixed`). Patching internals pins the test to *how* the code works today, so it keeps passing even after the real behavior breaks.
+
+The agent's public seam is `config=`. Script the LLM's turns with `autogen.beta.testing.TestConfig` instead of reaching for the agent's private client — the same test, before and after:
+
+```python
+from autogen.beta import Agent
+from autogen.beta.events import ToolCallEvent
+from autogen.beta.testing import TestConfig
+
+# BAD — patch the agent's private client to script the turn. The test breaks the
+# moment that internal is renamed, and a green run proves nothing about the wiring.
+async def test_agent_answers_with_tool(monkeypatch):
+    agent = Agent("weather", tools=[get_weather])
+    monkeypatch.setattr(agent, "_client", _scripted_client(...))   # private attribute
+    ...
+
+# GOOD — script the same turns through the public `config=` seam.
+async def test_agent_answers_with_tool():
+    agent = Agent(
+        "weather",
+        config=TestConfig(
+            ToolCallEvent(name="get_weather", arguments='{"city": "Tokyo"}'),  # turn 1: call the tool
+            "It's sunny in Tokyo.",                                            # turn 2: final reply
+        ),
+        tools=[get_weather],
+    )
+
+    reply = await agent.ask("Weather in Tokyo?")
+
+    assert reply.body == "It's sunny in Tokyo."
+```
+
+Use `TrackingConfig` (which wraps a `TestConfig`) when you also need to assert what the framework *sent* the LLM — again, no patching required.
+
+Failure paths follow the same principle: raise from a public collaborator, never a patched internal — an `Agent` double whose `ask` raises, a `TraceSource` whose `load` raises, or a `LinkEndpoint` whose `frames()` raises (registered with `hub.attach_endpoint(...)`). If a branch can *only* be reached by patching an internal, it isn't publicly observable: cover the observable contract instead of reaching in to hit the line.
+
 ### Assertion style
 
 Avoid chained field-access assertions like `result[0]["tool_calls"][0]["function"]["arguments"] == {...}`. Instead, compare the whole object directly (`assert msg == {...}`) or use **dirty-equals** `IsPartialDict` when only some fields matter:

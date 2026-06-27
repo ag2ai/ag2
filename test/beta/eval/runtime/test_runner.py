@@ -21,7 +21,6 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 pytest.importorskip("opentelemetry.sdk")
 
-import autogen.beta.eval.runtime.runner as runner_mod
 from autogen.beta import Agent, tool
 from autogen.beta.eval import (
     BudgetThresholds,
@@ -668,18 +667,23 @@ class TestTelemetryInjection:
 
 
 @pytest.mark.asyncio
-async def test_produce_one_failure_does_not_abort_whole_run(tmp_path: Path, monkeypatch) -> None:
-    """If one _produce_one coroutine raises, the run still returns with the surviving task's result present."""
-    calls: dict[str, int] = {"n": 0}
-    real = runner_mod._produce_one
+async def test_one_task_failure_does_not_abort_whole_run(tmp_path: Path) -> None:
+    """One failing task is isolated: its error lands on the trace while the surviving task
+    still runs and scores, so the run returns both entries instead of aborting.
 
-    async def flaky(*args, **kwargs):  # type: ignore[no-untyped-def]
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise RuntimeError("agent production exploded")
-        return await real(*args, **kwargs)
+    The failure is injected the public way — one task's cassette calls a tool that raises, so
+    ``ask`` surfaces the error through ``run_agent`` with no patching of runner internals.
+    """
 
-    monkeypatch.setattr(runner_mod, "_produce_one", flaky)
+    @tool
+    async def explode() -> str:
+        raise RuntimeError("tool exploded")
+
+    agent = Agent(
+        "weather",
+        prompt="You are a weather assistant. Use get_weather to answer.",
+        tools=[get_weather, explode],
+    )
 
     suite = Suite.from_list([
         {"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}},
@@ -688,18 +692,18 @@ async def test_produce_one_failure_does_not_abort_whole_run(tmp_path: Path, monk
 
     result = await run_agent(
         suite,
-        agent=_build_weather_agent(),
+        agent=agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
-        model_config={"t1": _cassette("Tokyo"), "t2": _cassette("Paris")},
+        model_config={"t1": TestConfig(ToolCallEvent(name="explode")), "t2": _cassette("Paris")},
         concurrency=2,
     )
 
-    # Run must not raise — returns a RunResult with both task entries
+    # Run must not raise — returns a RunResult with both task entries.
     assert len(result.tasks) == 2
-    # The failed production has its exception on the trace
+    # The failed task has its exception on the trace.
     failed = next(tr for tr in result.tasks if tr.task.task_id == "t1")
     assert isinstance(failed.trace.exception, RuntimeError)
-    # The surviving task scored normally
+    # The surviving task scored normally.
     surviving = next(tr for tr in result.tasks if tr.task.task_id == "t2")
-    assert surviving.feedback[0].score is True
+    assert surviving.feedback == (Feedback(key="called_get_weather", score=True),)

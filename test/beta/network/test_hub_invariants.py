@@ -817,42 +817,50 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
     await hub.close()
 
 
-class _FakeEndpoint:
-    """Minimal LinkEndpoint stub: yields ``frames_to_yield``, then stops."""
+class _FailingEndpoint:
+    """A ``LinkEndpoint`` whose inbound stream errors mid-read.
 
-    def __init__(self, frames_to_yield: list[object]) -> None:
-        self.endpoint_id = "fake-ep-001"
+    Models a transport that drops with an unexpected error while the hub reads
+    frames — the failure the hub must surface before dropping the endpoint.
+    """
+
+    def __init__(self) -> None:
+        self.endpoint_id = "failing-ep-001"
         self.agent_id: str | None = None
-        self._frames = frames_to_yield
-
-    async def frames(self):  # type: ignore[override]
-        for frame in self._frames:
-            yield frame
 
     async def send_frame(self, frame: object) -> None:  # noqa: D102
         pass
+
+    async def frames(self):  # type: ignore[override]
+        raise RuntimeError("transport read failed")
+        yield  # pragma: no cover - marks this coroutine as an async generator
 
     async def close(self) -> None:  # noqa: D102
         pass
 
 
 @pytest.mark.asyncio
-async def test_handle_endpoint_logs_dispatch_failure(caplog: pytest.LogCaptureFixture) -> None:
-    """``_handle_endpoint`` must log at ERROR level before dropping an endpoint
-    when the frame-dispatch loop raises an unexpected exception."""
+async def test_endpoint_frame_loop_failure_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """When an endpoint's frame stream errors, the hub logs at ERROR before dropping it
+    rather than swallowing the failure silently.
+
+    Drives the public ``attach_endpoint`` path with a transport whose ``frames()`` raises,
+    then awaits the spawned endpoint task to completion — no patching of hub internals.
+    """
     store = MemoryKnowledgeStore()
     hub = Hub(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    endpoint = _FakeEndpoint(frames_to_yield=[object()])
-
-    # Patch _dispatch_frame to raise so the loop fails deterministically.
-    async def _boom(ep: object, frame: object) -> None:
-        raise RuntimeError("dispatch failed")
-
-    hub._dispatch_frame = _boom  # type: ignore[method-assign]
 
     with caplog.at_level(logging.ERROR, logger="autogen.beta.network.hub.core"):
-        await hub._handle_endpoint(endpoint)  # type: ignore[arg-type]
+        before = asyncio.all_tasks()
+        hub.attach_endpoint(_FailingEndpoint())  # type: ignore[arg-type]
+        spawned = asyncio.all_tasks() - before
+        await asyncio.gather(*spawned, return_exceptions=True)
 
-    assert any("dispatch failed" in r.getMessage() or r.exc_info for r in caplog.records), (
-        f"Expected ERROR log with 'dispatch failed'; got records: {[r.getMessage() for r in caplog.records]}"
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert any("endpoint frame loop failed" in r.getMessage() for r in errors), (
+        f"Expected ERROR log for the dropped endpoint; got records: {[r.getMessage() for r in caplog.records]}"
     )
+    # The original transport failure is attached to the log record (logged via ``exception``).
+    assert any(r.exc_info and isinstance(r.exc_info[1], RuntimeError) for r in errors)
+
+    await hub.close()
