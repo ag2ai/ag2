@@ -39,10 +39,10 @@ class _AgentNlipSession(NLIP_Session):
 class NlipServer:
     """Wrap an AG2 ``Agent`` as a NLIP endpoint.
 
-    NLIP has no discovery card, no transports, and no task lifecycle, so 
-    there is exactly one way to serve it. The instance is itself an ASGI 
-    callable (built eagerly via ``nlip_server.setup_server`` so lifespan 
-    hooks are wired up before any request arrives); hand it directly to 
+    NLIP has no discovery card, no transports, and no task lifecycle, so
+    there is exactly one way to serve it. The instance is itself an ASGI
+    callable (built eagerly via ``nlip_server.setup_server`` so lifespan
+    hooks are wired up before any request arrives); hand it directly to
     any ASGI server::
 
         import uvicorn

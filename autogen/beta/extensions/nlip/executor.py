@@ -21,7 +21,7 @@ class NlipExecutor:
 
     NLIP sessions are stateless — each call rebuilds a fresh ``MemoryStream``
     and ``Context`` from the history carried on the incoming message,
-    without any task/queue machinery since NLIP has no streaming or 
+    without any task/queue machinery since NLIP has no streaming or
     multi-turn task lifecycle on the wire: one request in, one response out.
     """
 

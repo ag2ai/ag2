@@ -2,17 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.exceptions import missing_optional_dependency
+from autogen.beta.exceptions import missing_additional_dependency
 
 try:
     from .config import NlipConfig
 except ImportError as e:
-    NlipConfig = missing_optional_dependency("NlipConfig", "nlip", e)  # type: ignore[misc]
+    NlipConfig = missing_additional_dependency("NlipConfig", "nlip-sdk nlip-server", e)  # type: ignore[misc]
 
 try:
     from .server import NlipServer
 except ImportError as e:
-    NlipServer = missing_optional_dependency("NlipServer", "nlip", e)  # type: ignore[misc]
+    NlipServer = missing_additional_dependency("NlipServer", "nlip-sdk nlip-server", e)  # type: ignore[misc]
 
 __all__ = (
     "NlipConfig",

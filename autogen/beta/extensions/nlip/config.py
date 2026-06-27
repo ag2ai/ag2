@@ -27,8 +27,8 @@ class NlipConfig(ModelConfig):
     """Connection config for a remote NLIP agent acting as an LLM provider.
 
     ``url`` is the base URL of the NLIP server (e.g. ``"http://host:8000"``);
-    requests are posted to ``{url}/nlip/``. NLIP has no discovery card and no 
-    task lifecycle — every call is a single stateless request/response 
+    requests are posted to ``{url}/nlip/``. NLIP has no discovery card and no
+    task lifecycle — every call is a single stateless request/response
     exchange.
 
     ``httpx_client_factory`` builds the ``httpx.AsyncClient`` used for each

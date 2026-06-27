@@ -288,8 +288,6 @@ ddgs = ["ddgs>=9.0.0,<10"]
 tavily = ["tavily-python>=0.7.4,<0.8"]
 perplexity = ["perplexityai>=0.30.0,<1"]
 
-nlip = ["nlip-sdk>=0.1.0, <1", "nlip-server>=0.1.3, <1"]
-
 ## dev dependencies
 
 # test dependencies
@@ -318,13 +316,14 @@ test = [
 
 docs = [
     "ag2[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` / `autogen.beta.a2a` modules
-    "ag2[nlip]",    # NLIP is exposed in the public API by the optional `autogen.beta.nlip` module
     "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
     "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
     # Beta extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.2.3; python_version>='3.11'",
     "daytona>=0.171.0,<1",
     "exa-py>=2.12.1,<3",
+    "nlip-sdk>=0.1.0,<1",      # NLIP is exposed in the public API by the optional `autogen.beta.extensions.nlip` module
+    "nlip-server>=0.1.3,<1",
     "ag2[docker]",                     # Code execution tools are exposed in the public API by the optional `autogen.tools` module
     # Beta optional dependencies
     "ag2[openai]",                     # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
@@ -365,7 +364,9 @@ types = [
     "types-requests",
     "types-ujson",
     "types-aiofiles",
-    "ag2[test, openai, a2a, nlip, ag-ui]",
+    "ag2[test, openai, a2a, ag-ui]",
+    "nlip-sdk>=0.1.0,<1",
+    "nlip-server>=0.1.3,<1",
 ]
 
 lint = ["ruff==0.14.14", "codespell==2.4.2", "zizmor==1.25.2"]

@@ -95,7 +95,6 @@ setuptools.setup(
         "ddgs": ["ag2[ddgs]==" + __version__],
         "tavily": ["ag2[tavily]==" + __version__],
         "perplexity": ["ag2[perplexity]==" + __version__],
-        "nlip": ["ag2[nlip]==" + __version__],
         "test-core": ["ag2[test-core]==" + __version__],
         "test": ["ag2[test]==" + __version__],
         "docs": ["ag2[docs]==" + __version__],

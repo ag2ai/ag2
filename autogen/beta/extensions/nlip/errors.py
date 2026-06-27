@@ -37,8 +37,8 @@ class RehydratedNlipToolError(Exception):
 class NlipInputRequiredError(NlipError):
     """Raised when a remote NLIP server asks for human input.
 
-    NLIP is stateless and has no HITL hook on the wire; the caller is 
-    expected to catch this, obtain the answer, and resend a fresh 
+    NLIP is stateless and has no HITL hook on the wire; the caller is
+    expected to catch this, obtain the answer, and resend a fresh
     request with the user's reply appended to the conversation history.
     """
 
