@@ -45,6 +45,7 @@ setuptools.setup(
         "bedrock": ["ag2[bedrock]==" + __version__],
         "mistral": ["ag2[mistral]==" + __version__],
         "dashscope": ["ag2[dashscope]==" + __version__],
+        "acp": ["ag2[acp]==" + __version__],
         "redis": ["ag2[redis]==" + __version__],
         "tracing": ["ag2[tracing]==" + __version__],
         "flaml": ["ag2[flaml]==" + __version__],
