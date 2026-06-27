@@ -47,7 +47,7 @@ class NlipServer:
 
         import uvicorn
         from autogen.beta import Agent
-        from autogen.beta.nlip import NlipServer
+        from autogen.beta.extensions.nlip import NlipServer
 
         agent = Agent("assistant", config=...)
         server = NlipServer(agent)
