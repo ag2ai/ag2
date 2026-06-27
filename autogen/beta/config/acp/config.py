@@ -40,7 +40,7 @@ class ACPConfig:
 
     Attributes:
         command: Executable + base args launching the agent in ACP mode,
-            e.g. ``["claude-code-acp"]``. The first element is the executable.
+            e.g. ``["claude-agent-acp"]``. The first element is the executable.
         cwd: Workspace root passed to ``session/new``.
         env: Extra environment variables for the subprocess (auth typically
             lives here or is inherited from the parent process).
@@ -102,4 +102,4 @@ class ACPConfig:
 class ClaudeCodeConfig(ACPConfig):
     """``ACPConfig`` preset for the Claude Code ACP adapter."""
 
-    command: list[str] = field(default_factory=lambda: ["claude-code-acp"])
+    command: list[str] = field(default_factory=lambda: ["claude-agent-acp"])
