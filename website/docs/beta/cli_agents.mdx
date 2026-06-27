@@ -7,7 +7,7 @@ sidebarTitle: CLI Agents (ACP)
 
 AG2 can drive external CLI coding agents — **Claude Code**, **Codex**, **OpenCode**,
 **Gemini CLI**, and others — as first-class `beta` agents, using the
-[Agent Client Protocol](https://agentclientprotocol.com) (ACP).
+[Agent Client Protocol](https://agentclientprotocol.com){.external-link target="_blank"} (ACP).
 
 AG2 plays the ACP **Client** role; each CLI agent runs as an ACP **Agent**
 subprocess. Everything the agent does — message output, thinking, tool calls,
@@ -18,14 +18,15 @@ you can observe, gate, and orchestrate it like any other AG2 agent.
 pip install "ag2[acp]"
 ```
 
-The integration is a configuration class (`ClaudeCodeConfig`, a subclass of
-`ACPConfig`) — there are no changes to the `Agent` API.
+The integration is a configuration class — a subclass of `ACPConfig` carrying the
+launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
+`OpenCodeConfig`) — and there are no changes to the `Agent` API.
 
 ## Basic Usage
 
 ```python linenums="1"
 from autogen.beta import Agent
-from autogen.beta.config.acp import ClaudeCodeConfig
+from autogen.beta.acp import ClaudeCodeConfig
 
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
@@ -36,16 +37,62 @@ print(reply.body)
 A single `ask()`/`run()` maps to one ACP *prompt turn*: the CLI agent runs its
 own internal tool loop and AG2 streams every step as it happens.
 
+## Choosing an agent
+
+Each adapter is a preset with its own launch command and authentication:
+
+<Tabs>
+  <Tab title="Claude Code">
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.acp import ClaudeCodeConfig
+
+# Launches `claude-agent-acp`; auth via ANTHROPIC_API_KEY (env) or CLAUDE_CONFIG_DIR.
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+
+  <Tab title="Codex">
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.acp import CodexConfig
+
+# Launches `codex-acp`; auth via CODEX_API_KEY or OPENAI_API_KEY (env).
+agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+
+  <Tab title="OpenCode">
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.acp import OpenCodeConfig
+
+# Launches `opencode acp`; auth via `opencode auth login` (or env / .env).
+# Pick the model in OpenCode's own config (opencode.json: "model": "provider/model").
+agent = Agent("coder", config=OpenCodeConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+</Tabs>
+
+!!! note "OpenCode model selection"
+
+    As with the Claude Code and Codex adapters, `OpenCodeConfig`'s `model` field is
+    response metadata only. OpenCode's `acp` subcommand takes no `--model` flag —
+    select the model in OpenCode's own config (`opencode.json`:
+    `"model": "provider/model"`). With nothing configured and no authenticated
+    provider, OpenCode falls back to the first model of its built-in `opencode`
+    provider (OpenCode Zen).
+
 ## Observing the agent's work
 
 Subscribe to the run's stream to see thoughts, tool calls, and plans live:
 
 ```python linenums="1"
 from autogen.beta import Agent
-from autogen.beta.config.acp import ClaudeCodeConfig
+from autogen.beta.acp import ClaudeCodeConfig
 from autogen.beta.events import ModelMessageChunk, ModelReasoning
 from autogen.beta.events.tool_events import BuiltinToolCallEvent
-from autogen.beta.config.acp.events import ACPPlan
+from autogen.beta.acp.events import ACPPlan
 
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
@@ -59,7 +106,6 @@ def observe(event):
     elif isinstance(event, ACPPlan):
         for step in event.entries:
             print(f"  [{step.status}] {step.content}")
-
 
 async with agent.run("Add a healthcheck endpoint") as run:
     run.stream.subscribe(observe)  # subscribe before driving
@@ -100,7 +146,7 @@ of one another via `.as_tool()`:
 
 ```python linenums="1"
 from autogen.beta import Agent
-from autogen.beta.config.acp import ClaudeCodeConfig
+from autogen.beta.acp import ClaudeCodeConfig
 
 reviewer = Agent("reviewer", config=ClaudeCodeConfig(cwd="/repo"))
 manager = Agent(

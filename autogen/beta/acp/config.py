@@ -5,9 +5,9 @@
 
 ``ACPConfig`` implements the :class:`~autogen.beta.config.config.ModelConfig`
 protocol; ``create()`` returns an ``ACPClient`` that drives the CLI agent over
-the Agent Client Protocol. ``ClaudeCodeConfig`` and ``CodexConfig`` are thin
-subclasses carrying the launch defaults for the Claude Code and Codex ACP
-adapters respectively.
+the Agent Client Protocol. ``ClaudeCodeConfig``, ``CodexConfig`` and
+``OpenCodeConfig`` are thin subclasses carrying the launch defaults for the
+Claude Code, Codex and OpenCode ACP adapters respectively.
 """
 
 from dataclasses import dataclass, field, replace
@@ -128,3 +128,17 @@ class CodexConfig(ACPConfig):
     """
 
     command: list[str] = field(default_factory=lambda: ["codex-acp"])
+
+
+@dataclass(slots=True)
+class OpenCodeConfig(ACPConfig):
+    """``ACPConfig`` preset for the OpenCode ACP adapter.
+
+    Launches ``opencode acp``, which must be on ``PATH``. Authenticate with
+    ``opencode auth login`` (or env / ``.env``). Select the model in OpenCode's
+    config (``opencode.json``: ``"model": "provider/model"``); the ``acp``
+    subcommand takes no ``--model`` flag, and the ``model`` field here is
+    response metadata only, not sent to the agent.
+    """
+
+    command: list[str] = field(default_factory=lambda: ["opencode", "acp"])

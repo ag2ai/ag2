@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.acp import ACPConfig, ClaudeCodeConfig, CodexConfig
+from autogen.beta.acp import ACPConfig, ClaudeCodeConfig, CodexConfig, OpenCodeConfig
 from autogen.beta.config.client import LLMClient
 
 
@@ -33,6 +33,34 @@ def test_codex_copy_preserves_subclass() -> None:
 def test_codex_create_returns_llmclient() -> None:
     client = CodexConfig().create()
     assert isinstance(client, LLMClient)
+
+
+def test_opencode_defaults() -> None:
+    cfg = OpenCodeConfig()
+    assert cfg.command == ["opencode", "acp"]
+    assert cfg.permission_policy == "ask"
+    assert cfg.cwd == "."
+    assert cfg.allow_terminal is True
+
+
+def test_opencode_copy_preserves_subclass() -> None:
+    cfg = OpenCodeConfig(cwd="/a")
+    cfg2 = cfg.copy(cwd="/b")
+    assert cfg.cwd == "/a"
+    assert cfg2.cwd == "/b"
+    assert isinstance(cfg2, OpenCodeConfig)
+
+
+def test_opencode_create_returns_llmclient() -> None:
+    client = OpenCodeConfig().create()
+    assert isinstance(client, LLMClient)
+
+
+def test_opencode_model_is_metadata_only() -> None:
+    # The `acp` subcommand takes no `--model` flag; model selection lives in
+    # OpenCode's own config, so `model` must not alter the launch command.
+    cfg = OpenCodeConfig(model="anthropic/claude-sonnet-4")
+    assert cfg.command == ["opencode", "acp"]
 
 
 def test_copy_overrides_without_mutating() -> None:
