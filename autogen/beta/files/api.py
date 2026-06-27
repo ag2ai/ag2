@@ -4,6 +4,7 @@
 
 from os import PathLike
 from pathlib import Path
+from typing import Any
 
 from autogen.beta.config.config import ModelConfig
 
@@ -24,8 +25,14 @@ class FilesAPI(FilesClient):
         data: bytes | None = None,
         filename: str | None = None,
         purpose: str | None = None,
+        **provider_options: Any,
     ) -> UploadedFile:
-        """Upload a file to the provider."""
+        """Upload a file to the provider.
+
+        Provider-specific options can be passed as keyword arguments and are
+        forwarded to the underlying client (e.g. ``knowledge_id`` for Z.AI's
+        ``retrieval`` purpose). Clients ignore options they do not recognize.
+        """
         if path is not None:
             p = Path(path)
             data = p.read_bytes()
@@ -34,7 +41,7 @@ class FilesAPI(FilesClient):
             raise ValueError("Either 'path' or 'data' must be provided.")
         if filename is None:
             raise ValueError("'filename' is required when using 'data' without 'path'.")
-        return await self._client.upload(data, filename, purpose)
+        return await self._client.upload(data, filename, purpose, **provider_options)
 
     async def read(self, file_id: str) -> FileContent:
         """Download file content by ID."""
