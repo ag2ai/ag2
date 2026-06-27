@@ -7,18 +7,18 @@
   <br>
   <br>
 
-  <a href="https://www.pepy.tech/projects/ag2">
-    <img src="https://static.pepy.tech/personalized-badge/ag2?period=month&units=international_system&left_color=grey&right_color=green&left_text=downloads/month" alt="Downloads"/>
+  <a href="https://www.pepy.tech/projects/autogen">
+    <img src="https://static.pepy.tech/personalized-badge/autogen?period=month&units=international_system&left_color=grey&right_color=green&left_text=downloads/month" alt="Downloads"/>
   </a>
 
   <a href="https://pypi.org/project/autogen/">
-    <img src="https://img.shields.io/pypi/v/ag2?label=PyPI&color=green">
+    <img src="https://img.shields.io/pypi/v/autogen?label=PyPI&color=green">
   </a>
 
-  <img src="https://img.shields.io/pypi/pyversions/ag2.svg?label=">
+  <img src="https://img.shields.io/pypi/pyversions/autogen.svg?label=">
 
-  <a href="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml">
-    <img src="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg">
+  <a href="https://github.com/ag2ai/ag2classic/actions/workflows/python-package.yml">
+    <img src="https://github.com/ag2ai/ag2classic/actions/workflows/python-package.yml/badge.svg">
   </a>
   <a href="https://discord.gg/pAbnFJrkgZ">
     <img src="https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat">
@@ -44,9 +44,9 @@ AG2 was evolved from AutoGen. Fully open-sourced. We invite collaborators from a
 </p>
 
 > [!IMPORTANT]
-> **AG2 is on the path to v1.0.** The current framework will be tidied up through deprecations over the next few minor versions and moved to maintenance mode. The beta framework (`autogen.beta`) will become the official version of AG2 at v1.0.
+> **This is the classic AutoGen repository** — the original `autogen` framework built around `ConversableAgent`. It is published to PyPI as the [`autogen`](https://pypi.org/project/autogen/) package and is now in **maintenance mode**: it receives **security and critical bug fixes only**, with no new features.
 >
-> [Read the full release roadmap →](https://docs.ag2.ai/latest/docs/user-guide/release-roadmap/)
+> **AG2 is the current, actively developed version.** Find it at [github.com/ag2ai/ag2](https://github.com/ag2ai/ag2) (PyPI: [`ag2`](https://pypi.org/project/ag2/)), with documentation at [docs.ag2.ai](https://docs.ag2.ai/).
 
 # AG2: Open-Source AgentOS for AI Agents
 
@@ -82,16 +82,18 @@ For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](h
 
 ### Installation
 
-AG2 requires **Python version >= 3.10**. AG2 is available via `ag2` (or its alias `autogen`) on PyPI.
+This repository is the classic AutoGen, published as the [`autogen`](https://pypi.org/project/autogen/) package on PyPI (in maintenance mode — security and critical fixes only). For the current, actively developed version, install [`ag2`](https://pypi.org/project/ag2/) instead.
+
+Classic AutoGen requires **Python version >= 3.10**.
 
 **Windows/Linux:**
 ```bash
-pip install ag2[openai]
+pip install autogen[openai]
 ```
 
 **Mac:**
 ```bash
-pip install 'ag2[openai]'
+pip install 'autogen[openai]'
 ```
 
 Minimal dependencies are installed by default. You can install extra options based on the features you need.
@@ -435,8 +437,8 @@ prek run --all-files
 
 ## Contributors Wall
 
-<a href="https://github.com/ag2ai/ag2/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ag2ai/ag2&max=204" />
+<a href="https://github.com/ag2ai/ag2classic/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ag2ai/ag2classic&max=204" />
 </a>
 
 ## Cite the project
@@ -446,7 +448,7 @@ prek run --all-files
 author = {Chi Wang and Qingyun Wu and the AG2 Community},
 title = {AG2: Open-Source AgentOS for AI Agents},
 year = {2024},
-url = {https://github.com/ag2ai/ag2},
+url = {https://github.com/ag2ai/ag2classic},
 note = {Available at https://docs.ag2.ai/},
 version = {latest}
 }
