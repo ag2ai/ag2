@@ -5,18 +5,17 @@
 /ag2/ @Lancetnik
 /test/ @Lancetnik
 
-# A2A and AG-UI
+# A2A, A2UI, AG-UI
 /ag2/a2a/ @vvlrff
 /test/a2a/ @vvlrff
+/ag2/a2ui/ @vvlrff
+/test/a2ui/ @vvlrff
 /ag2/ag_ui/ @Lancetnik
 /test/ag_ui/ @Lancetnik
 
 # Provider configs
 /ag2/config/ @marklysze
 /test/config/ @marklysze
-
-# Shell Tool
-/ag2/tools/shell/ @priyansh4320
 
 # Observability
 /website/docs/user-guide/a2a/ @Lancetnik
