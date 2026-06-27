@@ -5,8 +5,9 @@
 
 ``ACPConfig`` implements the :class:`~autogen.beta.config.config.ModelConfig`
 protocol; ``create()`` returns an ``ACPClient`` that drives the CLI agent over
-the Agent Client Protocol. ``ClaudeCodeConfig`` is a thin subclass with Claude
-Code launch defaults.
+the Agent Client Protocol. ``ClaudeCodeConfig`` and ``CodexConfig`` are thin
+subclasses carrying the launch defaults for the Claude Code and Codex ACP
+adapters respectively.
 """
 
 from dataclasses import dataclass, field, replace
@@ -100,6 +101,30 @@ class ACPConfig:
 
 @dataclass(slots=True)
 class ClaudeCodeConfig(ACPConfig):
-    """``ACPConfig`` preset for the Claude Code ACP adapter."""
+    """``ACPConfig`` preset for the Claude Code ACP adapter.
+
+    Launches the ``@agentclientprotocol/claude-agent-acp`` bin, which must be on
+    ``PATH`` (install globally, or override ``command`` to run it via
+    ``npx -y @agentclientprotocol/claude-agent-acp``). The adapter wraps the
+    Claude Agent SDK; authenticate by setting ``ANTHROPIC_API_KEY`` in ``env``
+    or by pointing ``CLAUDE_CONFIG_DIR`` at an existing Claude Code login.
+    Select the model via the adapter's ``ANTHROPIC_MODEL`` env var (the
+    ``model`` field is currently response metadata only, not sent to the agent).
+    """
 
     command: list[str] = field(default_factory=lambda: ["claude-agent-acp"])
+
+
+@dataclass(slots=True)
+class CodexConfig(ACPConfig):
+    """``ACPConfig`` preset for the Codex ACP adapter.
+
+    Launches the ``@agentclientprotocol/codex-acp`` bin, which must be on
+    ``PATH`` (install globally, or override ``command`` to run it via
+    ``npx -y @agentclientprotocol/codex-acp``). Authenticate by setting
+    ``CODEX_API_KEY`` (takes precedence) or ``OPENAI_API_KEY`` in ``env``.
+    Select the model via the adapter's ``MODEL_PROVIDER`` env var (the
+    ``model`` field is currently response metadata only, not sent to the agent).
+    """
+
+    command: list[str] = field(default_factory=lambda: ["codex-acp"])

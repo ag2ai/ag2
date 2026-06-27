@@ -6,7 +6,7 @@ import pytest
 from acp import schema
 
 from autogen.beta import Agent
-from autogen.beta.config.acp.testing import ACPTurn, fake_acp_config
+from autogen.beta.acp.testing import ACPTurn, fake_acp_config
 from autogen.beta.events import BaseEvent, ModelReasoning
 from autogen.beta.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
 

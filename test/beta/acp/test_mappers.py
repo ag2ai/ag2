@@ -7,8 +7,8 @@ import base64
 from acp import schema
 from dirty_equals import IsPartialDict
 
-from autogen.beta.config.acp.events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
-from autogen.beta.config.acp.mappers import (
+from autogen.beta.acp.events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
+from autogen.beta.acp.mappers import (
     content_blocks_to_files,
     content_blocks_to_text,
     map_session_update,

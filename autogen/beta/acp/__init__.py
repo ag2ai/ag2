@@ -8,6 +8,6 @@ The integration is a :class:`ModelConfig` + :class:`LLMClient` pair — no chang
 to the :class:`~autogen.beta.Agent` class.
 """
 
-from .config import ACPConfig, ClaudeCodeConfig
+from .config import ACPConfig, ClaudeCodeConfig, CodexConfig
 
-__all__ = ["ACPConfig", "ClaudeCodeConfig"]
+__all__ = ["ACPConfig", "ClaudeCodeConfig", "CodexConfig"]

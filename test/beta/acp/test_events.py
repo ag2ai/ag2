@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.acp.events import (
+from autogen.beta.acp.events import (
     ACPAvailableCommands,
     ACPModeChange,
     ACPPlan,

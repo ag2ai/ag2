@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from acp import schema
 
-from autogen.beta.config.acp.bridge import BridgeState, _confine, make_bridge
-from autogen.beta.config.acp.config import ACPConfig
+from autogen.beta.acp.bridge import BridgeState, _confine, make_bridge
+from autogen.beta.acp.config import ACPConfig
 from autogen.beta.events import BaseEvent, ModelMessageChunk, ModelReasoning
 
 

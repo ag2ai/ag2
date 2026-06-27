@@ -5,7 +5,7 @@
 import pytest
 from acp import schema
 
-from autogen.beta.config.acp.permissions import resolve_permission_option_id
+from autogen.beta.acp.permissions import resolve_permission_option_id
 
 ALLOW = schema.PermissionOption(option_id="ok", kind="allow_once", name="Allow")
 REJECT = schema.PermissionOption(option_id="no", kind="reject_once", name="Reject")

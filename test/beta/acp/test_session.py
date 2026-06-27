@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.acp.session import new_prompt_text
+from autogen.beta.acp.session import new_prompt_text
 from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.events.types import ModelMessage
 
