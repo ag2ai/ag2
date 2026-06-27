@@ -1,6 +1,6 @@
 """Concise agent — answers in 1-2 sentences. For arena comparisons."""
 
-from autogen import AssistantAgent, LLMConfig
+from ag2 import AssistantAgent, LLMConfig
 
 config = LLMConfig(
     {"model": "gemini-3.1-flash-lite", "api_type": "google"},

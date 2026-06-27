@@ -1,0 +1,268 @@
+---
+title: Subagents
+sidebarTitle: Subagents
+---
+
+Subagents let agents delegate work to other agents through tool calling. The calling agent's LLM decides when and what to delegate, and each sub-task runs on its own isolated stream with independent history.
+
+## Why Use Subagents
+
+Breaking work across multiple agents gives you:
+
+- **Separation of concerns** — each agent has a focused prompt, tools, and config tuned for its role.
+- **Independent context** — sub-tasks run on fresh streams, so history doesn't grow unboundedly.
+- **LLM-driven orchestration** — the calling agent decides when to delegate, what context to pass, and how to use the result.
+
+!!! note
+    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other.
+
+!!! tip
+    For lightweight self-delegation where the parent doesn't need a *named* delegate, opt in to the auto-injected `#!python run_subtask` / `#!python run_subtasks` tools by passing `#!python tasks=TaskConfig(...)` — see [`tasks=` in The Agent Harness](/docs/user-guide/agent_harness#tasks-taskconfig). Use `Agent.as_tool()` (below) when you want a distinct, purpose-named tool exposed to the LLM.
+
+## Subagents API
+
+Use `#!python Agent.as_tool()` to make one agent available as a tool for another.
+
+```python linenums="1" hl_lines="24-25"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig("claude-sonnet-4-6")
+
+researcher = Agent(
+    "researcher",
+    prompt="You are a thorough researcher. Provide concise factual findings.",
+    config=config,
+    tools=[search_tool],
+)
+
+writer = Agent(
+    "writer",
+    prompt="You are a skilled writer. Turn research into clear prose.",
+    config=config,
+)
+
+coordinator = Agent(
+    "coordinator",
+    prompt="First delegate research, then pass findings to the writer.",
+    config=config,
+    tools=[
+        researcher.as_tool(description="Research a topic and return findings."),
+        writer.as_tool(description="Write an article. Pass research notes in the context parameter."),
+    ],
+)
+
+reply = await coordinator.ask("Write a short article about the history of Python.")
+print(await reply.content())
+```
+
+The coordinator's LLM sees two tools — `task_researcher` and `task_writer` — and calls them as needed. Each call spawns the target agent on a fresh stream, runs it to completion, and returns the result.
+
+The calling agent's LLM sees a tool named `#!python task_{agent.name}` with `objective` (required) and `context` (optional) parameters.
+
+The `context` tool parameter is how the calling LLM shares relevant information with the sub-task:
+
+```python linenums="1"
+task_writer(
+    objective="Write an article about Python's history",
+    context="Key findings: Created by Guido van Rossum in 1991. Named after Monty Python."
+)
+```
+
+`as_tool()` accepts these parameters:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `description` | `str` | Tool description shown to the LLM (required) |
+| `name` | `str | None` | Override the default `task_{agent.name}` tool name |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
+
+You can also use `#!python subagent_tool()` directly for more control:
+
+```python linenums="1" hl_lines="1 7"
+from ag2.tools.subagents import subagent_tool
+
+coordinator = Agent(
+    "coordinator",
+    config=config,
+    tools=[
+        subagent_tool(researcher, description="Research a topic."),
+    ],
+)
+```
+
+## Background Subagents
+
+`#!python as_tool()` and `#!python subagent_tool()` are **blocking**: the tool call doesn't return until the sub-task finishes, so the calling LLM waits for the result before doing anything else. `#!python background_agent_tool()` is **fire-and-forget** — it starts the sub-task, returns a task id immediately, and lets the parent LLM keep working in the same turn. The result is delivered later as a follow-up message to the parent.
+
+```python linenums="1" hl_lines="1 8"
+from ag2.tools.subagents import background_agent_tool
+
+coordinator = Agent(
+    "coordinator",
+    prompt="Kick off long-running research in the background, then keep helping the user.",
+    config=config,
+    tools=[
+        background_agent_tool(researcher, description="Research a topic in the background."),
+    ],
+)
+
+reply = await coordinator.ask("Start deep research on Rust async runtimes, then outline the article.")
+```
+
+The calling LLM sees a tool named `#!python background_task_{agent.name}` with the same `objective` (required) and `context` (optional) parameters as `as_tool()`. Calling it returns `#!python "Background task started: {task_id}"` right away, so the LLM can issue other tool calls or continue reasoning while the sub-task runs.
+
+How it behaves:
+
+- The sub-task runs concurrently via `#!python run_task` on its own stream (a fresh `#!python MemoryStream` by default, or one built by the `stream` factory).
+- The parent `#!python Agent.ask` loop **keeps running and will not return** until the background task finishes. Once it does, its result is pushed back into the parent's inbox as a follow-up turn (via `#!python context.enqueue`), so the parent LLM can react to it.
+- On success the follow-up message reports the task result; on failure it reports the error — the exception does not propagate to the parent.
+
+`background_agent_tool()` accepts these parameters:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `agent` | `Agent` | The agent to run as a background sub-task (positional) |
+| `description` | `str` | Tool description shown to the LLM (required) |
+| `name` | `str | None` | Override the default `background_task_{agent.name}` tool name |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
+
+!!! note
+    Background sub-tasks are for work the parent can fire off and revisit later within the *same* turn — the `ask` call still awaits their completion before returning. They are not detached jobs that outlive the turn.
+
+## Self-Delegation
+
+An agent can delegate to itself to break complex work into independent sub-tasks. Each sub-task runs as a fresh copy of the agent with its own stream and history.
+
+```python linenums="1" hl_lines="12-17"
+analyst = Agent(
+    "analyst",
+    prompt=(
+        "You have search and sub_task tools. "
+        "Only use sub_task when the task has clearly independent parts. "
+        "Otherwise handle it directly with search."
+    ),
+    config=config,
+    tools=[search_tool],
+)
+
+analyst.add_tool(
+    analyst.as_tool(
+        description="Break work into a focused sub-task for independent analysis.",
+        name="sub_task",
+    )
+)
+
+reply = await analyst.ask("Compare Python vs Rust for web APIs: performance, DX, and ecosystem.")
+```
+
+The analyst's LLM may call `sub_task` multiple times — one per aspect — then synthesise the results.
+
+## Dynamic Agents
+
+`#!python dynamic_agent()` lets the calling LLM **construct** an ephemeral agent at runtime — picking a name, system prompt, and a subset of available tools per objective — instead of pre-defining each delegate as a named `#!python as_tool()`. Use it when the orchestrator should compose a focused worker on demand for each sub-task.
+
+```python linenums="1" hl_lines="2 17"
+from ag2 import Agent
+from ag2.tools.dynamic import dynamic_agent
+from ag2.config import OpenAIConfig
+
+config = OpenAIConfig(model="gpt-4o-mini")
+
+orchestrator = Agent(
+    "orchestrator",
+    config=config,
+    prompt=(
+        "You orchestrate sub-tasks by calling create_and_run_agent. "
+        "For each task, invent a focused agent name and system prompt, "
+        "include only the tools the child genuinely needs, "
+        "and pass a clear objective."
+    ),
+    tools=[
+        dynamic_agent(available_tools=[calc, web_search], config=config),
+    ],
+)
+
+reply = await orchestrator.ask("What is 17 * 25 + 4? Use a child agent.")
+```
+
+The orchestrator's LLM sees one tool, `#!python create_and_run_agent(spec, objective)`. Each call spawns an ephemeral child `#!python Agent` on a fresh stream, runs the objective via `#!python run_task`, and returns the reply string.
+
+`dynamic_agent()` accepts these parameters:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `available_tools` | `Iterable[Tool | Callable[..., Any]]` | Pool of tools the spawned child may pick from by name |
+| `config` | `ModelConfig` | Model configuration used for every spawned child |
+| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to `create_and_run_agent` |
+
+### The AgentSpec the LLM constructs
+
+The LLM builds an `#!python AgentSpec` on every call. It is JSON-serializable and captures the declarative parts of the child:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `name` | `str` | Display name of the spawned child |
+| `prompt` | `list[str]` | System prompt for the child |
+| `tool_names` | `list[str]` | Subset of `available_tools` names to give the child |
+| `response_schema` | `ResponseSchemaSpec | None` | Optional structured output schema |
+
+### How the LLM discovers available tool names
+
+The pool's names and descriptions are **rendered into the `#!python create_and_run_agent` tool description automatically** when the factory is built. The calling agent's system prompt does not need to enumerate them — the LLM discovers the valid names from the tool schema.
+
+!!! tip
+    If the LLM picks a name not in the pool, the framework returns `Error: unknown tools [...]. Available: [...]` as a recoverable string. The LLM reads the hint and retries with a corrected spec — no exception propagates to the caller. The auto-rendered menu prevents this in the common case.
+
+!!! warning
+    Spawned children are themselves constructed **without** `dynamic_agent`, so they cannot recursively spawn further dynamic agents. Recursion is structurally impossible — no depth limit needed.
+
+## Sub-Task Streams
+
+### Default Behavior
+
+By default, each sub-task creates a fresh `MemoryStream`. The sub-task's history is isolated — it doesn't carry over between invocations.
+
+It means that subagent has no information about previous calls or results. It just sees the current call and the context.
+
+| What | Behavior | Why |
+|---|---|---|
+| **Dependencies** | Copied | Isolated — child mutations don't affect parent |
+| **Variables** | Copied; synced back on success | Concurrent-safe — user variable mutations propagate back |
+| **History** | Fresh stream | Clean context — the LLM passes relevant info via `context` parameter |
+| **Depth counter** | Incremented in child; excluded from sync-back | Internal bookkeeping — never leaks to parent |
+| **Agent prompt, tools, config** | Inherited | The sub-agent brings its own capabilities |
+
+### Persistent Stream
+
+`#!python persistent_stream()` gives the same agent a consistent stream across multiple invocations within a context. The sub-task's history accumulates across calls rather than starting fresh each time:
+
+```python linenums="1" hl_lines="5"
+from ag2.tools.subagents import persistent_stream
+
+researcher.as_tool(
+    description="Research a topic",
+    stream=persistent_stream(),
+)
+```
+
+It stores the stream ID in `#!python context.dependencies` keyed by `#!python f"ag:{agent.name}:stream"` and reuses the parent stream's storage backend. This is useful when the sub-agent benefits from seeing its own prior work — for example, a researcher that should avoid repeating searches.
+
+### Custom Factory
+
+For full control, pass any callable matching `#!python StreamFactory = Callable[[Agent, Context], Stream]`:
+
+```python linenums="1" hl_lines="4-5 9"
+from ag2 import Agent, Context
+from ag2.streams.redis import RedisStream
+
+def make_redis_stream(agent: Agent, ctx: Context) -> RedisStream:
+    return RedisStream(MY_REDIS_URL, prefix=f"ag2:sub:{agent.name}")
+
+researcher.as_tool(
+    description="Research a topic",
+    stream=make_redis_stream,
+)
+```

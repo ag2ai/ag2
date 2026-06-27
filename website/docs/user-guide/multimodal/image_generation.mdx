@@ -1,0 +1,165 @@
+---
+title: Image Generation
+sidebarTitle: Image Generation
+---
+
+# Image Generation
+
+Some providers can produce images as part of an agent's reply. Generated images are always returned the same way — as a list of `BinaryResult` objects on `#!python reply.files` — regardless of which provider produced them.
+
+AG2 exposes two different mechanisms, because the providers expose two different APIs:
+
+| Provider | Mechanism | How to enable |
+| :--- | :--- | :--- |
+| OpenAI | `ImageGenerationTool` (server-side tool, Responses API) | Add the tool to the agent |
+| Gemini | `IMAGE` response modality on an image model | Set `response_modalities=["TEXT", "IMAGE"]` |
+
+!!! note
+    OpenAI's `ImageGenerationTool` is **not** supported on Gemini, and Gemini's image modality is **not** available on OpenAI. Each provider uses its own mechanism below.
+
+## Reading generated images
+
+Every generated image is a [`BinaryResult`](/docs/user-guide/multimodal/inputs/) on `#!python reply.files`. It carries the raw bytes and a `metadata` dict; the image's media type is stored under the `media_type` key.
+
+```python linenums="1"
+reply = await agent.ask("Generate an image of a red bicycle on a beach.")
+
+for index, image in enumerate(reply.files):
+    media_type = image.metadata.get("media_type", "image/png")
+    extension = media_type.split("/")[-1]
+    with open(f"image_{index}.{extension}", "wb") as file:
+        file.write(image.data)
+```
+
+`#!python reply.files` is empty when the model returns only text, so it is safe to iterate even when no image was produced.
+
+## OpenAI
+
+Add `ImageGenerationTool` to an agent configured with the **Responses API** (`OpenAIResponsesConfig`). The model decides when to call the tool and the generated image is appended to `#!python reply.files`.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.tools import ImageGenerationTool
+
+agent = Agent(
+    "designer",
+    config=OpenAIResponsesConfig(model="gpt-4.1"),
+    tools=[
+        ImageGenerationTool(
+            quality="high",
+            size="1024x1024",
+            output_format="png",
+            background="transparent",
+        ),
+    ],
+)
+
+reply = await agent.ask("Generate a logo for a coffee shop.")
+image = reply.files[0]
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `quality` | `"low"`, `"medium"`, `"high"`, or `"auto"` |
+| `size` | e.g. `"1024x1024"`, `"1536x1024"`, or `"auto"` |
+| `background` | `"transparent"`, `"opaque"`, or `"auto"` |
+| `output_format` | `"png"`, `"jpeg"`, or `"webp"` |
+| `output_compression` | 0–100, for jpeg/webp only |
+| `partial_images` | 1–3, number of partial images to stream |
+
+!!! warning
+    `ImageGenerationTool` requires the Responses API. Using it with the Chat Completions API (`OpenAIConfig`) raises an `UnsupportedToolError`.
+
+## Gemini
+
+Gemini does not use a tool for image generation. Instead, you select an **image-capable model** and request the `IMAGE` response modality via `response_modalities`. The model returns the image inline and AG2 surfaces it on `#!python reply.files`.
+
+```python linenums="1" hl_lines="5 6"
+from ag2 import Agent
+from ag2.config import GeminiConfig
+
+config = GeminiConfig(
+    model="gemini-3.1-flash-image",
+    response_modalities=["TEXT", "IMAGE"],
+)
+
+agent = Agent("designer", config=config)
+
+reply = await agent.ask("Generate an image of a friendly robot waving hello.")
+image = reply.files[0]
+```
+
+!!! note
+    Image output requires an image-capable Gemini model (for example `gemini-3.1-flash-image`). Requesting the `IMAGE` modality on a text-only model returns no image. Include `"TEXT"` alongside `"IMAGE"` so the model can still return any accompanying text in `#!python reply.body`.
+
+`response_modalities` is also available on `VertexAIConfig` for Gemini models served through Vertex AI.
+
+### Controlling size and aspect ratio
+
+Gemini does not take a pixel `size` string like OpenAI. Instead, pass a `#!python types.ImageConfig` through `image_config` to set the aspect ratio and a resolution tier:
+
+```python linenums="1" hl_lines="8"
+from google.genai import types
+
+from ag2.config import GeminiConfig
+
+config = GeminiConfig(
+    model="gemini-3.1-flash-image",
+    response_modalities=["TEXT", "IMAGE"],
+    image_config=types.ImageConfig(aspect_ratio="16:9", image_size="2K"),
+)
+```
+
+| Field | Values |
+| :--- | :--- |
+| `aspect_ratio` | e.g. `"1:1"`, `"4:3"`, `"3:4"`, `"16:9"`, `"9:16"`, `"21:9"` |
+| `image_size` | resolution tier — `"1K"`, `"2K"` (higher tiers are model-dependent) |
+
+`image_config` is a full passthrough of the SDK's `#!python types.ImageConfig`, so any other field it supports (such as `person_generation`) is available too. It is also accepted on `VertexAIConfig`.
+
+## Editing an existing image
+
+To edit an image instead of generating one from scratch, pass it in as an [`ImageInput`](/docs/user-guide/multimodal/inputs/) alongside your instruction. The edited image is returned on `#!python reply.files`, exactly like a freshly generated one — so the same image can be sent back in for further rounds of editing.
+
+<Tabs>
+  <Tab title="OpenAI">
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ImageInput
+from ag2.tools import ImageGenerationTool
+
+agent = Agent(
+    "editor",
+    config=OpenAIResponsesConfig(model="gpt-4.1"),
+    tools=[ImageGenerationTool(size="1024x1024", output_format="png")],
+)
+
+reply = await agent.ask(
+    "Put a party hat on the robot. Keep everything else the same.",
+    ImageInput(path="robot.png"),
+)
+edited = reply.files[0]
+```
+  </Tab>
+
+  <Tab title="Gemini">
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import GeminiConfig
+from ag2.events import ImageInput
+
+config = GeminiConfig(model="gemini-3.1-flash-image", response_modalities=["TEXT", "IMAGE"])
+agent = Agent("editor", config=config)
+
+reply = await agent.ask(
+    "Put a party hat on the robot. Keep everything else the same.",
+    ImageInput(path="robot.png"),
+)
+edited = reply.files[0]
+```
+  </Tab>
+</Tabs>
+
+`ImageInput` also accepts raw bytes — `#!python ImageInput(data=image.data, media_type="image/png")` — which lets you feed a generated image straight back in for another edit without writing it to disk.

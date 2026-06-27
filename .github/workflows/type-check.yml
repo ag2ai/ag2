@@ -69,9 +69,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       # All additional modules should be defined in pyproject.toml
-      - run: uv pip install --system ".[types]"
+      - run: uv pip install --system --group types .
         if: matrix.optional-dependencies == 'none'
-      - run: uv pip install --system ".[types, ${{ matrix.optional-dependencies }}]"
+      - run: uv pip install --system --group types ".[${{ matrix.optional-dependencies }}]"
         if: matrix.optional-dependencies != 'none'
       # Any additional configuration should be defined in pyproject.toml
       - run: |

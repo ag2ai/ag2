@@ -101,7 +101,7 @@ cli/
 
 ```bash
 cd cli
-pip install -e ".[dev]"
+uv pip install -e . --group dev
 ag2 --version
 ```
 

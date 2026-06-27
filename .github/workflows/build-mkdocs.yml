@@ -36,14 +36,14 @@ jobs:
         run: |
           uv venv
           . .venv/bin/activate
-          uv pip install -e ".[docs]"
+          uv pip install --group docs -e .
           just docs-build --force
         working-directory: .
 
       - name: Verify the build
         run: |
           ls -la ./website/mkdocs/site
-          # Ensure the Beta-scoped llms.txt files were generated and copied into the site.
+          # Ensure the llms.txt files were generated and copied into the site.
           for f in llms.txt llms-full.txt; do
             if [ ! -s "./website/mkdocs/site/$f" ]; then
               echo "::error::Expected non-empty ./website/mkdocs/site/$f (llms.txt generation failed)"
@@ -63,11 +63,11 @@ jobs:
           . .venv/bin/activate
 
           # Get version directly from the package
-          VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print(".".join(autogen.__version__.split(".")[:3]))')
+          VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import ag2; print(".".join(ag2.__version__.split(".")[:3]))')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
           # Check if version contains "rc"
-          IS_RC=$(python -c 'import os, sys, re; sys.path.insert(0, os.getcwd()); import autogen; version = autogen.__version__; print(not bool(re.match(r"^[0-9]+(\.[0-9]+)*$", version)))')
+          IS_RC=$(python -c 'import os, sys, re; sys.path.insert(0, os.getcwd()); import ag2; version = ag2.__version__; print(not bool(re.match(r"^[0-9]+(\.[0-9]+)*$", version)))')
           echo "IS_RC=$IS_RC" >> $GITHUB_ENV
 
           echo $VERSION

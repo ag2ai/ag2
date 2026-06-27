@@ -1,5 +1,3 @@
 [run]
 branch = True
-source = autogen
-omit =
-  autogen/agentchat/contrib/*
+source = ag2

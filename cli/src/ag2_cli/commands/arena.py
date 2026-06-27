@@ -377,7 +377,7 @@ def arena_compare(
       [command]ag2 arena compare agents/ --eval tests/ --output json[/command]
     """
     try:
-        import autogen  # noqa: F401
+        import ag2  # noqa: F401
     except ImportError:
         console.print("[error]ag2 is not installed.[/error]")
         console.print("Install with: [command]pip install ag2[/command]")
@@ -456,7 +456,7 @@ def arena_models(
       [command]ag2 arena models my_agent.py --models gpt-4o,claude-sonnet-4-6 --eval tests/cases.yaml[/command]
     """
     try:
-        import autogen  # noqa: F401
+        import ag2  # noqa: F401
     except ImportError:
         console.print("[error]ag2 is not installed.[/error]")
         raise typer.Exit(1)
@@ -531,7 +531,7 @@ def arena_interactive(
       [command]ag2 arena interactive agent_v1.py agent_v2.py[/command]
     """
     try:
-        import autogen  # noqa: F401
+        import ag2  # noqa: F401
     except ImportError:
         console.print("[error]ag2 is not installed.[/error]")
         raise typer.Exit(1)

@@ -195,8 +195,9 @@ def _check_llm_judge(assertion: EvalAssertion, output: str) -> AssertionResult:
     model = getattr(assertion, "model", None) or "gpt-4o"
 
     try:
-        import autogen
-        from autogen.io.base import IOStream
+        from ag2.io.base import IOStream
+
+        import ag2
     except ImportError:
         return AssertionResult(
             passed=False,
@@ -215,13 +216,13 @@ def _check_llm_judge(assertion: EvalAssertion, output: str) -> AssertionResult:
     )
 
     try:
-        llm_config = autogen.LLMConfig({"model": model})
-        judge = autogen.AssistantAgent(
+        llm_config = ag2.LLMConfig({"model": model})
+        judge = ag2.AssistantAgent(
             name="judge",
             system_message="You are a strict evaluation judge. Always respond with PASS or FAIL followed by a brief explanation.",
             llm_config=llm_config,
         )
-        user = autogen.UserProxyAgent(
+        user = ag2.UserProxyAgent(
             name="eval_runner",
             human_input_mode="NEVER",
             max_consecutive_auto_reply=0,
