@@ -3,7 +3,7 @@ title: Beta NLIP Agent Integration
 sidebarTitle: NLIP Agent
 ---
 
-[NLIP (Natural Language Interaction Protocol)](https://ecma-international.org/publications-and-standards/standards/ecma-430/) is an ECMA-430 standard for interoperable agent communication over HTTP. The `autogen.beta.extensions.nlip` module lets you:
+[NLIP (Natural Language Interaction Protocol)](https://ecma-international.org/publications-and-standards/standards/ecma-430/){.external-link target="_blank"} is an ECMA-430 standard for interoperable agent communication over HTTP. The `autogen.beta.extensions.nlip` module lets you:
 
 1. **Expose** any `Agent` as a standards-compliant NLIP endpoint.
 2. **Connect** to any remote NLIP server as if it were a local AG2 agent.
@@ -18,16 +18,10 @@ Two entry points cover the full lifecycle:
 ## Installation
 
 ```bash
-pip install "ag2[openai,nlip]"
+pip install "ag2[openai]" "nlip-sdk>=0.1.0,<1" "nlip-server>=0.1.3,<1"
 ```
 
-This installs `nlip-sdk`, `nlip-server`, and the OpenAI client in one step.
-
-You can also install the optional packages separately:
-
-```bash
-pip install nlip-server nlip-sdk
-```
+This installs the OpenAI client plus the `nlip-sdk` and `nlip-server` packages. NLIP is not shipped as an `ag2` extra — install the two packages directly alongside whichever provider extra you need.
 
 You'll also need an ASGI server (e.g. `uvicorn`) to actually serve the application:
 
@@ -118,7 +112,7 @@ This example shows a realistic multi-agent setup where:
 
 `autogen.beta` has no GroupChat — the geo lookup and the remote weather call are both tools the coordinator's LLM picks between, rather than peer chat participants:
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │              Coordinator Agent              │
 │ tools=[geocode_location, ask_weather_agent] │
@@ -245,7 +239,7 @@ curl -X POST http://127.0.0.1:8014/nlip/ \
 In the coordinator file, we define a `geocode_location` tool, a `weather_agent` backed by `NlipConfig`, and a coordinator `Agent` that delegates between them.
 
 
-```python title="coordinator.py" hl_lines="35-38 40-43"
+```python title="coordinator.py" linenums="1" hl_lines="35-38 40-43"
 import argparse
 import asyncio
 
@@ -292,7 +286,7 @@ async def run_weather_task(task: str, weather_server_url: str = "http://localhos
 
     coordinator = Agent(
         name="coordinator",
-        (
+        prompt=(
             "You coordinate weather information requests. "
             "When a user asks about weather, first use geocode_location to look up coordinates, "
             "then use ask_weather_agent to get the forecast using those coordinates. "
