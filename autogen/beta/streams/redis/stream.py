@@ -97,9 +97,10 @@ class RedisStream(MemoryStream):
                 if isinstance(event, BaseEvent):
                     ctx = self._base_context or Context(self)
                     await super().send(event, ctx)
-        except asyncio.CancelledError:
-            pass
         finally:
+            # CancelledError (and any other exception) propagates out of the
+            # try; this cleanup still runs on cancellation so the pub/sub
+            # subscription is always released.
             await pubsub.unsubscribe(self._channel)
             await pubsub.aclose()
 

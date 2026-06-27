@@ -48,10 +48,10 @@ class _RetryMiddleware(BaseMiddleware):
         events: Sequence[BaseEvent],
         context: Context,
     ) -> ModelResponse:
-        for attempt in range(self._max_retries + 1):
+        for _ in range(self._max_retries):
             try:
                 return await call_next(events, context)
             except self._retry_on:
-                if attempt == self._max_retries:
-                    raise
-        raise RuntimeError("RetryMiddleware exhausted without an attempt")
+                pass
+        # Final attempt — let the original exception propagate.
+        return await call_next(events, context)

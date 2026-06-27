@@ -368,12 +368,24 @@ class TestRedisStream:
         assert len(received_c) == 1
 
     async def test_listener_propagates_cancellation(self, redis_stream):
+        """Cancelling the pub/sub listener must propagate CancelledError so the
+        task is marked cancelled, preserving structured cancellation."""
         stream = redis_stream()
         stream._ensure_listener()
         await stream._listener_ready.wait()
 
         task = stream._listener_task
         task.cancel()
+        # Wait for the listener task itself to settle. ``cancel()`` only
+        # *requests* cancellation, and a plain ``await task`` can be interrupted
+        # by an unrelated cancellation delivered to the *test* coroutine under
+        # full-suite event-loop load — either would leave the listener pending
+        # and make ``task.cancelled()`` flakily False. Looping on
+        # ``asyncio.wait`` asserts the listener's own final state, which is what
+        # "cancellation propagated" actually means.
+        while not task.done():
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.wait({task})
         assert task.cancelled()
 
     async def test_local_dispatch_survives_listener_failure(self, redis_stream):
