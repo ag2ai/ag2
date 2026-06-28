@@ -13,9 +13,9 @@ import json
 
 from acp import schema
 
-from autogen.beta.events import BaseEvent, ModelMessageChunk, ModelReasoning
-from autogen.beta.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent, ToolResult
-from autogen.beta.events.types import BinaryResult, Usage
+from ag2.events import BaseEvent, ModelMessageChunk, ModelReasoning
+from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent, ToolResult
+from ag2.events.types import BinaryResult, Usage
 
 from .events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
 from .types import ContentBlock, SessionUpdate, ToolCallContent

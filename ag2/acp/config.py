@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Config classes for ACP-backed agents.
 
-``ACPConfig`` implements the :class:`~autogen.beta.config.config.ModelConfig`
+``ACPConfig`` implements the :class:`~ag2.config.config.ModelConfig`
 protocol; ``create()`` returns an ``ACPClient`` that drives the CLI agent over
 the Agent Client Protocol. ``ClaudeCodeConfig``, ``CodexConfig`` and
 ``OpenCodeConfig`` are thin subclasses carrying the launch defaults for the
@@ -23,8 +23,8 @@ if TYPE_CHECKING:
     import acp
     from acp.core import ClientSideConnection
 
-    from autogen.beta.config.client import LLMClient
-    from autogen.beta.context import StreamId
+    from ag2.config.client import LLMClient
+    from ag2.context import StreamId
 
     from .session import ACPSession
 

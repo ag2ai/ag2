@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.acp.events import (
+from ag2.acp.events import (
     ACPAvailableCommands,
     ACPModeChange,
     ACPPlan,
     ACPPlanEntry,
 )
-from autogen.beta.events import BaseEvent
+from ag2.events import BaseEvent
 
 
 def test_acp_plan_holds_entries() -> None:

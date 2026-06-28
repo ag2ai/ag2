@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.acp.session import new_prompt_text
-from autogen.beta.events import ModelRequest, TextInput
-from autogen.beta.events.types import ModelMessage
+from ag2.acp.session import new_prompt_text
+from ag2.events import ModelRequest, TextInput
+from ag2.events.types import ModelMessage
 
 
 def _req(text: str) -> ModelRequest:

@@ -26,11 +26,11 @@ from uuid import uuid4
 import acp
 from acp import schema
 
-from autogen.beta.context import ConversationContext
-from autogen.beta.events import BaseEvent
-from autogen.beta.events.types import ModelMessage, ModelResponse
-from autogen.beta.response import ResponseProto
-from autogen.beta.tools.schemas import ToolSchema
+from ag2.context import ConversationContext
+from ag2.events import BaseEvent
+from ag2.events.types import ModelMessage, ModelResponse
+from ag2.response import ResponseProto
+from ag2.tools.schemas import ToolSchema
 
 from .bridge import make_bridge
 from .mappers import map_usage

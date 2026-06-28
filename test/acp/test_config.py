@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.acp import ACPConfig, ClaudeCodeConfig, CodexConfig, OpenCodeConfig
-from autogen.beta.config.client import LLMClient
+from ag2.acp import ACPConfig, ClaudeCodeConfig, CodexConfig, OpenCodeConfig
+from ag2.config.client import LLMClient
 
 
 def test_claude_defaults() -> None:

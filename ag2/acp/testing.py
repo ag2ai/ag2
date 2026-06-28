@@ -9,7 +9,7 @@ subprocess. Each :class:`ACPTurn` describes one ``session/prompt``: the
 ``session/update`` notifications the agent emits and the resulting stop reason.
 
 This module imports ``acp`` and is only usable with the ``acp`` extra installed;
-keep it out of the extra-free :mod:`autogen.beta.testing`.
+keep it out of the extra-free :mod:`ag2.testing`.
 """
 
 import asyncio

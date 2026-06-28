@@ -10,8 +10,8 @@ and tool calls map onto existing beta events (see :mod:`.mappers`).
 
 from dataclasses import dataclass
 
-from autogen.beta.events import BaseEvent
-from autogen.beta.events.base import Field
+from ag2.events import BaseEvent
+from ag2.events.base import Field
 
 
 @dataclass(frozen=True, slots=True)

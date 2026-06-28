@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import acp
 
-from autogen.beta.events import BaseEvent, ModelRequest, TextInput
+from ag2.events import BaseEvent, ModelRequest, TextInput
 
 if TYPE_CHECKING:
     from .bridge import ACPBridge

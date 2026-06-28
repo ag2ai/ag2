@@ -7,16 +7,16 @@ import base64
 from acp import schema
 from dirty_equals import IsPartialDict
 
-from autogen.beta.acp.events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
-from autogen.beta.acp.mappers import (
+from ag2.acp.events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
+from ag2.acp.mappers import (
     content_blocks_to_files,
     content_blocks_to_text,
     map_session_update,
     map_usage,
 )
-from autogen.beta.events import ModelMessageChunk, ModelReasoning
-from autogen.beta.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
-from autogen.beta.events.types import Usage
+from ag2.events import ModelMessageChunk, ModelReasoning
+from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
+from ag2.events.types import Usage
 
 
 def _text(text: str) -> schema.TextContentBlock:

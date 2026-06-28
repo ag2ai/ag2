@@ -17,14 +17,14 @@ from typing import TYPE_CHECKING, Any
 import acp
 from acp import schema
 
-from autogen.beta.events.types import BinaryResult
+from ag2.events.types import BinaryResult
 
 from .mappers import block_text, block_to_files, map_session_update
 from .permissions import resolve_permission_option_id
 from .types import SessionUpdate
 
 if TYPE_CHECKING:
-    from autogen.beta.context import ConversationContext
+    from ag2.context import ConversationContext
 
     from .config import ACPConfig
 

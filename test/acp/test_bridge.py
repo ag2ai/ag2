@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from acp import schema
 
-from autogen.beta.acp.bridge import BridgeState, _confine, make_bridge
-from autogen.beta.acp.config import ACPConfig
-from autogen.beta.events import BaseEvent, ModelMessageChunk, ModelReasoning
+from ag2.acp.bridge import BridgeState, _confine, make_bridge
+from ag2.acp.config import ACPConfig
+from ag2.events import BaseEvent, ModelMessageChunk, ModelReasoning
 
 
 def _text(text: str) -> schema.TextContentBlock:

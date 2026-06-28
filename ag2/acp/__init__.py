@@ -5,7 +5,7 @@
 
 AG2 plays the ACP *Client* role; each CLI agent runs as an ACP *Agent* subprocess.
 The integration is a :class:`ModelConfig` + :class:`LLMClient` pair — no changes
-to the :class:`~autogen.beta.Agent` class.
+to the :class:`~ag2.Agent` class.
 """
 
 from .config import ACPConfig, ClaudeCodeConfig, CodexConfig, OpenCodeConfig

@@ -5,10 +5,10 @@
 import pytest
 from acp import schema
 
-from autogen.beta import Agent
-from autogen.beta.acp.testing import ACPTurn, fake_acp_config
-from autogen.beta.events import BaseEvent, ModelReasoning
-from autogen.beta.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
+from ag2 import Agent
+from ag2.acp.testing import ACPTurn, fake_acp_config
+from ag2.events import BaseEvent, ModelReasoning
+from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
 
 
 def _text(text: str) -> schema.TextContentBlock:

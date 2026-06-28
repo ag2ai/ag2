@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from acp import schema
 
 if TYPE_CHECKING:
-    from autogen.beta.context import ConversationContext
+    from ag2.context import ConversationContext
 
     from .config import PermissionPolicy
 
