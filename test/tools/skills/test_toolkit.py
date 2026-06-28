@@ -113,6 +113,7 @@ async def test_run_skill_script_schema(skill_tree: Path, context: Context) -> No
                 "required": ["name", "script"],
             }),
         }),
+        "defer_loading": False,
     }
 
 

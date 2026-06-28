@@ -35,6 +35,7 @@ class FunctionDefinition:
 class FunctionToolSchema(ToolSchema):
     type: str = field(default="function", init=False)
     function: FunctionDefinition = field(default_factory=lambda: FunctionDefinition(name=""))
+    defer_loading: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FunctionToolSchema":
@@ -58,6 +59,7 @@ class FunctionTool(Tool):
         description: str,
         schema: FunctionParameters,
         middleware: Iterable[ToolMiddleware] = (),
+        defer_loading: bool = False,
     ) -> None:
         self.model = model
         self._middleware: tuple[ToolMiddleware, ...] = tuple(middleware)
@@ -67,7 +69,8 @@ class FunctionTool(Tool):
                 name=name,
                 description=description,
                 parameters=schema,
-            )
+            ),
+            defer_loading=defer_loading,
         )
 
         self.name = name
@@ -132,6 +135,7 @@ def tool(
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
     middleware: Iterable[ToolMiddleware] = (),
+    defer_loading: bool = False,
 ) -> FunctionTool: ...
 
 
@@ -144,6 +148,7 @@ def tool(
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
     middleware: Iterable[ToolMiddleware] = (),
+    defer_loading: bool = False,
 ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
 
 
@@ -155,6 +160,7 @@ def tool(
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
     middleware: Iterable[ToolMiddleware] = (),
+    defer_loading: bool = False,
 ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
     def make_tool(f: Callable[..., Any]) -> FunctionTool:
         call_model = build_model(
@@ -169,6 +175,7 @@ def tool(
             description=description or f.__doc__ or "",
             schema=_normalize_parameters(schema, call_model),
             middleware=middleware,
+            defer_loading=defer_loading,
         )
 
     if function:

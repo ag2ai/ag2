@@ -36,6 +36,7 @@ DEFAULT_SCHEMA = {
         },
     },
     "type": "function",
+    "defer_loading": False,
 }
 
 
@@ -76,6 +77,7 @@ def test_override_options() -> None:
             "name": "another_name",
         }),
         "type": "function",
+        "defer_loading": False,
     }
 
 
@@ -124,6 +126,7 @@ def test_option_description() -> None:
             }),
         }),
         "type": "function",
+        "defer_loading": False,
     }
 
 
@@ -143,6 +146,7 @@ def test_empty_args() -> None:
             },
         },
         "type": "function",
+        "defer_loading": False,
     }
 
 
@@ -161,6 +165,7 @@ def test_explicit_schema_is_preserved() -> None:
             "parameters": explicit,
         },
         "type": "function",
+        "defer_loading": False,
     }
 
 

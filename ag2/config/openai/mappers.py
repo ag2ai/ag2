@@ -37,6 +37,7 @@ from ag2.tools.builtin.shell import (
     ShellToolSchema,
 )
 from ag2.tools.builtin.skills import SkillsToolSchema
+from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
@@ -383,6 +384,12 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     """Chat Completions API tool format."""
     if isinstance(t, FunctionToolSchema):
+        if t.defer_loading:
+            # Tool search / deferred loading is a Responses-API feature; the
+            # Chat Completions API has no way to load deferred tools. Fail fast
+            # instead of silently sending the tool eagerly (which would defeat
+            # defer_loading and give no error). Use the Responses API instead.
+            raise UnsupportedToolError("function with defer_loading (use the Responses API)", "openai-completions")
         return {
             "type": "function",
             "function": {
@@ -398,12 +405,15 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     """Responses API tool format — name/description at top level."""
     if isinstance(t, FunctionToolSchema):
-        return {
+        fn_tool: dict[str, Any] = {
             "type": "function",
             "name": t.function.name,
             "description": t.function.description,
             "parameters": _ensure_object_schema(t.function.parameters),
         }
+        if t.defer_loading:
+            fn_tool["defer_loading"] = True
+        return fn_tool
 
     elif isinstance(t, WebSearchToolSchema):
         result: dict[str, Any] = {"type": "web_search"}
@@ -489,6 +499,11 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     elif isinstance(t, SkillsToolSchema):
         # https://developers.openai.com/api/docs/guides/tools-skills
         raise UnsupportedToolError(t.type, "openai-responses")
+
+    elif isinstance(t, ToolSearchToolSchema):
+        # https://developers.openai.com/api/docs/guides/tools-tool-search
+        # OpenAI exposes a single server-side tool-search tool; mode is Anthropic-only.
+        return {"type": "tool_search"}
 
     raise UnsupportedToolError(t.type, "openai-responses")
 

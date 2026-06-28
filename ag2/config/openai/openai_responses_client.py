@@ -37,6 +37,7 @@ from ag2.events import (
     Usage,
 )
 from ag2.response import ResponseProto
+from ag2.tools.builtin.tool_search import assert_tool_search_config
 from ag2.tools.schemas import ToolSchema
 
 from .events import OpenAIReasoningEvent, OpenAIServerToolCallEvent, OpenAIServerToolResultEvent
@@ -116,6 +117,7 @@ class OpenAIResponsesClient(LLMClient):
         instructions = "\n".join(prompt) or None
 
         tools_list = list(tools)
+        assert_tool_search_config(tools_list)
         openai_tools = [tool_to_responses_api(t) for t in tools_list]
 
         kwargs: dict[str, Any] = {}
