@@ -80,6 +80,7 @@ setuptools.setup(
         "together": ["ag2[together]==" + __version__],
         "websurfer": ["ag2[websurfer]==" + __version__],
         "cosmosdb": ["ag2[cosmosdb]==" + __version__],
+        "atr-guardrail": ["ag2[atr-guardrail]==" + __version__],
         "websockets": ["ag2[websockets]==" + __version__],
         "network-ws": ["ag2[network-ws]==" + __version__],
         "watchdog": ["ag2[watchdog]==" + __version__],
