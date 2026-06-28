@@ -14,14 +14,14 @@ migration is the worked example.
 Beta has two objects in scope on almost every execution path:
 
 - **`Stream`** — the event bus. Its primitive is
-  `send(event, context) -> None` (`autogen/beta/stream.py`): it runs the
+  `send(event, context) -> None` (`ag2/stream.py`): it runs the
   registered interrupters and subscribers, threading `context` through so each
   handler gets the live `dependency_provider` and the `Context` itself as a
   dependency.
 - **`ConversationContext`** — wraps a stream plus the per-run state
   (`variables`, `dependencies`, prompt). It exposes the one-argument
   convenience `send(event)`, which is literally
-  `await self.stream.send(event, self)` (`autogen/beta/context.py`).
+  `await self.stream.send(event, self)` (`ag2/context.py`).
 
 So `context.send(event)` and `stream.send(event, context)` publish onto the
 *same* stream with the *same* context — **when `context.stream is stream`**.
@@ -46,7 +46,7 @@ the context, and it's the single obvious seam.
 2. **A deliberate cross-stream forward**, where the stream published to and the
    context used for handler dispatch / reply routing are *intentionally
    different*. This is rare. Today there is exactly one: the HITL bridge in
-   `autogen/beta/tools/subagents/run_task.py`.
+   `ag2/tools/subagents/run_task.py`.
 
 ## Consequences / things that look wrong but are deliberate
 
@@ -54,10 +54,10 @@ the context, and it's the single obvious seam.
   ctx)` and must NOT be "fixed" to `parent_context.send(event)`.** This is the
   trap the migration was written to prevent. When a subagent without its own
   HITL hook calls `context.input()`, it `await`s a `HumanMessage` reply on its
-  **child** stream (`autogen/beta/context.py`, `input()`). The bridge forwards
+  **child** stream (`ag2/context.py`, `input()`). The bridge forwards
   the `HumanInputRequest` to the **parent** stream so the parent's hook handles
   it — but it passes the **child** `ctx` as the context. The parent hook replies
-  with `await context.send(reply)` (`autogen/beta/hitl.py`), and because that
+  with `await context.send(reply)` (`ag2/hitl.py`), and because that
   `context` is the child `ctx`, the reply lands on the child stream where
   `input()` is waiting. Rewrite it to `parent_context.send(event)` and the hook
   receives `parent_context`, the reply goes to the *parent* stream, the child's

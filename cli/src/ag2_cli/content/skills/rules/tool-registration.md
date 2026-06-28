@@ -13,7 +13,7 @@ alwaysApply: false
 Register a function for LLM calling and execution on separate agents:
 
 ```python
-from autogen import ConversableAgent, UserProxyAgent
+from ag2 import ConversableAgent, UserProxyAgent
 
 @user_proxy.register_for_execution()
 @assistant.register_for_llm(description="Search the web for information")
@@ -28,7 +28,7 @@ def web_search(query: Annotated[str, "The search query"]) -> str:
 Create a `Tool` object without binding to an agent:
 
 ```python
-from autogen.tools import tool
+from ag2.tools import tool
 
 @tool(description="Search the web for information")
 def web_search(query: Annotated[str, "The search query"]) -> str:
@@ -44,7 +44,7 @@ Both `name` and `description` are optional — defaults to the function name and
 ### 3. Tool Class
 
 ```python
-from autogen.tools import Tool
+from ag2.tools import Tool
 
 tool = Tool(
     name="web_search",
@@ -63,7 +63,7 @@ tool.register_for_execution(user_proxy)
 ### 4. Toolkit (Multiple Tools)
 
 ```python
-from autogen.tools import Toolkit
+from ag2.tools import Toolkit
 
 toolkit = Toolkit([tool1, tool2, tool3])
 toolkit.register_for_llm(assistant)
@@ -73,7 +73,7 @@ toolkit.register_for_execution(user_proxy)
 ### 5. Module-level Helper
 
 ```python
-from autogen import register_function
+from ag2 import register_function
 
 register_function(
     my_func,
@@ -100,7 +100,7 @@ Registers functions for LLM only (not execution). Best for single-agent setups.
 AG2 includes 20+ ready-to-use tools:
 
 ```python
-from autogen.tools.experimental import DuckDuckGoSearchTool, QuickResearchTool
+from ag2.tools.experimental import DuckDuckGoSearchTool, QuickResearchTool
 
 # No-config tools work immediately
 search = DuckDuckGoSearchTool()
@@ -137,7 +137,7 @@ The function docstring becomes the tool description. Parameter types and annotat
 Use `ChatContext` to access conversation state inside tools:
 
 ```python
-from autogen.tools import ChatContext, Depends
+from ag2.tools import ChatContext, Depends
 
 def context_aware_tool(
     query: str,

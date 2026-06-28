@@ -11,7 +11,7 @@
     <img src="https://static.pepy.tech/personalized-badge/ag2?period=month&units=international_system&left_color=grey&right_color=green&left_text=downloads/month" alt="Downloads"/>
   </a>
 
-  <a href="https://pypi.org/project/autogen/">
+  <a href="https://pypi.org/project/ag2/">
     <img src="https://img.shields.io/pypi/v/ag2?label=PyPI&color=green">
   </a>
 
@@ -44,7 +44,7 @@ AG2 was evolved from AutoGen. Fully open-sourced. We invite collaborators from a
 </p>
 
 > [!IMPORTANT]
-> **AG2 is on the path to v1.0.** The current framework will be tidied up through deprecations over the next few minor versions and moved to maintenance mode. The beta framework (`autogen.beta`) will become the official version of AG2 at v1.0.
+> **AG2 is on the path to v1.0.** The protocol-driven framework is now the top-level package, imported as `ag2`. The classic framework (`ConversableAgent`, `GroupChat`, …) has been removed, and the import name `autogen` is no longer available — use `import ag2`.
 >
 > [Read the full release roadmap →](https://docs.ag2.ai/latest/docs/user-guide/release-roadmap/)
 
@@ -82,7 +82,7 @@ For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](h
 
 ### Installation
 
-AG2 requires **Python version >= 3.10**. AG2 is available via `ag2` (or its alias `autogen`) on PyPI.
+AG2 requires **Python version >= 3.10**. AG2 is available as `ag2` on PyPI.
 
 **Windows/Linux:**
 ```bash
@@ -118,7 +118,7 @@ You can use the following content as a template:
 Create a script or a Jupyter Notebook and run your first agent.
 
 ```python
-from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from ag2 import AssistantAgent, UserProxyAgent, LLMConfig
 
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
@@ -156,7 +156,7 @@ Let's begin with a simple example where two agents collaborate:
 
 ```python
 import logging
-from autogen import ConversableAgent, LLMConfig
+from ag2 import ConversableAgent, LLMConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -200,9 +200,9 @@ Here’s how to build a team of **teacher**, **lesson planner**, and **reviewer*
 
 ```python
 import logging
-from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns import AutoPattern
+from ag2 import ConversableAgent, LLMConfig
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns import AutoPattern
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -264,9 +264,9 @@ Here we extend the **teacher–planner–reviewer** example by introducing a **h
 
 ```python
 import logging
-from autogen import ConversableAgent, LLMConfig, UserProxyAgent
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns import AutoPattern
+from ag2 import ConversableAgent, LLMConfig, UserProxyAgent
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns import AutoPattern
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -335,7 +335,7 @@ Agents gain significant utility through **tools**, which extend their capabiliti
 import logging
 from datetime import datetime
 from typing import Annotated
-from autogen import ConversableAgent, register_function, LLMConfig
+from ag2 import ConversableAgent, register_function, LLMConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

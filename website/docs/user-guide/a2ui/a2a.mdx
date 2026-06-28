@@ -1,0 +1,107 @@
+---
+title: Serving A2UI over A2A
+sidebarTitle: A2A Transport
+---
+
+A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](/docs/user-guide/a2a/) exchange instead of the built-in [REST adapter](/docs/user-guide/a2ui/server). The `#!python ag2.a2ui.a2a` submodule wraps a plain `#!python ag2.Agent` in an `#!python A2UIAgentExecutor`, plugs it into a standard `#!python A2AServer`, and carries each turn's A2UI messages as a canonical A2A `#!python DataPart`.
+
+!!! note
+    This page assumes familiarity with the [A2A server](/docs/user-guide/a2a/server). The A2UI integration is a drop-in `#!python executor` for the same `#!python A2AServer` — everything you know about cards, transports, and tasks still applies.
+
+## How It Maps
+
+| A2UI concept | A2A representation |
+|---|---|
+| Validated server→client messages | One `#!python DataPart` (MIME `#!python application/a2ui+json`) carrying the full message list, alongside a text `#!python Part` for the prose |
+| Button click / `#!python functionResponse` / client error | An inbound A2UI `#!python DataPart` on the request message — a registered action runs its handler on the server; anything else is rewritten into the turn's prompt |
+| Catalog negotiation | `#!python a2uiClientCapabilities` on the A2A message `#!python metadata` |
+| Protocol support advertised | An `#!python AgentExtension` on the agent card's `#!python capabilities.extensions` |
+
+The executor splits each completed turn into a text `#!python Part` (the conversational prose) plus a single A2UI `#!python DataPart` whose `#!python data` is the JSON array of validated messages — the canonical A2A v1.0 encoding for A2UI.
+
+## Public API
+
+```python linenums="1"
+from ag2.a2ui.a2a import (
+    A2UIAgentExecutor,        # the A2A executor wrapping a plain Agent
+    get_a2ui_agent_extension, # build the AgentExtension for the card
+    create_a2ui_parts,        # wrap A2UI messages into A2A Parts
+    get_a2ui_data,            # decode an A2UI DataPart's payload
+    is_a2ui_part,             # check whether a Part carries A2UI data
+)
+```
+
+## Minimal Server
+
+Wrap a plain `#!python Agent` in `#!python A2UIAgentExecutor` (with the same flat A2UI kwargs as `#!python A2UIServer`, including `#!python actions=` for clickable buttons), pass it to `#!python A2AServer` via `#!python executor=`, and advertise A2UI support on the card with a `#!python card_modifier` that appends the extension:
+
+```python linenums="1" hl_lines="10-12 18"
+import uvicorn
+from a2a.types import AgentCard
+
+from ag2 import Agent
+from ag2.a2a import A2AServer
+from ag2.a2ui import a2ui_action
+from ag2.a2ui.a2a import A2UIAgentExecutor, get_a2ui_agent_extension
+from ag2.config import AnthropicConfig
+
+@a2ui_action(description="Book the selected dinner reservation")
+def book_table(time: str) -> str:
+    return f"booked a table for {time}"
+
+def build_app():
+    agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+    # Buttons are declared on the executor via actions=, just like A2UIServer —
+    # the agent stays plain.
+    executor = A2UIAgentExecutor(agent, actions=[book_table], protocol_version="v0.9")
+
+    async def advertise_a2ui(card: AgentCard) -> AgentCard:
+        card.capabilities.extensions.append(get_a2ui_agent_extension(version=executor.protocol_version))
+        return card
+
+    server = A2AServer(agent, executor=executor, card_modifier=advertise_a2ui)
+    return server.build_jsonrpc(url="http://127.0.0.1:8000")
+
+app = build_app()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+A client connects by pointing `#!python A2AConfig(card_url=...)` at the card URL, exactly as for any A2A agent — see the [A2A client](/docs/user-guide/a2a/client) page.
+
+!!! tip
+    `#!python get_a2ui_agent_extension()` takes `#!python supported_catalog_ids=` and `#!python accepts_inline_catalogs=` to describe which [catalogs](/docs/user-guide/a2ui/capabilities) the agent renders. With no arguments it advertises the version's default "basic" catalog.
+
+## Reading A2UI From the Client
+
+The A2UI messages ride a `#!python DataPart` on the finalization message. Use `#!python is_a2ui_part` to find it and `#!python get_a2ui_data` to decode the payload (a list of canonical A2UI messages):
+
+```python linenums="1"
+from ag2.a2ui.a2a import get_a2ui_data, is_a2ui_part
+
+# `message` is the A2A agent message from the completed task.
+for part in message.parts:
+    if is_a2ui_part(part):
+        messages = get_a2ui_data(part)  # list[dict] — createSurface, updateComponents, ...
+```
+
+`#!python get_a2ui_data` decodes both the canonical v1.0 form (a JSON array in one `#!python DataPart`) and the legacy form (one object per `#!python DataPart`), returning `#!python None` for any part that is not A2UI-typed.
+
+## The Click Round-Trip
+
+A button click is sent back as an inbound A2UI `#!python DataPart` on the next request message — an `#!python action` envelope, or a `#!python functionResponse` (v1.0) for a server-initiated `#!python callFunction`. A click on a **registered** `#!python @a2ui_action` runs that handler on the server (its messages lead the `#!python DataPart`, the agent is not invoked); a click on any other button — plus `#!python error` and `#!python functionResponse` envelopes — is rewritten into the turn's prompt so the agent continues. A turn carrying only registered server-action clicks finalizes without invoking the agent. See [Actions](/docs/user-guide/a2ui/actions) for the envelope shapes.
+
+!!! note "v1.0 pause/resume"
+    With `#!python protocol_version="v1.0"`, a `#!python callFunction(wantResponse=true)` transitions the A2A task to `#!python input-required`, carrying the `#!python callFunction` `#!python DataPart` on the finalization message so the client knows which function to run. The client's `#!python functionResponse` arrives on the next request and resumes the task — standard A2A task lifecycle, no extra bookkeeping.
+
+## Manually Building Parts
+
+If you serialize A2UI messages onto an A2A message yourself (outside the executor), `#!python create_a2ui_parts` wraps one or many messages into `#!python DataPart`s:
+
+```python linenums="1"
+from ag2.a2ui.a2a import create_a2ui_parts
+
+parts = create_a2ui_parts(messages)                    # one DataPart, data = [msg, ...]
+parts = create_a2ui_parts(messages, legacy_split=True) # one DataPart per message (pre-v1.0 renderers)
+```

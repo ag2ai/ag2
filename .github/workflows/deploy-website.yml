@@ -4,7 +4,7 @@ on:
   push:
     branches: main
     paths:
-      - "autogen/**"
+      - "ag2/**"
       - "website/**"
       - ".github/workflows/deploy-website.yml"
       - ".github/workflows/mkdocs-check-broken-links.yml"

@@ -1,0 +1,191 @@
+---
+title: CLI Coding Agents (ACP)
+sidebarTitle: CLI Agents (ACP)
+---
+
+# Orchestrating CLI Coding Agents
+
+AG2 can drive external CLI coding agents — **Claude Code**, **Codex**, **OpenCode**,
+**Gemini CLI**, and others — as first-class agents, using the
+[Agent Client Protocol](https://agentclientprotocol.com){.external-link target="_blank"} (ACP).
+
+AG2 plays the ACP **Client** role; each CLI agent runs as an ACP **Agent**
+subprocess. Everything the agent does — message output, thinking, tool calls,
+plans, and permission prompts — is **externalized onto AG2's event stream**, so
+you can observe, gate, and orchestrate it like any other AG2 agent.
+
+```bash
+pip install "ag2[acp]"
+```
+
+The integration is a configuration class — a subclass of `ACPConfig` carrying the
+launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
+`OpenCodeConfig`) — and there are no changes to the `Agent` API.
+
+## Basic Usage
+
+```python linenums="1"
+from autogen import Agent
+from autogen.acp import ClaudeCodeConfig
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+
+reply = await agent.ask("Refactor the auth module and add tests")
+print(reply.body)
+```
+
+A single `ask()`/`run()` maps to one ACP *prompt turn*: the CLI agent runs its
+own internal tool loop and AG2 streams every step as it happens.
+
+## Choosing an agent
+
+Each adapter is a preset with its own launch command and authentication:
+
+<Tabs>
+  <Tab title="Claude Code">
+```python linenums="1"
+from autogen import Agent
+from autogen.acp import ClaudeCodeConfig
+
+# Launches `claude-agent-acp`; auth via ANTHROPIC_API_KEY (env) or CLAUDE_CONFIG_DIR.
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+
+  <Tab title="Codex">
+```python linenums="1"
+from autogen import Agent
+from autogen.acp import CodexConfig
+
+# Launches `codex-acp`; auth via CODEX_API_KEY or OPENAI_API_KEY (env).
+agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+
+  <Tab title="OpenCode">
+```python linenums="1"
+from autogen import Agent
+from autogen.acp import OpenCodeConfig
+
+# Launches `opencode acp`; auth via `opencode auth login` (or env / .env).
+# Pick the model in OpenCode's own config (opencode.json: "model": "provider/model").
+agent = Agent("coder", config=OpenCodeConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+</Tabs>
+
+!!! note "OpenCode model selection"
+
+    As with the Claude Code and Codex adapters, `OpenCodeConfig`'s `model` field is
+    response metadata only. OpenCode's `acp` subcommand takes no `--model` flag —
+    select the model in OpenCode's own config (`opencode.json`:
+    `"model": "provider/model"`). With nothing configured and no authenticated
+    provider, OpenCode falls back to the first model of its built-in `opencode`
+    provider (OpenCode Zen).
+
+## Observing the agent's work
+
+Subscribe to the run's stream to see thoughts, tool calls, and plans live:
+
+```python linenums="1"
+from autogen import Agent
+from autogen.acp import ClaudeCodeConfig
+from autogen.events import ModelMessageChunk, ModelReasoning
+from autogen.events.tool_events import BuiltinToolCallEvent
+from autogen.acp.events import ACPPlan
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+
+def observe(event):
+    if isinstance(event, ModelReasoning):
+        print("💭", event.content)
+    elif isinstance(event, ModelMessageChunk):
+        print(event.content, end="")
+    elif isinstance(event, BuiltinToolCallEvent):
+        print(f"🔧 {event.name}({event.arguments})")
+    elif isinstance(event, ACPPlan):
+        for step in event.entries:
+            print(f"  [{step.status}] {step.content}")
+
+async with agent.run("Add a healthcheck endpoint") as run:
+    run.stream.subscribe(observe)  # subscribe before driving
+    reply = await run.result()
+```
+
+| ACP update | AG2 event |
+| :--- | :--- |
+| agent message | `ModelMessageChunk` → final `ModelResponse` |
+| thinking | `ModelReasoning` |
+| tool call / result | `BuiltinToolCallEvent` / `BuiltinToolResultEvent` |
+| plan | `ACPPlan` |
+| mode change | `ACPModeChange` |
+| available commands | `ACPAvailableCommands` |
+
+## Permissions (Human-in-the-Loop)
+
+When the agent asks to perform a sensitive action, it sends a permission
+request. `permission_policy` controls the response:
+
+| Policy | Behavior |
+| :--- | :--- |
+| `"ask"` (default) | Route to the agent's `hitl_hook` / `context.input`; the human decides |
+| `"auto"` | Approve automatically (headless orchestration) |
+| `"deny"` | Reject automatically |
+
+```python linenums="1"
+agent = Agent(
+    "coder",
+    config=ClaudeCodeConfig(cwd="/repo", permission_policy="auto"),  # autonomous
+)
+```
+
+## Orchestrating multiple agents
+
+Because each CLI agent is an `Agent`, you can compose them — including as tools
+of one another via `.as_tool()`:
+
+```python linenums="1"
+from autogen import Agent
+from autogen.acp import ClaudeCodeConfig
+
+reviewer = Agent("reviewer", config=ClaudeCodeConfig(cwd="/repo"))
+manager = Agent(
+    "manager",
+    config=ClaudeCodeConfig(cwd="/repo"),
+    tools=[reviewer.as_tool(description="Review the changes for correctness")],
+)
+```
+
+!!! note
+
+    Exposing AG2 `tools=[...]` (including `.as_tool()` subagents) to the CLI agent
+    requires the MCP tool bridge, landing in a follow-up. Today, CLI-backed agents
+    use their own built-in tools; `tools=[...]` orchestration via ACP is on the
+    roadmap.
+
+## Configuration reference
+
+`ACPConfig` (and its presets like `ClaudeCodeConfig`) accept:
+
+| Field | Default | Purpose |
+| :--- | :--- | :--- |
+| `command` | preset per agent | Executable + args launching the agent in ACP mode |
+| `cwd` | `"."` | Workspace root for the session |
+| `env` | `None` | Extra environment variables for the subprocess |
+| `model` | `None` | Agent model selection, when supported |
+| `permission_policy` | `"ask"` | `ask` / `auto` / `deny` |
+| `fs_root` | `cwd` | Root for mediated `fs/*` access (path-confined) |
+| `allow_terminal` | `True` | Advertise the ACP terminal capability |
+| `additional_directories` | `[]` | Extra workspace roots |
+| `startup_timeout` | `30.0` | Subprocess spawn + handshake timeout (s) |
+| `turn_timeout` | `None` | Per-prompt-turn timeout (s) |
+| `cancel_timeout` | `5.0` | Grace period (s) after a timed-out turn signals `session/cancel` before the subprocess is hard-stopped |
+
+File and terminal operations the agent requests are mediated by AG2: file access
+is confined to `fs_root`, and the agent's commands run under AG2's control.
+
+## Lifecycle
+
+The ACP subprocess is created on the first turn and reused for the run. Call
+`await config.aclose()` to tear down any live subprocesses started from a config
+(a finalizer terminates them as a safety net if you don't).

@@ -304,9 +304,9 @@ class TestParseFrontmatterFixes:
     def test_parses_bracket_list(self):
         from ag2_cli.install.registry import parse_frontmatter
 
-        text = "---\ntags: [ag2, autogen, tools]\n---\nBody"
+        text = "---\ntags: [ag2, tools]\n---\nBody"
         fm, body = parse_frontmatter(text)
-        assert fm["tags"] == ["ag2", "autogen", "tools"]
+        assert fm["tags"] == ["ag2", "tools"]
         assert body == "Body"
 
     def test_parses_quoted_bracket_list(self):

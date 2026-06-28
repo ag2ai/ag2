@@ -2,7 +2,7 @@
 extend-exclude = ["notebook/", "website/"]
 
 [default.extend-words]
-# VertexAI import aliases in autogen/oai/gemini.py
+# VertexAI import aliases (gemini)
 vai = "vai"
 
 # Rajan Chari's name

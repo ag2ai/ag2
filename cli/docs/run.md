@@ -63,7 +63,7 @@ ag2 run my_team.py -m "Research topic" --max-turns 5
 
 Example `my_team.py`:
 ```python
-from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from ag2 import AssistantAgent, UserProxyAgent, LLMConfig
 
 config = LLMConfig(api_type="openai", model="gpt-4o")
 
@@ -181,8 +181,8 @@ The YAML config maps to AG2's Python API:
 - `team.pattern` → `AutoPattern`, `RoundRobinPattern`, etc.
 
 ### Streaming
-Use AG2's event system (`autogen.events`) and the beta streaming API
-(`autogen.beta.stream`) for real-time output. The Rich console handles
+Use AG2's event system (`ag2.events`) and the beta streaming API
+(`ag2.beta.stream`) for real-time output. The Rich console handles
 progressive rendering.
 
 ## Dependencies

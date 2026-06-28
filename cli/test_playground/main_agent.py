@@ -1,6 +1,6 @@
 """Agent with main() entry point for testing ag2 run."""
 
-from autogen import AssistantAgent, LLMConfig
+from ag2 import AssistantAgent, LLMConfig
 
 
 async def main(message="Hello!"):

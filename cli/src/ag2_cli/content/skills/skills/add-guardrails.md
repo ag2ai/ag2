@@ -19,9 +19,9 @@ Ask the user:
 For complex, nuanced safety checks:
 
 ```python
-from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat.group import AgentTarget, TerminateTarget
-from autogen.agentchat.group.guardrails import LLMGuardrail
+from ag2 import ConversableAgent, LLMConfig
+from ag2.agentchat.group import AgentTarget, TerminateTarget
+from ag2.agentchat.group.guardrails import LLMGuardrail
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
@@ -52,7 +52,7 @@ assistant.register_output_guardrail(guardrail)
 For fast, pattern-based checks (no LLM cost):
 
 ```python
-from autogen.agentchat.group.guardrails import RegexGuardrail
+from ag2.agentchat.group.guardrails import RegexGuardrail
 
 # Block SSN patterns
 pii_guardrail = RegexGuardrail(
@@ -93,8 +93,8 @@ assistant.register_output_guardrail(relevance_guard)   # LLM — slower but thor
 ## 5. Guardrails with Group Chat
 
 ```python
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns import AutoPattern
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns import AutoPattern
 
 # Register guardrails before creating the pattern
 researcher.register_output_guardrail(pii_guardrail)

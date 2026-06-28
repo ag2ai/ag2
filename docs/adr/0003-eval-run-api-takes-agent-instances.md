@@ -6,7 +6,7 @@ date: 2026-06-16
 # Public APIs take ready-to-use objects and reuse existing seams
 
 Two general design rules, surfaced while cleaning up the eval entry points
-(`run_agent` / `run_pairwise` / `run_variants` in `autogen/beta/eval/runtime/`)
+(`run_agent` / `run_pairwise` / `run_variants` in `ag2/eval/runtime/`)
 but meant to apply framework-wide. The eval change is the worked example.
 
 ## Context

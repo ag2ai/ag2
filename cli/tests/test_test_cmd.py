@@ -17,15 +17,15 @@ from typer.testing import CliRunner
 
 runner = CliRunner()
 
-# The test_eval command guards with `import autogen` which is not installed
+# The test_eval command guards with `import ag2` which is not installed
 # in the CLI test environment. We inject a fake module so the import succeeds.
-_mock_autogen = MagicMock()
+_mock_ag2 = MagicMock()
 
 
 @pytest.fixture(autouse=True)
-def _fake_autogen() -> Iterator[None]:
-    """Ensure ``import autogen`` succeeds inside the test_eval command."""
-    with patch.dict(sys.modules, {"autogen": _mock_autogen}):
+def _fake_ag2() -> Iterator[None]:
+    """Ensure ``import ag2`` succeeds inside the test_eval command."""
+    with patch.dict(sys.modules, {"ag2": _mock_ag2}):
         yield
 
 

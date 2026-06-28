@@ -11,7 +11,7 @@ alwaysApply: false
 Always use the `LLMConfig` class, not raw dicts:
 
 ```python
-from autogen import LLMConfig
+from ag2 import LLMConfig
 
 # Single model
 llm_config = LLMConfig(
