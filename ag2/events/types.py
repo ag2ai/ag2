@@ -161,7 +161,11 @@ class UsageEvent(BaseEvent):
     truth, so there is no double counting.
 
     Persisted (not transient): the report reads it back from history.
+    Not conversational: telemetry, so it must not drive history management
+    (compaction trigger, retention window, summary input).
     """
+
+    __conversational__ = False
 
     usage: Usage = Field(default_factory=Usage, kw_only=False)
     kind: str = Field(default="model_call")
