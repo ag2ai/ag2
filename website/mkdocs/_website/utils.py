@@ -11,7 +11,7 @@ from pathlib import Path
 from textwrap import dedent, indent
 from typing import Literal, TypedDict, Union
 
-from autogen.import_utils import optional_import_block, require_optional_import
+from ag2._import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import yaml

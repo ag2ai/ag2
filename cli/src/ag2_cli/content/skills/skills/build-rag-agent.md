@@ -18,8 +18,8 @@ Ask the user:
 
 ```python
 import os
-from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
+from ag2 import ConversableAgent, LLMConfig
+from ag2.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
@@ -93,10 +93,10 @@ retrieve_config = {
 ## 4. RAG with Group Chat
 
 ```python
-from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns import AutoPattern
-from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
+from ag2 import ConversableAgent, LLMConfig
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns import AutoPattern
+from ag2.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}

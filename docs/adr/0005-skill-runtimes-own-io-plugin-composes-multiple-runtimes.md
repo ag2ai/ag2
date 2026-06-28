@@ -13,7 +13,7 @@ draft was never implemented; this records the decision that replaced it.
 
 ## Context
 
-`SkillRuntime` (`autogen/beta/tools/skills/runtime/protocol.py`) owns storage,
+`SkillRuntime` (`ag2/tools/skills/runtime/protocol.py`) owns storage,
 discovery, and execution. The open question was where **reading** content
 (`SKILL.md`, resources, script source) and **running** scripts should live now
 that more than one backend exists:

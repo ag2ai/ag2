@@ -1,27 +1,12 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.9.2,<0.12"]
+build-backend = "uv_build"
 
-[tool.hatch.version]
-path = "autogen/version.py"
-
-[tool.hatch.build]
-skip-excluded-dirs = true
-exclude = ["/test", "/notebook"]
-
-[tool.hatch.build.targets.wheel]
-packages = ["autogen"]
-only-include = [
-    "autogen",
-    # need for generation of MCP Servers from OpenAPI specification
-    "templates",
-]
-
-[tool.hatch.build.targets.sdist]
-exclude = ["test", "notebook"]
-
-[tool.hatch.build.targets.wheel.sources]
-"autogen" = "autogen"
+[tool.uv.build-backend]
+# Distribution is named "ag2" but the importable module lives in ./ag2
+module-root = "."
+module-name = "ag2"
+source-exclude = ["test", "notebook"]
 
 [project.urls]
 Homepage = "https://ag2.ai/"
@@ -42,11 +27,10 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-dynamic = ["version"]
+version = "0.14.0"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: 3",
@@ -76,221 +60,62 @@ dependencies = [
     "packaging",
     "httpx>=0.28.1,<1",
     "anyio>=4.0.0,<5.0.0",
-    # for beta tools
+    # for tools
     "fast-depends[pydantic]>=3.0.8,<4.0.0",
 ]
 
 [project.optional-dependencies]
+# Each extra below corresponds to a `missing_optional_dependency(..., "<extra>", ...)`
+# fallback in the codebase. Extension packages (docker, daytona, sounddevice, exa-py,
+# tinyfish, ...) use `missing_additional_dependency` and are installed directly, not as extras.
+
+# === Agent protocols ===
+a2a = ["a2a-sdk>=1.1.0,<2"]
 a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<1"]
-
-a2a = [
-    "a2a-sdk>=1.1.0,<2",
-]
-
 ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
-# cache backends
-diskcache = ["diskcache"]
-
-# providers
+# === LLM providers (ag2.config) ===
 openai = ["openai>=2.44.0,<3.0"]
-openai-realtime = ["ag2[openai]", "openai[realtime]"]
-
-deepseek = ["ag2[openai]"]
-
 anthropic = ["anthropic[vertex]>=0.79.0,<1"]
-
 gemini = [
     "google-api-core",
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
-    # See test/oai/test_gemini_types.py for compatibility tests.
     "google-genai>=1.20.0,<3.0",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
     "jsonschema",
 ]
-gemini-realtime = [
-    "ag2[gemini]",
-    "ag2[websockets]",
-    # Bidirectional Live API: input/output audio transcription stabilized in 1.67.0;
-    # 1.75.0 is the latest 1.x and the version the live module is tested against.
-    "google-genai>=1.75.0,<3.0",
-]
-
-groq = ["groq>=0.9.0"]
-
 xai = ["xai-sdk>=1.12.2,<2"]
-
 zai = ["zai-sdk>=0.2.3,<1"]
-
 ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
-
 bedrock = ["boto3>=1.34.149"]
-
-mistral = ["mistralai>=2.0.0,<3.0.0"]
-
 dashscope = ["dashscope>=1.25.13"]
 
-# public distributions
+# === Streams / tracing ===
 redis = ["redis>=5.0,<9"]
 tracing = [
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
 ]
 
-flaml = [
-    "flaml",
-    # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
-    "numpy>=2.1; python_version>='3.13'",          # numpy 2.1+ required for Python 3.13
-    "numpy>=1.24.0,<2.0.0; python_version<'3.13'", # numpy 1.24+ for older Python versions
-]
+# === Search tools ===
+tavily = ["tavily-python>=0.7.4,<0.8"]
+ddgs = ["ddgs>=9.0.0,<10"]
+perplexity = ["perplexityai>=0.30.0,<1"]
 
-# code execution backends
-docker = ["docker>=6.0.0,<8"]
-
-jupyter-executor = [
-    "jupyter-kernel-gateway",
-    "websocket-client",
-    "requests",
-    "jupyter-client>=8.6.0",
-    "ipykernel>=6.29.0",
-    "ag2[docker]",
-]
-
-retrievechat = [
-    "protobuf>=6,<7",
-    "chromadb>=1.4.1,<1.6",
-    "sentence_transformers>=5.2.2,<=6",
-    "pypdf",
-    "ipython",
-    "beautifulsoup4",
-    "markdownify",
-]
-
-retrievechat-pgvector = [
-    "ag2[retrievechat]",
-    "pgvector>=0.2.5",
-    "psycopg[binary]>=3.1.18; platform_system=='Windows' or platform_system=='Darwin'",
-    "psycopg>=3.1.18; platform_system=='Linux'",
-]
-
-retrievechat-mongodb = ["ag2[retrievechat]", "pymongo>=4.0.0", "numpy"]
-
-retrievechat-qdrant = ["ag2[retrievechat]", "qdrant_client", "fastembed>=0.3.1"]
-
-retrievechat-couchbase = ["ag2[retrievechat]", "couchbase>=4.3.0", "numpy"]
-
-graph-rag-falkor-db = ["graphrag_sdk==1.3.0", "falkordb>=1.0.10"]
-
-rag = [
-    "docling>=2.107.0,<3",
-    "selenium>=4.28.1,<5",
-    "webdriver-manager==4.1.2",
-    "chromadb>=0.5,<2",
-    "llama-index>=0.14.13,<0.15",
-    "llama-index-core>=0.14.13,<0.15",
-    "llama-index-vector-stores-chroma>=0.4,<0.6",
-    "llama-index-vector-stores-mongodb>=0.6,<0.11",
-    "llama-index-embeddings-huggingface>=0.5,<0.8",
-    "llama-index-llms-langchain>=0.6,<0.9",
-    "llama-index-embeddings-openai>=0.3,<0.8",
-    "llama-index-llms-openai>=0.4,<0.8",
-    "requests>=2.32.3,<3",
-]
-
-
-crawl4ai = ["crawl4ai>=0.5.0,<0.9"]
-
-quick-research = [
-    "tavily-python>=0.7.4",
-    "crawl4ai>=0.5.0,<0.9",
-    "tiktoken",
-    "tldextract",
-    "beautifulsoup4",
-]
-
-browser-use = [
-    "browser-use>=0.3.1,<1.0; python_version>='3.11'",
-    "langchain-google-vertexai>=2.0,<4.0",
-]
-
-google-client = ["google-api-python-client>=2.163.0,<3.0"]
-
-google-api = [
-    "ag2[google-client]",
-    "google-auth-httplib2>=0.2.0,<0.5",
-    "google-auth-oauthlib>=1.2.1,<2.0",
-]
-
-google-search = ["ag2[google-client]"]
-
-wikipedia = ["wikipedia-api>=0.8.1, <1.0"]
-
-neo4j = [
-    "docx2txt==0.9",
-    # Aligned with [rag] llama-index constraints to allow co-installation
-    "llama-index>=0.14.13,<0.15",
-    "llama-index-core>=0.14.13,<0.15",
-    "llama-index-graph-stores-neo4j>=0.4,<0.8",
-    "llama-index-readers-web>=0.4,<0.7",
-]
-
+# === MCP (ag2.mcp) ===
 mcp = [
     # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
     "mcp>=1.11.0,<2",
 ]
 
-mcp-proxy-gen = [
-    "fastapi-code-generator>=0.5.4",
-    "fastapi>=0.112,<1",
-    "requests",                      # do not pin it
-    "typer",
-    "PyYAML",
-]
-
-interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai-slim>=1.0.12,<1.108", "fasta2a"]
-interop = ["ag2[interop-langchain, interop-pydantic-ai]"]
-
-autobuild = [
-    "chromadb>=1.4.1,<1.6",
-    "sentence_transformers>=5.2.2,<=6",
-    "huggingface-hub",
-]
-
-blendsearch = ["flaml[blendsearch]"]
-mathchat = ["sympy", "wolframalpha"]
-captainagent = ["ag2[autobuild]", "pandas"]
-teachable = ["chromadb"]
-lmm = ["replicate", "pillow"]
-graph = ["networkx", "matplotlib"]
-
-together = ["together>=1.2"]
-websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
-cosmosdb = ["azure-cosmos>=4.2.0"]
-websockets = ["websockets>=14.0,<17"]
-network-ws = ["ag2[websockets]"]
-watchdog = ["watchdog>=4.0,<7"]
-long-context = ["llmlingua<0.3"]
-cerebras = ["cerebras_cloud_sdk>=1.0.0"]
-yepcode = ["yepcode-run>=1.6.1; python_version>='3.11'", "python-dotenv"]
-remyx = ["remyxai>=0.2.0", "ag2[docker]"]
-cohere = ["cohere>=5.13.5"]
-
-commsagent-discord = ["discord.py>=2.4.0,<2.8"]
-commsagent-slack = ["slack_sdk>=3.33.0,<3.43"]
-commsagent-telegram = ["telethon>=1.38.1, <2"]
-
-duckduckgo = ["duckduckgo_search>=8.0.2"]
-ddgs = ["ddgs>=9.0.0,<10"]
-tavily = ["tavily-python>=0.7.4,<0.8"]
-perplexity = ["perplexityai>=0.30.0,<1"]
-
-nlip = ["nlip-sdk>=0.1.0, <1", "nlip-server>=0.1.3, <1"]
-
-## dev dependencies
+[dependency-groups]
+# Dev dependency groups (PEP 735). These replace the former dev *extras* and are
+# NOT published with the package — install with `uv pip install --group <name>`
+# (or `uv sync`). Feature extras (openai, gemini, redis, …) stay in
+# [project.optional-dependencies] because they are part of the published API.
 
 # test dependencies
 test-core = [
@@ -303,8 +128,8 @@ test-core = [
 ]
 
 test = [
-    "ag2[test-core]",
-    "ag2[docker]",
+    { include-group = "test-core" },
+    "docker>=6.0.0,<8",
     "ag2[mcp]",
     "ipykernel==7.3.0",
     "nbconvert==7.17.1",
@@ -316,25 +141,55 @@ test = [
     "aiofiles>=24.1.0,<26.0.0",
 ]
 
+# All optional feature deps needed so the full (non-LLM) test suite can be
+# collected and run. This has no dev-extra equivalent; it is consumed directly
+# by the test CI workflow alongside the `test` group.
+optionals = [
+    "ag2[redis]",
+    "ag2[ag-ui]",
+    "ag2[a2ui]", # provides starlette/jsonschema for AG-UI / a2ui serving tests
+    "ag2[mcp]", # ag2.mcp — serve an Agent as an MCP server
+    "ag2[tracing]",
+    # search tools
+    "ag2[tavily,ddgs,perplexity]",
+    # extensions are not shipped as extras; install their packages directly for testing
+    "watchdog>=4.0,<7",  # DiskKnowledgeStore (ag2.knowledge)
+    "websockets>=14.0,<17",  # WsLink (ag2.network)
+    "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
+    "daytona>=0.171.0,<1",
+    "tinyfish>=0.2.3; python_version>='3.11'",
+    "exa-py>=2.12.1,<3",
+    # providers
+    "ag2[openai]",
+    "ag2[anthropic]",
+    "ag2[bedrock]",
+    "ag2[gemini]",
+    "ag2[ollama]",
+    "ag2[dashscope]",
+    "ag2[xai]",
+    "ag2[zai]",
+]
+
 docs = [
-    "ag2[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` module
-    "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
-    "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
-    # Beta extensions are not shipped as extras; install their packages directly so docs can import the modules
+    "ag2[a2a]",     # A2A is exposed in the public API by the optional `ag2.a2a` module
+    "ag2[tracing]", # Tracing is exposed in the public API by the optional `ag2.opentelemetry` / `ag2.middleware` module
+    "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `ag2.ag_ui` module
+    # Extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.2.3; python_version>='3.11'",
     "daytona>=0.171.0,<1",
     "exa-py>=2.12.1,<3",
-    "ag2[docker]",                     # Code execution tools are exposed in the public API by the optional `autogen.tools` module
-    # Beta optional dependencies
-    "ag2[openai]",                     # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[anthropic]",                  # Anthropic is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[gemini]",                     # Gemini is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[ollama]",                     # Ollama is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[dashscope]",                  # DashScope is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[xai]",                        # xAI is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[redis]",                      # Redis is exposed in the public API by the optional `autogen.beta.streams` module
-    "ag2[watchdog]",                   # Watchdog is exposed in the public API by the optional `autogen.beta.knowledge` module
-    "ag2[tavily,ddgs,perplexity]",     # Search tools are exposed by optional beta search modules
+    "docker>=6.0.0,<8",                     # Code execution tools are exposed in the public API by the optional `ag2.tools` module
+    # Optional dependencies
+    "ag2[openai]",                     # OpenAI is exposed in the public API by the optional `ag2.config` module
+    "ag2[anthropic]",                  # Anthropic is exposed in the public API by the optional `ag2.config` module
+    "ag2[gemini]",                     # Gemini is exposed in the public API by the optional `ag2.config` module
+    "ag2[ollama]",                     # Ollama is exposed in the public API by the optional `ag2.config` module
+    "ag2[dashscope]",                  # DashScope is exposed in the public API by the optional `ag2.config` module
+    "ag2[xai]",                        # xAI is exposed in the public API by the optional `ag2.config` module
+    "ag2[redis]",                      # Redis is exposed in the public API by the optional `ag2.streams` module
+    "watchdog>=4.0,<7",                # DiskKnowledgeStore (ag2.knowledge) — additional dependency
+    "websockets>=14.0,<17",            # WsLink (ag2.network) — additional dependency
+    "ag2[tavily,ddgs,perplexity]",     # Search tools are exposed by optional search modules
     "mkdocs-material==9.7.6",
     "mkdocs-literate-nav==0.6.3",
     "mdx-include==1.4.2",
@@ -364,60 +219,21 @@ types = [
     "types-requests",
     "types-ujson",
     "types-aiofiles",
-    "ag2[test, openai, a2a, ag-ui]",
+    { include-group = "test" },
+    "ag2[openai, a2a, ag-ui]",
 ]
 
 lint = ["ruff==0.14.14", "codespell==2.4.2", "zizmor==1.25.2"]
 
 dev = [
     "toml==0.10.2",
-    "ag2[lint,test,types,docs]",
+    { include-group = "lint" },
+    { include-group = "test" },
+    { include-group = "types" },
+    { include-group = "docs" },
     "prek==0.4.5",
     "detect-secrets==1.5.0",
     "uv==0.11.21",
-]
-
-[dependency-groups]
-# Beta groups
-optionals = [
-    "ag2[redis]",
-    "ag2[ag-ui]",
-    "ag2[mcp]", # autogen.beta.mcp — serve an Agent as an MCP server
-    "ag2[tracing]",
-    "ag2[watchdog]", # DiskKnowledgeStore
-    # code execution
-    "ag2[docker]",
-    # search tools
-    "ag2[tavily,ddgs,perplexity]",
-    # beta extensions are not shipped as extras; install their packages directly for testing
-    "daytona>=0.171.0,<1",
-    "tinyfish>=0.2.3; python_version>='3.11'",
-    "exa-py>=2.12.1,<3",
-    # providers
-    "ag2[openai]",
-    "ag2[anthropic]",
-    "ag2[bedrock]",
-    "ag2[gemini]",
-    "ag2[ollama]",
-    "ag2[dashscope]",
-    "ag2[xai]",
-    "ag2[zai]",
-]
-
-testing = [
-    "ag2[test-core]",
-    "starlette",             # AG-UI tests require starlette
-    "respx>=0.23.0,<0.24.0", # search tests
-]
-
-lint = ["ag2[lint]"]
-
-dev = [
-    { include-group = "optionals" },
-    { include-group = "lint" },
-    { include-group = "testing" },
-    "prek==0.4.5",
-    "detect-secrets==1.5.0",
 ]
 
 [tool.pytest.ini_options]
@@ -556,56 +372,12 @@ convention = "google"
 [tool.mypy]
 python_version = "3.10"
 
+# The promoted (ex-beta) tree is not yet strict-clean — see
+# docs/adr/0010-promote-beta-to-top-level-and-delete-classic.md. Strict mypy
+# coverage is being (re)introduced module-by-module; until then mypy is scoped
+# to modules that already pass under `strict = true`.
 files = [
-    "test/mypy",
-    "autogen/agentchat/agent.py",
-    #    "autogen/agentchat/conversable_agent.py",
-    "autogen/agentchat/contrib/rag",
-    "autogen/agentchat/contrib/graph_rag",
-    "autogen/agentchat/group",
-    "autogen/agentchat/utils.py",
-    "autogen/agents",
-    "autogen/coding",
-    "autogen/exception_utils.py",
-    "autogen/fast_depends",
-    "autogen/import_utils.py",
-    "autogen/interop",
-    "autogen/io",
-    "autogen/json_utils.py",
-    "autogen/llm_config",
-    "autogen/logger",
-    "autogen/messages",
-    "autogen/oai/gemini_types.py",
-    "autogen/oai/oai_models",
-    "autogen/oai/openai_utils.py",
-    "autogen/tools",
-    "autogen/a2a",
-    "autogen/testing",
-    "website/*.py",
-    "test/agentchat/contrib/rag",
-    "test/agentchat/contrib/graph_rag",
-    "test/agentchat/group",
-    "test/agents",
-    "test/conftest.py",
-    #    "test/fast_depends",
-    "test/interop",
-    "test/io",
-    "test/oai/test_oai_models.py",
-    "test/oai/test_gemini_types.py",
-    "test/test_json_utils.py",
-    "test/test_llm_config.py",
-    "test/messages",
-    "test/test_import_utils.py",
-    "test/test_import.py",
-    "test/tools",
-]
-
-exclude = [
-    "autogen/math_utils\\.py",
-    "autogen/oai/completion\\.py",
-    "autogen/agentchat/contrib/compressible_agent\\.py",
-    "autogen/agentchat/contrib/math_user_proxy_agent.py",
-    "autogen/oai/openai_utils.py",
+    "ag2/_import_utils.py",
 ]
 
 strict = true
@@ -629,6 +401,13 @@ warn_unused_ignores = false
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 disallow_any_unimported = true
+
+# numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
+# under python_version = "3.10"; skip analysing numpy entirely (it is not our code).
+[[tool.mypy.overrides]]
+module = "numpy.*"
+follow_imports = "skip"
+follow_imports_for_stubs = true
 
 [tool.codespell]
 skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb,./notebook/agentchat_graph_rag_neo4j.ipynb"

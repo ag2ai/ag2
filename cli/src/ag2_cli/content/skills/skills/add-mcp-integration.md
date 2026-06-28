@@ -19,9 +19,9 @@ You are an expert at integrating MCP servers with AG2 agents.
 
 ```python
 import asyncio
-from autogen import ConversableAgent, LLMConfig
-from autogen.mcp import create_toolkit
-from autogen.mcp.mcp_client import StdioConfig
+from ag2 import ConversableAgent, LLMConfig
+from ag2.mcp import create_toolkit
+from ag2.mcp.mcp_client import StdioConfig
 
 async def main():
     llm_config = LLMConfig(
@@ -64,7 +64,7 @@ asyncio.run(main())
 ### SSE Server
 
 ```python
-from autogen.mcp.mcp_client import SseConfig
+from ag2.mcp.mcp_client import SseConfig
 
 sse_config = SseConfig(
     url="http://localhost:8080/sse",

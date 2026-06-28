@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate Beta-scoped ``llms.txt`` and ``llms-full.txt`` files.
+"""Generate ``llms.txt`` and ``llms-full.txt`` files from the User Guide docs.
 
 The output follows the https://llmstxt.org/ specification:
 
@@ -14,15 +14,15 @@ The output follows the https://llmstxt.org/ specification:
 - an optional H2 section literally titled "Optional" holding links that may be
   skipped when a shorter context is needed.
 
-Scope is intentionally limited to ``docs/beta/**`` so coding assistants are never
-fed the classic ``autogen`` API (retired at v1.0).
+Scope is the User Guide (``docs/user-guide/**``) so coding assistants are fed the
+current ``ag2`` API rather than the removed classic API.
 """
 
 import json
 import re
 from pathlib import Path
 
-from autogen.import_utils import optional_import_block, require_optional_import
+from ag2._import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import yaml
@@ -30,22 +30,22 @@ with optional_import_block():
 
 BASE_URL = "https://docs.ag2.ai/latest"
 
-PROJECT_TITLE = "AG2 Beta"
+PROJECT_TITLE = "AG2"
 
 SUMMARY = (
-    "AG2 Beta (`autogen.beta`) is an async, protocol-driven Python framework for building "
+    "AG2 (`ag2`) is an async, protocol-driven Python framework for building "
     "AI agents — covering agents, tools, multi-agent networks, structured output, memory, "
-    "and evaluation. This file indexes the Beta documentation for LLMs and coding assistants."
+    "and evaluation. This file indexes the AG2 documentation for LLMs and coding assistants."
 )
 
 # Free-form details paragraph(s) emitted after the blockquote.
 DETAILS = (
-    "Build with `autogen.beta` only. The classic `autogen` API (`ConversableAgent`, "
-    "`initiate_chat`, `GroupChat`) is retired at v1.0 — do not use it. For ready-made "
+    "Build with `ag2` only. The classic `autogen` API (`ConversableAgent`, "
+    "`initiate_chat`, `GroupChat`) has been removed — do not use it. For ready-made "
     "setup, install the AG2 Skills with `npx skills add ag2ai/ag2-skills`."
 )
 
-# Heading used for the standalone (non-grouped) Beta pages.
+# Heading used for the standalone (non-grouped) pages.
 DEFAULT_SECTION = "Documentation"
 
 # Capitalization fixes when deriving a title from a filename.
@@ -173,11 +173,11 @@ def _flatten_pages(group: dict) -> list[str]:
     return pages
 
 
-def _iter_sections(beta_group: dict) -> list[tuple[str, list[str]]]:
-    """Split the Beta nav into ``(section_title, page_paths)`` pairs, preserving order."""
+def _iter_sections(nav_group: dict) -> list[tuple[str, list[str]]]:
+    """Split the nav group into ``(section_title, page_paths)`` pairs, preserving order."""
     sections: list[tuple[str, list[str]]] = []
     standalone: list[str] = []
-    for page in beta_group["pages"]:
+    for page in nav_group["pages"]:
         if isinstance(page, str):
             standalone.append(page)
         else:
@@ -188,7 +188,7 @@ def _iter_sections(beta_group: dict) -> list[tuple[str, list[str]]]:
 
 
 def _load_page(page_path: str, site_root: Path) -> tuple[str, str, str] | None:
-    """Return ``(title, description, cleaned_body)`` for a Beta page, or ``None`` if missing."""
+    """Return ``(title, description, cleaned_body)`` for a page, or ``None`` if missing."""
     md_file = site_root / f"{page_path}.md"
     if not md_file.is_file():
         return None
@@ -217,11 +217,11 @@ def _render_index(sections: list[tuple[str, list[str]]], pages: dict[str, tuple[
     lines.append("## Optional")
     lines.append("")
     lines.append(
-        f"- [llms-full.txt]({BASE_URL}/llms-full.txt): The entire Beta documentation concatenated into a single file."
+        f"- [llms-full.txt]({BASE_URL}/llms-full.txt): The entire AG2 documentation concatenated into a single file."
     )
     lines.append(
         "- [AG2 Skills](https://github.com/ag2ai/ag2-skills): Installable Agent Skills that "
-        "teach coding assistants the Beta API."
+        "teach coding assistants the AG2 API."
     )
     lines.append("")
     return _normalize_punctuation("\n".join(lines))
@@ -256,7 +256,7 @@ def _render_full(sections: list[tuple[str, list[str]]], pages: dict[str, tuple[s
 
 @require_optional_import(["yaml", "jinja2"], "docs")
 def generate_llms_txt(website_dir: Path, site_root: Path) -> None:
-    """Write ``llms.txt`` and ``llms-full.txt`` to ``site_root`` from the Beta docs.
+    """Write ``llms.txt`` and ``llms-full.txt`` to ``site_root`` from the User Guide docs.
 
     Args:
         website_dir: The ``website/`` directory (holds ``mint-json-template.json.jinja``).
@@ -265,13 +265,13 @@ def generate_llms_txt(website_dir: Path, site_root: Path) -> None:
     """
     template_path = website_dir / "mint-json-template.json.jinja"
     navigation = json.loads(Template(template_path.read_text(encoding="utf-8")).render())["navigation"]
-    beta_group = next((group for group in navigation if group["group"] == "Beta"), None)
-    if beta_group is None:
+    user_guide_group = next((group for group in navigation if group["group"] == "User Guide"), None)
+    if user_guide_group is None:
         # Fail loudly rather than silently shipping no llms.txt — the most likely cause is
-        # the "Beta" navigation group being renamed in mint-json-template.json.jinja.
-        raise RuntimeError("Could not find the 'Beta' navigation group; llms.txt was not generated.")
+        # the "User Guide" navigation group being renamed in mint-json-template.json.jinja.
+        raise RuntimeError("Could not find the 'User Guide' navigation group; llms.txt was not generated.")
 
-    sections = _iter_sections(beta_group)
+    sections = _iter_sections(user_guide_group)
     pages: dict[str, tuple[str, str, str]] = {}
     for _, page_paths in sections:
         for page_path in page_paths:
@@ -280,8 +280,10 @@ def generate_llms_txt(website_dir: Path, site_root: Path) -> None:
                 pages[page_path] = loaded
 
     if not pages:
-        # The Beta docs were not converted to Markdown before this step ran.
-        raise RuntimeError(f"No Beta pages found under {site_root / 'docs' / 'beta'}; llms.txt was not generated.")
+        # The User Guide docs were not converted to Markdown before this step ran.
+        raise RuntimeError(
+            f"No User Guide pages found under {site_root / 'docs' / 'user-guide'}; llms.txt was not generated."
+        )
 
     (site_root / "llms.txt").write_text(_render_index(sections, pages), encoding="utf-8")
     (site_root / "llms-full.txt").write_text(_render_full(sections, pages), encoding="utf-8")

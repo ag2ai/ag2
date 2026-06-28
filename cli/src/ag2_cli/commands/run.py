@@ -31,7 +31,7 @@ def _on_print(text: str) -> None:
 def _on_event(event: Any) -> None:
     """Render structured AG2 events (from run_group_chat) with Rich."""
     try:
-        from autogen.events.agent_events import (
+        from ag2.events.agent_events import (
             RunCompletionEvent,
             TextEvent,
             ToolCallEvent,

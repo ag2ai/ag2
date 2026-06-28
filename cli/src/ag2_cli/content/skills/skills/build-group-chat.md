@@ -20,12 +20,12 @@ Ask the user:
 ```python
 import os
 from typing import Annotated
-from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group import (
+from ag2 import ConversableAgent, LLMConfig
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group import (
     OnCondition, AgentTarget, TerminateTarget, ContextVariables, StringLLMCondition,
 )
-from autogen.agentchat.group.patterns import DefaultPattern
+from ag2.agentchat.group.patterns import DefaultPattern
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
@@ -127,7 +127,7 @@ support.handoffs.add_llm_condition(
 )
 
 # After-work with RevertToUserTarget
-from autogen.agentchat.group import RevertToUserTarget
+from ag2.agentchat.group import RevertToUserTarget
 escalation.handoffs.set_after_work(RevertToUserTarget())
 ```
 
@@ -136,7 +136,7 @@ escalation.handoffs.set_after_work(RevertToUserTarget())
 Use `OnContextCondition` for deterministic routing based on shared state (faster, no LLM cost):
 
 ```python
-from autogen.agentchat.group import (
+from ag2.agentchat.group import (
     OnContextCondition, ExpressionContextCondition, ContextExpression, ReplyResult,
 )
 
@@ -160,7 +160,7 @@ def classify_issue(
 
 - Use `run_group_chat` with `DefaultPattern`, NOT deprecated `run_swarm`
 - Use `ConversableAgent` for all agents
-- Import handoff classes from `autogen.agentchat.group`
+- Import handoff classes from `ag2.agentchat.group`
 - Always set `max_rounds` to prevent infinite loops
 - Use `TerminateTarget()` as the default after-work to avoid hanging conversations
 - Write clear, specific condition strings — the LLM evaluates them to decide routing

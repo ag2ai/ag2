@@ -33,12 +33,12 @@ runner = CliRunner()
 
 
 @pytest.fixture(autouse=True)
-def _mock_autogen():
-    """Mock the `import autogen` guard so arena commands work without ag2 installed."""
+def _mock_ag2():
+    """Mock the `import ag2` guard so arena commands work without ag2 installed."""
     import types
 
-    fake_autogen = types.ModuleType("autogen")
-    with patch.dict("sys.modules", {"autogen": fake_autogen}):
+    fake_ag2 = types.ModuleType("ag2")
+    with patch.dict("sys.modules", {"ag2": fake_ag2}):
         yield
 
 
