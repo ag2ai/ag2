@@ -14,8 +14,8 @@ AG2 agents can generate and execute code. The recommended pattern separates the 
 
 ```python
 import os
-from autogen import ConversableAgent, LLMConfig
-from autogen.coding import LocalCommandLineCodeExecutor
+from ag2 import ConversableAgent, LLMConfig
+from ag2.coding import LocalCommandLineCodeExecutor
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
@@ -60,7 +60,7 @@ await result.process()
 ### LocalCommandLineCodeExecutor
 
 ```python
-from autogen.coding import LocalCommandLineCodeExecutor
+from ag2.coding import LocalCommandLineCodeExecutor
 
 executor = LocalCommandLineCodeExecutor(
     work_dir="./output",     # Where code files are saved and run
@@ -71,7 +71,7 @@ executor = LocalCommandLineCodeExecutor(
 ### DockerCommandLineCodeExecutor
 
 ```python
-from autogen.coding import DockerCommandLineCodeExecutor
+from ag2.coding import DockerCommandLineCodeExecutor
 
 executor = DockerCommandLineCodeExecutor(
     image="python:3.11-slim",   # Docker image

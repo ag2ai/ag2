@@ -1,0 +1,96 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from collections.abc import Iterable, Sequence
+from typing import Any
+from unittest.mock import MagicMock
+
+from typing_extensions import Self
+
+from ag2 import Context
+from ag2.config import LLMClient, ModelConfig
+from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, ToolErrorEvent
+
+__all__ = (
+    "TestConfig",
+    "TrackingConfig",
+)
+
+
+class TestClient(LLMClient):
+    __test__ = False
+
+    def __init__(self, *events: str | ModelResponse | ToolCallEvent | Iterable[ToolCallEvent]) -> None:
+        self.events = iter(events)
+
+    async def __call__(
+        self,
+        messages: Sequence[BaseEvent],
+        context: Context,
+        **kwargs: Any,
+    ) -> ModelResponse:
+        for m in messages:
+            if isinstance(m, ToolErrorEvent):
+                raise m.error
+
+        next_msg = next(self.events)
+
+        if isinstance(next_msg, str):
+            message = ModelMessage(next_msg)
+            await context.send(message)
+            next_msg = ModelResponse(message)
+
+        elif isinstance(next_msg, Iterable):
+            next_msg = ModelResponse(tool_calls=ToolCallsEvent(list(next_msg)))
+
+        elif isinstance(next_msg, ToolCallEvent):
+            next_msg = ModelResponse(tool_calls=ToolCallsEvent([next_msg]))
+
+        return next_msg
+
+
+class TrackingClient(LLMClient):
+    def __init__(self, client: LLMClient, mock: MagicMock) -> None:
+        self.client = client
+        self.mock = mock
+
+    async def __call__(
+        self,
+        messages: Sequence[BaseEvent],
+        context: Context,
+        **kwargs: Any,
+    ) -> ModelResponse:
+        self.mock(messages[-1])
+        return await self.client(messages, context=context, **kwargs)
+
+
+class TrackingConfig(ModelConfig):
+    def __init__(self, config: ModelConfig) -> None:
+        self.config = config
+        self.mock = MagicMock()
+
+    def copy(self) -> Self:
+        return self
+
+    def create(self) -> TrackingClient:
+        return TrackingClient(self.config.create(), self.mock)
+
+    def create_files_client(self) -> None:
+        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+
+
+class TestConfig(ModelConfig):
+    __test__ = False
+
+    def __init__(self, *events: str | ModelResponse | ToolCallEvent | Iterable[ToolCallEvent]) -> None:
+        self.events = events
+
+    def copy(self) -> Self:
+        return self
+
+    def create(self) -> TestClient:
+        return TestClient(*self.events)
+
+    def create_files_client(self) -> None:
+        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

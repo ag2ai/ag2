@@ -10,11 +10,11 @@ from ..ui import console
 
 
 def require_ag2() -> Any:
-    """Import autogen or exit with a helpful error."""
+    """Import ag2 or exit with a helpful error."""
     try:
-        import autogen
+        import ag2
 
-        return autogen
+        return ag2
     except ImportError:
         console.print("[error]ag2 is not installed.[/error]")
         console.print("Install it with: [command]pip install ag2[/command]")

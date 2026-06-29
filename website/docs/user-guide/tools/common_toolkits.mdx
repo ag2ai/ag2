@@ -1,0 +1,346 @@
+---
+title: Common Tools
+sidebarTitle: Common Tools
+---
+
+# Common Tools
+
+AG2 ships with ready-made tools and toolkits that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/user-guide/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
+
+## FilesystemToolkit
+
+`FilesystemToolkit` gives an agent the ability to read, write, update, delete, and search files within a sandboxed directory. All paths are resolved relative to a configurable `base_path`, and a path-traversal guard prevents access outside it.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import FilesystemToolkit
+
+fs = FilesystemToolkit(base_path="/tmp/workspace")
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[fs],
+)
+```
+
+### Available tools
+
+| Tool | Description |
+| :--- | :--- |
+| `read_file` | Read the contents of a file |
+| `write_file` | Create or overwrite a file (creates parent directories automatically) |
+| `update_file` | Replace the first occurrence of a string in a file |
+| `delete_file` | Delete a file |
+| `find_files` | Search for files matching a glob pattern (supports recursive `**` patterns) |
+
+### Read-only mode
+
+Pass `#!python read_only=True` to expose only `read_file` and `find_files`:
+
+```python linenums="1"
+fs = FilesystemToolkit(base_path="./docs", read_only=True)
+```
+
+### Using individual tools
+
+Every tool is available as an attribute on the toolkit instance. You can pass individual tools to an agent instead of the whole set:
+
+```python linenums="1"
+fs = FilesystemToolkit(base_path="/tmp/workspace")
+
+agent = Agent(
+    "reader",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[fs.read_file(), fs.find_files()],
+)
+```
+
+### Using a temporary directory
+
+For throwaway workspaces, use `#!python tempfile.TemporaryDirectory` so the directory and all its contents are automatically cleaned up when the context manager exits:
+
+```python linenums="1"
+import tempfile
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import FilesystemToolkit
+
+async def main() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fs = FilesystemToolkit(base_path=tmpdir)
+
+        agent = Agent(
+            "assistant",
+            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            tools=[fs],
+        )
+        await agent.ask("Create a hello.py file that prints 'Hello, World!'")
+```
+
+!!! tip
+    Prefer `#!python tempfile.TemporaryDirectory` over hardcoded `/tmp` paths. It guarantees a unique directory per run and cleans up after itself, avoiding leftover files and collisions between concurrent executions.
+
+### Path safety
+
+All paths are resolved relative to `base_path`. Any attempt to escape the base directory (e.g. `../../etc/passwd`) raises a `#!python PermissionError`:
+
+```python linenums="1"
+fs = FilesystemToolkit(base_path="/tmp/sandbox")
+
+# The agent can access /tmp/sandbox/data.txt
+# but NOT /tmp/sandbox/../../etc/passwd
+```
+
+---
+
+## DuckDuckSearchTool
+
+`DuckDuckSearchTool` gives an agent the ability to search the web using DuckDuckGo. No API key is required.
+
+!!! note
+    Requires the `ddgs` extra: `pip install ag2[ddgs]`
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import DuckDuckSearchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[DuckDuckSearchTool()],
+)
+```
+
+### Configuration
+
+```python linenums="1"
+tool = DuckDuckSearchTool(
+    max_results=10,       # default: 5
+    region="uk-en",       # default: "us-en"
+    safesearch="strict",  # default: "moderate" — options: "on", "moderate", "off"
+)
+```
+
+All parameters accept a `Variable` for dynamic values resolved at execution time.
+
+---
+
+## PerplexitySearchToolkit
+
+`PerplexitySearchToolkit` gives an agent two related tools powered by [Perplexity](https://www.perplexity.ai){.external-link target="_blank"}: raw web search via the Search API and LLM-grounded answers with citations via Sonar — sharing a single client.
+
+!!! note
+    Requires the `perplexity` extra and an API key: `pip install ag2[perplexity]`
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import PerplexitySearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[PerplexitySearchToolkit(api_key=os.environ["PERPLEXITY_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the Perplexity SDK reads the `PERPLEXITY_API_KEY` environment variable automatically.
+
+### Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `perplexity_search` | Raw web search via the [Search API](https://docs.perplexity.ai/docs/search/quickstart){.external-link target="_blank"} — ranked title/url/snippet/date results, no LLM hop |
+| `perplexity_answer` | LLM-generated answer with citations via [Sonar Chat Completions](https://docs.perplexity.ai/docs/sonar/openai-compatibility){.external-link target="_blank"} — also returns search results, citations, and optional images |
+
+### Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.answer()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = PerplexitySearchToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search()],
+)
+```
+
+### Per-tool configuration
+
+Per-call parameters live on the factory methods, not on the toolkit itself:
+
+```python linenums="1"
+toolkit = PerplexitySearchToolkit(api_key=...)
+
+search_tool = toolkit.search(
+    max_results=10,
+    max_tokens_per_page=512,
+    search_domain_filter=["arxiv.org", "-medium.com"],  # prefix '-' to exclude
+    search_recency_filter="week",                       # "hour" | "day" | "week" | "month" | "year"
+    search_after_date_filter="1/1/2025",                # MM/DD/YYYY
+    search_before_date_filter="12/31/2025",
+)
+
+answer_tool = toolkit.answer(
+    model="sonar-pro",              # "sonar" | "sonar-pro" | "sonar-reasoning" | "sonar-reasoning-pro" | "sonar-deep-research" — default: "sonar"
+    max_tokens=2000,                # default: 1000
+    search_context_size="high",     # "low" | "medium" | "high" — default: "high"
+    search_mode="academic",         # "web" | "academic" | "sec"
+    search_recency_filter="month",  # "hour" | "day" | "week" | "month" | "year"
+    return_images=True,             # include image URLs in the response
+    return_related_questions=True,  # include suggested follow-up questions
+    search_domain_filter=["arxiv.org", "nature.com"],
+)
+
+agent = Agent("researcher", config=config, tools=[search_tool, answer_tool])
+```
+
+### HTTP and SDK options
+
+The toolkit constructor accepts options for the underlying `httpx.AsyncClient` and the Perplexity SDK client. Any extra keyword arguments are forwarded directly to `AsyncPerplexity(...)` (e.g. `base_url`, `max_retries`, `default_headers`):
+
+```python linenums="1"
+toolkit = PerplexitySearchToolkit(
+    api_key=...,
+    proxy="http://proxy.company.com:8080",  # passed to httpx.AsyncClient
+    verify=False,                            # disable TLS verification (httpx)
+    timeout=30.0,                            # httpx timeout in seconds
+    # extra kwargs below are forwarded to AsyncPerplexity
+    base_url="https://custom.perplexity.example",
+    max_retries=5,
+    default_headers={"X-Trace-Id": "abc-123"},
+)
+```
+
+### Result
+
+Both tools return a `PerplexitySearchResponse` with these fields:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The original search query |
+| `results` | List of `PerplexitySearchResult` (`title`, `url`, `snippet`, `date`) |
+| `content` | LLM-generated answer (filled by `perplexity_answer`; empty for `perplexity_search`) |
+| `citations` | URLs the model cited inline (filled by `perplexity_answer`) |
+| `images` | List of `PerplexityImageMeta` when `return_images=True` on `perplexity_answer` |
+
+When `return_images=True`, image URLs are also surfaced as `ImageInput` parts on the tool result so the next model turn receives them as proper image inputs.
+
+!!! tip
+    Use `perplexity_search` when the agent only needs raw ranked URLs (cheaper, no LLM hop). Use `perplexity_answer` when a grounded answer with citations is helpful.
+
+!!! tip
+    `search_domain_filter` on `perplexity_answer` is a Pro-tier feature on the Perplexity API; see [usage tiers](https://docs.perplexity.ai/guides/usage-tiers){.external-link target="_blank"}.
+
+---
+
+## TavilySearchTool
+
+`TavilySearchTool` gives an agent advanced web search capabilities via the [Tavily](https://tavily.com){.external-link target="_blank"} API. Results include relevance scores and optional LLM-generated answers, raw page content, and images.
+
+!!! note
+    Requires the `tavily` extra and an API key: `pip install ag2[tavily]`
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import TavilySearchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[TavilySearchTool(api_key=os.environ["TAVILY_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, Tavily reads the `TAVILY_API_KEY` environment variable automatically.
+
+### Configuration
+
+```python linenums="1"
+tool = TavilySearchTool(
+    max_results=5,
+    search_depth="advanced",   # "basic" | "advanced" | "fast" | "ultra-fast"
+    topic="news",              # "general" | "news" | "finance"
+    include_answer=True,       # add an LLM-generated summary to the response
+    include_raw_content=True,  # include full page text alongside the snippet
+    include_images=True,       # include image URLs in the response
+    time_range="week",         # "day" | "week" | "month" | "year"
+    start_date="2024-01-01",   # YYYY-MM-DD
+    end_date="2024-12-31",     # YYYY-MM-DD
+    days=7,
+    include_domains=["reuters.com", "bbc.com"],
+    exclude_domains=["example.com"],
+    country="US",              # ISO country code for localized results
+    auto_parameters=True,      # let Tavily auto-tune query parameters
+    include_favicon=True,      # include result favicons in the response
+)
+```
+
+All search parameters accept a `Variable` for dynamic values resolved at execution time.
+
+### HTTP and SDK options
+
+The constructor also accepts options for the underlying `httpx.AsyncClient` and the Tavily SDK client. Any extra keyword arguments are forwarded directly to `AsyncTavilyClient(...)` (e.g. `api_base_url`, `company_info_tags`, `project_id`):
+
+```python linenums="1"
+tool = TavilySearchTool(
+    api_key=...,
+    proxy="http://proxy.company.com:8080",  # passed to httpx.AsyncClient
+    verify=False,                            # disable TLS verification (httpx)
+    timeout=30.0,                            # httpx timeout in seconds
+    # extra kwargs below are forwarded to AsyncTavilyClient
+    api_base_url="https://custom.tavily.example",
+    company_info_tags=("news", "finance"),
+)
+```
+
+---
+
+## SandboxShellTool
+
+`SandboxShellTool` gives an agent the ability to run shell commands inside an environment you choose. With no argument it uses a `LocalEnvironment` with a temporary working directory that is cleaned up on process exit. See the [Sandbox Shell page](/docs/user-guide/tools/local_shell) for the full guide.
+
+!!! warning
+    A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run — or a `DockerEnvironment` / `DaytonaEnvironment` for real isolation.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SandboxShellTool, LocalEnvironment
+
+agent = Agent(
+    "engineer",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SandboxShellTool(LocalEnvironment("/tmp/my_project"))],
+)
+```
+
+The first argument is the environment; the backend (where commands run) is configured there. Passing nothing uses a temporary local directory.
+
+### Restricting commands
+
+Command policy lives on the tool:
+
+```python linenums="1"
+from ag2.tools import SandboxShellTool, LocalEnvironment
+
+# Allow only specific commands
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), allowed=["git", "python", "pip"])
+
+# Block dangerous commands
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), blocked=["rm -rf", "curl", "wget"])
+
+# Read-only mode — agent can inspect but not modify
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), readonly=True)
+
+# Hide sensitive files from the agent
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), ignore=["**/.env", "*.key", "secrets/**"])
+```

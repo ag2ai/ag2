@@ -18,8 +18,8 @@ Ask the user:
 
 ```python
 import os
-from autogen import LLMConfig, UserProxyAgent
-from autogen.agents.experimental import ReasoningAgent
+from ag2 import LLMConfig, UserProxyAgent
+from ag2.agents.experimental import ReasoningAgent
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
@@ -111,9 +111,9 @@ reasoning_agent = ReasoningAgent(
 ## 5. ReasoningAgent in Group Chat
 
 ```python
-from autogen import ConversableAgent
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns import RoundRobinPattern
+from ag2 import ConversableAgent
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns import RoundRobinPattern
 
 reasoner = ReasoningAgent(
     name="reasoner",
@@ -145,7 +145,7 @@ result = run_group_chat(
 
 ## 6. Rules
 
-- Import from `autogen.agents.experimental`, not `autogen.agentchat`
+- Import from `ag2.agents.experimental`, not `ag2.agentchat`
 - `beam_size` and `answer_approach` as top-level params are deprecated — use `reason_config` dict instead
 - Higher `beam_size` / `nsim` = better reasoning but more LLM calls and cost
 - Use `grader_llm_config` with a stronger model for better path evaluation

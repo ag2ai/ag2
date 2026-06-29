@@ -19,8 +19,8 @@ Ask the user:
 ```python
 import os
 from typing import Annotated
-from autogen import ConversableAgent, LLMConfig
-from autogen.tools.experimental import DuckDuckGoSearchTool
+from ag2 import ConversableAgent, LLMConfig
+from ag2.tools.experimental import DuckDuckGoSearchTool
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
@@ -55,8 +55,8 @@ Requires: `pip install ag2[openai,duckduckgo_search]`
 
 ```python
 import os
-from autogen import ConversableAgent, LLMConfig
-from autogen.tools.experimental import QuickResearchTool
+from ag2 import ConversableAgent, LLMConfig
+from ag2.tools.experimental import QuickResearchTool
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
@@ -96,10 +96,10 @@ Requires: `pip install ag2[openai,quick-research]`
 ```python
 import os
 from typing import Annotated
-from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns import AutoPattern
-from autogen.tools.experimental import DuckDuckGoSearchTool
+from ag2 import ConversableAgent, LLMConfig
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns import AutoPattern
+from ag2.tools.experimental import DuckDuckGoSearchTool
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
