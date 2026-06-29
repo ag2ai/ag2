@@ -8,7 +8,7 @@ import pytest
 
 from ag2 import Agent, Context
 from ag2.agent import KnowledgeConfig
-from ag2.compact import CompactTrigger, CompactionSummary, TailWindowCompact
+from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact, TailWindowCompact
 from ag2.events import (
     CompactionCompleted,
     CompactionFailed,
@@ -22,10 +22,12 @@ from ag2.events import (
     ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
+    Usage,
+    UsageEvent,
 )
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.stream import MemoryStream
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 
 
 class TestTailWindowCompact:
@@ -124,6 +126,63 @@ class TestTailWindowToolCycleBoundary:
         assert mr not in result and res not in result
         entries = await store.list("/log/")
         assert [e for e in entries if "dropped" in e]
+
+
+@pytest.mark.asyncio
+class TestTelemetryNotConversational:
+    """UsageEvent is persisted telemetry, not conversation — it must not consume
+    the retention window, leak into the summary, or trigger compaction."""
+
+    async def test_usage_events_do_not_consume_window(self) -> None:
+        events: list = []
+        for i in range(3):
+            events.append(ModelRequest([TextInput(f"u{i}")]))
+            events.append(UsageEvent(Usage(total_tokens=10)))
+        result = await TailWindowCompact(target=2).compact(events, Context(stream=MemoryStream()), None)
+
+        conv = [e for e in result if isinstance(e, ModelRequest)]
+        assert [e.parts[0].content for e in conv] == ["u1", "u2"]
+        # Retained telemetry rides along so UsageReport keeps the window's usage
+        assert any(isinstance(e, UsageEvent) for e in result)
+
+    async def test_telemetry_alone_is_no_op(self) -> None:
+        events: list = [ModelRequest([TextInput("only")])]
+        events += [UsageEvent(Usage(total_tokens=1)) for _ in range(10)]
+        result = await TailWindowCompact(target=3).compact(events, Context(stream=MemoryStream()), None)
+        assert result == events
+
+    async def test_summarizer_prompt_excludes_telemetry(self) -> None:
+        tracking = TrackingConfig(TestConfig(ModelResponse(ModelMessage("summary"))))
+        events: list = [
+            ModelRequest([TextInput("keep-this-text")]),
+            UsageEvent(Usage(total_tokens=313373)),
+            ModelResponse(ModelMessage("and-this-text")),
+            ModelRequest([TextInput("recent")]),
+        ]
+        await SummarizeCompact(target=1, config=tracking).compact(events, Context(stream=MemoryStream()), None)
+
+        prompt = tracking.mock.call_args.args[0].parts[0].content
+        assert "keep-this-text" in prompt and "and-this-text" in prompt
+        assert "313373" not in prompt
+
+    async def test_usage_events_do_not_advance_trigger(self) -> None:
+        # One turn = ModelRequest + ModelResponse (2 conversational) + UsageEvent.
+        # max_events=2 must NOT fire: counting the UsageEvent would push it to 3.
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "compactor",
+            config=TestConfig(ModelResponse(ModelMessage("a"), usage=Usage(total_tokens=5))),
+            knowledge=KnowledgeConfig(
+                store=MemoryKnowledgeStore(),
+                compact=TailWindowCompact(target=2),
+                compact_trigger=CompactTrigger(max_events=2),
+            ),
+        )
+        await agent.ask("once", stream=stream)
+        assert completions == []
 
 
 class TestCompactionSummary:

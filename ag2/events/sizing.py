@@ -10,7 +10,7 @@ text verbatim, non-text parts by a flat per-modality token budget.
 
 from collections.abc import Iterator
 
-from .base import BaseEvent
+from .base import BaseEvent, is_conversational
 from .input_events import BinaryInput, BinaryType, DataInput, FileIdInput, ModelRequest, TextInput, UrlInput
 from .tool_events import ToolResultsEvent
 from .types import ModelResponse
@@ -86,6 +86,9 @@ def estimated_tokens(event: BaseEvent, chars_per_token: int = 4) -> int:
     Text counts as ``len // chars_per_token``; each non-text part counts as a
     flat per-modality budget. A size heuristic, not an exact tokenizer.
     """
+    # Telemetry never reaches the model, so it occupies no context budget.
+    if not is_conversational(event):
+        return 0
     total = 0
     for kind, payload in _content_pieces(event):
         if kind == "text":
@@ -99,8 +102,11 @@ def render_for_prompt(event: BaseEvent) -> str:
     """Full, untruncated text of an event for a summarizer/memory prompt.
 
     Text parts are rendered in full; non-text parts become ``[modality]``
-    placeholders. Prefixed with a role label where one applies.
+    placeholders. Prefixed with a role label where one applies. Telemetry
+    (non-conversational events) renders empty so it never enters a prompt.
     """
+    if not is_conversational(event):
+        return ""
     pieces = [payload if kind == "text" else f"[{payload}]" for kind, payload in _content_pieces(event)]
     body = " ".join(p for p in pieces if p)
     if not body:

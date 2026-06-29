@@ -13,6 +13,8 @@ from ag2.events import (
     ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
+    Usage,
+    UsageEvent,
     estimated_tokens,
     render_for_prompt,
 )
@@ -47,6 +49,14 @@ def test_render_preserves_full_text() -> None:
     rendered = render_for_prompt(ModelRequest([TextInput(BIG)]))
     assert BIG in rendered
     assert rendered.startswith("User: ")
+
+
+def test_telemetry_is_not_counted_or_rendered() -> None:
+    # UsageEvent never reaches the model, so it must size to 0 and render empty
+    # for every budget calc (trigger, TokenLimiter) and prompt.
+    usage = UsageEvent(Usage(total_tokens=1500), kind="model_call")
+    assert estimated_tokens(usage) == 0
+    assert render_for_prompt(usage) == ""
 
 
 def test_render_uses_placeholder_for_non_text() -> None:

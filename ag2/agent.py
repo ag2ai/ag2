@@ -49,6 +49,7 @@ from .events import (
     ToolResultsEvent,
     UsageEvent,
     estimated_tokens,
+    is_conversational,
 )
 from .events.lifecycle import (
     AggregationCompleted,
@@ -1787,9 +1788,9 @@ class _CompactionMiddleware(BaseMiddleware):
         result = await call_next(event, context)
 
         events = list(await context.stream.history.get_events())
-        # Count only non-transient events — transient events (chunks, lifecycle)
-        # should not influence compaction decisions even if persist_all=True.
-        conversation_events = [e for e in events if not getattr(type(e), "__transient__", False)]
+        # Count only conversational events — transient artifacts and persisted
+        # telemetry (UsageEvent) must not drive compaction, even if persist_all.
+        conversation_events = [e for e in events if is_conversational(e)]
         event_count = len(conversation_events)
 
         # Prevent double compaction — skip if count hasn't grown since last
@@ -1829,7 +1830,7 @@ class _CompactionMiddleware(BaseMiddleware):
                 return result
 
             await context.stream.history.replace(compacted)
-            self._last_compact_event_count = len([e for e in compacted if not getattr(type(e), "__transient__", False)])
+            self._last_compact_event_count = len([e for e in compacted if is_conversational(e)])
 
             usage = getattr(self._strategy, "last_usage", {})
             await context.send(

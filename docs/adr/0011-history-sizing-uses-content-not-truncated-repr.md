@@ -69,6 +69,13 @@ the per-event size is now content-based.
   their job (readable logs). The fix is to stop *other* code from borrowing them
   as a size/content proxy — not to change the repr.
 
+- **Both helpers skip non-conversational events.** `estimated_tokens` returns 0
+  and `render_for_prompt` returns `""` for telemetry (`UsageEvent` — see
+  [0010](./0010-history-management-keys-on-conversational-not-transient.md)),
+  since it never reaches the model. Putting the guard in the helpers — not just at
+  each caller — means every budget calc (trigger, `TokenLimiter`) and every prompt
+  is telemetry-free by construction, with no way for a new caller to forget it.
+
 - **The size estimate is a coarse heuristic, and that is the right altitude.**
   Text is already "chars ÷ 4" — no real tokenizer is wired in anywhere — so
   precise provider-specific image tokenization would be inconsistent precision.
