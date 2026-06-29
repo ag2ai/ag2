@@ -9,7 +9,7 @@ from typing import Any
 from nlip_sdk.nlip import NLIP_Message
 from nlip_server.server import NLIP_Application, NLIP_Session, setup_server
 
-from autogen.beta.agent import Agent
+from ag2.agent import Agent
 
 from .executor import NlipExecutor
 
@@ -46,8 +46,8 @@ class NlipServer:
     any ASGI server::
 
         import uvicorn
-        from autogen.beta import Agent
-        from autogen.beta.extensions.nlip import NlipServer
+        from ag2 import Agent
+        from ag2.extensions.nlip import NlipServer
 
         agent = Agent("assistant", config=...)
         server = NlipServer(agent)

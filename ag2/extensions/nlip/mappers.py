@@ -8,7 +8,7 @@ from typing import Any
 
 from nlip_sdk.nlip import NLIP_Factory, NLIP_Message
 
-from autogen.beta.events import (
+from ag2.events import (
     BaseEvent,
     ModelMessage,
     ModelRequest,
@@ -21,7 +21,7 @@ from autogen.beta.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.beta.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
+from ag2.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
 
 from .errors import RehydratedNlipToolError
 

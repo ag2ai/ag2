@@ -9,7 +9,7 @@ from typing import TypedDict
 import httpx
 from typing_extensions import Self, Unpack
 
-from autogen.beta.config.config import ModelConfig
+from ag2.config.config import ModelConfig
 
 from .client import NlipClient
 
@@ -34,7 +34,7 @@ class NlipConfig(ModelConfig):
     ``httpx_client_factory`` builds the ``httpx.AsyncClient`` used for each
     request; defaults to a plain client constructed from ``headers`` /
     ``timeout``. Override it (e.g. with ``httpx.ASGITransport``) for
-    in-process testing — see :mod:`autogen.beta.nlip.testing`.
+    in-process testing — see :mod:`ag2.nlip.testing`.
     """
 
     url: str

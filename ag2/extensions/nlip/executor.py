@@ -6,12 +6,12 @@ from typing import Any
 
 from nlip_sdk.nlip import NLIP_Message
 
-from autogen.beta.agent import Agent
-from autogen.beta.context import ConversationContext
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
-from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.final.client_tool import ClientTool
-from autogen.beta.tools.final.function_tool import FunctionToolSchema
+from ag2.agent import Agent
+from ag2.context import ConversationContext
+from ag2.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
+from ag2.stream import MemoryStream
+from ag2.tools.final.client_tool import ClientTool
+from ag2.tools.final.function_tool import FunctionToolSchema
 
 from .mappers import build_response_message, parse_request_message
 

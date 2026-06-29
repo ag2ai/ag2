@@ -3,7 +3,7 @@ title: NLIP Agent Integration
 sidebarTitle: NLIP Agent
 ---
 
-[NLIP (Natural Language Interaction Protocol)](https://ecma-international.org/publications-and-standards/standards/ecma-430/){.external-link target="_blank"} is an ECMA-430 standard for interoperable agent communication over HTTP. The `autogen.extensions.nlip` module lets you:
+[NLIP (Natural Language Interaction Protocol)](https://ecma-international.org/publications-and-standards/standards/ecma-430/){.external-link target="_blank"} is an ECMA-430 standard for interoperable agent communication over HTTP. The `ag2.extensions.nlip` module lets you:
 
 1. **Expose** any `Agent` as a standards-compliant NLIP endpoint.
 2. **Connect** to any remote NLIP server as if it were a local AG2 agent.
@@ -38,9 +38,9 @@ Each request creates an isolated session: the agent runs, responds, and the sess
 ```python title="server.py"
 import uvicorn
 
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.extensions.nlip import NlipServer
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.extensions.nlip import NlipServer
 
 agent = Agent(
     name="python_expert",
@@ -87,8 +87,8 @@ Example response:
 Similar to how AG2 integrates with the [A2A protocol](/docs/a2a/overview), `NlipConfig` connects to a remote NLIP server over HTTP and plugs into a regular `Agent` as its LLM provider.
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.extensions.nlip import NlipConfig
+from ag2 import Agent
+from ag2.extensions.nlip import NlipConfig
 
 remote_agent = Agent(
     "remote_python_expert",
@@ -98,7 +98,7 @@ remote_agent = Agent(
 
 Because `NlipConfig` is a `ModelConfig`, the remote endpoint plugs directly into the familiar `agent.ask(...)` / `reply.ask(...)` shape — no separate call surface to learn.
 
-```python linenums="1"
+```python
 reply = await remote_agent.ask("Explain Python generators")
 print(reply.response.content)
 ```
@@ -110,7 +110,7 @@ This example shows a realistic multi-agent setup where:
 - A **weather NLIP server** provides weather alerts and forecasts via the National Weather Service API.
 - A local **coordinator `Agent`** delegates geocoding to a local tool and forecasts to the remote weather server, reached through `NlipConfig`.
 
-`autogen` has no GroupChat — the geo lookup and the remote weather call are both tools the coordinator's LLM picks between, rather than peer chat participants:
+`ag2` has no GroupChat — the geo lookup and the remote weather call are both tools the coordinator's LLM picks between, rather than peer chat participants:
 
 ```text
 ┌─────────────────────────────────────────────┐
@@ -142,9 +142,9 @@ The weather server is an AG2 `Agent` with two tools — `get_weather_alerts` (by
 import httpx
 import uvicorn
 
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.extensions.nlip import NlipServer
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.extensions.nlip import NlipServer
 
 NWS_API_BASE = "https://api.weather.gov"
 NWS_HEADERS = {"User-Agent": "ag2-weather-nlip/1.0", "Accept": "application/geo+json"}
@@ -245,9 +245,9 @@ import asyncio
 
 import httpx
 
-from autogen import Agent
-from autogen.config import OpenAIConfig
-from autogen.extensions.nlip import NlipConfig
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.extensions.nlip import NlipConfig
 
 async def geocode_location(location: str) -> dict:
     """Convert a location name (city, address) to latitude/longitude coordinates."""

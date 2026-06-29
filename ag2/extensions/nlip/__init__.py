@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.exceptions import missing_additional_dependency
+from ag2.exceptions import missing_additional_dependency
 
 try:
     from .config import NlipConfig

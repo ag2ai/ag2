@@ -8,12 +8,12 @@ import httpx
 from fast_depends.library.serializer import SerializerProto
 from nlip_sdk.nlip import NLIP_Message
 
-from autogen.beta.config.client import LLMClient
-from autogen.beta.context import ConversationContext
-from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse, TextInput, ToolCallsEvent, Usage
-from autogen.beta.response import ResponseProto
-from autogen.beta.tools.final.function_tool import FunctionToolSchema
-from autogen.beta.tools.schemas import ToolSchema
+from ag2.config.client import LLMClient
+from ag2.context import ConversationContext
+from ag2.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse, TextInput, ToolCallsEvent, Usage
+from ag2.response import ResponseProto
+from ag2.tools.final.function_tool import FunctionToolSchema
+from ag2.tools.schemas import ToolSchema
 
 from .errors import NlipConnectionError, NlipInputRequiredError, NlipServerError, NlipTimeoutError
 from .mappers import build_request_message, parse_response_message
