@@ -175,16 +175,14 @@ coder = ConversableAgent(
 reviewer = ConversableAgent(
     name="reviewer",
     system_message="You are a code reviewer. Analyze provided code and suggest improvements. "
-                   "Do not generate code, only suggest improvements.",
+    "Do not generate code, only suggest improvements.",
     llm_config=llm_config,
 )
 
 # Start a conversation
 response = reviewer.run(
-            recipient=coder,
-            message="Write a Python function that computes Fibonacci numbers.",
-            max_turns=10
-        )
+    recipient=coder, message="Write a Python function that computes Fibonacci numbers.", max_turns=10
+)
 
 response.process()
 
@@ -211,7 +209,9 @@ llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
 # Define lesson planner and reviewer
 planner_message = "You are a classroom lesson planner. Given a topic, write a lesson plan for a fourth grade class."
-reviewer_message = "You are a classroom lesson reviewer. Compare the plan to the curriculum and suggest up to 3 improvements."
+reviewer_message = (
+    "You are a classroom lesson reviewer. Compare the plan to the curriculum and suggest up to 3 improvements."
+)
 
 lesson_planner = ConversableAgent(
     name="planner_agent",
@@ -275,7 +275,9 @@ llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
 # Same agents as before, but now the human validator will pass to the planner who will check for "APPROVED" and terminate
 planner_message = "You are a classroom lesson planner. Given a topic, write a lesson plan for a fourth grade class."
-reviewer_message = "You are a classroom lesson reviewer. Compare the plan to the curriculum and suggest up to 3 improvements."
+reviewer_message = (
+    "You are a classroom lesson reviewer. Compare the plan to the curriculum and suggest up to 3 improvements."
+)
 teacher_message = "You are an experienced classroom teacher. You don't prepare plans, you provide simple guidance to the planner to prepare a lesson plan on the key topic."
 
 lesson_planner = ConversableAgent(
@@ -342,10 +344,12 @@ logger = logging.getLogger(__name__)
 
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
+
 # Tool: returns weekday for a given date
 def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
     date = datetime.strptime(date_string, "%Y-%m-%d")
     return date.strftime("%A")
+
 
 date_agent = ConversableAgent(
     name="date_agent",

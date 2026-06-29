@@ -22,9 +22,7 @@ from typing import Annotated
 from ag2 import ConversableAgent, LLMConfig
 from ag2.tools.experimental import DuckDuckGoSearchTool
 
-llm_config = LLMConfig(
-    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
 assistant = ConversableAgent(
     name="researcher",
@@ -58,9 +56,7 @@ import os
 from ag2 import ConversableAgent, LLMConfig
 from ag2.tools.experimental import QuickResearchTool
 
-llm_config = LLMConfig(
-    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
 assistant = ConversableAgent(
     name="researcher",
@@ -101,9 +97,7 @@ from ag2.agentchat import run_group_chat
 from ag2.agentchat.group.patterns import AutoPattern
 from ag2.tools.experimental import DuckDuckGoSearchTool
 
-llm_config = LLMConfig(
-    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
 planner = ConversableAgent(
     name="planner",
