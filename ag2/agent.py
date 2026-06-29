@@ -48,6 +48,7 @@ from .events import (
     ToolCallsEvent,
     ToolResultsEvent,
     UsageEvent,
+    estimated_tokens,
 )
 from .events.lifecycle import (
     AggregationCompleted,
@@ -1799,7 +1800,7 @@ class _CompactionMiddleware(BaseMiddleware):
         if self._trigger.max_events > 0 and event_count > self._trigger.max_events:
             should_compact = True
         if self._trigger.max_tokens > 0:
-            estimated = sum(len(str(e)) for e in conversation_events) // self._trigger.chars_per_token
+            estimated = sum(estimated_tokens(e, self._trigger.chars_per_token) for e in conversation_events)
             if estimated > self._trigger.max_tokens:
                 should_compact = True
 

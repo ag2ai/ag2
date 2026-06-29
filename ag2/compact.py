@@ -27,6 +27,7 @@ from ag2.events import (
     ToolResultEvent,
     ToolResultsEvent,
     UsageEvent,
+    render_for_prompt,
 )
 from ag2.stream import MemoryStream
 
@@ -187,7 +188,7 @@ class SummarizeCompact:
         client = self._config.create()
         prompt_event = ModelRequest.ensure_request([
             "Summarize the following conversation history concisely, "
-            "preserving key decisions, findings, and context:\n\n" + "\n".join(str(e) for e in events)
+            "preserving key decisions, findings, and context:\n\n" + "\n".join(render_for_prompt(e) for e in events)
         ])
         response = await client(
             [prompt_event],

@@ -206,6 +206,28 @@ class TestCompactionWiredOnAgent:
 
         assert completions == []
 
+    @pytest.mark.asyncio
+    async def test_max_tokens_fires_on_large_content(self) -> None:
+        # A single large turn (~2500 est. tokens) must cross max_tokens. The old
+        # truncated str(event) estimate capped it near zero and never fired.
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "compactor",
+            config=TestConfig(ModelResponse(ModelMessage("ok"))),
+            knowledge=KnowledgeConfig(
+                store=store,
+                compact=TailWindowCompact(target=1),
+                compact_trigger=CompactTrigger(max_tokens=1000),
+            ),
+        )
+        await agent.ask("x" * 10_000, stream=stream)
+
+        assert len(completions) >= 1
+
 
 class _RaisingCompact:
     """CompactStrategy that always raises — for failure-path tests."""
