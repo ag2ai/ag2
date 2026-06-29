@@ -27,6 +27,7 @@ async def test_collects_events_in_window(self) -> None:
     assert len(batches) == 1
     assert len(batches[0]) == 2
 
+
 # === GOOD - public-api based test ===
 async def test_collects_events_in_window(self) -> None:
     # arrange stream
@@ -82,8 +83,9 @@ assert result[0] == {"role": "assistant", "tool_calls": [...]}
 
 # Good — partial match with dirty-equals (always use dict syntax, not kwargs)
 from dirty_equals import IsPartialDict
+
 assert result[0] == IsPartialDict({"role": "assistant"})  # Good
-assert result[0] == IsPartialDict(role="assistant")        # Bad — use dict syntax
+assert result[0] == IsPartialDict(role="assistant")  # Bad — use dict syntax
 ```
 
 ### Imports
@@ -104,6 +106,7 @@ class TestAgent:
 
     @pytest.mark.asyncio
     async def test_defaults(self, context: Context) -> None: ...
+
 
 # Good - markers are applied to the class itself
 @pytest.mark.asyncio

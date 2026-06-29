@@ -54,10 +54,10 @@ Each config dict supports:
 
 ```python
 {
-    "model": "gpt-4o-mini",          # Required
-    "api_key": "sk-...",             # Required (or via env)  # pragma: allowlist secret
-    "base_url": "https://...",       # Optional, for custom endpoints
-    "api_type": "openai",            # Optional, inferred from model
+    "model": "gpt-4o-mini",  # Required
+    "api_key": "sk-...",  # Required (or via env)  # pragma: allowlist secret
+    "base_url": "https://...",  # Optional, for custom endpoints
+    "api_type": "openai",  # Optional, inferred from model
     "tags": ["gpt4", "production"],  # Optional, for filtering
 }
 ```
@@ -71,7 +71,13 @@ AG2 supports many providers. Common patterns:
 {"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
 
 # Azure OpenAI
-{"model": "gpt-4", "api_type": "azure", "api_key": "...", "base_url": "https://your-resource.openai.azure.com", "api_version": "2024-02-01"}
+{
+    "model": "gpt-4",
+    "api_type": "azure",
+    "api_key": "...",
+    "base_url": "https://your-resource.openai.azure.com",
+    "api_version": "2024-02-01",
+}
 
 # Anthropic
 {"model": "claude-sonnet-4-20250514", "api_type": "anthropic", "api_key": os.environ["ANTHROPIC_API_KEY"]}
@@ -90,10 +96,12 @@ Use `response_format` with a Pydantic model to get typed, structured responses:
 ```python
 from pydantic import BaseModel
 
+
 class Analysis(BaseModel):
     summary: str
     confidence: float
     key_points: list[str]
+
 
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]},

@@ -19,7 +19,7 @@ from fast_depends.pydantic import PydanticSerializer
 
 from .annotations import Context
 from .config import ModelConfig
-from .events import BaseEvent, ModelRequest, UsageEvent
+from .events import BaseEvent, ModelRequest, UsageEvent, render_for_prompt
 from .knowledge import CONVERSATIONS_PREFIX, WORKING_MEMORY_PATH, KnowledgeStore
 from .stream import MemoryStream
 
@@ -92,7 +92,7 @@ class ConversationSummaryAggregate:
         client = self._config.create()
         prompt_event = ModelRequest.ensure_request([
             "Summarize this conversation. Include key decisions, "
-            "findings, outcomes, and any unfinished work:\n\n" + "\n".join(str(e) for e in events)
+            "findings, outcomes, and any unfinished work:\n\n" + "\n".join(render_for_prompt(e) for e in events)
         ])
         response = await client(
             [prompt_event],
@@ -188,7 +188,7 @@ class WorkingMemoryAggregate:
         client = self._config.create()
         prompt = self._prompt_template.format(
             existing=existing or "(empty)",
-            events="\n".join(str(e) for e in events),
+            events="\n".join(render_for_prompt(e) for e in events),
         )
         response = await client(
             [ModelRequest.ensure_request([prompt])],
