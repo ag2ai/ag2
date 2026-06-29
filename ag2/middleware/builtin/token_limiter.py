@@ -5,15 +5,16 @@
 from collections.abc import Sequence
 
 from ag2.annotations import Context
-from ag2.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from ag2.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent, estimated_tokens
 from ag2.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
 
 class TokenLimiter(MiddlewareFactory):
     """Truncate message history to fit within a token budget.
 
-    Uses a simple character-based estimate (``chars_per_token`` chars per token)
-    unless a custom tokenizer is provided.
+    Sizes each event with the shared content estimate (text by
+    ``chars_per_token``, non-text by a per-modality budget) — never the
+    truncated ``str(event)`` repr.
     """
 
     def __init__(self, max_tokens: int, chars_per_token: int = 4) -> None:
@@ -21,10 +22,11 @@ class TokenLimiter(MiddlewareFactory):
             raise ValueError("max_tokens must be greater than 0")
         if chars_per_token < 1:
             raise ValueError("chars_per_token must be greater than 0")
-        self._max_chars = max_tokens * chars_per_token
+        self._max_tokens = max_tokens
+        self._chars_per_token = chars_per_token
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
-        return _TokenLimiter(event, context, self._max_chars)
+        return _TokenLimiter(event, context, self._max_tokens, self._chars_per_token)
 
 
 class _TokenLimiter(BaseMiddleware):
@@ -32,10 +34,12 @@ class _TokenLimiter(BaseMiddleware):
         self,
         event: "BaseEvent",
         context: "Context",
-        max_chars: int,
+        max_tokens: int,
+        chars_per_token: int,
     ) -> None:
         super().__init__(event, context)
-        self._max_chars = max_chars
+        self._max_tokens = max_tokens
+        self._chars_per_token = chars_per_token
 
     @staticmethod
     def _skip_leading_tool_results(events: Sequence[BaseEvent], start: int) -> int:
@@ -49,20 +53,20 @@ class _TokenLimiter(BaseMiddleware):
         events: Sequence[BaseEvent],
         context: Context,
     ) -> ModelResponse:
-        event_lengths = [len(str(event)) for event in events]
-        if sum(event_lengths) <= self._max_chars:
+        event_tokens = [estimated_tokens(event, self._chars_per_token) for event in events]
+        if sum(event_tokens) <= self._max_tokens:
             return await call_next(events, context)
 
         prefix_length = 1 if isinstance(events[0], ModelRequest) else 0
-        current_chars = event_lengths[0] if prefix_length else 0
+        current_tokens = event_tokens[0] if prefix_length else 0
         retained_start = len(events)
 
         for idx in range(len(events) - 1, prefix_length - 1, -1):
-            event_chars = event_lengths[idx]
+            event_token_count = event_tokens[idx]
             # Always preserve the most recent event, even if it exceeds the remaining budget.
-            if retained_start == len(events) or current_chars + event_chars <= self._max_chars:
+            if retained_start == len(events) or current_tokens + event_token_count <= self._max_tokens:
                 retained_start = idx
-                current_chars += event_chars
+                current_tokens += event_token_count
             else:
                 break
 
