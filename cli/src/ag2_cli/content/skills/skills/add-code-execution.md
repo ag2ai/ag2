@@ -22,9 +22,7 @@ import os
 from ag2 import ConversableAgent, LLMConfig
 from ag2.coding import LocalCommandLineCodeExecutor
 
-llm_config = LLMConfig(
-    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
 # Coder writes code
 coder = ConversableAgent(
