@@ -71,7 +71,7 @@ dependencies = [
 
 # === Agent protocols ===
 a2a = ["a2a-sdk>=1.1.0,<2"]
-a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<1"]
+a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<2"]
 ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
@@ -119,7 +119,7 @@ mcp = [
 
 # test dependencies
 test-core = [
-    "pytest==9.1.0",
+    "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
     "pytest-timeout>=2.4.0,<3",
@@ -205,13 +205,13 @@ docs = [
     "cairosvg",                                         # required for mkdocs-glightbo
     "jinja2==3.1.6",
     "pyyaml==6.0.3",
-    "termcolor==3.1.0",
+    "termcolor==3.3.0",
     "nbclient==0.11.0",
     "mcp>=1.11.0",
 ]
 
 types = [
-    "mypy==1.17.1",
+    "mypy==2.1.0",
     "types-PyYAML",
     "types-decorator",
     "types-pycurl",
@@ -223,7 +223,7 @@ types = [
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.14.14", "codespell==2.4.2", "zizmor==1.25.2"]
+lint = ["ruff==0.15.18", "codespell==2.4.2", "zizmor==1.26.1"]
 
 dev = [
     "toml==0.10.2",
@@ -233,7 +233,7 @@ dev = [
     { include-group = "docs" },
     "prek==0.4.5",
     "detect-secrets==1.5.0",
-    "uv==0.11.21",
+    "uv==0.11.23",
 ]
 
 [tool.pytest.ini_options]

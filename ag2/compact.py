@@ -27,6 +27,8 @@ from ag2.events import (
     ToolResultEvent,
     ToolResultsEvent,
     UsageEvent,
+    is_conversational,
+    render_for_prompt,
 )
 from ag2.stream import MemoryStream
 
@@ -91,6 +93,20 @@ def _snap_to_turn_boundary(events: list[BaseEvent], cut: int) -> int:
     return cut
 
 
+def _cut_for_target(events: list[BaseEvent], target: int) -> int:
+    """Index such that ``events[cut:]`` holds the last ``target`` conversational
+    events. Interleaved telemetry rides along free (kept for ``UsageReport``);
+    returns 0 when there are fewer than ``target`` conversational events.
+    """
+    seen = 0
+    for i in range(len(events) - 1, -1, -1):
+        if is_conversational(events[i]):
+            seen += 1
+            if seen == target:
+                return i
+    return 0
+
+
 @dataclass(slots=True)
 class CompactTrigger:
     """Deterministic conditions for triggering compaction.
@@ -119,10 +135,11 @@ class TailWindowCompact:
         context: Context,
         store: KnowledgeStore | None,
     ) -> list[BaseEvent]:
-        if len(events) <= self._target:
+        cut = _cut_for_target(events, self._target)
+        if cut == 0:
             return events
 
-        cut = _snap_to_turn_boundary(events, len(events) - self._target)
+        cut = _snap_to_turn_boundary(events, cut)
         dropped = events[:cut]
         retained = events[cut:]
 
@@ -160,10 +177,11 @@ class SummarizeCompact:
         context: Context,
         store: KnowledgeStore | None,
     ) -> list[BaseEvent]:
-        if len(events) <= self._target:
+        cut = _cut_for_target(events, self._target)
+        if cut == 0:
             return events
 
-        cut = _snap_to_turn_boundary(events, len(events) - self._target)
+        cut = _snap_to_turn_boundary(events, cut)
         old = events[:cut]
         recent = events[cut:]
 
@@ -187,7 +205,8 @@ class SummarizeCompact:
         client = self._config.create()
         prompt_event = ModelRequest.ensure_request([
             "Summarize the following conversation history concisely, "
-            "preserving key decisions, findings, and context:\n\n" + "\n".join(str(e) for e in events)
+            "preserving key decisions, findings, and context:\n\n"
+            + "\n".join(render_for_prompt(e) for e in events if is_conversational(e))
         ])
         response = await client(
             [prompt_event],

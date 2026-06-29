@@ -76,7 +76,10 @@ When agents should explicitly route to each other:
 
 ```python
 from ag2.agentchat.group import (
-    OnCondition, AgentTarget, TerminateTarget, StringLLMCondition,
+    OnCondition,
+    AgentTarget,
+    TerminateTarget,
+    StringLLMCondition,
 )
 from ag2.agentchat.group.patterns import DefaultPattern
 

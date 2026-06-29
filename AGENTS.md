@@ -30,13 +30,15 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
   # === BAD - import inside function ===
   def execute_tool():
       from .tool import Tool
+
       ...
+
 
   # === GOOD - top-level import ===
   from .tool import Tool
 
-  def execute_tool():
-      ...
+
+  def execute_tool(): ...
   ```
 - Do not create nested functions inside runtime execution paths.
   ```python
@@ -47,17 +49,21 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 
       _inner_function()
 
+
   # === GOOD - function created once, executed each call ===
   def execute_tool():
       _inner_function()
 
+
   def _inner_function():
       pass
+
 
   # === GOOD - decorator executed import time, so we can use closure functions here ===
   def decorator(func):
       def wrapper():
           return func()
+
       return wrapper
   ```
 - Do not perform side effects in initialization methods. Apply side effects only at runtime.
@@ -69,8 +75,8 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
           # side effect - directory creation
           self.path.parent.mkdir(parents=True, exist_ok=True)
 
-      def run(self) -> None:
-          ...
+      def run(self) -> None: ...
+
 
   # === GOOD - create directory in runtime method ===
   class KnowledgeStore:
