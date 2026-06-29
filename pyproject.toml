@@ -285,6 +285,14 @@ markers = [
     "tracing",
 ]
 
+[tool.coverage.run]
+branch = true
+source = ["ag2"]
+# Store source paths relative to the repo root (with normalized separators) so
+# coverage data recorded on different runners (Linux/macOS/Windows) can be
+# merged by `coverage combine` into a single report before upload.
+relative_files = true
+
 [tool.ruff]
 fix = true
 line-length = 120
