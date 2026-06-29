@@ -195,7 +195,6 @@ docs = [
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
     "mkdocs-git-revision-date-localized-plugin==1.5.3",
-    "mike==2.2.0",
     "typer>=0.22,<0.27",
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.5.0",                      # includes with variables
