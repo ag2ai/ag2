@@ -1012,3 +1012,95 @@ class TestHitlPropagation:
         mock.worker_hitl.assert_called_once_with("Need approval")
         mock.tool_got.assert_called_once_with("worker answer")
         mock.parent_hitl.assert_not_called()
+
+
+class TestAsToolStreamArgument:
+    """`as_tool(stream=...)` should accept a Stream instance, a StreamFactory,
+    or None — and reject anything else loudly. Regression for #2888.
+    """
+
+    @pytest.mark.asyncio
+    async def test_stream_instance_captures_subagent_events(self):
+        """Passing a bare ``Stream`` instance should now capture sub-agent
+        events directly (previously fell through silently)."""
+        researcher_config = TestConfig(ModelResponse(ModelMessage("Found X.")))
+        researcher = Agent("researcher", config=researcher_config)
+
+        coordinator_config = TestConfig(
+            ToolCallEvent(name="task_researcher", arguments='{"objective": "Find X"}'),
+            ModelResponse(ModelMessage("OK.")),
+        )
+        sub_stream = MemoryStream()
+        coordinator = Agent(
+            "coordinator",
+            config=coordinator_config,
+            tools=[researcher.as_tool(description="Research", stream=sub_stream)],
+        )
+
+        await coordinator.ask("Find X")
+
+        sub_events = list(await sub_stream.history.get_events())
+        # Sub-agent ran at least one model turn against ``sub_stream``, so the
+        # stream must have captured the ModelRequest / ModelResponse pair.
+        # (``TaskStarted`` / ``TaskCompleted`` are emitted on the parent
+        # stream, not the sub stream — see ``run_task``.)
+        assert any(isinstance(e, ModelRequest) for e in sub_events), (
+            "sub_stream should capture sub-agent ModelRequest after #2888 fix"
+        )
+        assert any(isinstance(e, ModelResponse) for e in sub_events), (
+            "sub_stream should capture sub-agent ModelResponse after #2888 fix"
+        )
+
+    @pytest.mark.asyncio
+    async def test_stream_factory_still_works(self):
+        """The existing ``StreamFactory`` (callable) contract is unchanged."""
+        researcher_config = TestConfig(ModelResponse(ModelMessage("Found X.")))
+        researcher = Agent("researcher", config=researcher_config)
+
+        captured: list[MemoryStream] = []
+
+        def factory(_agent, _ctx) -> MemoryStream:
+            s = MemoryStream()
+            captured.append(s)
+            return s
+
+        coordinator_config = TestConfig(
+            ToolCallEvent(name="task_researcher", arguments='{"objective": "Find X"}'),
+            ModelResponse(ModelMessage("OK.")),
+        )
+        coordinator = Agent(
+            "coordinator",
+            config=coordinator_config,
+            tools=[researcher.as_tool(description="Research", stream=factory)],
+        )
+
+        await coordinator.ask("Find X")
+
+        assert len(captured) == 1
+        events = list(await captured[0].history.get_events())
+        # Factory-produced stream is the sub-agent's stream — same routing as
+        # the instance case: ModelRequest / ModelResponse land here.
+        assert any(isinstance(e, ModelRequest) for e in events)
+        assert any(isinstance(e, ModelResponse) for e in events)
+
+    def test_invalid_stream_type_raises_typeerror(self):
+        """Passing a non-callable / non-Stream / non-None must raise eagerly
+        (no more silent empty-stream surprise)."""
+        researcher_config = TestConfig(ModelResponse(ModelMessage("...")))
+        researcher = Agent("researcher", config=researcher_config)
+
+        with pytest.raises(TypeError, match="must be a Stream instance"):
+            researcher.as_tool(description="Research", stream=42)  # type: ignore[arg-type]
+
+        with pytest.raises(TypeError, match="must be a Stream instance"):
+            researcher.as_tool(description="Research", stream="not a stream")  # type: ignore[arg-type]
+
+    def test_stream_none_keeps_default_behaviour(self):
+        """``stream=None`` (the default) leaves run_task to allocate a fresh
+        per-call stream, just like before."""
+        researcher_config = TestConfig(ModelResponse(ModelMessage("...")))
+        researcher = Agent("researcher", config=researcher_config)
+
+        # Should not raise and should produce a usable FunctionTool.
+        delegate = researcher.as_tool(description="Research", stream=None)
+        assert delegate is not None
