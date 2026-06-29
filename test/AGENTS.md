@@ -73,19 +73,21 @@ async def test_collects_events_in_window(self) -> None:
 
 Do not use `monkeypatch.setattr`, `setattr` on an instance, or `unittest.mock.patch` to swap out a private function, method, or attribute (anything `_prefixed`). Patching internals pins the test to *how* the code works today, so it keeps passing even after the real behavior breaks.
 
-The agent's public seam is `config=`. Script the LLM's turns with `autogen.beta.testing.TestConfig` instead of reaching for the agent's private client — the same test, before and after:
+The agent's public seam is `config=`. Script the LLM's turns with `ag2.testing.TestConfig` instead of reaching for the agent's private client — the same test, before and after:
 
 ```python
-from autogen.beta import Agent
-from autogen.beta.events import ToolCallEvent
-from autogen.beta.testing import TestConfig
+from ag2 import Agent
+from ag2.events import ToolCallEvent
+from ag2.testing import TestConfig
+
 
 # BAD — patch the agent's private client to script the turn. The test breaks the
 # moment that internal is renamed, and a green run proves nothing about the wiring.
 async def test_agent_answers_with_tool(monkeypatch):
     agent = Agent("weather", tools=[get_weather])
-    monkeypatch.setattr(agent, "_client", _scripted_client(...))   # private attribute
+    monkeypatch.setattr(agent, "_client", _scripted_client(...))  # private attribute
     ...
+
 
 # GOOD — script the same turns through the public `config=` seam.
 async def test_agent_answers_with_tool():
@@ -93,7 +95,7 @@ async def test_agent_answers_with_tool():
         "weather",
         config=TestConfig(
             ToolCallEvent(name="get_weather", arguments='{"city": "Tokyo"}'),  # turn 1: call the tool
-            "It's sunny in Tokyo.",                                            # turn 2: final reply
+            "It's sunny in Tokyo.",  # turn 2: final reply
         ),
         tools=[get_weather],
     )

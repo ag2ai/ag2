@@ -4,7 +4,6 @@
 
 import asyncio
 import json
-from contextlib import ExitStack
 from typing import Annotated
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,9 +23,9 @@ from ag2 import (
     testing,
     tool,
 )
-from ag2.events import ToolCallsEvent, ToolResultsEvent
+from ag2.events import ToolResultsEvent
 from ag2.exceptions import ToolNotFoundError
-from ag2.tools.executor import ToolExecutor
+from ag2.middleware import ToolExecution
 from ag2.tools.subagents import subagent_tool
 
 
@@ -298,34 +297,50 @@ async def test_unknown_tool_result_is_populated() -> None:
 
 @pytest.mark.asyncio
 async def test_subagent_tool_surfaces_failure_to_caller() -> None:
-    """A failed sub-task must return an error string, never an empty success."""
+    """A failed sub-task must return a non-empty error string to the parent LLM, never an empty success.
 
-    class FailingWorker:
-        name = "worker"
-        _hitl_hook = None
+    Driven through the public seam: the worker is a real ``Agent`` whose tool raises (scripted with
+    ``TestConfig``); the parent delegates to it via ``subagent_tool``. ``TrackingConfig`` lets us read
+    the exact tool result the framework feeds back to the parent LLM — no patching, no agent doubles.
+    """
 
-        async def ask(self, *args: object, **kwargs: object) -> object:
-            raise RuntimeError("boom")
+    @tool
+    async def explode() -> str:
+        raise RuntimeError("boom")
 
-    tool_obj = subagent_tool(FailingWorker(), description="do work")
-
-    ctx = Context(stream=MemoryStream())
-    result = await tool_obj(
-        events.ToolCallEvent(
-            name=tool_obj.name,
-            arguments=json.dumps({"objective": "solve it"}),
-        ),
-        context=ctx,
+    worker = Agent(
+        "worker",
+        config=testing.TestConfig(events.ToolCallEvent(name="explode")),
+        tools=[explode],
     )
+    delegate = subagent_tool(worker, description="do work", name="delegate")
 
-    out = result.result.parts[0].content
+    parent_config = testing.TrackingConfig(
+        testing.TestConfig(
+            events.ToolCallEvent(name="delegate", arguments=json.dumps({"objective": "solve it"})),
+            "done",
+        )
+    )
+    parent = Agent("parent", config=parent_config, tools=[delegate])
+
+    await parent.ask("Delegate the task")
+
+    # The framework's second LLM turn carries the delegate tool's result back to the parent LLM.
+    tool_result: events.ToolResultEvent = parent_config.mock.call_args_list[1][0][0].results[0]
+    out = tool_result.result.parts[0].content
     assert out != "", "sub-task failure must not return empty string to parent LLM"
-    assert "boom" in out or "fail" in out.lower()
+    assert "boom" in out
 
 
 @pytest.mark.asyncio
 async def test_execute_tools_isolates_a_failing_tool() -> None:
-    """A tool that fails must not suppress another tool's result — both come back."""
+    """A tool that raises must not suppress another tool's result — both come back.
+
+    Driven through the public ``Agent`` + ``TestConfig`` seam: one turn issues two tool calls; the
+    failing one surfaces as a ``ToolErrorEvent`` while the other still returns. The next LLM turn
+    then re-raises the surfaced error (that is how ``TestConfig`` feeds a tool failure back to the
+    model), so the run raises — but the batch's results are already on the stream, undropped.
+    """
 
     @tool(name="good_tool")
     def good_tool() -> str:
@@ -336,62 +351,86 @@ async def test_execute_tools_isolates_a_failing_tool() -> None:
         raise RuntimeError("tool exploded")
 
     stream = MemoryStream()
-    ctx = Context(stream=stream)
-    ex = ToolExecutor(serializer=MagicMock())
+    agent = Agent(
+        "",
+        config=testing.TestConfig([
+            events.ToolCallEvent(name="good_tool"),
+            events.ToolCallEvent(name="bad_tool"),
+        ]),
+        tools=[good_tool, bad_tool],
+    )
 
-    with ExitStack() as stack:
-        ex.register(stack, ctx, tools=[good_tool, bad_tool])
-        await ctx.send(
-            ToolCallsEvent([
-                events.ToolCallEvent(name="good_tool"),
-                events.ToolCallEvent(name="bad_tool"),
-            ])
-        )
-
-    history = await stream.history.get_events()
-    results_events = [e for e in history if isinstance(e, ToolResultsEvent)]
-    assert results_events, "expected a ToolResultsEvent in history"
-    [results_event] = results_events
-    # Both calls represented: one success, one error — nothing silently dropped.
-    assert len(results_event.results) == 2
-
-
-@pytest.mark.asyncio
-async def test_execute_tools_isolates_a_call_that_raises_past_the_tool() -> None:
-    """A failure that escapes the tool itself (a raising middleware) must not discard
-    the batch — it comes back as that call's error while the others still return."""
-
-    async def boom_middleware(call_next: object, event: events.ToolCallEvent, context: Context) -> object:
-        raise RuntimeError("middleware exploded")
-
-    @tool(name="good_tool")
-    def good_tool() -> str:
-        return "all good"
-
-    @tool(name="bad_tool", middleware=[boom_middleware])
-    def bad_tool() -> str:
-        return "never reached"
-
-    stream = MemoryStream()
-    ctx = Context(stream=stream)
-    ex = ToolExecutor(serializer=MagicMock())
-
-    with ExitStack() as stack:
-        ex.register(stack, ctx, tools=[good_tool, bad_tool])
-        await ctx.send(
-            ToolCallsEvent([
-                events.ToolCallEvent(name="good_tool"),
-                events.ToolCallEvent(name="bad_tool"),
-            ])
-        )
+    with pytest.raises(RuntimeError, match="tool exploded"):
+        await agent.ask("Call both tools", stream=stream)
 
     history = await stream.history.get_events()
     [results_event] = [e for e in history if isinstance(e, ToolResultsEvent)]
     # Both calls represented: one success, one error — nothing silently dropped.
     assert len(results_event.results) == 2
-    # The escaping failure surfaced as a tool error carrying the middleware exception.
     errors = [r for r in results_event.results if isinstance(r, events.ToolErrorEvent)]
-    assert any(e.result is not None and "middleware exploded" in e.result.parts[0].content for e in errors)
+    assert any(e.result is not None and "tool exploded" in e.result.parts[0].content for e in errors)
+
+
+@pytest.mark.asyncio
+async def test_execute_tools_isolates_a_call_a_middleware_guard_rejects() -> None:
+    """A middleware guard that rejects a call by raising must not discard the batch — the rejection
+    comes back as that call's error while the other call still returns.
+
+    Models a real authorization guard (a refund above the auto-approval limit), driven through the
+    public ``Agent`` + ``TestConfig`` seam — the same shape a user would write against a live provider.
+    """
+
+    class RefundNotAuthorizedError(Exception):
+        """Raised by the guard when a refund exceeds the auto-approval limit."""
+
+    auto_approve_limit_usd = 100.0
+
+    async def refund_authority(
+        call_next: ToolExecution, event: events.ToolCallEvent, context: Context
+    ) -> events.ToolResultEvent:
+        amount = float(event.serialized_arguments.get("amount_usd", 0))
+        if amount > auto_approve_limit_usd:
+            raise RefundNotAuthorizedError(
+                f"refund of ${amount:.2f} exceeds the ${auto_approve_limit_usd:.0f} auto-approval limit"
+            )
+        return await call_next(event, context)
+
+    @tool(name="lookup_order")
+    def lookup_order(order_id: str) -> str:
+        return f"Order {order_id}: total $250.00"
+
+    @tool(name="issue_refund", middleware=[refund_authority])
+    def issue_refund(order_id: str, amount_usd: float) -> str:
+        return f"Refund of ${amount_usd:.2f} issued for order {order_id}."
+
+    stream = MemoryStream()
+    agent = Agent(
+        "",
+        config=testing.TestConfig(
+            [
+                events.ToolCallEvent(name="lookup_order", arguments=json.dumps({"order_id": "A-4471"})),
+                events.ToolCallEvent(
+                    name="issue_refund", arguments=json.dumps({"order_id": "A-4471", "amount_usd": 250.0})
+                ),
+            ],
+            "I could not issue the refund — it exceeds the auto-approval limit and needs human sign-off.",
+        ),
+        tools=[lookup_order, issue_refund],
+    )
+
+    reply = await agent.ask("Refund order A-4471 for $250", stream=stream)
+
+    # The guard's rejection did not abort the turn — the agent still produced a final reply.
+    assert reply.body is not None
+
+    history = await stream.history.get_events()
+    [results_event] = [e for e in history if isinstance(e, ToolResultsEvent)]
+    # Both calls represented: the lookup succeeded, the rejected refund came back as an error.
+    assert len(results_event.results) == 2
+    errors = [r for r in results_event.results if isinstance(r, events.ToolErrorEvent)]
+    assert any(
+        e.result is not None and "exceeds the $100 auto-approval limit" in e.result.parts[0].content for e in errors
+    )
 
 
 @pytest.mark.asyncio

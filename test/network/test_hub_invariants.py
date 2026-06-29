@@ -850,7 +850,7 @@ async def test_endpoint_frame_loop_failure_is_logged(caplog: pytest.LogCaptureFi
     store = MemoryKnowledgeStore()
     hub = Hub(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    with caplog.at_level(logging.ERROR, logger="autogen.beta.network.hub.core"):
+    with caplog.at_level(logging.ERROR, logger="ag2.network.hub.core"):
         before = asyncio.all_tasks()
         hub.attach_endpoint(_FailingEndpoint())  # type: ignore[arg-type]
         spawned = asyncio.all_tasks() - before
