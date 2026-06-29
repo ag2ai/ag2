@@ -17,9 +17,7 @@ import os
 from ag2 import ConversableAgent, LLMConfig
 from ag2.coding import LocalCommandLineCodeExecutor
 
-llm_config = LLMConfig(
-    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
 # Agent that writes code
 coder = ConversableAgent(
@@ -63,8 +61,8 @@ await result.process()
 from ag2.coding import LocalCommandLineCodeExecutor
 
 executor = LocalCommandLineCodeExecutor(
-    work_dir="./output",     # Where code files are saved and run
-    timeout=60,              # Max execution time in seconds
+    work_dir="./output",  # Where code files are saved and run
+    timeout=60,  # Max execution time in seconds
 )
 ```
 
@@ -74,7 +72,7 @@ executor = LocalCommandLineCodeExecutor(
 from ag2.coding import DockerCommandLineCodeExecutor
 
 executor = DockerCommandLineCodeExecutor(
-    image="python:3.11-slim",   # Docker image
+    image="python:3.11-slim",  # Docker image
     work_dir="./output",
     timeout=120,
 )
