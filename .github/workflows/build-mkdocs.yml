@@ -8,6 +8,11 @@ on:
         required: true
         default: '3.10'
         type: string
+      deploy:
+        description: 'Whether to publish the built docs to the gh-pages branch'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -58,7 +63,7 @@ jobs:
           git config --local user.name "github-actions[bot]"
 
       - name: Build docs and squash gh-pages commits
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
+        if: ${{ inputs.deploy }}
         run: |
           . .venv/bin/activate
 
@@ -88,7 +93,7 @@ jobs:
           git reset --soft origin/gh-pages
 
       - name: Force-push squashed docs to GH Pages
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
+        if: ${{ inputs.deploy }}
         uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
         with:
           branch: gh-pages
