@@ -12,7 +12,7 @@ from ag2.tools.builtin import ToolSearchTool
 
 @pytest.mark.asyncio
 async def test_full_tool_list_maps_for_both_providers():
-    @tool(defer_loading=True)
+    @tool
     def get_weather(location: str) -> str:
         """Get the weather at a location."""
         return location
@@ -22,21 +22,59 @@ async def test_full_tool_list_maps_for_both_providers():
         """Echo text back."""
         return text
 
-    search = ToolSearchTool()
-
-    # Build the schema list the way an agent would.
-    schemas = [(await search.schemas(None))[0], get_weather.schema, echo.schema]
+    # Build the schema list the way an agent would: get_weather is deferred by
+    # wrapping it in the search tool, echo is loaded eagerly.
+    schemas = [*(await ToolSearchTool(get_weather).schemas(None)), echo.schema]
 
     anthropic = [anthropic_tool_to_api(s) for s in schemas]
-    assert anthropic[0] == {"type": "tool_search_tool_regex_20251119", "name": "tool_search_tool_regex"}
-    assert anthropic[1]["defer_loading"] is True
-    assert "defer_loading" not in anthropic[2]
-    assert anthropic[1].get("name") == "get_weather"
-    assert anthropic[2].get("name") == "echo"
+    assert anthropic == [
+        {"type": "tool_search_tool_regex_20251119", "name": "tool_search_tool_regex"},
+        {
+            "name": "get_weather",
+            "description": "Get the weather at a location.",
+            "input_schema": {
+                "properties": {"location": {"title": "Location", "type": "string"}},
+                "required": ["location"],
+                "type": "object",
+            },
+            "defer_loading": True,  # deferred by wrapping in ToolSearchTool
+        },
+        {
+            "name": "echo",
+            "description": "Echo text back.",
+            "input_schema": {
+                "properties": {"text": {"title": "Text", "type": "string"}},
+                "required": ["text"],
+                "type": "object",
+            },
+            # no "defer_loading" key: echo is loaded eagerly
+        },
+    ]
 
     openai = [tool_to_responses_api(s) for s in schemas]
-    assert openai[0] == {"type": "tool_search"}
-    assert openai[1]["defer_loading"] is True
-    assert "defer_loading" not in openai[2]
-    assert openai[1].get("name") == "get_weather"
-    assert openai[2].get("name") == "echo"
+    assert openai == [
+        {"type": "tool_search"},
+        {
+            "type": "function",
+            "name": "get_weather",
+            "description": "Get the weather at a location.",
+            "parameters": {
+                "properties": {"location": {"title": "Location", "type": "string"}},
+                "required": ["location"],
+                "type": "object",
+                "additionalProperties": False,
+            },
+            "defer_loading": True,
+        },
+        {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo text back.",
+            "parameters": {
+                "properties": {"text": {"title": "Text", "type": "string"}},
+                "required": ["text"],
+                "type": "object",
+                "additionalProperties": False,
+            },
+        },
+    ]

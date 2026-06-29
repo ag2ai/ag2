@@ -32,7 +32,6 @@ from ag2.events import (
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.skills import SkillsToolSchema
-from ag2.tools.builtin.tool_search import assert_tool_search_config
 from ag2.tools.schemas import ToolSchema
 
 from .events import AnthropicServerToolCallEvent, AnthropicServerToolResultBlockType, AnthropicServerToolResultEvent
@@ -112,7 +111,6 @@ class AnthropicClient(LLMClient):
             self._inject_cache_control(anthropic_messages)
 
         tools_schemas = list(tools)
-        assert_tool_search_config(tools_schemas)
         tools_without_skills = [t for t in tools_schemas if not isinstance(t, SkillsToolSchema)]
         anthropic_skills = extract_skills_for_container(tools_schemas)
 

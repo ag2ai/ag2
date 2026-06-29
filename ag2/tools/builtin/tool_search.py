@@ -2,15 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
-from dataclasses import dataclass, field
-from typing import Literal
+from dataclasses import dataclass, field, replace
+from typing import Any, Literal
 
 from ag2.annotations import Context
 from ag2.events import BuiltinToolCallEvent, ToolCallEvent
+from ag2.exceptions import ToolConflictError
 from ag2.middleware import BaseMiddleware
-from ag2.tools.final.function_tool import FunctionToolSchema
+from ag2.tools.final.function_tool import FunctionTool, FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 from ag2.tools.tool import Tool
 
@@ -24,24 +25,54 @@ class ToolSearchToolSchema(ToolSchema):
 
 
 class ToolSearchTool(Tool):
-    """Server-side tool search.
+    """Server-side tool search over a set of deferred tools.
 
-    Lets the model discover deferred tools on demand instead of receiving
-    every tool definition up front. The provider runs the search and expands
-    matching tools server-side; ag2 only emits the tool definition.
+    Wrap the tools you want kept out of the upfront context::
 
-    `mode` selects Anthropic's variant ("regex" or "bm25"). OpenAI exposes a
-    single tool-search tool, so `mode` is ignored on OpenAI.
+        ToolSearchTool(get_weather, get_stock_price)
+
+    The wrapped tools are sent to the provider as searchable references
+    (names/descriptions only) instead of full definitions. The model discovers
+    the few it needs on demand via this tool, and the provider expands matches
+    server-side. The fixed context stays small and the prompt cache is
+    preserved. Unwrapped tools on the agent are loaded eagerly as usual.
+
+    ``mode`` selects Anthropic's variant ("regex" or "bm25"). OpenAI exposes a
+    single tool-search tool, so ``mode`` is ignored on OpenAI.
     """
 
-    __slots__ = ("_mode", "name")
+    __slots__ = ("_mode", "_tools", "name")
 
-    def __init__(self, *, mode: Literal["regex", "bm25"] = "regex") -> None:
+    def __init__(
+        self,
+        *tools: "Tool | Callable[..., Any]",
+        mode: Literal["regex", "bm25"] = "regex",
+    ) -> None:
+        if not tools:
+            raise ValueError(
+                "ToolSearchTool requires at least one tool to defer; pass the tools to "
+                "search over, e.g. ToolSearchTool(tool_a, tool_b)."
+            )
         self._mode: Literal["regex", "bm25"] = mode
         self.name = TOOL_SEARCH_TOOL_NAME
 
-    async def schemas(self, context: "Context") -> list[ToolSearchToolSchema]:
-        return [ToolSearchToolSchema(mode=self._mode)]
+        self._tools: dict[str, Tool] = {}
+        for t in tools:
+            ft = FunctionTool.ensure_tool(t)
+            if ft.name in self._tools:
+                raise ToolConflictError(ft.name)
+            self._tools[ft.name] = ft
+
+    @property
+    def tools(self) -> tuple[Tool, ...]:
+        return tuple(self._tools.values())
+
+    async def schemas(self, context: "Context") -> list[ToolSchema]:
+        schemas: list[ToolSchema] = [ToolSearchToolSchema(mode=self._mode)]
+        for t in self._tools.values():
+            for s in await t.schemas(context):
+                schemas.append(replace(s, defer_loading=True) if isinstance(s, FunctionToolSchema) else s)
+        return schemas
 
     def register(
         self,
@@ -57,22 +88,5 @@ class ToolSearchTool(Tool):
             context.stream.where(BuiltinToolCallEvent.name == TOOL_SEARCH_TOOL_NAME).sub_scope(execute),
         )
 
-
-def assert_tool_search_config(schemas: "Iterable[ToolSchema]") -> None:
-    """Raise if deferred tools are present without a ToolSearchTool to load them.
-
-    A deferred tool is only sent to the model as a searchable reference; with no
-    tool-search tool the model can never discover it, so the configuration is a
-    silent no-op. Fail fast with an actionable message instead.
-    """
-    schemas = list(schemas)
-    has_search = any(isinstance(s, ToolSearchToolSchema) for s in schemas)
-    if has_search:
-        return
-
-    deferred = [s.function.name for s in schemas if isinstance(s, FunctionToolSchema) and s.defer_loading]
-    if deferred:
-        raise ValueError(
-            "Tools marked defer_loading=True require a ToolSearchTool in the agent's "
-            f"tools so the model can discover them: {', '.join(deferred)}"
-        )
+        for t in self._tools.values():
+            t.register(stack, context, middleware=middleware)
