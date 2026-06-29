@@ -39,6 +39,43 @@ _TERMINAL_CHANNEL_EVENTS = frozenset({
     EV_CHANNEL_INVITE_REJECT,
 })
 
+_FUNCTIONS_NAMESPACE_PREFIX = "functions."
+
+
+def _target_candidates(target: str) -> tuple[str, ...]:
+    """Delegate-target resolution candidates, most-literal first.
+
+    LLMs sometimes echo OpenAI's ``functions.`` tool namespace into the target
+    string (e.g. ``functions.evaluator``). Try the literal name first, then the
+    name with that prefix stripped, so a valid peer still resolves instead of
+    the consult failing and the model re-guessing into a stalled run.
+    """
+    if target.startswith(_FUNCTIONS_NAMESPACE_PREFIX) and len(target) > len(_FUNCTIONS_NAMESPACE_PREFIX):
+        return (target, target[len(_FUNCTIONS_NAMESPACE_PREFIX) :])
+    return (target,)
+
+
+async def _available_target_names(client: "AgentClient") -> list[str]:
+    """Registered peer names the caller can delegate to, excluding itself.
+
+    When a target does not resolve, the model otherwise has no signal about
+    which peers are real, so it re-guesses invented names and the run stalls.
+    Enumerating the live directory lets the next turn pick a valid target.
+
+    Best-effort: a directory lookup failure must not mask the original
+    not-found error, so any exception yields an empty list.
+    """
+    try:
+        passports = await client._hub_client.list_agents()
+    except Exception:
+        return []
+    names = {
+        passport.name
+        for passport in passports
+        if passport.name and passport.agent_id is not None and passport.agent_id != client.agent_id
+    }
+    return sorted(names)
+
 
 def make_delegate_tool(agent_client: "AgentClient") -> object:
     """Return a closure-bound ``delegate`` tool."""
@@ -66,10 +103,24 @@ def make_delegate_tool(agent_client: "AgentClient") -> object:
         """
         actual_client = client if client is not None else agent_client
 
-        # Resolve target.
-        try:
-            target_passport = await actual_client._hub_client.get_agent(target)
-        except Exception:
+        # Resolve target. LLMs occasionally echo OpenAI's "functions." tool
+        # namespace into the target string (e.g. "functions.evaluator"), so the
+        # literal name misses the registry; retry with the unprefixed name so a
+        # valid peer still resolves instead of the consult failing and the model
+        # re-guessing into a stalled run.
+        target_passport = None
+        resolved_target = target
+        for candidate in _target_candidates(target):
+            try:
+                target_passport = await actual_client._hub_client.get_agent(candidate)
+            except Exception:
+                continue
+            resolved_target = candidate
+            break
+        if target_passport is None:
+            available = await _available_target_names(actual_client)
+            if available:
+                return f"Error: target {target!r} not found. Available targets: [{', '.join(available)}]"
             return f"Error: target {target!r} not found"
         target_id = target_passport.agent_id
         if target_id is None:
@@ -88,7 +139,7 @@ def make_delegate_tool(agent_client: "AgentClient") -> object:
         try:
             channel = await actual_client.open(
                 type="consulting",
-                target=target,
+                target=resolved_target,
                 knobs=knobs,
             )
         except Exception as exc:
