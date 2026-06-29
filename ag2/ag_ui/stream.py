@@ -116,7 +116,10 @@ class AGUIStream:
 
             async with read_events_stream:
                 async for event in read_events_stream:
-                    yield encoder.encode(event)
+                    # ASYNC119: this is a true streaming generator that must hold the
+                    # task group and stream open across yields; consumers are expected
+                    # to use contextlib.aclosing for timely cleanup.
+                    yield encoder.encode(event)  # noqa: ASYNC119
 
 
 @dataclass(slots=True)

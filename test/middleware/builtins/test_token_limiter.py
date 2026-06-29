@@ -17,6 +17,7 @@ from ag2.events import (
     ToolCallsEvent,
     ToolResultEvent,
     ToolResultsEvent,
+    estimated_tokens,
 )
 from ag2.middleware import TokenLimiter
 
@@ -46,7 +47,8 @@ async def test_token_limiter_keeps_first_request_while_trimming(mock: MagicMock)
         ModelResponse(ModelMessage("drop-me-2")),
         ModelResponse(ModelMessage("keep-me-too")),
     ]
-    middleware = TokenLimiter(max_tokens=30, chars_per_token=1)(events[-1], mock)
+    # content tokens (cpt=1): 7 + 9 + 9 + 11. Budget fits first(7)+last(11) but not a middle.
+    middleware = TokenLimiter(max_tokens=20, chars_per_token=1)(events[-1], mock)
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(history)
@@ -67,7 +69,8 @@ async def test_token_limiter_trims_from_front_without_initial_request(mock: Magi
         ModelResponse(ModelMessage("drop-me-2")),
         ModelResponse(ModelMessage("keep-me")),
     ]
-    middleware = TokenLimiter(max_tokens=20, chars_per_token=1)(events[-1], mock)
+    # content tokens (cpt=1): 9 + 9 + 7. Budget fits only the most recent.
+    middleware = TokenLimiter(max_tokens=10, chars_per_token=1)(events[-1], mock)
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(history)
@@ -88,7 +91,9 @@ async def test_token_limiter_drops_tool_results_without_parent_message(mock: Mag
         ModelResponse(ModelMessage("answer 1")),
         ModelRequest([TextInput("turn 2")]),
     ]
-    budget_after_dropping_tool_call = sum(len(str(event)) for event in [events[0], events[2], events[3], events[4]])
+    budget_after_dropping_tool_call = sum(
+        estimated_tokens(event, 1) for event in [events[0], events[2], events[3], events[4]]
+    )
     middleware = TokenLimiter(max_tokens=budget_after_dropping_tool_call, chars_per_token=1)(events[-1], mock)
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
@@ -114,7 +119,7 @@ async def test_token_limiter_drops_tool_results_without_parent_message_and_no_in
         ToolResultsEvent([ToolResultEvent.from_call(tool_call, result="ok")]),
         ModelResponse(ModelMessage("answer 1")),
     ]
-    budget_after_dropping_tool_call = sum(len(str(event)) for event in [events[1], events[2]])
+    budget_after_dropping_tool_call = sum(estimated_tokens(event, 1) for event in [events[1], events[2]])
     middleware = TokenLimiter(max_tokens=budget_after_dropping_tool_call, chars_per_token=1)(events[-1], mock)
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:

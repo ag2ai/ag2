@@ -8,6 +8,11 @@ on:
         required: true
         default: '3.10'
         type: string
+      deploy:
+        description: 'Whether to publish the built docs to the gh-pages branch'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -16,7 +21,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           lfs: true
           fetch-depth: 0
@@ -52,48 +57,20 @@ jobs:
           done
         working-directory: .
 
-      - name: Configure Git user
+      - name: Publish docs to GH Pages
+        if: ${{ inputs.deploy }}
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-      - name: Build docs and squash gh-pages commits
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
-        run: |
-          . .venv/bin/activate
+          # Documentation versioning was removed: publish the freshly built site at
+          # the gh-pages root. A separate worktree keeps the build output untouched.
+          # Existing gh-pages content (e.g. archived version directories, CNAME,
+          # .nojekyll) is left in place — only the root documentation is refreshed.
+          git worktree add gh-pages-publish gh-pages
+          cp -r website/mkdocs/site/. gh-pages-publish/
 
-          # Get version directly from the package
-          VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import ag2; print(".".join(ag2.__version__.split(".")[:3]))')
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-          # Check if version contains "rc"
-          IS_RC=$(python -c 'import os, sys, re; sys.path.insert(0, os.getcwd()); import ag2; version = ag2.__version__; print(not bool(re.match(r"^[0-9]+(\.[0-9]+)*$", version)))')
-          echo "IS_RC=$IS_RC" >> $GITHUB_ENV
-
-          echo $VERSION
-          echo $IS_RC
-
-          # mike commits the built site locally; the force-push step below squashes it.
-          if [ "$IS_RC" == "False" ] || [ "$VERSION" == "0.9.1post0" ]; then
-            cd website/mkdocs
-            mike deploy -F mkdocs.yml --update-aliases $VERSION latest
-            mike set-default --allow-empty -F mkdocs.yml latest
-          else
-            cd website/mkdocs
-            mike deploy -F mkdocs.yml --update-aliases $VERSION
-          fi
-
-          # Collapse mike's commits into one staged change on top of published gh-pages.
-          git checkout gh-pages
-          git reset --soft origin/gh-pages
-
-      - name: Force-push squashed docs to GH Pages
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
-        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
-        with:
-          branch: gh-pages
-          push_options: "--force"  # force push to keep gh-pages history clear
-          commit_message: "docs: deploy docs"
-          commit_user_name: github-actions[bot]
-          commit_user_email: github-actions[bot]@users.noreply.github.com
-          commit_author: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+          cd gh-pages-publish
+          git add -A
+          git commit -m "docs: deploy docs" || echo "No documentation changes to deploy"
+          git push origin gh-pages

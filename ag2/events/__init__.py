@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .alert import HaltEvent, ObserverAlert, Severity
-from .base import BaseEvent, Field
+from .base import BaseEvent, Field, is_conversational
 from .conditions import Condition
 from .input_events import (
     AudioInput,
@@ -32,6 +32,7 @@ from .lifecycle import (
     ObserverStarted,
     UnknownEvent,
 )
+from .sizing import estimated_tokens, render_for_prompt
 from .task_events import (
     TaskCancelled,
     TaskCompleted,
@@ -129,4 +130,7 @@ __all__ = (
     "Usage",
     "UsageEvent",
     "VideoInput",
+    "estimated_tokens",
+    "is_conversational",
+    "render_for_prompt",
 )

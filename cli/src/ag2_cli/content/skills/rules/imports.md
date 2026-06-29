@@ -155,14 +155,14 @@ from ag2.tools.experimental import SlackRetrieveTool, DiscordRetrieveTool, Teleg
 
 ```python
 from ag2.agents.experimental import (
-    ReasoningAgent,       # Tree-of-thought reasoning
-    DeepResearchAgent,    # Multi-step deep research
-    WebSurferAgent,       # Web browsing agent
-    DocAgent,             # Document processing
-    WikipediaAgent,       # Wikipedia querying
-    DiscordAgent,         # Discord bot
-    SlackAgent,           # Slack bot
-    TelegramAgent,        # Telegram bot
+    ReasoningAgent,  # Tree-of-thought reasoning
+    DeepResearchAgent,  # Multi-step deep research
+    WebSurferAgent,  # Web browsing agent
+    DocAgent,  # Document processing
+    WikipediaAgent,  # Wikipedia querying
+    DiscordAgent,  # Discord bot
+    SlackAgent,  # Slack bot
+    TelegramAgent,  # Telegram bot
 )
 ```
 
