@@ -29,7 +29,7 @@ class TestServerInfo:
         server = MCPServer(agent).server
 
         assert server.name == "greeter"
-        assert server.version == importlib.metadata.version("ag2")
+        assert server.version == importlib.metadata.version("autogen")
         # instructions is client-facing usage guidance, NOT the agent's system prompt.
         assert server.instructions is None
 

@@ -1,6 +1,7 @@
-# This workflows will build and upload a Python Package using Twine when a release is published
-# Conda-forge bot will pick up new PyPI version and automatically create new version
-# For more information see: https://help.github.com/en/actions/language-and-framework-guides/using-python-with-github-actions#publishing-to-package-registries
+# This workflow builds and uploads the `autogen` Python package to PyPI when a release is published.
+# Publishing uses PyPI Trusted Publishing (OIDC) — no API tokens. The trusted publisher must be
+# configured on PyPI for (owner=ag2ai, repo=ag2classic, workflow=python-package.yml, environment=package).
+# Conda-forge bot will pick up the new PyPI version and automatically create a new version.
 
 name: python-package
 
@@ -21,6 +22,10 @@ jobs:
         python-version: ["3.10"]
     runs-on: ${{ matrix.os }}
     environment: package
+    permissions:
+      contents: read
+      # IMPORTANT: required for PyPI Trusted Publishing (OIDC). No API token needed.
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -41,30 +46,10 @@ jobs:
       # - name: Conda list
       #   shell: pwsh
       #   run: conda list
-      - name: Build ag2
-        shell: pwsh
-        run: |
-          uv pip install --system twine
-          uv build
-      # - name: Publish ag2 to PyPI
-      #   env:
-      #     TWINE_USERNAME: ${{ secrets.PYAUTOGEN_PYPI_USERNAME }}
-      #     TWINE_PASSWORD: ${{ secrets.PYAUTOGEN_PYPI_PASSWORD }}
-      #   shell: pwsh
-      #   run: twine upload dist/*ag2*
       - name: Build autogen
         shell: pwsh
-        run: |
-          python setup_autogen.py sdist bdist_wheel
-      - name: Publish ag2 to PyPI
-        env:
-          TWINE_USERNAME: ${{ secrets.AUTOGEN_PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.AUTOGEN_PYPI_PASSWORD }}
-        shell: pwsh
-        run: twine upload dist/ag2*
+        run: uv build
       - name: Publish autogen to PyPI
-        env:
-          TWINE_USERNAME: ${{ secrets.AUTOGEN_PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.AUTOGEN_PYPI_PASSWORD }}
-        shell: pwsh
-        run: twine upload dist/autogen*
+        # Trusted Publishing (OIDC) — authenticates via the PyPI trusted publisher
+        # configured for this repo/workflow/environment; no username/password.
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
