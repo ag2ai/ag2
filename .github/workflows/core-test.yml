@@ -120,7 +120,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: core-without-llm, ${{ matrix.os }}, ${{ matrix.python-version }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
   build-check:
