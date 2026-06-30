@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 from ag2.agent import Agent
 
 from ..envelope import Envelope
+from ..errors import ProtocolError
 from ..identity import Passport, Resume, ResumeExample
 from ..rule import Rule
 from .channel import Channel
@@ -224,6 +225,15 @@ class AgentClient:
             if passport.agent_id is None:
                 raise RuntimeError(f"target {t!r} has no agent_id")
             target_ids.append(passport.agent_id)
+
+        # Every adapter requires at least two participants. If the only
+        # resolved target is this agent itself, the participant set
+        # collapses onto the creator and ``create_channel`` rejects it deep
+        # in the adapter with an opaque role error (e.g. "consulting
+        # requires exactly one respondent"). Fail fast here with a clear,
+        # actionable message that names the real problem.
+        if not any(tid != self.agent_id for tid in target_ids):
+            raise ProtocolError(f"cannot open a {type!r} channel with only self as participant")
 
         metadata = await self._hub_client.create_channel(
             creator_id=self.agent_id,
