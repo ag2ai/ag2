@@ -4,4 +4,4 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-coverage report -m --include="autogen/*" --omit="autogen/extensions/tmp_code_*.py"
+coverage report -m --include="ag2/*" --omit="ag2/extensions/tmp_code_*.py"

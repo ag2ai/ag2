@@ -22,9 +22,9 @@ Create a Python file with this structure:
 ```python
 import os
 from typing import Annotated
-from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns import AutoPattern
+from ag2 import ConversableAgent, LLMConfig
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns import AutoPattern
 
 # 1. LLM Configuration
 llm_config = LLMConfig(
@@ -47,7 +47,7 @@ user = ConversableAgent(
 # 3. Register Tools (if needed)
 # - Use @agent.register_for_llm() and @agent.register_for_execution() decorators
 # - Or use Tool/Toolkit classes
-# - For pre-built tools: from autogen.tools.experimental import DuckDuckGoSearchTool
+# - For pre-built tools: from ag2.tools.experimental import DuckDuckGoSearchTool
 
 # 4. Orchestration — choose pattern based on workflow:
 #    - AutoPattern: LLM picks next speaker (best for dynamic collaboration)
@@ -75,10 +75,13 @@ print(result.summary)
 When agents should explicitly route to each other:
 
 ```python
-from autogen.agentchat.group import (
-    OnCondition, AgentTarget, TerminateTarget, StringLLMCondition,
+from ag2.agentchat.group import (
+    OnCondition,
+    AgentTarget,
+    TerminateTarget,
+    StringLLMCondition,
 )
-from autogen.agentchat.group.patterns import DefaultPattern
+from ag2.agentchat.group.patterns import DefaultPattern
 
 # Define handoffs
 researcher.handoffs.add_llm_condition(
@@ -102,7 +105,7 @@ result = run_group_chat(
 
 ## 4. Rules to Follow
 
-- Import from `autogen`, not `ag2`
+- Import from `ag2`, not `ag2`
 - Always use `LLMConfig()` class, never raw dicts for llm_config
 - Every agent must have a unique name and a meaningful `description`
 - Pair every `register_for_llm()` with a `register_for_execution()`

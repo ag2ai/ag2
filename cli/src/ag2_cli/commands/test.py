@@ -133,7 +133,7 @@ def test_eval(
       [command]ag2 test eval my_agent.py --eval tests/ --output json[/command]
     """
     try:
-        import autogen  # noqa: F401
+        import ag2  # noqa: F401
     except ImportError:
         console.print("[error]ag2 is not installed.[/error]")
         console.print("Install with: [command]pip install ag2[/command]")

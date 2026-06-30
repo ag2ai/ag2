@@ -11,9 +11,9 @@ alwaysApply: false
 The recommended way to orchestrate multiple agents is `run_group_chat` with a pattern:
 
 ```python
-from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns import AutoPattern
+from ag2 import ConversableAgent, LLMConfig
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns import AutoPattern
 
 llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
@@ -53,7 +53,7 @@ Choose a pattern based on how you want speakers selected:
 ### AutoPattern (LLM-Selected)
 
 ```python
-from autogen.agentchat.group.patterns import AutoPattern
+from ag2.agentchat.group.patterns import AutoPattern
 
 pattern = AutoPattern(
     initial_agent=researcher,
@@ -68,7 +68,7 @@ Requires `llm_config` in `group_manager_args` for the LLM to select speakers. Ea
 ### RoundRobinPattern
 
 ```python
-from autogen.agentchat.group.patterns import RoundRobinPattern
+from ag2.agentchat.group.patterns import RoundRobinPattern
 
 pattern = RoundRobinPattern(
     initial_agent=researcher,
@@ -82,8 +82,8 @@ pattern = RoundRobinPattern(
 For customer service routing, state-machine workflows, or explicit agent-to-agent transitions:
 
 ```python
-from autogen.agentchat.group.patterns import DefaultPattern
-from autogen.agentchat.group import OnCondition, AgentTarget, TerminateTarget, StringLLMCondition
+from ag2.agentchat.group.patterns import DefaultPattern
+from ag2.agentchat.group import OnCondition, AgentTarget, TerminateTarget, StringLLMCondition
 
 triage.handoffs.add_llm_conditions([
     OnCondition(target=AgentTarget(billing), condition=StringLLMCondition(prompt="Customer has a billing question")),
@@ -107,12 +107,12 @@ All patterns accept:
 
 ```python
 Pattern(
-    initial_agent=agent,             # First agent to speak
-    agents=[agent1, agent2, ...],    # All participating agents
-    user_agent=user,                 # Optional user agent
-    context_variables=ctx,           # Shared state (ContextVariables)
+    initial_agent=agent,  # First agent to speak
+    agents=[agent1, agent2, ...],  # All participating agents
+    user_agent=user,  # Optional user agent
+    context_variables=ctx,  # Shared state (ContextVariables)
     group_after_work=TerminateTarget(),  # Default action when no handoff matches
-    summary_method="last_msg",       # "last_msg" or "reflection_with_llm"
+    summary_method="last_msg",  # "last_msg" or "reflection_with_llm"
 )
 ```
 
@@ -125,9 +125,13 @@ Agents can hand off to other agents based on conditions. Handoffs are evaluated 
 3. **after_work** — fallback if no condition matched
 
 ```python
-from autogen.agentchat.group import (
-    OnCondition, OnContextCondition, ContextVariables,
-    AgentTarget, TerminateTarget, RevertToUserTarget,
+from ag2.agentchat.group import (
+    OnCondition,
+    OnContextCondition,
+    ContextVariables,
+    AgentTarget,
+    TerminateTarget,
+    RevertToUserTarget,
     StringLLMCondition,
 )
 
@@ -156,7 +160,7 @@ writer.handoffs.set_after_work(TerminateTarget())
 Shared mutable state accessible by all agents in the group chat:
 
 ```python
-from autogen.agentchat.group import ContextVariables
+from ag2.agentchat.group import ContextVariables
 
 ctx = ContextVariables(data={"stage": "research", "findings": []})
 
@@ -171,7 +175,8 @@ pattern = AutoPattern(
 Access in tools via dependency injection:
 
 ```python
-from autogen.tools import ChatContext, Depends
+from ag2.tools import ChatContext, Depends
+
 
 def save_finding(
     finding: Annotated[str, "A research finding"],
@@ -202,7 +207,7 @@ Control where handoffs go:
 Add safety constraints to agents:
 
 ```python
-from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
+from ag2.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
 
 # LLM-based guardrail
 guardrail = LLMGuardrail(

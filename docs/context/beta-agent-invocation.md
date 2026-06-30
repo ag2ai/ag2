@@ -1,6 +1,6 @@
 # Context: Agent Invocation
 
-Glossary for how a caller invokes an `autogen.beta` agent and consumes what comes back.
+Glossary for how a caller invokes an `ag2` agent and consumes what comes back.
 Glossary only — no implementation detail.
 
 ## Terms

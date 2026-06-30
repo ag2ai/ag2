@@ -2,8 +2,8 @@ import asyncio
 
 from a2a.types import TaskState
 
-from autogen.beta.a2a import A2AConfig
-from autogen.beta.a2a.tasks import cancel_task, get_task, list_tasks
+from ag2.a2a import A2AConfig
+from ag2.a2a.tasks import cancel_task, get_task, list_tasks
 
 config = A2AConfig(card_url="http://127.0.0.1:8000", prefer="rest")
 

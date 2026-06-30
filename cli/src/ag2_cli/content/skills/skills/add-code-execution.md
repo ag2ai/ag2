@@ -19,12 +19,10 @@ Ask the user:
 
 ```python
 import os
-from autogen import ConversableAgent, LLMConfig
-from autogen.coding import LocalCommandLineCodeExecutor
+from ag2 import ConversableAgent, LLMConfig
+from ag2.coding import LocalCommandLineCodeExecutor
 
-llm_config = LLMConfig(
-    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
 # Coder writes code
 coder = ConversableAgent(
@@ -61,7 +59,7 @@ await result.process()
 ## 3. Docker Execution (Production)
 
 ```python
-from autogen.coding import DockerCommandLineCodeExecutor
+from ag2.coding import DockerCommandLineCodeExecutor
 
 executor = ConversableAgent(
     name="executor",
@@ -95,8 +93,8 @@ executor = ConversableAgent(
 ## 5. Code Execution in Group Chat
 
 ```python
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns import RoundRobinPattern
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns import RoundRobinPattern
 
 planner = ConversableAgent(
     name="planner",

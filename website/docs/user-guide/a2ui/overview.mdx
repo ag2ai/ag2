@@ -1,0 +1,117 @@
+---
+title: A2UI Protocol Overview
+sidebarTitle: Overview
+---
+
+The `#!python ag2.a2ui` module lets an AG2 `#!python Agent` produce **rich, interactive user interfaces** — cards, forms, lists, buttons — instead of plain text, using the [A2UI protocol](https://a2ui.org){.external-link target="_blank"}. The LLM emits conversational prose plus a validated A2UI message block; AG2 surfaces each message as a typed event and serializes it to A2UI's transport-agnostic wire format, so any A2UI-capable client can render it.
+
+A2UI is a **transport over a plain `#!python Agent`** (mirroring A2A and AG-UI): you build a normal `#!python ag2.Agent` and wrap it in an A2UI transport — `#!python A2UIServer` (REST/SSE) or `#!python A2UIAgentExecutor` (A2A) — configured with flat A2UI kwargs. There is no special agent subclass.
+
+## When To Use A2UI
+
+Reach for A2UI when a text answer isn't enough and the user needs to **see and act on** something:
+
+- A booking or settings **form** the user fills in and submits.
+- A **list** of results with per-item actions (approve, schedule, open).
+- A **card** summarising data with clickable buttons that drive the next turn.
+
+If you only need a conversational reply, serve a plain `#!python ag2.Agent` directly. A2UI is additive: an A2UI-wrapped agent still answers in prose when a UI wouldn't help.
+
+## Mental Model
+
+```
+   ┌────────────────────────────┐                       ┌─────────────────────────┐
+   │ Agent + A2UI transport     │   server→client        │ A2UI client             │
+   │  prose + <a2ui-json> block │   createSurface /       │  renders surfaces       │
+   │  ── validate vs catalog ── │   updateComponents …    │  & components           │
+   │  emits A2UIMessageEvent     │ ────────────────────▶  │                         │
+   │                            │                         │  user clicks a button   │
+   │  action → handler / prompt │   client→server         │                         │
+   │  ◀──────────────────────── │   action / functionResp │ ◀──────────────────────│
+   └────────────────────────────┘   (the next request)    └─────────────────────────┘
+```
+
+The transport applies A2UI behaviour to the plain agent per turn (prompt + validation middleware) and validates every A2UI message against the chosen **catalog** schema (with retry-on-error), so malformed UI never reaches the client — on repeated failure it gracefully degrades to prose. A button click travels back as a client→server `#!python action` (or v1.0 `#!python functionResponse`) envelope, which the transport rewrites into the next turn.
+
+## Core Concepts
+
+| Concept | Lives in | Purpose |
+|---|---|---|
+| `#!python Agent` | `#!python ag2` | A plain agent — wrap it in an A2UI transport to emit validated A2UI output |
+| `#!python a2ui_action` | `#!python ag2.a2ui` | Decorator turning a function into a clickable button (server `#!python event` action). A click runs the handler **on the server** — the agent is not invoked. Declared on the transport via `#!python actions=[...]` |
+| `#!python A2UIMessageEvent` | `#!python ag2.a2ui` | One validated A2UI server→client message on the stream — the event seam every transport consumes |
+| `#!python A2UIClientEvent` | `#!python ag2.a2ui` | One client→server interaction received from the renderer (click / `#!python functionResponse` / error) — the inbound observability seam |
+| `#!python A2UIValidationFailedEvent` | `#!python ag2.a2ui` | Observability signal that validation exhausted its retries and the turn degraded to prose |
+| `#!python A2UIClientCapabilities` | `#!python ag2.a2ui` | Catalog negotiation — tells the agent which catalogs/components the client can render |
+| `#!python A2UIServer` | `#!python ag2.a2ui` | Wraps a plain `#!python Agent` into an ASGI app and serves it over HTTP, using a `#!python transport=` for the wire encoding (REST/SSE or AG-UI) |
+| `#!python A2UIAgentExecutor` | `#!python ag2.a2ui.a2a` | Wraps a plain `#!python Agent` for the A2A transport, carrying A2UI as `#!python DataPart`s |
+
+## Protocol Versions
+
+The A2UI transports accept three protocol versions via `#!python protocol_version=`:
+
+- `#!python "v0.9"` (default) and `#!python "v0.9.1"` — server→client surfaces and components, plus server `#!python event` actions.
+- `#!python "v1.0"` — adds the `#!python callFunction` / `#!python functionResponse` / `#!python actionResponse` round-trip for richer client→server interaction.
+
+!!! note
+    A2UI's wire is **transport-agnostic**. The same validated messages serialize identically whether served over the built-in [REST/SSE adapter](/docs/user-guide/a2ui/server), embedded in an [A2A `#!python DataPart`](/docs/user-guide/a2ui/a2a), or carried by AG-UI events.
+
+## Public API
+
+The broadly-reusable surface is re-exported from `#!python ag2.a2ui`:
+
+```python linenums="1"
+from ag2.a2ui import (
+    a2ui_action,
+    A2UIClientCapabilities,
+    A2UIMessageEvent,
+    A2UIClientEvent,
+    A2UIValidationFailedEvent,
+)
+```
+
+The agent itself is a plain `#!python ag2.Agent`. The HTTP server picks its wire encoding from a `#!python transport=`, and the A2A executor lives in its own submodule (kept out of the core import so the package never pulls in the a2a-sdk):
+
+```python linenums="1"
+from ag2.a2ui import A2UIServer                       # HTTP server (ASGI app)
+from ag2.a2ui.transports import RestTransport, AgUiTransport
+from ag2.a2ui.a2a import A2UIAgentExecutor            # A2A
+```
+
+## Quickstart
+
+Build a plain `#!python Agent`, then wrap it in an `#!python A2UIServer` — the server **is** the ASGI app, the wire encoding comes from `#!python transport=`, and clickable buttons are declared via `#!python actions=` (the agent stays plain):
+
+```python linenums="1" hl_lines="16 17 18"
+import uvicorn
+
+from ag2 import Agent
+from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui.transports import RestTransport
+from ag2.config import AnthropicConfig
+
+@a2ui_action(description="Book the selected dinner reservation")
+def book_table(time: str, party_size: int) -> str:
+    return f"booked a table for {party_size} at {time}"
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+app = A2UIServer(
+    agent,
+    transport=RestTransport(encoding="jsonl"),  # POST /a2ui  →  A2UI NDJSON
+    actions=[book_table],
+    protocol_version="v0.9",
+)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+See [Server](/docs/user-guide/a2ui/server) for the request/response contract and a client that drives this app.
+
+## Reading Order
+
+1. [Server](/docs/user-guide/a2ui/server) — wrap an `#!python Agent` in `#!python A2UIServer` and drive it over HTTP (SSE / NDJSON).
+2. [A2A Transport](/docs/user-guide/a2ui/a2a) — serve the same agent over A2A, carrying A2UI messages as canonical `#!python DataPart`s.
+3. [Actions](/docs/user-guide/a2ui/actions) — clickable buttons backed by server-side `#!python @a2ui_action` handlers, the click round-trip, and the inbound `#!python A2UIClientEvent`.
+4. [Catalogs & Capabilities](/docs/user-guide/a2ui/capabilities) — the component schema the agent validates against, custom catalogs, and client capability negotiation.

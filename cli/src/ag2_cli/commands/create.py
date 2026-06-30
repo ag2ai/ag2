@@ -62,7 +62,7 @@ from agents.assistant import assistant
 
 
 async def main(message: str = "Hello! What can you help me with?"):
-    from autogen import UserProxyAgent
+    from ag2 import UserProxyAgent
 
     user = UserProxyAgent(
         name="user",
@@ -81,7 +81,7 @@ if __name__ == "__main__":
 _AGENT_TEMPLATE = """\
 \"\"\"Agent: {name}\"\"\"
 
-from autogen import AssistantAgent, LLMConfig
+from ag2 import AssistantAgent, LLMConfig
 
 config = LLMConfig({{"model": "gpt-4o"}})
 
@@ -95,7 +95,7 @@ config = LLMConfig({{"model": "gpt-4o"}})
 _AGENT_WITH_TOOLS_TEMPLATE = """\
 \"\"\"Agent: {name}\"\"\"
 
-from autogen import AssistantAgent, LLMConfig
+from ag2 import AssistantAgent, LLMConfig
 
 config = LLMConfig({{"model": "gpt-4o"}})
 
@@ -112,7 +112,7 @@ config = LLMConfig({{"model": "gpt-4o"}})
 _TOOL_TEMPLATE = """\
 \"\"\"Tool: {name}\"\"\"
 
-from autogen.tools import tool
+from ag2.tools import tool
 
 
 @tool(name="{func_name}", description="{description}")
@@ -132,9 +132,9 @@ def {func_name}({params}) -> str:
 _TEAM_TEMPLATE = """\
 \"\"\"Team: {name}\"\"\"
 
-from autogen import AssistantAgent, LLMConfig
-from autogen.agentchat import run_group_chat
-from autogen.agentchat.group.patterns.pattern import {pattern_class}
+from ag2 import AssistantAgent, LLMConfig
+from ag2.agentchat import run_group_chat
+from ag2.agentchat.group.patterns.pattern import {pattern_class}
 
 config = LLMConfig({{"model": "gpt-4o"}})
 
@@ -234,7 +234,7 @@ model: gpt-4o
 _WEB_SEARCH_TOOL = """\
 \"\"\"Example tool: web search.\"\"\"
 
-from autogen.tools import tool
+from ag2.tools import tool
 
 
 @tool(name="web_search", description="Search the web for information")
@@ -269,7 +269,7 @@ def _llm_generate(prompt: str, system_message: str) -> str:
     Uses AG2's own agents to call an LLM — requires ag2 and an API key.
     """
     try:
-        import autogen
+        import ag2
     except ImportError:
         console.print("[error]ag2 is not installed.[/error]")
         console.print("Install with: [command]pip install ag2[/command]")
@@ -283,13 +283,13 @@ def _llm_generate(prompt: str, system_message: str) -> str:
 
     console.print(f"[dim]Using {model} for generation...[/dim]")
 
-    llm_config = autogen.LLMConfig({"model": model})
-    generator = autogen.AssistantAgent(
+    llm_config = ag2.LLMConfig({"model": model})
+    generator = ag2.AssistantAgent(
         name="generator",
         system_message=system_message,
         llm_config=llm_config,
     )
-    user = autogen.UserProxyAgent(
+    user = ag2.UserProxyAgent(
         name="user",
         human_input_mode="NEVER",
         max_consecutive_auto_reply=0,
@@ -336,14 +336,14 @@ You are an expert AG2 (AutoGen) developer. You generate agent specifications as 
 
 AG2 uses this pattern for agents:
 ```python
-from autogen import AssistantAgent, LLMConfig
+from ag2 import AssistantAgent, LLMConfig
 config = LLMConfig({{"model": "gpt-4o"}})
 agent = AssistantAgent(name="agent_name", system_message="...", llm_config=config)
 ```
 
 Tools use:
 ```python
-from autogen.tools import tool
+from ag2.tools import tool
 @tool(name="tool_name", description="...")
 def tool_name(param: str) -> str:
     ...
@@ -548,7 +548,7 @@ def _create_project_from_description(description: str, name: str | None) -> None
             f"import asyncio\n\n"
             f"from agents.{avar} import {avar}\n\n\n"
             f'async def main(message: str = "Hello! What can you help me with?"):\n'
-            f"    from autogen import UserProxyAgent\n\n"
+            f"    from ag2 import UserProxyAgent\n\n"
             f'    user = UserProxyAgent(\n        name="user",\n'
             f'        human_input_mode="NEVER",\n'
             f"        max_consecutive_auto_reply=0,\n"
@@ -565,8 +565,8 @@ def _create_project_from_description(description: str, name: str | None) -> None
         main_content = (
             f'"""Entry point for ag2 run / ag2 chat."""\n\n'
             f"import asyncio\n\n"
-            f"from autogen.agentchat.group import run_group_chat\n"
-            f"from autogen.agentchat.group.patterns.pattern import {pattern_class}\n\n"
+            f"from ag2.agentchat.group import run_group_chat\n"
+            f"from ag2.agentchat.group.patterns.pattern import {pattern_class}\n\n"
             f"{imports}\n\n"
             f"agents = [{agent_list}]\n\n\n"
             f'async def main(message: str = "Hello team!"):\n'

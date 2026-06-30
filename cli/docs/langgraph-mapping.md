@@ -12,12 +12,12 @@
 
 | LangGraph Package | Purpose | AG2 Equivalent |
 |---|---|---|
-| `langgraph` (v1.1.3) | Core: StateGraph, Pregel engine | `autogen` (ag2) |
-| `langgraph-prebuilt` | create_react_agent, ToolNode | `autogen` ConversableAgent + tools |
+| `langgraph` (v1.1.3) | Core: StateGraph, Pregel engine | `ag2` (ag2) |
+| `langgraph-prebuilt` | create_react_agent, ToolNode | `ag2` ConversableAgent + tools |
 | `langgraph-checkpoint` | BaseCheckpointSaver, BaseStore | No direct equivalent (AG2 has no built-in checkpointing) |
 | `langgraph-checkpoint-postgres` | PostgreSQL persistence | No equivalent |
 | `langgraph-checkpoint-sqlite` | SQLite persistence | No equivalent |
-| `langgraph-supervisor` | create_supervisor, handoff tools | `autogen` GroupChat or Swarm |
+| `langgraph-supervisor` | create_supervisor, handoff tools | `ag2` GroupChat or Swarm |
 | `langgraph-sdk` | HTTP client for remote graphs | No equivalent (use ag2 serve REST API) |
 | `langgraph-cli` | Dev server, build, deploy | `ag2` CLI |
 
@@ -42,9 +42,9 @@ from langchain_core.messages import HumanMessage    # dict: {"role": "user", "co
 from langchain_core.messages import AIMessage       # dict: {"role": "assistant", "content": "..."}
 from langchain_core.messages import SystemMessage   # ConversableAgent(system_message="...")
 from langchain_core.messages import ToolMessage     # Internal to AG2 tool execution
-from langchain_core.tools import tool               # from autogen import register_function / Tool
-from langchain_core.tools import BaseTool           # autogen.tools.Tool
-from langchain_core.tools import StructuredTool     # autogen.tools.Tool
+from langchain_core.tools import tool               # from ag2 import register_function / Tool
+from langchain_core.tools import BaseTool           # ag2.tools.Tool
+from langchain_core.tools import StructuredTool     # ag2.tools.Tool
 from langchain_openai import ChatOpenAI             # LLMConfig(api_type="openai", model="...")
 from langchain_anthropic import ChatAnthropic       # LLMConfig(api_type="anthropic", model="...")
 
@@ -171,7 +171,7 @@ result = agent.invoke({"messages": [("user", "What is 2+2?")]})
 
 ```python
 # AG2
-from autogen import ConversableAgent, LLMConfig, register_function
+from ag2 import ConversableAgent, LLMConfig, register_function
 
 llm_config = LLMConfig(api_type="openai", model="gpt-4o")
 
@@ -233,7 +233,7 @@ result = app.invoke({"messages": [{"role": "user", "content": "What is 2+2?"}]})
 
 ```python
 # AG2 GroupChat (supervisor pattern)
-from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig, register_function
+from ag2 import ConversableAgent, GroupChat, GroupChatManager, LLMConfig, register_function
 
 llm_config = LLMConfig(api_type="openai", model="gpt-4o")
 
@@ -268,7 +268,7 @@ math_agent.initiate_chat(manager, message="What is 2+2?")
 | LangChain/LangGraph | AG2 | Notes |
 |---|---|---|
 | `@tool` decorator | `@tool` decorator (different import) or plain function + `register_function` | LangChain `@tool` uses docstring as description; AG2 uses `description` param |
-| `BaseTool` subclass | `autogen.tools.Tool(name, description, func)` | Subclass pattern has no direct equivalent |
+| `BaseTool` subclass | `ag2.tools.Tool(name, description, func)` | Subclass pattern has no direct equivalent |
 | `StructuredTool.from_function(func, name, description)` | `Tool(name=name, description=description, func=func)` | Clean mapping |
 | `args_schema` (Pydantic model) | Type hints on function parameters | AG2 infers schema from type hints |
 | Tool with `Annotated` params | `Annotated[str, "description"]` on function params | Direct mapping |
@@ -291,7 +291,7 @@ def search(query: str, limit: int = 10) -> str:
 **AG2 tool:**
 ```python
 from typing import Annotated
-from autogen import ConversableAgent, register_function
+from ag2 import ConversableAgent, register_function
 
 def search(
     query: Annotated[str, "Search query"],
@@ -367,7 +367,7 @@ graph.add_conditional_edges("classifier", router)
 
 **AG2:**
 ```python
-from autogen.agentchat.group import OnCondition, AgentTarget, StringLLMCondition
+from ag2.agentchat.group import OnCondition, AgentTarget, StringLLMCondition
 
 classifier = ConversableAgent(name="classifier", ...)
 classifier.handoffs.add_llm_conditions([
