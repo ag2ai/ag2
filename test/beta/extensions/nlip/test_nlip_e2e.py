@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+
 from ag2 import Agent
 from ag2.events import ModelRequest, TextInput
 from ag2.extensions.nlip import NlipConfig, NlipServer
