@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-
 from autogen.beta import Agent
 from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.extensions.nlip import NlipConfig, NlipServer
