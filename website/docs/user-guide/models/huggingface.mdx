@@ -8,19 +8,14 @@ description: "How to use HuggingFace models with AG2. Setup and code examples fo
 Install AG2 with the necessary dependencies for custom model integration:
 
 ```bash
-pip install ag2[openai] torch transformers sentencepiece
+pip install autogen[openai] torch transformers sentencepiece
 ```
 
 <Tip>
-If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+If you have been using `autogen`, all you need to do is upgrade it using:
 ```bash
 pip install -U autogen[openai] torch transformers sentencepiece
 ```
-or
-```bash
-pip install -U ag2[openai] torch transformers sentencepiece
-```
-as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
 
 ## Dependencies
@@ -28,7 +23,7 @@ as `autogen` and `ag2` are aliases for the same PyPI package.
  We will explore how to use custom models (specifically Hugging Face models) in AG2. Install the necessary dependencies with the following command:
 
 ```bash
-pip install ag2[openai] torch transformers sentencepiece
+pip install autogen[openai] torch transformers sentencepiece
 ```
 
 For more information, please refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2).

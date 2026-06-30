@@ -189,6 +189,42 @@
     z-index: 3;
   }
 
+  .classic-home-note {
+    z-index: 3;
+    max-width: 640px;
+    margin: 0 1rem;
+    padding: 1rem 1.5rem;
+    background: rgba(255, 255, 255, 0.82);
+    border: 2px solid #000000;
+    border-radius: 16px;
+    box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.16);
+    color: #1c1c1c;
+    text-align: center;
+  }
+
+  .classic-home-note p {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .classic-home-note p + p {
+    margin-top: 0.5rem;
+  }
+
+  .classic-home-note code {
+    background: rgba(0, 0, 0, 0.08);
+    color: #1c1c1c;
+    padding: 0.05em 0.35em;
+    border-radius: 0.25em;
+  }
+
+  .classic-home-note a {
+    color: #1565a8;
+    font-weight: 700;
+    text-decoration: underline;
+  }
+
   .playground-btn {
     background: linear-gradient(90deg, #e85d9a, #d4af37, #a78bfa, #e85d9a);
     background-size: 300% auto;
@@ -511,17 +547,25 @@
       <h1 class="title">The Open-Source AgentOS</h1>
       <h2 class="tagline">Build production-ready AI agents in minutes, not months.</h2>
     </div>
+    <div class="classic-home-note">
+      <p>
+        <strong>You're viewing the AG2 Classic docs.</strong>
+        Classic is the <code>autogen</code> package and is now in <strong>maintenance mode</strong> &mdash;
+        receiving only critical and security updates.
+      </p>
+      <p>
+        For new projects, use <strong>AG2 v1.0+</strong> (the <code>ag2</code> package).
+        Read the latest docs at
+        <a href="https://docs.ag2.ai" target="_blank" rel="noopener">docs.ag2.ai</a>.
+      </p>
+    </div>
     <div class="hero-buttons">
-      <a href="./docs/quick-start"><div class="button">
-        <p>Quick Start</p>
-        <img src="images/button-shine.png" alt="Shine" class="shine"/>
-      </div></a>
       <a href="https://playground.ag2.ai" target="_blank"><div class="button playground-btn">
         <p>Playground</p>
         <img src="images/button-shine.png" alt="Shine" class="shine"/>
       </div></a>
-      <a href="./docs/user-guide/release-roadmap"><div class="button">
-        <p>Path to v1.0</p>
+      <a href="https://docs.ag2.ai" target="_blank" rel="noopener"><div class="button">
+        <p>v1.0 Docs</p>
         <img src="images/button-shine.png" alt="Shine" class="shine"/>
       </div></a>
     </div>
@@ -573,123 +617,6 @@
           <img src="images/top-right-corner.png" alt="" class="pixel-corner tr"/>
           <img src="images/bot-left-corner.png" alt="" class="pixel-corner bl"/>
           <img src="images/bot-right-corner.png" alt="" class="pixel-corner br"/>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="nextsteps">
-    <h2 class="jersey" >Next Steps</h2>
-    <div class="cardgroup">
-      <a href="./docs/user-guide/basic-concepts/llm-configuration/">
-        <div class="card green-bg">
-          <div class="card-content">
-            <h3>Key concepts</h3>
-            <p>Conversable Agent, Group Chat, Swarm, tools and more</p>
-            <div class="right-border"></div>
-            <div class="left-border"></div>
-            <div class="top-border"></div>
-            <div class="bottom-border"></div>
-            <img src="images/top-left-corner.png" alt="" class="pixel-corner tl"/>
-            <img src="images/top-right-corner.png" alt="" class="pixel-corner tr"/>
-            <img src="images/bot-left-corner.png" alt="" class="pixel-corner bl"/>
-            <img src="images/bot-right-corner.png" alt="" class="pixel-corner br"/>
-          </div>
-        </div>
-    </a>
-      <a href="./docs/user-guide/advanced-concepts/rag/">
-        <div class="card green-bg">
-          <div class="card-content">
-            <h3>Next level concepts</h3>
-            <p>RAG, Code Execution, Complex Group Chats, and more</p>
-            <div class="right-border"></div>
-            <div class="left-border"></div>
-            <div class="top-border"></div>
-            <div class="bottom-border"></div>
-            <img src="images/top-left-corner.png" alt="" class="pixel-corner tl"/>
-            <img src="images/top-right-corner.png" alt="" class="pixel-corner tr"/>
-            <img src="images/bot-left-corner.png" alt="" class="pixel-corner bl"/>
-            <img src="images/bot-right-corner.png" alt="" class="pixel-corner br"/>
-          </div>
-        </div>
-    </a>
-      <a href="./docs/use-cases/use-cases/customer-service/">
-        <div class="card green-bg">
-          <div class="card-content">
-            <h3>Use Cases</h3>
-            <p>Customer Service, Travel Planning, and Game Design</p>
-            <div class="right-border"></div>
-            <div class="left-border"></div>
-            <div class="top-border"></div>
-            <div class="bottom-border"></div>
-            <img src="images/top-left-corner.png" alt="" class="pixel-corner tl"/>
-            <img src="images/top-right-corner.png" alt="" class="pixel-corner tr"/>
-            <img src="images/bot-left-corner.png" alt="" class="pixel-corner bl"/>
-            <img src="images/bot-right-corner.png" alt="" class="pixel-corner br"/>
-          </div>
-        </div>
-    </a>
-      <a href="./docs/use-cases/notebooks/Notebooks">
-        <div class="card green-bg">
-          <div class="card-content">
-            <h3>Notebook Examples</h3>
-            <p>In-depth and interactive notebooks for all things AG2</p>
-            <div class="right-border"></div>
-            <div class="left-border"></div>
-            <div class="top-border"></div>
-            <div class="bottom-border"></div>
-            <img src="images/top-left-corner.png" alt="" class="pixel-corner tl"/>
-            <img src="images/top-right-corner.png" alt="" class="pixel-corner tr"/>
-            <img src="images/bot-left-corner.png" alt="" class="pixel-corner bl"/>
-            <img src="images/bot-right-corner.png" alt="" class="pixel-corner br"/>
-          </div>
-        </div>
-      </a>
-    <a href="./docs/contributor-guide/contributing">
-      <div class="card green-bg">
-        <div class="card-content">
-          <h3>How to Contribute</h3>
-          <p>Join us in making the most powerful multi-agent framework</p>
-          <div class="right-border"></div>
-          <div class="left-border"></div>
-          <div class="top-border"></div>
-          <div class="bottom-border"></div>
-          <img src="images/top-left-corner.png" alt="" class="pixel-corner tl"/>
-          <img src="images/top-right-corner.png" alt="" class="pixel-corner tr"/>
-          <img src="images/bot-left-corner.png" alt="" class="pixel-corner bl"/>
-          <img src="images/bot-right-corner.png" alt="" class="pixel-corner br"/>
-        </div>
-      </div>
-    </a>
-    </div>
-  </div>
-  <div class="resources">
-    <h2 class="jersey" >Popular resources</h2>
-      <div class="videos">
-        <div class="youtube-video">
-          <iframe
-            class="w-full aspect-video rounded-md"
-            src="https://www.youtube.com/embed/RLwyXRVvlNk"
-            title="YouTube video player"
-            frameborder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowfullscreen
-          ></iframe>
-          <a target="_blank" href="https://www.youtube.com/watch?v=RLwyXRVvlNk">
-            Foundation Capital Interview with Dr. Chi Wang
-          </a>
-        </div>
-        <div class="youtube-video">
-          <iframe
-            class="w-full aspect-video rounded-md"
-            src="https://www.youtube.com/embed/TBNTH-fwGPE"
-            title="YouTube video player"
-            frameborder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowfullscreen
-          ></iframe>
-          <a target="_blank" href="https://www.youtube.com/watch?v=TBNTH-fwGPE">
-            Learn AG2 on DeepLearningAI
-          </a>
         </div>
       </div>
     </div>

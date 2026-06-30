@@ -24,23 +24,18 @@ If you want to add browsing capabilities to your existing agents, see [this note
 
 To get started with `WebSurferAgent`, install AG2 with the `browser-use` and/or `crawl4ai` extras.
 ```bash
-pip install ag2[openai,browser-use]
+pip install autogen[openai,browser-use]
 ```
 and/or
 ```bash
-pip install ag2[openai,crawl4ai]
+pip install autogen[openai,crawl4ai]
 ```
 
 <Tip>
-If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+If you have been using `autogen`, all you need to do is upgrade it using:
 ```bash
 pip install -U autogen[openai,browser-use]
 ```
-or
-```bash
-pip install -U ag2[openai,browser-use]
-```
-as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
 
 And then setup Playwright:
