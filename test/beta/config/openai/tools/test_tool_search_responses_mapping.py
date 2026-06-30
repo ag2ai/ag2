@@ -6,14 +6,13 @@ import pytest
 
 from ag2.config.openai.mappers import tool_to_api, tool_to_responses_api
 from ag2.exceptions import UnsupportedToolError
-from ag2.tools.builtin.tool_search import ToolSearchToolSchema
+from ag2.tools.builtin.tool_search import DeferredFunctionToolSchema, ToolSearchToolSchema
 from ag2.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
 
 
 def test_responses_deferred_function_emits_defer_loading():
-    schema = FunctionToolSchema(
+    schema = DeferredFunctionToolSchema(
         function=FunctionDefinition(name="get_weather", description="d", parameters={"type": "object"}),
-        defer_loading=True,
     )
     result = tool_to_responses_api(schema)
     assert result["name"] == "get_weather"
@@ -41,9 +40,8 @@ def test_completions_rejects_tool_search():
 def test_completions_rejects_deferred_function():
     # The Chat Completions API has no tool-search support, so a deferred
     # function must fail fast rather than be silently sent eagerly.
-    schema = FunctionToolSchema(
+    schema = DeferredFunctionToolSchema(
         function=FunctionDefinition(name="get_weather", description="d", parameters={"type": "object"}),
-        defer_loading=True,
     )
     with pytest.raises(UnsupportedToolError):
         tool_to_api(schema)

@@ -6,7 +6,6 @@ import pytest
 
 from ag2.tools import tool
 from ag2.tools.builtin import ToolSearchTool
-from ag2.tools.final.function_tool import FunctionToolSchema
 
 
 @tool
@@ -15,12 +14,8 @@ def get_weather(location: str) -> str:
     return location
 
 
-def test_function_tool_schema_defaults_to_not_deferred():
-    assert FunctionToolSchema().defer_loading is False
-
-
-def test_plain_tool_is_not_deferred():
-    assert get_weather.schema.defer_loading is False
+def test_plain_tool_has_no_defer_loading_flag():
+    assert not hasattr(get_weather.schema, "defer_loading")
 
 
 @pytest.mark.asyncio
@@ -34,4 +29,4 @@ async def test_wrapping_in_tool_search_defers_the_tool():
 async def test_wrapping_does_not_mutate_the_original_schema():
     await ToolSearchTool(get_weather).schemas(context=None)
     # the source tool's own schema stays eager — only the emitted copy is deferred
-    assert get_weather.schema.defer_loading is False
+    assert not hasattr(get_weather.schema, "defer_loading")

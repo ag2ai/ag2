@@ -7,8 +7,7 @@ import pytest
 from ag2.exceptions import ToolConflictError
 from ag2.tools import tool
 from ag2.tools.builtin import ToolSearchTool
-from ag2.tools.builtin.tool_search import TOOL_SEARCH_TOOL_NAME, ToolSearchToolSchema
-from ag2.tools.final.function_tool import FunctionToolSchema
+from ag2.tools.builtin.tool_search import TOOL_SEARCH_TOOL_NAME, DeferredFunctionToolSchema, ToolSearchToolSchema
 
 
 @tool
@@ -54,7 +53,7 @@ async def test_wrapped_tools_are_marked_deferred():
     assert isinstance(schemas[0], ToolSearchToolSchema)
     wrapped = schemas[1:]
     assert {s.function.name for s in wrapped} == {"get_weather", "get_stock_price"}
-    assert all(isinstance(s, FunctionToolSchema) and s.defer_loading for s in wrapped)
+    assert all(isinstance(s, DeferredFunctionToolSchema) and s.defer_loading for s in wrapped)
 
 
 def test_duplicate_wrapped_tool_names_raise():

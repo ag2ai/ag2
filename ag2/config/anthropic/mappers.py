@@ -38,7 +38,7 @@ from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.memory import MemoryToolSchema
 from ag2.tools.builtin.shell import ShellToolSchema
 from ag2.tools.builtin.skills import SkillsToolSchema
-from ag2.tools.builtin.tool_search import ToolSearchToolSchema
+from ag2.tools.builtin.tool_search import DeferredFunctionToolSchema, ToolSearchToolSchema
 from ag2.tools.builtin.web_fetch import WebFetchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
@@ -108,7 +108,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             "description": t.function.description,
             "input_schema": _ensure_object_schema(t.function.parameters),
         }
-        if t.defer_loading:
+        if isinstance(t, DeferredFunctionToolSchema):
             fn_tool["defer_loading"] = True
         return fn_tool
 

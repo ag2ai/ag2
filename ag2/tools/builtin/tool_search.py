@@ -4,7 +4,7 @@
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ag2.annotations import Context
@@ -22,6 +22,11 @@ TOOL_SEARCH_TOOL_NAME = "tool_search"
 class ToolSearchToolSchema(ToolSchema):
     type: str = field(default=TOOL_SEARCH_TOOL_NAME, init=False)
     mode: Literal["regex", "bm25"] = "regex"
+
+
+@dataclass(slots=True)
+class DeferredFunctionToolSchema(FunctionToolSchema):
+    defer_loading: bool = field(default=True, init=False)
 
 
 class ToolSearchTool(Tool):
@@ -71,7 +76,9 @@ class ToolSearchTool(Tool):
         schemas: list[ToolSchema] = [ToolSearchToolSchema(mode=self._mode)]
         for t in self._tools.values():
             for s in await t.schemas(context):
-                schemas.append(replace(s, defer_loading=True) if isinstance(s, FunctionToolSchema) else s)
+                schemas.append(
+                    DeferredFunctionToolSchema(function=s.function) if isinstance(s, FunctionToolSchema) else s
+                )
         return schemas
 
     def register(
