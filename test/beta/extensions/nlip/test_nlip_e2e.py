@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from autogen.beta import Agent
-from autogen.beta.events import ModelRequest, TextInput
-from autogen.beta.extensions.nlip import NlipConfig, NlipServer
-from autogen.beta.extensions.nlip.testing import make_test_client_factory
-from autogen.beta.testing import TestConfig, TrackingConfig
+from ag2 import Agent
+from ag2.events import ModelRequest, TextInput
+from ag2.extensions.nlip import NlipConfig, NlipServer
+from ag2.extensions.nlip.testing import make_test_client_factory
+from ag2.testing import TestConfig, TrackingConfig
 
 
 def _make_pair(*events: str, server_url: str = "http://test") -> tuple[NlipServer, Agent, TrackingConfig]:
