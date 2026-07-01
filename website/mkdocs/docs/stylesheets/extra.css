@@ -736,3 +736,8 @@ border: 0;
 .md-header .classic-banner a:hover {
     color: #c4e6ff;
 }
+
+/* Hide the GitHub stars/forks "facts" next to the repo name in the header. */
+.md-source__facts {
+    display: none;
+}
