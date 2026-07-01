@@ -1,0 +1,327 @@
+---
+title: NLIP Agent Integration
+sidebarTitle: NLIP Agent
+---
+
+[NLIP (Natural Language Interaction Protocol)](https://ecma-international.org/publications-and-standards/standards/ecma-430/){.external-link target="_blank"} is an ECMA-430 standard for interoperable agent communication over HTTP. The `ag2.extensions.nlip` module lets you:
+
+1. **Expose** any `Agent` as a standards-compliant NLIP endpoint.
+2. **Connect** to any remote NLIP server as if it were a local AG2 agent.
+
+Two entry points cover the full lifecycle:
+
+| Class | Role |
+|-------|---|
+| [`NlipServer`](#server-expose-an-agent-via-nlip) | Wraps an `Agent` as an ASGI callable — pass it directly to `uvicorn.run` |
+| [`NlipConfig`](#client-connect-to-a-remote-nlip-endpoint) | A `ModelConfig` — connects to any remote NLIP endpoint and turns it into the LLM provider for a local `Agent` |
+
+## Installation
+
+```bash
+pip install "ag2[openai]" "nlip-sdk>=0.1.0,<1" "nlip-server>=0.1.3,<1"
+```
+
+This installs the OpenAI client plus the `nlip-sdk` and `nlip-server` packages. NLIP is not shipped as an `ag2` extra — install the two packages directly alongside whichever provider extra you need.
+
+You'll also need an ASGI server (e.g. `uvicorn`) to actually serve the application:
+
+```bash
+pip install uvicorn
+```
+
+## Server — Expose an Agent via NLIP
+
+`NlipServer` wraps any `Agent` as an ASGI callable. You can hand the instance directly to any ASGI server (`uvicorn`, `hypercorn`, …) without an extra wrapper.
+
+Each request creates an isolated session: the agent runs, responds, and the session tears down. No conversation state is shared between requests — every call ships the full AG2 conversation history as a JSON submessage on the wire.
+
+```python title="server.py"
+import uvicorn
+
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.extensions.nlip import NlipServer
+
+agent = Agent(
+    name="python_expert",
+    prompt="You are an expert Python developer. Answer questions clearly and concisely with practical examples.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+)
+
+server = NlipServer(agent)
+
+if __name__ == "__main__":
+    uvicorn.run(server, host="0.0.0.0", port=8000)
+```
+
+Start the server:
+```bash
+python server.py
+```
+
+Or run it directly via `uvicorn`:
+```bash
+uvicorn server:server --host 0.0.0.0 --port 8000
+```
+
+This will start an NLIP endpoint and we can send an NLIP message to test whether it works:
+
+```bash
+curl -X POST http://localhost:8000/nlip/ \
+  -H "Content-Type: application/json" \
+  -d '{"format": "text", "subformat": "english", "content": "How to use Python decorators?"}'
+```
+
+Example response:
+
+```json
+{
+  "format": "text",
+  "subformat": "english",
+  "content": "Python decorators are a powerful feature that allows you to modify the behavior of a function..."
+}
+```
+
+## Client — Connect to a remote NLIP endpoint
+
+Similar to how AG2 integrates with the [A2A protocol](/docs/a2a/overview), `NlipConfig` connects to a remote NLIP server over HTTP and plugs into a regular `Agent` as its LLM provider.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.extensions.nlip import NlipConfig
+
+remote_agent = Agent(
+    "remote_python_expert",
+    config=NlipConfig(url="http://localhost:8000"),
+)
+```
+
+Because `NlipConfig` is a `ModelConfig`, the remote endpoint plugs directly into the familiar `agent.ask(...)` / `reply.ask(...)` shape — no separate call surface to learn.
+
+```python
+reply = await remote_agent.ask("Explain Python generators")
+print(reply.response.content)
+```
+
+## End-to-end example — Weather agent with a coordinator
+
+This example shows a realistic multi-agent setup where:
+
+- A **weather NLIP server** provides weather alerts and forecasts via the National Weather Service API.
+- A local **coordinator `Agent`** delegates geocoding to a local tool and forecasts to the remote weather server, reached through `NlipConfig`.
+
+`ag2` has no GroupChat — the geo lookup and the remote weather call are both tools the coordinator's LLM picks between, rather than peer chat participants:
+
+```text
+┌─────────────────────────────────────────────┐
+│              Coordinator Agent              │
+│ tools=[geocode_location, ask_weather_agent] │
+│                                             │
+│  geocode_location  ──►  (local, Nominatim)  │
+│  ask_weather_agent ──►  weather_agent       │
+│                         (NlipConfig)        │
+│                              │              │
+└──────────────────────────────┼──────────────┘
+                               │  HTTP POST /nlip/
+                               ▼
+                     ┌─────────────────────┐
+                     │   Weather NLIP      │
+                     │   Server (:8014)    │
+                     │   (AG2 agent)       │
+                     └─────────────────────┘
+
+                  ▼ (response flows back up to coordinator)
+                  Final answer to user
+```
+
+### Step 1 — Start the weather agent
+
+The weather server is an AG2 `Agent` with two tools — `get_weather_alerts` (by US state code) and `get_weather_forecast` (by latitude/longitude) — exposed as an NLIP endpoint via `NlipServer`.
+
+```python title="weather_agent.py"
+import httpx
+import uvicorn
+
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.extensions.nlip import NlipServer
+
+NWS_API_BASE = "https://api.weather.gov"
+NWS_HEADERS = {"User-Agent": "ag2-weather-nlip/1.0", "Accept": "application/geo+json"}
+
+async def get_weather_alerts(state: str) -> str:
+    """Get active weather alerts for a US state (2-letter code)."""
+    url = f"{NWS_API_BASE}/alerts/active/area/{state.upper()}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=NWS_HEADERS, timeout=30.0)
+        resp.raise_for_status()
+        features = resp.json().get("features", [])
+
+    if not features:
+        return f"No active weather alerts for {state.upper()}."
+
+    parts = []
+    for f in features:
+        p = f["properties"]
+        parts.append(
+            f"**{p.get('event', 'Unknown')}** | "
+            f"Area: {p.get('areaDesc', '?')} | "
+            f"Severity: {p.get('severity', '?')}\n"
+            f"{p.get('description', '')}"
+        )
+    return "\n---\n".join(parts)
+
+async def get_weather_forecast(latitude: float, longitude: float) -> str:
+    """Get weather forecast for a latitude/longitude location."""
+    async with httpx.AsyncClient() as client:
+        points = await client.get(
+            f"{NWS_API_BASE}/points/{latitude},{longitude}",
+            headers=NWS_HEADERS,
+            timeout=30.0,
+        )
+        points.raise_for_status()
+        forecast_url = points.json()["properties"]["forecast"]
+
+        forecast = await client.get(forecast_url, headers=NWS_HEADERS, timeout=30.0)
+        forecast.raise_for_status()
+
+    periods = forecast.json()["properties"]["periods"][:5]
+    parts = []
+    for p in periods:
+        parts.append(
+            f"**{p['name']}**: {p['temperature']}°{p['temperatureUnit']}, "
+            f"wind {p['windSpeed']} {p['windDirection']}\n"
+            f"{p['detailedForecast']}"
+        )
+    return "\n---\n".join(parts)
+
+agent = Agent(
+    name="weather_assistant",
+    prompt=(
+        "You are a weather assistant. Use the provided tools to answer questions. "
+        "get_weather_alerts takes a 2-letter US state code. "
+        "get_weather_forecast takes latitude and longitude."
+    ),
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    tools=[get_weather_alerts, get_weather_forecast],
+)
+
+server = NlipServer(agent)
+
+if __name__ == "__main__":
+    uvicorn.run(server, host="127.0.0.1", port=8014)
+```
+
+This file contains a weather agent with two tools, `get_weather_alerts` and `get_weather_forecast`, which is then exposed as an NLIP server with `NlipServer` on port 8014.
+
+Start the server with:
+
+```bash
+python weather_agent.py
+```
+
+Or run it directly via `uvicorn`:
+
+```bash
+uvicorn weather_agent:server --host 127.0.0.1 --port 8014
+```
+
+You can verify whether it works with a quick `curl`:
+
+```bash
+curl -X POST http://127.0.0.1:8014/nlip/ \
+  -H "Content-Type: application/json" \
+  -d '{"format": "text", "subformat": "english", "content": "Get weather alerts for Indiana"}' | python -m json.tool
+```
+
+### Step 2 — Connect to the weather agent with NlipConfig
+
+In the coordinator file, we define a `geocode_location` tool, a `weather_agent` backed by `NlipConfig`, and a coordinator `Agent` that delegates between them.
+
+
+```python title="coordinator.py" linenums="1" hl_lines="35-38 40-43"
+import argparse
+import asyncio
+
+import httpx
+
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.extensions.nlip import NlipConfig
+
+async def geocode_location(location: str) -> dict:
+    """Convert a location name (city, address) to latitude/longitude coordinates."""
+    headers = {"User-Agent": "ag2-weather-demo/1.0"}
+    url = "https://nominatim.openstreetmap.org/search"
+
+    params = {"q": location, "format": "json", "limit": 1}
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, params=params, headers=headers, timeout=10.0)
+        response.raise_for_status()
+        data = response.json()
+        if not data:
+            return {
+                "error": f"Location '{location}' not found",
+                "latitude": None,
+                "longitude": None
+            }
+        result = data[0]
+        return {
+            "latitude": float(result["lat"]),
+            "longitude": float(result["lon"]),
+            "display_name": result["display_name"],
+        }
+
+async def run_weather_task(task: str, weather_server_url: str = "http://localhost:8014") -> None:
+    weather_agent = Agent(
+        name="weather_agent",
+        config=NlipConfig(url=weather_server_url),
+    )
+
+    async def ask_weather_agent(question: str) -> str:
+        """Ask the remote weather agent a question, e.g. a forecast for a lat/lon."""
+        reply = await weather_agent.ask(question)
+        return reply.response.content or ""
+
+    coordinator = Agent(
+        name="coordinator",
+        prompt=(
+            "You coordinate weather information requests. "
+            "When a user asks about weather, first use geocode_location to look up coordinates, "
+            "then use ask_weather_agent to get the forecast using those coordinates. "
+            "Summarize the final result for the user."
+        ),
+        config=OpenAIConfig(model="gpt-4o-mini"),
+        tools=[geocode_location, ask_weather_agent],
+    )
+
+    reply = await coordinator.ask(task)
+    print("Final Result:", reply.response.content)
+
+async def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--task",
+        type=str,
+        default="What's the weather forecast for Bloomington, Indiana?",
+        help="Weather query to execute",
+    )
+    parser.add_argument(
+        "--server",
+        type=str,
+        default="http://localhost:8014",
+        help="URL of the weather_agent NLIP server (default: http://localhost:8014)",
+    )
+    args = parser.parse_args()
+    await run_weather_task(task=args.task, weather_server_url=args.server)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The coordinator connects to the NLIP weather agent through `weather_agent`, a regular `Agent` configured with `NlipConfig` (highlighted lines 35-38), and delegates to it via the plain tool function `ask_weather_agent` (highlighted lines 40-43).
+
+```bash
+python coordinator.py
+```
