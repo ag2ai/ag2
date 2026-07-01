@@ -41,8 +41,8 @@ _DEFAULT_VERSION = "0.0.0"
 
 def _package_version() -> str:
     try:
-        return importlib.metadata.version("ag2")
-    except importlib.metadata.PackageNotFoundError:  # pragma: no cover - ag2 always installed in practice
+        return importlib.metadata.version("autogen")
+    except importlib.metadata.PackageNotFoundError:  # pragma: no cover - autogen always installed in practice
         return _DEFAULT_VERSION
 
 

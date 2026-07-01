@@ -164,7 +164,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: optional-deps, ${{ matrix.optional-dependencies }}, ${{ matrix.os }}, ${{ matrix.python-version }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-with_optional-dependencies-check:

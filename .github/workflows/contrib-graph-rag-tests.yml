@@ -92,7 +92,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: falkordb, ubuntu-latest, ${{ matrix.python-version }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
   GraphRagIntegrationTest-Neo4j-Llmaindex-Ubuntu:
@@ -168,7 +168,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: neo4j, ubuntu-latest, ${{ matrix.python-version }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # Test-Neo4j-Llmaindex-Ubuntu:

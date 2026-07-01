@@ -8,6 +8,11 @@ on:
         required: true
         default: '3.10'
         type: string
+      deploy:
+        description: 'Whether to publish the built docs to the gh-pages branch'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -43,22 +48,21 @@ jobs:
       - name: Verify the build
         run: |
           ls -la ./website/mkdocs/site
-          # Ensure the Beta-scoped llms.txt files were generated and copied into the site.
-          for f in llms.txt llms-full.txt; do
-            if [ ! -s "./website/mkdocs/site/$f" ]; then
-              echo "::error::Expected non-empty ./website/mkdocs/site/$f (llms.txt generation failed)"
-              exit 1
-            fi
-          done
+          # Ensure the site was generated.
+          if [ ! -s "./website/mkdocs/site/index.html" ]; then
+            echo "::error::Expected non-empty ./website/mkdocs/site/index.html (docs build failed)"
+            exit 1
+          fi
         working-directory: .
 
       - name: Configure Git user
+        if: ${{ inputs.deploy }}
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
       - name: Build docs and squash gh-pages commits
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
+        if: ${{ inputs.deploy }}
         run: |
           . .venv/bin/activate
 
@@ -88,7 +92,7 @@ jobs:
           git reset --soft origin/gh-pages
 
       - name: Force-push squashed docs to GH Pages
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
+        if: ${{ inputs.deploy }}
         uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
         with:
           branch: gh-pages

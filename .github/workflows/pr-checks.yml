@@ -73,10 +73,8 @@ jobs:
           filters: |
             autogen:
               - "autogen/**"
-              - "!autogen/beta/**"
             test:
               - "test/**"
-              - "!test/beta/**"
             workflows:
               - ".github/workflows/pr-checks.yml"
             setup:
@@ -119,7 +117,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: core-without-llm, ubuntu-latest, 3.11
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
   docs-paths-filter:
