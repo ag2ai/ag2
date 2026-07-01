@@ -128,7 +128,7 @@ def execute(
 
             def _set_iostream() -> Any:
                 try:
-                    from autogen.io.base import IOStream
+                    from ag2.io.base import IOStream
 
                     return IOStream.set_default(iostream)
                 except ImportError:
@@ -177,9 +177,9 @@ def execute(
             _drain_events(response, result, on_event)
 
         elif d.kind == "agents":
-            from autogen.agentchat import run_group_chat
-            from autogen.agentchat.group.patterns.auto import AutoPattern
-            from autogen.agentchat.group.patterns.round_robin import RoundRobinPattern
+            from ag2.agentchat import run_group_chat
+            from ag2.agentchat.group.patterns.auto import AutoPattern
+            from ag2.agentchat.group.patterns.round_robin import RoundRobinPattern
 
             if len(d.agents) <= 2:
                 pattern = RoundRobinPattern(initial_agent=d.agents[0], agents=d.agents)

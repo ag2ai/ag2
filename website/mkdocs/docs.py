@@ -15,7 +15,7 @@ from typing import Annotated
 import mkdocs.commands.serve
 import typer
 from _website.generate_mkdocs import main as generate_files_for_mkdocs
-from create_api_docs import create_api_docs
+from generate_summary import generate_summary
 from mkdocs.config import load_config
 
 IGNORE_DIRS = ("assets", "stylesheets", "javascripts")
@@ -102,7 +102,7 @@ def live(
     if not skip_build:
         typer.echo("Pre-processing files for mkdocs...")
         generate_files_for_mkdocs(force=False)
-        build_api_docs()
+        build_summary()
         typer.echo("Pre-processing complete.")
 
     typer.echo(f"Serving at: http://{dev_server}")
@@ -219,15 +219,15 @@ def update_readme() -> None:
 
 
 @app.command()
-def build_api_docs():
-    """Build api docs for autogen."""
-    typer.echo("Updating API docs")
-    create_api_docs(root_path=BASE_DIR, module="autogen")
+def build_summary():
+    """Build the literate-nav SUMMARY.md for the docs site."""
+    typer.echo("Updating navigation summary")
+    generate_summary(root_path=BASE_DIR)
 
 
 def _build(force: bool = False):
     generate_files_for_mkdocs(force)
-    build_api_docs()
+    build_summary()
     # update_readme()
     # update_contributing()
 

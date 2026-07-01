@@ -9,12 +9,9 @@ import re
 import shutil
 from pathlib import Path
 
-from autogen.import_utils import optional_import_block, require_optional_import
+from ag2._import_utils import optional_import_block, require_optional_import
 
-from .notebook_processor import (
-    create_base_argument_parser,
-    process_notebooks_core,
-)
+from .llms_txt import generate_llms_txt
 from .utils import (
     NavigationGroup,
     add_authors_and_social_preview,
@@ -164,14 +161,6 @@ def fix_asset_path(content: str) -> str:
 
 
 def fix_internal_references(abs_file_url: str, mkdocs_docs_dir: Path = mkdocs_docs_dir) -> str:
-    # Special case for the API Reference
-    if abs_file_url in {"/docs/api-reference", "/docs/api-reference/autogen"}:
-        return (
-            f"{abs_file_url}/autogen/AfterWork"
-            if abs_file_url == "/docs/api-reference"
-            else f"{abs_file_url}/AfterWork"
-        )
-
     file_path = mkdocs_docs_dir / (abs_file_url.lstrip("/") + ".md")
     if file_path.is_file():
         return abs_file_url
@@ -261,39 +250,6 @@ def _ensure_md_extension(relative_link: str) -> str:
     return path_part
 
 
-def _transform_api_anchor(absolute_link: str, fragment: str) -> str:
-    """Transform API reference anchors from kebab-case to mkdocstrings dotted format.
-
-    mkdocstrings generates anchors using the full dotted Python path (e.g.,
-    ``autogen.ConversableAgent.initiate_chat``), but source docs use kebab-case
-    (e.g., ``#initiate-chat``). This converts the latter to the former.
-
-    Class-level anchors (e.g., ``#conversableagent``) map to just the dotted class
-    path (e.g., ``autogen.ConversableAgent``).
-
-    Args:
-        absolute_link: The absolute URL path (e.g., ``/docs/api-reference/autogen/ConversableAgent``)
-        fragment: The anchor fragment without ``#`` (e.g., ``initiate-chat``)
-
-    Returns:
-        The transformed fragment (e.g., ``autogen.ConversableAgent.initiate_chat``)
-    """
-    if not absolute_link.startswith("/docs/api-reference/"):
-        return fragment
-    # If the fragment already contains a dot, it's already in mkdocstrings format
-    if "." in fragment:
-        return fragment
-    module_prefix = absolute_link.rstrip("/").replace("/docs/api-reference/", "").replace("/", ".")
-    # Extract the class/module name (last non-empty path segment) for comparison
-    last_segment = absolute_link.rstrip("/").rsplit("/", 1)[-1]
-    # Strip trailing disambiguation suffixes like -2, -3 (from Mintlify anchors)
-    clean_fragment = re.sub(r"-\d+$", "", fragment)
-    # If the fragment matches the class name (case-insensitive), it's a class-level anchor
-    if clean_fragment.replace("-", "").replace("_", "").lower() == last_segment.lower():
-        return module_prefix
-    return f"{module_prefix}.{clean_fragment.replace('-', '_')}"
-
-
 def fix_internal_links(source_path: str, content: str) -> str:
     """Detect internal links in content that start with '/docs' and convert them to relative paths.
 
@@ -362,9 +318,8 @@ def fix_internal_links(source_path: str, content: str) -> str:
         if attr_type == "href":
             relative_link = _ensure_md_extension(relative_link)
 
-        # Reattach fragment (transforming API reference anchors to mkdocstrings format)
+        # Reattach fragment
         if fragment is not None:
-            fragment = _transform_api_anchor(absolute_link, fragment)
             relative_link = f"{relative_link}#{fragment}"
         return f'{attr_type}="{relative_link}"'
 
@@ -394,9 +349,8 @@ def fix_internal_links(source_path: str, content: str) -> str:
         if not is_image:
             relative_link = _ensure_md_extension(relative_link)
 
-        # Reattach fragment (transforming API reference anchors to mkdocstrings format)
+        # Reattach fragment
         if fragment is not None:
-            fragment = _transform_api_anchor(absolute_link, fragment)
             relative_link = f"{relative_link}#{fragment}"
         prefix = "!" if is_image else ""
         return f"{prefix}[{text}]({relative_link})"
@@ -612,26 +566,9 @@ def format_navigation(
     ret_val = "\n".join(result)
 
     ret_val = ret_val.replace(
-        "- Quick Start\n    - [Quick Start](docs/quick-start.md)\n",
-        "- [Quick Start](docs/quick-start.md)\n",
+        "- Quick Start\n    - [Quick Start](docs/user-guide/quick-start.md)\n",
+        "- [Quick Start](docs/user-guide/quick-start.md)\n",
     )
-    ret_val = ret_val.replace(
-        "- Basic Concepts\n",
-        "- [Basic Concepts](docs/user-guide/basic-concepts/overview.md)\n",
-    )
-    ret_val = ret_val.replace("- FAQs\n    - [Faq](docs/faq/FAQ.md)\n", "- [FAQs](docs/faq/FAQ.md)\n")
-    return ret_val
-
-
-def add_api_ref_to_mkdocs_template(mkdocs_nav: str, section_to_follow: str) -> str:
-    """Add API Reference section to the navigation template."""
-    api_reference_section = """- API References
-{api}
-"""
-    section_to_follow_marker = f"- {section_to_follow}"
-
-    replacement_content = f"{api_reference_section}{section_to_follow_marker}"
-    ret_val = mkdocs_nav.replace(section_to_follow_marker, replacement_content)
     return ret_val
 
 
@@ -647,11 +584,8 @@ def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exc
 
     mkdocs_docs_dir = mkdocs_root_dir / "docs"
     mkdocs_nav = format_navigation(filtered_nav, mkdocs_docs_dir)
-    mkdocs_nav_with_api_ref = add_api_ref_to_mkdocs_template(mkdocs_nav, "Contributor Guide")
 
-    blog_nav = "- Blog\n    - [Blog](docs/blog/index.md)"
-
-    mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav_with_api_ref + "\n" + blog_nav + "\n"
+    mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav + "\n"
     mkdocs_nav_path.write_text(mkdocs_nav_content)
     summary_md_path.write_text(mkdocs_nav_content)
 
@@ -1301,22 +1235,11 @@ def add_authors_info_to_user_stories(website_dir: Path) -> None:
 
 
 def main(force: bool) -> None:
-    parser = create_base_argument_parser()
-    args = parser.parse_args(["render"])
-    args.dry_run = False
-    args.quarto_bin = "quarto"
-    args.notebooks = None
-
-    # check if args.force is set
     if force and mkdocs_output_dir.exists():
         shutil.rmtree(mkdocs_output_dir)
 
     exclusion_list = [
         "docs/.gitignore",
-        "docs/installation",
-        "docs/user-guide/getting-started",
-        "docs/user-guide/models/litellm-with-watsonx.md",
-        "docs/contributor-guide/Migration-Guide.md",
     ]
     nav_exclusions = [""]
 
@@ -1330,39 +1253,7 @@ def main(force: bool) -> None:
     copy_assets(website_dir)
     process_and_copy_files(mint_docs_dir, mkdocs_output_dir, filtered_files)
 
-    snippets_dir_path = website_dir / "snippets"
-    authors_yml_path = website_dir / "blogs_and_user_stories_authors.yml"
-
-    process_blog_files(mkdocs_output_dir, authors_yml_path, snippets_dir_path)
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
 
-    if args.website_build_directory is None:
-        args.website_build_directory = mkdocs_output_dir
-
-    if args.notebook_directory is None:
-        args.notebook_directory = mkdocs_root_dir / "../../notebook"
-
-    metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
-
-    if not metadata_yml_path.exists() or (force and mkdocs_output_dir.exists()):
-        process_notebooks_core(args, post_process_func, target_dir_func)
-
-    # Render Notebooks Gallery HTML
-    notebooks_md_path = mkdocs_output_dir / "use-cases" / "notebooks" / "Notebooks.md"
-    inject_gallery_html(notebooks_md_path, metadata_yml_path)
-
-    # Add Notebooks Navigation to Summary.md
-    mkdocs_nav_path = mkdocs_root_dir / "docs" / "navigation_template.txt"
-    add_notebooks_nav(mkdocs_nav_path, metadata_yml_path)
-
-    # Render Community Gallery HTML
-    community_md_path = mkdocs_output_dir / "use-cases" / "community-gallery" / "community-gallery.md"
-    metadata_yml_path = Path(args.website_build_directory) / "../../data/gallery_items.yml"
-    inject_gallery_html(community_md_path, metadata_yml_path)
-
-    # Generate Navigation for User Stories
-    docs_dir = mkdocs_root_dir / "docs"
-    generate_community_insights_nav(docs_dir, mkdocs_nav_path)
-
-    # Add Authors info to User Stories
-    add_authors_info_to_user_stories(website_dir)
+    # Generate llms.txt / llms-full.txt (https://llmstxt.org/) at the site root.
+    generate_llms_txt(website_dir, mkdocs_docs_dir)

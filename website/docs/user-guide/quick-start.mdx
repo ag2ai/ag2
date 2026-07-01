@@ -1,0 +1,119 @@
+---
+title: Quick Start
+sidebarTitle: Quick Start
+---
+
+Get up and running with **AG2** in a few minutes. You'll install the framework, configure a model provider, and build your first agent — then give it a tool.
+
+## 1. Install AG2
+
+Install AG2 with the extra for your model provider:
+
+<Tabs>
+  <Tab title="OpenAI">
+```bash
+pip install "ag2[openai]"
+```
+  </Tab>
+
+  <Tab title="Anthropic">
+```bash
+pip install "ag2[anthropic]"
+```
+  </Tab>
+
+  <Tab title="Gemini">
+```bash
+pip install "ag2[gemini]"
+```
+  </Tab>
+</Tabs>
+
+Then export your provider's API key:
+
+<Tabs>
+  <Tab title="OpenAI">
+```bash
+export OPENAI_API_KEY="your-api-key"
+```
+  </Tab>
+
+  <Tab title="Anthropic">
+```bash
+export ANTHROPIC_API_KEY="your-api-key"
+```
+  </Tab>
+
+  <Tab title="Gemini">
+```bash
+export GEMINI_API_KEY="your-api-key"
+```
+  </Tab>
+</Tabs>
+
+## 2. Build your first agent
+
+AG2 is async throughout, so the example runs inside an `async` function driven by `asyncio.run`. `Agent.ask(...)` starts a turn and returns an `AgentReply`; read the text with `reply.body`.
+
+```python linenums="1" hl_lines="5-9 12 13"
+import asyncio
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful assistant.",
+    config=OpenAIConfig("gpt-4o-mini"),
+)
+
+async def main() -> None:
+    reply = await agent.ask("Give me one sentence about AG2.")
+    print(reply.body)
+
+asyncio.run(main())
+```
+
+To continue the same conversation, call `ask` again on the reply — it preserves context and history:
+
+```python linenums="1" hl_lines="3"
+async def main() -> None:
+    reply = await agent.ask("Give me one sentence about AG2.")
+    follow_up = await reply.ask("Now make it shorter.")
+    print(follow_up.body)
+```
+
+## 3. Give your agent a tool
+
+Decorate a plain Python function with `@tool` and pass it to the agent. AG2 manages the full tool-calling lifecycle — the model decides when to call it, AG2 executes it, and feeds the result back.
+
+```python linenums="1" hl_lines="4-7 13"
+import asyncio
+from ag2 import Agent, tool
+from ag2.config import OpenAIConfig
+
+@tool
+async def get_weather(city: str) -> str:
+    """Return the current weather for a city."""
+    return f"It's sunny in {city}."
+
+agent = Agent(
+    "assistant",
+    prompt="Use tools when helpful.",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[get_weather],
+)
+
+async def main() -> None:
+    reply = await agent.ask("What's the weather in Paris?")
+    print(reply.body)
+
+asyncio.run(main())
+```
+
+## Next steps
+
+- [Agents](/docs/user-guide/agents) — the full agent communication API, streaming, and live runs.
+- [Models & Providers](/docs/user-guide/model_configuration) — configure OpenAI, Anthropic, Gemini, and more.
+- [Tools](/docs/user-guide/tools/tools) — tools, toolkits, and built-in tools.
+- [Multi-Agent Network](/docs/user-guide/network/overview) — coordinate multiple agents.
+- [Coding with AI Assistants](/docs/user-guide/coding_with_ai) — set up your AI assistant to build with AG2.

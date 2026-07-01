@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from pathlib import Path
 
-from autogen.import_utils import optional_import_block, require_optional_import
+from ag2._import_utils import optional_import_block, require_optional_import
 
 from .notebook_processor import (
     create_base_argument_parser,
@@ -538,7 +538,7 @@ def ensure_mint_json_exists(website_build_directory: Path) -> None:
     mint_json_path = website_build_directory / "mint.json"
     if not mint_json_path.exists():
         print(f"mint.json not found at {mint_json_path}")
-        print("Run the 'generate_api_references.py' script before running this script.")
+        print("Generate mint.json from 'mint-json-template.json.jinja' before running this script.")
         sys.exit(1)
 
 

@@ -12,12 +12,12 @@
 
 | LangGraph Package | Purpose | AG2 Equivalent |
 |---|---|---|
-| `langgraph` (v1.1.3) | Core: StateGraph, Pregel engine | `autogen` (ag2) |
-| `langgraph-prebuilt` | create_react_agent, ToolNode | `autogen` ConversableAgent + tools |
+| `langgraph` (v1.1.3) | Core: StateGraph, Pregel engine | `ag2` (ag2) |
+| `langgraph-prebuilt` | create_react_agent, ToolNode | `ag2` ConversableAgent + tools |
 | `langgraph-checkpoint` | BaseCheckpointSaver, BaseStore | No direct equivalent (AG2 has no built-in checkpointing) |
 | `langgraph-checkpoint-postgres` | PostgreSQL persistence | No equivalent |
 | `langgraph-checkpoint-sqlite` | SQLite persistence | No equivalent |
-| `langgraph-supervisor` | create_supervisor, handoff tools | `autogen` GroupChat or Swarm |
+| `langgraph-supervisor` | create_supervisor, handoff tools | `ag2` GroupChat or Swarm |
 | `langgraph-sdk` | HTTP client for remote graphs | No equivalent (use ag2 serve REST API) |
 | `langgraph-cli` | Dev server, build, deploy | `ag2` CLI |
 
@@ -42,9 +42,9 @@ from langchain_core.messages import HumanMessage    # dict: {"role": "user", "co
 from langchain_core.messages import AIMessage       # dict: {"role": "assistant", "content": "..."}
 from langchain_core.messages import SystemMessage   # ConversableAgent(system_message="...")
 from langchain_core.messages import ToolMessage     # Internal to AG2 tool execution
-from langchain_core.tools import tool               # from autogen import register_function / Tool
-from langchain_core.tools import BaseTool           # autogen.tools.Tool
-from langchain_core.tools import StructuredTool     # autogen.tools.Tool
+from langchain_core.tools import tool               # from ag2 import register_function / Tool
+from langchain_core.tools import BaseTool           # ag2.tools.Tool
+from langchain_core.tools import StructuredTool     # ag2.tools.Tool
 from langchain_openai import ChatOpenAI             # LLMConfig(api_type="openai", model="...")
 from langchain_anthropic import ChatAnthropic       # LLMConfig(api_type="anthropic", model="...")
 
@@ -68,7 +68,7 @@ from langchain.agents.middleware import ...          # register_hook / register_
 | **Edge (fixed)** | `graph.add_edge("a", "b")` | Implicit via `initiate_chat()` or GroupChat ordering | AG2 doesn't have explicit fixed edges; flow is determined by conversation |
 | **Conditional edge** | `graph.add_conditional_edges(src, func, map)` | `OnCondition(target=agent, condition="...")` in Swarm, or `speaker_selection_method` in GroupChat | Closest mapping is Swarm's `OnCondition` for LLM-driven routing |
 | **Entry point** | `graph.add_edge(START, "first")` | `initial_agent` in swarm, or first agent in `initiate_chat()` | Implicit in AG2 |
-| **End point** | `graph.add_edge("last", END)` | `is_termination_msg` or `AfterWork(AfterWorkOption.TERMINATE)` | AG2 uses termination conditions rather than explicit end nodes |
+| **End point** | `graph.add_edge("last", END)` | `is_termination_msg` or `handoffs.set_after_work(TerminateTarget())` | AG2 uses termination conditions rather than explicit end nodes |
 | **Compile** | `graph.compile(checkpointer=...)` | Not needed (AG2 agents are ready to use) | No compilation step in AG2 |
 | **Invoke** | `app.invoke({"messages": [...]})` | `agent.initiate_chat(recipient, message="...")` | Different invocation model |
 | **Stream** | `app.stream(input, stream_mode="values")` | No built-in streaming equivalent | MANUAL: AG2 has no graph-level streaming |
@@ -120,15 +120,6 @@ def route(state: AgentState) -> str:
 graph.add_conditional_edges("agent", route, {"tools": "tools", END: END})
 ```
 
-**AG2 Swarm equivalent:**
-```python
-agent = SwarmAgent(name="agent", ...)
-agent.register_hand_off([
-    OnCondition(target=tool_agent, condition="When tools need to be called"),
-    AfterWork(AfterWorkOption.TERMINATE)
-])
-```
-
 **AG2 GroupChat equivalent:**
 ```python
 groupchat = GroupChat(
@@ -151,7 +142,7 @@ groupchat = GroupChat(
 | Parameter | LangGraph | AG2 Equivalent |
 |---|---|---|
 | `model` | `BaseChatModel` or string like `"openai:gpt-4o"` | `llm_config=LLMConfig(model="gpt-4o", api_type="openai")` |
-| `tools` | `list[BaseTool \| Callable \| dict]` | `register_function(func, caller=agent, executor=agent)` or `functions=[...]` on SwarmAgent |
+| `tools` | `list[BaseTool \| Callable \| dict]` | `register_function(func, caller=agent, executor=agent)` or `functions=[...]` on `ConversableAgent` |
 | `prompt` | `str \| SystemMessage \| Callable` | `system_message="..."` |
 | `name` | `str` | `name="..."` |
 | `response_format` | `BaseModel` (Pydantic) for structured output | No direct equivalent; use tool-based structured output |
@@ -180,7 +171,7 @@ result = agent.invoke({"messages": [("user", "What is 2+2?")]})
 
 ```python
 # AG2
-from autogen import ConversableAgent, LLMConfig, register_function
+from ag2 import ConversableAgent, LLMConfig, register_function
 
 llm_config = LLMConfig(api_type="openai", model="gpt-4o")
 
@@ -242,7 +233,7 @@ result = app.invoke({"messages": [{"role": "user", "content": "What is 2+2?"}]})
 
 ```python
 # AG2 GroupChat (supervisor pattern)
-from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig, register_function
+from ag2 import ConversableAgent, GroupChat, GroupChatManager, LLMConfig, register_function
 
 llm_config = LLMConfig(api_type="openai", model="gpt-4o")
 
@@ -277,7 +268,7 @@ math_agent.initiate_chat(manager, message="What is 2+2?")
 | LangChain/LangGraph | AG2 | Notes |
 |---|---|---|
 | `@tool` decorator | `@tool` decorator (different import) or plain function + `register_function` | LangChain `@tool` uses docstring as description; AG2 uses `description` param |
-| `BaseTool` subclass | `autogen.tools.Tool(name, description, func)` | Subclass pattern has no direct equivalent |
+| `BaseTool` subclass | `ag2.tools.Tool(name, description, func)` | Subclass pattern has no direct equivalent |
 | `StructuredTool.from_function(func, name, description)` | `Tool(name=name, description=description, func=func)` | Clean mapping |
 | `args_schema` (Pydantic model) | Type hints on function parameters | AG2 infers schema from type hints |
 | Tool with `Annotated` params | `Annotated[str, "description"]` on function params | Direct mapping |
@@ -300,7 +291,7 @@ def search(query: str, limit: int = 10) -> str:
 **AG2 tool:**
 ```python
 from typing import Annotated
-from autogen import ConversableAgent, register_function
+from ag2 import ConversableAgent, register_function
 
 def search(
     query: Annotated[str, "Search query"],
@@ -322,7 +313,7 @@ register_function(
 | Pattern | LangGraph | AG2 |
 |---|---|---|
 | Bind to model | `model.bind_tools([tool1, tool2])` | `register_function(func, caller=agent, ...)` |
-| Bind at agent creation | `create_react_agent(tools=[...])` | `ConversableAgent(functions=[func1, func2])` on SwarmAgent |
+| Bind at agent creation | `create_react_agent(tools=[...])` | `ConversableAgent(functions=[func1, func2])` |
 | Separate caller/executor | Not applicable (ToolNode handles both) | `register_function(func, caller=llm_agent, executor=exec_agent)` |
 | Dynamic tool selection | `tool_chooser` on ToolNode | `func_call_filter=True` in GroupChat |
 
@@ -374,14 +365,16 @@ def router(state):
 graph.add_conditional_edges("classifier", router)
 ```
 
-**AG2 Swarm:**
+**AG2:**
 ```python
-classifier = SwarmAgent(name="classifier", ...)
-classifier.register_hand_off([
-    OnCondition(target=billing_agent, condition="Route to billing for payment/invoice questions"),
-    OnCondition(target=tech_agent, condition="Route to tech support for technical issues"),
-    AfterWork(agent=general_agent),  # Default fallback
+from ag2.agentchat.group import OnCondition, AgentTarget, StringLLMCondition
+
+classifier = ConversableAgent(name="classifier", ...)
+classifier.handoffs.add_llm_conditions([
+    OnCondition(target=AgentTarget(billing_agent), condition=StringLLMCondition(prompt="Route to billing for payment/invoice questions")),
+    OnCondition(target=AgentTarget(tech_agent), condition=StringLLMCondition(prompt="Route to tech support for technical issues")),
 ])
+classifier.handoffs.set_after_work(AgentTarget(general_agent))  # Default fallback
 ```
 
 ### 5.3 Pattern: Supervisor / Hierarchical
@@ -426,7 +419,7 @@ groupchat = GroupChat(agents=[agent_a, agent_b], messages=[])
 ```
 
 > Note: AG2 doesn't have a typed shared scratchpad. The conversation itself serves
-> as the shared context. For structured shared state, use `context_variables` in Swarm.
+> as the shared context. For structured shared state, use `ContextVariables` in a group chat.
 
 ### 5.5 Pattern: Hierarchical Teams (Nested Subgraphs)
 
@@ -735,7 +728,7 @@ CONSTRUCTS = {
 |---|---|
 | `ChatOpenAI(model="gpt-4o")` | `LLMConfig(api_type="openai", model="gpt-4o")` |
 | `ChatAnthropic(model="claude-sonnet-4-20250514")` | `LLMConfig(api_type="anthropic", model="claude-sonnet-4-20250514")` |
-| `ChatGoogleGenerativeAI(model="gemini-2.0-flash")` | `LLMConfig(api_type="google", model="gemini-2.0-flash")` |
+| `ChatGoogleGenerativeAI(model="gemini-3.5-flash")` | `LLMConfig(api_type="google", model="gemini-3.5-flash")` |
 | `ChatOllama(model="llama3")` | `LLMConfig(api_type="ollama", model="llama3", base_url="http://localhost:11434/v1")` |
 | `"openai:gpt-4o"` (string format) | `LLMConfig(api_type="openai", model="gpt-4o")` |
 
@@ -794,8 +787,6 @@ The converter should emit warnings for:
 - [LangChain Middleware](https://docs.langchain.com/oss/python/langchain/middleware/overview)
 - [LangChain Tools](https://docs.langchain.com/oss/python/langchain/tools)
 - [LangChain Messages](https://docs.langchain.com/oss/python/langchain/messages)
-- [AG2 ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent/)
-- [AG2 GroupChat](https://docs.ag2.ai/latest/docs/api-reference/autogen/GroupChat/)
 - [AG2 Swarm Orchestration](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_swarm/)
 - [AG2 Quickstart](https://docs.ag2.ai/latest/docs/home/quickstart/)
 - [AG2 Swarm Deep-Dive](https://docs.ag2.ai/0.8.3/docs/user-guide/advanced-concepts/swarm/deep-dive/)

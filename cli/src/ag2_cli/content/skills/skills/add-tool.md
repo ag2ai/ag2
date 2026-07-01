@@ -22,6 +22,7 @@ Follow this pattern exactly:
 ```python
 from typing import Annotated
 
+
 @executor_agent.register_for_execution()
 @caller_agent.register_for_llm(description="Clear description of what this tool does")
 def tool_name(
@@ -44,7 +45,8 @@ def tool_name(
 - If the tool needs conversation context, use dependency injection:
 
 ```python
-from autogen.tools import ChatContext, Depends
+from ag2.tools import ChatContext, Depends
+
 
 @executor.register_for_execution()
 @caller.register_for_llm(description="Context-aware tool")
@@ -61,7 +63,7 @@ def my_tool(
 If the user prefers explicit Tool objects:
 
 ```python
-from autogen.tools import Tool
+from ag2.tools import Tool
 
 tool = Tool(
     name="tool_name",

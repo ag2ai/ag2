@@ -8,10 +8,10 @@ alwaysApply: false
 
 ## Agent Classes
 
-AG2 provides two main agent classes, imported from `autogen`:
+AG2 provides two main agent classes, imported from `ag2`:
 
 ```python
-from autogen import ConversableAgent, UserProxyAgent
+from ag2 import ConversableAgent, UserProxyAgent
 ```
 
 - **ConversableAgent** — The primary agent class. Use for all LLM-powered agents with full control over configuration.
@@ -22,7 +22,7 @@ from autogen import ConversableAgent, UserProxyAgent
 Always provide a `name` (no whitespace allowed) and explicit `llm_config`:
 
 ```python
-from autogen import ConversableAgent, LLMConfig
+from ag2 import ConversableAgent, LLMConfig
 
 llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
@@ -69,14 +69,12 @@ print(await chat_result.summary)
 Use `UpdateSystemMessage` to change the system message based on context:
 
 ```python
-from autogen import ConversableAgent, UpdateSystemMessage
+from ag2 import ConversableAgent, UpdateSystemMessage
 
 agent = ConversableAgent(
     name="assistant",
     llm_config=llm_config,
-    update_agent_state_before_reply=[
-        UpdateSystemMessage("Current context: {context_var}")
-    ],
+    update_agent_state_before_reply=[UpdateSystemMessage("Current context: {context_var}")],
 )
 ```
 

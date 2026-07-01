@@ -1,0 +1,217 @@
+---
+title: Tasks
+sidebarTitle: Tasks
+---
+
+A `#!python Task` is a framework-core wrapper any `#!python Agent` can use to give a unit of work a trackable lifecycle. While the task is active, the framework emits `#!python TaskStarted`, `#!python TaskProgress`, `#!python TaskCompleted`, `#!python TaskFailed`, and `#!python TaskExpired` events on a stream — so observers (UIs, watchers, mirrors, test harnesses) can follow along without participating in execution.
+
+!!! note
+    Tasks are **agent-owned**. The framework does not assign or schedule them. Standalone usage requires no observers — events fly past harmlessly if nothing subscribes.
+
+## When to Use a Task
+
+Use a Task whenever a unit of work has a beginning, an end, and observable progress that you want to surface beyond your own function's return value:
+
+- **Long-running pipelines** where downstream consumers want progress checkpoints.
+- **HITL approvals** where a UI needs to know the task is waiting on a human.
+- **Test harnesses** that assert a sequence of lifecycle events.
+
+For lightweight LLM-driven sub-agent delegation see [Subagents](/docs/user-guide/subagents) — that's a different feature that wraps an Agent in a `#!python run_subtask` tool.
+
+## Quick Start
+
+```python linenums="1" hl_lines="6"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+
+agent = Agent("indexer", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+async with agent.task("index documents") as task:
+    await task.progress({"stage": "discover", "files": 12})
+    await task.progress({"stage": "index", "indexed": 12})
+    await task.complete({"indexed": 12})
+
+print(task.state)        # TaskState.COMPLETED
+print(task.metadata.result)  # {'indexed': 12}
+```
+
+The `#!python async with` block opens the lifecycle. On clean exit the task auto-completes with `#!python result=None` if you didn't call `#!python complete()` or `#!python fail()` yourself.
+
+## Lifecycle States
+
+```
+CREATED -> RUNNING -> COMPLETED   (terminal, success)
+                   -> FAILED      (terminal, exception or explicit fail)
+                   -> EXPIRED     (terminal, TTL elapsed)
+```
+
+| State | Meaning |
+|---|---|
+| `CREATED` | The Task object exists but `#!python __aenter__` has not run. `#!python task.task_id` and `#!python task.metadata` raise. |
+| `RUNNING` | Inside the `#!python async with` block. Progress events allowed. |
+| `COMPLETED` | Reached `#!python complete()` or clean block exit. |
+| `FAILED` | Reached `#!python fail()` or block exited via exception. |
+| `EXPIRED` | TTL elapsed; emitted by an external observer (e.g. a network hub's TTL sweeper). |
+
+The terminal states are immutable — once set, further `#!python complete() / fail() / progress()` calls are silent no-ops. The set is exported as `#!python ag2.task.TERMINAL_TASK_STATES`.
+
+## API Reference
+
+### `#!python Agent.task(...)`
+
+```python
+agent.task(
+    title: str,
+    *,
+    description: str = "",
+    payload: dict[str, Any] | None = None,
+    capability: str | None = None,
+    ttl_seconds: int | None = None,
+    context: ConversationContext | None = None,
+) -> Task
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `title` | `str` | Short objective shown on every event. |
+| `description` | `str` | Optional longer description. |
+| `payload` | `dict[str, Any] \| None` | Initial payload merged into `#!python TaskSpec`. |
+| `capability` | `str \| None` | Tags the task with a capability name; used by network mirrors. |
+| `ttl_seconds` | `int \| None` | Sets `#!python metadata.expires_at`. The Task does not self-expire — an external observer must call `#!python task.expire()` when the TTL elapses. |
+| `context` | `ConversationContext \| None` | If supplied, events flow on `#!python context.stream` and `#!python ag2.task` is stamped into `#!python context.dependencies` for the duration of the block. If omitted, the Task creates a private `#!python MemoryStream` on entry. |
+
+Returns an unentered `#!python Task`. Use as `#!python async with agent.task(...) as task:`.
+
+### `#!python Task` instance methods
+
+| Method | Description |
+|---|---|
+| `#!python await task.progress(payload)` | Emits `#!python TaskProgress`; merges `payload` into `#!python metadata.progress` and stamps `#!python last_progress_at`. No-op if already terminal. |
+| `#!python await task.complete(result=None)` | Terminal. Emits `#!python TaskCompleted`; sets `#!python metadata.result` and `#!python state = COMPLETED`. |
+| `#!python await task.fail(error)` | Terminal. Accepts a string (wrapped in `#!python RuntimeError`) or any `#!python BaseException`. Emits `#!python TaskFailed`; sets `#!python state = FAILED`. |
+| `#!python await task.expire()` | Terminal. Emits `#!python TaskExpired`; sets `#!python state = EXPIRED`. Called by external TTL observers. |
+
+### Properties
+
+| Property | Available before `#!python __aenter__`? |
+|---|---|
+| `#!python task.state` | Yes — returns `#!python TaskState.CREATED`. |
+| `#!python task.task_id` | No — raises `#!python RuntimeError`. |
+| `#!python task.metadata` | No — raises `#!python RuntimeError`. |
+| `#!python task.context` | No — raises `#!python RuntimeError`. |
+
+## Bound Context vs. Standalone
+
+```python linenums="1" hl_lines="4 6"
+from ag2.context import ConversationContext
+from ag2.stream import MemoryStream
+
+ctx = ConversationContext(stream=MemoryStream())
+
+async with agent.task("with-ctx", context=ctx) as task:
+    ...
+```
+
+Passing a `#!python ConversationContext` shares the stream with the rest of your agent's run, so observers and middleware already attached to that stream see the lifecycle events.
+
+Without a context, the Task creates a private stream on entry. Events still fire — but only observers attached to that private stream see them. Useful for one-off background work that doesn't need to surface anywhere.
+
+## Auto-Complete and Auto-Fail
+
+The `#!python async with` block has these guarantees:
+
+- **Clean exit, no terminal call** -> auto `#!python complete(result=None)`.
+- **Exception inside the block** -> auto `#!python fail(exc)`, then the exception propagates.
+- **Already terminal at exit time** -> nothing further happens.
+
+```python linenums="1" hl_lines="3 5"
+try:
+    async with agent.task("flaky") as task:
+        raise ValueError("boom")
+except ValueError as exc:
+    print(task.state)            # TaskState.FAILED
+    print(task.metadata.error)   # 'boom'
+```
+
+## Observing the Lifecycle
+
+Subscribe directly on the bound stream to capture every lifecycle event in order.
+
+```python linenums="1" hl_lines="6-9"
+from ag2.events import TaskCompleted, TaskProgress, TaskStarted
+
+stream = MemoryStream()
+ctx = ConversationContext(stream=stream)
+
+stream.subscribe(
+    lambda ev: print(type(ev).__name__, getattr(ev, "payload", "")),
+    sync_to_thread=False,
+)
+
+async with agent.task("watched", context=ctx) as task:
+    await task.progress({"step": "fetch"})
+    await task.complete({"ok": True})
+```
+
+!!! note
+    `#!python TaskProgress` is marked transient — it is delivered live to subscribers but **not** persisted to the stream's storage. Subscribe before the events fire to capture them. `#!python TaskStarted`, `#!python TaskCompleted`, `#!python TaskFailed`, and `#!python TaskExpired` are persisted normally.
+
+## Reading the Active Task with `#!python TaskInject`
+
+Inside an `#!python async with agent.task(...)` block, the framework stamps the active Task into `#!python context.dependencies["ag2.task"]`. Two ways to read it:
+
+### Direct access
+
+```python linenums="1"
+async with agent.task("work", context=ctx) as task:
+    active = ctx.dependencies["ag2.task"]
+    assert active is task
+```
+
+### `#!python TaskInject` annotation
+
+`#!python TaskInject` is a fast_depends-resolvable annotation that injects the active Task into any function the dependency-injection machinery resolves — most usefully a `#!python @tool` body.
+
+```python linenums="1" hl_lines="2 5"
+from ag2 import tool
+from ag2.task import TaskInject
+
+@tool
+async def report(message: str, task: TaskInject) -> str:
+    if task is None:
+        return "no active task"
+    await task.progress({"tool_message": message})
+    return f"reported on task {task.task_id}"
+```
+
+The injection has `#!python default=None`, so always treat `task` as possibly `#!python None` and null-check before use.
+
+## TTL and Expiry
+
+Setting `#!python ttl_seconds=N` populates `#!python metadata.expires_at` but **does not** start a timer. The Task primitive itself never self-expires — that's by design, so a standalone Task with no observer doesn't spawn a background task. Instead, an external observer (e.g. a network hub's TTL sweeper, a periodic watch) checks `#!python expires_at` and calls `#!python task.expire()` when due.
+
+For self-contained TTL behaviour, wire up a sweeper in your application:
+
+```python linenums="1" hl_lines="3 4"
+async def sweep(task: Task, deadline: datetime) -> None:
+    while task.state == TaskState.RUNNING:
+        if datetime.now(timezone.utc) >= deadline:
+            await task.expire()
+            return
+        await asyncio.sleep(1.0)
+```
+
+## TaskSpec and TaskMetadata
+
+Two small dataclasses surface around a Task:
+
+- `#!python TaskSpec` — what the task is doing: `title`, `description`, `payload`, optional `capability`. Created by `#!python Agent.task(...)`.
+- `#!python TaskMetadata` — mutable lifecycle record updated on each transition: `task_id`, `owner_id`, `spec`, `state`, ISO-8601 timestamps, `progress`, `result`, `error`, optional `session_id`.
+
+```python linenums="1"
+async with agent.task("survey", description="probe upstream", payload={"region": "us"}) as task:
+    print(task.metadata.spec.title)        # 'survey'
+    print(task.metadata.spec.payload)      # {'region': 'us'}
+    print(task.metadata.owner_id)          # 'researcher'
+    print(task.metadata.started_at)        # ISO 8601 string
+```

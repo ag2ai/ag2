@@ -32,7 +32,7 @@ ag2 proxy cli kubectl --subcommands "get pods,get services,logs,describe" --outp
 
 Generated:
 ```python
-from autogen.tools import tool
+from ag2.tools import tool
 import subprocess
 
 @tool(name="kubectl_get_pods", description="List Kubernetes pods")

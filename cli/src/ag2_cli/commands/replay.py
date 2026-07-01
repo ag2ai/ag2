@@ -384,7 +384,7 @@ def replay_branch(
       [command]ag2 replay branch 20260319-a1b2c3 --at 3 -m "Try a different approach"[/command]
     """
     try:
-        import autogen  # noqa: F401
+        import ag2  # noqa: F401
     except ImportError:
         console.print("[error]ag2 is not installed.[/error]")
         raise typer.Exit(1)

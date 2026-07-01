@@ -4,7 +4,7 @@
 
 ## Problem
 
-AG2 already has MCP server support (`python -m autogen.mcp`) and A2A integration,
+AG2 already has MCP server support (`python -m ag2.mcp`) and A2A integration,
 but they're buried in the library. There's no unified way to take an agent and
 make it available to external consumers.
 
@@ -94,7 +94,7 @@ This means any AG2 agent can be instantly used from:
 
 ### A2A Endpoint
 
-Wraps the agent using AG2's built-in `A2aAgentServer` from `autogen.a2a`.
+Wraps the agent using AG2's built-in `A2aAgentServer` from `ag2.a2a`.
 
 ```bash
 ag2 serve my_agent.py --protocol a2a --port 9000
@@ -165,7 +165,7 @@ The serve command builds a FastMCP server that wraps the agent:
 Requires the `mcp` pip package.
 
 ### A2A: Uses AG2's A2aAgentServer
-Wraps `ConversableAgent` instances using `autogen.a2a.A2aAgentServer`:
+Wraps `ConversableAgent` instances using `ag2.a2a.A2aAgentServer`:
 1. Single agent: `A2aAgentServer(agent, url=...).build()` served directly
 2. Multiple agents: each mounted as a Starlette `Mount` at `/<slug>/`
 

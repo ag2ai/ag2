@@ -74,43 +74,13 @@ plugins:
       separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   # - meta                         # (insiders) use .meta.yml files
   - redirects:
-      redirect_maps:
-        'docs/home/home.md': 'docs/quick-start.md'
-        'docs/home/quick-start.md': 'docs/quick-start.md'
-        'docs/home.md': 'docs/quick-start.md'
-        'docs/home/user.md': 'docs/quick-start.md'
-        'docs/user-guide/quick-start.md': 'docs/quick-start.md'
-        'docs/user-guide/models.md': 'docs/user-guide/models/amazon-bedrock.md'
-        'docs/user-guide/advanced-concepts/resuming-group-chat.md': 'docs/user-guide/advanced-concepts/orchestration/group-chat/introduction.md'
+      redirect_maps: {}
   - glightbox:                   # image zoom
       manual: true
   - macros:                      # Jinja templates
       include_dir: includes
       include_yaml:
         - people: data/people.yml
-  - mkdocstrings:                # Generate References
-      default_handler: python
-      handlers:
-        python:
-          inventories:
-          - https://docs.python.org/3/objects.inv
-          options:
-            filters:
-            - '!^_'
-            show_root_heading: true
-            show_if_no_docstring: true
-            inherited_members: true
-            members_order: source
-            separate_signature: true
-            unwrap_annotated: true
-            merge_init_into_class: true
-            docstring_section_style: spacy
-            signature_crossrefs: true
-            show_symbol_type_heading: true
-            show_symbol_type_toc: true
-            # show_docstring_attributes: false
-            # show_signature_annotations: true
-            # load_external_modules: true
   - git-revision-date-localized: # show page edition date
       enabled: !ENV [CI, false]
       type: timeago
@@ -125,16 +95,6 @@ plugins:
       cache_safe: true
       css_files:
         - stylesheets/extra.css
-  - mike:                        # versioning
-      alias_type: copy
-      redirect_template: templates/redirect.html
-      canonical_version: latest
-  - blog:
-      blog_dir: docs/blog
-      blog_toc: true
-
-hooks:
-  - create_api_docs.py
 
 markdown_extensions:
   - toc:
@@ -178,6 +138,3 @@ extra:
       link: https://www.youtube.com/@ag2ai
     - icon: fontawesome/brands/linkedin
       link: https://www.linkedin.com/company/ag2ai
-
-  version:
-    provider: mike

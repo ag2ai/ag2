@@ -1,4 +1,4 @@
-# AG2 Beta Development Guidelines
+# AG2 Development Guidelines
 
 ## AI-assisted contribution policy
 
@@ -8,27 +8,37 @@ Before opening a PR, read and follow `.github/AI_POLICY.md`.
 - Ensure the PR description explains the real problem or use case and accurately reflects the diff.
 - Include validation and testing information in the PR body.
 - Be prepared to explain and revise the contribution in response to reviewer questions.
+- Write the PR description using `.github/PULL_REQUEST_TEMPLATE.md`. Keep its section headings (`## Why are these changes needed?`, `## Related issue number`, `## Checks`, `## AI assistance`), fill each one in, and only check a checklist box once it is actually true.
 
-## Common rules
+## Architecture Decision Records (ADR)
+
+Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, sequentially numbered (`0001-*.md`, `0002-*.md`, …) with `status` / `date` frontmatter and a short Context / Decision / Consequences body.
+
+- **Consult them before changing established public API or architecture.** They explain *why* something is the way it is — e.g. `0003-eval-run-api-takes-agent-instances.md` records that the eval `run_*` API takes prebuilt `Agent` instances (not factories) and explicitly-built `Suite`s. If a change contradicts an ADR, supersede it rather than silently reverting the code.
+- **Add one when a decision qualifies**: it is hard to reverse, surprising without context (a reader would assume the opposite), and the result of a real trade-off. Scan `docs/adr/` for the highest number and increment. Keep it short — recording *that* a decision was made and *why* is the value.
+
+## Code Style Guidelines
 
 - Do not use `from __future__ import annotations`.
 - Do not use global variables or top-level side-effect function calls unless the user explicitly allows it.
 - For filesystem paths, use `pathlib.Path` internally. Public signatures should accept `str | os.PathLike[str]`.
-- Top-level imports from `autogen.beta.*` are for common APIs that are broadly reusable across scenarios and core agent flows.
-  Good: `autogen.beta.[Input]` — common structures usable in `await agent.ask(Input())` and as tool results.
-  Bad: `autogen.beta.middleware.BaseMiddleware` — this is advanced/specialized and should be imported only when implementing custom middleware.
+- Top-level imports from `ag2.*` are for common APIs that are broadly reusable across scenarios and core agent flows.
+  Good: `ag2.[Input]` — common structures usable in `await agent.ask(Input())` and as tool results.
+  Bad: `ag2.middleware.BaseMiddleware` — this is advanced/specialized and should be imported only when implementing custom middleware.
 - Do not use function-level imports unless the user explicitly allows it.
   ```python
   # === BAD - import inside function ===
   def execute_tool():
       from .tool import Tool
+
       ...
+
 
   # === GOOD - top-level import ===
   from .tool import Tool
 
-  def execute_tool():
-      ...
+
+  def execute_tool(): ...
   ```
 - Do not create nested functions inside runtime execution paths.
   ```python
@@ -39,17 +49,21 @@ Before opening a PR, read and follow `.github/AI_POLICY.md`.
 
       _inner_function()
 
+
   # === GOOD - function created once, executed each call ===
   def execute_tool():
       _inner_function()
 
+
   def _inner_function():
       pass
+
 
   # === GOOD - decorator executed import time, so we can use closure functions here ===
   def decorator(func):
       def wrapper():
           return func()
+
       return wrapper
   ```
 - Do not perform side effects in initialization methods. Apply side effects only at runtime.
@@ -61,8 +75,8 @@ Before opening a PR, read and follow `.github/AI_POLICY.md`.
           # side effect - directory creation
           self.path.parent.mkdir(parents=True, exist_ok=True)
 
-      def run(self) -> None:
-          ...
+      def run(self) -> None: ...
+
 
   # === GOOD - create directory in runtime method ===
   class KnowledgeStore:
@@ -76,7 +90,7 @@ Before opening a PR, read and follow `.github/AI_POLICY.md`.
 
 ## Package Structure
 
-`autogen/beta/` is a protocol-driven async agent framework. Key modules:
+`ag2/` is a protocol-driven async agent framework. Key modules:
 
 | Module | Purpose | Key Exports |
 |--------|---------|-------------|
@@ -95,32 +109,32 @@ Before opening a PR, read and follow `.github/AI_POLICY.md`.
 | `hitl.py` | Human-in-the-loop hooks | — |
 | `streams/` | Persistent stream backends (e.g. Redis) | — |
 
-### Public API (`autogen.beta`)
+### Public API (`ag2`)
 
 Top-level modules:
-- `autogen.beta` - top-level module with most basic functionality
-- `autogen.beta.types` - Type aliases and constants
-- `autogen.beta.config` - LLM provider clients (see [below](#llm-provider-clients))
-- `autogen.beta.tools` - Tool system — builtin + user-defined (see [below](#builtin-tools))
-- `autogen.beta.tools.subagents` - Agent-to-agent delegation (see [below](#subagent-delegation))
-- `autogen.beta.testing` - Testing utilities
-- `autogen.beta.middleware` - Request/response interception (see [below](#middleware))
-- `autogen.beta.observer` - Reusable observer implementations
-- `autogen.beta.eval` - Offline evaluation framework (datasets, scorers, runner, persistence)
+- `ag2` - top-level module with most basic functionality
+- `ag2.types` - Type aliases and constants
+- `ag2.config` - LLM provider clients (see [below](#llm-provider-clients))
+- `ag2.tools` - Tool system — builtin + user-defined (see [below](#builtin-tools))
+- `ag2.tools.subagents` - Agent-to-agent delegation (see [below](#subagent-delegation))
+- `ag2.testing` - Testing utilities
+- `ag2.middleware` - Request/response interception (see [below](#middleware))
+- `ag2.observer` - Reusable observer implementations
+- `ag2.eval` - Offline evaluation framework (datasets, scorers, runner, persistence)
 
 Advanced modules:
-- `autogen.beta.events` - Event types for the agent loop
-- `autogen.beta.streams` - Persistent stream backends (e.g. Redis)
-- `autogen.beta.watch` - Watch system for triggering observers
-- `autogen.beta.knowledge` - Knowledge management
-- `autogen.beta.plugin` - Plugin system
+- `ag2.events` - Event types for the agent loop
+- `ag2.streams` - Persistent stream backends (e.g. Redis)
+- `ag2.watch` - Watch system for triggering observers
+- `ag2.knowledge` - Knowledge management
+- `ag2.plugin` - Plugin system
 
 ### Re-export rules
 
-All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires third-party dependencies, wrap the import in a `try/except ImportError` block and register a missing-dependency fallback so users get a clear install hint instead of an unexplained `ImportError` (see `autogen/beta/config/__init__.py`, `autogen/beta/middleware/builtin/__init__.py` as the reference pattern). Two fallbacks exist:
+All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires third-party dependencies, wrap the import in a `try/except ImportError` block and register a missing-dependency fallback so users get a clear install hint instead of an unexplained `ImportError` (see `ag2/config/__init__.py`, `ag2/middleware/builtin/__init__.py` as the reference pattern). Two fallbacks exist:
 
 - **Core modules** use **optional dependencies** shipped as pyproject extras — fall back via `missing_optional_dependency`, which hints `pip install "ag2[<extra>]"`.
-- **Extensions** (`autogen/beta/extensions/`) are **not** shipped as extras — declare their third-party packages as **additional dependencies** and fall back via `missing_additional_dependency`, which hints the upstream package directly (e.g. `pip install "daytona>=0.171.0,<1"`).
+- **Extensions** (`ag2/extensions/`) are **not** shipped as extras — declare their third-party packages as **additional dependencies** and fall back via `missing_additional_dependency`, which hints the upstream package directly (e.g. `pip install "daytona>=0.171.0,<1"`).
 
 ### Design principles
 
@@ -131,7 +145,7 @@ All implementations must be re-exported from their public module's `__init__.py`
 
 ## Builtin Tools
 
-Builtin tools live in `autogen/beta/tools/builtin/`. Each tool has:
+Builtin tools live in `ag2/tools/builtin/`. Each tool has:
 - A `ToolSchema` dataclass (provider-neutral capability flag)
 - A `Tool` class (constructs the schema, resolves Variables)
 
@@ -140,20 +154,20 @@ Builtin tools live in `autogen/beta/tools/builtin/`. Each tool has:
 - Use `version` as the public parameter name on Tool constructors for provider-versioned tools (e.g., `WebSearchTool(version="web_search_20260209")`). The schema field may use a more specific name internally (e.g., `web_search_version`) — the Tool maps between them.
 - Tool constructor parameters that accept runtime values must also accept `Variable` for deferred context resolution (e.g., `max_uses: int | Variable | None`).
 - Tools with no configurable parameters (e.g., `MemoryTool`, `CodeExecutionTool`) should still accept a `version` keyword argument to allow version pinning.
-- Provider mappers in `autogen/beta/config/{provider}/mappers.py` convert `ToolSchema` instances to provider-specific API dicts. Use `t.version` instead of hardcoding version strings.
+- Provider mappers in `ag2/config/{provider}/mappers.py` convert `ToolSchema` instances to provider-specific API dicts. Use `t.version` instead of hardcoding version strings.
 
 ### Adding a New Builtin Tool
 
-1. Create `autogen/beta/tools/builtin/{tool_name}.py` with a `ToolSchema` dataclass and `Tool` class.
+1. Create `ag2/tools/builtin/{tool_name}.py` with a `ToolSchema` dataclass and `Tool` class.
 2. Add mapper handling in every provider's mapper:
    - Supported: add an `elif isinstance(t, YourToolSchema)` branch returning the provider-specific dict.
    - Unsupported: the existing fallback `raise UnsupportedToolError(t.type, "provider")` handles it.
 3. Add tests for every provider (see test guidelines below).
-4. If the tool accepts `Variable` parameters, add 2 tests to `test/beta/tools/test_resolve.py`: one resolving from context, one raising `KeyError` on missing.
+4. If the tool accepts `Variable` parameters, add 2 tests to `test/tools/test_resolve.py`: one resolving from context, one raising `KeyError` on missing.
 
 ## Subagent Delegation
 
-Subagent tools live in `autogen/beta/tools/subagents/` and are imported from `autogen.beta.tools.subagents` (not re-exported from `autogen.beta.tools`).
+Subagent tools live in `ag2/tools/subagents/` and are imported from `ag2.tools.subagents` (not re-exported from `ag2.tools`).
 
 | File | Purpose |
 |------|---------|
@@ -196,7 +210,7 @@ agent.as_tool(description="...", stream=persistent_stream())
 
 ## LLM Provider Clients
 
-Provider clients live in `autogen/beta/config/{provider}/`. Each provider has at least three files:
+Provider clients live in `ag2/config/{provider}/`. Each provider has at least three files:
 - `config.py` — a `@dataclass(slots=True)` implementing the `ModelConfig` protocol
 - `{provider}_client.py` — a concrete class satisfying the `LLMClient` protocol (async `__call__`)
 - `mappers.py` — pure functions for converting messages, tools, response schemas, and usage between internal and provider-specific formats
@@ -217,7 +231,7 @@ Provider clients live in `autogen/beta/config/{provider}/`. Each provider has at
 
 ### Adding a new provider
 
-1. Create `autogen/beta/config/{provider}/` with `config.py`, `{provider}_client.py`, and `mappers.py`.
-2. Register the config in `autogen/beta/config/__init__.py`: import inside a `try/except ImportError` block and add a `_missing_optional_dependency_config` fallback.
+1. Create `ag2/config/{provider}/` with `config.py`, `{provider}_client.py`, and `mappers.py`.
+2. Register the config in `ag2/config/__init__.py`: import inside a `try/except ImportError` block and add a `_missing_optional_dependency_config` fallback.
 3. Add the config to `__all__`.
-4. Add mapper tests under `test/beta/config/{provider}/`
+4. Add mapper tests under `test/config/{provider}/`

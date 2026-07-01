@@ -141,7 +141,7 @@ def _build_a2a_app(discovered: Any, port: int) -> Any:
     as A2A-compatible HTTP endpoints.
     """
     try:
-        from autogen.a2a import A2aAgentServer
+        from ag2.a2a import A2aAgentServer
     except ImportError:
         console.print("[error]A2A support is required.[/error]")
         console.print("Install with: [command]pip install 'ag2\\[a2a]'[/command]")

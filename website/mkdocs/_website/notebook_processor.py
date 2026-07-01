@@ -22,7 +22,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, TypeVar
 
-from autogen.import_utils import optional_import_block, require_optional_import
+from ag2._import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import nbformat

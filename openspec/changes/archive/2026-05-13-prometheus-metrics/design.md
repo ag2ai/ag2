@@ -61,12 +61,10 @@ To ensure type safety, `ModelConfig` protocol will expose `provider` and `model`
 ```python
 class ModelConfig(Protocol):
     @property
-    def provider(self) -> str:
-        ...
+    def provider(self) -> str: ...
 
     @property
-    def model(self) -> str:
-        ...
+    def model(self) -> str: ...
 ```
 
 Each `ModelConfig` implementation must provide these properties, ensuring that mypy will report an error if a new config implementation is added without implementing them.

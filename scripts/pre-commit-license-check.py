@@ -136,7 +136,7 @@ def check_file_header(file_path: Path) -> list[str]:
 
 def get_files_to_check() -> list[Path]:
     """Determine which files to check based on environment."""
-    return list(Path("autogen").rglob("*.py")) + list(Path("test").rglob("*.py"))
+    return list(Path("ag2").rglob("*.py")) + list(Path("test").rglob("*.py"))
     # try:
     #     if "--all-files" in sys.argv:
     #         return list(Path().rglob("*.py"))
