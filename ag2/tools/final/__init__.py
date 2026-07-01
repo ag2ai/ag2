@@ -3,11 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .client_tool import ClientTool
-from .function_tool import FunctionDefinition, FunctionParameters, FunctionTool, FunctionToolSchema, tool
+from .function_tool import (
+    DeferredFunctionToolSchema,
+    FunctionDefinition,
+    FunctionParameters,
+    FunctionTool,
+    FunctionToolSchema,
+    tool,
+)
 from .toolkit import Toolkit
 
 __all__ = (
     "ClientTool",
+    "DeferredFunctionToolSchema",
     "FunctionDefinition",
     "FunctionParameters",
     "FunctionTool",

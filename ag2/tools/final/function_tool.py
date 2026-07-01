@@ -42,6 +42,11 @@ class FunctionToolSchema(ToolSchema):
         return cls(function=FunctionDefinition(**func_data))
 
 
+@dataclass(slots=True)
+class DeferredFunctionToolSchema(FunctionToolSchema):
+    defer_loading: bool = field(default=True, init=False)
+
+
 class FunctionTool(Tool):
     __slots__ = (
         "model",

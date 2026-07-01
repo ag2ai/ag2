@@ -6,7 +6,8 @@ import pytest
 
 from ag2.config.openai.mappers import tool_to_api, tool_to_responses_api
 from ag2.exceptions import UnsupportedToolError
-from ag2.tools.builtin.tool_search import DeferredFunctionToolSchema, ToolSearchToolSchema
+from ag2.tools.builtin.tool_search import ToolSearchToolSchema
+from ag2.tools.final import DeferredFunctionToolSchema
 from ag2.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
 
 

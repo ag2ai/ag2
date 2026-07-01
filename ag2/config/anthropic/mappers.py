@@ -38,10 +38,10 @@ from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.memory import MemoryToolSchema
 from ag2.tools.builtin.shell import ShellToolSchema
 from ag2.tools.builtin.skills import SkillsToolSchema
-from ag2.tools.builtin.tool_search import DeferredFunctionToolSchema, ToolSearchToolSchema
+from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_fetch import WebFetchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
-from ag2.tools.final import FunctionToolSchema
+from ag2.tools.final import DeferredFunctionToolSchema, FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 

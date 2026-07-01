@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from ag2.config.anthropic.mappers import tool_to_api
-from ag2.tools.builtin.tool_search import DeferredFunctionToolSchema, ToolSearchToolSchema
+from ag2.tools.builtin.tool_search import ToolSearchToolSchema
+from ag2.tools.final import DeferredFunctionToolSchema
 from ag2.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
 
 

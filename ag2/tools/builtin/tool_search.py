@@ -11,7 +11,7 @@ from ag2.annotations import Context
 from ag2.events import BuiltinToolCallEvent, ToolCallEvent
 from ag2.exceptions import ToolConflictError
 from ag2.middleware import BaseMiddleware
-from ag2.tools.final.function_tool import FunctionTool, FunctionToolSchema
+from ag2.tools.final.function_tool import DeferredFunctionToolSchema, FunctionTool, FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 from ag2.tools.tool import Tool
 
@@ -22,11 +22,6 @@ TOOL_SEARCH_TOOL_NAME = "tool_search"
 class ToolSearchToolSchema(ToolSchema):
     type: str = field(default=TOOL_SEARCH_TOOL_NAME, init=False)
     mode: Literal["regex", "bm25"] = "regex"
-
-
-@dataclass(slots=True)
-class DeferredFunctionToolSchema(FunctionToolSchema):
-    defer_loading: bool = field(default=True, init=False)
 
 
 class ToolSearchTool(Tool):

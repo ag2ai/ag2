@@ -7,7 +7,8 @@ import pytest
 from ag2.exceptions import ToolConflictError
 from ag2.tools import tool
 from ag2.tools.builtin import ToolSearchTool
-from ag2.tools.builtin.tool_search import TOOL_SEARCH_TOOL_NAME, DeferredFunctionToolSchema, ToolSearchToolSchema
+from ag2.tools.builtin.tool_search import TOOL_SEARCH_TOOL_NAME, ToolSearchToolSchema
+from ag2.tools.final import DeferredFunctionToolSchema
 
 
 @tool
