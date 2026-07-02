@@ -4,7 +4,6 @@
 
 from .client_tool import ClientTool
 from .function_tool import (
-    DeferredFunctionToolSchema,
     FunctionDefinition,
     FunctionParameters,
     FunctionTool,
@@ -15,7 +14,6 @@ from .toolkit import Toolkit
 
 __all__ = (
     "ClientTool",
-    "DeferredFunctionToolSchema",
     "FunctionDefinition",
     "FunctionParameters",
     "FunctionTool",

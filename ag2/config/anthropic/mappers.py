@@ -41,7 +41,7 @@ from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_fetch import WebFetchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
-from ag2.tools.final import DeferredFunctionToolSchema, FunctionToolSchema
+from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 
@@ -108,7 +108,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             "description": t.function.description,
             "input_schema": _ensure_object_schema(t.function.parameters),
         }
-        if isinstance(t, DeferredFunctionToolSchema):
+        if t.defer_loading:
             fn_tool["defer_loading"] = True
         return fn_tool
 

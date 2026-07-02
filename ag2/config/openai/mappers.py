@@ -39,7 +39,7 @@ from ag2.tools.builtin.shell import (
 from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
-from ag2.tools.final import DeferredFunctionToolSchema, FunctionToolSchema
+from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 
@@ -384,7 +384,7 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     """Chat Completions API tool format."""
     if isinstance(t, FunctionToolSchema):
-        if isinstance(t, DeferredFunctionToolSchema):
+        if t.defer_loading:
             # Tool search / deferred loading is a Responses-API feature; the
             # Chat Completions API has no way to load deferred tools. Fail fast
             # instead of silently sending the tool eagerly (which would defeat
@@ -411,7 +411,7 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             "description": t.function.description,
             "parameters": _ensure_object_schema(t.function.parameters),
         }
-        if isinstance(t, DeferredFunctionToolSchema):
+        if t.defer_loading:
             fn_tool["defer_loading"] = True
         return fn_tool
 

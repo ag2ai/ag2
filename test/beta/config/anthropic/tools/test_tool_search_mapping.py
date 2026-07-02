@@ -4,13 +4,13 @@
 
 from ag2.config.anthropic.mappers import tool_to_api
 from ag2.tools.builtin.tool_search import ToolSearchToolSchema
-from ag2.tools.final import DeferredFunctionToolSchema
 from ag2.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
 
 
 def test_deferred_function_emits_defer_loading():
-    schema = DeferredFunctionToolSchema(
+    schema = FunctionToolSchema(
         function=FunctionDefinition(name="get_weather", description="d", parameters={"type": "object"}),
+        defer_loading=True,
     )
     result = tool_to_api(schema)
     assert result["name"] == "get_weather"

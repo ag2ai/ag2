@@ -11,7 +11,7 @@ from ag2.annotations import Context
 from ag2.events import BuiltinToolCallEvent, ToolCallEvent
 from ag2.exceptions import ToolConflictError
 from ag2.middleware import BaseMiddleware
-from ag2.tools.final.function_tool import DeferredFunctionToolSchema, FunctionTool, FunctionToolSchema
+from ag2.tools.final.function_tool import FunctionTool, FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 from ag2.tools.tool import Tool
 
@@ -72,7 +72,9 @@ class ToolSearchTool(Tool):
         for t in self._tools.values():
             for s in await t.schemas(context):
                 schemas.append(
-                    DeferredFunctionToolSchema(function=s.function) if isinstance(s, FunctionToolSchema) else s
+                    FunctionToolSchema(function=s.function, defer_loading=True)
+                    if isinstance(s, FunctionToolSchema)
+                    else s
                 )
         return schemas
 

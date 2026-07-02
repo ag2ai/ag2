@@ -14,8 +14,8 @@ def get_weather(location: str) -> str:
     return location
 
 
-def test_plain_tool_has_no_defer_loading_flag():
-    assert not hasattr(get_weather.schema, "defer_loading")
+def test_plain_tool_has_defer_loading_false():
+    assert get_weather.schema.defer_loading is False
 
 
 @pytest.mark.asyncio
@@ -29,4 +29,4 @@ async def test_wrapping_in_tool_search_defers_the_tool():
 async def test_wrapping_does_not_mutate_the_original_schema():
     await ToolSearchTool(get_weather).schemas(context=None)
     # the source tool's own schema stays eager — only the emitted copy is deferred
-    assert not hasattr(get_weather.schema, "defer_loading")
+    assert get_weather.schema.defer_loading is False
