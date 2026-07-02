@@ -40,7 +40,7 @@ class FunctionToolSchema(ToolSchema):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FunctionToolSchema":
         func_data = data.get("function", {})
-        return cls(function=FunctionDefinition(**func_data))
+        return cls(function=FunctionDefinition(**func_data), defer_loading=data.get("defer_loading", False))
 
 
 class FunctionTool(Tool):
