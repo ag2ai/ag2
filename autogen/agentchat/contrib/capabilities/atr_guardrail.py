@@ -15,15 +15,26 @@ is not installed.
 
 Usage::
 
-    from autogen import AssistantAgent
+    from autogen import AssistantAgent, UserProxyAgent
     from autogen.agentchat.contrib.capabilities.atr_guardrail import ATRGuardrail
 
-    agent = AssistantAgent(name="assistant", llm_config=llm_config)
-    ATRGuardrail(action="warn", min_severity="medium").add_to_agent(agent)
+    assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+    user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+
+    guardrail = ATRGuardrail(action="warn", min_severity="medium")
+    guardrail.add_to_agent(assistant)  # scans messages before each LLM call
+    guardrail.add_to_agent(user_proxy)  # scans tool outputs on the executor
+
+Note that the ``safeguard_tool_outputs`` hook runs on the agent that *executes*
+a tool. In the common caller/executor split
+(``register_function(..., caller=assistant, executor=user_proxy)``) tool
+outputs are only scanned if the capability is added to the executor agent, so
+add it to both agents as shown above.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections.abc import Callable
@@ -89,16 +100,23 @@ class ATRGuardrail(AgentCapability):
 
     Subscribes to two ``ConversableAgent`` hookable methods:
 
-    - ``safeguard_tool_outputs`` -- invoked after every tool/function call; the
-      serialised tool response is evaluated as an ATR ``tool_response`` event.
+    - ``safeguard_tool_outputs`` -- invoked after each (synchronous) tool call
+      *executed by the agent this capability is added to*; the serialised tool
+      response is evaluated as an ATR ``tool_response`` event. In the common
+      caller/executor split the executor agent runs the tools, so add the
+      capability to the executor (or both agents) for tool outputs to be
+      scanned.
     - ``safeguard_llm_inputs`` -- invoked before sending messages to the LLM;
-      the most recent message content is evaluated as an ATR ``llm_input``
-      event.
+      every message in the outgoing payload (system messages excluded) is
+      evaluated as an ATR ``llm_input`` event. Verdicts are cached per unique
+      message content, so history is only scanned once.
 
     Matches are recorded on ``self.matches`` and forwarded to the optional
     ``on_match`` callback. In ``action="block"`` mode a match on
     ``safeguard_llm_inputs`` returns ``None`` so the core hook chain halts the
-    send; tool outputs are not blocked (they have already executed) but the
+    send; because flagged content is remembered, the send stays blocked on
+    subsequent turns while the flagged message remains in the conversation
+    history. Tool outputs are not blocked (they have already executed) but the
     matched content is redacted.
     """
 
@@ -133,11 +151,19 @@ class ATRGuardrail(AgentCapability):
         self._on_match = on_match
         self._engine = engine if engine is not None else _build_engine(rules_dir)
         self.matches: list[ATRMatch] = []
+        # Per-content scan verdicts (True = flagged) so conversation history is
+        # only evaluated once, and a flagged message keeps blocking later sends.
+        self._llm_input_verdicts: dict[str, bool] = {}
 
     # ------------------------------------------------------------- capability
 
     def add_to_agent(self, agent: ConversableAgent) -> None:
-        """Register the guardrail's hooks on the given agent."""
+        """Register the guardrail's hooks on the given agent.
+
+        The ``safeguard_tool_outputs`` hook only fires for tools *executed by*
+        ``agent``. When tool calling is split across a caller and an executor
+        agent, call this once per agent so both surfaces are covered.
+        """
         agent.register_hook(hookable_method="safeguard_tool_outputs", hook=self._on_tool_output)
         agent.register_hook(hookable_method="safeguard_llm_inputs", hook=self._on_llm_input)
 
@@ -159,16 +185,33 @@ class ATRGuardrail(AgentCapability):
         return response
 
     def _on_llm_input(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
-        """Scan the most recent LLM input message. Returns ``None`` in ``block``
-        mode on match (halting the send), otherwise the original list."""
+        """Scan every message in the outgoing LLM payload. Returns ``None`` in
+        ``block`` mode when any message is flagged (halting the send), otherwise
+        the original list.
+
+        System messages are skipped: they are authored by the application, and
+        security-minded prompts routinely quote the very phrases the rules
+        detect. Scan verdicts are cached per unique content, so each message is
+        evaluated once even though the full history is passed on every call --
+        and a message flagged in an earlier turn keeps blocking the send while
+        it remains in the history.
+        """
         if self._engine is None or not messages:
             return messages
-        last = messages[-1]
-        text = self._stringify(last.get("content"))
-        match = self._scan(text, hook="llm_input")
-        if match is None:
-            return messages
-        if self.action == "block":
+        flagged = False
+        for message in messages:
+            if message.get("role") == "system":
+                continue
+            text = self._stringify(message.get("content"))
+            if not text:
+                continue
+            key = hashlib.sha256(text.encode("utf-8", "surrogatepass")).hexdigest()
+            verdict = self._llm_input_verdicts.get(key)
+            if verdict is None:
+                verdict = self._scan(text, hook="llm_input") is not None
+                self._llm_input_verdicts[key] = verdict
+            flagged = flagged or verdict
+        if flagged and self.action == "block":
             return None
         return messages
 
