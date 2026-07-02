@@ -26,12 +26,12 @@ exclude = ["test", "notebook"]
 [project.urls]
 Homepage = "https://ag2.ai/"
 Documentation = "https://docs.ag2.ai"
-Tracker = "https://github.com/ag2ai/ag2/issues"
-Source = "https://github.com/ag2ai/ag2"
+Tracker = "https://github.com/ag2ai/ag2classic/issues"
+Source = "https://github.com/ag2ai/ag2classic"
 Discord = "https://discord.gg/pAbnFJrkgZ"
 
 [project]
-name = "ag2"
+name = "autogen"
 description = "A programming framework for agentic AI"
 readme = "README.md"
 license = "Apache-2.0"
@@ -94,9 +94,9 @@ diskcache = ["diskcache"]
 
 # providers
 openai = ["openai>=2.44.0,<3.0"]
-openai-realtime = ["ag2[openai]", "openai[realtime]"]
+openai-realtime = ["autogen[openai]", "openai[realtime]"]
 
-deepseek = ["ag2[openai]"]
+deepseek = ["autogen[openai]"]
 
 anthropic = ["anthropic[vertex]>=0.79.0,<1"]
 
@@ -112,8 +112,8 @@ gemini = [
     "jsonschema",
 ]
 gemini-realtime = [
-    "ag2[gemini]",
-    "ag2[websockets]",
+    "autogen[gemini]",
+    "autogen[websockets]",
     # Bidirectional Live API: input/output audio transcription stabilized in 1.67.0;
     # 1.75.0 is the latest 1.x and the version the live module is tested against.
     "google-genai>=1.75.0,<3.0",
@@ -156,7 +156,7 @@ jupyter-executor = [
     "requests",
     "jupyter-client>=8.6.0",
     "ipykernel>=6.29.0",
-    "ag2[docker]",
+    "autogen[docker]",
 ]
 
 retrievechat = [
@@ -170,17 +170,17 @@ retrievechat = [
 ]
 
 retrievechat-pgvector = [
-    "ag2[retrievechat]",
+    "autogen[retrievechat]",
     "pgvector>=0.2.5",
     "psycopg[binary]>=3.1.18; platform_system=='Windows' or platform_system=='Darwin'",
     "psycopg>=3.1.18; platform_system=='Linux'",
 ]
 
-retrievechat-mongodb = ["ag2[retrievechat]", "pymongo>=4.0.0", "numpy"]
+retrievechat-mongodb = ["autogen[retrievechat]", "pymongo>=4.0.0", "numpy"]
 
-retrievechat-qdrant = ["ag2[retrievechat]", "qdrant_client", "fastembed>=0.3.1"]
+retrievechat-qdrant = ["autogen[retrievechat]", "qdrant_client", "fastembed>=0.3.1"]
 
-retrievechat-couchbase = ["ag2[retrievechat]", "couchbase>=4.3.0", "numpy"]
+retrievechat-couchbase = ["autogen[retrievechat]", "couchbase>=4.3.0", "numpy"]
 
 graph-rag-falkor-db = ["graphrag_sdk==1.3.0", "falkordb>=1.0.10"]
 
@@ -219,12 +219,12 @@ browser-use = [
 google-client = ["google-api-python-client>=2.163.0,<3.0"]
 
 google-api = [
-    "ag2[google-client]",
+    "autogen[google-client]",
     "google-auth-httplib2>=0.2.0,<0.5",
     "google-auth-oauthlib>=1.2.1,<2.0",
 ]
 
-google-search = ["ag2[google-client]"]
+google-search = ["autogen[google-client]"]
 
 wikipedia = ["wikipedia-api>=0.8.1, <1.0"]
 
@@ -252,7 +252,7 @@ mcp-proxy-gen = [
 
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai-slim>=1.0.12,<1.108", "fasta2a"]
-interop = ["ag2[interop-langchain, interop-pydantic-ai]"]
+interop = ["autogen[interop-langchain, interop-pydantic-ai]"]
 
 autobuild = [
     "chromadb>=1.4.1,<1.6",
@@ -262,7 +262,7 @@ autobuild = [
 
 blendsearch = ["flaml[blendsearch]"]
 mathchat = ["sympy", "wolframalpha"]
-captainagent = ["ag2[autobuild]", "pandas"]
+captainagent = ["autogen[autobuild]", "pandas"]
 teachable = ["chromadb"]
 lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
@@ -272,12 +272,12 @@ websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
 atr-guardrail = ["pyatr>=0.2.6"]
 websockets = ["websockets>=14.0,<17"]
-network-ws = ["ag2[websockets]"]
+network-ws = ["autogen[websockets]"]
 watchdog = ["watchdog>=4.0,<7"]
 long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = ["yepcode-run>=1.6.1; python_version>='3.11'", "python-dotenv"]
-remyx = ["remyxai>=0.2.0", "ag2[docker]"]
+remyx = ["remyxai>=0.2.0", "autogen[docker]"]
 cohere = ["cohere>=5.13.5"]
 
 commsagent-discord = ["discord.py>=2.4.0,<2.8"]
@@ -304,9 +304,9 @@ test-core = [
 ]
 
 test = [
-    "ag2[test-core]",
-    "ag2[docker]",
-    "ag2[mcp]",
+    "autogen[test-core]",
+    "autogen[docker]",
+    "autogen[mcp]",
     "ipykernel==7.3.0",
     "nbconvert==7.17.1",
     "nbformat==5.10.4",
@@ -318,24 +318,24 @@ test = [
 ]
 
 docs = [
-    "ag2[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` module
-    "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
-    "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
+    "autogen[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` module
+    "autogen[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
+    "autogen[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
     # Beta extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.2.3; python_version>='3.11'",
     "daytona>=0.171.0,<1",
     "exa-py>=2.12.1,<3",
-    "ag2[docker]",                     # Code execution tools are exposed in the public API by the optional `autogen.tools` module
+    "autogen[docker]",                     # Code execution tools are exposed in the public API by the optional `autogen.tools` module
     # Beta optional dependencies
-    "ag2[openai]",                     # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[anthropic]",                  # Anthropic is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[gemini]",                     # Gemini is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[ollama]",                     # Ollama is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[dashscope]",                  # DashScope is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[xai]",                        # xAI is exposed in the public API by the optional `autogen.beta.config` module
-    "ag2[redis]",                      # Redis is exposed in the public API by the optional `autogen.beta.streams` module
-    "ag2[watchdog]",                   # Watchdog is exposed in the public API by the optional `autogen.beta.knowledge` module
-    "ag2[tavily,ddgs,perplexity]",     # Search tools are exposed by optional beta search modules
+    "autogen[openai]",                     # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
+    "autogen[anthropic]",                  # Anthropic is exposed in the public API by the optional `autogen.beta.config` module
+    "autogen[gemini]",                     # Gemini is exposed in the public API by the optional `autogen.beta.config` module
+    "autogen[ollama]",                     # Ollama is exposed in the public API by the optional `autogen.beta.config` module
+    "autogen[dashscope]",                  # DashScope is exposed in the public API by the optional `autogen.beta.config` module
+    "autogen[xai]",                        # xAI is exposed in the public API by the optional `autogen.beta.config` module
+    "autogen[redis]",                      # Redis is exposed in the public API by the optional `autogen.beta.streams` module
+    "autogen[watchdog]",                   # Watchdog is exposed in the public API by the optional `autogen.beta.knowledge` module
+    "autogen[tavily,ddgs,perplexity]",     # Search tools are exposed by optional beta search modules
     "mkdocs-material==9.7.6",
     "mkdocs-literate-nav==0.6.3",
     "mdx-include==1.4.2",
@@ -365,60 +365,17 @@ types = [
     "types-requests",
     "types-ujson",
     "types-aiofiles",
-    "ag2[test, openai, a2a, ag-ui]",
+    "autogen[test, openai, a2a, ag-ui]",
 ]
 
 lint = ["ruff==0.14.14", "codespell==2.4.2", "zizmor==1.25.2"]
 
 dev = [
     "toml==0.10.2",
-    "ag2[lint,test,types,docs]",
+    "autogen[lint,test,types,docs]",
     "prek==0.4.5",
     "detect-secrets==1.5.0",
     "uv==0.11.21",
-]
-
-[dependency-groups]
-# Beta groups
-optionals = [
-    "ag2[redis]",
-    "ag2[ag-ui]",
-    "ag2[mcp]", # autogen.beta.mcp — serve an Agent as an MCP server
-    "ag2[tracing]",
-    "ag2[watchdog]", # DiskKnowledgeStore
-    # code execution
-    "ag2[docker]",
-    # search tools
-    "ag2[tavily,ddgs,perplexity]",
-    # beta extensions are not shipped as extras; install their packages directly for testing
-    "daytona>=0.171.0,<1",
-    "tinyfish>=0.2.3; python_version>='3.11'",
-    "exa-py>=2.12.1,<3",
-    # providers
-    "ag2[openai]",
-    "ag2[anthropic]",
-    "ag2[bedrock]",
-    "ag2[gemini]",
-    "ag2[ollama]",
-    "ag2[dashscope]",
-    "ag2[xai]",
-    "ag2[zai]",
-]
-
-testing = [
-    "ag2[test-core]",
-    "starlette",             # AG-UI tests require starlette
-    "respx>=0.23.0,<0.24.0", # search tests
-]
-
-lint = ["ag2[lint]"]
-
-dev = [
-    { include-group = "optionals" },
-    { include-group = "lint" },
-    { include-group = "testing" },
-    "prek==0.4.5",
-    "detect-secrets==1.5.0",
 ]
 
 [tool.pytest.ini_options]

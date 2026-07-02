@@ -695,3 +695,58 @@ height: 100%;
 border: 0;
 }
 /* User Story Page Ends */
+
+/* Reserve space for the sidebar scrollbar so classic (non-overlay) scrollbars
+   don't paint over the navigation/content. Only applies at the desktop
+   breakpoint where the sidebars are shown. */
+@media screen and (min-width: 76.25em) {
+    .md-sidebar__scrollwrap {
+        scrollbar-gutter: stable;
+    }
+}
+
+/* Classic maintenance notice — a thin strip inside the header, sitting
+   between the top row (.md-header__inner) and the navigation tabs (.md-tabs). */
+.md-header .classic-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.8rem;
+    text-align: center;
+    background-color: rgba(0, 0, 0, 0.28);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.66rem;
+    line-height: 1.4;
+}
+
+.md-header .classic-banner__text {
+    max-width: 72rem;
+}
+
+.md-header .classic-banner__icon {
+    margin-right: 0.35em;
+}
+
+.md-header .classic-banner code {
+    background-color: rgba(255, 255, 255, 0.16);
+    color: #ffe9a8;
+    padding: 0.05em 0.35em;
+    border-radius: 0.25em;
+    font-size: 0.92em;
+}
+
+.md-header .classic-banner a {
+    color: #9fd4ff;
+    font-weight: 700;
+    text-decoration: underline;
+}
+
+.md-header .classic-banner a:hover {
+    color: #c4e6ff;
+}
+
+/* Hide the GitHub stars/forks "facts" next to the repo name in the header. */
+.md-source__facts {
+    display: none;
+}

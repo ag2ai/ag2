@@ -80,7 +80,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: teachable, ${{ matrix.python-version }}, ${{ matrix.os }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
   AgentBuilder:
@@ -147,7 +147,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: autobuild, captainagent, ${{ matrix.python-version }}, ${{ matrix.os }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # https://github.com/marketplace/actions/alls-green#why

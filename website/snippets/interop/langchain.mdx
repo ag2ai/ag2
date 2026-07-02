@@ -4,19 +4,14 @@ LangChain is a popular framework with lots of tools for working with LLMs. It's 
 To get LangChain tools working with AG2, you’ll need to install a couple of dependencies:
 
 ```bash
-pip install ag2[openai,interop-langchain]
+pip install autogen[openai,interop-langchain]
 ```
 
 <Tip>
-If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+If you have been using `autogen`, all you need to do is upgrade it using:
 ```bash
 pip install -U autogen[openai,interop-langchain]
 ```
-or
-```bash
-pip install -U ag2[openai,interop-langchain]
-```
-as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
 
 Also, we’ll use LangChain’s [Wikipedia Tool](https://python.langchain.com/docs/integrations/tools/wikipedia/), which needs the wikipedia package. Install it like this:
