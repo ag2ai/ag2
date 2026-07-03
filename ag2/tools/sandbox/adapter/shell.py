@@ -87,8 +87,15 @@ class ShellAdapter:
             # command spawn or redirect to disallowed ones — block them.
             if contains_shell_operator(command):
                 return f"Command not allowed (shell operators are not permitted in restricted mode): {command!r}"
-        if self._blocked is not None and any(matches(p, command) for p in self._blocked):
-            return f"Command not allowed: {command!r}"
+        if self._blocked is not None:
+            if any(matches(p, command) for p in self._blocked):
+                return f"Command not allowed: {command!r}"
+            # Shell operators let a non-blocked head command chain into a
+            # blocked one (e.g. blocked=["rm"] doesn't catch "echo x; rm -rf /").
+            # Reject shell operators when a blocked list is active, consistent
+            # with the allowed-list behaviour.
+            if contains_shell_operator(command):
+                return f"Command not allowed (shell operators bypass blocked list): {command!r}"
         if self._ignore is not None:
             # self.workdir gives a host Path for local backends and a
             # PurePosixPath for remote/container ones — check_ignore handles
