@@ -87,6 +87,9 @@ a2ui = [
     { name = "jsonschema" },
     { name = "starlette" },
 ]
+acp = [
+    { name = "agent-client-protocol" },
+]
 ag-ui = [
     { name = "ag-ui-protocol" },
 ]
@@ -292,6 +295,7 @@ types = [
 requires-dist = [
     { name = "a2a-sdk", marker = "extra == 'a2a'", specifier = ">=1.1.0,<2" },
     { name = "ag-ui-protocol", marker = "extra == 'ag-ui'", specifier = ">=0.1.15,<0.2" },
+    { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.10.1,<0.11" },
     { name = "anthropic", extras = ["vertex"], marker = "extra == 'anthropic'", specifier = ">=0.79.0,<1" },
     { name = "anyio", specifier = ">=4.0.0,<5.0.0" },
     { name = "boto3", marker = "extra == 'bedrock'", specifier = ">=1.34.149" },
@@ -325,7 +329,7 @@ requires-dist = [
     { name = "xai-sdk", marker = "extra == 'xai'", specifier = ">=1.12.2,<2" },
     { name = "zai-sdk", marker = "extra == 'zai'", specifier = ">=0.2.3,<1" },
 ]
-provides-extras = ["a2a", "a2ui", "ag-ui", "openai", "anthropic", "gemini", "xai", "zai", "ollama", "bedrock", "dashscope", "redis", "tracing", "tavily", "ddgs", "perplexity", "mcp"]
+provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini", "xai", "zai", "ollama", "bedrock", "dashscope", "redis", "tracing", "tavily", "ddgs", "perplexity", "mcp"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -509,6 +513,18 @@ types = [
     { name = "types-pyyaml" },
     { name = "types-requests" },
     { name = "types-ujson" },
+]
+
+[[package]]
+name = "agent-client-protocol"
+version = "0.10.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/88/a0/3b96cd8374725c69bc3dae9fcc2082f3f6cafec1be35d24d7af0f8c3265f/agent_client_protocol-0.10.1.tar.gz", hash = "sha256:355c65ca19f0568344aafc2c1552b7066a8fc491df23ab28e7e253c6c9a85a25", size = 81924, upload-time = "2026-05-24T18:46:44.444Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7b/18/d8c7ff337cf621ea79a84006a7252ff057bfb5767549bb102cc6649f4ec2/agent_client_protocol-0.10.1-py3-none-any.whl", hash = "sha256:a03d3198f4d772f2e0ec012c00ac1cce131b4710220a3dc9fae3c991d047c750", size = 65401, upload-time = "2026-05-24T18:46:43.202Z" },
 ]
 
 [[package]]

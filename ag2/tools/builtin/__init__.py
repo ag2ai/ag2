@@ -9,6 +9,7 @@ from .memory import MemoryTool
 from .retrieval import RetrievalTool
 from .shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, NetworkPolicy, ShellTool
 from .skills import Skill, SkillsTool
+from .tool_search import ToolSearchTool
 from .web_fetch import WebFetchTool
 from .web_search import UserLocation, WebSearchTool
 from .x_search import XSearchTool
@@ -25,6 +26,7 @@ __all__ = (
     "ShellTool",
     "Skill",
     "SkillsTool",
+    "ToolSearchTool",
     "UserLocation",
     "WebFetchTool",
     "WebSearchTool",
