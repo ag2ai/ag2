@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from collections.abc import Iterable
 from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass, field
@@ -52,6 +53,17 @@ class WebFetchTool(Tool):
             self._params["allowed_domains"] = allowed_domains
         if blocked_domains is not None:
             self._params["blocked_domains"] = blocked_domains
+
+        # Warn when no domain restrictions are set — SSRF risk
+        if allowed_domains is None and blocked_domains is None:
+            warnings.warn(
+                "WebFetchTool has no domain restrictions (allowed_domains=None, "
+                "blocked_domains=None). The LLM can fetch any URL including "
+                "internal services and cloud metadata endpoints. "
+                "Set allowed_domains or blocked_domains to restrict.",
+                UserWarning,
+                stacklevel=2,
+            )
         if citations is not None:
             self._params["citations"] = citations
         if max_content_tokens is not None:
