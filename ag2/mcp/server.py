@@ -3,10 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import importlib.metadata
+import logging
+import warnings
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
+
+_logger = logging.getLogger(__name__)
 
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
@@ -169,6 +173,18 @@ class MCPServer:
             context_provider=context_provider,
             session_store=self._session_store,
         )
+        if security is None:
+            warnings.warn(
+                "MCPServer is running without authentication (security=None). "
+                "Any network client can invoke the agent's tools without credentials. "
+                "Pass a security=Requirement(...) to enable OAuth 2.0 bearer auth.",
+                UserWarning,
+                stacklevel=2,
+            )
+            _logger.warning(
+                "MCPServer started without authentication — all tool invocations are unauthenticated"
+            )
+
         self._server = self._build_server()
         routes, manager = self._streamable_routes(
             path=path, stateless=stateless, json_response=json_response, security=security
