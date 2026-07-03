@@ -13,8 +13,8 @@ watch:
   - includes
   - overrides
 
-repo_name: ag2ai/ag2classic
-repo_url: https://github.com/ag2ai/ag2classic
+repo_name: ag2ai/ag2-classic
+repo_url: https://github.com/ag2ai/ag2-classic
 edit_uri: edit/main/website/
 
 exclude_docs: |

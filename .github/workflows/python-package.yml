@@ -1,6 +1,6 @@
 # This workflow builds and uploads the `autogen` Python package to PyPI when a release is published.
 # Publishing uses PyPI Trusted Publishing (OIDC) — no API tokens. The trusted publisher must be
-# configured on PyPI for (owner=ag2ai, repo=ag2classic, workflow=python-package.yml, environment=package).
+# configured on PyPI for (owner=ag2ai, repo=ag2-classic, workflow=python-package.yml, environment=package).
 # Conda-forge bot will pick up the new PyPI version and automatically create a new version.
 
 name: python-package

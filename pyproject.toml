@@ -26,8 +26,8 @@ exclude = ["test", "notebook"]
 [project.urls]
 Homepage = "https://ag2.ai/"
 Documentation = "https://docs.ag2.ai"
-Tracker = "https://github.com/ag2ai/ag2classic/issues"
-Source = "https://github.com/ag2ai/ag2classic"
+Tracker = "https://github.com/ag2ai/ag2-classic/issues"
+Source = "https://github.com/ag2ai/ag2-classic"
 Discord = "https://discord.gg/pAbnFJrkgZ"
 
 [project]

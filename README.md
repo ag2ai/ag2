@@ -17,8 +17,8 @@
 
   <img src="https://img.shields.io/pypi/pyversions/autogen.svg?label=">
 
-  <a href="https://github.com/ag2ai/ag2classic/actions/workflows/python-package.yml">
-    <img src="https://github.com/ag2ai/ag2classic/actions/workflows/python-package.yml/badge.svg">
+  <a href="https://github.com/ag2ai/ag2-classic/actions/workflows/python-package.yml">
+    <img src="https://github.com/ag2ai/ag2-classic/actions/workflows/python-package.yml/badge.svg">
   </a>
   <a href="https://discord.gg/pAbnFJrkgZ">
     <img src="https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat">
@@ -437,8 +437,8 @@ prek run --all-files
 
 ## Contributors Wall
 
-<a href="https://github.com/ag2ai/ag2classic/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ag2ai/ag2classic&max=204" />
+<a href="https://github.com/ag2ai/ag2-classic/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ag2ai/ag2-classic&max=204" />
 </a>
 
 ## Cite the project
@@ -448,7 +448,7 @@ prek run --all-files
 author = {Chi Wang and Qingyun Wu and the AG2 Community},
 title = {AG2: Open-Source AgentOS for AI Agents},
 year = {2024},
-url = {https://github.com/ag2ai/ag2classic},
+url = {https://github.com/ag2ai/ag2-classic},
 note = {Available at https://docs.ag2.ai/},
 version = {latest}
 }
