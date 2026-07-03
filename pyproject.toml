@@ -72,6 +72,7 @@ dependencies = [
 # === Agent protocols ===
 a2a = ["a2a-sdk>=1.1.0,<2"]
 a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<2"]
+acp = ["agent-client-protocol>=0.10.1,<0.11"]
 ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
@@ -93,7 +94,6 @@ ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 dashscope = ["dashscope>=1.25.13"]
 
-# === Streams / tracing ===
 redis = ["redis>=5.0,<9"]
 tracing = [
     "opentelemetry-sdk>=1.20",

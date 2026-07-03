@@ -22,6 +22,9 @@ from anthropic.types import (
     TextEditorCodeExecutionToolResultBlock,
     TextEditorCodeExecutionToolResultError,
     TextEditorCodeExecutionViewResultBlock,
+    ToolSearchToolResultBlock,
+    ToolSearchToolResultError,
+    ToolSearchToolSearchResultBlock,
     WebFetchBlock,
     WebFetchToolResultBlock,
     WebFetchToolResultErrorBlock,
@@ -43,6 +46,7 @@ from ag2.events import (
     UrlInput,
 )
 from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
+from ag2.tools.builtin.tool_search import TOOL_SEARCH_TOOL_NAME
 from ag2.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
@@ -52,6 +56,7 @@ AnthropicServerToolResultBlockType: TypeAlias = (
     | CodeExecutionToolResultBlock
     | BashCodeExecutionToolResultBlock
     | TextEditorCodeExecutionToolResultBlock
+    | ToolSearchToolResultBlock
 )
 
 
@@ -67,6 +72,8 @@ class AnthropicServerToolCallEvent(BuiltinToolCallEvent):
                 name = WEB_FETCH_TOOL_NAME
             case "code_execution" | "bash_code_execution" | "text_editor_code_execution":
                 name = CODE_EXECUTION_TOOL_NAME
+            case "tool_search_tool_regex" | "tool_search_tool_bm25":
+                name = TOOL_SEARCH_TOOL_NAME
             case _:
                 return None
         return cls(
@@ -172,6 +179,17 @@ class AnthropicServerToolResultEvent(BuiltinToolResultEvent):
                     "old_lines": content.old_lines,
                     "old_start": content.old_start,
                 }
+
+        elif isinstance(block, ToolSearchToolResultBlock):
+            name = TOOL_SEARCH_TOOL_NAME
+            content = block.content
+            if isinstance(content, ToolSearchToolResultError):
+                parts = [TextInput(f"{content.type}: {content.error_code}")]
+                metadata = {"error": True, "error_code": content.error_code, "type": content.type}
+            elif isinstance(content, ToolSearchToolSearchResultBlock):
+                references = [ref.tool_name for ref in content.tool_references]
+                parts = [TextInput(", ".join(references))] if references else []
+                metadata = {"tool_references": references}
 
         else:
             return None

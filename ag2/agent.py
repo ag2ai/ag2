@@ -79,6 +79,7 @@ from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .task import CheckpointStore, Task, TaskSpec
+from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
@@ -1255,15 +1256,23 @@ class Agent(PluginTarget, Generic[TResult]):
 
             all_schemas: list[ToolSchema] = []
             known_tools: set[str] = set()
+            tool_search_schema: ToolSearchToolSchema | None = None
             for t in all_tools:
                 schemas = await t.schemas(context)
-                all_schemas.extend(schemas)
 
                 for schema in schemas:
                     if isinstance(schema, FunctionToolSchema):
                         known_tools.add(schema.function.name)
                     else:
                         known_tools.add(schema.type)
+
+                    if isinstance(schema, ToolSearchToolSchema):
+                        tool_search_schema = schema
+                    else:
+                        all_schemas.append(schema)
+
+            if tool_search_schema is not None:
+                all_schemas.append(tool_search_schema)
 
             # instantiate middlewares
             middleware_instances: list[BaseMiddleware] = []

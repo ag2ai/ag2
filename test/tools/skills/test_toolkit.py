@@ -103,6 +103,7 @@ async def test_run_skill_script_schema(skill_tree: Path, context: Context) -> No
 
     assert asdict(schema) == {
         "type": "function",
+        "defer_loading": False,
         "function": IsPartialDict({
             "name": "run_skill_script",
             "parameters": IsPartialDict({
