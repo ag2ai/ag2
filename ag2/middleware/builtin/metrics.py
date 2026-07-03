@@ -236,6 +236,14 @@ class _MetricsMiddleware(BaseMiddleware):
                 token_type="output",
             ).inc(usage.completion_tokens)
 
+        if usage.total_tokens:
+            self._metrics.llm_tokens_total.labels(
+                agent=self._agent_name,
+                provider=provider,
+                model=model,
+                token_type="total",
+            ).inc(usage.total_tokens)
+
         if usage.cache_read_input_tokens:
             self._metrics.llm_tokens_total.labels(
                 agent=self._agent_name,
@@ -343,13 +351,13 @@ class _MetricsMiddleware(BaseMiddleware):
     def _get_model_provider(self, model_config: "ModelConfig") -> Any:
         try:
             return model_config.provider
-        except NotImplementedError:
+        except (NotImplementedError, AttributeError):
             return None
 
     def _get_model_name(self, model_config: "ModelConfig") -> Any:
         try:
             return model_config.model
-        except NotImplementedError:
+        except (NotImplementedError, AttributeError):
             return None
 
     def _normalize_provider_label(self, provider: Any) -> str:

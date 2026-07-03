@@ -67,6 +67,7 @@ async def test_records_llm_call_and_token_success_metrics(
                 usage=Usage(
                     prompt_tokens=10,
                     completion_tokens=5,
+                    total_tokens=15,
                     cache_read_input_tokens=3,
                     cache_creation_input_tokens=2,
                     thinking_tokens=296,
@@ -94,6 +95,7 @@ async def test_records_llm_call_and_token_success_metrics(
 
     assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "input"}) == 10.0
     assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "output"}) == 5.0
+    assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "total"}) == 15.0
     assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "cache_read_input"}) == 3.0
     assert (
         registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "cache_creation_input"}) == 2.0
