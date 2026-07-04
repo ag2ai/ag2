@@ -37,11 +37,14 @@ from ag2.events import (
     Usage,
 )
 from ag2.response import ResponseProto
+from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.schemas import ToolSchema
 
 from .events import OpenAIReasoningEvent, OpenAIServerToolCallEvent, OpenAIServerToolResultEvent
 from .mappers import (
     events_to_responses_input,
+    extract_skills_for_shell,
+    merge_skills_into_shell_tools,
     normalize_responses_usage,
     response_proto_to_text_config,
     responses_api_includes,
@@ -116,7 +119,12 @@ class OpenAIResponsesClient(LLMClient):
         instructions = "\n".join(prompt) or None
 
         tools_list = list(tools)
-        openai_tools = [tool_to_responses_api(t) for t in tools_list]
+        openai_skills = extract_skills_for_shell(tools_list)
+        tools_list = [t for t in tools_list if not isinstance(t, SkillsToolSchema)]
+        openai_tools = merge_skills_into_shell_tools(
+            [tool_to_responses_api(t) for t in tools_list],
+            openai_skills,
+        )
 
         kwargs: dict[str, Any] = {}
         if r := response_proto_to_text_config(response_schema):

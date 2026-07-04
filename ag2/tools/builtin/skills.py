@@ -34,8 +34,9 @@ class SkillsToolSchema(ToolSchema):
     """Provider-neutral capability flag for provider-side skills.
 
     Skills are passed to the provider via a separate API parameter
-    (``container`` for Anthropic).
-    They never appear in the ``tools[]`` array of a request.
+    (``container`` for Anthropic, the hosted shell tool's
+    ``environment.skills`` for OpenAI Responses).
+    They never appear as standalone entries in the ``tools[]`` array.
     """
 
     type: str = field(default=SKILLS_TOOL_NAME, init=False)
