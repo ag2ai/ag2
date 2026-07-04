@@ -22,7 +22,7 @@ Every label belongs to a class. The class prefix tells you what question the lab
 | `status:*` | Where is it in the lifecycle? | exactly one (see stale exception) | Automation + Triage Team + maintainers |
 | `priority:*` | When should we work on it? | at most one | **Humans only** (Triage Team, maintainers) |
 | `area:*` | Which part of the repository does it touch, and who should look? | any number | `actions/labeler` by file paths; bot for issues |
-| `resolution:*` | Why was it closed? | at most one, on closed items | **Humans only** |
+| `resolution:*` | Why was it closed? | at most one | **Humans close**; the bot may apply `resolution:duplicate` to an open item as a proposal |
 
 Standalone labels outside the classes: `good first issue` and `help wanted` (kept with their exact GitHub-standard names so they surface in GitHub's contribution UI) and `security` (cross-cutting flag; see [§7](#7-security-issues)).
 
@@ -117,7 +117,7 @@ Rules for closing without merging/fixing:
 - Set the `resolution:*` label **and** the matching native close reason.
 - Always leave a closing comment explaining why — start from the matching [canned reply](replies/) (`close-duplicate`, `close-wontfix`, `close-invalid`). For duplicates, link the original.
 - Issues fixed by a merged PR need no `resolution:*` label — close as *completed* (linked PRs do this automatically).
-- The bot may **recommend** a resolution in a comment but never closes items itself. (The one exception is the stale automation, [§5](#5-gates-and-the-stale-mechanism).)
+- The bot may apply `resolution:duplicate` to an **open** item as a proposal (with the [`duplicate-suspect`](replies/duplicate-suspect.md) comment), but never closes items itself — the author, Triage Team, or a maintainer closes if they agree. (The one exception is the stale automation, [§5](#5-gates-and-the-stale-mechanism).)
 
 ---
 
@@ -153,7 +153,7 @@ stateDiagram-v2
     changes_requested --> needs_review : author pushed updates
     needs_review --> closed : merged
 
-    needs_template --> stale : 3 days of silence — +stale, gate label stays
+    needs_template --> stale : 7 days of silence — +stale, gate label stays
     needs_cla --> stale : 3 days of silence — +stale, gate label stays
     awaiting_response --> stale : 10 days of silence — +stale, gate label stays
     changes_requested --> stale : 30 days of silence — +stale, gate label stays
@@ -181,7 +181,7 @@ The AI Triage Bot then runs a first pass:
 | Check | Outcome |
 |---|---|
 | Description does not follow the template (sections gutted, no reproduction for bugs) | set `status:needs-template`, comment listing what is missing |
-| Looks like a duplicate | comment linking candidates, recommend `resolution:duplicate` |
+| Looks like a duplicate | apply `resolution:duplicate` as a proposal + [`duplicate-suspect`](replies/duplicate-suspect.md) comment; a human closes |
 | Type mismatch (e.g. a feature request filed as a bug) | fix the `type:*` label and Issue Type, keeping them in sync |
 | Area detectable from the text | add `area:*` labels |
 | It is a usage question | set `type:question`, comment pointing to GitHub Discussions, recommend closing |
@@ -262,8 +262,8 @@ Gate labels (`status:needs-template`, `status:needs-cla`, `status:awaiting-respo
 
 | Gate | Days to `status:stale` | Rationale |
 |---|---|---|
-| `status:needs-template` | **3** | Fixing a description is minutes of work; a fast window filters out low-effort and AI-slop submissions |
-| `status:needs-cla` | **3** | Signing the CLA is one click; same slop filter |
+| `status:needs-template` | **7** | Fixing a description is quick, but writing a good reproduction or validation section can take a sitting |
+| `status:needs-cla` | **3** | Signing the CLA is one click; a fast window filters out low-effort submissions |
 | `status:awaiting-response` | **10** | Answering a question may require checking an environment or reproducing locally |
 | `status:changes-requested` | **30** | Addressing review feedback is real work — code, tests, docs |
 
@@ -302,7 +302,8 @@ Suspected vulnerabilities must not be triaged in public. Per [SECURITY.md](../SE
 | Set `status:confirmed` | ❌ | ✅ | ✅ |
 | Set `priority:*` | ❌ | ✅ | ✅ |
 | Set `status:changes-requested` | on review submission | ❌ | ✅ (as reviewer) |
-| Close with `resolution:*` | ❌ (recommend only) | ✅ | ✅ |
+| Propose `resolution:duplicate` (label + comment, item stays open) | ✅ | ✅ | ✅ |
+| Close with `resolution:*` | ❌ | ✅ | ✅ |
 | Close stale gated items | `actions/stale` only | ✅ | ✅ |
 | Merge | ❌ | ❌ | ✅ |
 
@@ -319,5 +320,7 @@ Suspected vulnerabilities must not be triaged in public. Per [SECURITY.md](../SE
 | `actions/stale` | The per-gate stale windows ([§5](#5-gates-and-the-stale-mechanism)); configured to act only on gate labels |
 | AI Triage Bot | Template gate, duplicate detection, type/area inference, Issue Type ↔ label sync, gate-clearing on author activity, Extension-maintainer routing, `status:needs-review` transitions |
 | [Canned replies](replies/) | Template messages for every scripted comment above — see the [index](replies/README.md) mapping each situation to its file, placeholders, and accompanying action |
+
+Operational instructions for the bot's recurring tasks — triggers, steps, and which replies/labels each task uses — live in [TRIAGE_AI_TASKS.md](TRIAGE_AI_TASKS.md).
 
 Any new automation that touches labels must respect the class invariants in [§1](#1-label-taxonomy) and the permission matrix in [§8](#8-who-may-do-what).

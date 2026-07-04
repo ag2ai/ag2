@@ -18,6 +18,7 @@ Conventions:
 | `stale-close.md` | Closing a gated item after the stale window | close as *not planned* |
 | `needs-reproduction.md` | Bug cannot be reproduced / info missing | `status:awaiting-response` |
 | `redirect-question.md` | Usage question filed as an issue | close as *not planned* |
+| `duplicate-suspect.md` | Intake found a likely duplicate (stays open) | `resolution:duplicate` as a proposal; humans close |
 | `close-duplicate.md` | Duplicate of an existing item | `resolution:duplicate` + close as *duplicate* |
 | `close-wontfix.md` | Valid but deliberately not planned | `resolution:wontfix` + close as *not planned* |
 | `close-invalid.md` | Not actionable / not a real issue | `resolution:invalid` + close as *not planned* |

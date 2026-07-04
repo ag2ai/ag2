@@ -1,6 +1,6 @@
 <!--
 Use when: a PR description doesn't follow .github/PULL_REQUEST_TEMPLATE.md (missing "Why are these changes needed?", no validation info, unchecked mandatory sections).
-Action: set `status:needs-template`. Stale window: 3 days, then closed 7 days later.
+Action: set `status:needs-template`. Stale window: 7 days, then closed 7 days later.
 -->
 
 Hi @{{author}}, thanks for the contribution!
@@ -13,4 +13,4 @@ In particular, per our [AI-assisted contribution policy](https://github.com/ag2a
 
 Please **edit the PR description** to fill in the template. Once it's fixed, the `status:needs-template` label will be removed and the PR will enter the review queue.
 
-⏳ If there's no update within **3 days**, this PR will be marked stale and closed **7 days** after that.
+⏳ If there's no update within **7 days**, this PR will be marked stale and closed **7 days** after that.
