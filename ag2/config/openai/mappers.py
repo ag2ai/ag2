@@ -29,6 +29,7 @@ from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.files.types import FileProvider
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
+from ag2.tools.builtin.file_search import FileSearchToolSchema
 from ag2.tools.builtin.image_generation import ImageGenerationToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.shell import (
@@ -436,6 +437,15 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             result["filters"] = {"allowed_domains": t.allowed_domains}
         return result
 
+    elif isinstance(t, FileSearchToolSchema):
+        # https://developers.openai.com/api/docs/guides/tools-file-search
+        result_fs: dict[str, Any] = {"type": "file_search", "vector_store_ids": t.vector_store_ids}
+        if t.max_num_results is not None:
+            result_fs["max_num_results"] = t.max_num_results
+        if t.filters is not None:
+            result_fs["filters"] = t.filters
+        return result_fs
+
     elif isinstance(t, CodeExecutionToolSchema):
         # https://developers.openai.com/api/docs/guides/tools-code-interpreter
         return {"type": "code_interpreter", "container": {"type": "auto"}}
@@ -513,6 +523,9 @@ def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
     for t in tools:
         if isinstance(t, WebSearchToolSchema):
             includes.append("web_search_call.action.sources")
+        elif isinstance(t, FileSearchToolSchema) and t.include_results:
+            # Off by default: results are full text chunks and inflate responses.
+            includes.append("file_search_call.results")
     return includes
 
 

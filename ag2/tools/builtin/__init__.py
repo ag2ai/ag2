@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .code_execution import CodeExecutionTool
+from .file_search import FileSearchTool
 from .image_generation import ImageGenerationTool
 from .mcp_server import MCPServerTool
 from .memory import MemoryTool
@@ -18,6 +19,7 @@ __all__ = (
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
+    "FileSearchTool",
     "ImageGenerationTool",
     "MCPServerTool",
     "MemoryTool",
