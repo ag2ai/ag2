@@ -86,6 +86,11 @@ Area answers "which part of the repository does this touch, and therefore who sh
 
 | Label | Covers |
 |---|---|
+| `area:core` | Agent runtime core: `ag2/*.py`, `ag2/events`, `ag2/response`, `ag2/streams` |
+| `area:tools` | Tool system, builtin tools, subagents: `ag2/tools` |
+| `area:providers` | LLM provider clients and mappers: `ag2/config` |
+| `area:middleware` | Middleware system and builtins: `ag2/middleware` |
+| `area:eval` | Offline evaluation framework: `ag2/eval` |
 | `area:a2a` | `ag2/a2a`, A2A protocol support |
 | `area:a2ui` | `ag2/a2ui` |
 | `area:acp` | `ag2/acp`, ACP support for CLI coding agents |
@@ -110,7 +115,7 @@ On PRs, areas are applied automatically by `actions/labeler` from changed file p
 Rules for closing without merging/fixing:
 
 - Set the `resolution:*` label **and** the matching native close reason.
-- Always leave a closing comment explaining why. For duplicates, link the original.
+- Always leave a closing comment explaining why — start from the matching [canned reply](replies/) (`close-duplicate`, `close-wontfix`, `close-invalid`). For duplicates, link the original.
 - Issues fixed by a merged PR need no `resolution:*` label — close as *completed* (linked PRs do this automatically).
 - The bot may **recommend** a resolution in a comment but never closes items itself. (The one exception is the stale automation, [§5](#5-gates-and-the-stale-mechanism).)
 
@@ -181,7 +186,7 @@ The AI Triage Bot then runs a first pass:
 | Area detectable from the text | add `area:*` labels |
 | It is a usage question | set `type:question`, comment pointing to GitHub Discussions, recommend closing |
 
-The bot **comments and labels; it does not confirm, prioritize, or close.**
+The bot **comments and labels; it does not confirm, prioritize, or close.** All bot comments use the [canned replies](replies/) with placeholders substituted; humans use the same templates as copy-paste starting points and personalize where it helps.
 
 ### Stage I2 — Triage (Triage Team)
 
@@ -215,7 +220,9 @@ On open, a workflow applies `status:needs-triage`, and `actions/labeler` applies
 | `status:needs-cla` | the CLA check fails | the author signs; the CLA workflow removes the label |
 | `status:needs-template` | the PR description guts [the template](../PULL_REQUEST_TEMPLATE.md) (missing "Why are these changes needed?", unchecked mandatory checks, no validation info — see [AI policy](../AI_POLICY.md)) | the author fixes the description; the bot verifies and removes the label |
 
-While any gate label is present, **no human reviews the PR.** The bot posts one comment per gate explaining exactly what is required.
+While any gate label is present, **no human reviews the PR.** The bot posts one comment per gate explaining exactly what is required, using the matching [canned reply](replies/) (`needs-cla`, `needs-template-pr`).
+
+**Gates apply to draft PRs too.** A draft without a signed CLA carries `status:needs-cla`, not `status:in-progress` — the gate takes precedence, and its stale window runs even while the PR is a draft. There is no reason to invest work in a PR that cannot be accepted.
 
 ### Stage P2 — Ready for review
 
@@ -260,9 +267,9 @@ Gate labels (`status:needs-template`, `status:needs-cla`, `status:awaiting-respo
 | `status:awaiting-response` | **10** | Answering a question may require checking an environment or reproducing locally |
 | `status:changes-requested` | **30** | Addressing review feedback is real work — code, tests, docs |
 
-1. After the gate's grace period with no author activity → `actions/stale` adds `status:stale` **on top of** the gate label (the gate label is *not* removed — it is the visible reason) and posts a warning comment.
+1. After the gate's grace period with no author activity → `actions/stale` adds `status:stale` **on top of** the gate label (the gate label is *not* removed — it is the visible reason) and posts the [`stale-warning`](replies/stale-warning.md) comment.
 2. Any author activity → `status:stale` is removed; the gate label stays until its own clearing condition is met.
-3. **7 more days** of silence → the item is closed as *not planned*. Both labels remain on the closed item so we can audit why things get dropped.
+3. **7 more days** of silence → the item is closed as *not planned* with the [`stale-close`](replies/stale-close.md) comment. Both labels remain on the closed item so we can audit why things get dropped.
 
 Exempt from stale: everything that is not gated — `status:needs-triage` (a slow queue is our problem, not the author's), `status:confirmed`, `status:in-progress`, `status:blocked`, `status:needs-review`.
 
@@ -311,5 +318,6 @@ Suspected vulnerabilities must not be triaged in public. Per [SECURITY.md](../SE
 | CLA workflow | Set/remove `status:needs-cla` from the check result |
 | `actions/stale` | The per-gate stale windows ([§5](#5-gates-and-the-stale-mechanism)); configured to act only on gate labels |
 | AI Triage Bot | Template gate, duplicate detection, type/area inference, Issue Type ↔ label sync, gate-clearing on author activity, Extension-maintainer routing, `status:needs-review` transitions |
+| [Canned replies](replies/) | Template messages for every scripted comment above — see the [index](replies/README.md) mapping each situation to its file, placeholders, and accompanying action |
 
 Any new automation that touches labels must respect the class invariants in [§1](#1-label-taxonomy) and the permission matrix in [§8](#8-who-may-do-what).

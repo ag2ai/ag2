@@ -41,6 +41,43 @@ area:extensions:
       - test/extensions/**
       - website/docs/user-guide/extensions/**
 
+area:core:
+  - changed-files:
+    - any-glob-to-any-file:
+      - ag2/*.py
+      - ag2/events/**
+      - ag2/response/**
+      - ag2/streams/**
+      - test/agent/**
+      - test/events/**
+      - test/stream/**
+      - test/response/**
+
+area:tools:
+  - changed-files:
+    - any-glob-to-any-file:
+      - ag2/tools/**
+      - test/tools/**
+
+area:providers:
+  - changed-files:
+    - any-glob-to-any-file:
+      - ag2/config/**
+      - test/config/**
+      - test/providers/**
+
+area:middleware:
+  - changed-files:
+    - any-glob-to-any-file:
+      - ag2/middleware/**
+      - test/middleware/**
+
+area:eval:
+  - changed-files:
+    - any-glob-to-any-file:
+      - ag2/eval/**
+      - test/eval/**
+
 area:docs:
   - changed-files:
     - any-glob-to-any-file:
