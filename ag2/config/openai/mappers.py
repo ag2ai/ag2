@@ -8,7 +8,7 @@ from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
-from openai.types.responses import ResponseUsage
+from openai.types.responses import ResponseUsage, SkillReferenceParam
 
 from ag2.compact import CompactionSummary
 from ag2.config.openai.events import OpenAIReasoningEvent, OpenAIServerToolCallEvent
@@ -29,6 +29,7 @@ from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.files.types import FileProvider
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
+from ag2.tools.builtin.file_search import FileSearchToolSchema
 from ag2.tools.builtin.image_generation import ImageGenerationToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.shell import (
@@ -436,6 +437,15 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             result["filters"] = {"allowed_domains": t.allowed_domains}
         return result
 
+    elif isinstance(t, FileSearchToolSchema):
+        # https://developers.openai.com/api/docs/guides/tools-file-search
+        result_fs: dict[str, Any] = {"type": "file_search", "vector_store_ids": t.vector_store_ids}
+        if t.max_num_results is not None:
+            result_fs["max_num_results"] = t.max_num_results
+        if t.filters is not None:
+            result_fs["filters"] = t.filters
+        return result_fs
+
     elif isinstance(t, CodeExecutionToolSchema):
         # https://developers.openai.com/api/docs/guides/tools-code-interpreter
         return {"type": "code_interpreter", "container": {"type": "auto"}}
@@ -497,7 +507,9 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         return result
 
     elif isinstance(t, SkillsToolSchema):
-        # https://developers.openai.com/api/docs/guides/tools-skills
+        # Skills never appear directly in tools[] — the Responses client extracts
+        # them via extract_skills_for_shell() and attaches them to the hosted
+        # shell tool's container environment (merge_skills_into_shell_tools).
         raise UnsupportedToolError(t.type, "openai-responses")
 
     elif isinstance(t, ToolSearchToolSchema):
@@ -508,11 +520,61 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     raise UnsupportedToolError(t.type, "openai-responses")
 
 
+def extract_skills_for_shell(tools: Iterable[ToolSchema]) -> list[SkillReferenceParam]:
+    """Extract OpenAI ``skill_reference`` entries from SkillsToolSchema instances.
+
+    OpenAI Responses attaches skills to the hosted shell tool's container
+    environment rather than as standalone ``tools[]`` entries.
+    https://developers.openai.com/api/docs/guides/tools-skills
+    """
+    skills: list[SkillReferenceParam] = []
+    for t in tools:
+        if isinstance(t, SkillsToolSchema):
+            for s in t.skills:
+                entry: SkillReferenceParam = {"type": "skill_reference", "skill_id": s.id}
+                # A positive-integer string or "latest"; omitted means the
+                # skill's default_version.
+                if s.version is not None:
+                    entry["version"] = s.version
+                skills.append(entry)
+    return skills
+
+
+def merge_skills_into_shell_tools(
+    openai_tools: list[dict[str, Any]],
+    skills: list[SkillReferenceParam],
+) -> list[dict[str, Any]]:
+    """Attach skill references to the hosted shell tool's environment.
+
+    Skills require a ``container_auto`` environment. When no shell tool is
+    present one is appended (mirrors the Anthropic client auto-adding code
+    execution for skills). A ``container_reference`` environment is rejected:
+    skills for existing containers are configured at container creation.
+    """
+    if not skills:
+        return openai_tools
+    for tool_dict in openai_tools:
+        if tool_dict.get("type") == "shell":
+            env = tool_dict.setdefault("environment", {"type": "container_auto"})
+            if env.get("type") == "container_reference":
+                raise ValueError(
+                    "SkillsTool cannot be combined with ContainerReferenceEnvironment: "
+                    "attach skills when creating the container via ContainerManager instead."
+                )
+            env["skills"] = skills
+            return openai_tools
+    openai_tools.append({"type": "shell", "environment": {"type": "container_auto", "skills": skills}})
+    return openai_tools
+
+
 def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
     includes: list[str] = []
     for t in tools:
         if isinstance(t, WebSearchToolSchema):
             includes.append("web_search_call.action.sources")
+        elif isinstance(t, FileSearchToolSchema) and t.include_results:
+            # Off by default: results are full text chunks and inflate responses.
+            includes.append("file_search_call.results")
     return includes
 
 

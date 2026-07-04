@@ -16,3 +16,12 @@ async def test_defaults(context: Context) -> None:
     [schema] = await tool.schemas(context)
 
     assert tool_to_api(schema) == {"type": "code_execution_20250825", "name": "code_execution"}
+
+
+@pytest.mark.asyncio
+async def test_version_20260521(context: Context) -> None:
+    tool = CodeExecutionTool(version="code_execution_20260521")
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_api(schema) == {"type": "code_execution_20260521", "name": "code_execution"}

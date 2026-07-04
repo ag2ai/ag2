@@ -10,12 +10,14 @@ import pytest
 from openai.types.responses import (
     Response,
     ResponseCodeInterpreterToolCall,
+    ResponseFileSearchToolCall,
     ResponseFunctionToolCall,
     ResponseFunctionWebSearch,
     ResponseOutputMessage,
     ResponseReasoningItem,
 )
 from openai.types.responses.response_code_interpreter_tool_call import OutputImage, OutputLogs
+from openai.types.responses.response_file_search_tool_call import Result as FileSearchResult
 from openai.types.responses.response_function_web_search import (
     ActionFind,
     ActionOpenPage,
@@ -47,6 +49,7 @@ from ag2.events import (
     UrlInput,
 )
 from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
+from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME
 from ag2.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
 from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
@@ -488,3 +491,40 @@ class TestResultParts:
         [_, result_event] = events
         assert isinstance(result_event, OpenAIServerToolResultEvent)
         assert response.files[0].data is result_event.result.parts[0].data
+
+    async def test_file_search_call_emits_text_input_and_metadata(self) -> None:
+        item = ResponseFileSearchToolCall(
+            id="fs1",
+            type="file_search_call",
+            status="completed",
+            queries=["deep research"],
+            results=[
+                FileSearchResult(file_id="file-1", filename="doc.md", score=0.9, text="chunk text"),
+                FileSearchResult(file_id="file-2", filename="empty.md", score=0.1, text=None),
+            ],
+        )
+
+        _, events = await _process([item])
+
+        assert events == [
+            OpenAIServerToolCallEvent(
+                id="fs1",
+                name=FILE_SEARCH_TOOL_NAME,
+                arguments=json.dumps({"queries": ["deep research"]}),
+                item=item,
+            ),
+            OpenAIServerToolResultEvent(
+                parent_id="fs1",
+                name=FILE_SEARCH_TOOL_NAME,
+                result=ToolResult(
+                    TextInput("chunk text"),
+                    metadata={
+                        "status": "completed",
+                        "results": [
+                            {"file_id": "file-1", "filename": "doc.md", "score": 0.9},
+                            {"file_id": "file-2", "filename": "empty.md", "score": 0.1},
+                        ],
+                    },
+                ),
+            ),
+        ]

@@ -27,7 +27,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-version = "0.14.0"
+version = "1.0.0b0"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -77,7 +77,7 @@ ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=2.44.0,<3.0"]
-anthropic = ["anthropic[vertex]>=0.79.0,<1"]
+anthropic = ["anthropic[vertex]>=0.116.0,<1"]
 gemini = [
     "google-api-core",
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
@@ -227,7 +227,7 @@ types = [
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.15.18", "codespell==2.4.2", "zizmor==1.26.1"]
+lint = ["ruff==0.15.20", "codespell==2.4.2", "zizmor==1.26.1"]
 
 dev = [
     "toml==0.10.2",
@@ -237,7 +237,7 @@ dev = [
     { include-group = "docs" },
     "prek==0.4.5",
     "detect-secrets==1.5.0",
-    "uv==0.11.23",
+    "uv==0.11.25",
 ]
 
 [tool.pytest.ini_options]

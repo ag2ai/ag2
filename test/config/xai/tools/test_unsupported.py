@@ -7,6 +7,7 @@ import pytest
 from ag2 import Context
 from ag2.config.xai.mappers import tool_to_api
 from ag2.exceptions import UnsupportedToolError
+from ag2.tools.builtin.file_search import FileSearchTool
 from ag2.tools.builtin.image_generation import ImageGenerationTool
 from ag2.tools.builtin.memory import MemoryTool
 from ag2.tools.builtin.retrieval import RetrievalTool
@@ -68,6 +69,16 @@ async def test_web_fetch(context: Context) -> None:
 @pytest.mark.asyncio
 async def test_retrieval(context: Context) -> None:
     tool = RetrievalTool("kb_123")
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(UnsupportedToolError, match="xai"):
+        tool_to_api(schema)
+
+
+@pytest.mark.asyncio
+async def test_file_search(context: Context) -> None:
+    tool = FileSearchTool(vector_store_ids=["vs_1"])
 
     [schema] = await tool.schemas(context)
 

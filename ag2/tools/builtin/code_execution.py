@@ -15,7 +15,11 @@ from ag2.tools.tool import Tool
 
 CODE_EXECUTION_TOOL_NAME = "code_execution"
 
-CodeExecutionVersions: TypeAlias = Literal["code_execution_20250825", "code_execution_20260120"]
+CodeExecutionVersions: TypeAlias = Literal[
+    "code_execution_20250825",
+    "code_execution_20260120",
+    "code_execution_20260521",
+]
 
 
 @dataclass(slots=True)
