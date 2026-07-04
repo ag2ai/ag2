@@ -98,7 +98,7 @@ Area answers "which part of the repository does this touch, and therefore who sh
 | `area:mcp` | `ag2/mcp` |
 | `area:network` | `ag2/network` |
 | `area:extensions` | `ag2/extensions` — community-maintained Extensions (see [§6](#6-extensions)) |
-| `area:docs` | `website/`, `docs/`, `notebook/` |
+| `area:docs` | `website/` |
 | `area:actions` | `.github/workflows/` |
 | `area:deps` | `pyproject.toml`, `uv.lock`, dependency updates |
 
