@@ -77,7 +77,7 @@ ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=2.44.0,<3.0"]
-anthropic = ["anthropic[vertex]>=0.79.0,<1"]
+anthropic = ["anthropic[vertex]>=0.116.0,<1"]
 gemini = [
     "google-api-core",
     # Version bounds: local types in gemini_types.py are tested for subset compatibility

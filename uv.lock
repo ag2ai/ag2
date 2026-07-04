@@ -65,7 +65,7 @@ wheels = [
 
 [[package]]
 name = "ag2"
-version = "0.14.0"
+version = "1.0.0b0"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
@@ -296,7 +296,7 @@ requires-dist = [
     { name = "a2a-sdk", marker = "extra == 'a2a'", specifier = ">=1.1.0,<2" },
     { name = "ag-ui-protocol", marker = "extra == 'ag-ui'", specifier = ">=0.1.15,<0.2" },
     { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.10.1,<0.11" },
-    { name = "anthropic", extras = ["vertex"], marker = "extra == 'anthropic'", specifier = ">=0.79.0,<1" },
+    { name = "anthropic", extras = ["vertex"], marker = "extra == 'anthropic'", specifier = ">=0.116.0,<1" },
     { name = "anyio", specifier = ">=4.0.0,<5.0.0" },
     { name = "boto3", marker = "extra == 'bedrock'", specifier = ">=1.34.149" },
     { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.25.13" },
@@ -741,7 +741,7 @@ wheels = [
 
 [[package]]
 name = "anthropic"
-version = "0.109.2"
+version = "0.116.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -754,9 +754,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1b/b7/9a8e2f79011e89dd6eeb599c27332aed765dac9d6fbee3a55e68e4e3ec25/anthropic-0.109.2.tar.gz", hash = "sha256:d37db299597c7bc124b49b767ff135f1e6456b64af2b2fad4b63b2a1df333cf0", size = 927559, upload-time = "2026-06-15T17:30:25.024Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/66/a2/d31f14e28d49bae983a3634e38dfb4b31c50110b5e403596c5c6a20b23f8/anthropic-0.116.0.tar.gz", hash = "sha256:5fc248fbb9fe03ef686f8a774f81586bca31a043260aab88b387ea3660f4a396", size = 949149, upload-time = "2026-07-02T19:08:10.534Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d1/f2/bee5de8a2699fc8a3cce34d61c7a2626a2c310ddde7ea5611327eb0ddbe9/anthropic-0.109.2-py3-none-any.whl", hash = "sha256:e0fb4ca5df0ed983248c9c6c3242adc81d9cfddb8725902da53698554117abac", size = 923800, upload-time = "2026-06-15T17:30:23.124Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/dd/2a1e81cf1b163acc340afc4ec74ed1d86f5eed1a809fabdeed3e0997b346/anthropic-0.116.0-py3-none-any.whl", hash = "sha256:6c0a7698e8d652455da3499978279bb2588c7264d0a35be3666009a4258c8256", size = 956896, upload-time = "2026-07-02T19:08:08.756Z" },
 ]
 
 [package.optional-dependencies]
