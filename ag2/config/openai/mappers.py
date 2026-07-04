@@ -507,7 +507,9 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         return result
 
     elif isinstance(t, SkillsToolSchema):
-        # https://developers.openai.com/api/docs/guides/tools-skills
+        # Skills never appear directly in tools[] — the Responses client extracts
+        # them via extract_skills_for_shell() and attaches them to the hosted
+        # shell tool's container environment (merge_skills_into_shell_tools).
         raise UnsupportedToolError(t.type, "openai-responses")
 
     elif isinstance(t, ToolSearchToolSchema):
@@ -516,6 +518,53 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         return {"type": "tool_search"}
 
     raise UnsupportedToolError(t.type, "openai-responses")
+
+
+def extract_skills_for_shell(tools: Iterable[ToolSchema]) -> list[dict[str, Any]]:
+    """Extract OpenAI ``skill_reference`` entries from SkillsToolSchema instances.
+
+    OpenAI Responses attaches skills to the hosted shell tool's container
+    environment rather than as standalone ``tools[]`` entries.
+    https://developers.openai.com/api/docs/guides/tools-skills
+    """
+    skills: list[dict[str, Any]] = []
+    for t in tools:
+        if isinstance(t, SkillsToolSchema):
+            for s in t.skills:
+                entry: dict[str, Any] = {"type": "skill_reference", "skill_id": s.id}
+                # OpenAI versions are integers; non-numeric pins ("latest") are
+                # expressed by omitting the field.
+                if s.version is not None and s.version.isdigit():
+                    entry["version"] = int(s.version)
+                skills.append(entry)
+    return skills
+
+
+def merge_skills_into_shell_tools(
+    openai_tools: list[dict[str, Any]],
+    skills: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Attach skill references to the hosted shell tool's environment.
+
+    Skills require a ``container_auto`` environment. When no shell tool is
+    present one is appended (mirrors the Anthropic client auto-adding code
+    execution for skills). A ``container_reference`` environment is rejected:
+    skills for existing containers are configured at container creation.
+    """
+    if not skills:
+        return openai_tools
+    for tool_dict in openai_tools:
+        if tool_dict.get("type") == "shell":
+            env = tool_dict.setdefault("environment", {"type": "container_auto"})
+            if env.get("type") == "container_reference":
+                raise ValueError(
+                    "SkillsTool cannot be combined with ContainerReferenceEnvironment: "
+                    "attach skills when creating the container via ContainerManager instead."
+                )
+            env["skills"] = skills
+            return openai_tools
+    openai_tools.append({"type": "shell", "environment": {"type": "container_auto", "skills": skills}})
+    return openai_tools
 
 
 def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
