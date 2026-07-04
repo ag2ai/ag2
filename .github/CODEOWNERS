@@ -16,8 +16,3 @@
 # Provider configs
 /ag2/config/ @marklysze
 /test/config/ @marklysze
-
-# Observability
-/website/docs/user-guide/a2a/ @Lancetnik
-/website/docs/user-guide/ag-ui/ @Lancetnik
-/website/docs/user-guide/observability/ @priyansh4320
