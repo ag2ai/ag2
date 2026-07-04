@@ -9,6 +9,7 @@ import pytest
 from ag2 import Context, Variable
 from ag2.tools import ImageGenerationTool, UserLocation, WebSearchTool
 from ag2.tools.builtin._resolve import resolve_variable
+from ag2.tools.builtin.file_search import FileSearchTool, FileSearchToolSchema
 from ag2.tools.builtin.image_generation import ImageGenerationToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerTool, MCPServerToolSchema
 from ag2.tools.builtin.retrieval import RetrievalTool, RetrievalToolSchema
@@ -188,4 +189,23 @@ class TestRetrievalToolVariable:
         tool = RetrievalTool(Variable("kid"))
 
         with pytest.raises(KeyError, match="kid"):
+            await tool.schemas(context)
+
+
+class TestFileSearchToolVariable:
+    @pytest.mark.asyncio
+    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
+        ctx = make_context(stores=["vs_1", "vs_2"])
+        tool = FileSearchTool(vector_store_ids=Variable("stores"))
+
+        [schema] = await tool.schemas(ctx)
+
+        assert isinstance(schema, FileSearchToolSchema)
+        assert schema.vector_store_ids == ["vs_1", "vs_2"]
+
+    @pytest.mark.asyncio
+    async def test_missing_raises(self, context: Context) -> None:
+        tool = FileSearchTool(vector_store_ids=Variable("stores"))
+
+        with pytest.raises(KeyError, match="stores"):
             await tool.schemas(context)
