@@ -8,7 +8,9 @@ from ag2 import Context
 from ag2.config.openai.mappers import (
     extract_skills_for_shell,
     merge_skills_into_shell_tools,
+    tool_to_responses_api,
 )
+from ag2.exceptions import UnsupportedToolError
 from ag2.tools.builtin.skills import Skill, SkillsTool
 
 
@@ -83,3 +85,17 @@ def test_merge_noop_without_skills() -> None:
     tools = [{"type": "shell"}]
 
     assert merge_skills_into_shell_tools(tools, []) == [{"type": "shell"}]
+
+
+@pytest.mark.asyncio
+async def test_skills_never_in_tools_array(context: Context) -> None:
+    # Skills never appear directly in the Responses `tools[]` array — the client
+    # extracts them via `extract_skills_for_shell` and merges them into a `shell`
+    # tool's `environment.skills` instead. Mapping a skills schema directly
+    # through `tool_to_responses_api` is therefore intentionally unsupported.
+    tool = SkillsTool("pptx")
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(UnsupportedToolError):
+        tool_to_responses_api(schema)

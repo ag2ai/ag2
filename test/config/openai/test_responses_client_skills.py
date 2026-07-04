@@ -11,6 +11,7 @@ from fast_depends.use import SerializerCls
 from ag2 import Context, MemoryStream
 from ag2.config.openai import OpenAIResponsesConfig
 from ag2.events import ModelRequest, TextInput
+from ag2.tools.builtin.file_search import FileSearchTool
 from ag2.tools.builtin.shell import ShellTool
 from ag2.tools.builtin.skills import Skill, SkillsTool
 
@@ -96,3 +97,13 @@ async def test_skills_auto_add_shell() -> None:
             },
         },
     ]
+
+
+@pytest.mark.asyncio
+async def test_file_search_include_results_sets_include() -> None:
+    captured: dict[str, object] = {}
+
+    body = await _request_body(captured, [FileSearchTool(vector_store_ids=["vs_1"], include_results=True)])
+
+    assert body["include"] == ["file_search_call.results"]
+    assert {"type": "file_search", "vector_store_ids": ["vs_1"]} in body["tools"]

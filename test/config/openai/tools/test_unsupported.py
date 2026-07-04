@@ -141,15 +141,6 @@ class TestResponsesApi:
             tool_to_responses_api(schema)
 
     @pytest.mark.asyncio
-    async def test_skills(self, context: Context) -> None:
-        tool = SkillsTool("pptx")
-
-        [schema] = await tool.schemas(context)
-
-        with pytest.raises(UnsupportedToolError):
-            tool_to_responses_api(schema)
-
-    @pytest.mark.asyncio
     async def test_x_search(self, context: Context) -> None:
         tool = XSearchTool()
 
