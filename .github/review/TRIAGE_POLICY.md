@@ -121,6 +121,7 @@ Rules for closing without merging/fixing:
 ```mermaid
 stateDiagram-v2
     [*] --> needs_triage : opened (issue form / PR workflow, automatic)
+    [*] --> confirmed : opened by a maintainer / Triage Team (self-triaged)
 
     state "Triage gates — nobody reviews until cleared" as gates {
         needs_template
@@ -182,6 +183,8 @@ The AI Triage Bot then runs a first pass:
 | It is a usage question | set `type:question`, comment pointing to GitHub Discussions, recommend closing |
 
 The bot **comments and labels; it does not confirm, prioritize, or close.**
+
+**Maintainer shortcut.** Issues opened by maintainers or Triage Team members are self-triaged: they enter at `status:confirmed` instead of `status:needs-triage`, and the author assigns `priority:*` at creation. The intake bot checks above still run (duplicates, areas, type sync).
 
 ### Stage I2 — Triage (Triage Team)
 
