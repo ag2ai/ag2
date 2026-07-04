@@ -18,8 +18,20 @@ class Skill:
     """A reference to a provider-managed skill.
 
     Args:
-        id: Skill identifier (such as ``"pptx"``, ``"xlsx"``, ``"skill_abc123"``).
-        version: Version pin. ``None`` means the provider uses its latest version.
+        id: Skill identifier. Provider-specific:
+
+            - Anthropic first-party skills: ``"pptx"``, ``"xlsx"``, ``"docx"``, ``"pdf"``.
+            - OpenAI system skills carry the ``openai-`` prefix
+              (e.g. ``"openai-spreadsheets"``); bare ids like ``"spreadsheet"``
+              are rejected with 404 "System skill not found".
+            - Custom skill ids as returned by the provider's skills API
+              (e.g. ``"skill_abc123"``).
+        version: Version pin, always a string:
+
+            - Anthropic: a version date such as ``"20251013"`` or ``"latest"``.
+              ``None`` is sent as ``"latest"``.
+            - OpenAI: a positive-integer string such as ``"2"`` or ``"latest"``.
+              ``None`` omits the field, meaning the skill's ``default_version``.
     """
 
     id: str
@@ -46,16 +58,50 @@ class SkillsToolSchema(ToolSchema):
 class SkillsTool(Tool):
     """Declares provider-side skills to be activated for this agent.
 
-    Accepts skill identifiers as plain strings (shorthand for the latest
-    version) or :class:`Skill` objects when a specific version is required.
+    Accepts skill identifiers as plain strings (shorthand for the provider's
+    default version) or :class:`Skill` objects when a specific version is
+    required. Skills are executed server-side by the provider — no local
+    executor is registered.
+
+    Provider support:
+
+    - **Anthropic** — skills ride the ``container`` API parameter as
+      ``{"type": "anthropic", "skill_id": ..., "version": ...}`` entries; they
+      never appear in ``tools[]``. Skills run inside the code-execution
+      container, so a :class:`~ag2.tools.CodeExecutionTool` is added
+      automatically when missing. The client also injects the required
+      ``code-execution-2025-08-25`` and ``skills-2025-10-02`` beta headers.
+
+    - **OpenAI Responses API** — skills attach to the hosted shell tool as
+      ``skill_reference`` entries in its ``container_auto`` environment; a
+      ``{"type": "shell"}`` tool is appended automatically when missing.
+      Combining with :class:`~ag2.tools.ContainerReferenceEnvironment` raises
+      ``ValueError`` — skills for an existing container are configured at
+      container creation (:class:`~ag2.config.ContainerManager`).
+
+    - All other providers (including OpenAI Chat Completions) raise
+      :class:`~ag2.exceptions.UnsupportedToolError`.
 
     Example::
 
-        # Strings — shorthand for Skill(id=s, version=None)
-        SkillsTool("pptx", "xlsx")
+        # Anthropic: first-party skills, auto-adds CodeExecutionTool
+        agent = Agent(
+            name="analyst",
+            config=AnthropicConfig(model="claude-sonnet-4-6", ...),
+            tools=[SkillsTool("pptx", Skill("xlsx", version="latest"))],
+        )
 
-        # Mix
-        SkillsTool("pptx", Skill("xlsx", version="latest"))
+        # OpenAI Responses: system skills use the "openai-" prefix,
+        # auto-adds the hosted shell tool
+        agent = Agent(
+            name="analyst",
+            config=OpenAIResponsesConfig(model="gpt-5.4", ...),
+            tools=[SkillsTool("openai-spreadsheets")],
+        )
+
+    See:
+    - https://platform.claude.com/docs/en/agents-and-tools/agent-skills
+    - https://developers.openai.com/api/docs/guides/tools-skills
     """
 
     __slots__ = (
