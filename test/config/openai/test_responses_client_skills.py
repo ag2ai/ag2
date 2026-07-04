@@ -75,7 +75,7 @@ async def test_skills_merge_into_existing_shell() -> None:
                 "type": "container_auto",
                 "skills": [
                     {"type": "skill_reference", "skill_id": "skill_abc"},
-                    {"type": "skill_reference", "skill_id": "skill_def", "version": 2},
+                    {"type": "skill_reference", "skill_id": "skill_def", "version": "2"},
                 ],
             },
         },

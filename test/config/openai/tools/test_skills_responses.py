@@ -22,9 +22,10 @@ async def test_extract_skill_references(context: Context) -> None:
 
     assert extract_skills_for_shell(schemas) == [
         {"type": "skill_reference", "skill_id": "skill_abc"},
-        {"type": "skill_reference", "skill_id": "skill_def", "version": 2},
-        # non-numeric version ("latest") is omitted — OpenAI treats absent as latest
-        {"type": "skill_reference", "skill_id": "skill_ghi"},
+        # version is a string on the wire: a positive integer or "latest"
+        # (openai.types.responses.SkillReferenceParam); omitted means default_version
+        {"type": "skill_reference", "skill_id": "skill_def", "version": "2"},
+        {"type": "skill_reference", "skill_id": "skill_ghi", "version": "latest"},
     ]
 
 

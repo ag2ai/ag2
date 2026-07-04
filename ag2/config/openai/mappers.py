@@ -8,7 +8,7 @@ from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
-from openai.types.responses import ResponseUsage
+from openai.types.responses import ResponseUsage, SkillReferenceParam
 
 from ag2.compact import CompactionSummary
 from ag2.config.openai.events import OpenAIReasoningEvent, OpenAIServerToolCallEvent
@@ -520,29 +520,29 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     raise UnsupportedToolError(t.type, "openai-responses")
 
 
-def extract_skills_for_shell(tools: Iterable[ToolSchema]) -> list[dict[str, Any]]:
+def extract_skills_for_shell(tools: Iterable[ToolSchema]) -> list[SkillReferenceParam]:
     """Extract OpenAI ``skill_reference`` entries from SkillsToolSchema instances.
 
     OpenAI Responses attaches skills to the hosted shell tool's container
     environment rather than as standalone ``tools[]`` entries.
     https://developers.openai.com/api/docs/guides/tools-skills
     """
-    skills: list[dict[str, Any]] = []
+    skills: list[SkillReferenceParam] = []
     for t in tools:
         if isinstance(t, SkillsToolSchema):
             for s in t.skills:
-                entry: dict[str, Any] = {"type": "skill_reference", "skill_id": s.id}
-                # OpenAI versions are integers; non-numeric pins ("latest") are
-                # expressed by omitting the field.
-                if s.version is not None and s.version.isdigit():
-                    entry["version"] = int(s.version)
+                entry: SkillReferenceParam = {"type": "skill_reference", "skill_id": s.id}
+                # A positive-integer string or "latest"; omitted means the
+                # skill's default_version.
+                if s.version is not None:
+                    entry["version"] = s.version
                 skills.append(entry)
     return skills
 
 
 def merge_skills_into_shell_tools(
     openai_tools: list[dict[str, Any]],
-    skills: list[dict[str, Any]],
+    skills: list[SkillReferenceParam],
 ) -> list[dict[str, Any]]:
     """Attach skill references to the hosted shell tool's environment.
 
