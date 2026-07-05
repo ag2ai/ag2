@@ -93,10 +93,10 @@ Prometheus histograms also expose `_bucket`, `_count`, and `_sum` series for eac
 | `outcome` | `success`, `error` | `error` is used for raised exceptions, tool error results, timeouts, and cancellations. |
 | `finish_reason` | Provider finish reason or `unknown` | |
 | `error_type` | Exception class name or empty string | Empty string means the operation succeeded. |
-| `token_type` | `input`, `output`, `cache_read_input`, `cache_creation_input` | |
+| `token_type` | `input`, `output`, `total`, `cache_read_input`, `cache_creation_input`, `thinking` | `total` overlaps `input` + `output`. |
 | `tool` | Tool name | Derived from the `ToolCallEvent` name. |
 
-Missing or empty label values are normalized to `unknown`, except `error_type`, which is an empty string for successful operations. Token values of zero are not emitted, and missing token fields are not synthesized as zero.
+Missing or empty label values are normalized to `unknown`, except `error_type`, which is an empty string for successful operations. Token values of zero are not emitted, and missing token fields are not synthesized as zero. Which `token_type` values appear depends on what the provider reports (for example, `thinking` only for reasoning models and `cache_read_input` / `cache_creation_input` only when prompt caching is active).
 
 ## Configuration
 
