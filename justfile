@@ -10,55 +10,55 @@ default:
 
 # Tests
 
-_beta_llm_filter := "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)"
+_llm_filter := "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or zai or deepseek or ollama or bedrock or cerebras)"
 
-[doc("Run beta tests")]
+[doc("Run tests")]
 [group("tests")]
-test-beta *params:
+test *params:
   pytest -vv --durations=10 --durations-min=1.0 \
-    -m "{{ _beta_llm_filter }}" \
-    test/beta/ {{ params }}
+    -m "{{ _llm_filter }}" \
+    test/ {{ params }}
 
-[doc("Run beta tests with coverage")]
+[doc("Run tests with coverage")]
 [group("tests")]
-test-beta-cov *params:
+test-cov *params:
   pytest -vv --durations=10 --durations-min=1.0 \
-    --cov=autogen/beta --cov-branch --cov-report=xml \
-    -m "{{ _beta_llm_filter }}" \
-    test/beta/ {{ params }}
-  coverage report -m --include="autogen/beta/*"
+    --cov=ag2 --cov-branch --cov-report=xml \
+    -m "{{ _llm_filter }}" \
+    test/ {{ params }}
+  coverage report -m --include="ag2/*"
 
-_beta_llm_default_mark := "openai or gemini or anthropic or ollama or dashscope"
+_llm_default_mark := "openai or gemini or anthropic or zai or ollama or dashscope"
 
-[doc("Run beta tests with LLM (e.g. just test-beta-llm openai)")]
+[doc("Run tests with LLM (e.g. just test-llm openai)")]
 [group("tests")]
-test-beta-llm mark=_beta_llm_default_mark *params:
+test-llm mark=_llm_default_mark *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
     -m "{{ mark }}" \
-    test/beta/ {{ params }}
+    test/ {{ params }}
 
-[doc("Run beta tests with LLM and coverage (e.g. just test-beta-llm-cov openai)")]
+[doc("Run tests with LLM and coverage (e.g. just test-llm-cov openai)")]
 [group("tests")]
-test-beta-llm-cov mark=_beta_llm_default_mark *params:
+test-llm-cov mark=_llm_default_mark *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
-    --cov=autogen/beta/config --cov-branch --cov-report=xml \
+    --cov=ag2/config --cov-branch --cov-report=xml \
     -m "{{ mark }}" \
-    test/beta/ {{ params }}
-  coverage report -m --include="autogen/beta/config/*"
+    test/ {{ params }}
+  coverage report -m --include="ag2/config/*"
 
-[doc("Run all beta tests (with and without LLMs)")]
+[doc("Run all tests (with and without LLMs)")]
 [group("tests")]
-test-beta-all *params:
+test-all *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
-    test/beta/ {{ params }}
+    test/ {{ params }}
 
-[doc("Run all beta tests with coverage")]
+[doc("Run all tests with coverage")]
 [group("tests")]
-test-beta-all-cov *params:
+test-all-cov *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
-    --cov=autogen/beta --cov-branch --cov-report=xml \
-    test/beta/ {{ params }}
-  coverage report -m --include="autogen/beta/*"
+    --cov=ag2 --cov-branch --cov-report=xml \
+    test/ {{ params }}
+  coverage report -m --include="ag2/*"
 
 
 # Linter

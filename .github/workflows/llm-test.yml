@@ -1,0 +1,171 @@
+name: Tests with LLMs
+
+on:
+  schedule:
+    - cron: "0 0 * * 0" # weekly on Sunday at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
+permissions:
+  {}
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        llm: ["openai", "gemini", "anthropic", "zai"]
+        python-version: ["3.10"]
+        os: [ubuntu-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    environment: openai1
+    steps:
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@c21884f3dda18dafc2f8b402fe807ccc9ec1aa5e # v2.4.0
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${GITHUB_TRIGGERING_ACTOR} does not have permissions on this repo."
+          echo "Current permission level is ${STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION}"
+          echo "Job originally triggered by ${GITHUB_ACTOR}"
+          exit 1
+        env:
+          STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION: ${{ steps.checkAccess.outputs.user-permission }}
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "latest"
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages for ${{ matrix.llm }}
+        run: |
+          uv pip install --system --group test -e ".[redis,tracing,${{ matrix.llm }}]" "watchdog>=4.0,<7"
+      - name: LLM tests using ${{ matrix.llm }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+        run: |
+          llm_fixed="${{ matrix.llm }}"
+          llm_fixed="${llm_fixed//-/_}"
+          just test-llm-cov "$llm_fixed"
+      - name: Rename coverage file
+        run: mkdir coverage && mv .coverage coverage/.coverage.llm-${{ matrix.llm }}
+      - name: Store coverage file
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-llm-${{ matrix.llm }}
+          path: coverage
+          include-hidden-files: true
+          if-no-files-found: error
+
+  test-mixed-provider:
+    strategy:
+      matrix:
+        python-version: ["3.10"]
+        os: [ubuntu-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    environment: openai1
+    steps:
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@c21884f3dda18dafc2f8b402fe807ccc9ec1aa5e # v2.4.0
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${GITHUB_TRIGGERING_ACTOR} does not have permissions on this repo."
+          echo "Current permission level is ${STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION}"
+          echo "Job originally triggered by ${GITHUB_ACTOR}"
+          exit 1
+        env:
+          STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION: ${{ steps.checkAccess.outputs.user-permission }}
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "latest"
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages for all providers
+        run: |
+          uv pip install --system --group test -e ".[redis,tracing,openai,anthropic,gemini]" "watchdog>=4.0,<7"
+      - name: LLM cross-provider tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          just test-llm-cov "anthropic and openai"
+      - name: Rename coverage file
+        run: mkdir coverage && mv .coverage coverage/.coverage.llm-mixed-provider
+      - name: Store coverage file
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-llm-mixed-provider
+          path: coverage
+          include-hidden-files: true
+          if-no-files-found: error
+
+  coverage-combine:
+    needs: [test, test-mixed-provider]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "latest"
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.13"
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: coverage-*
+          path: coverage
+          merge-multiple: true
+      - name: Combine coverage data into a single report
+        run: |
+          uv pip install --system "coverage[toml]"
+          coverage combine coverage
+          coverage xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./coverage.xml
+          flags: llm
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}

@@ -1,0 +1,136 @@
+---
+title: "Coding with AI Assistants"
+sidebarTitle: "AI Coding Assistants"
+---
+
+Set up your AI coding assistant (Claude Code, Cursor, Copilot, Codex, Windsurf, or any agent) so it can build **AG2** apps with you using current, accurate APIs and examples.
+
+!!! tip "Point your agent at this page"
+    Paste this page's link into your assistant and ask it to follow the setup. It can install the AG2 skills and configure itself. Everything below is written to be runnable copy-paste.
+
+## Why this matters
+
+AG2 (`ag2`) is an async, protocol-driven API. Models were largely trained on the older `autogen` / `pyautogen` surface, so out of the box an assistant will reach for stale patterns such as synchronous `ConversableAgent`, `initiate_chat`, and the like. The setup on this page gives your assistant three things it otherwise lacks: **AG2-specific skills**, an up-to-date **docs reference**, and **project rules** that keep it on the current AG2 API.
+
+!!! warning "Current API only"
+    The earlier synchronous `ConversableAgent` / `initiate_chat` API has been removed from the package. Models were trained on it, so point your assistant at the current AG2 docs and skills, not legacy examples it may have memorized.
+
+## Step 1: Install the AG2 Skills
+
+The most critical and dev-accelerating step.
+
+[ag2-skills](https://github.com/ag2ai/ag2-skills){.external-link target="_blank"} is a catalog of [Agent Skills](https://agentskills.io/){.external-link target="_blank"}, on-demand instruction packs that teach an assistant how to build with AG2. Each skill loads only its name and description until it's relevant, then pulls in the full recipe. Skills cover quickstart, custom tools, the multi-agent network, middleware, memory, structured output, evaluation, and more.
+
+The fastest path uses the [`skills` CLI](https://skills.sh){.external-link target="_blank"}:
+
+<Tabs>
+  <Tab title="All skills">
+```bash
+# Install the full AG2 skill catalog
+npx skills add ag2ai/ag2-skills
+```
+  </Tab>
+
+  <Tab title="One skill">
+```bash
+# Install just the quickstart (good first taste)
+npx skills add ag2ai/ag2-skills@ag2-quickstart
+```
+  </Tab>
+
+  <Tab title="Manual (Claude Code)">
+```bash
+# Clone and copy individual skills into your user skills directory
+git clone https://github.com/ag2ai/ag2-skills.git
+cp -r ag2-skills/skills/ag2-overview   ~/.claude/skills/
+cp -r ag2-skills/skills/ag2-quickstart ~/.claude/skills/
+```
+  </Tab>
+</Tabs>
+
+!!! tip "Where to start"
+    After installing, tell your assistant to load **`ag2-overview`** (a map of AG2 capabilities) and **`ag2-quickstart`** (a minimal working agent). From there it can pull in the specific skill it needs, such as `ag2-add-custom-tool` or `ag2-network-quickstart`.
+
+## Step 2: Point your assistant at the AG2 docs
+
+Skills teach patterns; the docs keep your assistant honest about the *exact* current signatures. The biggest risk is your assistant falling back on the **classic** `autogen` API it was trained on (`ConversableAgent`, `initiate_chat`, `GroupChat`) — now removed from the package. Give it current ground truth:
+
+- **Live AG2 docs:** [`https://docs.ag2.ai/latest/docs/user-guide/agents/`](https://docs.ag2.ai/latest/docs/user-guide/agents/){.external-link target="_blank"} — point your agent at this section (most assistants can fetch a URL).
+- **AG2 docs source (Markdown):** [`ag2ai/ag2/website/docs/user-guide`](https://github.com/ag2ai/ag2/tree/main/website/docs/user-guide){.external-link target="_blank"} — the raw `.mdx` your agent can read directly from GitHub.
+- **AG2 `llms.txt`:** [`https://docs.ag2.ai/latest/llms.txt`](https://docs.ag2.ai/latest/llms.txt){.external-link target="_blank"} — a machine-readable index of the AG2 docs following the [llms.txt standard](https://llmstxt.org/){.external-link target="_blank"}, plus [`llms-full.txt`](https://docs.ag2.ai/latest/llms-full.txt){.external-link target="_blank"} for the entire AG2 docs in one file. Both are AG2-scoped, so they never point your agent at the classic API.
+
+Then anchor your prompt: *"Build with `ag2` only. If a signature is unfamiliar, check the AG2 docs before writing code — do not use the classic `autogen` API."*
+
+!!! warning "Prefer the official skills and docs"
+    Generic docs-MCP servers and code indexers may surface outdated `ConversableAgent` / `initiate_chat` examples cached from older AG2 releases. Rely on the AG2 Skills and the docs links above, which always reflect the current API.
+
+## Step 3: Add project rules to your repo
+
+A rules file pins AG2 conventions for every session in your project. The open [AGENTS.md](https://agents.md/){.external-link target="_blank"} standard is read by Cursor, Copilot, Codex, Gemini CLI, Windsurf, and others; Claude Code reads `CLAUDE.md`. Drop one (or both, a symlink works) at your repo root:
+
+```markdown
+# AGENTS.md
+
+This project is built on **AG2** (`ag2`). Follow these rules.
+
+## API surface
+- Import only from `ag2` and its submodules (`ag2.config`,
+  `ag2.tools`, ...). Do NOT use the legacy `autogen` / `pyautogen`
+  API (`ConversableAgent`, `initiate_chat`) — it has been removed.
+- Agents are async. Use `await agent.ask(...)` and `await reply.ask(...)`.
+
+## Conventions
+- Do not use `from __future__ import annotations`.
+- Public signatures accept `str | os.PathLike[str]`; use `pathlib.Path` internally.
+- Prefer top-level imports; no imports inside functions.
+
+## Docs & skills
+- Install and use the AG2 skills: `npx skills add ag2ai/ag2-skills`.
+- AG2 docs: https://docs.ag2.ai/latest/docs/user-guide/agents/ (machine-readable index at /latest/llms.txt).
+- When unsure of a signature, check the AG2 docs before writing code.
+- Do NOT trust generic docs indexers — they surface the retired classic API.
+```
+
+<Tabs>
+  <Tab title="Claude Code">
+```bash
+# Claude Code reads CLAUDE.md — symlink it to a single source of truth
+ln -s AGENTS.md CLAUDE.md
+```
+  </Tab>
+
+  <Tab title="Cursor">
+```bash
+# Cursor reads AGENTS.md, or project rules under .cursor/rules/
+mkdir -p .cursor/rules
+cp AGENTS.md .cursor/rules/ag2.md
+```
+  </Tab>
+
+  <Tab title="Copilot">
+```bash
+# GitHub Copilot reads .github/copilot-instructions.md
+mkdir -p .github
+cp AGENTS.md .github/copilot-instructions.md
+```
+  </Tab>
+</Tabs>
+
+## Per-tool summary
+
+| Assistant | Skills | AG2 docs | Project rules |
+|---|---|---|---|
+| **Claude Code** | `npx skills add ag2ai/ag2-skills` or copy to `~/.claude/skills/` | point at the docs URL | `CLAUDE.md` (symlink to `AGENTS.md`) |
+| **Cursor** | `npx skills add ag2ai/ag2-skills` | point at the docs URL | `AGENTS.md` or `.cursor/rules/` |
+| **Copilot / Codex / Windsurf** | `npx skills add ag2ai/ag2-skills` | point at the docs URL | `AGENTS.md` (Copilot: `.github/copilot-instructions.md`) |
+| **Any agent** | paste `SKILL.md` contents into context | paste the docs (or `llms-full.txt`) | paste the rules above into your prompt |
+
+## Tips & caveats
+
+- **Start from the quickstart.** Have your assistant scaffold from `ag2-quickstart` rather than inventing structure — see [Agent Communication](/docs/user-guide/agents) and [Model Configuration](/docs/user-guide/model_configuration).
+- **Prefer the documented high-level API** (`ag2`, `ag2.tools`, `ag2.config`) over reaching into internals.
+- **Always review generated code.** Models still drift toward legacy `autogen` patterns; verify imports come from `ag2` and that calls are `await`ed.
+- **Run the tests.** AG2 is async throughout — encourage your assistant to write and run [tests](/docs/user-guide/testing) with `TestConfig` instead of hitting a live model.
+
+!!! note "Going further"
+    The skill catalog mirrors these docs section-for-section — `ag2-network-quickstart` for [multi-agent networks](/docs/user-guide/network/overview), `ag2-structured-output` for [typed responses](/docs/user-guide/structured_output), `ag2-evaluation` for the [eval framework](/docs/user-guide/evaluation/evaluation), and more. Install the set once and your assistant can pull in whichever it needs.

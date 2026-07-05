@@ -1,0 +1,400 @@
+---
+title: Built-in Provider Tools
+sidebarTitle: Built-in Tools
+---
+
+# Built-in Provider Tools
+
+AG2 includes built-in tools that map to server-side capabilities offered by LLM providers. These tools are executed by the provider's API — not locally — and require no function implementation on your side.
+
+| Tool | Anthropic | OpenAI | Gemini | xAI | Z.AI |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| `CodeExecutionTool` | ✓ | ✓ | ✓ | ✓ | ✗ |
+| `WebSearchTool` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `WebFetchTool` | ✓ | ✗ | ✓ | ✗ | ✗ |
+| `FileSearchTool` | ✗ | ✓ | ✗ | ✗ | ✗ |
+| `ShellTool` | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `SkillsTool` | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `MCPServerTool` | ✓ | ✓ | ✗ | ✓ | ✗ |
+| `ImageGenerationTool` | ✗ | ✓ | ✗ | ✗ | ✗ |
+| `MemoryTool` | ✓ | ✗ | ✗ | ✗ | ✗ |
+| `XSearchTool` | ✗ | ✗ | ✗ | ✓ | ✗ |
+| `RetrievalTool` | ✗ | ✗ | ✗ | ✗ | ✓ |
+
+## Web Search
+
+Gives the model access to real-time web search results.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import WebSearchTool, UserLocation
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[
+        WebSearchTool(
+            max_uses=5,
+            user_location=UserLocation(country="US"),
+            allowed_domains=["github.com", "pypi.org"],
+            blocked_domains=["pinterest.com"],
+        ),
+    ],
+)
+```
+
+Not all parameters are supported by every provider. Unsupported parameters are silently ignored.
+
+| Parameter | Anthropic | OpenAI | Gemini | xAI | Z.AI |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| `max_uses` | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `user_location` | ✓ | ✓ | ✗ | ✓ | ✗ |
+| `search_context_size` | ✗ | ✓ | ✗ | ✗ | ✓ |
+| `allowed_domains` | ✓ | ✓ | ✗ | ✓ | ✗ |
+| `blocked_domains` | ✓ | ✗ | ✓ | ✓ | ✗ |
+
+!!! note
+    Z.AI maps `WebSearchTool` to its `search-prime` engine and only honors `search_context_size` (as `content_size`); the other parameters are silently ignored.
+
+## Web Fetch
+
+Fetches full content from specific URLs. Useful for reading documentation, articles, or PDFs.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import WebFetchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[
+        WebFetchTool(
+            max_uses=3,
+            max_content_tokens=50000,
+            citations=True,
+        ),
+    ],
+)
+```
+
+| Parameter | Anthropic | Gemini |
+| :--- | :---: | :---: |
+| `max_uses` | ✓ | ✗ |
+| `allowed_domains` | ✓ | ✗ |
+| `blocked_domains` | ✓ | ✗ |
+| `citations` | ✓ | ✗ |
+| `max_content_tokens` | ✓ | ✗ |
+
+!!! note
+    OpenAI does not support web fetch. Using `WebFetchTool` with an OpenAI config will raise an error.
+
+## File Search
+
+`FileSearchTool` lets the model search OpenAI vector stores and ground its answers in the retrieved chunks. Upload files to a vector store first (via the OpenAI SDK or dashboard), then reference the store by id.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.tools import FileSearchTool
+
+agent = Agent(
+    "librarian",
+    config=OpenAIResponsesConfig(model="gpt-4o"),
+    tools=[
+        FileSearchTool(
+            vector_store_ids=["vs_abc123"],
+            max_num_results=4,
+            include_results=True,
+        ),
+    ],
+)
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `vector_store_ids` | **Required.** Ids of the vector stores to search. |
+| `max_num_results` | Cap the number of retrieved chunks. |
+| `filters` | An [OpenAI comparison or compound filter](https://developers.openai.com/api/docs/guides/tools-file-search#metadata-filtering){.external-link target="_blank"} object, passed through verbatim. |
+| `include_results` | Return the raw retrieved chunks in the tool result (adds `include=["file_search_call.results"]`). Off by default — chunks are full text and inflate responses. |
+
+Search activity surfaces on the event stream as `BuiltinToolCallEvent` / `BuiltinToolResultEvent` pairs. With `include_results=True` the result event carries each chunk as a `TextInput` part, plus per-file relevance scores in `metadata["results"]`.
+
+!!! note
+    `FileSearchTool` is only supported by the OpenAI Responses API (`OpenAIResponsesConfig`). Other providers raise an error.
+
+## Code Execution
+
+Lets the model write and run code inline during a conversation.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import CodeExecutionTool
+
+agent = Agent(
+    "analyst",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[CodeExecutionTool()],
+)
+```
+
+The tool accepts a `version` parameter for provider version pinning:
+
+```python
+CodeExecutionTool(version="code_execution_20260521")
+```
+
+Accepted versions: `code_execution_20250825` (default), `code_execution_20260120`, and `code_execution_20260521`.
+
+## Memory
+
+Enables Claude to store and retrieve information across conversations. Claude can create, read, update, and delete files in a `/memories` directory.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import MemoryTool
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[MemoryTool()],
+)
+```
+
+!!! note
+    `MemoryTool` is currently only supported by Anthropic.
+
+## Shell
+
+Gives the model the ability to run shell commands. The execution environment depends on the provider.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import ShellTool
+
+agent = Agent(
+    "devops",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[ShellTool()],
+)
+```
+
+OpenAI supports configuring the execution environment:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.tools import ShellTool
+from ag2.tools.builtin.shell import ContainerAutoEnvironment, NetworkPolicy
+
+agent = Agent(
+    "devops",
+    config=OpenAIResponsesConfig(model="gpt-4.1"),
+    tools=[
+        ShellTool(
+            environment=ContainerAutoEnvironment(
+                network_policy=NetworkPolicy(allowed_domains=["pypi.org"]),
+            ),
+        ),
+    ],
+)
+```
+
+| Environment | Description |
+| :--- | :--- |
+| `ContainerAutoEnvironment` | Provider-managed container with optional network policy |
+| `ContainerReferenceEnvironment` | Reference an existing container by ID |
+
+!!! warning
+    `ShellTool` gives the model direct shell access. Use it only with trusted prompts and consider restricting the environment.
+
+## Provider Skills
+
+`SkillsTool` activates skills that are hosted and executed **by the provider** — packaged capabilities such as spreadsheet or document generation. Pass skill ids as strings, or `Skill` objects to pin a version.
+
+!!! note
+    Provider skills are unrelated to AG2's local [Skills](/docs/user-guide/skills/) (`SkillPlugin` / `SkillsToolkit`), which run on your machine. `SkillsTool` only tells the provider which of *its own* skills to enable server-side.
+
+<Tabs>
+  <Tab title="Anthropic">
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import Skill, SkillsTool
+
+agent = Agent(
+    "analyst",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SkillsTool("pptx", Skill("xlsx", version="latest"))],
+)
+```
+  </Tab>
+
+  <Tab title="OpenAI">
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.tools import SkillsTool
+
+agent = Agent(
+    "analyst",
+    config=OpenAIResponsesConfig(model="gpt-5.4"),
+    tools=[SkillsTool("openai-spreadsheets")],
+)
+```
+  </Tab>
+</Tabs>
+
+Skills never appear as standalone entries in the provider's `tools[]` array — each client wires them into the request differently:
+
+- **Anthropic** — skills ride the `container` API parameter. They execute inside the code-execution container, so a `CodeExecutionTool` is added automatically when missing, along with the required beta headers. First-party skill ids: `pptx`, `xlsx`, `docx`, `pdf`.
+- **OpenAI (Responses API)** — skills attach to the hosted shell tool's `container_auto` environment as `skill_reference` entries; a shell tool is added automatically when missing. System skill ids carry the `openai-` prefix (e.g. `openai-spreadsheets`). Combining `SkillsTool` with `ContainerReferenceEnvironment` raises an error — skills for an existing container are configured when the container is created.
+
+Version pins are strings. For Anthropic, a version date such as `"20251013"` or `"latest"` (`None` is sent as `"latest"`). For OpenAI, a positive integer such as `"2"` or `"latest"` (`None` omits the field, meaning the skill's default version).
+
+## MCP Server
+
+Integrates external [MCP (Model Context Protocol)](https://modelcontextprotocol.io/){.external-link target="_blank"} servers, giving the model access to remote tools.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import MCPServerTool
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[
+        MCPServerTool(
+            server_url="https://mcp.example.com/sse",
+            server_label="my-tools",
+            allowed_tools=["search", "summarize"],
+        ),
+    ],
+)
+```
+
+| Parameter | Anthropic | OpenAI |
+| :--- | :---: | :---: |
+| `server_url` | ✓ | ✓ |
+| `server_label` | ✓ | ✓ |
+| `authorization_token` | ✓ | ✗ |
+| `description` | ✓ | ✗ |
+| `allowed_tools` | ✓ | ✓ |
+| `blocked_tools` | ✓ | ✗ |
+| `headers` | ✗ | ✓ |
+
+## Image Generation
+
+`ImageGenerationTool` instructs the model to generate images inline during a conversation. Generated images are returned via `#!python reply.files`.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.tools import ImageGenerationTool
+
+agent = Agent(
+    "designer",
+    config=OpenAIResponsesConfig(model="gpt-4.1"),
+    tools=[
+        ImageGenerationTool(
+            quality="high",
+            size="1024x1024",
+            output_format="png",
+            background="transparent",
+        ),
+    ],
+)
+
+reply = await agent.ask("Generate a logo for a coffee shop.")
+for image in reply.files:
+    print(image.metadata.get("media_type"), len(image.data))
+```
+
+!!! note
+    `ImageGenerationTool` is only supported by OpenAI (Responses API). Gemini generates images through a response modality rather than a tool. See [Image Generation](/docs/user-guide/multimodal/image_generation/) for the full guide covering both providers.
+
+## X Search
+
+`XSearchTool` gives xAI's Grok models real-time search over X (Twitter), optionally scoped to specific handles, a date range, or media understanding. This tool is xAI-specific.
+
+```python linenums="1"
+from datetime import datetime
+
+from ag2 import Agent
+from ag2.config import XAIConfig
+from ag2.tools import XSearchTool
+
+agent = Agent(
+    "researcher",
+    config=XAIConfig(model="grok-4"),
+    tools=[
+        XSearchTool(
+            allowed_x_handles=["xai"],
+            from_date=datetime(2024, 1, 1),
+            enable_image_understanding=True,
+        ),
+    ],
+)
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `allowed_x_handles` | Restrict the search to these X handles. |
+| `excluded_x_handles` | Exclude these X handles from results. |
+| `from_date` / `to_date` | Bound the search to a `datetime` range. |
+| `enable_image_understanding` | Let the model interpret images in posts. |
+| `enable_video_understanding` | Let the model interpret videos in posts. |
+
+!!! note
+    `XSearchTool` is only supported by xAI.
+
+## Retrieval
+
+`RetrievalTool` lets the model query a Z.AI knowledge base by id, grounding its answers in the retrieved documents.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import ZAIConfig
+from ag2.tools.builtin import RetrievalTool
+
+agent = Agent(
+    "researcher",
+    config=ZAIConfig(model="glm-4.6"),
+    tools=[
+        RetrievalTool(
+            knowledge_id="kb_123",
+            prompt_template="Use {{ knowledge }} to answer {{ question }}.",
+        ),
+    ],
+)
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `knowledge_id` | **Required.** Id of the Z.AI knowledge base to query. |
+| `prompt_template` | Optional template for injecting retrieved content, using `{{ knowledge }}` and `{{ question }}` placeholders. |
+
+!!! note
+    `RetrievalTool` is only supported by Z.AI.
+
+## Anthropic Tool Versions
+
+Anthropic versions their server-side tools. Newer versions support dynamic filtering (Claude writes code to filter results before loading into context), but require Opus 4.6 or Sonnet 4.6.
+
+Set the version on each built-in tool (defaults match the older Anthropic tool revisions):
+
+```python linenums="1"
+from ag2.tools import WebFetchTool, WebSearchTool
+
+tools = [
+    WebSearchTool(version="web_search_20260209"),  # default: web_search_20250305
+    WebFetchTool(version="web_fetch_20260209"),    # default: web_fetch_20250910
+]
+```
+
+The default versions are compatible with all Claude models including Haiku.

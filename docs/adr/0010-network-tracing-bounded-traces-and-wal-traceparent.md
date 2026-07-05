@@ -19,7 +19,7 @@ brings three tensions a naive design gets wrong:
 - **Trace shape.** A hub can run for hours with long-lived channels and thousands of
   envelopes. Parenting all of it under one root span produces a trace that never ends
   and that no collector or viewer ingests well.
-- **Dependency surface.** The hub and `autogen.beta.task` are core; most users never
+- **Dependency surface.** The hub and `ag2.task` are core; most users never
   enable tracing. OpenTelemetry must not become a hard import on the hot path.
 - **Replay.** Channel state is rebuilt by re-folding the WAL on `hydrate()`. If trace
   context lived only in memory, replayed envelopes would either lose their original
@@ -45,7 +45,7 @@ the records, not reconstructed.
 **3. Opt-in by layering.** Nothing is traced unless a `tracer_provider` is passed to
 `Hub.open`. OpenTelemetry is imported only in the middleware and network seams
 (guarded), never in core. The shared string vocabulary lives in an import-free
-`autogen.beta._telemetry_consts` module so an OTel-free consumer (the network handler,
+`ag2._telemetry_consts` module so an OTel-free consumer (the network handler,
 the eval reader) can reference a key without pulling in OpenTelemetry.
 
 **4. Span vocabulary — align with GenAI semconv, extend under `ag2.*`.** Agent-side
@@ -70,14 +70,14 @@ network.envelope ag2.msg.text   ag2.span.type=envelope            (PRODUCER, tra
 ```
 
 The full span/attribute catalog is **not** duplicated here — it is reference material
-maintained in the telemetry docs (`website/docs/beta/telemetry/agent.mdx` and
-`website/docs/beta/telemetry/network.mdx`).
+maintained in the telemetry docs (`website/docs/user-guide/telemetry/agent.mdx` and
+`website/docs/user-guide/telemetry/network.mdx`).
 
 **Related — checkpoints as span-events, not spans.** Task checkpoints bypass the
 envelope path (direct `KnowledgeStore` writes), so they would otherwise be invisible.
 `HubBackedCheckpointStore` records them as `checkpoint.write` / `checkpoint.read`
 *span-events* on the active span rather than as their own spans — keeping cardinality
-low and keeping OpenTelemetry out of `autogen.beta.task` (the same layering rule as #3).
+low and keeping OpenTelemetry out of `ag2.task` (the same layering rule as #3).
 
 ## Consequences
 

@@ -1,0 +1,315 @@
+---
+title: "Skills"
+---
+
+Skills let an agent load specialized instructions on demand instead of carrying every capability in its system prompt. They follow the [agentskills.io](https://agentskills.io){.external-link target="_blank"} convention: each skill is a directory that an agent discovers, reads, and runs only when a task actually calls for it. Skills can also be [defined inline in code](#code-defined-skills) when a directory on disk isn't a good fit.
+
+!!! note
+    This page covers **local** skills that run on your machine. To activate skills hosted and executed by the LLM provider (Anthropic or OpenAI server-side), use `SkillsTool` — see [Provider Skills](/docs/user-guide/tools/builtin_tools#provider-skills).
+
+AG2 ships three entry points, from highest-level to lowest:
+
+| Entry point | Use it when |
+| :--- | :--- |
+| [`SkillPlugin`](#skillplugin) | **Recommended.** Injects the catalog into the system prompt and wires the activation tools, so the model knows what's available from the first turn. |
+| [`SkillsToolkit`](#skillstoolkit) | You want the activation tools (plus an explicit `list_skills`) without prompt injection, or full control over runtimes. |
+| [`SkillSearchToolkit`](#skillsearchtoolkit) | The agent should discover and install new skills from the [skills.sh](https://skills.sh){.external-link target="_blank"} registry at runtime. |
+
+## Skill structure
+
+A skill is a directory with a `SKILL.md` at its root and, optionally, scripts and resource files:
+
+```text
+pdf-processing/
+├── SKILL.md            # required: YAML frontmatter + instructions
+├── scripts/            # optional: runnable .py / .sh files
+│   └── extract.py
+└── references/         # optional: any bundled resource files
+    └── form-fields.md
+```
+
+`SKILL.md` carries YAML frontmatter (`name`, `description`, and optionally `version`, `license`, `compatibility`) followed by the instruction body. For the full authoring format, see the [agentskills.io documentation](https://agentskills.io/){.external-link target="_blank"}.
+
+When surfacing a skill's files, AG2 draws one firm line:
+
+- A **script** lives under `scripts/` and is *executed* via `run_skill_script`.
+- A **resource** is any other file (not `SKILL.md`, not under `scripts/`) and is *read* via `read_skill_resource`.
+
+The two are disjoint — a file is one or the other, never both.
+
+## Progressive disclosure
+
+Skills exist to keep context small. The agent only pays the token cost of the detail it actually uses, in three tiers:
+
+| Tier | What's loaded | When |
+| :--- | :--- | :--- |
+| **1. Catalog** | Name + description + location, per skill | At startup (or via `list_skills`) |
+| **2. Instructions** | The full `SKILL.md` body | When the model calls `load_skill` |
+| **3. Resources & scripts** | Bundled files and script output | When the instructions reference them (`read_skill_resource` / `run_skill_script`) |
+
+An agent with 20 installed skills doesn't load 20 full instruction sets upfront — only the ones a given conversation activates.
+
+## SkillPlugin
+
+`SkillPlugin` is the recommended way to give an agent local skills. Instead of spending a `list_skills` tool round-trip, it injects the catalog into the system prompt at startup, so the model can decide which skill is relevant immediately.
+
+```python linenums="1" hl_lines="8"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SkillPlugin
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    plugins=[SkillPlugin()],
+)
+```
+
+By default it scans `.agents/skills` relative to the current working directory. Pass a path or a `LocalRuntime` to point elsewhere:
+
+```python linenums="1"
+plugins=[SkillPlugin("./my-skills")]
+```
+
+### Activation flow
+
+1. **Startup** — the plugin discovers every skill and injects an `<available_skills>` block into the system prompt. Each entry lists the skill's `name`, `description`, and `location`:
+
+    ```xml
+    <available_skills>
+      <skill>
+        <name>pdf-processing</name>
+        <description>Extract PDF text, fill forms, merge files. Use when handling PDFs.</description>
+        <location>/home/user/.agents/skills/pdf-processing/SKILL.md</location>
+      </skill>
+    </available_skills>
+    ```
+
+2. **Load** — when a task matches a description, the model calls `load_skill(name)`. The `name` parameter is constrained to the discovered skills, so the model can't invent one. The tool returns the `SKILL.md` body wrapped in `<skill_content>`, along with the skill directory and a listing of bundled resources.
+
+3. **Use resources** — the model reads a listed resource with `read_skill_resource(name, resource)` or executes a script with `run_skill_script(name, script, args)` only when the instructions call for it.
+
+### Capability gating
+
+`SkillPlugin` only registers the activation tools the installed skills can actually use:
+
+- `load_skill` is always registered (when at least one skill exists).
+- `read_skill_resource` is registered **only if some skill has resources**.
+- `run_skill_script` is registered **only if some skill has scripts**.
+
+So an agent whose skills are pure instructions never sees a `run_skill_script` tool it can't use. When no skills are found at all, the plugin contributes nothing — no catalog and no tools.
+
+!!! tip
+    `SkillPlugin` is a snapshot taken at construction time: the catalog, the `name` constraint, and the gated tools always describe the same set of skills. Rebuild the agent (or the plugin) after installing new skills.
+
+## SkillsToolkit
+
+`SkillsToolkit` is the lower-level building block behind `SkillPlugin`. It exposes the same activation tools plus an explicit `list_skills` tool, but does **not** inject anything into the prompt — the model discovers skills by calling `list_skills` itself. Prefer [`SkillPlugin`](#skillplugin) unless you need that control.
+
+```python linenums="1" hl_lines="8"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SkillsToolkit
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SkillsToolkit()],
+)
+```
+
+It exposes four tools:
+
+| Tool | Description |
+| :--- | :--- |
+| `list_skills` | Return a catalog of installed skills with name, description, and location |
+| `load_skill` | Fetch the full `SKILL.md` content for a specific skill |
+| `read_skill_resource` | Read a bundled resource file from a skill's directory |
+| `run_skill_script` | Execute a `.py` or `.sh` script from a skill's `scripts/` directory |
+
+Every tool is also available as a method, so you can hand-pick a subset:
+
+```python linenums="1" hl_lines="6"
+skills = SkillsToolkit()
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[skills.list_skills(), skills.load_skill()],
+)
+```
+
+### Runtimes
+
+A **runtime** owns where skills live and how their scripts run — it discovers skills, reads their content, and executes their scripts. `LocalRuntime` is the default: it backs skills with the filesystem and runs scripts in a local subprocess (or a sandbox you supply). Pass one to a toolkit or plugin as a path string or an explicit `LocalRuntime`:
+
+```python linenums="1" hl_lines="4 6"
+from ag2.tools import SkillsToolkit
+from ag2.tools.skills import LocalRuntime
+
+skills = SkillsToolkit(LocalRuntime("./my-skills"))
+# or just a path string
+skills = SkillsToolkit("./my-skills")
+```
+
+`LocalRuntime` takes the install directory plus optional execution and discovery settings. `extra_paths` adds read-only directories that are scanned for skills but never written to — installed skills always go to the primary `dir`:
+
+```python linenums="1" hl_lines="4-6"
+skills = SkillsToolkit(
+    LocalRuntime(
+        "./my-skills",
+        extra_paths=["./shared-skills"],   # read-only, also scanned
+        timeout=30,                        # per-script timeout (seconds)
+        blocked=["rm -rf"],                # best-effort command blocklist
+    )
+)
+```
+
+## Composing multiple runtimes
+
+`SkillPlugin` and `SkillsToolkit` both accept **more than one runtime**, so you can serve skills from several locations at once — each with its own configuration. A common pattern is a read-only global library plus a writable project directory:
+
+```python linenums="1" hl_lines="6-7"
+from ag2.tools import SkillPlugin
+from ag2.tools.skills import LocalRuntime
+
+plugins = [
+    SkillPlugin(
+        LocalRuntime("~/.agents/skills"),   # global
+        LocalRuntime(".agents/skills"),     # project
+    ),
+]
+```
+
+When the same skill name exists in more than one runtime, the **last runtime wins** — here the project skill shadows the global one. The rule is applied uniformly: the catalog, the `name` constraint, `load_skill`, `read_skill_resource`, and `run_skill_script` all resolve to the same winning skill.
+
+!!! note
+    Because each runtime can carry its own execution and storage settings (sandbox, timeout, install directory), composition lets global skills run one way and project skills another — something a single runtime can't express.
+
+## Code-defined skills
+
+Not every skill needs to live on disk. A `MemorySkill` defines a skill **inline in code** — its instructions, resources, and scripts are Python values rather than files. It's backed by an in-memory runtime (`MemoryRuntime`) instead of `LocalRuntime`, but the agent activates it through the same progressive-disclosure flow.
+
+```python linenums="1" hl_lines="11 16 24"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SkillPlugin, MemorySkill
+
+unit_converter = MemorySkill(
+    name="unit-converter",
+    description="Convert between common units. Use when asked to convert miles, kilometers, pounds, or kilograms.",
+    instructions="Use the convert script, passing the value and a factor from the conversion_table resource.",
+)
+
+@unit_converter.resource
+def conversion_table() -> str:
+    """Multiplication factors for common conversions."""
+    return "miles->km: 1.60934\npounds->kg: 0.453592"
+
+@unit_converter.script
+def convert(value: float, factor: float) -> str:
+    """Multiply a value by a conversion factor."""
+    return str(round(value * factor, 4))
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    plugins=[SkillPlugin(unit_converter)],
+)
+```
+
+Pass a `MemorySkill` straight to `SkillPlugin` (or `SkillsToolkit`) — it is wrapped in a `MemoryRuntime` automatically and appears in the catalog alongside any file-based skills.
+
+### Resources and scripts as callables
+
+The `@skill.resource` and `@skill.script` decorators register Python callables (sync or async). By default the **function name** becomes the resource/script name and the **docstring** becomes its description — pass `name=` or `description=` only to override:
+
+- A **resource** callable runs every time it is read, so it can return live data — current config, a roster, a database lookup — rather than a static file.
+- A **script** callable runs **in-process**: no subprocess, no `scripts/` directory. Its parameter JSON-schema is generated from the signature and disclosed inside the loaded skill content, so the model calls `run_skill_script` with named arguments (`{"value": 10, "factor": 2}`) matching that schema. Arguments are validated and coerced exactly as a regular tool's are.
+
+Both forms support dependency injection — a callable can declare `Context`, `Variable`, or `Inject` parameters and they resolve from the live run context, just like a tool:
+
+```python linenums="1" hl_lines="8"
+from typing import Annotated
+from ag2 import Variable
+from ag2.tools import MemorySkill
+
+project = MemorySkill(name="project-info", description="Project status and configuration.")
+
+@project.resource
+def environment(region: Annotated[str, Variable("region")]) -> str:
+    return f"Region: {region}"
+```
+
+### Composing with file-based skills
+
+A `MemorySkill` composes with paths and runtimes like any other source — declaration order decides precedence, and the last source wins on a name clash:
+
+```python linenums="1"
+plugins=[SkillPlugin(".agents/skills", unit_converter, project)]
+```
+
+Grouping is associative: passing loose `MemorySkill`s, wrapping each in its own `MemoryRuntime`, or grouping several into one `MemoryRuntime(...)` all behave identically.
+
+!!! note
+    `MemoryRuntime` is read-only — its skills are defined in code, so it cannot be an install target for `SkillSearchToolkit`.
+
+## SkillSearchToolkit
+
+`SkillSearchToolkit` extends `SkillsToolkit` with three tools for discovering and installing skills from the [skills.sh](https://skills.sh){.external-link target="_blank"} registry. It uses the GitHub Tarball API directly — no Node.js required.
+
+```python linenums="1" hl_lines="10"
+import asyncio
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import SkillSearchToolkit
+
+agent = Agent(
+    "coder",
+    "You are a helpful coding assistant. Use skills to extend your capabilities.",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SkillSearchToolkit()],  # adds search_skills, install_skill, remove_skill
+)
+
+async def main() -> None:
+    reply = await agent.ask(
+        "Find and install a skill for React best practices, then tell me the top 3 rules."
+    )
+    print(await reply.content())
+
+asyncio.run(main())
+```
+
+It inherits all of `SkillsToolkit`'s tools and adds:
+
+| Tool | Description |
+| :--- | :--- |
+| `search_skills` | Search the skills.sh registry by keyword |
+| `install_skill` | Download and install a skill by its registry identifier |
+| `remove_skill` | Remove an installed skill by name |
+
+### GitHub rate limits
+
+By default the GitHub API allows 60 unauthenticated requests per hour. Setting a `GITHUB_TOKEN` environment variable raises this to 5,000 per hour:
+
+```bash
+export GITHUB_TOKEN=ghp_...
+```
+
+You can also pass the token (and other settings) directly via `SkillsClientConfig`:
+
+```python linenums="1" hl_lines="6-9"
+from ag2.tools import SkillSearchToolkit
+from ag2.tools.skills import LocalRuntime, SkillsClientConfig
+
+skills = SkillSearchToolkit(
+    LocalRuntime(dir="./my-skills", timeout=30),
+    client=SkillsClientConfig(
+        github_token="ghp_...",
+        proxy="http://proxy.company.com:8080",
+    ),
+)
+```
+
+!!! note
+    `SkillSearchToolkit` installs into a single runtime. To combine installed skills with skills from other locations, serve them through a `SkillPlugin` or `SkillsToolkit` that lists multiple runtimes.

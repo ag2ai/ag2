@@ -1,0 +1,109 @@
+---
+title: A2UI Actions & Round-Trips
+sidebarTitle: Actions
+---
+
+A2UI **actions** are the clickable parts of a UI — buttons that, when pressed, drive what happens next. A clickable button is a function you decorate with `#!python @a2ui_action` and **declare on the transport** via `#!python actions=[...]` — the agent stays a plain `#!python Agent`. The transport advertises the button to the LLM so it can render it; a click runs your function **on the server**, the agent is not invoked.
+
+## Server-Side Buttons (`@a2ui_action`)
+
+Decorate a function with `#!python @a2ui_action`, then declare it on the server with `#!python actions=`. The button is declared to the LLM so it can render it, but a **click runs the function on the server** with the click's `#!python event.context` as keyword arguments — the agent is **not** invoked. Inside the handler you can do anything: hit a backend, call a tool, update a surface.
+
+```python linenums="1" hl_lines="6-11 15"
+from ag2 import Agent
+from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui.transports import RestTransport
+from ag2.config import AnthropicConfig
+
+@a2ui_action(description="Schedule all posts for the given time")
+def schedule_posts(time: str) -> dict:
+    # ... do the work on the server ...
+    return {"updateComponents": {"surfaceId": "s1", "components": [
+        {"id": "root", "component": "Text", "text": f"Scheduled for {time}"},
+    ]}}
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+app = A2UIServer(agent, transport=RestTransport(encoding="jsonl"), actions=[schedule_posts])
+```
+
+When the LLM renders a button whose `#!python action.event.name` is `#!python "schedule_posts"`, a click sends the button's `#!python event.context` back as the handler's keyword arguments and runs it on the server. The decorator derives an example context from the function's parameter schema (here `#!python {"time": "<string>"}`) and injects it into the system prompt so the LLM emits the right keys; pass `#!python example_context=` to override it.
+
+What the handler returns is mapped to the client per the A2UI spec:
+
+- one A2UI server→client message — or a list of them (e.g. `#!python updateComponents` / `#!python updateDataModel`) — is sent to the renderer as a **surface update** (works on every protocol version);
+- any other JSON value becomes an `#!python actionResponse` **only** when the client asked for one (`#!python wantResponse` + `#!python actionId`, v1.0); otherwise it is fire-and-forget.
+
+A turn whose only input is registered server-action clicks **skips the agent entirely** — the handlers' messages are the whole response.
+
+Declaring the button on the transport — not on the agent — keeps the `#!python Agent` plain and reusable across deployments. The same `#!python actions=[...]` is accepted by `#!python A2UIAgentExecutor` for the [A2A transport](/docs/user-guide/a2ui/a2a), so a button is declared the same way wherever the agent is served.
+
+## Other Kinds of Buttons
+
+A2UI components support two button shapes the spec distinguishes by what the click does:
+
+- **Server `#!python event`** — sends a client→server message; the server handles it. This is what `#!python @a2ui_action` produces.
+- **Client `#!python functionCall`** — runs a function **on the renderer with no network round-trip** (e.g. `#!python openUrl`, copy-to-clipboard).
+
+Client `#!python functionCall` buttons execute entirely in the client, so they are **not registered on the server**. The LLM learns which client functions it may target from the active **catalog** and from the client's advertised [capabilities](/docs/user-guide/a2ui/capabilities) — not from server-side code. You can also render a button whose `#!python event.name` isn't backed by a registered action: a click on it is rewritten generically into the next prompt so the LLM simply continues the conversation.
+
+## The Click Round-Trip
+
+The server is stateless, so a click is just another request. The client posts the conversation plus an `#!python a2ui` envelope describing what was pressed; the server runs the matching handler — or, for an unregistered button, rewrites the click into the current turn:
+
+```python linenums="1" hl_lines="4-15"
+import httpx
+
+body = {
+    "messages": [],  # plus any prior conversation
+    "a2ui": [
+        {
+            "version": "v0.9",
+            "action": {
+                "name": "schedule_posts",
+                "surfaceId": "s1",
+                "sourceComponentId": "schedule_btn",
+                "timestamp": "2026-06-17T12:00:00Z",
+                "context": {"time": "2:00 PM"},
+            },
+        }
+    ],
+}
+
+async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
+    resp = await client.post("/a2ui", json=body)
+```
+
+When the action name matches a registered `#!python @a2ui_action`, the click runs that handler on the server (the agent is not invoked); otherwise the click is rewritten into a plain instruction so the LLM continues the conversation.
+
+!!! note "v1.0 round-trip"
+    With `#!python protocol_version="v1.0"`, a client's reply to a server `#!python callFunction` arrives as a `#!python functionResponse` envelope in the next request and is rewritten to a continuation prompt — the stateless transport needs no pause/resume bookkeeping. The same applies to `#!python actionResponse`.
+
+## Observing Client Interactions
+
+Each client→server interaction the server receives — a button `#!python action`, a v1.0 `#!python functionResponse`, or an `#!python error` — is surfaced on the turn's stream as an `#!python A2UIClientEvent`, the inbound mirror of `#!python A2UIMessageEvent`. Subscribe to react to or log client interactions (beyond what the LLM sees in its prompt):
+
+```python linenums="1"
+from ag2.a2ui import A2UIClientEvent
+
+@stream.subscribe
+async def on_client_event(event):
+    if isinstance(event, A2UIClientEvent):
+        log.info("client interaction: %r", event.interaction)
+```
+
+!!! note
+    A purely client-side `#!python functionCall` button (e.g. `#!python openUrl`) runs on the renderer with no network round-trip per the A2UI spec, so it produces no envelope and therefore no `#!python A2UIClientEvent`.
+
+## Observing Validation Failures
+
+A2UI has no server→client error message, so when the model can't produce schema-valid UI within `#!python validation_retries + 1` attempts, the agent **gracefully degrades** to prose and emits no `#!python A2UIMessageEvent`. To tell "couldn't build UI" apart from "intentionally answered with text", subscribe to `#!python A2UIValidationFailedEvent` on the stream:
+
+```python linenums="1"
+from ag2.a2ui import A2UIValidationFailedEvent
+
+@stream.subscribe
+async def on_validation_failed(event):
+    if isinstance(event, A2UIValidationFailedEvent):
+        log.warning("A2UI validation failed after %d attempts: %s", event.attempts, event.errors)
+```

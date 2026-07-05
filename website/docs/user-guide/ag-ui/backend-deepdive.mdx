@@ -14,24 +14,24 @@ Because AG-UI integration works on top of simple HTTP SSE endpoints, you can use
 
 Example: protect `/chat` with a shared token header.
 
-```python title="run_ag_ui_auth.py" linenums="1" hl_lines="21 24-25"
+```python title="run_ag_ui_auth.py" linenums="1" hl_lines="22 25-26"
 from typing import Annotated
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
-from autogen import ConversableAgent, LLMConfig
-from autogen.ag_ui import AGUIStream, RunAgentInput
+from ag2 import Agent
+from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.config import OpenAIConfig
 
-agent = ConversableAgent(
+agent = Agent(
     name="support_bot",
-    system_message="You help users with billing questions.",
-    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+    prompt="You help users with billing questions.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
 )
 
 stream = AGUIStream(agent)
 app = FastAPI()
-
 
 @app.post("/chat")
 async def run_agent(
@@ -59,28 +59,27 @@ You often need to pass **per-request context** (user ID, org ID, plan, permissio
 
 AG2 supports this via `ContextVariables`. Your tool can accept a `context` parameter, and you provide values when dispatching.
 
-```python title="tools_context.py" linenums="1" hl_lines="1 4 18"
-from autogen import ContextVariables, ConversableAgent, LLMConfig
-from autogen.ag_ui import AGUIStream, RunAgentInput
+```python title="tools_context.py" linenums="1" hl_lines="1 6-7 20"
+from ag2 import Agent, Context, tool
+from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.config import OpenAIConfig
 
-
-def get_user_profile(context: ContextVariables) -> str:
-    user_id = context.get("user_id")
+@tool
+def get_user_profile(user_id: Context) -> str:
+    user_id = context.variables.get("user_id")
     return f"User profile for user {user_id}"
 
-
-agent = ConversableAgent(
+agent = Agent(
     name="profile_bot",
-    system_message="You can look up a user profile when needed.",
-    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
-    functions=[get_user_profile],
+    prompt="You can look up a user profile when needed.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    tools=[get_user_profile],
 )
 
 stream = AGUIStream(agent)
 
-
 async def dispatch_with_context(message: RunAgentInput):
-    return stream.dispatch(message, context={"user_id": "1234567890"})
+    return stream.dispatch(message, variables={"user_id": "1234567890"})
 ```
 
 ## Backend tools (Python functions)
@@ -90,22 +89,18 @@ Backend tools are regular Python callables registered on the agent (for example 
 Example backend tool:
 
 ```python title="backend_tools.py" linenums="1"
-from typing import Annotated
+from ag2 import Agent, tool
+from ag2.config import OpenAIConfig
 
-from autogen import ConversableAgent, LLMConfig
-
-
-def calculate_sum(
-    a: Annotated[int, "First number"],
-    b: Annotated[int, "Second number"],
-) -> int:
+@tool
+def calculate_sum(a: int, b: int) -> int:
+    """Adds two numbers and returns the result."""
     return a + b
 
-
-agent = ConversableAgent(
-    "calculator",
-    functions=[calculate_sum],
-    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+agent = Agent(
+    name="calculator",
+    tools=[calculate_sum],
+    config=OpenAIConfig(model="gpt-4o-mini"),
 )
 ```
 

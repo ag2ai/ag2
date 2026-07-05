@@ -1,0 +1,125 @@
+---
+title: "Journal Companion"
+sidebarTitle: "06 · Journal Companion"
+---
+
+A daily-journal Agent that genuinely remembers across runs — not by replaying conversation history, but by summarising each session into a `/memory/working.md` file in a `KnowledgeStore` and re-injecting that file at the start of every later conversation. Two sessions are run with different `Agent` instances pointed at the same store; the second one (a brand-new object) recalls what the user said in the first.
+
+## What it covers
+
+- Persistent agent memory backed by a `DiskKnowledgeStore` on disk.
+- `WorkingMemoryAggregate` — an LLM-driven rollup that runs at the end of every conversation and writes `/memory/working.md`.
+- `WorkingMemoryPolicy` — an assembly policy that reads `/memory/working.md` and injects it as context before every LLM call.
+- The full `KnowledgeConfig(store=..., aggregate=..., aggregate_trigger=...)` shape and how it pairs with `assembly=`.
+- The `AggregateTrigger(on_end=True)` cadence — fire once when the conversation ends.
+
+## Primitives covered
+
+- `KnowledgeConfig` with `store`, `aggregate`, `aggregate_trigger`
+- `DiskKnowledgeStore`
+- `WorkingMemoryAggregate` (rollup strategy)
+- `AggregateTrigger(on_end=True)`
+- Assembly policies: `WorkingMemoryPolicy`, `ConversationPolicy`
+- Reading the store directly via `store.read("/memory/working.md")`
+
+## Source
+
+```python linenums="1"
+"""06 · Journal companion — knowledge store with working memory
+
+Persistent agent memory using the framework's three knowledge primitives:
+
+- ``KnowledgeStore`` — virtual filesystem for agent state.
+- ``WorkingMemoryAggregate`` — an LLM-driven summary rollup that runs at
+  the end of every conversation and writes ``/memory/working.md``.
+- ``WorkingMemoryPolicy`` — an assembly policy that reads
+  ``/memory/working.md`` and injects it as context at the start of every
+  subsequent conversation.
+
+The agent therefore "remembers" what you told it even after a full restart,
+because the state lives in the knowledge store — not in conversation
+history.
+
+Run::
+
+    .venv/bin/python 06_journal_companion.py
+"""
+
+import asyncio
+import shutil
+import tempfile
+from pathlib import Path
+
+from ag2 import Agent, KnowledgeConfig
+from ag2.aggregate import AggregateTrigger, WorkingMemoryAggregate
+from ag2.config import GeminiConfig
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.policies import ConversationPolicy, WorkingMemoryPolicy
+
+def section(title: str) -> None:
+    print(f"\n── {title} ───")
+
+async def main() -> None:
+    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+
+    # Use a fresh tempdir so the example is reproducible.
+    workdir = Path(tempfile.mkdtemp(prefix="journal-companion-"))
+
+    try:
+        store = DiskKnowledgeStore(str(workdir))
+
+        def build_agent() -> Agent:
+            return Agent(
+                "journal",
+                prompt=(
+                    "You are a supportive daily journal companion. Keep a "
+                    "running understanding of what the user is working on. "
+                    "Be brief and reference their past entries when relevant."
+                ),
+                config=config,
+                knowledge=KnowledgeConfig(
+                    store=store,
+                    aggregate=WorkingMemoryAggregate(config=config),
+                    # on_end=True: roll up working memory when each conversation finishes
+                    aggregate_trigger=AggregateTrigger(on_end=True),
+                ),
+                assembly=[
+                    WorkingMemoryPolicy(),  # inject /memory/working.md on every LLM call
+                    ConversationPolicy(),  # then filter to conversation events
+                ],
+            )
+
+        section("Session 1 — tell the journal what you're doing")
+
+        agent1 = build_agent()
+        r = await agent1.ask(
+            "Today I started learning to build a home espresso setup. Still "
+            "choosing between a Silvia Pro and a Linea Mini."
+        )
+        print(r.body)
+        r = await r.ask(
+            "Also started reading The Pragmatic Programmer. On chapter 2 about orthogonality. That's the whole update."
+        )
+        print(r.body)
+        # When the `with await agent1.ask(...)` exits the `_execute`,
+        # WorkingMemoryAggregate writes /memory/working.md.
+
+        working = await store.read("/memory/working.md")
+        print()
+        print("## /memory/working.md after session 1")
+        print(working)
+
+        section("Session 2 — new Agent instance, same store: memory persists")
+
+        agent2 = build_agent()
+        r2 = await agent2.ask("Quick check-in: what was I working on? Answer in one line.")
+        print(r2.body)
+        # The answer should mention espresso and/or Pragmatic Programmer
+        # even though agent2 is a brand-new object with no prior state,
+        # because WorkingMemoryPolicy injected /memory/working.md as a prompt.
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
