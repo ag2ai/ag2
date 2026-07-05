@@ -82,8 +82,6 @@ area:docs:
   - changed-files:
     - any-glob-to-any-file:
       - website/**
-      - docs/**
-      - notebook/**
 
 area:actions:
   - changed-files:
