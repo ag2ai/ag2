@@ -25,8 +25,8 @@ launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
 ## Basic Usage
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import ClaudeCodeConfig
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
 
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
@@ -44,8 +44,8 @@ Each adapter is a preset with its own launch command and authentication:
 <Tabs>
   <Tab title="Claude Code">
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import ClaudeCodeConfig
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
 
 # Launches `claude-agent-acp`; auth via ANTHROPIC_API_KEY (env) or CLAUDE_CONFIG_DIR.
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
@@ -54,8 +54,8 @@ agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
   <Tab title="Codex">
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import CodexConfig
+from ag2 import Agent
+from ag2.acp import CodexConfig
 
 # Launches `codex-acp`; auth via CODEX_API_KEY or OPENAI_API_KEY (env).
 agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
@@ -64,8 +64,8 @@ agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
 
   <Tab title="OpenCode">
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import OpenCodeConfig
+from ag2 import Agent
+from ag2.acp import OpenCodeConfig
 
 # Launches `opencode acp`; auth via `opencode auth login` (or env / .env).
 # Pick the model in OpenCode's own config (opencode.json: "model": "provider/model").
@@ -83,16 +83,44 @@ agent = Agent("coder", config=OpenCodeConfig(cwd="/path/to/repo"))
     provider, OpenCode falls back to the first model of its built-in `opencode`
     provider (OpenCode Zen).
 
+## Authentication & billing
+
+AG2 does not meter or bill ACP usage itself — it only launches the CLI agent as a
+subprocess. **How the run is billed is determined entirely by how the underlying
+CLI agent is authenticated**, and that authentication lives in the agent's own
+environment (`env` on the config, or inherited from the parent process), not in AG2.
+
+Two modes are possible, depending on the credential you provide:
+
+| Authentication | Billing |
+| :--- | :--- |
+| **API key** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` / `CODEX_API_KEY`, or a provider key for OpenCode) | The provider's **API** — pay-per-token against that API account |
+| **Existing CLI login** (`CLAUDE_CONFIG_DIR` pointing at a Claude Code login, or `opencode auth login`) | Whatever **plan that login is on** — which may be a subscription rather than the pay-per-token API |
+
+So "API or subscription" is not a property of ACP or AG2: it follows the
+credential you hand the agent. Point the adapter at an API key and usage is billed
+per-token by the provider's API; point it at an existing subscription-backed login
+and it draws on that subscription.
+
+!!! note
+
+    The Codex adapter, as configured here, authenticates via `CODEX_API_KEY` /
+    `OPENAI_API_KEY` — i.e. API billing. Subscription-backed logins apply to the
+    adapters that read an existing login (Claude Code via `CLAUDE_CONFIG_DIR`,
+    OpenCode via `opencode auth login`). Exact plan names, quotas, and whether a
+    given plan permits programmatic use are set by each provider, not by AG2 —
+    check the provider's terms.
+
 ## Observing the agent's work
 
 Subscribe to the run's stream to see thoughts, tool calls, and plans live:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import ClaudeCodeConfig
-from autogen.events import ModelMessageChunk, ModelReasoning
-from autogen.events.tool_events import BuiltinToolCallEvent
-from autogen.acp.events import ACPPlan
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.events import ModelMessageChunk, ModelReasoning
+from ag2.events.tool_events import BuiltinToolCallEvent
+from ag2.acp.events import ACPPlan
 
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
@@ -145,8 +173,8 @@ Because each CLI agent is an `Agent`, you can compose them — including as tool
 of one another via `.as_tool()`:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import ClaudeCodeConfig
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
 
 reviewer = Agent("reviewer", config=ClaudeCodeConfig(cwd="/repo"))
 manager = Agent(
