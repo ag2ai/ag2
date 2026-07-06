@@ -34,6 +34,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 try:
+    from opentelemetry.sdk.trace import ReadableSpan
     from opentelemetry.trace import Link, SpanContext, SpanKind, Status, StatusCode, set_span_in_context
 
     from ._envelope_tracing import get_tracer, iso_to_ns, serialize_span
@@ -86,7 +87,7 @@ SpanRecordSubscriber = Callable[[dict], Awaitable[None]]
 
 __all__ = ("HubTelemetryListener", "SpanRecordSubscriber")
 
-_TERMINAL_TASK_KINDS = ("completed", "failed", "expired", "mirror_failed")
+_TERMINAL_TASK_KINDS = ("completed", "failed", "expired", "cancelled", "mirror_failed")
 
 
 class HubTelemetryListener(BaseHubListener):
@@ -146,7 +147,13 @@ class HubTelemetryListener(BaseHubListener):
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     async def _emit(self, span: object) -> None:
-        """Serialise an ended span, append it to disk, notify subscribers."""
+        """Serialise an ended span, append it to disk, notify subscribers.
+
+        Spans that are not ``ReadableSpan``s — a ``NonRecordingSpan`` from a
+        no-op provider or a dropped sample — are skipped.
+        """
+        if not isinstance(span, ReadableSpan):
+            return
         record, line = serialize_span(span)
         await self._store.append(spans_path(), line)
         self._bytes_written += len(line.encode("utf-8"))

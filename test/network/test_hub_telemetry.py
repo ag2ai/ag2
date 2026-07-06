@@ -15,12 +15,16 @@ from collections.abc import Sequence as SequenceType
 import pytest
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
+from opentelemetry.trace import NoOpTracerProvider
 
 from ag2 import Agent, Context
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.middleware.builtin import TelemetryMiddleware
 from ag2.network import (
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
     EV_TEXT,
+    AuthBlock,
     Envelope,
     Hub,
     HubClient,
@@ -29,7 +33,7 @@ from ag2.network import (
     Resume,
     TaskMirror,
 )
-from ag2.network.hub import HubTelemetryListener
+from ag2.network.hub import HubTelemetryListener, RuleBasedArbiter
 from ag2.network.hub._envelope_tracing import EnvelopeTracer
 from ag2.network.hub.layout import spans_path
 from ag2.stream import MemoryStream
@@ -332,6 +336,169 @@ async def test_hub_without_tracer_provider_stays_otel_free() -> None:
     assert text_envelopes and text_envelopes[0].trace_id is None
     assert await store.read(spans_path()) in (None, "")
     assert hub.health()["telemetry_log_bytes"] == 0
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_task_emits_network_task_span(otel_setup) -> None:
+    """``cancelled`` is a terminal task kind and emits a ``network.task`` span."""
+    exporter, provider = otel_setup
+    store = MemoryKnowledgeStore()
+    listener = HubTelemetryListener(store, tracer_provider=provider)
+
+    await listener.on_task_event(
+        "task-c",
+        "cancelled",
+        {
+            "owner_id": "alice",
+            "channel_id": "chan-1",
+            "capability": "synthesis",
+            "outcome": "cancelled",
+            "started_at": "2026-01-01T00:00:00Z",
+            "at": "2026-01-01T00:00:02Z",
+        },
+    )
+
+    task_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "task"]
+    assert len(task_spans) == 1
+    span = task_spans[0]
+    assert span.name == "network.task synthesis"
+    assert span.attributes.get("ag2.network.outcome") == "cancelled"
+    assert span.status.status_code.name == "ERROR"
+
+
+@pytest.mark.asyncio
+async def test_non_recording_provider_does_not_crash_or_write() -> None:
+    """With a non-recording provider, spans are ``NonRecordingSpan``s: closing a
+    channel and sending an envelope must not crash, and nothing is written to the
+    disk span log."""
+    store = MemoryKnowledgeStore()
+    provider = NoOpTracerProvider()
+    hub = await Hub.open(store, tracer_provider=provider, ttl_sweep_interval=0)
+    hub.register_listener(HubTelemetryListener(store, tracer_provider=provider))
+
+    link = LocalLink(hub)
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(Agent("alice", config=ScriptedConfig("")), Passport(name="alice"), Resume())
+    await bob_hc.register(Agent("bob", config=ScriptedConfig("")), Passport(name="bob"), Resume())
+
+    channel = await alice.open(type="conversation", target="bob")
+    await channel.send("hi")
+    await wait_for_text_count(hub, channel.channel_id, 1)
+    await alice_hc.close_channel(channel.channel_id, reason="done")
+
+    assert await _read_disk_spans(store) == []
+    assert hub.health()["telemetry_log_bytes"] == 0
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_failure_recorded_on_envelope_span(otel_setup) -> None:
+    """A failed delivery records ``ag2.network.dispatch_failures`` on the
+    envelope span and sets its status to ERROR."""
+    exporter, provider = otel_setup
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, tracer_provider=provider, ttl_sweep_interval=0)
+
+    link = LocalLink(hub)
+    alice_hc = HubClient(link, hub=hub)
+    carol_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(Agent("alice", config=ScriptedConfig("")), Passport(name="alice"), Resume())
+    carol = await carol_hc.register(Agent("carol", config=ScriptedConfig("")), Passport(name="carol"), Resume())
+    bob = await hub.register_identity(
+        Passport(name="bob", auth=AuthBlock(scheme="a2a"), kind="remote_agent"),
+        Resume(),
+    )
+
+    class _AckThenFailProxy:
+        scheme = "a2a"
+
+        async def dispatch(self, envelope: Envelope, recipient: Passport) -> None:
+            if envelope.event_type == EV_CHANNEL_INVITE and recipient.agent_id:
+                await hub.post_envelope(
+                    Envelope(
+                        channel_id=envelope.channel_id,
+                        sender_id=recipient.agent_id,
+                        audience=None,
+                        event_type=EV_CHANNEL_INVITE_ACK,
+                        event_data={"channel_id": envelope.channel_id},
+                        causation_id=envelope.envelope_id,
+                    )
+                )
+                return
+            if envelope.event_type == EV_TEXT:
+                raise RuntimeError("delivery failed")
+
+        async def close(self) -> None:
+            pass
+
+    hub.register_remote_proxy(_AckThenFailProxy())
+
+    try:
+        channel = await alice.open(type="discussion", target=["carol", "bob"])
+        await channel.send("hello", audience=[carol.agent_id, bob.agent_id])
+        await asyncio.sleep(0.05)
+
+        envelope_spans = [
+            s
+            for s in exporter.get_finished_spans()
+            if s.attributes.get("ag2.span.type") == "envelope" and s.attributes.get("ag2.network.event_type") == EV_TEXT
+        ]
+        assert envelope_spans, "expected a network.envelope span for the text send"
+        span = envelope_spans[0]
+        assert span.attributes.get("ag2.network.dispatch_failures") == 1
+        assert span.status.status_code.name == "ERROR"
+    finally:
+        await alice_hc.close()
+        await carol_hc.close()
+        await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_escaped_dispatch_exception_marks_envelope_span_error(otel_setup) -> None:
+    """An exception escaping dispatch (e.g. a custom arbiter raising after WAL
+    append) marks the envelope span ERROR and records the exception."""
+    exporter, provider = otel_setup
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, tracer_provider=provider, ttl_sweep_interval=0)
+
+    class _RaisingArbiter(RuleBasedArbiter):
+        async def authorize_dispatch(self, envelope, sender, recipient, recipient_rule):
+            if envelope.event_type == EV_TEXT:
+                raise RuntimeError("arbiter boom")
+            return await super().authorize_dispatch(envelope, sender, recipient, recipient_rule)
+
+    hub.register_arbiter(_RaisingArbiter())
+
+    link = LocalLink(hub)
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(Agent("alice", config=ScriptedConfig("")), Passport(name="alice"), Resume())
+    await bob_hc.register(Agent("bob", config=ScriptedConfig("")), Passport(name="bob"), Resume())
+
+    channel = await alice.open(type="conversation", target="bob")
+    with pytest.raises(RuntimeError, match="arbiter boom"):
+        await channel.send("hi")
+
+    envelope_spans = [
+        s
+        for s in exporter.get_finished_spans()
+        if s.attributes.get("ag2.span.type") == "envelope" and s.attributes.get("ag2.network.event_type") == EV_TEXT
+    ]
+    assert envelope_spans, "expected a network.envelope span for the text send"
+    span = envelope_spans[0]
+    assert span.status.status_code.name == "ERROR"
+    assert any(e.name == "exception" for e in span.events), "escaped exception should be recorded on the span"
+    # An escaped exception short-circuits _dispatch before it returns a count,
+    # so no partial per-recipient failure count is recorded on this path.
+    assert span.attributes.get("ag2.network.dispatch_failures") is None
 
     await alice_hc.close()
     await bob_hc.close()

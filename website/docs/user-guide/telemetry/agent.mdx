@@ -3,15 +3,9 @@ title: Agent Telemetry
 sidebarTitle: Agent
 ---
 
-<<<<<<<< HEAD:website/docs/user-guide/telemetry/agent.mdx
-AG2 Beta ships a `#!python TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/){.external-link target="_blank"} spans for a single agent's work — its turns, LLM calls, tool executions, and human-in-the-loop interactions.
+AG2 ships a `#!python TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/){.external-link target="_blank"} spans for a single agent's work — its turns, LLM calls, tool executions, and human-in-the-loop interactions.
 
 The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/){.external-link target="_blank"}, so traces can be exported to **any compatible backend** — Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and others.
-========
-# AG2 Telemetry
-
-AG2 includes a `TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/) spans for agent turns, LLM calls, tool executions, and human-in-the-loop interactions.
->>>>>>>> origin/main:website/docs/user-guide/telemetry.mdx
 
 !!! tip
     To trace the interactions *between* agents in a network — the hub's dispatch, channels, agent lifecycles, and tasks — see [Network Telemetry](/docs/user-guide/telemetry/network). The two compose: an agent's `#!python invoke_agent` span links back to the network envelope that triggered it.
@@ -163,19 +157,11 @@ TelemetryMiddleware(
 
 ## Tool Execution Example
 
-<<<<<<<< HEAD:website/docs/user-guide/telemetry/agent.mdx
 ```python linenums="1"
 from ag2 import Agent
 from ag2.config import OpenAIConfig
 from ag2.middleware.builtin import TelemetryMiddleware
 from ag2.tools import tool
-========
-```python
-from ag2 import Agent
-from ag2.config import OpenAIConfig
-from ag2.middleware.builtin import TelemetryMiddleware
-from ag2.tools import tool
->>>>>>>> origin/main:website/docs/user-guide/telemetry.mdx
 
 @tool
 def get_weather(city: str) -> str:
@@ -198,8 +184,4 @@ agent = Agent(
 
 ## Backend Integration
 
-<<<<<<<< HEAD:website/docs/user-guide/telemetry/agent.mdx
 Since `#!python TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works — Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, and others. Swap the `#!python ConsoleSpanExporter` from the Quick Start above for an `#!python OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
-========
-Since `TelemetryMiddleware` uses standard OpenTelemetry, any OTLP-compatible backend works — Grafana Tempo, Jaeger, Langfuse, and others. Point the OTLP exporter at your backend's endpoint; the agent instrumentation shown above stays the same.
->>>>>>>> origin/main:website/docs/user-guide/telemetry.mdx

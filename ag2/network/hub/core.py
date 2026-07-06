@@ -1997,13 +1997,20 @@ class Hub:
             await self._handle_invite_reject(envelope, metadata)
             return envelope.envelope_id
 
+        dispatch_failures = 0
+        dispatch_error: Exception | None = None
         try:
-            await self._dispatch(envelope, metadata)
+            dispatch_failures = await self._dispatch(envelope, metadata)
+        except Exception as exc:
+            dispatch_error = exc
+            raise
         finally:
-            # End the envelope span (and mirror it to disk) once dispatch
-            # is done.
+            # End the envelope span (and mirror it to disk). An escaped
+            # exception or per-recipient delivery failures mark it ERROR.
             if envelope_span is not None:
-                await self._envelope_tracer.finish_envelope_span(envelope_span)
+                await self._envelope_tracer.finish_envelope_span(
+                    envelope_span, dispatch_failures=dispatch_failures, error=dispatch_error
+                )
 
         # Listener fan-out — read-only state-transition notification.
         # Fires for every successfully posted envelope (including
@@ -2119,7 +2126,7 @@ class Hub:
             key = (envelope.channel_id, envelope.sender_id, envelope.causation_id)
             self._causation_index[key] = envelope.envelope_id
 
-    async def _dispatch(self, envelope: Envelope, metadata: ChannelMetadata) -> None:
+    async def _dispatch(self, envelope: Envelope, metadata: ChannelMetadata) -> int:
         """Send NotifyFrames to the audience (or all participants if broadcast).
 
         Inbound access is consulted via :meth:`HubArbiter.authorize_dispatch`
@@ -2128,7 +2135,10 @@ class Hub:
         audience ids are routed through
         :meth:`HubArbiter.resolve_unknown_audience` so federation hooks
         can replace them with locally-deliverable proxies.
+
+        Returns the number of recipients whose delivery failed.
         """
+        failures = 0
         if envelope.audience is None:
             recipients = [p.agent_id for p in metadata.participants if p.agent_id != envelope.sender_id]
         else:
@@ -2172,6 +2182,7 @@ class Hub:
                 proxy = self._remote_proxies.get(scheme)
                 if proxy is None:
                     reason = NotFoundError(f"no remote proxy registered for scheme {scheme!r}")
+                    failures += 1
                     await self._fan_out("on_dispatch_failed", envelope, recipient_id, reason)
                     logger.warning(
                         "dispatch failed: channel=%s recipient=%s event=%s reason=%s",
@@ -2184,6 +2195,7 @@ class Hub:
                 try:
                     await proxy.dispatch(envelope, recipient_passport)
                 except Exception as exc:
+                    failures += 1
                     await self._fan_out("on_dispatch_failed", envelope, recipient_id, exc)
                     logger.warning(
                         "remote dispatch failed: channel=%s recipient=%s scheme=%s reason=%s",
@@ -2205,6 +2217,7 @@ class Hub:
             try:
                 await endpoint.send_frame(NotifyFrame(envelope=envelope, recipient_id=recipient_id))
             except Exception as exc:
+                failures += 1
                 await self._fan_out("on_dispatch_failed", envelope, recipient_id, exc)
                 logger.warning(
                     "dispatch failed: channel=%s recipient=%s event=%s reason=%s",
@@ -2213,6 +2226,8 @@ class Hub:
                     envelope.event_type,
                     exc,
                 )
+
+        return failures
 
     async def _maybe_fire_inbox_pressure(self, recipient_id: str, prev: int, new: int) -> None:
         """Fire ``on_inbox_pressure`` when crossing the high-water mark.

@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.propagate import inject
+from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.trace import Link, SpanContext, SpanKind, Status, StatusCode
 
 from ag2._telemetry_consts import (
@@ -51,7 +52,7 @@ from ag2._telemetry_consts import (
 from .layout import spans_path
 
 if TYPE_CHECKING:
-    from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+    from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.trace import Span
 
     from ag2.knowledge import KnowledgeStore
@@ -139,7 +140,13 @@ def serialize_span(span: "ReadableSpan") -> "tuple[dict, str]":
 
 
 async def write_span(store: "KnowledgeStore", span: "ReadableSpan") -> int:
-    """Serialise an ended span to one JSONL line and append it. Returns bytes written."""
+    """Serialise an ended span to one JSONL line and append it. Returns bytes written.
+
+    Non-recording spans (a ``NonRecordingSpan`` from a no-op provider or a
+    dropped sample) are not ``ReadableSpan``s and write nothing (returns 0).
+    """
+    if not isinstance(span, ReadableSpan):
+        return 0
     _, line = serialize_span(span)
     await store.append(spans_path(), line)
     return len(line.encode("utf-8"))
@@ -228,10 +235,22 @@ class EnvelopeTracer:
         if traceparent is not None:
             envelope.trace_id = traceparent
 
-    async def finish_envelope_span(self, span: "Span", *, dispatch_failures: int = 0) -> None:
-        """End the span (status from dispatch outcome) and mirror it to disk."""
+    async def finish_envelope_span(
+        self, span: "Span", *, dispatch_failures: int = 0, error: BaseException | None = None
+    ) -> None:
+        """End the span (status from dispatch outcome) and mirror it to disk.
+
+        ``dispatch_failures`` is recorded as ``ag2.network.dispatch_failures``
+        whenever non-zero, independently of ``error``. ``error`` is an exception
+        that escaped dispatch; it is recorded on the span. Either one sets ERROR
+        status, ``error`` taking precedence for the status message.
+        """
         if dispatch_failures:
             span.set_attribute(ATTR_NET_DISPATCH_FAILURES, dispatch_failures)
+        if error is not None:
+            span.record_exception(error)
+            span.set_status(Status(StatusCode.ERROR, str(error)))
+        elif dispatch_failures:
             span.set_status(Status(StatusCode.ERROR, f"{dispatch_failures} dispatch failure(s)"))
         span.end()
         self._bytes_written += await write_span(self._store, span)
