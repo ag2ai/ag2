@@ -77,15 +77,35 @@ class GeminiServerToolResultEvent(BuiltinToolResultEvent):
     @classmethod
     def from_grounding(cls, gm: types.GroundingMetadata, *, parent_id: str, name: str) -> "GeminiServerToolResultEvent":
         chunks = gm.grounding_chunks or []
-        parts: list[Input] = [
-            UrlInput(
-                chunk.web.uri,
-                kind=BinaryType.BINARY,
-                metadata={"title": chunk.web.title, "domain": chunk.web.domain},
-            )
-            for chunk in chunks
-            if chunk.web and chunk.web.uri
-        ]
+        parts: list[Input] = []
+        for chunk in chunks:
+            if chunk.web and chunk.web.uri:
+                parts.append(
+                    UrlInput(
+                        chunk.web.uri,
+                        kind=BinaryType.BINARY,
+                        metadata={"title": chunk.web.title, "domain": chunk.web.domain},
+                    )
+                )
+            elif chunk.maps and chunk.maps.uri:
+                parts.append(
+                    UrlInput(
+                        chunk.maps.uri,
+                        kind=BinaryType.BINARY,
+                        metadata={"title": chunk.maps.title, "place_id": chunk.maps.place_id},
+                    )
+                )
+            elif chunk.retrieved_context and chunk.retrieved_context.uri:
+                parts.append(
+                    UrlInput(
+                        chunk.retrieved_context.uri,
+                        kind=BinaryType.BINARY,
+                        metadata={
+                            "title": chunk.retrieved_context.title,
+                            "file_search_store": chunk.retrieved_context.file_search_store,
+                        },
+                    )
+                )
         metadata: dict[str, Any] = {"queries": list(gm.web_search_queries or [])} if chunks else {}
         return cls(
             parent_id=parent_id,
