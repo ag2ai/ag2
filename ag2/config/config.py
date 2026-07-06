@@ -20,6 +20,7 @@ class ModelProvider(str, Enum):
     GEMINI = "gemini"
     OLLAMA = "ollama"
     OPENAI = "openai"
+    ORCAROUTER = "orcarouter"
     VERTEXAI = "vertexai"
     XAI = "xai"
     ZAI = "zai"

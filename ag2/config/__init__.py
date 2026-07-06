@@ -43,6 +43,12 @@ except ImportError as e:
     OllamaConfig = missing_optional_dependency("OllamaConfig", "ollama", e)  # type: ignore[misc]
 
 try:
+    # OrcaRouter is OpenAI-compatible and reuses the `openai` extra (no new dependency).
+    from .orcarouter import OrcaRouterConfig
+except ImportError as e:
+    OrcaRouterConfig = missing_optional_dependency("OrcaRouterConfig", "openai", e)  # type: ignore[misc]
+
+try:
     from .xai import XAIConfig
 except ImportError as e:
     XAIConfig = missing_optional_dependency("XAIConfig", "xai", e)  # type: ignore[misc]
@@ -66,6 +72,7 @@ __all__ = (
     "OllamaConfig",
     "OpenAIConfig",
     "OpenAIResponsesConfig",
+    "OrcaRouterConfig",
     "VertexAIConfig",
     "XAIConfig",
     "ZAIConfig",
