@@ -184,7 +184,7 @@ Beyond the resource attributes, spans carry `ag2.network.*` and `ag2.agent.*` at
 | `ag2.network.manifest_type` | channel | Channel type (e.g. `workflow`, `discussion`) |
 | `ag2.network.creator_id` | channel | Agent that opened the channel |
 | `ag2.network.capability` | task | The task's declared capability |
-| `ag2.network.outcome` | task | Terminal outcome (e.g. `completed`, `expired`) |
+| `ag2.network.outcome` | task | Terminal outcome (e.g. `completed`, `expired`, `cancelled`) |
 | `ag2.network.task_id` | task | Task ID |
 | `ag2.network.owner_id` | task | Agent that owns the task |
 | `ag2.agent.id` | agent_lifetime, agent_event | Agent ID |
@@ -194,6 +194,8 @@ Beyond the resource attributes, spans carry `ag2.network.*` and `ag2.agent.*` at
 | `ag2.agent.skill_removed` | agent_event | `true` when a `skill_set` event removed (rather than set) the skill |
 
 Channel spans also record diagnostic span **events** — `dispatch_failed` (carrying `ag2.network.recipient_id` + `ag2.error.type` / `ag2.error.message`), `turn_failed`, `envelope_rejected`, and expectation violations — and `agent.lifetime` spans record `inbox_pressure` (`ag2.inbox.pending` / `ag2.inbox.cap`), so failures and back-pressure surface in the trace without their own spans.
+
+The `#!python network.envelope` span reports ERROR when delivery fails: per-recipient delivery failures set `ag2.network.dispatch_failures`, and an exception that escapes dispatch (for example, a custom `#!python HubArbiter` error) is recorded on the span as an `exception` event.
 
 Owner code that checkpoints a task adds `checkpoint.write` / `checkpoint.read` span events on the active span — see [Checkpoint events](#checkpoint-events) above.
 
