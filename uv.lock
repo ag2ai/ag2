@@ -116,6 +116,9 @@ gemini = [
 mcp = [
     { name = "mcp" },
 ]
+metrics = [
+    { name = "prometheus-client" },
+]
 ollama = [
     { name = "fix-busted-json" },
     { name = "ollama" },
@@ -145,7 +148,7 @@ zai = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai"] },
+    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "metrics", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai"] },
     { name = "aiofiles" },
     { name = "cairosvg" },
     { name = "codespell" },
@@ -200,7 +203,7 @@ dev = [
     { name = "zizmor" },
 ]
 docs = [
-    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai"] },
+    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "metrics", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai"] },
     { name = "cairosvg" },
     { name = "daytona" },
     { name = "docker" },
@@ -232,7 +235,7 @@ lint = [
     { name = "zizmor" },
 ]
 optionals = [
-    { name = "ag2", extra = ["a2ui", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "gemini", "mcp", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2ui", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "gemini", "mcp", "metrics", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "daytona" },
     { name = "docker" },
     { name = "exa-py" },
@@ -318,6 +321,7 @@ requires-dist = [
     { name = "packaging" },
     { name = "perplexityai", marker = "extra == 'perplexity'", specifier = ">=0.30.0,<1" },
     { name = "pillow", marker = "extra == 'gemini'" },
+    { name = "prometheus-client", marker = "extra == 'metrics'", specifier = ">=0.20.0,<0.30.0" },
     { name = "pydantic", specifier = ">=2.6.1,<3" },
     { name = "python-dotenv" },
     { name = "pyyaml", specifier = ">=6.0.2" },
@@ -329,7 +333,7 @@ requires-dist = [
     { name = "xai-sdk", marker = "extra == 'xai'", specifier = ">=1.12.2,<2" },
     { name = "zai-sdk", marker = "extra == 'zai'", specifier = ">=0.2.3,<1" },
 ]
-provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini", "xai", "zai", "ollama", "bedrock", "dashscope", "redis", "tracing", "tavily", "ddgs", "perplexity", "mcp"]
+provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini", "xai", "zai", "ollama", "bedrock", "dashscope", "redis", "tracing", "metrics", "tavily", "ddgs", "perplexity", "mcp"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -339,6 +343,7 @@ dev = [
     { name = "ag2", extras = ["dashscope"] },
     { name = "ag2", extras = ["gemini"] },
     { name = "ag2", extras = ["mcp"] },
+    { name = "ag2", extras = ["metrics"] },
     { name = "ag2", extras = ["ollama"] },
     { name = "ag2", extras = ["openai"] },
     { name = "ag2", extras = ["openai", "a2a", "ag-ui"] },
@@ -405,6 +410,7 @@ docs = [
     { name = "ag2", extras = ["anthropic"] },
     { name = "ag2", extras = ["dashscope"] },
     { name = "ag2", extras = ["gemini"] },
+    { name = "ag2", extras = ["metrics"] },
     { name = "ag2", extras = ["ollama"] },
     { name = "ag2", extras = ["openai"] },
     { name = "ag2", extras = ["redis"] },
@@ -449,6 +455,7 @@ optionals = [
     { name = "ag2", extras = ["dashscope"] },
     { name = "ag2", extras = ["gemini"] },
     { name = "ag2", extras = ["mcp"] },
+    { name = "ag2", extras = ["metrics"] },
     { name = "ag2", extras = ["ollama"] },
     { name = "ag2", extras = ["openai"] },
     { name = "ag2", extras = ["redis"] },
@@ -4894,6 +4901,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e2/49/e8c8a7bc6b741ab6f15896022eee4f906d04d7ccd15aeeb515dd04bbeb6d/primp-1.3.1-cp314-cp314t-win32.whl", hash = "sha256:4346dcef805279028bf4a54bb87dd43d0920130e25b5790689f5c96c9ba0d9e5", size = 4262615, upload-time = "2026-05-23T17:39:13.88Z" },
     { url = "https://files.pythonhosted.org/packages/a9/84/7ae4a257dec6dff329d4a8d9051d907316095c27ffc8d1ea15c359e6eeb5/primp-1.3.1-cp314-cp314t-win_amd64.whl", hash = "sha256:6c55f152a73b6d6af8ac37bdb648d8bbfd7e656f9ef40d87feb3c0d81cee930a", size = 4660584, upload-time = "2026-05-23T17:39:10.081Z" },
     { url = "https://files.pythonhosted.org/packages/99/20/10e0d96bfaeef1f0cd339ccf9bb8feb4bf798fde93198f7a96c73441080a/primp-1.3.1-cp314-cp314t-win_arm64.whl", hash = "sha256:46a529d74583d6ceba52e15bf4c678fcf24e6d669c1ce935262d5490d1b25801", size = 4623226, upload-time = "2026-05-23T17:38:57.256Z" },
+]
+
+[[package]]
+name = "prometheus-client"
+version = "0.25.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1b/fb/d9aa83ffe43ce1f19e557c0971d04b90561b0cfd50762aafb01968285553/prometheus_client-0.25.0.tar.gz", hash = "sha256:5e373b75c31afb3c86f1a52fa1ad470c9aace18082d39ec0d2f918d11cc9ba28", size = 86035, upload-time = "2026-04-09T19:53:42.359Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8d/9b/d4b1e644385499c8346fa9b622a3f030dce14cd6ef8a1871c221a17a67e7/prometheus_client-0.25.0-py3-none-any.whl", hash = "sha256:d5aec89e349a6ec230805d0df882f3807f74fd6c1a2fa86864e3c2279059fed1", size = 64154, upload-time = "2026-04-09T19:53:41.324Z" },
 ]
 
 [[package]]

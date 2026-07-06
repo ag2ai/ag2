@@ -8,7 +8,7 @@ from typing import Any, TypedDict
 
 from typing_extensions import Unpack
 
-from ag2.config.config import ModelConfig
+from ag2.config.config import ModelConfig, ModelProvider
 
 from .files import XAIFilesClient
 from .xai_client import CreateOptions, IncludeOption, ReasoningEffort, XAIClient
@@ -73,6 +73,10 @@ class XAIConfig(ModelConfig):
     max_turns: int | None = None
     include: Sequence[IncludeOption] | None = None
     conversation_id: str | None = None
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.XAI
 
     def copy(self, /, **overrides: Unpack[XAIConfigOverrides]) -> "XAIConfig":
         return replace(self, **overrides)

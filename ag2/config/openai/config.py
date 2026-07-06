@@ -10,7 +10,7 @@ from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
 from openai.types import ChatModel
 from typing_extensions import Unpack
 
-from ag2.config.config import ModelConfig
+from ag2.config.config import ModelConfig, ModelProvider
 
 from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, OpenAIClient, ReasoningEffort
@@ -99,6 +99,10 @@ class OpenAIConfig(ModelConfig):
     verbosity: str | None | Omit = omit
     web_search_options: dict[str, Any] | Omit = omit
     extra_body: dict[str, Any] | None = None
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.OPENAI
 
     def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> "OpenAIConfig":
         return replace(self, **overrides)
@@ -205,6 +209,10 @@ class OpenAIResponsesConfig(ModelConfig):
     service_tier: str | None | Omit = omit
     user: str = ""
     truncation: str | None | Omit = omit
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.OPENAI
 
     def copy(self, /, **overrides: Unpack[OpenAIResponsesConfigOverrides]) -> "OpenAIResponsesConfig":
         return replace(self, **overrides)

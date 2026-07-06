@@ -87,6 +87,7 @@ from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
 from .types import Omittable, SendableMessage, omit
 from .usage import UsageReport
+from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -1165,6 +1166,8 @@ class Agent(PluginTarget, Generic[TResult]):
         if not config:
             raise ConfigNotProvidedError()
 
+        context.dependencies[MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY] = config
+
         if not context.prompt:
             context.prompt.extend(self._system_prompt)
 
@@ -1414,13 +1417,15 @@ class Agent(PluginTarget, Generic[TResult]):
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
     ) -> Context:
-        return Context(
+        context = Context(
             stream,
             prompt=list(prompt),
             dependencies=self._agent_dependencies | (dependencies or {}),
             variables=self._agent_variables | (variables or {}),
             dependency_provider=self.dependency_provider,
         )
+        context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY] = self
+        return context
 
     def as_tool(
         self,

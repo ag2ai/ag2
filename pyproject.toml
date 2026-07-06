@@ -99,6 +99,7 @@ tracing = [
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
 ]
+metrics = ["prometheus-client>=0.20.0,<0.30.0"]
 
 # === Search tools ===
 tavily = ["tavily-python>=0.7.4,<0.8"]
@@ -150,6 +151,7 @@ optionals = [
     "ag2[a2ui]", # provides starlette/jsonschema for AG-UI / a2ui serving tests
     "ag2[mcp]", # ag2.mcp — serve an Agent as an MCP server
     "ag2[tracing]",
+    "ag2[metrics]",
     # search tools
     "ag2[tavily,ddgs,perplexity]",
     # extensions are not shipped as extras; install their packages directly for testing
@@ -173,6 +175,7 @@ optionals = [
 docs = [
     "ag2[a2a]",     # A2A is exposed in the public API by the optional `ag2.a2a` module
     "ag2[tracing]", # Tracing is exposed in the public API by the optional `ag2.opentelemetry` / `ag2.middleware` module
+    "ag2[metrics]", # Metrics is exposed in the public API by the optional `ag2.middleware` module
     "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `ag2.ag_ui` module
     # Extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.2.3; python_version>='3.11'",
