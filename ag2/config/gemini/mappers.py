@@ -360,11 +360,14 @@ def _to_float(value: Any) -> float | None:
 
 
 def grounding_tool_name(gm: types.GroundingMetadata) -> str:
-    if gm.web_search_queries:
-        return WEB_SEARCH_TOOL_NAME
+    # Chunk type is the authoritative signal: Google Maps grounding also populates
+    # web_search_queries, so the chunk kind must be checked before falling back to
+    # the queries heuristic — otherwise maps/file_search grounding is misread as web_search.
     chunks = gm.grounding_chunks or []
     if any(c.maps for c in chunks):
         return GOOGLE_MAPS_TOOL_NAME
     if any(c.retrieved_context for c in chunks):
         return FILE_SEARCH_TOOL_NAME
+    if gm.web_search_queries:
+        return WEB_SEARCH_TOOL_NAME
     return WEB_FETCH_TOOL_NAME

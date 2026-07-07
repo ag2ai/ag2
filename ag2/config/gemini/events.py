@@ -51,7 +51,8 @@ class GeminiServerToolCallEvent(BuiltinToolCallEvent):
         return cls(
             id=str(uuid4()),
             name=name,
-            arguments=json.dumps({"queries": list(gm.web_search_queries or [])}),
+            # web_search / web_fetch use web_search_queries; file_search uses retrieval_queries.
+            arguments=json.dumps({"queries": list(gm.web_search_queries or []) + list(gm.retrieval_queries or [])}),
             grounding_metadata=gm,
         )
 
@@ -95,18 +96,35 @@ class GeminiServerToolResultEvent(BuiltinToolResultEvent):
                         metadata={"title": chunk.maps.title, "place_id": chunk.maps.place_id},
                     )
                 )
-            elif chunk.retrieved_context and chunk.retrieved_context.uri:
-                parts.append(
-                    UrlInput(
-                        chunk.retrieved_context.uri,
-                        kind=BinaryType.BINARY,
-                        metadata={
-                            "title": chunk.retrieved_context.title,
-                            "file_search_store": chunk.retrieved_context.file_search_store,
-                        },
+            elif chunk.retrieved_context:
+                rc = chunk.retrieved_context
+                if rc.text:
+                    # file_search returns the retrieved chunk as text (no uri).
+                    parts.append(
+                        TextInput(
+                            rc.text,
+                            metadata={
+                                "title": rc.title,
+                                "uri": rc.uri,
+                                "document_name": rc.document_name,
+                                "file_search_store": rc.file_search_store,
+                                "page_number": rc.page_number,
+                            },
+                        )
                     )
-                )
-        metadata: dict[str, Any] = {"queries": list(gm.web_search_queries or [])} if chunks else {}
+                elif rc.uri:
+                    parts.append(
+                        UrlInput(
+                            rc.uri,
+                            kind=BinaryType.BINARY,
+                            metadata={
+                                "title": rc.title,
+                                "file_search_store": rc.file_search_store,
+                            },
+                        )
+                    )
+        queries = list(gm.web_search_queries or []) + list(gm.retrieval_queries or [])
+        metadata: dict[str, Any] = {"queries": queries} if chunks else {}
         return cls(
             parent_id=parent_id,
             name=name,
