@@ -563,13 +563,7 @@ def format_navigation(
                 # Handle individual pages
                 result.append(format_page_entry(page, indent, keywords, mkdocs_docs_dir))
 
-    ret_val = "\n".join(result)
-
-    ret_val = ret_val.replace(
-        "- Quick Start\n    - [Quick Start](docs/user-guide/quick-start.md)\n",
-        "- [Quick Start](docs/user-guide/quick-start.md)\n",
-    )
-    return ret_val
+    return "\n".join(result)
 
 
 @require_optional_import("jinja2", "docs")
