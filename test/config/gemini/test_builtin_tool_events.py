@@ -17,6 +17,8 @@ from ag2.config.gemini.gemini_client import GeminiClient
 from ag2.config.gemini.mappers import grounding_tool_name
 from ag2.events import BinaryType, TextInput, UrlInput
 from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
+from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME
+from ag2.tools.builtin.google_maps import GOOGLE_MAPS_TOOL_NAME
 from ag2.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
@@ -115,6 +117,36 @@ class TestGroundingToolName:
         gm = types.GroundingMetadata()
 
         assert grounding_tool_name(gm) == WEB_FETCH_TOOL_NAME
+
+    def test_google_maps_when_maps_chunk_present(self) -> None:
+        chunk = types.GroundingChunk(maps=types.GroundingChunkMaps(uri="https://maps/x", title="Cafe", place_id="p1"))
+        gm = types.GroundingMetadata(grounding_chunks=[chunk])
+
+        assert grounding_tool_name(gm) == GOOGLE_MAPS_TOOL_NAME
+
+    def test_google_maps_when_maps_chunk_present_with_queries(self) -> None:
+        # Google Maps grounding populates web_search_queries alongside maps chunks;
+        # the chunk type must win over the presence of queries.
+        chunk = types.GroundingChunk(maps=types.GroundingChunkMaps(uri="https://maps/x", title="Cafe", place_id="p1"))
+        gm = types.GroundingMetadata(web_search_queries=["coffee shop near me"], grounding_chunks=[chunk])
+
+        assert grounding_tool_name(gm) == GOOGLE_MAPS_TOOL_NAME
+
+    def test_file_search_when_retrieved_context_present(self) -> None:
+        chunk = types.GroundingChunk(
+            retrieved_context=types.GroundingChunkRetrievedContext(uri="https://doc/1", title="Doc")
+        )
+        gm = types.GroundingMetadata(grounding_chunks=[chunk])
+
+        assert grounding_tool_name(gm) == FILE_SEARCH_TOOL_NAME
+
+    def test_file_search_when_retrieved_context_present_with_queries(self) -> None:
+        chunk = types.GroundingChunk(
+            retrieved_context=types.GroundingChunkRetrievedContext(uri="https://doc/1", title="Doc")
+        )
+        gm = types.GroundingMetadata(web_search_queries=["q"], grounding_chunks=[chunk])
+
+        assert grounding_tool_name(gm) == FILE_SEARCH_TOOL_NAME
 
 
 @pytest.mark.asyncio
@@ -370,3 +402,101 @@ class TestResultParts:
                 grounding_metadata=gm,
             ),
         ]
+
+    async def test_grounding_emits_maps_chunk_url(
+        self, client: GeminiClient, memory_context: tuple[Context, MemoryStream]
+    ) -> None:
+        ctx, stream = memory_context
+        chunk = types.GroundingChunk(maps=types.GroundingChunkMaps(uri="https://maps/x", title="Cafe", place_id="p1"))
+        gm = types.GroundingMetadata(grounding_chunks=[chunk])
+
+        await client._process_response(
+            _response([_candidate([types.Part(text="near you")], grounding_metadata=gm)]), ctx
+        )
+
+        events = list(await stream.history.get_events())
+        [call_event, result_event] = events
+        assert call_event.name == GOOGLE_MAPS_TOOL_NAME
+        assert result_event == GeminiServerToolResultEvent(
+            parent_id=call_event.id,
+            name=GOOGLE_MAPS_TOOL_NAME,
+            result=ToolResult(
+                UrlInput("https://maps/x", kind=BinaryType.BINARY, metadata={"title": "Cafe", "place_id": "p1"}),
+                metadata={"queries": []},
+            ),
+            grounding_metadata=gm,
+        )
+
+    async def test_grounding_emits_retrieved_context_url(
+        self, client: GeminiClient, memory_context: tuple[Context, MemoryStream]
+    ) -> None:
+        ctx, stream = memory_context
+        chunk = types.GroundingChunk(
+            retrieved_context=types.GroundingChunkRetrievedContext(
+                uri="https://doc/1", title="Doc", file_search_store="projects/p/fileSearchStores/s"
+            )
+        )
+        gm = types.GroundingMetadata(grounding_chunks=[chunk])
+
+        await client._process_response(
+            _response([_candidate([types.Part(text="per your files")], grounding_metadata=gm)]), ctx
+        )
+
+        events = list(await stream.history.get_events())
+        [call_event, result_event] = events
+        assert call_event.name == FILE_SEARCH_TOOL_NAME
+        assert result_event == GeminiServerToolResultEvent(
+            parent_id=call_event.id,
+            name=FILE_SEARCH_TOOL_NAME,
+            result=ToolResult(
+                UrlInput(
+                    "https://doc/1",
+                    kind=BinaryType.BINARY,
+                    metadata={"title": "Doc", "file_search_store": "projects/p/fileSearchStores/s"},
+                ),
+                metadata={"queries": []},
+            ),
+            grounding_metadata=gm,
+        )
+
+    async def test_grounding_emits_retrieved_context_text_and_retrieval_queries(
+        self, client: GeminiClient, memory_context: tuple[Context, MemoryStream]
+    ) -> None:
+        # file_search grounding carries the retrieved chunk in `text` (not `uri`)
+        # and the queries in `retrieval_queries` (not `web_search_queries`).
+        ctx, stream = memory_context
+        chunk = types.GroundingChunk(
+            retrieved_context=types.GroundingChunkRetrievedContext(
+                text="Kestrel's hot cache is Dragonfly, not Redis.",
+                title="Handbook",
+                file_search_store="projects/p/fileSearchStores/s",
+            )
+        )
+        gm = types.GroundingMetadata(retrieval_queries=["hot cache"], grounding_chunks=[chunk])
+
+        await client._process_response(
+            _response([_candidate([types.Part(text="Dragonfly")], grounding_metadata=gm)]), ctx
+        )
+
+        events = list(await stream.history.get_events())
+        [call_event, result_event] = events
+        assert call_event.name == FILE_SEARCH_TOOL_NAME
+        assert call_event.arguments == '{"queries": ["hot cache"]}'
+        assert result_event == GeminiServerToolResultEvent(
+            parent_id=call_event.id,
+            name=FILE_SEARCH_TOOL_NAME,
+            result=ToolResult(
+                TextInput(
+                    "Kestrel's hot cache is Dragonfly, not Redis.",
+                    metadata={
+                        "title": "Handbook",
+                        "uri": None,
+                        "document_name": None,
+                        "file_search_store": "projects/p/fileSearchStores/s",
+                        "page_number": None,
+                    },
+                ),
+                metadata={"queries": ["hot cache"]},
+            ),
+            grounding_metadata=gm,
+        )

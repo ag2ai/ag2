@@ -4,6 +4,7 @@
 
 from .code_execution import CodeExecutionTool
 from .file_search import FileSearchTool
+from .google_maps import GoogleMapsTool
 from .image_generation import ImageGenerationTool
 from .mcp_server import MCPServerTool
 from .memory import MemoryTool
@@ -20,6 +21,7 @@ __all__ = (
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
     "FileSearchTool",
+    "GoogleMapsTool",
     "ImageGenerationTool",
     "MCPServerTool",
     "MemoryTool",
