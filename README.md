@@ -45,8 +45,6 @@ AG2 was evolved from AutoGen. Fully open-sourced. We invite collaborators from a
 
 > [!IMPORTANT]
 > **AG2 is on the path to v1.0.** The protocol-driven framework is now the top-level package, imported as `ag2`. The classic framework (`ConversableAgent`, `GroupChat`, …) has been removed, and the import name `autogen` is no longer available — use `import ag2`.
->
-> [Read the full release roadmap →](https://docs.ag2.ai/latest/docs/user-guide/release-roadmap/)
 
 # AG2: Open-Source AgentOS for AI Agents
 

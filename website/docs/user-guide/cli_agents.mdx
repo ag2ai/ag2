@@ -25,8 +25,8 @@ launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
 ## Basic Usage
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import ClaudeCodeConfig
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
 
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
@@ -44,30 +44,33 @@ Each adapter is a preset with its own launch command and authentication:
 <Tabs>
   <Tab title="Claude Code">
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import ClaudeCodeConfig
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
 
-# Launches `claude-agent-acp`; auth via ANTHROPIC_API_KEY (env) or CLAUDE_CONFIG_DIR.
+# Launches `claude-agent-acp`. Auth: pass ANTHROPIC_API_KEY in env={...}, or use
+# an existing ~/.claude login. See "Authentication & billing" below.
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 ```
   </Tab>
 
   <Tab title="Codex">
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import CodexConfig
+from ag2 import Agent
+from ag2.acp import CodexConfig
 
-# Launches `codex-acp`; auth via CODEX_API_KEY or OPENAI_API_KEY (env).
+# Launches `codex-acp`. Auth: pass CODEX_API_KEY or OPENAI_API_KEY in env={...}.
+# See "Authentication & billing" below.
 agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
 ```
   </Tab>
 
   <Tab title="OpenCode">
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import OpenCodeConfig
+from ag2 import Agent
+from ag2.acp import OpenCodeConfig
 
-# Launches `opencode acp`; auth via `opencode auth login` (or env / .env).
+# Launches `opencode acp`. Auth: `opencode auth login` (stored under $HOME).
+# See "Authentication & billing" below.
 # Pick the model in OpenCode's own config (opencode.json: "model": "provider/model").
 agent = Agent("coder", config=OpenCodeConfig(cwd="/path/to/repo"))
 ```
@@ -83,16 +86,71 @@ agent = Agent("coder", config=OpenCodeConfig(cwd="/path/to/repo"))
     provider, OpenCode falls back to the first model of its built-in `opencode`
     provider (OpenCode Zen).
 
+## Authentication & billing
+
+AG2 never meters or bills a run itself — it only launches the CLI agent as a
+subprocess and streams its output. **Who is billed, and whether it's per-token API
+usage or a subscription, is decided entirely by the credential the agent
+authenticates with — not by AG2 or ACP.**
+
+### How the agent's environment is built
+
+This is the part that trips people up. AG2 does **not** hand the agent your full
+shell environment. The ACP subprocess starts from a *trimmed* environment — only
+`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, and `USER` are inherited — merged with
+whatever you pass explicitly in the config's `env` field:
+
+```text
+agent environment  =  { HOME, LOGNAME, PATH, SHELL, TERM, USER }  +  config.env
+```
+
+The practical consequence: **`export ANTHROPIC_API_KEY=...` in your shell does not
+reach the agent.** An API key takes effect only if you put it in `env`:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+agent = Agent("coder", config=ClaudeCodeConfig(
+    cwd="/repo",
+    env={"ANTHROPIC_API_KEY": "sk-ant-..."},  # a shell export would NOT be inherited
+))
+```
+
+A disk-based login is different: it lives under `$HOME` (e.g. Claude Code's
+`~/.claude`, or the credentials written by `opencode auth login`), and `HOME` *is*
+inherited — so it works without setting `env` at all.
+
+### The two paths, and how each is billed
+
+| You authenticate with… | How to set it | Billing |
+| :--- | :--- | :--- |
+| **An API key** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` / `CODEX_API_KEY`, or a provider key for OpenCode) | Pass it in `config.env` — a shell `export` is **not** inherited | The provider's **API**: pay-per-token against that API account |
+| **An existing CLI login** on the host (Claude Code `~/.claude`, `opencode auth login`) | Nothing to set — inherited via `$HOME` | Whatever **plan that login is on**, which may be a **subscription** |
+
+So "API or subscription" is not a property of ACP or AG2 — it follows the
+credential. By default (no `env`), the agent uses whatever login already exists on
+the host; pass an API key in `env` to bill against the provider's API instead.
+
+!!! note
+
+    The Codex adapter here authenticates only via `CODEX_API_KEY` / `OPENAI_API_KEY`
+    (API billing). The subscription/login path applies to the adapters that read a
+    disk login — Claude Code (`~/.claude`, or a custom location via
+    `CLAUDE_CONFIG_DIR` passed in `env`) and OpenCode (`opencode auth login`). Exact
+    plan names, quotas, and whether a plan permits programmatic use are set by each
+    provider, not by AG2 — check the provider's terms.
+
 ## Observing the agent's work
 
 Subscribe to the run's stream to see thoughts, tool calls, and plans live:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import ClaudeCodeConfig
-from autogen.events import ModelMessageChunk, ModelReasoning
-from autogen.events.tool_events import BuiltinToolCallEvent
-from autogen.acp.events import ACPPlan
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.events import ModelMessageChunk, ModelReasoning
+from ag2.events.tool_events import BuiltinToolCallEvent
+from ag2.acp.events import ACPPlan
 
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
@@ -145,8 +203,8 @@ Because each CLI agent is an `Agent`, you can compose them — including as tool
 of one another via `.as_tool()`:
 
 ```python linenums="1"
-from autogen import Agent
-from autogen.acp import ClaudeCodeConfig
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
 
 reviewer = Agent("reviewer", config=ClaudeCodeConfig(cwd="/repo"))
 manager = Agent(
