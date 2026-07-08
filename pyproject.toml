@@ -125,7 +125,6 @@ test-core = [
     "pytest-cov==7.1.0",
     "pytest-timeout>=2.4.0,<3",
     "dirty-equals>=0.11,<0.12",
-    "freezegun>=1.5.5,<2",
 ]
 
 test = [
@@ -135,11 +134,7 @@ test = [
     "ipykernel==7.3.0",
     "nbconvert==7.17.1",
     "nbformat==5.10.4",
-    "pandas>=2.2.0,<3",
-    "fastapi>=0.115.0,<1",
     "respx>=0.23.0,<0.24.0", # search tests
-    # test utilities
-    "aiofiles>=24.1.0,<26.0.0",
 ]
 
 # All optional feature deps needed so the full (non-LLM) test suite can be
@@ -217,12 +212,7 @@ docs = [
 types = [
     "mypy==2.1.0",
     "types-PyYAML",
-    "types-decorator",
-    "types-pycurl",
-    "types-python-dateutil",
     "types-requests",
-    "types-ujson",
-    "types-aiofiles",
     { include-group = "test" },
     "ag2[openai, a2a, ag-ui]",
 ]
@@ -230,13 +220,11 @@ types = [
 lint = ["ruff==0.15.20", "codespell==2.4.2", "zizmor==1.26.1"]
 
 dev = [
-    "toml==0.10.2",
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
     "prek==0.4.5",
-    "detect-secrets==1.5.0",
     "uv==0.11.25",
 ]
 
