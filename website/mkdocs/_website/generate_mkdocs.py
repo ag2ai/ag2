@@ -579,7 +579,9 @@ def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exc
     mkdocs_docs_dir = mkdocs_root_dir / "docs"
     mkdocs_nav = format_navigation(filtered_nav, mkdocs_docs_dir)
 
-    mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav + "\n"
+    blog_nav = "- Blog\n    - [Blog](docs/blog/index.md)"
+
+    mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav + "\n" + blog_nav + "\n"
     mkdocs_nav_path.write_text(mkdocs_nav_content)
     summary_md_path.write_text(mkdocs_nav_content)
 
@@ -1246,6 +1248,9 @@ def main(force: bool) -> None:
 
     copy_assets(website_dir)
     process_and_copy_files(mint_docs_dir, mkdocs_output_dir, filtered_files)
+
+    authors_yml_path = website_dir / "blogs_and_user_stories_authors.yml"
+    process_blog_files(mkdocs_output_dir, authors_yml_path, website_dir / "snippets")
 
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
 

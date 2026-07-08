@@ -97,6 +97,9 @@ plugins:
       cache_safe: true
       css_files:
         - stylesheets/extra.css
+  - blog:
+      blog_dir: docs/blog
+      blog_toc: true
 
 markdown_extensions:
   - toc:
