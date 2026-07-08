@@ -349,7 +349,7 @@ Reasoning content is streamed as `ModelReasoning` events, and reasoning tokens a
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
-If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAIConfig` class and specify a custom `base_url`.
+If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, **Together AI**, or meta-routers like **OrcaRouter**), you can use the `OpenAIConfig` class and specify a custom `base_url`.
 
 ```python linenums="1" hl_lines="6"
 from ag2.config import OpenAIConfig
@@ -394,6 +394,24 @@ nemotron = OpenAIConfig(
     extra_body={"chat_template_kwargs": {"thinking": True}},
 )
 ```
+
+The same mechanism covers OpenAI-compatible meta-routers. For example, [**OrcaRouter**](https://orcarouter.ai) fronts many upstream models behind one endpoint and exposes a request-level **model-fallback chain**: put an ordered list of models in `extra_body.models` and set `extra_body.route` to `"fallback"`, and it tries each in order until one succeeds (up to 5 models).
+
+```python linenums="1" hl_lines="7-10"
+from ag2.config import OpenAIConfig
+
+# OrcaRouter: try each model in order until one succeeds
+config = OpenAIConfig(
+    model="openai/gpt-4o",
+    base_url="https://api.orcarouter.ai/v1",
+    extra_body={
+        "models": ["openai/gpt-4o", "anthropic/claude-haiku-4.5"],
+        "route": "fallback",
+    },
+)
+```
+
+For automatic routing, OrcaRouter also exposes server-side routers you invoke by model name (the routing strategy is configured in its dashboard, not per request) — e.g. `OpenAIConfig(model="orcarouter/auto", base_url="https://api.orcarouter.ai/v1")` picks a live model for each request.
 
 ## Reusing and Overriding Configurations
 
