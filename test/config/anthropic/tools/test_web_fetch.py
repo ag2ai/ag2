@@ -54,3 +54,16 @@ async def test_dynamic_version(context: Context) -> None:
         "type": "web_fetch_20260209",
         "name": "web_fetch",
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", ["web_fetch_20260309", "web_fetch_20260318"])
+async def test_new_versions(context: Context, version: str) -> None:
+    tool = WebFetchTool(version=version)
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_api(schema) == {
+        "type": version,
+        "name": "web_fetch",
+    }

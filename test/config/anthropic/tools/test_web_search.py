@@ -93,6 +93,18 @@ async def test_dynamic_version(context: Context) -> None:
 
 
 @pytest.mark.asyncio
+async def test_version_20260318(context: Context) -> None:
+    tool = WebSearchTool(version="web_search_20260318")
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_api(schema) == {
+        "type": "web_search_20260318",
+        "name": "web_search",
+    }
+
+
+@pytest.mark.asyncio
 async def test_dynamic_version_with_domains(context: Context) -> None:
     tool = WebSearchTool(
         max_uses=5,
