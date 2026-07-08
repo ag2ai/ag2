@@ -124,12 +124,12 @@ Do not use banner-style section dividers (e.g. `# ---\n# Section\n# ---`). Class
 
 ### Structure
 
-Provider-specific tool tests live in `test/beta/config/{provider}/tools/`:
+Provider-specific tool tests live in `test/config/{provider}/tools/`:
 - `test_{tool}.py` — e2e tests for supported tools (one file per tool)
 - `test_unsupported.py` — all unsupported tools for the provider in one file
 - `test_tool_to_api.py` — generic function tool mapping (not builtin-specific)
 
-Variable resolution tests live in `test/beta/tools/test_resolve.py`.
+Variable resolution tests live in `test/tools/test_resolve.py`.
 
 ### Test Pattern
 
@@ -149,7 +149,7 @@ Do **not** instantiate schema classes directly in provider tests — always go t
 
 ### Fixtures
 
-Use the shared `context` pytest fixture from `test/beta/config/conftest.py` (no need to import — pytest discovers it automatically):
+Use the shared `context` pytest fixture from `test/config/conftest.py` (no need to import — pytest discovers it automatically):
 
 ```python
 async def test_defaults(context: Context) -> None: ...
@@ -165,6 +165,6 @@ For OpenAI, test both `tool_to_api` (completions) and `tool_to_responses_api` (r
 
 ### Variable Resolution
 
-Each tool that accepts `Variable` parameters needs exactly 2 tests in `test/beta/tools/test_resolve.py`:
+Each tool that accepts `Variable` parameters needs exactly 2 tests in `test/tools/test_resolve.py`:
 1. Value resolved from context
 2. Missing key raises `KeyError`
