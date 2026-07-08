@@ -51,6 +51,7 @@ from ag2.events import (
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
+from ag2.tools.builtin.collections_search import CollectionsSearchToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.builtin.x_search import XSearchToolSchema
@@ -166,6 +167,16 @@ def tool_to_api(t: ToolSchema) -> chat_pb2.Tool:
 
     if isinstance(t, CodeExecutionToolSchema):
         return xai_tools.code_execution()
+
+    if isinstance(t, CollectionsSearchToolSchema):
+        kwargs = {"collection_ids": t.collection_ids}
+        if t.limit is not None:
+            kwargs["limit"] = t.limit
+        if t.instructions is not None:
+            kwargs["instructions"] = t.instructions
+        if t.retrieval_mode is not None:
+            kwargs["retrieval_mode"] = t.retrieval_mode
+        return xai_tools.collections_search(**kwargs)
 
     if isinstance(t, MCPServerToolSchema):
         kwargs = {"server_url": t.server_url}

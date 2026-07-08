@@ -8,6 +8,7 @@ from ag2 import Context
 from ag2.config.openai.mappers import tool_to_api, tool_to_responses_api
 from ag2.exceptions import UnsupportedToolError
 from ag2.tools.builtin.code_execution import CodeExecutionTool
+from ag2.tools.builtin.collections_search import CollectionsSearchTool
 from ag2.tools.builtin.file_search import FileSearchTool
 from ag2.tools.builtin.google_maps import GoogleMapsTool
 from ag2.tools.builtin.image_generation import ImageGenerationTool
@@ -130,6 +131,15 @@ class TestCompletionsApi:
         with pytest.raises(UnsupportedToolError):
             tool_to_api(schema)
 
+    @pytest.mark.asyncio
+    async def test_collections_search(self, context: Context) -> None:
+        tool = CollectionsSearchTool(collection_ids=["c1"])
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(UnsupportedToolError):
+            tool_to_api(schema)
+
 
 class TestResponsesApi:
     @pytest.mark.asyncio
@@ -171,6 +181,15 @@ class TestResponsesApi:
     @pytest.mark.asyncio
     async def test_google_maps(self, context: Context) -> None:
         tool = GoogleMapsTool()
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(UnsupportedToolError):
+            tool_to_responses_api(schema)
+
+    @pytest.mark.asyncio
+    async def test_collections_search(self, context: Context) -> None:
+        tool = CollectionsSearchTool(collection_ids=["c1"])
 
         [schema] = await tool.schemas(context)
 

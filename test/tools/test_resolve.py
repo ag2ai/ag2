@@ -9,6 +9,7 @@ import pytest
 from ag2 import Context, Variable
 from ag2.tools import ImageGenerationTool, UserLocation, WebSearchTool
 from ag2.tools.builtin._resolve import resolve_variable
+from ag2.tools.builtin.collections_search import CollectionsSearchTool, CollectionsSearchToolSchema
 from ag2.tools.builtin.file_search import FileSearchTool, FileSearchToolSchema
 from ag2.tools.builtin.google_maps import GoogleMapsTool, GoogleMapsToolSchema
 from ag2.tools.builtin.image_generation import ImageGenerationToolSchema
@@ -243,4 +244,22 @@ class TestGoogleMapsToolVariable:
         tool = GoogleMapsTool(latitude=Variable("lat"))
 
         with pytest.raises(KeyError):
+            await tool.schemas(context)
+
+
+@pytest.mark.asyncio
+class TestCollectionsSearchToolVariable:
+    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
+        ctx = make_context(collections=["c1", "c2"])
+
+        tool = CollectionsSearchTool(collection_ids=Variable("collections"))
+        [schema] = await tool.schemas(ctx)
+
+        assert isinstance(schema, CollectionsSearchToolSchema)
+        assert schema.collection_ids == ["c1", "c2"]
+
+    async def test_missing_raises(self, context: Context) -> None:
+        tool = CollectionsSearchTool(collection_ids=Variable("collections"))
+
+        with pytest.raises(KeyError, match="collections"):
             await tool.schemas(context)

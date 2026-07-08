@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .code_execution import CodeExecutionTool
+from .collections_search import CollectionsSearchTool
 from .file_search import FileSearchTool
 from .google_maps import GoogleMapsTool
 from .image_generation import ImageGenerationTool
@@ -18,6 +19,7 @@ from .x_search import XSearchTool
 
 __all__ = (
     "CodeExecutionTool",
+    "CollectionsSearchTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
     "FileSearchTool",

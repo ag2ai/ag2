@@ -19,6 +19,7 @@ AG2 includes built-in tools that map to server-side capabilities offered by LLM 
 | `ImageGenerationTool` | ✗ | ✓ | ✗ | ✗ | ✗ |
 | `MemoryTool` | ✓ | ✗ | ✗ | ✗ | ✗ |
 | `XSearchTool` | ✗ | ✗ | ✗ | ✓ | ✗ |
+| `CollectionsSearchTool` | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `RetrievalTool` | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `GoogleMapsTool` | ✗ | ✗ | ✓ | ✗ | ✗ |
 
@@ -389,6 +390,38 @@ agent = Agent(
 
 !!! note
     `XSearchTool` is only supported by xAI.
+
+## Collections Search
+
+`CollectionsSearchTool` lets Grok search your uploaded xAI document collections (knowledge bases) and ground its answer in the retrieved chunks. Grok issues the searches server-side; the tool call is surfaced as an event, but xAI returns no separate result payload.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import XAIConfig
+from ag2.tools import CollectionsSearchTool
+
+agent = Agent(
+    "researcher",
+    config=XAIConfig(model="grok-4"),
+    tools=[
+        CollectionsSearchTool(
+            collection_ids=["collection_abc"],
+            limit=10,
+            retrieval_mode="hybrid",
+        ),
+    ],
+)
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `collection_ids` | **Required.** Ids of the xAI document collections to search (max 10). |
+| `limit` | Maximum number of retrieved chunks (server default: 10). |
+| `instructions` | Free-text guidance to steer ranking. |
+| `retrieval_mode` | One of `"hybrid"`, `"semantic"`, `"keyword"` (server default: hybrid). |
+
+!!! note
+    `CollectionsSearchTool` is only supported by xAI. All other providers raise `UnsupportedToolError`.
 
 ## Retrieval
 

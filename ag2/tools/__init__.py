@@ -6,6 +6,7 @@ from ag2.events import ToolResult
 
 from .builtin import (
     CodeExecutionTool,
+    CollectionsSearchTool,
     ContainerAutoEnvironment,
     ContainerReferenceEnvironment,
     FileSearchTool,
@@ -32,6 +33,7 @@ from .toolkits import FilesystemToolkit, MCPServerConfig, MCPStdioServerConfig, 
 
 __all__ = (
     "CodeExecutionTool",
+    "CollectionsSearchTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
     "DuckDuckSearchTool",

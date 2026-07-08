@@ -7,6 +7,7 @@ import pytest
 from ag2 import Context
 from ag2.config.anthropic.mappers import tool_to_api
 from ag2.exceptions import UnsupportedToolError
+from ag2.tools.builtin.collections_search import CollectionsSearchTool
 from ag2.tools.builtin.file_search import FileSearchTool
 from ag2.tools.builtin.google_maps import GoogleMapsTool
 from ag2.tools.builtin.image_generation import ImageGenerationTool
@@ -69,6 +70,16 @@ async def test_file_search(context: Context) -> None:
 @pytest.mark.asyncio
 async def test_google_maps(context: Context) -> None:
     tool = GoogleMapsTool()
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(UnsupportedToolError):
+        tool_to_api(schema)
+
+
+@pytest.mark.asyncio
+async def test_collections_search(context: Context) -> None:
+    tool = CollectionsSearchTool(collection_ids=["c1"])
 
     [schema] = await tool.schemas(context)
 
