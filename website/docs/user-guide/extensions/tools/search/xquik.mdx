@@ -6,7 +6,7 @@ sidebarTitle: Xquik Tweet Search
 `XquikSearchToolkit` gives an agent a tool for searching public X posts through the [Xquik API](https://docs.xquik.com/api-reference/overview){.external-link target="_blank"}. Use it when an agent needs structured tweet records and pagination metadata.
 
 !!! note
-    Set `XQUIK_API_KEY` or pass an API key to the toolkit. No additional Python package is required.
+    An Xquik `api_key` is required. No additional Python package is required.
 
 ```python linenums="1"
 import os
@@ -21,7 +21,7 @@ agent = Agent(
 )
 ```
 
-If `api_key` is omitted, the toolkit reads `XQUIK_API_KEY` when the tool runs.
+The `api_key` is required and validated when the toolkit is constructed.
 
 ## Tool
 
