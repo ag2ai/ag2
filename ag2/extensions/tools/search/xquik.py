@@ -4,7 +4,6 @@
 
 """Xquik tweet search extension for AG2."""
 
-import os
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
@@ -37,14 +36,14 @@ class XquikSearchToolkit(Toolkit):
     search defaults can be fixed when the toolkit or tool is constructed, or
     supplied through AG2 ``Variable`` values at runtime.
 
-    The API key is read from ``XQUIK_API_KEY`` when ``api_key`` is omitted.
+    An Xquik ``api_key`` is required.
     """
 
     __slots__ = ("_api_key", "_base_url", "_timeout")
 
     def __init__(
         self,
-        api_key: str | None = None,
+        api_key: str,
         *,
         base_url: str = "https://xquik.com",
         timeout: float = 60.0,
@@ -55,6 +54,8 @@ class XquikSearchToolkit(Toolkit):
         limit: int | Variable | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
+        if not api_key:
+            raise ValueError("api_key is required")
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
@@ -93,10 +94,6 @@ class XquikSearchToolkit(Toolkit):
             ctx: Context,
         ) -> ToolResult:
             """Search public X posts and return a structured page of results."""
-            resolved_api_key = api_key or os.environ.get("XQUIK_API_KEY")
-            if resolved_api_key is None:
-                raise ValueError("XQUIK_API_KEY is required when api_key is omitted")
-
             params: dict[str, Any] = {
                 "q": query,
                 "queryType": resolve_variable(query_type, ctx, param_name="query_type"),
@@ -109,7 +106,7 @@ class XquikSearchToolkit(Toolkit):
 
             async with httpx.AsyncClient(
                 base_url=base_url,
-                headers={"x-api-key": resolved_api_key},
+                headers={"x-api-key": api_key},
                 timeout=timeout,
             ) as client:
                 response = await client.get("/api/v1/x/tweets/search", params=request_params)
