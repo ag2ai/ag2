@@ -1,0 +1,71 @@
+---
+title: Xquik Tweet Search
+sidebarTitle: Xquik Tweet Search
+---
+
+`XquikSearchToolkit` gives an agent a tool for searching public X posts through the [Xquik API](https://docs.xquik.com/api-reference/overview){.external-link target="_blank"}. Use it when an agent needs structured tweet records and pagination metadata.
+
+!!! note
+    Set `XQUIK_API_KEY` or pass an API key to the toolkit. No additional Python package is required.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import XquikSearchToolkit
+
+agent = Agent(
+    "social-researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[XquikSearchToolkit(api_key=os.environ["XQUIK_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the toolkit reads `XQUIK_API_KEY` when the tool runs.
+
+## Tool
+
+| Tool | Description |
+| :--- | :--- |
+| `xquik_tweet_search` | Search public X posts and return tweet records plus pagination metadata |
+
+## Search configuration
+
+The tool accepts a required `query` at execution time. Configure optional defaults on the toolkit or `toolkit.search()`:
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import XquikSearchToolkit
+
+toolkit = XquikSearchToolkit(api_key=os.environ["XQUIK_API_KEY"])
+
+search_tool = toolkit.search(
+    query_type="Latest",
+    since_time="2026-07-01T00:00:00Z",
+    until_time="2026-07-02T00:00:00Z",
+    limit=25,
+)
+
+agent = Agent(
+    "social-researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[search_tool],
+)
+```
+
+Use `cursor` with the `next_cursor` from a previous response to request another page. All search defaults accept a `Variable` for deferred context resolution.
+
+## Result
+
+`xquik_tweet_search` returns an `XquikTweetSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query sent to Xquik |
+| `tweets` | Structured tweet records returned by the API |
+| `has_next_page` | Whether another result page is available |
+| `next_cursor` | Cursor for the next page, or an empty string |
+
+Check the [Xquik OpenAPI schema](https://xquik.com/openapi.json){.external-link target="_blank"} for current search syntax, limits, and response fields.
