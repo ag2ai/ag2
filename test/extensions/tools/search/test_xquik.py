@@ -128,26 +128,9 @@ class TestSearchExecution:
 
         assert dict(route.calls.last.request.url.params) == {"q": "AG2"}
 
-    @respx.mock
-    async def test_reads_api_key_from_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        route = respx.get(f"{XQUIK_BASE_URL}/api/v1/x/tweets/search").mock(
-            return_value=httpx.Response(200, json={"tweets": []})
-        )
-        monkeypatch.setenv("XQUIK_API_KEY", "environment-key")
-        toolkit = XquikSearchToolkit()
-        agent = Agent("a", config=_tool_call_config({"query": "AG2"}), tools=[toolkit])
-
-        await agent.ask("search")
-
-        assert route.calls.last.request.headers["x-api-key"] == "environment-key"
-
-    async def test_missing_api_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("XQUIK_API_KEY", raising=False)
-        toolkit = XquikSearchToolkit()
-        agent = Agent("a", config=_tool_call_config({"query": "AG2"}), tools=[toolkit])
-
-        with pytest.raises(ValueError, match="XQUIK_API_KEY"):
-            await agent.ask("search")
+    async def test_empty_api_key_raises_at_construction(self) -> None:
+        with pytest.raises(ValueError, match="api_key is required"):
+            XquikSearchToolkit("")
 
 
 @pytest.mark.asyncio
