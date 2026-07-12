@@ -76,7 +76,7 @@ acp = ["agent-client-protocol>=0.10.1,<0.11"]
 ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
-openai = ["openai>=2.44.0,<3.0"]
+openai = ["openai>=2.45.0,<3.0"]
 anthropic = ["anthropic[vertex]>=0.116.0,<1"]
 gemini = [
     "google-api-core",
