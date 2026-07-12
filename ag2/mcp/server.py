@@ -23,11 +23,13 @@ from starlette.routing import BaseRoute, Mount, Route
 from ag2.agent import Agent
 from ag2.history import MemoryStorage
 
+from .errors import MCPToolNameConflictError
 from .executor import AgentExecutor, ContextProvider
 from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
+from .tools import MCPUITool, ToolProvider
 
 if TYPE_CHECKING:
     from starlette.types import Lifespan, Receive, Scope, Send
@@ -123,6 +125,7 @@ class MCPServer:
         "_session_store",
         "_resource_provider",
         "_prompt_provider",
+        "_tool_provider",
         "_http",
     )
 
@@ -144,6 +147,7 @@ class MCPServer:
         resources: "Sequence[Resource]" = (),
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
+        tools: "Sequence[MCPUITool]" = (),
         path: str = "/mcp",
         stateless: bool = False,
         json_response: bool = False,
@@ -161,6 +165,11 @@ class MCPServer:
             ResourceProvider(resources, resource_templates) if (resources or resource_templates) else None
         )
         self._prompt_provider = PromptProvider(prompts) if prompts else None
+        if tools:
+            conflict = next((t.name for t in tools if t.name == tool_name), None)
+            if conflict is not None:
+                raise MCPToolNameConflictError(conflict)
+        self._tool_provider = ToolProvider(tools) if tools else None
         self._executor = AgentExecutor(
             agent,
             tool_name=tool_name,
@@ -197,17 +206,25 @@ class MCPServer:
             **kwargs,
         )
         executor = self._executor
+        tool_provider = self._tool_provider
 
         # ``mcp``'s low-level decorators are untyped; ignore the resulting noise.
         @server.list_tools()  # type: ignore[no-untyped-call, misc]
         async def _list_tools() -> list[MCPTool]:
-            return executor.list_tools()
+            tools = executor.list_tools()
+            if tool_provider is not None:
+                tools += tool_provider.list_mcp_tools()
+            return tools
 
         @server.call_tool()  # type: ignore[no-untyped-call, misc]
         async def _call_tool(
             name: str, arguments: dict[str, Any]
         ) -> list[ContentBlock] | tuple[list[ContentBlock], dict[str, Any]] | CallToolResult:
             arguments = arguments or {}
+            # Custom tools run their handler directly; everything else is the
+            # agent's conversational tool (name collisions are rejected at init).
+            if tool_provider is not None and tool_provider.has(name):
+                return await tool_provider.call(name, arguments)
             return await executor.call(
                 name,
                 message=arguments.get("message", ""),
