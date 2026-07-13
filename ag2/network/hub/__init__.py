@@ -12,6 +12,8 @@ modules — the trust boundary runs through ``HubClient`` /
 ``AgentClient`` (see ``client/``).
 """
 
+from ag2.exceptions import missing_optional_dependency
+
 from .arbiter import Allow, BaseHubArbiter, Decision, Deny, HubArbiter, RuleBasedArbiter
 from .audit import (
     AUDIT_KIND_AGENT_REGISTERED,
@@ -70,6 +72,11 @@ from .layout import (
 )
 from .listener import BaseHubListener, HubListener
 
+try:
+    from .telemetry import HubTelemetryListener
+except ImportError as e:
+    HubTelemetryListener = missing_optional_dependency("HubTelemetryListener", "tracing", e)
+
 __all__ = (
     "AUDIT_KIND_AGENT_REGISTERED",
     "AUDIT_KIND_AGENT_UNREGISTERED",
@@ -99,6 +106,7 @@ __all__ = (
     "Hub",
     "HubArbiter",
     "HubListener",
+    "HubTelemetryListener",
     "MaxSilenceEvaluator",
     "NotifyChannelHandler",
     "PendingTurn",

@@ -27,7 +27,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-version = "0.14.0"
+version = "1.0.0b0"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -72,11 +72,12 @@ dependencies = [
 # === Agent protocols ===
 a2a = ["a2a-sdk>=1.1.0,<2"]
 a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<2"]
+acp = ["agent-client-protocol>=0.10.1,<0.11"]
 ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
-openai = ["openai>=2.44.0,<3.0"]
-anthropic = ["anthropic[vertex]>=0.79.0,<1"]
+openai = ["openai>=2.45.0,<3.0"]
+anthropic = ["anthropic[vertex]>=0.116.0,<1"]
 gemini = [
     "google-api-core",
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
@@ -93,12 +94,12 @@ ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 dashscope = ["dashscope>=1.25.13"]
 
-# === Streams / tracing ===
 redis = ["redis>=5.0,<9"]
 tracing = [
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
 ]
+metrics = ["prometheus-client>=0.20.0,<0.30.0"]
 
 # === Search tools ===
 tavily = ["tavily-python>=0.7.4,<0.8"]
@@ -124,7 +125,6 @@ test-core = [
     "pytest-cov==7.1.0",
     "pytest-timeout>=2.4.0,<3",
     "dirty-equals>=0.11,<0.12",
-    "freezegun>=1.5.5,<2",
 ]
 
 test = [
@@ -134,11 +134,7 @@ test = [
     "ipykernel==7.3.0",
     "nbconvert==7.17.1",
     "nbformat==5.10.4",
-    "pandas>=2.2.0,<3",
-    "fastapi>=0.115.0,<1",
     "respx>=0.23.0,<0.24.0", # search tests
-    # test utilities
-    "aiofiles>=24.1.0,<26.0.0",
 ]
 
 # All optional feature deps needed so the full (non-LLM) test suite can be
@@ -150,6 +146,7 @@ optionals = [
     "ag2[a2ui]", # provides starlette/jsonschema for AG-UI / a2ui serving tests
     "ag2[mcp]", # ag2.mcp — serve an Agent as an MCP server
     "ag2[tracing]",
+    "ag2[metrics]",
     # search tools
     "ag2[tavily,ddgs,perplexity]",
     # extensions are not shipped as extras; install their packages directly for testing
@@ -173,6 +170,7 @@ optionals = [
 docs = [
     "ag2[a2a]",     # A2A is exposed in the public API by the optional `ag2.a2a` module
     "ag2[tracing]", # Tracing is exposed in the public API by the optional `ag2.opentelemetry` / `ag2.middleware` module
+    "ag2[metrics]", # Metrics is exposed in the public API by the optional `ag2.middleware` module
     "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `ag2.ag_ui` module
     # Extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.2.3; python_version>='3.11'",
@@ -214,27 +212,20 @@ docs = [
 types = [
     "mypy==2.1.0",
     "types-PyYAML",
-    "types-decorator",
-    "types-pycurl",
-    "types-python-dateutil",
     "types-requests",
-    "types-ujson",
-    "types-aiofiles",
     { include-group = "test" },
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.15.18", "codespell==2.4.2", "zizmor==1.26.1"]
+lint = ["ruff==0.15.20", "codespell==2.4.2", "zizmor==1.26.1"]
 
 dev = [
-    "toml==0.10.2",
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
     "prek==0.4.5",
-    "detect-secrets==1.5.0",
-    "uv==0.11.23",
+    "uv==0.11.25",
 ]
 
 [tool.pytest.ini_options]

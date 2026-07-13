@@ -8,6 +8,8 @@ from ag2 import Context
 from ag2.config.openai.mappers import tool_to_api, tool_to_responses_api
 from ag2.exceptions import UnsupportedToolError
 from ag2.tools.builtin.code_execution import CodeExecutionTool
+from ag2.tools.builtin.file_search import FileSearchTool
+from ag2.tools.builtin.google_maps import GoogleMapsTool
 from ag2.tools.builtin.image_generation import ImageGenerationTool
 from ag2.tools.builtin.mcp_server import MCPServerTool
 from ag2.tools.builtin.memory import MemoryTool
@@ -110,6 +112,24 @@ class TestCompletionsApi:
         with pytest.raises(UnsupportedToolError):
             tool_to_api(schema)
 
+    @pytest.mark.asyncio
+    async def test_file_search(self, context: Context) -> None:
+        tool = FileSearchTool(vector_store_ids=["vs_1"])
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(UnsupportedToolError):
+            tool_to_api(schema)
+
+    @pytest.mark.asyncio
+    async def test_google_maps(self, context: Context) -> None:
+        tool = GoogleMapsTool()
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(UnsupportedToolError):
+            tool_to_api(schema)
+
 
 class TestResponsesApi:
     @pytest.mark.asyncio
@@ -131,15 +151,6 @@ class TestResponsesApi:
             tool_to_responses_api(schema)
 
     @pytest.mark.asyncio
-    async def test_skills(self, context: Context) -> None:
-        tool = SkillsTool("pptx")
-
-        [schema] = await tool.schemas(context)
-
-        with pytest.raises(UnsupportedToolError):
-            tool_to_responses_api(schema)
-
-    @pytest.mark.asyncio
     async def test_x_search(self, context: Context) -> None:
         tool = XSearchTool()
 
@@ -151,6 +162,15 @@ class TestResponsesApi:
     @pytest.mark.asyncio
     async def test_retrieval(self, context: Context) -> None:
         tool = RetrievalTool("kb_123")
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(UnsupportedToolError):
+            tool_to_responses_api(schema)
+
+    @pytest.mark.asyncio
+    async def test_google_maps(self, context: Context) -> None:
+        tool = GoogleMapsTool()
 
         [schema] = await tool.schemas(context)
 

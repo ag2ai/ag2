@@ -74,7 +74,9 @@ plugins:
       separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   # - meta                         # (insiders) use .meta.yml files
   - redirects:
-      redirect_maps: {}
+      redirect_maps:
+        docs/quick-start.md: docs/user-guide/quick-start.md
+        docs/user-guide/contribution_policy.md: docs/contributor-guide/contribution_policy.md
   - glightbox:                   # image zoom
       manual: true
   - macros:                      # Jinja templates
@@ -95,6 +97,9 @@ plugins:
       cache_safe: true
       css_files:
         - stylesheets/extra.css
+  - blog:
+      blog_dir: docs/blog
+      blog_toc: true
 
 markdown_extensions:
   - toc:

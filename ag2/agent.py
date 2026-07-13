@@ -79,6 +79,7 @@ from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .task import CheckpointStore, Task, TaskSpec
+from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
@@ -86,6 +87,7 @@ from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
 from .types import Omittable, SendableMessage, omit
 from .usage import UsageReport
+from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -1164,6 +1166,8 @@ class Agent(PluginTarget, Generic[TResult]):
         if not config:
             raise ConfigNotProvidedError()
 
+        context.dependencies[MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY] = config
+
         if not context.prompt:
             context.prompt.extend(self._system_prompt)
 
@@ -1252,15 +1256,23 @@ class Agent(PluginTarget, Generic[TResult]):
 
             all_schemas: list[ToolSchema] = []
             known_tools: set[str] = set()
+            tool_search_schema: ToolSearchToolSchema | None = None
             for t in all_tools:
                 schemas = await t.schemas(context)
-                all_schemas.extend(schemas)
 
                 for schema in schemas:
                     if isinstance(schema, FunctionToolSchema):
                         known_tools.add(schema.function.name)
                     else:
                         known_tools.add(schema.type)
+
+                    if isinstance(schema, ToolSearchToolSchema):
+                        tool_search_schema = schema
+                    else:
+                        all_schemas.append(schema)
+
+            if tool_search_schema is not None:
+                all_schemas.append(tool_search_schema)
 
             # instantiate middlewares
             middleware_instances: list[BaseMiddleware] = []
@@ -1405,13 +1417,15 @@ class Agent(PluginTarget, Generic[TResult]):
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
     ) -> Context:
-        return Context(
+        context = Context(
             stream,
             prompt=list(prompt),
             dependencies=self._agent_dependencies | (dependencies or {}),
             variables=self._agent_variables | (variables or {}),
             dependency_provider=self.dependency_provider,
         )
+        context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY] = self
+        return context
 
     def as_tool(
         self,

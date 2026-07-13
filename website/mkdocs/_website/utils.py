@@ -39,7 +39,9 @@ def get_git_tracked_and_untracked_files_in_directory(directory: Path) -> list[Pa
         text=True,
         check=True,
     )
-    return list({directory / p for p in proc.stdout.splitlines()})
+    # --cached also lists files deleted or moved away in the working tree but not yet
+    # committed; keep only paths that still exist so an uncommitted rm/mv doesn't break the build.
+    return [p for p in {directory / p for p in proc.stdout.splitlines()} if p.exists()]
 
 
 def copy_files(src_dir: Path, dst_dir: Path, files_to_copy: list[Path]) -> None:

@@ -51,7 +51,8 @@ class GeminiServerToolCallEvent(BuiltinToolCallEvent):
         return cls(
             id=str(uuid4()),
             name=name,
-            arguments=json.dumps({"queries": list(gm.web_search_queries or [])}),
+            # web_search / web_fetch use web_search_queries; file_search uses retrieval_queries.
+            arguments=json.dumps({"queries": list(gm.web_search_queries or []) + list(gm.retrieval_queries or [])}),
             grounding_metadata=gm,
         )
 
@@ -77,16 +78,53 @@ class GeminiServerToolResultEvent(BuiltinToolResultEvent):
     @classmethod
     def from_grounding(cls, gm: types.GroundingMetadata, *, parent_id: str, name: str) -> "GeminiServerToolResultEvent":
         chunks = gm.grounding_chunks or []
-        parts: list[Input] = [
-            UrlInput(
-                chunk.web.uri,
-                kind=BinaryType.BINARY,
-                metadata={"title": chunk.web.title, "domain": chunk.web.domain},
-            )
-            for chunk in chunks
-            if chunk.web and chunk.web.uri
-        ]
-        metadata: dict[str, Any] = {"queries": list(gm.web_search_queries or [])} if chunks else {}
+        parts: list[Input] = []
+        for chunk in chunks:
+            if chunk.web and chunk.web.uri:
+                parts.append(
+                    UrlInput(
+                        chunk.web.uri,
+                        kind=BinaryType.BINARY,
+                        metadata={"title": chunk.web.title, "domain": chunk.web.domain},
+                    )
+                )
+            elif chunk.maps and chunk.maps.uri:
+                parts.append(
+                    UrlInput(
+                        chunk.maps.uri,
+                        kind=BinaryType.BINARY,
+                        metadata={"title": chunk.maps.title, "place_id": chunk.maps.place_id},
+                    )
+                )
+            elif chunk.retrieved_context:
+                rc = chunk.retrieved_context
+                if rc.text:
+                    # file_search returns the retrieved chunk as text (no uri).
+                    parts.append(
+                        TextInput(
+                            rc.text,
+                            metadata={
+                                "title": rc.title,
+                                "uri": rc.uri,
+                                "document_name": rc.document_name,
+                                "file_search_store": rc.file_search_store,
+                                "page_number": rc.page_number,
+                            },
+                        )
+                    )
+                elif rc.uri:
+                    parts.append(
+                        UrlInput(
+                            rc.uri,
+                            kind=BinaryType.BINARY,
+                            metadata={
+                                "title": rc.title,
+                                "file_search_store": rc.file_search_store,
+                            },
+                        )
+                    )
+        queries = list(gm.web_search_queries or []) + list(gm.retrieval_queries or [])
+        metadata: dict[str, Any] = {"queries": queries} if chunks else {}
         return cls(
             parent_id=parent_id,
             name=name,

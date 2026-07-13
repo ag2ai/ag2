@@ -52,15 +52,10 @@
   "anchors": [],
   "navigation": [
     {
-      "group": "Quick Start",
-      "pages": [
-        "docs/user-guide/quick-start"
-      ]
-    },
-    {
       "group": "User Guide",
       "pages": [
         "docs/user-guide/motivation",
+        "docs/user-guide/quick-start",
         "docs/user-guide/agents",
         "docs/user-guide/model_configuration",
         "docs/user-guide/resume",
@@ -98,7 +93,14 @@
         "docs/user-guide/depends",
         "docs/user-guide/skills",
         "docs/user-guide/middleware",
-        "docs/user-guide/telemetry",
+        {
+          "group": "Telemetry",
+          "pages": [
+            "docs/user-guide/telemetry/agent",
+            "docs/user-guide/telemetry/network"
+          ]
+        },
+        "docs/user-guide/metrics",
         "docs/user-guide/testing",
         {
           "group": "Evaluation",
@@ -137,50 +139,6 @@
         "docs/user-guide/tasks",
         "docs/user-guide/subagents",
         {
-          "group": "Multi-Agent Network",
-          "pages": [
-            "docs/user-guide/network/overview",
-            "docs/user-guide/network/quick_start",
-            "docs/user-guide/network/hub_and_identity",
-            "docs/user-guide/network/agent_clients",
-            "docs/user-guide/network/human_client",
-            "docs/user-guide/network/network_assigned_tools",
-            {
-              "group": "Session Adapters",
-              "pages": [
-                "docs/user-guide/network/adapters_overview",
-                "docs/user-guide/network/conversation",
-                "docs/user-guide/network/consulting",
-                "docs/user-guide/network/discussion",
-                "docs/user-guide/network/workflow",
-                "docs/user-guide/network/context_variables",
-                "docs/user-guide/network/termination",
-                "docs/user-guide/network/migration_from_group_chat",
-                {
-                  "group": "Pattern Cookbook",
-                  "pages": [
-                    "docs/user-guide/network/pattern_cookbook/pattern_cookbook",
-                    "docs/user-guide/network/pattern_cookbook/pipeline",
-                    "docs/user-guide/network/pattern_cookbook/hierarchical",
-                    "docs/user-guide/network/pattern_cookbook/star",
-                    "docs/user-guide/network/pattern_cookbook/coordinator",
-                    "docs/user-guide/network/pattern_cookbook/escalation",
-                    "docs/user-guide/network/pattern_cookbook/redundant",
-                    "docs/user-guide/network/pattern_cookbook/feedback_loop",
-                    "docs/user-guide/network/pattern_cookbook/context_aware_routing",
-                    "docs/user-guide/network/pattern_cookbook/triage_with_tasks"
-                  ]
-                }
-              ]
-            },
-            "docs/user-guide/network/envelopes_and_events",
-            "docs/user-guide/network/expectations_and_audit",
-            "docs/user-guide/network/task_observation",
-            "docs/user-guide/network/views_and_skills",
-            "docs/user-guide/network/distributed"
-          ]
-        },
-        {
           "group": "AG-UI",
           "pages": [
             "docs/user-guide/ag-ui/index",
@@ -208,47 +166,90 @@
             "docs/user-guide/a2ui/capabilities"
           ]
         },
+        "docs/user-guide/coding_with_ai"
+      ]
+    },
+    {
+      "group": "Agents Orchestration",
+      "pages": [
+        "docs/user-guide/network/overview",
+        "docs/user-guide/network/quick_start",
+        "docs/user-guide/network/hub_and_identity",
+        "docs/user-guide/network/agent_clients",
+        "docs/user-guide/network/human_client",
+        "docs/user-guide/network/network_assigned_tools",
         {
-          "group": "Extensions",
+          "group": "Session Adapters",
+          "pages": [
+            "docs/user-guide/network/adapters_overview",
+            "docs/user-guide/network/conversation",
+            "docs/user-guide/network/consulting",
+            "docs/user-guide/network/discussion",
+            "docs/user-guide/network/workflow",
+            "docs/user-guide/network/context_variables",
+            "docs/user-guide/network/termination",
+            "docs/user-guide/network/migration_from_group_chat",
+            {
+              "group": "Pattern Cookbook",
+              "pages": [
+                "docs/user-guide/network/pattern_cookbook/pattern_cookbook",
+                "docs/user-guide/network/pattern_cookbook/pipeline",
+                "docs/user-guide/network/pattern_cookbook/hierarchical",
+                "docs/user-guide/network/pattern_cookbook/star",
+                "docs/user-guide/network/pattern_cookbook/coordinator",
+                "docs/user-guide/network/pattern_cookbook/escalation",
+                "docs/user-guide/network/pattern_cookbook/redundant",
+                "docs/user-guide/network/pattern_cookbook/feedback_loop",
+                "docs/user-guide/network/pattern_cookbook/context_aware_routing",
+                "docs/user-guide/network/pattern_cookbook/triage_with_tasks"
+              ]
+            }
+          ]
+        },
+        "docs/user-guide/network/envelopes_and_events",
+        "docs/user-guide/network/expectations_and_audit",
+        "docs/user-guide/network/task_observation",
+        "docs/user-guide/network/views_and_skills",
+        "docs/user-guide/network/distributed"
+      ]
+    },
+    {
+      "group": "Examples",
+      "pages": [
+        "docs/user-guide/code_examples/code_examples",
+        "docs/user-guide/code_examples/01_hello_agent",
+        "docs/user-guide/code_examples/02_recipe_builder",
+        "docs/user-guide/code_examples/03_travel_planner",
+        "docs/user-guide/code_examples/04_token_watchdog",
+        "docs/user-guide/code_examples/05_research_squad",
+        "docs/user-guide/code_examples/06_journal_companion",
+        "docs/user-guide/code_examples/07_long_doc_chat",
+        "docs/user-guide/code_examples/08_safety_guard"
+      ]
+    },
+    {
+      "group": "Extensions",
+      "pages": [
+        {
+          "group": "Tools",
           "pages": [
             {
-              "group": "Tools",
+              "group": "Search",
               "pages": [
-                {
-                  "group": "Search",
-                  "pages": [
-                    "docs/user-guide/extensions/tools/search/exa",
-                    "docs/user-guide/extensions/tools/search/tinyfish"
-                  ]
-                }
+                "docs/user-guide/extensions/tools/search/exa",
+                "docs/user-guide/extensions/tools/search/tinyfish"
               ]
-            },
-            "docs/beta/extensions/nlipagent"
+            }
           ]
         },
-        {
-          "group": "Code Examples",
-          "pages": [
-            "docs/user-guide/code_examples/code_examples",
-            "docs/user-guide/code_examples/01_hello_agent",
-            "docs/user-guide/code_examples/02_recipe_builder",
-            "docs/user-guide/code_examples/03_travel_planner",
-            "docs/user-guide/code_examples/04_token_watchdog",
-            "docs/user-guide/code_examples/05_research_squad",
-            "docs/user-guide/code_examples/06_journal_companion",
-            "docs/user-guide/code_examples/07_long_doc_chat",
-            "docs/user-guide/code_examples/08_safety_guard"
-          ]
-        },
-        "docs/user-guide/coding_with_ai",
-        "docs/user-guide/contribution_policy",
-        "docs/user-guide/roadmap"
+        "docs/user-guide/extensions/nlipagent"
       ]
     },
     {
       "group": "Contributor Guide",
       "pages": [
         "docs/contributor-guide/contributing",
+        "docs/contributor-guide/contribution_policy",
         "docs/contributor-guide/setup-development-environment",
         "docs/contributor-guide/documentation",
         "docs/contributor-guide/file-bug-report",

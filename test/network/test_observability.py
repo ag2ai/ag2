@@ -329,6 +329,8 @@ async def test_health_snapshot_shape() -> None:
         "registered_listeners": 1,
         "adapters_loaded": 4,
         "audit_log_bytes": 0,
+        # Tracing is opt-in; zero when no tracer_provider / telemetry listener.
+        "telemetry_log_bytes": 0,
     }
 
     alice = await hub.register(_agent("alice"))
