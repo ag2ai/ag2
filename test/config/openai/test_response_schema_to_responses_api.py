@@ -232,9 +232,36 @@ def test_raw_schema_maps_correctly() -> None:
     assert result == {
         "format": {
             "type": "json_schema",
-            "schema": {"type": "object", "properties": {"x": {"type": "integer"}}, "additionalProperties": False},
+            "schema": {
+                "type": "object",
+                "properties": {"x": {"type": "integer"}},
+                "additionalProperties": False,
+                "required": ["x"],
+            },
             "name": "Custom",
             "description": "A custom schema",
             "strict": True,
         },
     }
+
+
+def test_defaulted_fields_are_still_required() -> None:
+    """Strict mode requires every property in `required`, including defaulted ones.
+
+    Pydantic leaves fields that carry a default out of `required`; sending that
+    schema with `strict: True` is rejected by the API with `invalid_json_schema`.
+    """
+
+    class Inner(BaseModel):
+        text: str
+        options: list[str] = Field(default_factory=list)
+
+    class Outer(BaseModel):
+        title: str = ""
+        items: list[Inner] = Field(default_factory=list)
+
+    result = response_proto_to_text_config(ResponseSchema(Outer))
+
+    schema = result["format"]["schema"]
+    assert schema["required"] == ["title", "items"]
+    assert schema["$defs"]["Inner"]["required"] == ["text", "options"]

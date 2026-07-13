@@ -55,9 +55,9 @@ cp -r ag2-skills/skills/ag2-quickstart ~/.claude/skills/
 
 Skills teach patterns; the docs keep your assistant honest about the *exact* current signatures. The biggest risk is your assistant falling back on the **classic** `autogen` API it was trained on (`ConversableAgent`, `initiate_chat`, `GroupChat`) — now removed from the package. Give it current ground truth:
 
-- **Live AG2 docs:** [`https://docs.ag2.ai/latest/docs/user-guide/agents/`](https://docs.ag2.ai/latest/docs/user-guide/agents/){.external-link target="_blank"} — point your agent at this section (most assistants can fetch a URL).
+- **Live AG2 docs:** [`https://docs.ag2.ai/docs/user-guide/agents/`](https://docs.ag2.ai/docs/user-guide/agents/){.external-link target="_blank"} — point your agent at this section (most assistants can fetch a URL).
 - **AG2 docs source (Markdown):** [`ag2ai/ag2/website/docs/user-guide`](https://github.com/ag2ai/ag2/tree/main/website/docs/user-guide){.external-link target="_blank"} — the raw `.mdx` your agent can read directly from GitHub.
-- **AG2 `llms.txt`:** [`https://docs.ag2.ai/latest/llms.txt`](https://docs.ag2.ai/latest/llms.txt){.external-link target="_blank"} — a machine-readable index of the AG2 docs following the [llms.txt standard](https://llmstxt.org/){.external-link target="_blank"}, plus [`llms-full.txt`](https://docs.ag2.ai/latest/llms-full.txt){.external-link target="_blank"} for the entire AG2 docs in one file. Both are AG2-scoped, so they never point your agent at the classic API.
+- **AG2 `llms.txt`:** [`https://docs.ag2.ai/llms.txt`](https://docs.ag2.ai/llms.txt){.external-link target="_blank"} — a machine-readable index of the AG2 docs following the [llms.txt standard](https://llmstxt.org/){.external-link target="_blank"}, plus [`llms-full.txt`](https://docs.ag2.ai/llms-full.txt){.external-link target="_blank"} for the entire AG2 docs in one file. Both are AG2-scoped, so they never point your agent at the classic API.
 
 Then anchor your prompt: *"Build with `ag2` only. If a signature is unfamiliar, check the AG2 docs before writing code — do not use the classic `autogen` API."*
 
@@ -86,7 +86,7 @@ This project is built on **AG2** (`ag2`). Follow these rules.
 
 ## Docs & skills
 - Install and use the AG2 skills: `npx skills add ag2ai/ag2-skills`.
-- AG2 docs: https://docs.ag2.ai/latest/docs/user-guide/agents/ (machine-readable index at /latest/llms.txt).
+- AG2 docs: https://docs.ag2.ai/docs/user-guide/agents/ (machine-readable index at /llms.txt).
 - When unsure of a signature, check the AG2 docs before writing code.
 - Do NOT trust generic docs indexers — they surface the retired classic API.
 ```
