@@ -130,7 +130,13 @@ class OpenAIResponsesClient(LLMClient):
         if r := response_proto_to_text_config(response_schema):
             kwargs["text"] = r
 
-        if includes := responses_api_includes(tools_list):
+        includes = responses_api_includes(tools_list)
+        if self._create_options.get("store") is False:
+            # Stateless mode: the API persists nothing, so replaying a reasoning item
+            # by id on a later turn (a tool loop always does) will fail. Asking
+            # for the encrypted payload makes those items self-contained.
+            includes.append("reasoning.encrypted_content")
+        if includes:
             kwargs["include"] = includes
 
         response = await self._client.responses.create(

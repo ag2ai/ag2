@@ -49,7 +49,7 @@ def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] |
     if not response or not response.json_schema:
         return
 
-    strict_schema = _ensure_additional_properties_false(response.json_schema)
+    strict_schema = _strictify_schema(response.json_schema)
     schema: dict[str, Any] = {
         "schema": strict_schema,
         "name": response.name,
@@ -61,11 +61,8 @@ def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] |
     return {"type": "json_schema", "json_schema": schema}
 
 
-def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any]:
-    """Recursively add additionalProperties: false to all object schemas.
-
-    The OpenAI Responses API requires this on every object node.
-    """
+def _strictify_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Recursively coerce a JSON Schema into OpenAI's strict subset."""
     schema = dict(schema)
 
     if schema.get("type") == "object":
@@ -73,23 +70,19 @@ def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any
 
     if "properties" in schema:
         schema["properties"] = {
-            k: _ensure_additional_properties_false(v) if isinstance(v, dict) else v
-            for k, v in schema["properties"].items()
+            k: _strictify_schema(v) if isinstance(v, dict) else v for k, v in schema["properties"].items()
         }
+        schema["required"] = list(schema["properties"])
 
     if "$defs" in schema:
-        schema["$defs"] = {
-            k: _ensure_additional_properties_false(v) if isinstance(v, dict) else v for k, v in schema["$defs"].items()
-        }
+        schema["$defs"] = {k: _strictify_schema(v) if isinstance(v, dict) else v for k, v in schema["$defs"].items()}
 
     for key in ("anyOf", "oneOf", "allOf"):
         if key in schema:
-            schema[key] = [
-                _ensure_additional_properties_false(item) if isinstance(item, dict) else item for item in schema[key]
-            ]
+            schema[key] = [_strictify_schema(item) if isinstance(item, dict) else item for item in schema[key]]
 
     if "items" in schema and isinstance(schema["items"], dict):
-        schema["items"] = _ensure_additional_properties_false(schema["items"])
+        schema["items"] = _strictify_schema(schema["items"])
 
     return schema
 
@@ -101,7 +94,7 @@ def response_proto_to_text_config(
     if not response or not response.json_schema:
         return
 
-    strict_schema = _ensure_additional_properties_false(response.json_schema)
+    strict_schema = _strictify_schema(response.json_schema)
 
     fmt: dict[str, Any] = {
         "type": "json_schema",
