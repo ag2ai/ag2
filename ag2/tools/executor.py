@@ -56,8 +56,7 @@ class ToolExecutor:
         results: list[ToolErrorEvent | ToolResultEvent] = []
         client_calls: list[ClientToolCallEvent] = []
 
-        # Execute called tools in parallel. return_exceptions keeps one call's
-        # infra failure from discarding every other call's result.
+        # Execute called tools in parallel
         for event in await asyncio.gather(*(_execute_call(context, call) for call in event.calls)):
             match event:
                 case ClientToolCallEvent() as ev:
@@ -116,9 +115,11 @@ async def _execute_call(
     ) as result:
         try:
             await context.send(call)
+            return await result
+
+        # tool-level middleware could leads to execution exceptions
         except Exception as e:
             return ToolErrorEvent.from_call(call, e)
-        return await result
 
 
 def _tool_not_found(known_tools: Iterable[str]) -> Callable[..., Any]:
