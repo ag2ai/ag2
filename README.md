@@ -36,7 +36,8 @@
   <a href="https://github.com/ag2ai/build-with-ag2">💡 Examples</a> |
   <a href="https://docs.ag2.ai/latest/docs/contributor-guide/contributing">🤝 Contributing</a> |
   <a href="#related-papers">📝 Cite paper</a> |
-  <a href="https://discord.gg/pAbnFJrkgZ">💬 Join Discord</a>
+  <a href="https://discord.gg/pAbnFJrkgZ">💬 Join Discord</a> |
+  <a href="#ag2-classic-the-autogen-namespace">🏛️ AG2 Classic</a>
 </p>
 
 <p align="center">
@@ -44,7 +45,11 @@ AG2 was evolved from AutoGen. Fully open-sourced. We invite collaborators from a
 </p>
 
 > [!IMPORTANT]
-> **AG2 is on the path to v1.0.** The protocol-driven framework is now the top-level package, imported as `ag2`. The classic framework (`ConversableAgent`, `GroupChat`, …) has been removed, and the import name `autogen` is no longer available — use `import ag2`.
+> **Looking for `ConversableAgent`, `GroupChat`, or `import autogen`? That's now [AG2 Classic](#ag2-classic-the-autogen-namespace).**
+>
+> As of AG2 v1.0, the protocol-driven framework is the top-level package, imported as `ag2`. The classic framework has moved to its own repository — [**ag2ai/ag2-classic**](https://github.com/ag2ai/ag2-classic), documented at [**classic.docs.ag2.ai**](https://classic.docs.ag2.ai). It is still maintained and installable; nothing you have built stops working.
+>
+> This repository (`pip install ag2`) no longer ships the `autogen` import name or the classic agent classes.
 
 # AG2: Open-Source AgentOS for AI Agents
 
@@ -56,16 +61,17 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
 
 - [AG2: Open-Source AgentOS for AI Agents](#ag2-open-source-agentos-for-ai-agents)
   - [Table of contents](#table-of-contents)
+  - [AG2 Classic (the `autogen.*` namespace)](#ag2-classic-the-autogen-namespace)
   - [Getting started](#getting-started)
     - [Installation](#installation)
     - [Setup your API keys](#setup-your-api-keys)
     - [Run your first agent](#run-your-first-agent)
   - [Example applications](#example-applications)
   - [Introduction of different agent concepts](#introduction-of-different-agent-concepts)
-    - [Conversable agent](#conversable-agent)
-    - [Orchestrating Multiple Agents](#orchestrating-multiple-agents)
-    - [Human in the Loop](#human-in-the-loop)
+    - [Agents](#agents)
     - [Tools](#tools)
+    - [Human in the Loop](#human-in-the-loop)
+    - [Orchestrating Multiple Agents](#orchestrating-multiple-agents)
     - [Advanced agentic design patterns](#advanced-agentic-design-patterns)
   - [Announcements](#announcements)
   - [Code style and linting](#code-style-and-linting)
@@ -74,9 +80,44 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
   - [Cite the project](#cite-the-project)
   - [License](#license)
 
+## AG2 Classic (the `autogen.*` namespace)
+
+**AG2 Classic** is the original AutoGen-derived framework: the `autogen.*` import namespace and its agent classes — `ConversableAgent`, `AssistantAgent`, `UserProxyAgent`, `GroupChat` / `GroupChatManager`, swarms, `register_function`, `LLMConfig` / `OAI_CONFIG_LIST`, and the nested- and sequential-chat patterns.
+
+It now lives in its own repository and has its own documentation site:
+
+| | AG2 Classic | AG2 (this repo) |
+|---|---|---|
+| **Repository** | [ag2ai/ag2-classic](https://github.com/ag2ai/ag2-classic) | [ag2ai/ag2](https://github.com/ag2ai/ag2) |
+| **Documentation** | [classic.docs.ag2.ai](https://classic.docs.ag2.ai) | [docs.ag2.ai](https://docs.ag2.ai) |
+| **Import** | `import autogen` | `import ag2` |
+| **Core agent** | `ConversableAgent` | `Agent` |
+| **Multi-agent** | `GroupChat`, swarms, nested chats | [Network](https://docs.ag2.ai/latest/docs/user-guide/network/overview) (hub + channels) |
+
+### Are you using AG2 Classic?
+
+If any of the following appear in your code, you are on Classic — stay on it, and use [classic.docs.ag2.ai](https://classic.docs.ag2.ai):
+
+```python
+import autogen                                    # the autogen.* namespace
+from autogen import ConversableAgent, GroupChat   # classic agent classes
+from autogen import AssistantAgent, UserProxyAgent
+```
+
+Classic remains maintained and installable. **Your existing code keeps working** — pin the classic distribution instead of `ag2>=1.0`:
+
+```bash
+pip install ag2-classic
+```
+
+> [!NOTE]
+> AG2 v1.0 (`pip install ag2`) is **not** a drop-in upgrade from Classic. The agent model, orchestration, and imports all changed. Migrating is a rewrite, not a version bump — so upgrade deliberately, not by accident. See the [migration guide](https://classic.docs.ag2.ai) for what maps to what.
+
+The rest of this README covers **AG2 v1.0** (`import ag2`).
+
 ## Getting started
 
-For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/installing-ag2/) in our documentation.
+For a step-by-step walk through of AG2 concepts and code, see the [Quick Start](https://docs.ag2.ai/latest/docs/user-guide/quick-start) in our documentation.
 
 ### Installation
 
@@ -92,303 +133,238 @@ pip install ag2[openai]
 pip install 'ag2[openai]'
 ```
 
-Minimal dependencies are installed by default. You can install extra options based on the features you need.
+Minimal dependencies are installed by default. Install the extra that matches your model provider — `ag2[openai]`, `ag2[anthropic]`, `ag2[gemini]`, `ag2[ollama]`, and so on.
 
 ### Setup your API keys
 
-To keep your LLM dependencies neat and avoid accidentally checking in code with your API key, we recommend storing your keys in a configuration file.
+Each provider config reads its standard environment variable, so keys never need to be hardcoded or checked in:
 
-In our examples, we use a file named **`OAI_CONFIG_LIST`** to store API keys. You can choose any filename, but make sure to add it to `.gitignore` so it will not be committed to source control.
-
-You can use the following content as a template:
-
-```json
-[
-  {
-    "model": "gpt-5",
-    "api_key": "<your OpenAI API key here>"
-  }
-]
+```bash
+export OPENAI_API_KEY="your-api-key"       # or ANTHROPIC_API_KEY, GEMINI_API_KEY, ...
 ```
+
+You can also pass a key explicitly with `OpenAIConfig(model="gpt-4o-mini", api_key=...)` — useful when each request brings its own key.
 
 ### Run your first agent
 
-Create a script or a Jupyter Notebook and run your first agent.
+AG2 is async throughout. `Agent.ask(...)` starts a turn and returns an `AgentReply`; the text is in `reply.body`.
 
 ```python
-from ag2 import AssistantAgent, UserProxyAgent, LLMConfig
+import asyncio
 
-llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
+from ag2 import Agent
+from ag2.config import OpenAIConfig
 
-assistant = AssistantAgent("assistant", llm_config=llm_config)
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful assistant.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+)
 
-user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
 
-user_proxy.run(assistant, message="Summarize the main differences between Python lists and tuples.").process()
+async def main() -> None:
+    reply = await agent.ask("Summarize the main differences between Python lists and tuples.")
+    print(reply.body)
+
+
+asyncio.run(main())
 ```
 
 ## Example applications
 
-We maintain a dedicated repository with a wide range of applications to help you get started with various use cases or check out our collection of jupyter notebooks as a starting point.
+We maintain a dedicated repository with a wide range of applications to help you get started with various use cases, and a set of runnable code examples in the documentation.
 
 - [Build with AG2](https://github.com/ag2ai/build-with-ag2)
-- [Jupyter Notebooks](notebook)
+- [Code Examples](https://docs.ag2.ai/latest/docs/user-guide/code_examples/code_examples)
 
 ## Introduction of different agent concepts
 
 We have several agent concepts in AG2 to help you build your AI agents. We introduce the most common ones here.
 
-- **Conversable Agent**: Agents that are able to send messages, receive messages and generate replies using GenAI models, non-GenAI tools, or human inputs.
-- **Human in the loop**: Add human input to the conversation
-- **Orchestrating multiple agents**: Users can orchestrate multiple agents with built-in conversation patterns such as swarms, group chats, nested chats, sequential chats or customize the orchestration by registering custom reply methods.
-- **Tools**: Programs that can be registered, invoked and executed by agents
-- **Advanced Concepts**: AG2 supports more concepts such as structured outputs, rag, code execution, etc.
+- **Agents**: `Agent` is the core building block — it talks to a model provider, calls tools, and returns a reply.
+- **Tools**: Plain Python functions, decorated with `@tool`, that the agent can invoke.
+- **Human in the loop**: Pause a run to collect confirmation or missing information from a person.
+- **Orchestrating multiple agents**: Coordinate several agents over a hub and typed channels using the **Network**.
+- **Advanced Concepts**: Structured outputs, memory, middleware, observers, telemetry, evaluation, and more.
 
-### Conversable agent
+### Agents
 
-The `ConversableAgent` is the fundamental building block of AG2, designed to enable seamless communication between AI entities. This core agent type handles message exchange and response generation, serving as the base class for all agents in the framework.
-
-Let's begin with a simple example where two agents collaborate:
-- A **coder agent** that writes Python code.
-- A **reviewer agent** that critiques the code without rewriting it.
+The `Agent` is the fundamental building block of AG2. `ask()` runs a turn; calling `ask()` on the returned reply continues the *same* conversation, preserving its history.
 
 ```python
-import logging
-from ag2 import ConversableAgent, LLMConfig
+import asyncio
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from ag2 import Agent
+from ag2.config import OpenAIConfig
 
-# Load LLM configuration
-llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
-
-# Define agents
-coder = ConversableAgent(
-    name="coder",
-    system_message="You are a Python developer. Write short Python scripts.",
-    llm_config=llm_config,
+reviewer = Agent(
+    "reviewer",
+    prompt=(
+        "You are a code reviewer. Analyze the provided code and suggest improvements. "
+        "Do not generate code, only suggest improvements."
+    ),
+    config=OpenAIConfig(model="gpt-4o-mini"),
 )
 
-reviewer = ConversableAgent(
-    name="reviewer",
-    system_message="You are a code reviewer. Analyze provided code and suggest improvements. "
-    "Do not generate code, only suggest improvements.",
-    llm_config=llm_config,
-)
 
-# Start a conversation
-response = reviewer.run(
-    recipient=coder, message="Write a Python function that computes Fibonacci numbers.", max_turns=10
-)
+async def main() -> None:
+    reply = await reviewer.ask("def fib(n): return n if n < 2 else fib(n-1) + fib(n-2)")
+    print(reply.body)
 
-response.process()
+    # Continue the same conversation — prior turns stay in scope.
+    follow_up = await reply.ask("Which of those matters most for large n?")
+    print(follow_up.body)
 
-logger.info("Final output:\n%s", response.summary)
-```
 
----
-### Orchestrating Multiple Agents
-
-AG2 enables sophisticated multi-agent collaboration through flexible orchestration patterns, allowing you to create dynamic systems where specialized agents work together to solve complex problems.
-
-Here’s how to build a team of **teacher**, **lesson planner**, and **reviewer** agents working together to design a lesson plan:
-
-```python
-import logging
-from ag2 import ConversableAgent, LLMConfig
-from ag2.agentchat import run_group_chat
-from ag2.agentchat.group.patterns import AutoPattern
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
-
-# Define lesson planner and reviewer
-planner_message = "You are a classroom lesson planner. Given a topic, write a lesson plan for a fourth grade class."
-reviewer_message = (
-    "You are a classroom lesson reviewer. Compare the plan to the curriculum and suggest up to 3 improvements."
-)
-
-lesson_planner = ConversableAgent(
-    name="planner_agent",
-    system_message=planner_message,
-    description="Creates or revises lesson plans.",
-    llm_config=llm_config,
-)
-
-lesson_reviewer = ConversableAgent(
-    name="reviewer_agent",
-    system_message=reviewer_message,
-    description="Provides one round of feedback to lesson plans.",
-    llm_config=llm_config,
-)
-
-teacher_message = "You are a classroom teacher. You decide topics and collaborate with planner and reviewer to finalize lesson plans. When satisfied, output DONE!"
-
-teacher = ConversableAgent(
-    name="teacher_agent",
-    system_message=teacher_message,
-    is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper(),
-    llm_config=llm_config,
-)
-
-auto_selection = AutoPattern(
-    agents=[teacher, lesson_planner, lesson_reviewer],
-    initial_agent=lesson_planner,
-    group_manager_args={"name": "group_manager", "llm_config": llm_config},
-)
-
-response = run_group_chat(
-    pattern=auto_selection,
-    messages="Let's introduce our kids to the solar system.",
-    max_rounds=20,
-)
-
-response.process()
-
-logger.info("Final output:\n%s", response.summary)
-```
-
----
-
-### Human in the Loop
-
-Human oversight is often essential for validating or guiding AI outputs.
-AG2 provides the `UserProxyAgent` for seamless integration of human feedback.
-
-Here we extend the **teacher–planner–reviewer** example by introducing a **human agent** who validates the final lesson:
-
-```python
-import logging
-from ag2 import ConversableAgent, LLMConfig, UserProxyAgent
-from ag2.agentchat import run_group_chat
-from ag2.agentchat.group.patterns import AutoPattern
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
-
-# Same agents as before, but now the human validator will pass to the planner who will check for "APPROVED" and terminate
-planner_message = "You are a classroom lesson planner. Given a topic, write a lesson plan for a fourth grade class."
-reviewer_message = (
-    "You are a classroom lesson reviewer. Compare the plan to the curriculum and suggest up to 3 improvements."
-)
-teacher_message = "You are an experienced classroom teacher. You don't prepare plans, you provide simple guidance to the planner to prepare a lesson plan on the key topic."
-
-lesson_planner = ConversableAgent(
-    name="planner_agent",
-    system_message=planner_message,
-    description="Creates or revises lesson plans before having them reviewed.",
-    is_termination_msg=lambda x: "APPROVED" in (x.get("content", "") or "").upper(),
-    human_input_mode="NEVER",
-    llm_config=llm_config,
-)
-
-lesson_reviewer = ConversableAgent(
-    name="reviewer_agent",
-    system_message=reviewer_message,
-    description="Provides one round of feedback to lesson plans back to the lesson planner before requiring the human validator.",
-    llm_config=llm_config,
-)
-
-teacher = ConversableAgent(
-    name="teacher_agent",
-    system_message=teacher_message,
-    description="Provides guidance on the topic and content, if required.",
-    llm_config=llm_config,
-)
-
-human_validator = UserProxyAgent(
-    name="human_validator",
-    system_message="You are a human educator who provides final approval for lesson plans.",
-    description="Evaluates the proposed lesson plan and either approves it or requests revisions, before returning to the planner.",
-)
-
-auto_selection = AutoPattern(
-    agents=[teacher, lesson_planner, lesson_reviewer],
-    initial_agent=teacher,
-    user_agent=human_validator,
-    group_manager_args={"name": "group_manager", "llm_config": llm_config},
-)
-
-response = run_group_chat(
-    pattern=auto_selection,
-    messages="Let's introduce our kids to the solar system.",
-    max_rounds=20,
-)
-
-response.process()
-
-logger.info("Final output:\n%s", response.summary)
+asyncio.run(main())
 ```
 
 ---
 
 ### Tools
 
-Agents gain significant utility through **tools**, which extend their capabilities with external data, APIs, or functions.
+Agents gain significant utility through **tools**, which extend their capabilities with external data, APIs, or functions. Decorate a Python function with `@tool` and pass it to the agent — AG2 runs the full tool-calling loop: the model decides when to call it, AG2 executes it, and the result is fed back.
 
 ```python
-import logging
+import asyncio
 from datetime import datetime
-from typing import Annotated
-from ag2 import ConversableAgent, register_function, LLMConfig
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
+from ag2 import Agent, tool
+from ag2.config import OpenAIConfig
 
 
-# Tool: returns weekday for a given date
-def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
-    date = datetime.strptime(date_string, "%Y-%m-%d")
-    return date.strftime("%A")
+@tool
+async def get_weekday(date_string: str) -> str:
+    """Get the day of the week for a given date, formatted as YYYY-MM-DD."""
+    return datetime.strptime(date_string, "%Y-%m-%d").strftime("%A")
 
 
-date_agent = ConversableAgent(
-    name="date_agent",
-    system_message="You find the day of the week for a given date.",
-    llm_config=llm_config,
+date_agent = Agent(
+    "date_agent",
+    prompt="You find the day of the week for a given date.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    tools=[get_weekday],
 )
 
-executor_agent = ConversableAgent(
-    name="executor_agent",
-    human_input_mode="NEVER",
-    llm_config=llm_config,
-)
 
-# Register tool
-register_function(
-    get_weekday,
-    caller=date_agent,
-    executor=executor_agent,
-    description="Get the day of the week for a given date",
-)
+async def main() -> None:
+    reply = await date_agent.ask("I was born on 1995-03-25, what day was it?")
+    print(reply.body)
 
-# Use tool in chat
-chat_result = executor_agent.initiate_chat(
-    recipient=date_agent,
-    message="I was born on 1995-03-25, what day was it?",
-    max_turns=2,
-)
 
-logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
+asyncio.run(main())
 ```
+
+---
+
+### Human in the Loop
+
+Human oversight is often essential for validating or guiding AI outputs. Call `context.input(...)` inside a tool to pause the run and ask a person — your `hitl_hook` decides how that question is answered (CLI prompt, web UI, queue, …).
+
+```python
+import asyncio
+
+from ag2 import Agent, Context, tool
+from ag2.config import OpenAIConfig
+from ag2.events import HumanInputRequest, HumanMessage
+
+
+@tool
+async def publish_lesson_plan(context: Context, plan: str) -> str:
+    """Publish a lesson plan, once a human educator has approved it."""
+    answer = await context.input(f"Approve this lesson plan?\n\n{plan}")
+    if answer.strip().lower().startswith("y"):
+        return "Published."
+    return f"Rejected by the educator: {answer}"
+
+
+def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+    # Block here for real input — a CLI prompt, a web UI, a queue.
+    return HumanMessage(content=input(f"{event.content}\n> "))
+
+
+teacher = Agent(
+    "teacher",
+    prompt=(
+        "Draft a short lesson plan, then call the publish_lesson_plan tool to have it published. "
+        "Approval is collected by the tool — never ask for approval in plain text."
+    ),
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    tools=[publish_lesson_plan],
+    hitl_hook=hitl_hook,
+)
+
+
+async def main() -> None:
+    reply = await teacher.ask("Let's introduce our kids to the solar system.")
+    print(reply.body)
+
+
+asyncio.run(main())
+```
+
+---
+
+### Orchestrating Multiple Agents
+
+When two or more agents need to work together, AG2 uses the **Network**: a `Hub` that owns the registry, the write-ahead log, and the audit trail, with agents talking over typed **channels**. This replaces the classic `GroupChat` / swarm / nested-chat patterns.
+
+Here a `consulting` channel — strict one-question-one-reply, auto-closing on the answer — connects two agents:
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import EV_CHANNEL_CLOSED, EV_TEXT, Hub
+
+
+async def main() -> None:
+    config = OpenAIConfig(model="gpt-4o-mini")
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+
+    planner = await hub.register(
+        Agent("planner", prompt="Ask one focused question about the lesson topic, then stop.", config=config),
+    )
+    reviewer = await hub.register(
+        Agent("reviewer", prompt="Answer in one short, concrete sentence.", config=config),
+    )
+
+    channel = await planner.open(type="consulting", target="reviewer")
+    await channel.send("What should a fourth-grade solar system lesson lead with?", audience=[reviewer.agent_id])
+
+    # The reviewer's handler replies, then the consulting adapter closes the channel.
+    await planner.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
+        timeout=60.0,
+    )
+
+    # Replay the exchange from the hub's write-ahead log.
+    for envelope in await hub.read_wal(channel.channel_id):
+        if envelope.event_type == EV_TEXT:
+            print(envelope.event_data["text"])
+
+    await hub.close()
+
+
+asyncio.run(main())
+```
+
+Channels come in several shapes — `consulting` (1Q1R), `conversation` (free-form), `discussion` (round-robin), and `workflow` (a declarative `TransitionGraph` for conditional handoffs, which is the closest analogue to a classic `GroupChat`). See the [Network guide](https://docs.ag2.ai/latest/docs/user-guide/network/overview).
 
 ### Advanced agentic design patterns
 
 AG2 supports more advanced concepts to help you build your AI agent workflows. You can find more information in the documentation.
 
-- [Structured Output](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/structured-outputs)
-- [Ending a conversation](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/ending-a-chat/)
-- [Retrieval Augmented Generation (RAG)](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/rag/)
-- [Code Execution](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/code-execution)
-- [Tools with Secrets](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/tools/tools-with-secrets/)
-- [Pattern Cookbook (9 group orchestrations)](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/pattern-cookbook/overview/)
+- [Structured Output](https://docs.ag2.ai/latest/docs/user-guide/structured_output)
+- [Multi-Agent Network](https://docs.ag2.ai/latest/docs/user-guide/network/overview)
+- [Knowledge & Memory](https://docs.ag2.ai/latest/docs/user-guide/agents)
+- [Middleware](https://docs.ag2.ai/latest/docs/user-guide/middleware)
+- [Telemetry](https://docs.ag2.ai/latest/docs/user-guide/telemetry)
+- [Evaluation](https://docs.ag2.ai/latest/docs/user-guide/evaluation)
+- [Testing](https://docs.ag2.ai/latest/docs/user-guide/testing)
 
 ## Announcements
 
