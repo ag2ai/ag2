@@ -33,16 +33,14 @@
 
 <p align="center">
   <a href="https://docs.ag2.ai/">📚 Documentation</a> |
+  <a href="https://playground.ag2.ai">💡 Playground</a> |
   <a href="https://github.com/ag2ai/build-with-ag2">💡 Examples</a> |
-  <a href="https://docs.ag2.ai/latest/docs/contributor-guide/contributing">🤝 Contributing</a> |
+  <a href="https://docs.ag2.ai/docs/contributor-guide/contributing/">🤝 Contributing</a> |
   <a href="#related-papers">📝 Cite paper</a> |
   <a href="https://discord.gg/pAbnFJrkgZ">💬 Join Discord</a> |
   <a href="#ag2-classic-the-autogen-namespace">🏛️ AG2 Classic</a>
 </p>
 
-<p align="center">
-AG2 was evolved from AutoGen. Fully open-sourced. We invite collaborators from all organizations to contribute.
-</p>
 
 > [!IMPORTANT]
 > **Looking for `ConversableAgent`, `GroupChat`, or `import autogen`? That's now [AG2 Classic](#ag2-classic-the-autogen-namespace).**
@@ -53,7 +51,7 @@ AG2 was evolved from AutoGen. Fully open-sourced. We invite collaborators from a
 
 # AG2: Open-Source AgentOS for AI Agents
 
-AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
+AG2 is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
 
 The project is currently maintained by a [dynamic group of volunteers](MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via [support@ag2.ai](mailto:support@ag2.ai) if you are interested in becoming a maintainer.
 
@@ -72,6 +70,7 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
     - [Tools](#tools)
     - [Human in the Loop](#human-in-the-loop)
     - [Orchestrating Multiple Agents](#orchestrating-multiple-agents)
+    - [The agent harness: knowledge and compaction](#the-agent-harness-knowledge-and-compaction)
     - [Advanced agentic design patterns](#advanced-agentic-design-patterns)
   - [Announcements](#announcements)
   - [Code style and linting](#code-style-and-linting)
@@ -92,7 +91,7 @@ It now lives in its own repository and has its own documentation site:
 | **Documentation** | [classic.docs.ag2.ai](https://classic.docs.ag2.ai) | [docs.ag2.ai](https://docs.ag2.ai) |
 | **Import** | `import autogen` | `import ag2` |
 | **Core agent** | `ConversableAgent` | `Agent` |
-| **Multi-agent** | `GroupChat`, swarms, nested chats | [Network](https://docs.ag2.ai/latest/docs/user-guide/network/overview) (hub + channels) |
+| **Multi-agent** | `GroupChat`, swarms, nested chats | [Network](https://docs.ag2.ai/docs/user-guide/network/overview/) (hub + channels) |
 
 ### Are you using AG2 Classic?
 
@@ -111,13 +110,13 @@ pip install ag2-classic
 ```
 
 > [!NOTE]
-> AG2 v1.0 (`pip install ag2`) is **not** a drop-in upgrade from Classic. The agent model, orchestration, and imports all changed. Migrating is a rewrite, not a version bump — so upgrade deliberately, not by accident. See the [migration guide](https://classic.docs.ag2.ai) for what maps to what.
+> AG2 v1.0 (`pip install ag2`) is **not** a drop-in upgrade from Classic. The agent model, orchestration, and imports all changed. See the [group chat migration guide](https://docs.ag2.ai/docs/user-guide/network/migration_from_group_chat/).
 
 The rest of this README covers **AG2 v1.0** (`import ag2`).
 
 ## Getting started
 
-For a step-by-step walk through of AG2 concepts and code, see the [Quick Start](https://docs.ag2.ai/latest/docs/user-guide/quick-start) in our documentation.
+For a step-by-step walk through of AG2 concepts and code, see the [Quick Start](https://docs.ag2.ai/docs/user-guide/quick-start/) in our documentation.
 
 ### Installation
 
@@ -172,10 +171,11 @@ asyncio.run(main())
 
 ## Example applications
 
-We maintain a dedicated repository with a wide range of applications to help you get started with various use cases, and a set of runnable code examples in the documentation.
+We maintain both a live playground and a dedicated repository with a wide range of applications to help you get started with various use cases, and a set of runnable code examples in the documentation.
 
+- [AG2 Playground](https://playground.ag2.ai)
 - [Build with AG2](https://github.com/ag2ai/build-with-ag2)
-- [Code Examples](https://docs.ag2.ai/latest/docs/user-guide/code_examples/code_examples)
+- [Code Examples](https://docs.ag2.ai/docs/user-guide/code_examples/code_examples/)
 
 ## Introduction of different agent concepts
 
@@ -185,7 +185,8 @@ We have several agent concepts in AG2 to help you build your AI agents. We intro
 - **Tools**: Plain Python functions, decorated with `@tool`, that the agent can invoke.
 - **Human in the loop**: Pause a run to collect confirmation or missing information from a person.
 - **Orchestrating multiple agents**: Coordinate several agents over a hub and typed channels using the **Network**.
-- **Advanced Concepts**: Structured outputs, memory, middleware, observers, telemetry, evaluation, and more.
+- **The agent harness**: Opt-in primitives layered onto an agent — persistent knowledge, context assembly, and history compaction.
+- **Advanced Concepts**: Structured outputs, middleware, observers, telemetry, evaluation, and more.
 
 ### Agents
 
@@ -365,35 +366,109 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Channels come in several shapes — `conversation` (free-form, two parties), `consulting` (strict one-question-one-reply, auto-closing), `discussion` (round-robin across N agents), and `workflow` (a declarative `TransitionGraph` for conditional handoffs, which is the closest analogue to a classic `GroupChat`). See the [Network guide](https://docs.ag2.ai/latest/docs/user-guide/network/overview).
+Channels come in several shapes — `conversation` (free-form, two parties), `consulting` (strict one-question-one-reply, auto-closing), `discussion` (round-robin across N agents), and `workflow` (a declarative `TransitionGraph` for conditional handoffs, which is the closest analogue to a classic `GroupChat`). See the [Network guide](https://docs.ag2.ai/docs/user-guide/network/overview/).
+
+### The agent harness: knowledge and compaction
+
+A bare `Agent` is just a model loop. The **harness** is the set of opt-in primitives you compose onto it. Two of the most useful:
+
+- **`knowledge=`** — a `KnowledgeStore` the agent can read and write, so it remembers across runs.
+- **`compact=`** — a strategy that caps history growth. `SummarizeCompact` folds the dropped turns into a summary rather than discarding them outright.
+
+Pair the store with a `WorkingMemoryPolicy` in `assembly=` and the agent's memory is injected into the system prompt on every turn — recall no longer depends on the model *choosing* to look it up.
+
+```python
+import asyncio
+from pathlib import Path
+
+from ag2 import Agent, KnowledgeConfig, MemoryStream
+from ag2.compact import CompactTrigger, SummarizeCompact
+from ag2.config import OpenAIConfig
+from ag2.events import CompactionCompleted, CompactionFailed
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.policies import WorkingMemoryPolicy
+
+config = OpenAIConfig(model="gpt-4o-mini")
+
+# Disk-backed, so anything the agent remembers survives the process exiting.
+STORE_DIR = Path("./knowledge_demo")
+store = DiskKnowledgeStore(STORE_DIR)
+
+agent = Agent(
+    "tutor",
+    prompt=(
+        "You are a science tutor for a fourth-grade teacher. "
+        "Whenever you learn a durable fact about the teacher or their class, use the knowledge "
+        "tool to `read` `memory/working.md`, then `write` it back with the new fact appended as "
+        "a bullet. Never drop a fact that is already there. "
+        "Keep every reply to one or two sentences."
+    ),
+    config=config,
+    knowledge=KnowledgeConfig(
+        store=store,
+        # Summarize the dropped history instead of forgetting it outright.
+        compact=SummarizeCompact(target=4, config=config),
+        compact_trigger=CompactTrigger(max_events=8),
+    ),
+    # Injects memory/working.md into the system prompt on every turn, so recall
+    # does not depend on the model choosing to call the knowledge tool.
+    assembly=[WorkingMemoryPolicy()],
+)
+
+stream = MemoryStream()
+
+
+# Subscribe to both outcomes — watching only Completed would hide a failing strategy.
+@stream.where(CompactionCompleted).subscribe()
+async def on_compacted(event: CompactionCompleted) -> None:
+    print(f"  [compacted: {event.events_before} -> {event.events_after} events via {event.strategy}]")
+
+
+@stream.where(CompactionFailed).subscribe()
+async def on_compaction_failed(event: CompactionFailed) -> None:
+    print(f"  [compaction FAILED: {event.strategy}]")
+
+
+async def main() -> None:
+    # A returning session: no conversation history at all, so anything the agent
+    # recalls here came off disk, via the knowledge store.
+    if STORE_DIR.exists():
+        reply = await agent.ask("What do you remember about me and my class?", stream=stream)
+        print(f"tutor: {reply.body}")
+        return
+
+    reply = await agent.ask("I'm Dana. I teach 4th grade at Rosewood Elementary, 26 students.", stream=stream)
+    print(f"tutor: {reply.body}")
+
+    for turn in ["My class struggles most with why we have seasons.", "Suggest one hands-on demo for that."]:
+        reply = await reply.ask(turn)
+        print(f"tutor: {reply.body}")
+
+
+asyncio.run(main())
+```
+
+Run it twice. The first run fills `memory/working.md` and trips compaction; the second starts with an empty history and still knows who Dana is:
+
+```text
+  [compacted: 18 -> 3 events via SummarizeCompact]
+tutor: I remember that you, Dana, teach 4th grade at Rosewood Elementary with 26 students,
+       and your class struggles the most with understanding why we have seasons.
+```
+
+See the [Agent Harness guide](https://docs.ag2.ai/docs/user-guide/agent_harness/) for `assembly=`, `tasks=`, aggregation, and the full turn lifecycle.
 
 ### Advanced agentic design patterns
 
 AG2 supports more advanced concepts to help you build your AI agent workflows. You can find more information in the documentation.
 
-- [Structured Output](https://docs.ag2.ai/latest/docs/user-guide/structured_output)
-- [Multi-Agent Network](https://docs.ag2.ai/latest/docs/user-guide/network/overview)
-- [Knowledge & Memory](https://docs.ag2.ai/latest/docs/user-guide/agents)
-- [Middleware](https://docs.ag2.ai/latest/docs/user-guide/middleware)
-- [Telemetry](https://docs.ag2.ai/latest/docs/user-guide/telemetry)
-- [Evaluation](https://docs.ag2.ai/latest/docs/user-guide/evaluation)
-- [Testing](https://docs.ag2.ai/latest/docs/user-guide/testing)
-
-## Announcements
-
-🔥 🎉 **Nov 11, 2024:** We are evolving AutoGen into **AG2**!
-A new organization [AG2AI](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
-
-📄 **License:**
-We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-source collaboration while providing additional protections for contributors and users alike.
-
-🎉 May 29, 2024: DeepLearning.ai launched a new short course [AI Agentic Design Patterns with AutoGen](https://www.deeplearning.ai/short-courses/ai-agentic-design-patterns-with-autogen), made in collaboration with Microsoft and Penn State University, and taught by AutoGen creators [Chi Wang](https://github.com/sonichi) and [Qingyun Wu](https://github.com/qingyun-wu).
-
-🎉 May 24, 2024: Foundation Capital published an article on [Forbes: The Promise of Multi-Agent AI](https://www.forbes.com/sites/joannechen/2024/05/24/the-promise-of-multi-agent-ai/?sh=2c1e4f454d97) and a video [AI in the Real World Episode 2: Exploring Multi-Agent AI and AutoGen with Chi Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk).
-
-🎉 Apr 17, 2024: Andrew Ng cited AutoGen in [The Batch newsletter](https://www.deeplearning.ai/the-batch/issue-245/) and [What's next for AI agentic workflows](https://youtu.be/sal78ACtGTc?si=JduUzN_1kDnMq0vF) at Sequoia Capital's AI Ascent (Mar 26).
-
-[More Announcements](announcements.md)
+- [Structured Output](https://docs.ag2.ai/docs/user-guide/structured_output/)
+- [Multi-Agent Network](https://docs.ag2.ai/docs/user-guide/network/overview/)
+- [Knowledge & Memory](https://docs.ag2.ai/docs/user-guide/advanced/knowledge_store/)
+- [Middleware](https://docs.ag2.ai/docs/user-guide/middleware/)
+- [Telemetry](https://docs.ag2.ai/docs/user-guide/telemetry/)
+- [Evaluation](https://docs.ag2.ai/docs/user-guide/evaluation/evaluation/)
+- [Testing](https://docs.ag2.ai/docs/user-guide/testing/)
 
 ## Code style and linting
 
@@ -412,44 +487,15 @@ prek install
 prek run --all-files
 ```
 
-## Related papers
-
-- [AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation](https://arxiv.org/abs/2308.08155)
-
-- [EcoOptiGen: Hyperparameter Optimization for Large Language Model Generation Inference](https://arxiv.org/abs/2303.04673)
-
-- [MathChat: Converse to Tackle Challenging Math Problems with LLM Agents](https://arxiv.org/abs/2306.01337)
-
-- [AgentOptimizer: Offline Training of Language Model Agents with Functions as Learnable Weights](https://arxiv.org/pdf/2402.11359)
-
-- [StateFlow: Enhancing LLM Task-Solving through State-Driven Workflows](https://arxiv.org/abs/2403.11322)
-
 ## Contributors Wall
 
 <a href="https://github.com/ag2ai/ag2/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=ag2ai/ag2&max=204" />
 </a>
 
-## Cite the project
-
-```
-@software{AG2_2024,
-author = {Chi Wang and Qingyun Wu and the AG2 Community},
-title = {AG2: Open-Source AgentOS for AI Agents},
-year = {2024},
-url = {https://github.com/ag2ai/ag2},
-note = {Available at https://docs.ag2.ai/},
-version = {latest}
-}
-```
-
 ## License
 
 This project is licensed under the [Apache License, Version 2.0 (Apache-2.0)](./LICENSE).
-
-This project is a spin-off of [AutoGen](https://github.com/microsoft/autogen) and contains code under two licenses:
-
-- The original code from https://github.com/microsoft/autogen is licensed under the MIT License. See the [LICENSE_original_MIT](./license_original/LICENSE_original_MIT) file for details.
 
 - Modifications and additions made in this fork are licensed under the Apache License, Version 2.0. See the [LICENSE](./LICENSE) file for the full license text.
 
