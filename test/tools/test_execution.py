@@ -408,9 +408,15 @@ async def test_execute_tools_isolates_a_call_a_middleware_guard_rejects() -> Non
         "",
         config=testing.TestConfig(
             [
-                events.ToolCallEvent(name="lookup_order", arguments=json.dumps({"order_id": "A-4471"})),
                 events.ToolCallEvent(
-                    name="issue_refund", arguments=json.dumps({"order_id": "A-4471", "amount_usd": 250.0})
+                    name="lookup_order",
+                    arguments=json.dumps({"order_id": "A-4471"}),
+                ),
+                events.ToolCallEvent(
+                    name="issue_refund",
+                    arguments=json.dumps(
+                        {"order_id": "A-4471", "amount_usd": 250.0},
+                    ),
                 ),
             ],
             "I could not issue the refund — it exceeds the auto-approval limit and needs human sign-off.",

@@ -58,13 +58,8 @@ class ToolExecutor:
 
         # Execute called tools in parallel. return_exceptions keeps one call's
         # infra failure from discarding every other call's result.
-        calls = event.calls
-        outcomes = await asyncio.gather(
-            *(_execute_call(context, call) for call in calls),
-            return_exceptions=True,
-        )
-        for call, outcome in zip(calls, outcomes):
-            match outcome:
+        for event in await asyncio.gather(*(_execute_call(context, call) for call in event.calls)):
+            match event:
                 case ClientToolCallEvent() as ev:
                     client_calls.append(ev)
 
@@ -96,12 +91,6 @@ class ToolExecutor:
                     else:
                         results.append(ev)
 
-                case Exception() as exc:
-                    results.append(ToolErrorEvent.from_call(call, exc))
-
-                case BaseException():
-                    raise outcome
-
                 case ev:
                     results.append(ev)
 
@@ -125,7 +114,10 @@ async def _execute_call(
         | (ToolResultEvent.parent_id == call.id)
         | (ClientToolCallEvent.id == call.id)
     ) as result:
-        await context.send(call)
+        try:
+            await context.send(call)
+        except Exception as e:
+            return ToolErrorEvent.from_call(call, e)
         return await result
 
 
