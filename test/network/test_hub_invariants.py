@@ -28,6 +28,7 @@ Covers:
 import asyncio
 import contextlib
 import json
+import logging
 from typing import Any
 
 import pytest
@@ -812,5 +813,54 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
     lowered = result.lower()
     assert "channel closed" in lowered or "prompt send failed" in lowered, result
     assert "expired" in lowered, result
+
+    await hub.close()
+
+
+class _FailingEndpoint:
+    """A ``LinkEndpoint`` whose inbound stream errors mid-read.
+
+    Models a transport that drops with an unexpected error while the hub reads
+    frames — the failure the hub must surface before dropping the endpoint.
+    """
+
+    def __init__(self) -> None:
+        self.endpoint_id = "failing-ep-001"
+        self.agent_id: str | None = None
+
+    async def send_frame(self, frame: object) -> None:  # noqa: D102
+        pass
+
+    async def frames(self):  # type: ignore[override]
+        raise RuntimeError("transport read failed")
+        yield  # pragma: no cover - marks this coroutine as an async generator
+
+    async def close(self) -> None:  # noqa: D102
+        pass
+
+
+@pytest.mark.asyncio
+async def test_endpoint_frame_loop_failure_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """When an endpoint's frame stream errors, the hub logs at ERROR before dropping it
+    rather than swallowing the failure silently.
+
+    Drives the public ``attach_endpoint`` path with a transport whose ``frames()`` raises,
+    then awaits the spawned endpoint task to completion — no patching of hub internals.
+    """
+    store = MemoryKnowledgeStore()
+    hub = Hub(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+
+    with caplog.at_level(logging.ERROR, logger="ag2.network.hub.core"):
+        before = asyncio.all_tasks()
+        hub.attach_endpoint(_FailingEndpoint())  # type: ignore[arg-type]
+        spawned = asyncio.all_tasks() - before
+        await asyncio.gather(*spawned, return_exceptions=True)
+
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert any("endpoint frame loop failed" in r.getMessage() for r in errors), (
+        f"Expected ERROR log for the dropped endpoint; got records: {[r.getMessage() for r in caplog.records]}"
+    )
+    # The original transport failure is attached to the log record (logged via ``exception``).
+    assert any(r.exc_info and isinstance(r.exc_info[1], RuntimeError) for r in errors)
 
     await hub.close()
