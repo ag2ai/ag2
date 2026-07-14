@@ -309,7 +309,7 @@ asyncio.run(main())
 
 When two or more agents need to work together, AG2 uses the **Network**: a `Hub` that owns the registry, the write-ahead log, and the audit trail, with agents talking over typed **channels**. This replaces the classic `GroupChat` / swarm / nested-chat patterns.
 
-Here a `consulting` channel — strict one-question-one-reply, auto-closing on the answer — connects two agents:
+Here a `conversation` channel — a free-form two-party session where either side may speak at any time — connects a planner and a reviewer:
 
 ```python
 import asyncio
@@ -317,7 +317,20 @@ import asyncio
 from ag2 import Agent
 from ag2.config import OpenAIConfig
 from ag2.knowledge import MemoryKnowledgeStore
-from ag2.network import EV_CHANNEL_CLOSED, EV_TEXT, Hub
+from ag2.network import EV_TEXT, Hub
+
+MAX_MESSAGES = 4
+
+
+async def wait_for_messages(hub: Hub, channel_id: str, expected: int, timeout: float = 120.0) -> None:
+    """Poll the hub's write-ahead log until `expected` messages have been exchanged."""
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        wal = await hub.read_wal(channel_id)
+        if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
+            return
+        await asyncio.sleep(0.05)
+    raise TimeoutError(f"only reached {expected} messages before timing out")
 
 
 async def main() -> None:
@@ -325,26 +338,26 @@ async def main() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
     planner = await hub.register(
-        Agent("planner", prompt="Ask one focused question about the lesson topic, then stop.", config=config),
+        Agent("planner", prompt="You plan school lessons. Reply in one short sentence.", config=config),
     )
     reviewer = await hub.register(
-        Agent("reviewer", prompt="Answer in one short, concrete sentence.", config=config),
+        Agent("reviewer", prompt="You critique lesson plans. Reply in one short sentence.", config=config),
     )
 
-    channel = await planner.open(type="consulting", target="reviewer")
+    # Free-form 2-party channel: either side may speak at any time.
+    channel = await planner.open(type="conversation", target="reviewer")
     await channel.send("What should a fourth-grade solar system lesson lead with?", audience=[reviewer.agent_id])
 
-    # The reviewer's handler replies, then the consulting adapter closes the channel.
-    await planner.wait_for_channel_event(
-        channel_id=channel.channel_id,
-        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
-        timeout=60.0,
-    )
+    # Both default handlers reply to every inbound message, so the conversation
+    # auto-drives. `conversation` never auto-closes — we bound it and close it.
+    await wait_for_messages(hub, channel.channel_id, expected=MAX_MESSAGES)
+    await channel.close()
 
     # Replay the exchange from the hub's write-ahead log.
+    names = {planner.agent_id: "planner", reviewer.agent_id: "reviewer"}
     for envelope in await hub.read_wal(channel.channel_id):
         if envelope.event_type == EV_TEXT:
-            print(envelope.event_data["text"])
+            print(f"{names[envelope.sender_id]}: {envelope.event_data['text']}")
 
     await hub.close()
 
@@ -352,7 +365,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Channels come in several shapes — `consulting` (1Q1R), `conversation` (free-form), `discussion` (round-robin), and `workflow` (a declarative `TransitionGraph` for conditional handoffs, which is the closest analogue to a classic `GroupChat`). See the [Network guide](https://docs.ag2.ai/latest/docs/user-guide/network/overview).
+Channels come in several shapes — `conversation` (free-form, two parties), `consulting` (strict one-question-one-reply, auto-closing), `discussion` (round-robin across N agents), and `workflow` (a declarative `TransitionGraph` for conditional handoffs, which is the closest analogue to a classic `GroupChat`). See the [Network guide](https://docs.ag2.ai/latest/docs/user-guide/network/overview).
 
 ### Advanced agentic design patterns
 
