@@ -378,6 +378,33 @@ config = OpenAIConfig(
     )
     ```
 
+#### Example: DaoXE multi-protocol gateway
+
+[DaoXE](https://daoxe.com) is a multi-model multi-protocol API gateway. With AG2, use the existing OpenAI-compatible Chat Completions path via `OpenAIConfig` and `base_url="https://daoxe.com/v1"` (DaoXE also exposes OpenAI Responses and Anthropic Messages endpoints for other clients).
+
+Use an account-scoped model ID from your DaoXE dashboard or `GET /v1/models` — do not hardcode a public catalog. DaoXE is not available in mainland China.
+
+```python linenums="1" hl_lines="6-8"
+import os
+
+from ag2.config import OpenAIConfig
+
+config = OpenAIConfig(
+    # Exact ID from your DaoXE account / GET /v1/models
+    model=os.environ["DAOXE_MODEL"],
+    base_url="https://daoxe.com/v1",
+    api_key=os.environ["DAOXE_API_KEY"],
+    streaming=True,
+)
+```
+
+```bash
+export DAOXE_API_KEY="your-daoxe-api-key"
+export DAOXE_MODEL="your-account-model-id"
+```
+
+Public starter examples: [seven7763/DaoXE-AI](https://github.com/seven7763/DaoXE-AI).
+
 ### Extra Body Parameters
 
 Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAIConfig` to pass these through directly to the API call.
