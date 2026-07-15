@@ -47,10 +47,41 @@ if __name__ == "__main__":
     asyncio.run(server.run_stdio())
 ```
 
-`@mcp_tool` (from `ag2.mcp`) derives the tool `name` from the function name, the `description` from its docstring, and the `inputSchema` from the typed signature — the same convention as `ag2.tools.tool`. The handler may be sync or async. Point a UI-capable MCP client (or the MCP Inspector) at this stdio server, call `show_greeting`, and the HTML renders inline.
+`@mcp_tool` (from `ag2.mcp`) derives the tool `name` from the function name, the `description` from its docstring, and the `inputSchema` from the typed signature — the same convention as `ag2.tools.tool`. The handler may be sync or async, and may return a plain string (wrapped in a text block) instead of content blocks. Point a UI-capable MCP client (or the MCP Inspector) at this stdio server, call `show_greeting`, and the HTML renders inline.
+
+Optional `title` and `annotations` keyword arguments are advertised in `tools/list`; `annotations` takes `mcp.types.ToolAnnotations` behavior hints (`readOnlyHint`, `destructiveHint`, …) that hosts use to decide e.g. whether to confirm with the user before calling:
+
+```python linenums="1"
+from typing import Any
+
+from mcp.types import ToolAnnotations
+
+from ag2.mcp import mcp_tool
+from ag2.mcp_ui import external_url
+
+@mcp_tool(annotations=ToolAnnotations(readOnlyHint=True))
+async def show_docs() -> Any:
+    """Return the AG2 docs embedded in an iframe."""
+    return external_url("ui://ag2/docs", "https://docs.ag2.ai/")
+```
 
 !!! tip "Why a custom tool and not the `ask` tool"
     The agent's `ask` tool replies with model-generated text/images, so it cannot emit a deterministic UI blob on its own. Always return UI resources from your own `@mcp_tool`.
+
+### Accessing the request context
+
+Annotate a parameter (any name) with `ag2.mcp.tools.MCPRequestContext` to receive the live MCP request context — the session, client parameters, and lifespan state. The parameter is excluded from the advertised `inputSchema`, so clients never see it:
+
+```python linenums="1"
+from ag2.mcp import mcp_tool
+from ag2.mcp.tools import MCPRequestContext
+
+@mcp_tool
+async def whoami(ctx: MCPRequestContext) -> str:
+    """Report the calling client."""
+    params = ctx.session.client_params
+    return f"client: {params.clientInfo.name if params else 'unknown'}"
+```
 
 ## UI resource types
 
@@ -97,22 +128,19 @@ raw_html(
 
 ## UI Actions
 
-A rendered UI can carry interactive elements. When the user interacts, the element sends a message to the host with `window.parent.postMessage`, and the host's `onUIAction` handler reacts. `ag2.mcp_ui.actions` builds those message payloads.
+A rendered UI can carry interactive elements. When the user interacts, the element sends a message to the host with `window.parent.postMessage`, and the host's `onUIAction` handler reacts. `ag2.mcp_ui` builds those message payloads.
 
 !!! warning "UI Actions are dispatched by the host, not your server"
     Unlike `ag2.a2ui` actions, these are **not** server-side handlers. The [MCP-UI spec](https://mcpui.dev/guide/protocol-details){.external-link target="_blank"} puts the host in control: a UI Action is dispatched client-side (`onUIAction`). A `tool` action just asks the host to call an ordinary MCP tool on your server — expose that tool the normal way; there is no server-side "action handler" to register.
 
-These are **authoring** helpers: serialize the result with `.model_dump(exclude_none=True)` into the UI you build with the resource builders — for example, a button's `postMessage` payload.
+These are **authoring** helpers: embed the built action into the UI with `post_message(action)`, which returns an HTML-attribute-safe `window.parent.postMessage(...)` call (quotes and apostrophes in the payload are escaped, so they cannot break out of the attribute).
 
 ```python linenums="1"
-import json
-
-from ag2.mcp_ui import actions, raw_html
+from ag2.mcp_ui import post_message, raw_html, tool_call
 
 # A `tool` action: on click, the host calls tools/call add_to_cart(good_id="42").
-action = actions.tool_call("add_to_cart", {"good_id": "42"})
-payload = json.dumps(action.model_dump(exclude_none=True))
-html = f"<button onclick='window.parent.postMessage({payload}, \"*\")'>Add to cart</button>"
+action = tool_call("add_to_cart", {"good_id": "42"})
+html = f'<button onclick="{post_message(action)}">Add to cart</button>'
 resource = raw_html("ui://ag2/shop", html)
 ```
 
@@ -120,29 +148,27 @@ The five action types map one-to-one to the spec:
 
 | Builder | Action | What the host does |
 |---|---|---|
-| `actions.tool_call(name, params)` | `tool` | call the MCP tool `name(params)` (`tools/call`) |
-| `actions.prompt(text)` | `prompt` | send `text` into the conversation as a follow-up |
-| `actions.link(url)` | `link` | open `url` |
-| `actions.intent(name, params)` | `intent` | emit a host-defined `name` intent with `params` |
-| `actions.notify(message)` | `notify` | receive `message` as a notification / log |
+| `tool_call(name, params)` | `tool` | call the MCP tool `name(params)` (`tools/call`) |
+| `prompt(text)` | `prompt` | send `text` into the conversation as a follow-up |
+| `link(url)` | `link` | open `url` |
+| `intent(name, params)` | `intent` | emit a host-defined `name` intent with `params` |
+| `notify(message)` | `notify` | receive `message` as a notification / log |
 
 ### Closing the loop with a `tool` action
 
 Because a `tool` action asks the host to call `tools/call`, you close the interaction loop by exposing the target as another `@mcp_tool` on the same server:
 
 ```python linenums="1"
-import json
 from typing import Any
 
 from ag2.mcp import mcp_tool
-from ag2.mcp_ui import actions, raw_html
+from ag2.mcp_ui import post_message, raw_html, tool_call
 
 @mcp_tool
 async def show_greeting(name: str = "world") -> Any:
     """Return a greeting card with an 'Add to cart' button."""
-    action = actions.tool_call("add_to_cart", {"good_id": "42"})
-    payload = json.dumps(action.model_dump(exclude_none=True))
-    html = f"<h1>Hello, {name} 👋</h1><button onclick='window.parent.postMessage({payload}, \"*\")'>Add to cart</button>"
+    action = tool_call("add_to_cart", {"good_id": "42"})
+    html = f'<h1>Hello, {name} 👋</h1><button onclick="{post_message(action)}">Add to cart</button>'
     return raw_html("ui://ag2/greeting", html)
 
 @mcp_tool

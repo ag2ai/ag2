@@ -2,9 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import html
+import json
 from typing import Any
 
 from mcp_ui_server import (
+    UIActionResult,
     UIActionResultIntent,
     UIActionResultLink,
     UIActionResultNotification,
@@ -21,6 +24,7 @@ __all__ = (
     "intent",
     "link",
     "notify",
+    "post_message",
     "prompt",
     "tool_call",
 )
@@ -49,3 +53,16 @@ def intent(name: str, params: dict[str, Any]) -> UIActionResultIntent:
 def notify(message: str) -> UIActionResultNotification:
     """A ``notify`` action: send ``message`` to the host as a notification/log."""
     return ui_action_result_notification(message)
+
+
+def post_message(action: UIActionResult) -> str:
+    """An HTML-attribute-safe ``window.parent.postMessage(...)`` call for ``action``.
+
+    JSON-serializes the action and HTML-escapes the result, so quotes and
+    apostrophes in the payload (e.g. a prompt like ``"What's my order?"``)
+    cannot terminate the surrounding attribute::
+
+        button = f'<button onclick="{post_message(action)}">Add to cart</button>'
+    """
+    payload = json.dumps(action.model_dump(exclude_none=True))
+    return html.escape(f"window.parent.postMessage({payload}, '*')")

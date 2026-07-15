@@ -29,7 +29,7 @@ from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
-from .tools import MCPUITool, ToolProvider
+from .tools import MCPFunctionTool, ToolProvider
 
 if TYPE_CHECKING:
     from starlette.types import Lifespan, Receive, Scope, Send
@@ -147,7 +147,7 @@ class MCPServer:
         resources: "Sequence[Resource]" = (),
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
-        tools: "Sequence[MCPUITool]" = (),
+        tools: "Sequence[MCPFunctionTool]" = (),
         path: str = "/mcp",
         stateless: bool = False,
         json_response: bool = False,
@@ -166,9 +166,13 @@ class MCPServer:
         )
         self._prompt_provider = PromptProvider(prompts) if prompts else None
         if tools:
-            conflict = next((t.name for t in tools if t.name == tool_name), None)
-            if conflict is not None:
-                raise MCPToolNameConflictError(conflict)
+            seen: set[str] = set()
+            for tool in tools:
+                if tool.name == tool_name:
+                    raise MCPToolNameConflictError(tool.name)
+                if tool.name in seen:
+                    raise MCPToolNameConflictError(tool.name, reserved=False)
+                seen.add(tool.name)
         self._tool_provider = ToolProvider(tools) if tools else None
         self._executor = AgentExecutor(
             agent,
@@ -224,7 +228,7 @@ class MCPServer:
             # Custom tools run their handler directly; everything else is the
             # agent's conversational tool (name collisions are rejected at init).
             if tool_provider is not None and tool_provider.has(name):
-                return await tool_provider.call(name, arguments)
+                return await tool_provider.call(name, arguments, server.request_context)
             return await executor.call(
                 name,
                 message=arguments.get("message", ""),

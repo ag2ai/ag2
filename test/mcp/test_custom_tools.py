@@ -6,16 +6,17 @@ from typing import Any
 
 import pytest
 from dirty_equals import IsPartialDict
-from mcp.types import TextContent
+from mcp.types import TextContent, ToolAnnotations
 
 from ag2 import Agent
-from ag2.mcp import MCPServer, MCPUITool, mcp_tool
+from ag2.mcp import MCPFunctionTool, MCPServer, mcp_tool
 from ag2.mcp.errors import MCPToolNameConflictError
 from ag2.mcp.testing import connect
+from ag2.mcp.tools import MCPRequestContext, ToolContext
 from ag2.testing import TestConfig
 
 
-async def _echo(args: dict[str, Any]) -> TextContent:
+async def _echo(args: dict[str, Any], _ctx: ToolContext) -> TextContent:
     return TextContent(type="text", text=f"got {args.get('x')}")
 
 
@@ -24,7 +25,9 @@ class TestCustomTools:
     async def test_custom_tools_listed_next_to_ask(self) -> None:
         server = MCPServer(
             Agent("g", config=TestConfig("hi")),
-            tools=[MCPUITool("echo", "Echo x", _echo, {"type": "object", "properties": {"x": {"type": "string"}}})],
+            tools=[
+                MCPFunctionTool("echo", "Echo x", _echo, {"type": "object", "properties": {"x": {"type": "string"}}})
+            ],
         )
 
         async with connect(server) as session:
@@ -33,7 +36,7 @@ class TestCustomTools:
         assert [t.name for t in tools.tools] == ["ask", "echo"]
 
     async def test_custom_tool_dispatches_to_handler(self) -> None:
-        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[MCPUITool("echo", "Echo x", _echo)])
+        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[MCPFunctionTool("echo", "Echo x", _echo)])
 
         async with connect(server) as session:
             result = await session.call_tool("echo", {"x": "42"})
@@ -42,7 +45,7 @@ class TestCustomTools:
         assert result.content == [TextContent(type="text", text="got 42")]
 
     async def test_ask_still_works_alongside_custom_tools(self) -> None:
-        server = MCPServer(Agent("g", config=TestConfig("hello")), tools=[MCPUITool("echo", "Echo x", _echo)])
+        server = MCPServer(Agent("g", config=TestConfig("hello")), tools=[MCPFunctionTool("echo", "Echo x", _echo)])
 
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
@@ -50,10 +53,10 @@ class TestCustomTools:
         assert result.content == [TextContent(type="text", text="hello")]
 
     async def test_sync_handler_runs(self) -> None:
-        def sync_handler(args: dict[str, Any]) -> TextContent:
+        def sync_handler(args: dict[str, Any], _ctx: ToolContext) -> TextContent:
             return TextContent(type="text", text="sync ok")
 
-        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[MCPUITool("s", "sync", sync_handler)])
+        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[MCPFunctionTool("s", "sync", sync_handler)])
 
         async with connect(server) as session:
             result = await session.call_tool("s", {})
@@ -62,14 +65,50 @@ class TestCustomTools:
 
     async def test_name_collision_with_ask_is_rejected(self) -> None:
         with pytest.raises(MCPToolNameConflictError):
-            MCPServer(Agent("g", config=TestConfig("hi")), tools=[MCPUITool("ask", "clash", _echo)])
+            MCPServer(Agent("g", config=TestConfig("hi")), tools=[MCPFunctionTool("ask", "clash", _echo)])
+
+    async def test_duplicate_tool_names_are_rejected(self) -> None:
+        with pytest.raises(MCPToolNameConflictError):
+            MCPServer(
+                Agent("g", config=TestConfig("hi")),
+                tools=[MCPFunctionTool("echo", "first", _echo), MCPFunctionTool("echo", "second", _echo)],
+            )
+
+    async def test_string_result_from_handler_becomes_a_text_block(self) -> None:
+        # A plain string must not be split into per-character blocks.
+        server = MCPServer(
+            Agent("g", config=TestConfig("hi")),
+            tools=[MCPFunctionTool("hello", "Say hello", lambda args, ctx: "hello world")],
+        )
+
+        async with connect(server) as session:
+            result = await session.call_tool("hello", {})
+
+        assert result.content == [TextContent(type="text", text="hello world")]
+
+    async def test_title_and_annotations_are_advertised(self) -> None:
+        server = MCPServer(
+            Agent("g", config=TestConfig("hi")),
+            tools=[
+                MCPFunctionTool("echo", "Echo x", _echo, title="Echo", annotations=ToolAnnotations(readOnlyHint=True))
+            ],
+        )
+
+        async with connect(server) as session:
+            tools = await session.list_tools()
+
+        assert tools.tools[1].model_dump(exclude_none=True) == IsPartialDict({
+            "name": "echo",
+            "title": "Echo",
+            "annotations": {"readOnlyHint": True},
+        })
 
     async def test_collision_respects_custom_tool_name(self) -> None:
         # The reserved name follows ``tool_name``; "ask" is free when renamed.
         server = MCPServer(
             Agent("g", config=TestConfig("hi")),
             tool_name="chat",
-            tools=[MCPUITool("ask", "now free", _echo)],
+            tools=[MCPFunctionTool("ask", "now free", _echo)],
         )
 
         async with connect(server) as session:
@@ -86,7 +125,7 @@ class TestMcpToolDecorator:
             """Greet someone."""
             return TextContent(type="text", text=f"hi {name}")
 
-        assert isinstance(greet, MCPUITool)
+        assert isinstance(greet, MCPFunctionTool)
         assert greet.name == "greet"
         assert greet.description == "Greet someone."
         assert greet.input_schema == IsPartialDict({
@@ -130,3 +169,40 @@ class TestMcpToolDecorator:
 
         assert greet.name == "custom"
         assert greet.description == "overridden"
+
+    async def test_title_and_annotations_pass_through(self) -> None:
+        @mcp_tool(title="Greet", annotations=ToolAnnotations(readOnlyHint=True))
+        async def greet() -> TextContent:
+            """Greet."""
+            return TextContent(type="text", text="ok")
+
+        assert greet.title == "Greet"
+        assert greet.annotations == ToolAnnotations(readOnlyHint=True)
+
+    async def test_string_result_from_decorated_function_becomes_a_text_block(self) -> None:
+        @mcp_tool
+        async def greet(name: str = "world") -> str:
+            """Greet."""
+            return f"hi {name}"
+
+        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[greet])
+
+        async with connect(server) as session:
+            result = await session.call_tool("greet", {})
+
+        assert result.content == [TextContent(type="text", text="hi world")]
+
+    async def test_request_context_is_injected_and_hidden_from_schema(self) -> None:
+        @mcp_tool
+        async def whoami(ctx: MCPRequestContext) -> str:
+            """Report whether a live session is attached."""
+            return f"live session: {ctx.session is not None}"
+
+        assert "ctx" not in whoami.input_schema.get("properties", {})
+
+        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[whoami])
+
+        async with connect(server) as session:
+            result = await session.call_tool("whoami", {})
+
+        assert result.content == [TextContent(type="text", text="live session: True")]
