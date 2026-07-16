@@ -8,7 +8,7 @@ Build with `ag2` only. The classic `autogen` API (`ConversableAgent`, `initiate_
 
 # AG2
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/motivation/
+Source: https://docs.ag2.ai/docs/user-guide/motivation/
 
 ## Why did we create AG2?
 
@@ -103,7 +103,7 @@ We are building **AG2** to make agent development simpler, more modern, and easi
 
 # Quick Start
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/quick-start/
+Source: https://docs.ag2.ai/docs/user-guide/quick-start/
 
 Get up and running with **AG2** in a few minutes. You'll install the framework, configure a model provider, and build your first agent - then give it a tool.
 
@@ -214,7 +214,7 @@ asyncio.run(main())
 
 # Agent Communication
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/agents/
+Source: https://docs.ag2.ai/docs/user-guide/agents/
 
 Agents are the central primitive in **AG2**. They maintain state, interact with models, execute tools, and handle user interactions through a clean, conversation-focused API.
 
@@ -435,7 +435,7 @@ print(await reply.content())
 
 # Model Configuration
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/model_configuration/
+Source: https://docs.ag2.ai/docs/user-guide/model_configuration/
 
 # Model Configuration
 
@@ -887,7 +887,7 @@ response = await agent.ask(
 
 # Resuming a Turn
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/resume/
+Source: https://docs.ag2.ai/docs/user-guide/resume/
 
 `agent.ask(...)` starts a turn from a new message on the agent's current stream. `agent.resume(...)` does the same job from a **recorded trajectory**: you hand it a list of past events, and it re-enters the agent loop driven by the **last** event in that list. The trigger can be *any* event (a fresh user message, a tool result, a human reply) so `resume` is the general way to rebuild a conversation from stored state and carry it forward.
 
@@ -1056,7 +1056,7 @@ OpenAI reasoning items and Anthropic thinking signatures carry similar provider-
 
 # Structured Output
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/structured_output/
+Source: https://docs.ag2.ai/docs/user-guide/structured_output/
 
 # Structured Output
 
@@ -1588,7 +1588,7 @@ def parse_rating(value: int) -> int:
 
 # Prompt Management
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/system_prompts/
+Source: https://docs.ag2.ai/docs/user-guide/system_prompts/
 
 # Prompt Management
 
@@ -1701,7 +1701,7 @@ await agent.ask("Tell me a joke", stream=stream)
 
 # Depends
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/depends/
+Source: https://docs.ag2.ai/docs/user-guide/depends/
 
 # Depends
 
@@ -1870,7 +1870,7 @@ await agent.ask(
 
 # Skills
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/skills/
+Source: https://docs.ag2.ai/docs/user-guide/skills/
 
 Skills let an agent load specialized instructions on demand instead of carrying every capability in its system prompt. They follow the [agentskills.io](https://agentskills.io) convention: each skill is a directory that an agent discovers, reads, and runs only when a task actually calls for it. Skills can also be [defined inline in code](#code-defined-skills) when a directory on disk isn't a good fit.
 
@@ -2188,7 +2188,7 @@ skills = SkillSearchToolkit(
 
 # Middleware
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/middleware/
+Source: https://docs.ag2.ai/docs/user-guide/middleware/
 
 # AG2 Middleware
 
@@ -2654,203 +2654,15 @@ For related runtime customization patterns, see [Tools](tools/tools.md), [Tool m
 
 ---
 
-# Telemetry
-
-Source: https://docs.ag2.ai/latest/docs/user-guide/telemetry/
-
-# AG2 Telemetry
-
-AG2 includes a `TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/) spans for agent turns, LLM calls, tool executions, and human-in-the-loop interactions.
-
-The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/), so traces can be exported to **any compatible backend** -- Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and others.
-
-## Installation
-
-```bash
-pip install "ag2[openai,tracing]"
-```
-
-## Quick Start
-
-```python
-from opentelemetry import trace
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
-
-from ag2 import Agent
-from ag2.config import OpenAIConfig
-from ag2.middleware.builtin import TelemetryMiddleware
-
-# 1. Configure OpenTelemetry
-resource = Resource.create(attributes={"service.name": "ag2-quickstart"})
-tracer_provider = TracerProvider(resource=resource)
-tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
-trace.set_tracer_provider(tracer_provider)
-
-# 2. Create agent with telemetry middleware
-agent = Agent(
-    "assistant",
-    prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
-    middleware=[
-        TelemetryMiddleware(
-            tracer_provider=tracer_provider,
-            agent_name="assistant",
-        ),
-    ],
-)
-
-# 3. Run -- spans are emitted automatically
-import asyncio
-reply = asyncio.run(agent.ask("What is the capital of France?"))
-```
-
-## Trace Hierarchy
-
-Each `ask()` call produces a root span with child spans for LLM calls, tool executions, and human input:
-
-```
-invoke_agent assistant
-  |-- chat gpt-4o-mini              # LLM API call
-  |-- execute_tool get_weather      # tool execution
-  |-- chat gpt-4o-mini              # LLM call after tool result
-  +-- await_human_input assistant   # human-in-the-loop
-```
-
-## Span Types
-
-Every span includes an `ag2.span.type` attribute:
-
-| `ag2.span.type` | Operation name | Triggered by |
-|---|---|---|
-| `agent` | `invoke_agent` | `on_turn` -- wraps the full agent turn |
-| `llm` | `chat` | `on_llm_call` -- each LLM API call |
-| `tool` | `execute_tool` | `on_tool_execution` -- each tool invocation |
-| `human_input` | `await_human_input` | `on_human_input` -- human-in-the-loop |
-
-## Semantic Attributes
-
-Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/docs/specs/semconv/gen-ai/):
-
-| Attribute | Span types | Description |
-|---|---|---|
-| `gen_ai.operation.name` | All | Operation: `invoke_agent`, `chat`, `execute_tool`, `await_human_input` |
-| `gen_ai.agent.name` | agent, human_input | Agent name |
-| `gen_ai.provider.name` | agent, llm | LLM provider (e.g. `openai`, `anthropic`) -- auto-detected |
-| `gen_ai.request.model` | agent, llm | Model name (e.g. `gpt-4o-mini`) -- auto-detected |
-| `gen_ai.response.model` | llm | Resolved model name from response |
-| `gen_ai.response.finish_reasons` | llm | Finish reasons (e.g. `["stop"]`, `["tool_calls"]`) |
-| `gen_ai.usage.input_tokens` | llm | Prompt token count |
-| `gen_ai.usage.output_tokens` | llm | Completion token count |
-| `gen_ai.usage.cache_creation_input_tokens` | llm | Tokens used to create prompt cache (Anthropic) |
-| `gen_ai.usage.cache_read_input_tokens` | llm | Tokens read from prompt cache (Anthropic, OpenAI, Gemini) |
-| `gen_ai.tool.name` | tool | Tool function name |
-| `gen_ai.tool.call.id` | tool | Tool call ID |
-| `gen_ai.tool.type` | tool | Tool type (always `function`) |
-
-## Content Capture
-
-By default, message content, tool arguments, and results **are** included in spans. To disable content capture for privacy-sensitive environments:
-
-```python
-TelemetryMiddleware(
-    tracer_provider=tracer_provider,
-    agent_name="assistant",
-    capture_content=False,  # omits messages, tool args, and results
-)
-```
-
-When content capture is enabled (the default), spans include these additional attributes:
-
-| Attribute | Span type | Content |
-|---|---|---|
-| `gen_ai.input.messages` | llm | JSON request messages |
-| `gen_ai.output.messages` | llm | JSON response messages |
-| `gen_ai.tool.call.arguments` | tool | Tool call arguments (JSON) |
-| `gen_ai.tool.call.result` | tool | Tool execution result |
-| `ag2.human_input.prompt` | human_input | Prompt shown to human |
-| `ag2.human_input.response` | human_input | Human's response |
-
-!!! warning
-    With `capture_content=True`, message content, tool arguments, and human input will appear in your tracing backend. Ensure your backend has appropriate access controls.
-
-## Custom Span Attributes
-
-Use `span_attributes` to stamp custom key-value pairs onto spans the middleware emits. This is useful for routing or filtering traces by tenant, environment, deployment, or any other label your backend supports. Every span will carry these attributes.
-
-```python
-TelemetryMiddleware(
-    tracer_provider=tracer_provider,
-    agent_name="assistant",
-    span_attributes={
-        "deployment": "production",
-        "ag2.org.id": "org-abc123",
-    },
-)
-```
-
-!!! tip
-    This is the right place to add tenant or organization identifiers when your tracing backend filters traces by span-level labels (for example, Google Cloud Trace label filters or Datadog tags).
-
-!!! note
-    If a key in `span_attributes` collides with an intrinsic attribute set by the middleware (such as `ag2.span.type` or `gen_ai.usage.input_tokens`), the middleware's value always wins.
-
-## Configuration
-
-`TelemetryMiddleware` accepts:
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `tracer_provider` | `TracerProvider \| None` | Global provider | OpenTelemetry TracerProvider |
-| `capture_content` | `bool` | `True` | Include message/tool content in spans |
-| `agent_name` | `str \| None` | `"unknown"` | Agent name for span attributes |
-| `provider_name` | `str \| None` | `None` | LLM provider name (auto-detected from response if not set) |
-| `model_name` | `str \| None` | `None` | Model name (auto-detected from response if not set) |
-| `span_attributes` | `dict[str, str] \| None` | `None` | Extra key-value pairs stamped onto every span (tenant IDs, environment tags, etc.) |
-
-## Tool Execution Example
-
-```python
-from ag2 import Agent
-from ag2.config import OpenAIConfig
-from ag2.middleware.builtin import TelemetryMiddleware
-from ag2.tools import tool
-
-@tool
-def get_weather(city: str) -> str:
-    """Get weather information for a city."""
-    return f"Sunny, 72F in {city}"
-
-agent = Agent(
-    "weather_agent",
-    prompt="Use the get_weather tool to answer weather questions.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
-    tools=[get_weather],
-    middleware=[
-        TelemetryMiddleware(
-            tracer_provider=tracer_provider,
-            agent_name="weather_agent",
-        ),
-    ],
-)
-```
-
-## Backend Integration
-
-Since `TelemetryMiddleware` uses standard OpenTelemetry, any OTLP-compatible backend works - Grafana Tempo, Jaeger, Langfuse, and others. Point the OTLP exporter at your backend's endpoint; the agent instrumentation shown above stays the same.
-
----
-
 # Metrics
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/metrics/
+Source: https://docs.ag2.ai/docs/user-guide/metrics/
 
 # Metrics
 
 AG2 includes a `MetricsMiddleware` that emits Prometheus-compatible counters and histograms for agent turns, LLM calls, tool executions, human input requests, and LLM token usage.
 
-Use metrics when you need operational dashboards and alerts for latency, success rates, error types, and token consumption. Use [Telemetry](telemetry.md) when you need request-level traces and span details.
+Use metrics when you need operational dashboards and alerts for latency, success rates, error types, and token consumption. Use [Telemetry](telemetry/agent.md) when you need request-level traces and span details.
 
 ## Installation
 
@@ -3077,7 +2889,7 @@ Create separate rows for agent turns, LLM calls, tools, human input, and token u
 
 # Testing
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/testing/
+Source: https://docs.ag2.ai/docs/user-guide/testing/
 
 AG2 provides a built-in `TestConfig` utility in the `ag2.testing` module to help you write unit tests for your agents. It allows you to mock LLM responses and simulate tool execution scenarios without making actual API calls.
 
@@ -3203,7 +3015,7 @@ async def test_tool_not_found():
 
 # The Agent Harness
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/agent_harness/
+Source: https://docs.ag2.ai/docs/user-guide/agent_harness/
 
 A bare `Agent` is just a model loop. The **harness** is the set of opt-in primitives you compose onto it to give it richer capabilities - context assembly, persistent knowledge, sub-task spawning, and the supporting middleware they wire in.
 
@@ -3425,7 +3237,7 @@ Lifecycle events emitted during a turn include `ObserverStarted` / `ObserverComp
 
 # Tasks
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tasks/
+Source: https://docs.ag2.ai/docs/user-guide/tasks/
 
 A `Task` is a framework-core wrapper any `Agent` can use to give a unit of work a trackable lifecycle. While the task is active, the framework emits `TaskStarted`, `TaskProgress`, `TaskCompleted`, `TaskFailed`, and `TaskExpired` events on a stream - so observers (UIs, watchers, mirrors, test harnesses) can follow along without participating in execution.
 
@@ -3644,7 +3456,7 @@ async with agent.task("survey", description="probe upstream", payload={"region":
 
 # Subagents
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/subagents/
+Source: https://docs.ag2.ai/docs/user-guide/subagents/
 
 Subagents let agents delegate work to other agents through tool calling. The calling agent's LLM decides when and what to delegate, and each sub-task runs on its own isolated stream with independent history.
 
@@ -3914,7 +3726,7 @@ researcher.as_tool(
 
 # Coding with AI Assistants
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/coding_with_ai/
+Source: https://docs.ag2.ai/docs/user-guide/coding_with_ai/
 
 Set up your AI coding assistant (Claude Code, Cursor, Copilot, Codex, Windsurf, or any agent) so it can build **AG2** apps with you using current, accurate APIs and examples.
 
@@ -3963,9 +3775,9 @@ The fastest path uses the [`skills` CLI](https://skills.sh):
 
 Skills teach patterns; the docs keep your assistant honest about the *exact* current signatures. The biggest risk is your assistant falling back on the **classic** `autogen` API it was trained on (`ConversableAgent`, `initiate_chat`, `GroupChat`) - now removed from the package. Give it current ground truth:
 
-- **Live AG2 docs:** [`https://docs.ag2.ai/latest/docs/user-guide/agents/`](https://docs.ag2.ai/latest/docs/user-guide/agents/) - point your agent at this section (most assistants can fetch a URL).
+- **Live AG2 docs:** [`https://docs.ag2.ai/docs/user-guide/agents/`](https://docs.ag2.ai/docs/user-guide/agents/) - point your agent at this section (most assistants can fetch a URL).
 - **AG2 docs source (Markdown):** [`ag2ai/ag2/website/docs/user-guide`](https://github.com/ag2ai/ag2/tree/main/website/docs/user-guide) - the raw `.mdx` your agent can read directly from GitHub.
-- **AG2 `llms.txt`:** [`https://docs.ag2.ai/latest/llms.txt`](https://docs.ag2.ai/latest/llms.txt) - a machine-readable index of the AG2 docs following the [llms.txt standard](https://llmstxt.org/), plus [`llms-full.txt`](https://docs.ag2.ai/latest/llms-full.txt) for the entire AG2 docs in one file. Both are AG2-scoped, so they never point your agent at the classic API.
+- **AG2 `llms.txt`:** [`https://docs.ag2.ai/llms.txt`](https://docs.ag2.ai/llms.txt) - a machine-readable index of the AG2 docs following the [llms.txt standard](https://llmstxt.org/), plus [`llms-full.txt`](https://docs.ag2.ai/llms-full.txt) for the entire AG2 docs in one file. Both are AG2-scoped, so they never point your agent at the classic API.
 
 Then anchor your prompt: *"Build with `ag2` only. If a signature is unfamiliar, check the AG2 docs before writing code - do not use the classic `autogen` API."*
 
@@ -3994,7 +3806,7 @@ This project is built on **AG2** (`ag2`). Follow these rules.
 
 ## Docs & skills
 - Install and use the AG2 skills: `npx skills add ag2ai/ag2-skills`.
-- AG2 docs: https://docs.ag2.ai/latest/docs/user-guide/agents/ (machine-readable index at /latest/llms.txt).
+- AG2 docs: https://docs.ag2.ai/docs/user-guide/agents/ (machine-readable index at /llms.txt).
 - When unsure of a signature, check the AG2 docs before writing code.
 - Do NOT trust generic docs indexers - they surface the retired classic API.
 ```
@@ -4042,7 +3854,7 @@ This project is built on **AG2** (`ag2`). Follow these rules.
 
 # Multimodal Inputs
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/multimodal/inputs/
+Source: https://docs.ag2.ai/docs/user-guide/multimodal/inputs/
 
 # Multimodal Inputs
 
@@ -4368,7 +4180,7 @@ doc = BinaryInput(
 
 # Image Generation
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/multimodal/image_generation/
+Source: https://docs.ag2.ai/docs/user-guide/multimodal/image_generation/
 
 # Image Generation
 
@@ -4531,7 +4343,7 @@ To edit an image instead of generating one from scratch, pass it in as an [`Imag
 
 # Agent Tools
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tools/tools/
+Source: https://docs.ag2.ai/docs/user-guide/tools/tools/
 
 # Agent Tools
 
@@ -4900,7 +4712,7 @@ This is especially useful for tools that:
 
 # Toolkits
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tools/toolkits/
+Source: https://docs.ag2.ai/docs/user-guide/tools/toolkits/
 
 # Toolkits
 
@@ -5003,7 +4815,7 @@ Toolkit middleware is the **outermost** layer: it runs before any per-tool middl
 
 # Common Tools
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tools/common_toolkits/
+Source: https://docs.ag2.ai/docs/user-guide/tools/common_toolkits/
 
 # Common Tools
 
@@ -5351,7 +5163,7 @@ sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), ignore=["**/.env", "*
 
 # MCP Servers
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tools/mcp_servers/
+Source: https://docs.ag2.ai/docs/user-guide/tools/mcp_servers/
 
 # MCP Servers
 
@@ -5521,7 +5333,7 @@ agent_with_mcp = Agent(
 
 # Built-in Provider Tools
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tools/builtin_tools/
+Source: https://docs.ag2.ai/docs/user-guide/tools/builtin_tools/
 
 # Built-in Provider Tools
 
@@ -5532,7 +5344,7 @@ AG2 includes built-in tools that map to server-side capabilities offered by LLM 
 | `CodeExecutionTool` | ✓ | ✓ | ✓ | ✓ | ✗ |
 | `WebSearchTool` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `WebFetchTool` | ✓ | ✗ | ✓ | ✗ | ✗ |
-| `FileSearchTool` | ✗ | ✓ | ✗ | ✗ | ✗ |
+| `FileSearchTool` | ✗ | ✓ | ✓ | ✗ | ✗ |
 | `ShellTool` | ✓ | ✓ | ✗ | ✗ | ✗ |
 | `SkillsTool` | ✓ | ✓ | ✗ | ✗ | ✗ |
 | `MCPServerTool` | ✓ | ✓ | ✗ | ✓ | ✗ |
@@ -5540,6 +5352,7 @@ AG2 includes built-in tools that map to server-side capabilities offered by LLM 
 | `MemoryTool` | ✓ | ✗ | ✗ | ✗ | ✗ |
 | `XSearchTool` | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `RetrievalTool` | ✗ | ✗ | ✗ | ✗ | ✓ |
+| `GoogleMapsTool` | ✗ | ✗ | ✓ | ✗ | ✗ |
 
 ## Web Search
 
@@ -5610,9 +5423,41 @@ agent = Agent(
 !!! note
     OpenAI does not support web fetch. Using `WebFetchTool` with an OpenAI config will raise an error.
 
+## Google Maps
+
+`GoogleMapsTool` enables Grounding with Google Maps on the Gemini 3 family, giving the
+model access to up-to-date places, business info, and location data.
+
+```python
+from ag2 import Agent
+from ag2.config import GeminiConfig
+from ag2.tools import GoogleMapsTool
+
+agent = Agent(
+    "concierge",
+    config=GeminiConfig(model="gemini-3-flash-preview"),
+    tools=[
+        GoogleMapsTool(
+            latitude=40.7128,
+            longitude=-74.0060,
+            language_code="en",
+        ),
+    ],
+)
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `latitude` / `longitude` | Bias results toward a location (sent via `tool_config.retrieval_config`). Both required for geo-biasing. |
+| `language_code` | Localise results (e.g. `"en"`). |
+| `enable_widget` | Request the interactive Maps widget context token. |
+
+!!! note
+    `GoogleMapsTool` is only supported by Gemini. All other providers raise `UnsupportedToolError`.
+
 ## File Search
 
-`FileSearchTool` lets the model search OpenAI vector stores and ground its answers in the retrieved chunks. Upload files to a vector store first (via the OpenAI SDK or dashboard), then reference the store by id.
+`FileSearchTool` lets the model search a provider-hosted document store and ground its answers in the retrieved chunks. On OpenAI this searches vector stores (upload files via the OpenAI SDK or dashboard, then reference the store by id); on Gemini this searches `FileSearchStore` resources.
 
 ```python
 from ag2 import Agent
@@ -5634,15 +5479,19 @@ agent = Agent(
 
 | Parameter | Description |
 | :--- | :--- |
-| `vector_store_ids` | **Required.** Ids of the vector stores to search. |
-| `max_num_results` | Cap the number of retrieved chunks. |
-| `filters` | An [OpenAI comparison or compound filter](https://developers.openai.com/api/docs/guides/tools-file-search#metadata-filtering) object, passed through verbatim. |
+| `vector_store_ids` | **OpenAI only. Required for OpenAI.** Ids of the vector stores to search. |
+| `max_num_results` | Cap the number of retrieved chunks. Maps to Gemini's `top_k`. |
+| `filters` | **OpenAI only.** An [OpenAI comparison or compound filter](https://developers.openai.com/api/docs/guides/tools-file-search#metadata-filtering) object, passed through verbatim. |
 | `include_results` | Return the raw retrieved chunks in the tool result (adds `include=["file_search_call.results"]`). Off by default - chunks are full text and inflate responses. |
+| `store_names` | **Gemini only. Required for Gemini.** Gemini `FileSearchStore` resource names to search. |
+| `metadata_filter` | **Gemini only.** AIP-160 filter string applied to store metadata. |
+
+`vector_store_ids` and `filters` are OpenAI-only; `store_names` and `metadata_filter` are Gemini-only. `max_num_results` is shared and maps to Gemini's `top_k`.
 
 Search activity surfaces on the event stream as `BuiltinToolCallEvent` / `BuiltinToolResultEvent` pairs. With `include_results=True` the result event carries each chunk as a `TextInput` part, plus per-file relevance scores in `metadata["results"]`.
 
 !!! note
-    `FileSearchTool` is only supported by the OpenAI Responses API (`OpenAIResponsesConfig`). Other providers raise an error.
+    `FileSearchTool` is supported by the OpenAI Responses API (`OpenAIResponsesConfig`) and Gemini (`GeminiConfig`). Other providers raise an error.
 
 ## Code Execution
 
@@ -5919,7 +5768,7 @@ The default versions are compatible with all Claude models including Haiku.
 
 # Code Execution
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tools/code_execution/
+Source: https://docs.ag2.ai/docs/user-guide/tools/code_execution/
 
 # Code Execution
 
@@ -6092,7 +5941,7 @@ For most chat-style agents, instantiate one `CodeEnvironment` per agent (or per 
 
 # Sandbox Shell Tool
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tools/local_shell/
+Source: https://docs.ag2.ai/docs/user-guide/tools/local_shell/
 
 # Sandbox Shell Tool
 
@@ -6247,7 +6096,7 @@ reply3 = await reply2.ask("Read the counter and tell me the value")
 
 # Tool middleware
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tools/tool_middleware/
+Source: https://docs.ag2.ai/docs/user-guide/tools/tool_middleware/
 
 # Tool middleware
 
@@ -6344,7 +6193,7 @@ Pass `middleware=[...]` to a [`Toolkit`](toolkits.md) constructor to apply hooks
 
 # Approval Required
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/tools/approval_required/
+Source: https://docs.ag2.ai/docs/user-guide/tools/approval_required/
 
 # Approval Required
 
@@ -6416,7 +6265,7 @@ def send_email(to: str, subject: str, body: str) -> str:
 
 # Conversation Variables
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/context/variables/
+Source: https://docs.ag2.ai/docs/user-guide/context/variables/
 
 # Conversation Variables
 
@@ -6582,7 +6431,7 @@ def fetch_secure_data(
 
 # Dependency Injection
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/context/inject/
+Source: https://docs.ag2.ai/docs/user-guide/context/inject/
 
 # Dependency Injection
 
@@ -6728,7 +6577,7 @@ def update_record(
 
 # Human in the Loop
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/context/human_in_the_loop/
+Source: https://docs.ag2.ai/docs/user-guide/context/human_in_the_loop/
 
 # Human in the Loop
 
@@ -6839,9 +6688,440 @@ async def async_hitl_hook(event: HumanInputRequest) -> HumanMessage:
 
 ---
 
+# Agent Telemetry
+
+Source: https://docs.ag2.ai/docs/user-guide/telemetry/agent/
+
+AG2 ships a `TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/) spans for a single agent's work - its turns, LLM calls, tool executions, and human-in-the-loop interactions.
+
+The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/), so traces can be exported to **any compatible backend** - Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and others.
+
+!!! tip
+    To trace the interactions *between* agents in a network - the hub's dispatch, channels, agent lifecycles, and tasks - see [Network Telemetry](network.md). The two compose: an agent's `invoke_agent` span links back to the network envelope that triggered it.
+
+## Installation
+
+```bash
+pip install "ag2[openai,tracing]"
+```
+
+## Quick Start
+
+```python
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
+
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.middleware.builtin import TelemetryMiddleware
+
+# 1. Configure OpenTelemetry
+resource = Resource.create(attributes={"service.name": "ag2-quickstart"})
+tracer_provider = TracerProvider(resource=resource)
+tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+trace.set_tracer_provider(tracer_provider)
+
+# 2. Create agent with telemetry middleware
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful assistant.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    middleware=[
+        TelemetryMiddleware(
+            tracer_provider=tracer_provider,
+            agent_name="assistant",
+        ),
+    ],
+)
+
+# 3. Run -- spans are emitted automatically
+import asyncio
+reply = asyncio.run(agent.ask("What is the capital of France?"))
+```
+
+## Trace Hierarchy
+
+Each `ask()` call produces a root span with child spans for LLM calls, tool executions, and human input:
+
+```
+invoke_agent assistant
+  |-- chat gpt-4o-mini              # LLM API call
+  |-- execute_tool get_weather      # tool execution
+  |-- chat gpt-4o-mini              # LLM call after tool result
+  +-- await_human_input assistant   # human-in-the-loop
+```
+
+## Span Types
+
+Every span includes an `ag2.span.type` attribute:
+
+| `ag2.span.type` | Operation name | Triggered by |
+|---|---|---|
+| `agent` | `invoke_agent` | `on_turn` -- wraps the full agent turn |
+| `llm` | `chat` | `on_llm_call` -- each LLM API call |
+| `tool` | `execute_tool` | `on_tool_execution` -- each tool invocation |
+| `human_input` | `await_human_input` | `on_human_input` -- human-in-the-loop |
+
+## Semantic Attributes
+
+Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/docs/specs/semconv/gen-ai/):
+
+| Attribute | Span types | Description |
+|---|---|---|
+| `gen_ai.operation.name` | All | Operation: `invoke_agent`, `chat`, `execute_tool`, `await_human_input` |
+| `gen_ai.agent.name` | agent, human_input | Agent name |
+| `gen_ai.provider.name` | agent, llm | LLM provider (e.g. `openai`, `anthropic`) -- auto-detected |
+| `gen_ai.request.model` | agent, llm | Model name (e.g. `gpt-4o-mini`) -- auto-detected |
+| `gen_ai.response.model` | llm | Resolved model name from response |
+| `gen_ai.response.finish_reasons` | llm | Finish reasons (e.g. `["stop"]`, `["tool_calls"]`) |
+| `gen_ai.usage.input_tokens` | llm | Prompt token count |
+| `gen_ai.usage.output_tokens` | llm | Completion token count |
+| `gen_ai.usage.cache_creation_input_tokens` | llm | Tokens used to create prompt cache (Anthropic) |
+| `gen_ai.usage.cache_read_input_tokens` | llm | Tokens read from prompt cache (Anthropic, OpenAI, Gemini) |
+| `gen_ai.tool.name` | tool | Tool function name |
+| `gen_ai.tool.call.id` | tool | Tool call ID |
+| `gen_ai.tool.type` | tool | Tool type (always `function`) |
+
+## Content Capture
+
+By default, message content, tool arguments, and results **are** included in spans. To disable content capture for privacy-sensitive environments:
+
+```python
+TelemetryMiddleware(
+    tracer_provider=tracer_provider,
+    agent_name="assistant",
+    capture_content=False,  # omits messages, tool args, and results
+)
+```
+
+When content capture is enabled (the default), spans include these additional attributes:
+
+| Attribute | Span type | Content |
+|---|---|---|
+| `gen_ai.input.messages` | llm | JSON request messages |
+| `gen_ai.output.messages` | llm | JSON response messages |
+| `gen_ai.tool.call.arguments` | tool | Tool call arguments (JSON) |
+| `gen_ai.tool.call.result` | tool | Tool execution result |
+| `ag2.human_input.prompt` | human_input | Prompt shown to human |
+| `ag2.human_input.response` | human_input | Human's response |
+
+!!! warning
+    With `capture_content=True`, message content, tool arguments, and human input will appear in your tracing backend. Ensure your backend has appropriate access controls.
+
+## Custom Span Attributes
+
+Use `span_attributes` to stamp custom key-value pairs onto spans the middleware emits. This is useful for routing or filtering traces by tenant, environment, deployment, or any other label your backend supports. Every span will carry these attributes.
+
+```python
+TelemetryMiddleware(
+    tracer_provider=tracer_provider,
+    agent_name="assistant",
+    span_attributes={
+        "deployment": "production",
+        "ag2.org.id": "org-abc123",
+    },
+)
+```
+
+!!! tip
+    This is the right place to add tenant or organization identifiers when your tracing backend filters traces by span-level labels (for example, Google Cloud Trace label filters or Datadog tags).
+
+!!! note
+    If a key in `span_attributes` collides with an intrinsic attribute set by the middleware (such as `ag2.span.type` or `gen_ai.usage.input_tokens`), the middleware's value always wins.
+
+## Configuration
+
+`TelemetryMiddleware` accepts:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `tracer_provider` | `TracerProvider \| None` | Global provider | OpenTelemetry TracerProvider |
+| `capture_content` | `bool` | `True` | Include message/tool content in spans |
+| `agent_name` | `str \| None` | `"unknown"` | Agent name for span attributes |
+| `provider_name` | `str \| None` | `None` | LLM provider name (auto-detected from response if not set) |
+| `model_name` | `str \| None` | `None` | Model name (auto-detected from response if not set) |
+| `span_attributes` | `dict[str, str] \| None` | `None` | Extra key-value pairs stamped onto every span (tenant IDs, environment tags, etc.) |
+
+## Tool Execution Example
+
+```python
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.middleware.builtin import TelemetryMiddleware
+from ag2.tools import tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get weather information for a city."""
+    return f"Sunny, 72F in {city}"
+
+agent = Agent(
+    "weather_agent",
+    prompt="Use the get_weather tool to answer weather questions.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    tools=[get_weather],
+    middleware=[
+        TelemetryMiddleware(
+            tracer_provider=tracer_provider,
+            agent_name="weather_agent",
+        ),
+    ],
+)
+```
+
+## Backend Integration
+
+Since `TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works - Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, and others. Swap the `ConsoleSpanExporter` from the Quick Start above for an `OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
+
+---
+
+# Network Telemetry
+
+Source: https://docs.ag2.ai/docs/user-guide/telemetry/network/
+
+Where [Agent Telemetry](agent.md) traces what happens *inside* one agent, **network telemetry** traces what happens *between* them - the hub's envelope dispatch, channel lifecycles, agent registration, and tasks. It is emitted by the hub itself, as [OpenTelemetry](https://opentelemetry.io/) spans on the same `TracerProvider` your agents use, so the two stitch together into one picture.
+
+Like agent telemetry it is **opt-in**: nothing is traced unless you hand the hub a `TracerProvider`.
+
+!!! tip
+    Network telemetry composes with [Agent Telemetry](agent.md). When an agent's turn is triggered by a network envelope, its `invoke_agent` span links back to that envelope's span - so a trace can follow a message from dispatch, into the receiving agent's LLM calls and tools, and back out.
+
+## Installation
+
+```bash
+pip install "ag2[openai,tracing]"
+```
+
+## Quick Start
+
+Two opt-ins wire up the full picture: pass a `tracer_provider` to `Hub.open` (the hub owns **envelope** spans), and register a `HubTelemetryListener` (it owns **channel**, **agent**, and **task** spans). Give each agent a `TelemetryMiddleware` so its turn spans join the same provider.
+
+```python
+import asyncio
+
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
+
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.middleware.builtin import TelemetryMiddleware
+from ag2.network import Hub, HubClient, LocalLink, Passport, Resume
+from ag2.network.hub import HubTelemetryListener
+
+async def main() -> None:
+    # 1. One TracerProvider, shared by the hub and every agent. The resource
+    #    attributes identify this hub instance across all of its traces.
+    resource = Resource.create({
+        "service.name": "ag2-network",
+        "service.instance.id": "hub-001",
+        "ag2.hub.id": "hub-001",
+    })
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+    trace.set_tracer_provider(provider)
+
+    store = DiskKnowledgeStore("./hub_store")
+
+    # 2. The hub owns `network.envelope` spans - pass it the provider.
+    hub = await Hub.open(store, tracer_provider=provider)
+
+    # 3. The listener owns `network.channel`, `agent.lifetime`, and
+    #    `network.task` spans (plus channel-attached signal events).
+    hub.register_listener(HubTelemetryListener(store, tracer_provider=provider))
+
+    link = LocalLink(hub)
+
+    # 4. Each agent's TelemetryMiddleware shares the provider, so its turn
+    #    spans link back to the envelope that triggered them.
+    alice = Agent(
+        "alice",
+        config=OpenAIConfig(model="gpt-4o-mini"),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="alice")],
+    )
+
+    hc = HubClient(link, hub=hub)
+    await hc.register(alice, Passport(name="alice"), Resume())
+
+    # ... open channels and run as usual; spans are emitted automatically ...
+
+    # 5. shutdown() unregisters agents so long-lived `agent.lifetime` spans
+    #    end (and export). See "Getting a complete trace set" below.
+    await hc.shutdown()
+    await hub.close()
+    provider.shutdown()
+
+asyncio.run(main())
+```
+
+## What Gets Traced
+
+The hub and listener emit five span types. Each carries an `ag2.span.type` attribute, mirroring the agent-side convention.
+
+| `ag2.span.type` | Span name | Emitted by | Lifetime |
+|---|---|---|---|
+| `envelope` | `network.envelope {event_type}` | Hub | One per dispatched envelope. Brackets WAL append + dispatch; **root of its own trace** (`SpanKind.PRODUCER`). |
+| `channel` | `network.channel {type}` | listener | Long-lived: opened on `created`, ended on `closed` / `expired`. Channel-scoped signal events attach here. |
+| `agent_lifetime` | `agent.lifetime {name}` | listener | Long-lived: opened on `registered`, ended on `unregistered`. |
+| `agent_event` | `agent.resume_set` / `agent.skill_set` / `agent.rule_set` | listener | Single-shot identity-change span, nested under the agent's `agent.lifetime`. |
+| `task` | `network.task {capability}` | listener | Single-shot, created at a task's terminal event with its start time backdated to when the task began. |
+
+Agents instrumented with `TelemetryMiddleware` add their own `agent` / `llm` / `tool` / `human_input` spans (see [Agent Telemetry](agent.md)), linked to the triggering envelope.
+
+!!! note
+    `network.task` spans cover capability-tagged tasks - the same `agent.task(..., capability="X")` mechanism described in [Task Observation](../network/task_observation.md). The span records the task's `capability`, `outcome`, and latency, which is what feeds task-level evaluation views.
+
+### Checkpoint events
+
+Task checkpoints are written straight to the hub's store, so they bypass the envelope path and are **not** their own spans. Instead, `HubBackedCheckpointStore` pins them as **span-events** on whatever span is active when a checkpoint is saved or loaded - typically the owning agent's turn span:
+
+| Event | Attributes | Meaning |
+|---|---|---|
+| `checkpoint.write` | `ag2.checkpoint.task_id`, `ag2.checkpoint.bytes` | Owner saved a resume snapshot. |
+| `checkpoint.read` | `ag2.checkpoint.task_id`, `ag2.checkpoint.hit` | Snapshot loaded; `hit=false` when none existed. On a resume read, `task_id` is the prior task being resumed from - the link back to the original run. |
+
+These are no-ops when no tracer is configured, so checkpointing carries no tracing cost unless you opt in.
+
+## Bounded Traces, Joined by Links
+
+Rather than forcing everything onto one enormous hub-wide trace, each entity is its **own bounded trace** - an envelope, a channel, an agent's lifetime, and a task each root a separate trace. This matches how OTLP collectors and trace viewers expect to ingest data (a long-lived channel that stays open for hours does not hold one trace open indefinitely).
+
+The causal relationships between these traces are expressed two ways:
+
+- **`SpanLink`s** connect related spans across traces:
+
+    | Link | From -> To | Meaning |
+    |---|---|---|
+    | `in_channel` | envelope -> channel | the envelope was dispatched in this channel |
+    | `triggered_by` | envelope -> caller's span | the envelope was posted by this work |
+    | `in_channel` | task -> channel | the task ran in this channel |
+
+- **Resource attributes** (`service.instance.id`, `ag2.hub.id`) stamp every span the hub emits, so all of a hub's traces are joinable in your backend without a shared parent span.
+
+### Connecting agent turns to envelopes
+
+You do not wire this up yourself - adding `TelemetryMiddleware` to your agents is enough. Under the hood, the hub injects the `network.envelope` span's W3C `traceparent` into the envelope *before* it is written to the WAL (so the write-ahead log is the source of truth), and the receiving agent's middleware extracts it to parent the `invoke_agent` span. The result: a continuous trace from dispatch into the recipient's work.
+
+## What a Single Exchange Produces
+
+To make the model concrete, here is the exact output of one **consulting** exchange - a 1-question / 1-reply channel where `alice` asks `bob`, both agents instrumented with `TelemetryMiddleware`. It yields **five bounded traces** (indentation = parent -> child within one trace):
+
+```text
+network.channel consulting                      # the channel: open -> auto-close
+                                                 #   <- linked from each envelope below
+
+network.envelope ag2.msg.text   (alice -> bob)   # dispatch of alice's question
+└─ invoke_agent bob                              #   bob's turn, triggered by the question
+   └─ chat                                       #   bob's LLM call
+                                                 #   -> in_channel link to network.channel
+
+network.envelope ag2.msg.text   (bob -> alice)   # dispatch of bob's reply
+                                                 #   -> in_channel link to network.channel
+
+agent.lifetime alice                            # alice: registered -> unregistered
+agent.lifetime bob                              # bob:   registered -> unregistered
+```
+
+What to read off this:
+
+- **Each entity is its own trace.** The channel, each envelope, and each agent's lifetime are separate bounded traces - not one giant tree - joined by SpanLinks and the shared `ag2.hub.id` resource attribute.
+- **The recipient's work nests under the triggering envelope.** `invoke_agent bob` (and its `chat`, plus any `execute_tool`) are children of the **question** envelope, because the traceparent rides that envelope into bob's turn. One trace follows the message from dispatch into the recipient's LLM call.
+- **The reply is its own envelope trace** (bob -> alice) - the hub starts a fresh `network.envelope` root for every dispatched message.
+- **Lifetime spans appear only once the agent is unregistered** - they stay open from `registered` until `shutdown()` (see [Getting a complete trace set](#getting-a-complete-trace-set)).
+
+It scales predictably: *N* messages on a channel -> *N* `network.envelope` traces; each agent turn adds an `invoke_agent` (with its `chat` / `execute_tool` children) under the envelope that triggered it; one `network.channel` per channel; one `agent.lifetime` per registered agent.
+
+## Two Sinks: Collector and Disk
+
+Every span the hub and listener emit goes to **two** places:
+
+1. **The OTLP collector** - via the `TracerProvider` you configured, exactly like agent telemetry. Any OTLP-compatible backend works.
+2. **Disk** - each ended span is also mirrored as one JSON object per line to `/telemetry/spans.jsonl` inside the hub's `KnowledgeStore`. This is hub-private storage (agents cannot read it), it survives restarts, and it can be queried offline without a running collector.
+
+The disk records use the same hex trace/span IDs as the OTLP export, so a span on disk and the same span in your backend cross-reference one another.
+
+## Span Attributes
+
+Beyond the resource attributes, spans carry `ag2.network.*` and `ag2.agent.*` attributes you can filter and aggregate on:
+
+| Attribute | Span types | Description |
+|---|---|---|
+| `ag2.network.channel_id` | envelope, channel, task | Channel the span belongs to |
+| `ag2.network.event_type` | envelope | Envelope event type (e.g. `ag2.msg.text`) |
+| `ag2.network.sender_id` | envelope | Sender agent ID |
+| `ag2.network.envelope_id` | envelope | Envelope ID |
+| `ag2.network.audience` | envelope | Recipient agent IDs the envelope was addressed to |
+| `ag2.network.causation_id` | envelope | ID of the envelope that caused this one (reply chains) |
+| `ag2.network.dispatch_failures` | envelope | Count of failed deliveries - set only when non-zero; also flips span status to ERROR |
+| `ag2.network.manifest_type` | channel | Channel type (e.g. `workflow`, `discussion`) |
+| `ag2.network.creator_id` | channel | Agent that opened the channel |
+| `ag2.network.capability` | task | The task's declared capability |
+| `ag2.network.outcome` | task | Terminal outcome (e.g. `completed`, `expired`, `cancelled`) |
+| `ag2.network.task_id` | task | Task ID |
+| `ag2.network.owner_id` | task | Agent that owns the task |
+| `ag2.agent.id` | agent_lifetime, agent_event | Agent ID |
+| `ag2.agent.resume_source` | agent_event | `tenant` (set by an operator) or `observed` (earned via a task) |
+| `ag2.agent.capability` | agent_event | Capability observed (on an `observed` resume update) |
+| `ag2.agent.outcome` | agent_event | Task outcome that drove the observation |
+| `ag2.agent.skill_removed` | agent_event | `true` when a `skill_set` event removed (rather than set) the skill |
+
+Channel spans also record diagnostic span **events** - `dispatch_failed` (carrying `ag2.network.recipient_id` + `ag2.error.type` / `ag2.error.message`), `turn_failed`, `envelope_rejected`, and expectation violations - and `agent.lifetime` spans record `inbox_pressure` (`ag2.inbox.pending` / `ag2.inbox.cap`), so failures and back-pressure surface in the trace without their own spans.
+
+The `network.envelope` span reports ERROR when delivery fails: per-recipient delivery failures set `ag2.network.dispatch_failures`, and an exception that escapes dispatch (for example, a custom `HubArbiter` error) is recorded on the span as an `exception` event.
+
+Owner code that checkpoints a task adds `checkpoint.write` / `checkpoint.read` span events on the active span - see [Checkpoint events](#checkpoint-events) above.
+
+## Custom Span Attributes
+
+`HubTelemetryListener` accepts a `span_attributes` dict, stamped onto every channel / agent / task span it emits - the same pattern as the agent middleware, useful for tenant or environment labels.
+
+```python
+hub.register_listener(
+    HubTelemetryListener(
+        store,
+        tracer_provider=provider,
+        span_attributes={"deployment": "production", "ag2.org.id": "org-abc123"},
+    )
+)
+```
+
+!!! tip
+    For hub-wide identity that should appear on **all** spans (including the hub-owned `network.envelope` spans), prefer resource attributes on the `TracerProvider` (`service.instance.id`, `ag2.hub.id`) over `span_attributes`. Resource attributes stamp every span automatically.
+
+## Getting a Complete Trace Set
+
+Long-lived spans only export when they **end**. `agent.lifetime` spans end when an agent is *unregistered*, and `network.channel` spans end when a channel *closes*.
+
+- `HubClient.shutdown()` unregisters the client's agents - ending their `agent.lifetime` spans.
+- `HubClient.close()` only drops the connection; registrations (and their lifetime spans) stay open.
+
+So for a clean, complete trace set at the end of a run, call `shutdown()` (not just `close()`) on your hub clients, then `provider.shutdown()` to flush the exporter.
+
+## Configuration
+
+`HubTelemetryListener` accepts:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `store` | `KnowledgeStore` | required | The hub's store; span records are appended to `/telemetry/spans.jsonl` |
+| `tracer_provider` | `TracerProvider \| None` | Global provider | OpenTelemetry TracerProvider; share it with the hub and agents |
+| `span_attributes` | `dict[str, str] \| None` | `None` | Extra key-value pairs stamped onto every channel / agent / task span |
+
+To enable hub-owned `network.envelope` spans, pass the same `tracer_provider` to `Hub.open(store, tracer_provider=...)`.
+
+## Backend Integration
+
+Network telemetry emits standard OpenTelemetry spans, so any OTLP-compatible backend works - Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, and others. Swap the `ConsoleSpanExporter` for an `OTLPSpanExporter` pointed at your backend or a local OpenTelemetry Collector; the hub and agents share the one provider, so all their spans flow to the same place.
+
+---
+
 # Evaluation
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/evaluation/evaluation/
+Source: https://docs.ag2.ai/docs/user-guide/evaluation/evaluation/
 
 Evaluation is how you measure whether your agent actually works. The framework runs your agent over a dataset of tasks, scores each run on multiple properties, and gives you aggregate metrics you can track over time.
 
@@ -6997,7 +7277,7 @@ v0 ships **offline evaluation** (run a curated dataset with `run_agent`) **and g
 
 # Get started
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/evaluation/getting-started/
+Source: https://docs.ag2.ai/docs/user-guide/evaluation/getting-started/
 
 A hands-on walk-through: by the end you'll have run a real evaluation and understood every line. We build it up one concept at a time - no prior eval experience assumed.
 
@@ -7132,7 +7412,7 @@ You've seen the whole loop. From here:
 
 # Scorers
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/evaluation/scorers/
+Source: https://docs.ag2.ai/docs/user-guide/evaluation/scorers/
 
 A scorer is a function that grades one agent run and produces a structured feedback record. Run it across N tasks and you get N feedback records - which the framework aggregates into pass rates, score distributions, and label counts.
 
@@ -7405,7 +7685,7 @@ The prebuilts use this pattern internally - `tool_called("get_weather")` returns
 
 # Datasets & Runs
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/evaluation/runs/
+Source: https://docs.ag2.ai/docs/user-guide/evaluation/runs/
 
 This page covers the core of the offline eval pipeline: building a `Suite` of tasks, calling `run_agent()`, reading the `RunResult`, and grading traces that already exist. (Saving runs and comparing them over time has its own page - [Persistence & tracking](persistence.md).)
 
@@ -7732,7 +8012,7 @@ The aggregate count of agent-level errors surfaces in `result.aggregates.errors`
 
 # Comparing variants
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/evaluation/variants/
+Source: https://docs.ag2.ai/docs/user-guide/evaluation/variants/
 
 To answer "which is best?" - across models, prompts, tools, middleware, or whole builds - run the same suite under several named **variants** and rank them on a leaderboard.
 
@@ -7793,7 +8073,7 @@ Each variant runs via `run_agent()` (so `repeats`, persistence, everything appli
 
 # Pairwise comparison
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/evaluation/pairwise/
+Source: https://docs.ag2.ai/docs/user-guide/evaluation/pairwise/
 
 Sometimes "which answer is better?" is easier and more reliable than scoring each answer in isolation - especially for subjective quality. `run_pairwise` runs two variants over the same suite and asks a **comparator** to pick a winner per task, then reports B's win-rate with a confidence interval.
 
@@ -7917,7 +8197,7 @@ Each manifest line is blinded - the labeler sees the two answers but **not** whi
 
 # Persistence & tracking
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/evaluation/persistence/
+Source: https://docs.ag2.ai/docs/user-guide/evaluation/persistence/
 
 Every run is saved to disk. That's what turns "run an eval once" into "track an agent over its lifetime" - comparing each version against its past selves to confirm improvements and catch regressions before they ship.
 
@@ -8066,7 +8346,7 @@ The folder now holds `v1.json`, `v2.json`, `v3.json` - a complete, comparable hi
 
 # Voice & Realtime Overview
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/live/live/
+Source: https://docs.ag2.ai/docs/user-guide/live/live/
 
 `ag2.live` is the AG2 module for building voice-enabled agents. It covers two complementary patterns: a turn-by-turn **STT -> Agent -> TTS** pipeline built on top of a regular `Agent`, and a full-duplex **`LiveAgent`** that streams audio to and from a provider's realtime API.
 
@@ -8167,7 +8447,7 @@ pip install "ag2[openai,gemini] sounddevice[numpy]"
 
 # Speech-to-Text and Text-to-Speech
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/live/stt_tts/
+Source: https://docs.ag2.ai/docs/user-guide/live/stt_tts/
 
 The STT -> Agent -> TTS flow turns any existing `Agent` into a voice agent without changing the agent itself. Speech-to-text is added as a **pipeline wrapper**; text-to-speech is added as an **observer** that listens to the model's streamed message chunks.
 
@@ -8341,7 +8621,7 @@ if __name__ == "__main__":
 
 # LiveAgent - Realtime Voice Sessions
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/live/live_agent/
+Source: https://docs.ag2.ai/docs/user-guide/live/live_agent/
 
 `LiveAgent` is a full-duplex voice agent backed by a provider's realtime API. Unlike the [turn-by-turn STT/TTS pipeline](stt_tts.md), it opens a single bidirectional session for the entire conversation - audio flows in and out continuously, with built-in voice activity detection and barge-in.
 
@@ -8605,7 +8885,7 @@ If you need both - for example, a realtime voice front-end that hands off to a t
 
 # Files API
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/advanced/files/
+Source: https://docs.ag2.ai/docs/user-guide/advanced/files/
 
 The AG2 Files API provides a provider-agnostic interface for uploading, listing, reading, and deleting files used by multimodal workflows. It wraps each provider's native files endpoint behind a single async client.
 
@@ -8715,7 +8995,7 @@ For more multimodal details, see [Multimodal Inputs](../multimodal/inputs.md).
 
 # Events Streaming
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/advanced/stream/
+Source: https://docs.ag2.ai/docs/user-guide/advanced/stream/
 
 ## What is the Stream?
 
@@ -9009,7 +9289,7 @@ async def process_payment(context: Context):
 
 # Observers
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/advanced/observers/
+Source: https://docs.ag2.ai/docs/user-guide/advanced/observers/
 
 Observers let you attach lightweight, read-only event listeners directly to an Agent. Under the hood, each observer is a regular [Stream subscriber](stream.md) - but you register it on the Agent instead of managing the stream yourself.
 
@@ -9286,7 +9566,7 @@ agent = Agent(
 
 # Watches
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/advanced/watches/
+Source: https://docs.ag2.ai/docs/user-guide/advanced/watches/
 
 A **Watch** is a reactive trigger primitive. You arm it on a [Stream](stream.md), and it fires a callback when its condition is met - where "condition" can be an event match, a count, a time window, a schedule, or a composition of other watches.
 
@@ -9527,7 +9807,7 @@ Most of the time you won't call `arm()` / `disarm()` directly - you'll hand the 
 
 # Knowledge Store
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/advanced/knowledge_store/
+Source: https://docs.ag2.ai/docs/user-guide/advanced/knowledge_store/
 
 A **`KnowledgeStore`** is a virtual, path-based key-value store with filesystem-like semantics. It gives agents a durable place to persist conversation logs, artifacts, working memory, and any other content that should outlive a single `agent.ask()` call.
 
@@ -9706,7 +9986,7 @@ store = LockedKnowledgeStore(inner, lock=your_distributed_lock)
 
 # Assembly
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/advanced/assembly/
+Source: https://docs.ag2.ai/docs/user-guide/advanced/assembly/
 
 **Assembly** is the step that shapes what the LLM actually sees on each turn. An `AssemblerMiddleware` runs an ordered chain of `AssemblyPolicy` instances, each one transforming `(prompts, events)` before they reach the model.
 
@@ -9950,7 +10230,7 @@ Drop it into the policy list alongside the built-ins.
 
 # Compaction
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/advanced/compaction/
+Source: https://docs.ag2.ai/docs/user-guide/advanced/compaction/
 
 **Compaction** reduces a stream's event history to respect runtime constraints - event count or token budget. It is the constraint-respecting counterpart to [Aggregation](aggregation.md).
 
@@ -10154,7 +10434,7 @@ class DropOldToolEvents:
 
 # Aggregation
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/advanced/aggregation/
+Source: https://docs.ag2.ai/docs/user-guide/advanced/aggregation/
 
 **Aggregation** extracts structured knowledge from raw events and writes it to the [KnowledgeStore](knowledge_store.md). It is the knowledge-organizing counterpart to [Compaction](compaction.md).
 
@@ -10392,7 +10672,7 @@ class ResponseLengthAggregate:
 
 # AG-UI (Agent-User Interaction) Integration
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/ag-ui/index/
+Source: https://docs.ag2.ai/docs/user-guide/ag-ui/index/
 
 ## Overview
 
@@ -10537,7 +10817,7 @@ For protocol-level testing and event inspection, use the AG2 Dojo profile:
 
 # CopilotKit UI Quickstart for AG-UI
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/ag-ui/copilotkit-quickstart/
+Source: https://docs.ag2.ai/docs/user-guide/ag-ui/copilotkit-quickstart/
 
 This quickstart shows how to connect a CopilotKit React/Next.js UI to an AG2 backend endpoint that speaks the AG-UI protocol.
 
@@ -10821,7 +11101,7 @@ Treat tool inputs and shared state as untrusted user-controlled data. Validate a
 
 # AG-UI backend deep dive
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/ag-ui/backend-deepdive/
+Source: https://docs.ag2.ai/docs/user-guide/ag-ui/backend-deepdive/
 
 This page expands on the backend of the AG-UI integration: how to secure your endpoint, how tool calls are represented in the protocol, and how to pass per-request context into your tools.
 
@@ -10957,7 +11237,7 @@ For a production-ready React/Next.js client that supports frontend tools, backen
 
 # A2A Protocol Overview
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2a/overview/
+Source: https://docs.ag2.ai/docs/user-guide/a2a/overview/
 
 The `ag2.a2a` module exposes any AG2 `Agent` over the [Agent2Agent (A2A) protocol](https://a2a-protocol.org/) and lets one AG2 agent talk to a remote A2A endpoint as if it were a regular LLM provider. The protocol is transport-agnostic: the same agent can be served over JSON-RPC, HTTP+JSON (REST) or gRPC, and clients pick the binding from the published `AgentCard`.
 
@@ -11034,7 +11314,7 @@ Sub-modules:
 
 # Exposing an Agent as an A2A Server
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2a/server/
+Source: https://docs.ag2.ai/docs/user-guide/a2a/server/
 
 `A2AServer` wraps an existing `Agent` and produces a transport object you can serve directly. JSON-RPC is the default; the same `A2AServer` instance can also build REST and gRPC transports that share one task store.
 
@@ -11300,7 +11580,7 @@ For gRPC, attach interceptors when constructing the channel via `grpc.aio.Server
 
 # Connecting to an A2A Server
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2a/client/
+Source: https://docs.ag2.ai/docs/user-guide/a2a/client/
 
 `A2AConfig` is a `ModelConfig` - pass it to a regular `Agent` and the remote A2A server becomes that agent's LLM provider. Conversation history, tool calls and streaming are negotiated through the protocol; calling code keeps the familiar `agent.ask(...)` / `reply.ask(...)` shape.
 
@@ -11445,7 +11725,7 @@ config = A2AConfig.from_card(card, prefer="jsonrpc", timeout=30.0)
 
 # Managing Tasks and Push Notifications
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2a/tasks_and_push/
+Source: https://docs.ag2.ai/docs/user-guide/a2a/tasks_and_push/
 
 A2A models every conversation as a `Task` with a server-side lifecycle. `ag2.a2a.tasks` exposes helpers for inspecting and aborting tasks; `ag2.a2a.push` manages webhook subscriptions for asynchronous delivery of task updates. All helpers accept an `A2AConfig` and work over any transport the server's card declares.
 
@@ -11565,7 +11845,7 @@ acme_tasks = await list_tasks(config, tenant="acme-corp", page_size=10)
 
 # A2A Advanced Topics
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2a/advanced/
+Source: https://docs.ag2.ai/docs/user-guide/a2a/advanced/
 
 Topics that aren't part of the day-to-day A2A path: human-in-the-loop, transparent reconnects on streaming drops, plugging in a custom executor, and the error hierarchy.
 
@@ -11689,7 +11969,7 @@ grpc_server = server.build_grpc(bind=f"127.0.0.1:{port}", grpc_url=f"grpc://127.
 
 # A2UI Protocol Overview
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2ui/overview/
+Source: https://docs.ag2.ai/docs/user-guide/a2ui/overview/
 
 The `ag2.a2ui` module lets an AG2 `Agent` produce **rich, interactive user interfaces** - cards, forms, lists, buttons - instead of plain text, using the [A2UI protocol](https://a2ui.org). The LLM emits conversational prose plus a validated A2UI message block; AG2 surfaces each message as a typed event and serializes it to A2UI's transport-agnostic wire format, so any A2UI-capable client can render it.
 
@@ -11808,7 +12088,7 @@ See [Server](server.md) for the request/response contract and a client that driv
 
 # Serving A2UI over HTTP
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2ui/server/
+Source: https://docs.ag2.ai/docs/user-guide/a2ui/server/
 
 `A2UIServer` wraps a plain `ag2.Agent` and **is** a ready-to-serve [Starlette](https://www.starlette.io) ASGI app that speaks **canonical A2UI** over HTTP. It mirrors `ag2.a2a.A2AServer`: hold the agent, configure A2UI with flat kwargs, pick a `transport=` for the wire encoding, and bring your own `uvicorn` (or any ASGI server) to run the `A2UIServer` instance directly.
 
@@ -11971,7 +12251,7 @@ The turn is served at `POST /` by default (pass `AgUiTransport(path="/agent")` t
 
 # Serving A2UI over A2A
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2ui/a2a/
+Source: https://docs.ag2.ai/docs/user-guide/a2ui/a2a/
 
 A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](../a2a/advanced.md) exchange instead of the built-in [REST adapter](server.md). The `ag2.a2ui.a2a` submodule wraps a plain `ag2.Agent` in an `A2UIAgentExecutor`, plugs it into a standard `A2AServer`, and carries each turn's A2UI messages as a canonical A2A `DataPart`.
 
@@ -12080,7 +12360,7 @@ parts = create_a2ui_parts(messages, legacy_split=True) # one DataPart per messag
 
 # A2UI Actions & Round-Trips
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2ui/actions/
+Source: https://docs.ag2.ai/docs/user-guide/a2ui/actions/
 
 A2UI **actions** are the clickable parts of a UI - buttons that, when pressed, drive what happens next. A clickable button is a function you decorate with `@a2ui_action` and **declare on the transport** via `actions=[...]` - the agent stays a plain `Agent`. The transport advertises the button to the LLM so it can render it; a click runs your function **on the server**, the agent is not invoked.
 
@@ -12191,7 +12471,7 @@ async def on_validation_failed(event):
 
 # Catalogs & Client Capabilities
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/a2ui/capabilities/
+Source: https://docs.ag2.ai/docs/user-guide/a2ui/capabilities/
 
 A **catalog** is the schema that defines which components and functions an A2UI message may use - buttons, forms, lists, cards, and so on. An A2UI transport validates the agent's output against a catalog, and the catalog's id is stamped into each `createSurface` message so the client knows how to render it. **Client capabilities** are the other half: the client tells the agent which catalogs *it* can render, and the transport folds that into the prompt so it only targets components the client supports.
 
@@ -12271,7 +12551,7 @@ Whatever the transport, the capabilities become a short prompt section listing t
 
 # Multi-Agent Network Overview
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/overview/
+Source: https://docs.ag2.ai/docs/user-guide/network/overview/
 
 The `ag2.network` module turns one or more `Agent` instances into a **multi-agent network** - a hub-and-spoke topology where a central registry coordinates channel-based, protocol-driven exchanges between named agents.
 
@@ -12374,7 +12654,7 @@ If you're operating an existing deployment:
 
 # Quick Start
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/quick_start/
+Source: https://docs.ag2.ai/docs/user-guide/network/quick_start/
 
 The smallest possible end-to-end network scenario: one in-process hub, two agents, a `consulting` channel that auto-closes after a single Q-and-A.
 
@@ -12474,7 +12754,7 @@ In order:
 
 # Hub and Identity
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/hub_and_identity/
+Source: https://docs.ag2.ai/docs/user-guide/network/hub_and_identity/
 
 The hub is the network's single source of truth: registry, audit log, channel table, write-ahead logs, expectation evaluators, sweepers. Every send, observation, and rule check goes through it.
 
@@ -12690,7 +12970,7 @@ Cancels all sweeper tasks, closes the underlying store, drains pending I/O. Alwa
 
 # Agent Clients and Handlers
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/agent_clients/
+Source: https://docs.ag2.ai/docs/user-guide/network/agent_clients/
 
 The agent-side of the network. Registering an `Agent` produces an `AgentClient` - one per registered agent - carrying a notify handler that decides what the agent does when an envelope arrives.
 
@@ -12854,7 +13134,7 @@ For agents registered via `hub.register(...)`, `hub.close()` is enough - it tear
 
 # Human Clients (HITL)
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/human_client/
+Source: https://docs.ag2.ai/docs/user-guide/network/human_client/
 
 A `HumanClient` is a **non-LLM participant** on the network - the human-in-the-loop primitive. It is a client in the network, just like LLM agents, so the hub routes envelopes to it exactly the same way.
 
@@ -13058,7 +13338,7 @@ await human.disconnect()
 
 # Network-Assigned Tools
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/network_assigned_tools/
+Source: https://docs.ag2.ai/docs/user-guide/network/network_assigned_tools/
 
 When you call `hub.register(agent, ...)` with the default `attach_plugin=True`, the framework attaches `NetworkPlugin` to your agent. The plugin does two things:
 
@@ -13200,7 +13480,7 @@ worker.on_envelope(my_custom_handler)
 
 # Channel Adapters Overview
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/adapters_overview/
+Source: https://docs.ag2.ai/docs/user-guide/network/adapters_overview/
 
 A **channel adapter** governs one channel's allowed sends, default view policy, expectations, and termination rules. Four built-ins ship with the network module; each has its own page.
 
@@ -13388,7 +13668,7 @@ Pick an adapter from the table at the top of this page and read its dedicated pa
 
 # Conversation Adapter
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/conversation/
+Source: https://docs.ag2.ai/docs/user-guide/network/conversation/
 
 `conversation` is a free-form 2-party channel. Either side can send at any time; there's no turn order to enforce, and the adapter never auto-closes. Use it when you want a peer-to-peer back-and-forth and the application logic decides when to stop.
 
@@ -13531,7 +13811,7 @@ See [Closing Channels](termination.md) for the worked examples.
 
 # Consulting Adapter
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/consulting/
+Source: https://docs.ag2.ai/docs/user-guide/network/consulting/
 
 `consulting` is a strict 1-question-1-reply channel. The initiator sends exactly one substantive envelope; the respondent sends exactly one reply; the adapter auto-closes with reason `"consulting_complete"`.
 
@@ -13670,7 +13950,7 @@ For the full set of close patterns (agent-side tool, sentinel, TTL safety nets),
 
 # Discussion Adapter
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/discussion/
+Source: https://docs.ag2.ai/docs/user-guide/network/discussion/
 
 `discussion` is an N-party round-robin channel. Participants speak in a fixed order, cycling indefinitely until you close it. The adapter enforces "wait your turn" via `validate_send`; the hub's `can_send` probe lets the default handler skip wasted LLM calls when it isn't this agent's turn.
 
@@ -13826,7 +14106,7 @@ See [Closing Channels](termination.md) for the full picture.
 
 # Workflow Adapter
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/workflow/
+Source: https://docs.ag2.ai/docs/user-guide/network/workflow/
 
 `workflow` is the orchestrated multi-party adapter. A declarative `TransitionGraph` describes who speaks first, what conditions fire, and when the channel terminates. It's the modern replacement for the classic `GroupChat + handoffs` pattern - see [Migrating from Group Chat](migration_from_group_chat.md) for the side-by-side translation.
 
@@ -14252,7 +14532,7 @@ For the canonical multi-agent patterns translated from classic AG2 (Pipeline, St
 
 # Context Variables
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/context_variables/
+Source: https://docs.ag2.ai/docs/user-guide/network/context_variables/
 
 Channel-scoped mutable state that any participant can read or write,
 auto-persisted on the WAL, and visible to transition conditions. The
@@ -14484,7 +14764,7 @@ top of the existing primitives without framework changes.
 
 # Closing Channels
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/termination/
+Source: https://docs.ag2.ai/docs/user-guide/network/termination/
 
 Every channel terminates with an `EV_CHANNEL_CLOSED` envelope on the WAL, carrying a free-form reason on `event_data["reason"]` and on `ChannelMetadata.close_reason`. Five routes lead there. Pick by who decides.
 
@@ -14722,7 +15002,7 @@ async def stream_until_closed(hub, channel_id, name_by_id, *, timeout=180.0):
 
 # Migrating from Group Chat
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/migration_from_group_chat/
+Source: https://docs.ag2.ai/docs/user-guide/network/migration_from_group_chat/
 
 This page is for users porting an existing AG2 deployment that uses `GroupChat` plus `Handoffs`-style orchestration onto the new `ag2.network` module. The modern equivalent is the [`WorkflowAdapter`](workflow.md), driven by a declarative `TransitionGraph`.
 
@@ -14955,7 +15235,7 @@ For a runnable end-to-end translation of the "researcher -> writer -> editor" ha
 
 # Pattern Cookbook
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/pattern_cookbook/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/pattern_cookbook/
 
 Side-by-side translations of the canonical multi-agent orchestration
 patterns from classic AG2 (`ag2.agentchat.group`) onto the
@@ -15111,7 +15391,7 @@ yet ship versus classic, see [Migrating from Group Chat](../migration_from_group
 
 # Pipeline / Sequential Processing
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/pipeline/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/pipeline/
 
 The Pipeline pattern organises agents into a strict linear sequence:
 each agent processes the previous agent's output, then hands off to
@@ -15326,7 +15606,7 @@ closed: reason='sequence_complete'
 
 # Hierarchical / Tree
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/hierarchical/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/hierarchical/
 
 The Hierarchical pattern places a coordinator above a set of
 specialists. The coordinator delegates work, the researcher returns
@@ -15608,7 +15888,7 @@ closed: reason='written'
 
 # Star
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/star/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/star/
 
 The Star pattern places one hub agent at the centre with several
 specialist spokes. The hub fans out questions to the relevant spoke,
@@ -15976,7 +16256,7 @@ closed: reason='answered'
 
 # Coordinator (Manager + Specialists)
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/coordinator/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/coordinator/
 
 A coordinator agent at the centre with several specialists. The coordinator's LLM decides which specialist to consult next via a single generic `handoff(to)` tool, and ends the conversation via a `finish(summary)` tool. No per-specialist routing rules, no graph rewiring when a specialist is added or removed.
 
@@ -16393,7 +16673,7 @@ When it's not a fit:
 
 # Escalation
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/escalation/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/escalation/
 
 The Escalation pattern flows a request up a tiered support stack.
 Each tier either resolves the request (terminating the workflow) or
@@ -16696,7 +16976,7 @@ A loud humming combined with clicking from your refrigerator compressor most com
 
 # Redundant
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/redundant/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/redundant/
 
 The Redundant pattern sends the same problem to multiple specialists
 with different perspectives; an evaluator at the end picks the best
@@ -16939,7 +17219,7 @@ closed: reason='sequence_complete'
 
 # Feedback Loop
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/feedback_loop/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/feedback_loop/
 
 The Feedback Loop pattern alternates a drafter and a reviewer until
 the reviewer flips a `done` flag in context, or `max_turns`
@@ -17205,7 +17485,7 @@ closed: reason='approved'
 
 # Context-Aware Routing
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/context_aware_routing/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/context_aware_routing/
 
 The Context-Aware Routing pattern uses a router agent to read the
 user's request, classify it into a category, and dispatch to the
@@ -17487,7 +17767,7 @@ closed: reason='technical_resolved'
 
 # Triage with Tasks
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/pattern_cookbook/triage_with_tasks/
+Source: https://docs.ag2.ai/docs/user-guide/network/pattern_cookbook/triage_with_tasks/
 
 The Triage with Tasks pattern breaks a complex request into typed
 tasks (research -> writing -> review). Each task type routes to a
@@ -17794,7 +18074,7 @@ final context_vars: {'pending_tasks': ['research', 'writing', 'review'], 'comple
 
 # Envelopes and Events
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/envelopes_and_events/
+Source: https://docs.ag2.ai/docs/user-guide/network/envelopes_and_events/
 
 The `Envelope` is the wire format for everything that flows between agents on the network. Every send produces one; every observer reads them. This page covers the envelope shape, the built-in event types, audience/visibility rules, and how to send raw envelopes when `channel.send(text)` isn't enough.
 
@@ -17945,7 +18225,7 @@ Below the envelope layer is the frame layer (`HelloFrame`, `SendFrame`, `NotifyF
 
 # Governance, Audit and Observability
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/expectations_and_audit/
+Source: https://docs.ag2.ai/docs/user-guide/network/expectations_and_audit/
 
 The hub enforces governance and surfaces observability through a few layered seams:
 
@@ -18247,7 +18527,7 @@ Register on a custom registry and pass to `Hub.open(..., evaluators=registry)`. 
 
 # Task Observation
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/task_observation/
+Source: https://docs.ag2.ai/docs/user-guide/network/task_observation/
 
 The bridge between the [`Task` lifecycle primitive](../tasks.md) and the network's per-agent track record. When an Agent runs an `agent.task(..., capability="X")` inside a network turn, a `TaskMirror` forwards the lifecycle events to the hub. On terminal events with a `capability` tag, the hub updates the worker's `Resume.observed[capability]`.
 
@@ -18393,7 +18673,7 @@ After a few channels, `worker.resume.observed` will hold both `"research"` and `
 
 # Views and Skills
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/views_and_skills/
+Source: https://docs.ag2.ai/docs/user-guide/network/views_and_skills/
 
 Two LLM-facing concerns:
 
@@ -18587,7 +18867,7 @@ Switching the view doesn't affect the WAL - every envelope is still there, every
 
 # Distributed Deployment
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/network/distributed/
+Source: https://docs.ag2.ai/docs/user-guide/network/distributed/
 
 The network is not limited to one process. Replace `LocalLink` with `WsLink` and the hub becomes a server that agents anywhere on the network can connect to over WebSocket - entirely over the wire, no shared memory, no in-process hub reference.
 
@@ -18784,7 +19064,7 @@ recovered = await agent.resume_from(task_id, checkpoint_store)
 
 # Code Examples
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/code_examples/code_examples/
+Source: https://docs.ag2.ai/docs/user-guide/code_examples/code_examples/
 
 End-to-end runnable scripts demonstrating `ag2`. Each example is self-contained, instantiates a `GeminiConfig` directly, and exercises one or two specific harness primitives so you can read it top-to-bottom and copy what you need.
 
@@ -18807,7 +19087,7 @@ Set `GEMINI_API_KEY` (or swap in another provider's `ModelConfig` - `AnthropicCo
 
 # Hello Agent
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/code_examples/01_hello_agent/
+Source: https://docs.ag2.ai/docs/user-guide/code_examples/01_hello_agent/
 
 The smallest possible end-to-end example: instantiate an `Agent` with one model config, call `ask()`, print the reply, then reuse the same Agent for a second turn. No tools, no harness primitives, no plugins - just the bare loop.
 
@@ -18871,7 +19151,7 @@ if __name__ == "__main__":
 
 # Recipe Builder
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/code_examples/02_recipe_builder/
+Source: https://docs.ag2.ai/docs/user-guide/code_examples/02_recipe_builder/
 
 A culinary assistant that rescales a classic carbonara recipe from 2 servings to 6. The Agent is given a custom Python function as a tool and a Pydantic model as its `response_schema`, so the final reply is a fully validated `Recipe` object instead of free-form text.
 
@@ -18979,7 +19259,7 @@ if __name__ == "__main__":
 
 # Travel Planner
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/code_examples/03_travel_planner/
+Source: https://docs.ag2.ai/docs/user-guide/code_examples/03_travel_planner/
 
 A travel-planner Agent walks through five turns of a single conversation: kicking off the trip, layering on budget and travel-mode constraints, swapping a day's activity, and producing a final itinerary summary. Each turn uses `reply.ask()` so the conversation context (constraints from earlier turns) carries forward without the caller re-supplying it.
 
@@ -19055,7 +19335,7 @@ if __name__ == "__main__":
 
 # Token Watchdog
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/code_examples/04_token_watchdog/
+Source: https://docs.ag2.ai/docs/user-guide/code_examples/04_token_watchdog/
 
 A creative-writing Agent runs with three observers attached: two built-in (`TokenMonitor`, `LoopDetector`) and one custom (`AlertConsole`). The thresholds are deliberately low so a single ask trips the monitors and the custom observer prints every alert to stdout - giving you a live "watchdog dashboard" view of what the framework is noticing.
 
@@ -19156,7 +19436,7 @@ if __name__ == "__main__":
 
 # Research Squad
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/code_examples/05_research_squad/
+Source: https://docs.ag2.ai/docs/user-guide/code_examples/05_research_squad/
 
 Two complementary multi-Agent patterns in one example. First, a coordinator opts in to the auto-injected `run_subtasks` tool (via `tasks=TaskConfig()`) to fan out three independent factual lookups concurrently in a single tool call. Then a second coordinator delegates arithmetic to a `math_expert` Agent exposed via `Agent.as_tool()`. Together they show "fan out then collect" alongside "named delegate".
 
@@ -19285,7 +19565,7 @@ if __name__ == "__main__":
 
 # Journal Companion
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/code_examples/06_journal_companion/
+Source: https://docs.ag2.ai/docs/user-guide/code_examples/06_journal_companion/
 
 A daily-journal Agent that genuinely remembers across runs - not by replaying conversation history, but by summarising each session into a `/memory/working.md` file in a `KnowledgeStore` and re-injecting that file at the start of every later conversation. Two sessions are run with different `Agent` instances pointed at the same store; the second one (a brand-new object) recalls what the user said in the first.
 
@@ -19412,7 +19692,7 @@ if __name__ == "__main__":
 
 # Long-Doc Chat
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/code_examples/07_long_doc_chat/
+Source: https://docs.ag2.ai/docs/user-guide/code_examples/07_long_doc_chat/
 
 A "remember the last words" chat exercise that stress-tests the assembly chain. Three policies compose to control exactly what the LLM sees on each call - drop non-conversation events, hard-cap to the last 6 events, then enforce a token budget. A separate `TailWindowCompact` strategy keeps the underlying stream history small too. Watch the compaction events fire as the conversation grows.
 
@@ -19531,7 +19811,7 @@ if __name__ == "__main__":
 
 # Safety Guard
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/code_examples/08_safety_guard/
+Source: https://docs.ag2.ai/docs/user-guide/code_examples/08_safety_guard/
 
 A custom `BaseObserver` (`PathGuardian`) watches every tool call and emits a `Severity.FATAL` `ObserverAlert` when an Agent tries to write to a forbidden path like `/etc/`. The alert routes through `AlertPolicy` -> `HaltEvent` -> `_HaltCheckMiddleware`, which short-circuits the next LLM call with a synthetic `HALTED: ...` response. The first ask (writing to `/tmp/...`) succeeds; the second (writing to `/etc/passwd`) is blocked end-to-end.
 
@@ -19670,7 +19950,7 @@ if __name__ == "__main__":
 
 # Exa Search
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/extensions/tools/search/exa/
+Source: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/exa/
 
 `ExaToolkit` gives an agent four related tools powered by the [Exa](https://exa.ai) neural search engine: web search, find-similar, content retrieval, and AI-powered answers - all sharing a single client.
 
@@ -19758,7 +20038,7 @@ All runtime parameters accept `Variable` for deferred context resolution.
 
 # TinyFish Search
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/extensions/tools/search/tinyfish/
+Source: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/tinyfish/
 
 `TinyFishSearchToolkit` gives an agent two related tools powered by [TinyFish](https://www.tinyfish.ai/): web search and browser-rendered page fetch. Use it when an agent needs current search results and then needs to read the full content of selected URLs.
 
@@ -19872,9 +20152,82 @@ All configurable defaults on `TinyFishSearchToolkit`, `toolkit.search()`, and `t
 
 ---
 
+# Xquik Tweet Search
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/xquik/
+
+`XquikSearchToolkit` gives an agent a tool for searching public X posts through the [Xquik API](https://docs.xquik.com/api-reference/overview). Use it when an agent needs structured tweet records and pagination metadata.
+
+!!! note
+    An Xquik `api_key` is required. No additional Python package is required.
+
+```python
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import XquikSearchToolkit
+
+agent = Agent(
+    "social-researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[XquikSearchToolkit(api_key=os.environ["XQUIK_API_KEY"])],
+)
+```
+
+The `api_key` is required and validated when the toolkit is constructed.
+
+## Tool
+
+| Tool | Description |
+| :--- | :--- |
+| `xquik_tweet_search` | Search public X posts and return tweet records plus pagination metadata |
+
+## Search configuration
+
+The tool accepts a required `query` at execution time. Configure optional defaults on the toolkit or `toolkit.search()`:
+
+```python
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import XquikSearchToolkit
+
+toolkit = XquikSearchToolkit(api_key=os.environ["XQUIK_API_KEY"])
+
+search_tool = toolkit.search(
+    query_type="Latest",
+    since_time="2026-07-01T00:00:00Z",
+    until_time="2026-07-02T00:00:00Z",
+    limit=25,
+)
+
+agent = Agent(
+    "social-researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[search_tool],
+)
+```
+
+Use `cursor` with the `next_cursor` from a previous response to request another page. All search defaults accept a `Variable` for deferred context resolution.
+
+## Result
+
+`xquik_tweet_search` returns an `XquikTweetSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query sent to Xquik |
+| `tweets` | Structured tweet records returned by the API |
+| `has_next_page` | Whether another result page is available |
+| `next_cursor` | Cursor for the next page, or an empty string |
+
+Check the [Xquik OpenAPI schema](https://xquik.com/openapi.json) for current search syntax, limits, and response fields.
+
+---
+
 # NLIP Agent Integration
 
-Source: https://docs.ag2.ai/latest/docs/user-guide/extensions/nlipagent/
+Source: https://docs.ag2.ai/docs/user-guide/extensions/nlipagent/
 
 [NLIP (Natural Language Interaction Protocol)](https://ecma-international.org/publications-and-standards/standards/ecma-430/) is an ECMA-430 standard for interoperable agent communication over HTTP. The `ag2.extensions.nlip` module lets you:
 
