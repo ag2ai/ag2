@@ -31,11 +31,7 @@ SearchMode: TypeAlias = Literal["web", "academic", "sec"]
 SearchContextSize: TypeAlias = Literal["low", "medium", "high"]
 RecencyFilter: TypeAlias = Literal["hour", "day", "week", "month", "year"]
 
-
-def _client_kwargs_with_integration_header(client_kwargs: dict[str, Any]) -> dict[str, Any]:
-    default_headers = dict(client_kwargs.get("default_headers") or {})
-    default_headers["X-Pplx-Integration"] = f"ag2/{__version__}"
-    return {**client_kwargs, "default_headers": default_headers}
+_PPLX_INTEGRATION_HEADER = "X-Pplx-Integration"
 
 
 @dataclass(slots=True)
@@ -117,6 +113,11 @@ class PerplexitySearchToolkit(Toolkit):
             middleware=middleware,
         )
 
+    def _client_kwargs_with_integration_header(self) -> dict[str, Any]:
+        default_headers = dict(self._client_kwargs.get("default_headers") or {})
+        default_headers[_PPLX_INTEGRATION_HEADER] = f"ag2/{__version__}"
+        return {**self._client_kwargs, "default_headers": default_headers}
+
     def search(
         self,
         *,
@@ -138,7 +139,7 @@ class PerplexitySearchToolkit(Toolkit):
         proxy = self._proxy
         verify = self._verify
         timeout = self._timeout
-        client_kwargs = self._client_kwargs
+        client_kwargs = self._client_kwargs_with_integration_header()
 
         @tool(name=name, description=description, middleware=middleware)
         async def perplexity_search(
@@ -163,11 +164,7 @@ class PerplexitySearchToolkit(Toolkit):
             kwargs = {k: v for k, v in params.items() if v is not None}
 
             async with httpx.AsyncClient(proxy=proxy, verify=verify, timeout=timeout) as http:
-                sdk = AsyncPerplexity(
-                    api_key=api_key,
-                    http_client=http,
-                    **_client_kwargs_with_integration_header(client_kwargs),
-                )
+                sdk = AsyncPerplexity(api_key=api_key, http_client=http, **client_kwargs)
                 raw = await sdk.search.create(query=query, **kwargs)
 
             raw_results: list[SearchAPIResult] = getattr(raw, "results", None) or []
@@ -208,7 +205,7 @@ class PerplexitySearchToolkit(Toolkit):
         proxy = self._proxy
         verify = self._verify
         timeout = self._timeout
-        client_kwargs = self._client_kwargs
+        client_kwargs = self._client_kwargs_with_integration_header()
 
         @tool(name=name, description=description, middleware=middleware)
         async def perplexity_answer(
@@ -246,11 +243,7 @@ class PerplexitySearchToolkit(Toolkit):
                 **kwargs,
             }
             async with httpx.AsyncClient(proxy=proxy, verify=verify, timeout=timeout) as http:
-                sdk = AsyncPerplexity(
-                    api_key=api_key,
-                    http_client=http,
-                    **_client_kwargs_with_integration_header(client_kwargs),
-                )
+                sdk = AsyncPerplexity(api_key=api_key, http_client=http, **client_kwargs)
                 raw = await sdk.chat.completions.create(**create_kwargs)
 
             content: str | None = None
