@@ -18,6 +18,7 @@ from ag2.middleware import ToolMiddleware
 from ag2.tools.builtin._resolve import resolve_variable
 from ag2.tools.final import Toolkit, tool
 from ag2.tools.final.function_tool import FunctionTool
+from ag2.version import __version__
 
 SonarModel: TypeAlias = Literal[
     "sonar",
@@ -29,6 +30,12 @@ SonarModel: TypeAlias = Literal[
 SearchMode: TypeAlias = Literal["web", "academic", "sec"]
 SearchContextSize: TypeAlias = Literal["low", "medium", "high"]
 RecencyFilter: TypeAlias = Literal["hour", "day", "week", "month", "year"]
+
+
+def _client_kwargs_with_integration_header(client_kwargs: dict[str, Any]) -> dict[str, Any]:
+    default_headers = dict(client_kwargs.get("default_headers") or {})
+    default_headers["X-Pplx-Integration"] = f"ag2/{__version__}"
+    return {**client_kwargs, "default_headers": default_headers}
 
 
 @dataclass(slots=True)
@@ -156,7 +163,11 @@ class PerplexitySearchToolkit(Toolkit):
             kwargs = {k: v for k, v in params.items() if v is not None}
 
             async with httpx.AsyncClient(proxy=proxy, verify=verify, timeout=timeout) as http:
-                sdk = AsyncPerplexity(api_key=api_key, http_client=http, **client_kwargs)
+                sdk = AsyncPerplexity(
+                    api_key=api_key,
+                    http_client=http,
+                    **_client_kwargs_with_integration_header(client_kwargs),
+                )
                 raw = await sdk.search.create(query=query, **kwargs)
 
             raw_results: list[SearchAPIResult] = getattr(raw, "results", None) or []
@@ -235,7 +246,11 @@ class PerplexitySearchToolkit(Toolkit):
                 **kwargs,
             }
             async with httpx.AsyncClient(proxy=proxy, verify=verify, timeout=timeout) as http:
-                sdk = AsyncPerplexity(api_key=api_key, http_client=http, **client_kwargs)
+                sdk = AsyncPerplexity(
+                    api_key=api_key,
+                    http_client=http,
+                    **_client_kwargs_with_integration_header(client_kwargs),
+                )
                 raw = await sdk.chat.completions.create(**create_kwargs)
 
             content: str | None = None
