@@ -4,7 +4,7 @@
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Literal, TypeAlias
+from typing import Annotated, Any, Final, Literal, TypeAlias
 
 import httpx
 from perplexity import AsyncPerplexity
@@ -31,7 +31,7 @@ SearchMode: TypeAlias = Literal["web", "academic", "sec"]
 SearchContextSize: TypeAlias = Literal["low", "medium", "high"]
 RecencyFilter: TypeAlias = Literal["hour", "day", "week", "month", "year"]
 
-_PPLX_INTEGRATION_HEADER = "X-Pplx-Integration"
+_PPLX_INTEGRATION_HEADERS: Final[dict[str, str]] = {"X-Pplx-Integration": f"ag2/{__version__}"}
 
 
 @dataclass(slots=True)
@@ -104,6 +104,10 @@ class PerplexitySearchToolkit(Toolkit):
         self._proxy = proxy
         self._verify = verify
         self._timeout = timeout
+        client_kwargs["default_headers"] = {
+            **(client_kwargs.get("default_headers") or {}),
+            **_PPLX_INTEGRATION_HEADERS,
+        }
         self._client_kwargs = client_kwargs
 
         super().__init__(
@@ -112,11 +116,6 @@ class PerplexitySearchToolkit(Toolkit):
             name="perplexity_toolkit",
             middleware=middleware,
         )
-
-    def _client_kwargs_with_integration_header(self) -> dict[str, Any]:
-        default_headers = dict(self._client_kwargs.get("default_headers") or {})
-        default_headers[_PPLX_INTEGRATION_HEADER] = f"ag2/{__version__}"
-        return {**self._client_kwargs, "default_headers": default_headers}
 
     def search(
         self,
@@ -139,7 +138,7 @@ class PerplexitySearchToolkit(Toolkit):
         proxy = self._proxy
         verify = self._verify
         timeout = self._timeout
-        client_kwargs = self._client_kwargs_with_integration_header()
+        client_kwargs = self._client_kwargs
 
         @tool(name=name, description=description, middleware=middleware)
         async def perplexity_search(
@@ -205,7 +204,7 @@ class PerplexitySearchToolkit(Toolkit):
         proxy = self._proxy
         verify = self._verify
         timeout = self._timeout
-        client_kwargs = self._client_kwargs_with_integration_header()
+        client_kwargs = self._client_kwargs
 
         @tool(name=name, description=description, middleware=middleware)
         async def perplexity_answer(
