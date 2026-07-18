@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from typing import overload
+from typing import Literal, overload
 
 from fast_depends import Provider
 from typing_extensions import TypeVar as TypeVar313
@@ -24,14 +24,22 @@ _DEFAULT_PROMPT_TEMPLATE = (
     "Do not include any text, markdown formatting, or explanation outside the JSON object."
 )
 
+InjectTo = Literal["system", "last_message"]
+
 
 class PromptedSchema(ResponseProto[T]):
     """Response schema that uses prompt-based instructions instead of native API structured output.
 
     Use this for models or providers that do not support built-in structured output
-    (e.g., ``response_format``). The JSON schema is injected into the system prompt,
+    (e.g., ``response_format``). The JSON schema is injected into the prompt,
     instructing the model to return valid JSON matching the schema. Validation is
     still performed using the inner schema's ``validate`` method.
+
+    By default the schema instruction is added to the system prompt. Pass
+    ``inject_to="last_message"`` (or use :class:`LastMessagePromptedSchema`) to
+    append it to the last user message instead — useful when the model pays more
+    attention to the end of the conversation, or when a system prompt is not
+    supported.
 
     Examples:
         Using with a type directly::
@@ -42,6 +50,103 @@ class PromptedSchema(ResponseProto[T]):
 
             schema = ResponseSchema(int | str)
             agent = Agent(..., response_schema=PromptedSchema(schema))
+
+        Injecting into the last user message::
+
+            agent = Agent(..., response_schema=LastMessagePromptedSchema(MyModel))
+    """
+
+    @overload
+    def __init__(
+        self,
+        inner: ResponseProto[T],
+        /,
+        *,
+        prompt_template: str | None = None,
+        inject_to: InjectTo = "system",
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        inner: type[T],
+        /,
+        *,
+        prompt_template: str | None = None,
+        inject_to: InjectTo = "system",
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        inner: ClassInfo,
+        /,
+        *,
+        prompt_template: str | None = None,
+        inject_to: InjectTo = "system",
+    ) -> None: ...
+
+    def __init__(
+        self,
+        inner: "ResponseProto[T] | type[T] | ClassInfo",
+        /,
+        *,
+        prompt_template: str | None = None,
+        inject_to: InjectTo = "system",
+    ) -> None:
+        self._inner = ResponseSchema[T].ensure_schema(inner)
+
+        self.name = self._inner.name
+        self.description = self._inner.description
+
+        self._json_schema = self._inner.json_schema
+        self._prompt_template = prompt_template or _DEFAULT_PROMPT_TEMPLATE
+        self._inject_to = inject_to
+
+        instruction: str | None
+        if self._json_schema:
+            schema_str = json.dumps(self._json_schema, indent=2)
+            instruction = self._prompt_template.format(schema=schema_str)
+        else:
+            instruction = None
+
+        # Set public property to None to avoid native JSON schema validation
+        self.json_schema = None
+
+        if inject_to == "last_message":
+            self.system_prompt = None
+            self.last_message_prompt = instruction
+        else:
+            self.system_prompt = instruction
+            self.last_message_prompt = None
+
+    async def validate(
+        self,
+        response: str,
+        context: "Context",
+        provider: "Provider | None" = None,
+    ) -> T:
+        return await self._inner.validate(response, context, provider)
+
+
+class LastMessagePromptedSchema(PromptedSchema[T]):
+    """:class:`PromptedSchema` that injects the schema instruction into the last user message.
+
+    This is a convenience subclass equivalent to
+    ``PromptedSchema(inner, inject_to="last_message")``. Some models attend more
+    strongly to the end of the conversation, and some endpoints have no system
+    prompt slot; appending the JSON-schema instruction to the final user turn
+    keeps it adjacent to the request the model must answer.
+
+    Examples:
+        Using with a type directly::
+
+            agent = Agent(..., response_schema=LastMessagePromptedSchema(MyModel))
+
+        Wrapping an existing ResponseProto::
+
+            schema = ResponseSchema(int | str)
+            agent = Agent(..., response_schema=LastMessagePromptedSchema(schema))
     """
 
     @overload
@@ -78,26 +183,4 @@ class PromptedSchema(ResponseProto[T]):
         *,
         prompt_template: str | None = None,
     ) -> None:
-        self._inner = ResponseSchema[T].ensure_schema(inner)
-
-        self.name = self._inner.name
-        self.description = self._inner.description
-
-        self._json_schema = self._inner.json_schema
-        self._prompt_template = prompt_template or _DEFAULT_PROMPT_TEMPLATE
-        if self._json_schema:
-            schema_str = json.dumps(self._json_schema, indent=2)
-            self.system_prompt = self._prompt_template.format(schema=schema_str)
-        else:
-            self.system_prompt = None
-
-        # Set public property to None to avoid native JSON schema validation
-        self.json_schema = None
-
-    async def validate(
-        self,
-        response: str,
-        context: "Context",
-        provider: "Provider | None" = None,
-    ) -> T:
-        return await self._inner.validate(response, context, provider)
+        super().__init__(inner, prompt_template=prompt_template, inject_to="last_message")

@@ -19,7 +19,7 @@ from .files import FilesAPI
 from .middleware import Middleware
 from .observers import observer
 from .plugin import Plugin
-from .response import PromptedSchema, ResponseSchema, response_schema
+from .response import LastMessagePromptedSchema, PromptedSchema, ResponseSchema, response_schema
 from .spec import AgentSpec
 from .stream import MemoryStream
 from .task import Task, TaskInject, TaskSpec
@@ -41,6 +41,7 @@ __all__ = (
     "ImageInput",
     "Inject",
     "KnowledgeConfig",
+    "LastMessagePromptedSchema",
     "MemoryStream",
     "Middleware",
     "Plugin",

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from ag2 import PromptedSchema, ResponseSchema, response_schema
+from ag2 import LastMessagePromptedSchema, PromptedSchema, ResponseSchema, response_schema
 from ag2.response import ResponseProto
 
 
@@ -186,3 +186,127 @@ class TestValidation:
 
         with pytest.raises(Exception):
             await schema.validate("not a number", context)
+
+
+class TestInjectToLastMessage:
+    def test_prompted_schema_with_inject_to_last_message(self) -> None:
+        schema = PromptedSchema(int, inject_to="last_message")
+
+        assert schema.system_prompt is None
+        assert schema.last_message_prompt is not None
+        assert '"type": "integer"' in schema.last_message_prompt
+        assert schema.json_schema is None
+
+    def test_prompted_schema_default_injects_to_system(self) -> None:
+        schema = PromptedSchema(int)
+
+        assert schema.system_prompt is not None
+        assert schema.last_message_prompt is None
+
+    def test_last_message_prompted_schema_from_type(self) -> None:
+        schema = LastMessagePromptedSchema(int)
+
+        assert schema.system_prompt is None
+        assert schema.last_message_prompt is not None
+        assert '"type": "integer"' in schema.last_message_prompt
+        assert schema.json_schema is None
+
+    def test_last_message_prompted_schema_from_dataclass(self) -> None:
+        @dataclass
+        class User:
+            name: str
+            age: int
+
+        schema = LastMessagePromptedSchema(User)
+
+        assert schema.name == "User"
+        assert schema.system_prompt is None
+        assert '"name"' in schema.last_message_prompt
+        assert '"age"' in schema.last_message_prompt
+
+    def test_last_message_prompted_schema_from_pydantic_model(self) -> None:
+        class Item(BaseModel):
+            title: str
+            price: float
+
+        schema = LastMessagePromptedSchema(Item)
+
+        assert schema.name == "Item"
+        assert schema.system_prompt is None
+        assert '"title"' in schema.last_message_prompt
+        assert '"price"' in schema.last_message_prompt
+
+    def test_last_message_prompted_schema_wraps_response_schema(self) -> None:
+        inner = ResponseSchema(int, name="MyInt")
+        schema = LastMessagePromptedSchema(inner)
+
+        assert schema.name == "MyInt"
+        assert schema.system_prompt is None
+        assert '"type": "integer"' in schema.last_message_prompt
+
+    def test_last_message_prompted_schema_custom_template(self) -> None:
+        template = "Return JSON: ```{schema}```"
+        schema = LastMessagePromptedSchema(int, prompt_template=template)
+
+        assert schema.last_message_prompt is not None
+        assert schema.last_message_prompt.startswith("Return JSON: ```")
+        assert schema.system_prompt is None
+
+    def test_last_message_prompted_schema_no_inner_schema(self) -> None:
+        class NoSchemaProto(ResponseProto[str]):
+            def __init__(self) -> None:
+                self.name = "test"
+                self.description = None
+                self.json_schema = None
+
+            async def validate(self, response, context, provider=None):
+                return response
+
+        schema = LastMessagePromptedSchema(NoSchemaProto())
+        assert schema.last_message_prompt is None
+        assert schema.system_prompt is None
+
+    def test_is_subclass_of_prompted_schema(self) -> None:
+        schema = LastMessagePromptedSchema(int)
+        assert isinstance(schema, PromptedSchema)
+
+
+@pytest.mark.asyncio
+class TestLastMessageValidation:
+    async def test_validates_primitive(self) -> None:
+        schema = LastMessagePromptedSchema(int)
+        context = AsyncMock()
+
+        result = await schema.validate('{"data": 42}', context)
+        assert result == 42
+
+    async def test_validates_dataclass(self) -> None:
+        @dataclass
+        class Point:
+            x: float
+            y: float
+
+        schema = LastMessagePromptedSchema(Point)
+        context = AsyncMock()
+
+        result = await schema.validate('{"x": 1.5, "y": 2.5}', context)
+        assert result == Point(x=1.5, y=2.5)
+
+    async def test_delegates_to_inner_response_schema(self) -> None:
+        inner = ResponseSchema(int, name="MyInt")
+        schema = LastMessagePromptedSchema(inner)
+        context = AsyncMock()
+
+        result = await schema.validate('{"data": 42}', context)
+        assert result == 42
+
+    async def test_delegates_to_inner_callable_schema(self) -> None:
+        @response_schema
+        def double(content: str) -> int:
+            return int(content) * 2
+
+        schema = LastMessagePromptedSchema(double)
+        context = AsyncMock()
+
+        result = await schema.validate("21", context)
+        assert result == 42

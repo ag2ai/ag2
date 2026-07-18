@@ -45,6 +45,7 @@ from .events import (
     Input,
     ModelRequest,
     ModelResponse,
+    TextInput,
     ToolCallsEvent,
     ToolResultsEvent,
     UsageEvent,
@@ -1311,6 +1312,8 @@ class Agent(PluginTarget, Generic[TResult]):
                     await context.send(DrainedModelRequest(merged.parts))
 
                 messages = await context.stream.history.get_events()
+                if final_schema and final_schema.last_message_prompt:
+                    messages = _inject_last_message_prompt(messages, final_schema.last_message_prompt)
                 result = await llm_call(messages, context)
                 # Emit usage at the point it is spent, decoupled from the
                 # response, so token accounting never depends on a response
@@ -1553,6 +1556,32 @@ def _drain_pending(context: Context) -> ModelRequest | None:
     parts: list[Input] = [part for request in queue for part in request.parts]
     queue.clear()
     return ModelRequest(parts)
+
+
+def _inject_last_message_prompt(
+    messages: list[BaseEvent],
+    instruction: str,
+) -> list[BaseEvent]:
+    """Return a copy of ``messages`` with ``instruction`` appended to the last user turn.
+
+    Finds the last ``ModelRequest`` and appends a ``TextInput`` carrying
+    ``instruction`` to its ``parts``. The original events are not mutated —
+    only the returned list and the replaced ``ModelRequest`` copy are new.
+    Returns the original list unchanged when there is no ``ModelRequest``.
+    """
+    last_request_idx = -1
+    original: ModelRequest | None = None
+    for i in range(len(messages) - 1, -1, -1):
+        msg = messages[i]
+        if isinstance(msg, ModelRequest):
+            last_request_idx = i
+            original = msg
+            break
+    if original is None:
+        return messages
+
+    augmented = ModelRequest([*original.parts, TextInput(instruction)])
+    return [*messages[:last_request_idx], augmented, *messages[last_request_idx + 1 :]]
 
 
 @asynccontextmanager
