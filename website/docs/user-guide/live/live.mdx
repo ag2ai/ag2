@@ -9,18 +9,20 @@ sidebarTitle: "Overview"
 
 | Pattern | Class | Latency | Use when… |
 |---|---|---|---|
-| Turn-by-turn voice | `Agent` + `OpenAITranscriber` + `TTSObserver` | ~1–3 s per turn | You already have a text agent and want to add a voice front-end; you need tool execution, middleware, structured output, or any other text-agent feature. |
+| Turn-by-turn voice | `Agent` + a transcriber + a TTS observer | ~1–3 s per turn | You already have a text agent and want to add a voice front-end; you need tool execution, middleware, structured output, or any other text-agent feature. |
 | Realtime full-duplex | `LiveAgent` + `OpenAIRealTimeConfig` / `GeminiRealTimeConfig` | <500 ms | You want barge-in, interruption, semantic VAD, or a phone-call-like UX. |
+
+For the turn-by-turn pattern, OpenAI and ElevenLabs are both available and support different halves incrementally — OpenAI streams transcription, ElevenLabs streams synthesis. See [Provider support](/docs/user-guide/live/stt_tts) for the full matrix. Gemini is realtime-only.
 
 !!! note
     Both patterns share the same audio I/O primitives — [`SoundDevicePlayer`](/docs/user-guide/live/stt_tts) and [`SoundDeviceRecorder`](/docs/user-guide/live/stt_tts) — and the same event stream. You can mix observers (TTS, logging, persistence) across both.
 
 ## Installation
 
-The audio I/O classes depend on `sounddevice` and `numpy`; the OpenAI and Gemini integrations need their respective SDKs.
+The audio I/O classes depend on `sounddevice` and `numpy`; the OpenAI, Gemini, and ElevenLabs integrations need their respective SDKs.
 
 ```bash
-pip install "ag2[openai,gemini] sounddevice[numpy]"
+pip install "ag2[openai,gemini,elevenlabs] sounddevice[numpy]"
 ```
 
 !!! warning

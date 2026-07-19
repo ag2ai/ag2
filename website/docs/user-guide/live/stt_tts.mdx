@@ -5,6 +5,27 @@ sidebarTitle: "STT & TTS"
 
 The STT → Agent → TTS flow turns any existing `Agent` into a voice agent without changing the agent itself. Speech-to-text is added as a **pipeline wrapper**; text-to-speech is added as an **observer** that listens to the model's streamed message chunks.
 
+## Provider support
+
+Both halves are protocol-based, so providers are interchangeable — but they do not all support incremental delivery, and the two current providers are complementary opposites.
+
+| Provider | STT | Streaming STT | TTS | Streaming TTS |
+|---|---|---|---|---|
+| OpenAI | `OpenAITranscriber`, `OpenAITranslationTranscriber` | **Yes** — emits `TranscriptionChunkEvent` deltas | `OpenAITTSConfig` | No — one buffered clip |
+| ElevenLabs | `ElevenLabsTranscriber` (Scribe) | No — whole-file upload | `ElevenLabsTTSConfig`, `ElevenLabsStreamingTTSConfig` | **Yes** — via `ElevenLabsStreamingTTSConfig` |
+| Gemini | — | — | — | — |
+
+!!! note
+    **ElevenLabs is currently the only streaming TTS provider**, and **OpenAI is the only streaming STT provider**. Gemini has no standalone STT/TTS config in `ag2.live` — it is realtime-only, via `GeminiRealTimeConfig` and [LiveAgent](/docs/user-guide/live/live_agent).
+
+Mixing providers across the two halves is supported and often the best setup: transcribe with OpenAI for live captions, speak with ElevenLabs for low time-to-first-byte.
+
+ElevenLabs classes need the optional dependency and `ELEVENLABS_API_KEY` in the environment:
+
+```bash
+pip install "ag2[elevenlabs] sounddevice[numpy]"
+```
+
 ## Audio I/O primitives
 
 `SoundDeviceRecorder` captures microphone input and `SoundDevicePlayer` plays synthesized speech. Both are thin wrappers around the [`sounddevice`](https://python-sounddevice.readthedocs.io/){.external-link target="_blank"} library and share the same event stream.
@@ -71,6 +92,23 @@ from ag2.live import OpenAITranslationTranscriber
 pipeline = OpenAITranslationTranscriber("whisper-1").pipe(agent)
 ```
 
+### ElevenLabs (Scribe)
+
+`ElevenLabsTranscriber` implements the same `STTConfig` protocol, so it drops into the same `.pipe(agent)` call:
+
+```python linenums="1"
+from ag2.live import ElevenLabsTranscriber
+
+pipeline = ElevenLabsTranscriber("scribe_v2").pipe(agent)
+```
+
+`language_code` is only sent when you set it — leave it unset and Scribe auto-detects. `diarize=True` asks for speaker labels.
+
+!!! warning "Scribe is whole-file, so there are no partials"
+    The endpoint takes a **complete** recording, so there is nothing to emit until it answers. `ElevenLabsTranscriber` only ever sends `TranscriptionCompletedEvent` — never `TranscriptionChunkEvent`. Live-caption code written against the OpenAI transcriber's deltas will go quiet if you swap in Scribe.
+
+    It also blocks the whole turn: `VoicePipeline.ask` awaits `transcribe(...)` before the agent starts, so nothing can be spoken during the upload and transcription. On a short turn this often dominates the latency — see [Where the latency goes](#where-the-latency-goes).
+
 ## Text-to-Speech
 
 `TTSObserver` is an observer that listens to `ModelMessageChunk` events as the agent streams its response, batches them into sentence-sized chunks, calls a TTS provider, and emits `SynthesizedAudioEvent`s onto the stream. A `SoundDevicePlayer` attached to the same stream then plays them.
@@ -104,8 +142,10 @@ if __name__ == "__main__":
 
 ### Voice and speed
 
-`OpenAITTSConfig` accepts the standard OpenAI TTS parameters:
+Any config implementing the `TTSConfig` protocol works with `TTSObserver`:
 
+<Tabs>
+  <Tab title="OpenAI">
 ```python linenums="1"
 from ag2.live import OpenAITTSConfig
 
@@ -115,6 +155,105 @@ config = OpenAITTSConfig(
     speed=1.1,
 )
 ```
+  </Tab>
+
+  <Tab title="ElevenLabs">
+```python linenums="1"
+from ag2.live import ElevenLabsTTSConfig
+
+config = ElevenLabsTTSConfig(
+    "eleven_v3",
+    voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel
+    output_format="pcm_24000",  # matches SoundDevicePlayer
+)
+```
+  </Tab>
+</Tabs>
+
+`ElevenLabsTTSConfig` is the buffered mode — required by `eleven_v3`, which cannot stream. For the flash and turbo families, prefer streaming (below).
+
+!!! note
+    `output_format` defaults to `pcm_24000`, matching what `SoundDevicePlayer` and `SoundDeviceRecorder` expect. If you change it, change the player to match.
+
+## Streaming TTS
+
+`TTSObserver` still waits for each *sentence* to be fully synthesized before any of it plays. Streaming TTS removes that wait: audio chunks are forwarded as they are generated, so playback starts at time-to-first-byte.
+
+!!! note
+    **ElevenLabs is currently the only provider with a streaming TTS config.** `OpenAITTSConfig` performs a single buffered read and has no streaming equivalent.
+
+Streaming needs both a different config *and* a different observer:
+
+```python linenums="1" hl_lines="6 12"
+import asyncio
+
+from ag2 import Agent, config
+from ag2.live import ElevenLabsStreamingTTSConfig, ElevenLabsStreamingTTSObserver, SoundDevicePlayer
+
+tts = ElevenLabsStreamingTTSConfig("eleven_flash_v2_5", voice_id="21m00Tcm4TlvDq8ikWAM")
+
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful voice assistant. Keep answers to a few sentences.",
+    config=config.OpenAIConfig("gpt-5-mini", streaming=True),
+    observers=[ElevenLabsStreamingTTSObserver(tts)],
+)
+
+async def main() -> None:
+    async with SoundDevicePlayer() as player:
+        await agent.ask("Hello, agent!", stream=player.stream)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+!!! warning "Pair the streaming config with the streaming observer"
+    `ElevenLabsStreamingTTSConfig` also implements `synthesize(...)`, so it satisfies the `TTSConfig` protocol and *will* work with the plain `TTSObserver` — but `synthesize` is implemented by draining the whole stream into one buffer, which throws away the entire latency advantage. Use `ElevenLabsStreamingTTSObserver` with `ElevenLabsStreamingTTSConfig`, and `TTSObserver` with `ElevenLabsTTSConfig` / `OpenAITTSConfig`.
+
+### Streaming directly to the speaker
+
+`ElevenLabsStreamingTTSConfig.stream(...)` is usable on its own, outside any agent, when you just want to speak a known string:
+
+```python linenums="1" hl_lines="7-9"
+import asyncio
+
+from ag2.live import ElevenLabsStreamingTTSConfig, SoundDevicePlayer
+
+async def main() -> None:
+    tts = ElevenLabsStreamingTTSConfig("eleven_flash_v2_5")
+    async with SoundDevicePlayer() as player:
+        async for chunk in tts.stream("Audio arrives as it is generated."):
+            await player.play(chunk)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+`player.play(...)` only enqueues — a background worker thread writes to the output device, so this loop is never blocked by playback.
+
+### Sentence batching
+
+Both observers batch streamed text before synthesizing, since a per-token request would be slow and expensive. `min_chars` (default `60`) is the smallest amount of text worth a request; below it the buffer keeps accumulating even past a sentence boundary.
+
+```python linenums="1"
+observers=[ElevenLabsStreamingTTSObserver(tts, min_chars=40)]
+```
+
+Lowering it starts the first sentence sooner, at the cost of more requests and more granular sentences.
+
+## Where the latency goes
+
+Streaming TTS removes one source of delay, not all of them. For a single turn, in order:
+
+| Stage | Cost | Streaming TTS helps? |
+|---|---|---|
+| Transcription | With Scribe, the whole clip is uploaded and transcribed before the agent starts | No |
+| Model time-to-first-token | Provider-dependent; large on reasoning models | No |
+| Sentence buffer fill | Until `min_chars` **and** a sentence boundary is reached | No — lower `min_chars` instead |
+| Synthesis | Time-to-first-byte vs. waiting for the full clip | **Yes** — this is the win |
+
+!!! note
+    Synthesis is awaited inline in the observer, which runs inside the model's token loop. While one sentence is being synthesized the next tokens are not being consumed, so a long reply can still develop small gaps between sentences even in streaming mode.
 
 ## Combining STT and TTS
 
@@ -165,6 +304,14 @@ if __name__ == "__main__":
 
 !!! tip
     `player.join()` blocks the main task until the synthesized audio queue has drained. Use it between turns when you want the assistant to finish speaking before the next recording starts — otherwise the recorder will capture the tail of the assistant's voice.
+
+## Examples
+
+- `examples/stt_tts.py/stt_tts.py` — the OpenAI round-trip
+- `examples/stt_tts.py/elevenlabs_stt_tts_streaming.py` — streaming TTS, prints time-to-first-byte
+- `examples/stt_tts.py/elevenlabs_stt_tts_sync.py` — buffered TTS with `eleven_v3`
+
+Run the last two back to back to hear the difference on the first sentence.
 
 ## What's next
 
