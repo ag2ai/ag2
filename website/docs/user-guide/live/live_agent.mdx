@@ -3,7 +3,9 @@ title: "LiveAgent — Realtime Voice Sessions"
 sidebarTitle: "LiveAgent"
 ---
 
-`LiveAgent` is a full-duplex voice agent backed by a provider's realtime API. Unlike the [turn-by-turn STT/TTS pipeline](/docs/user-guide/live/stt_tts), it opens a single bidirectional session for the entire conversation — audio flows in and out continuously, with built-in voice activity detection and barge-in.
+`LiveAgent` is a full-duplex voice agent. Unlike the [turn-by-turn STT/TTS pipeline](/docs/user-guide/live/stt_tts), it opens a single session for the entire conversation — audio flows in and out continuously, with voice activity detection and barge-in.
+
+It holds a `RealtimeConfig`, which comes in two flavors: a provider's native **speech-to-speech** API (OpenAI, Gemini), or [`CascadeConfig`](#cascadeconfig-a-cascade-that-looks-realtime), which wires a separate STT, LLM, and TTS together behind the same interface. `LiveAgent` drives both identically, so the choice is one line of config.
 
 ## Quick start
 
@@ -120,6 +122,54 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Keeping the session, swapping the voice
+
+Because the provider is no longer speaking, you are free to synthesize the reply yourself with any TTS. Attach a [`TTSObserver`](/docs/user-guide/live/stt_tts): it listens to the `ModelMessageChunk`s the session emits and turns them into `SynthesizedAudioEvent`s, which the player picks up as usual.
+
+```python linenums="1" hl_lines="17 19-22"
+import asyncio
+
+from ag2.live import (
+    ElevenLabsStreamingTTSConfig,
+    LiveAgent,
+    SoundDevicePlayer,
+    SoundDeviceRecorder,
+    TTSObserver,
+    openai,
+)
+
+agent = LiveAgent(
+    name="assistant",
+    prompt="You are a helpful voice assistant.",
+    config=openai.RealTimeConfig(
+        "gpt-realtime-2",
+        output=openai.TextOutput(),
+    ),
+    observers=[
+        # any TTS provider — the realtime model is not producing audio
+        TTSObserver(ElevenLabsStreamingTTSConfig("eleven_flash_v2_5")),
+    ],
+)
+
+async def main() -> None:
+    async with (
+        agent.run() as context,
+        SoundDevicePlayer(context=context),
+        SoundDeviceRecorder(context=context),
+    ):
+        await asyncio.Future()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+This buys you the realtime session's server-side turn detection while sourcing the voice elsewhere — the STT and LLM halves stay with the provider, only the TTS half moves. If you want *all three* halves to be yours, use [`CascadeConfig`](#cascadeconfig-a-cascade-that-looks-realtime) below.
+
+!!! warning "Do not attach a `TTSObserver` to a session that already speaks"
+    `TextOutput()` is what stops the provider generating audio. Without it, the session emits **both** `SynthesizedAudioEvent` (its own voice) and `ModelMessageChunk` (the transcript of that voice) — so a `TTSObserver` would synthesize a *second* voice from the transcript and the player would play both at once. Two overlapping voices, doubled TTS spend.
+
+    The same applies to `CascadeConfig`, which already speaks from inside the session. `TTSObserver` belongs with `TextOutput()`, or with a plain `Agent` — never with a config that produces audio of its own.
+
 ## Tools in a realtime session
 
 `LiveAgent` supports the same `@agent.tool` decorator as a regular `Agent`. Tool calls are routed through AG2's normal tool executor, and results are sent back to the provider's realtime session automatically.
@@ -161,7 +211,7 @@ if __name__ == "__main__":
 
 ## Providers
 
-`LiveAgent` is provider-neutral — it accepts any `RealtimeConfig`. AG2 ships with two implementations.
+`LiveAgent` is provider-neutral — it accepts any `RealtimeConfig`. AG2 ships with two native speech-to-speech implementations, plus [`CascadeConfig`](#cascadeconfig-a-cascade-that-looks-realtime) for mixing providers.
 
 <Tabs>
   <Tab title="OpenAI">
@@ -246,6 +296,125 @@ if __name__ == "__main__":
   </Tab>
 </Tabs>
 
+## CascadeConfig: a cascade that looks realtime
+
+The configs above are **speech-to-speech**: one provider owns transcription, the model, and the voice behind a single socket. `CascadeConfig` is the alternative — three separate providers wired together so that, from `LiveAgent`'s point of view, they behave like one realtime session.
+
+It implements the same `RealtimeConfig` protocol, so it is a drop-in: same `agent.run()`, same events, and `SoundDevicePlayer` / `SoundDeviceRecorder` need no changes.
+
+```python linenums="1" hl_lines="16-20"
+import asyncio
+
+from ag2 import config
+from ag2.live import (
+    CascadeConfig,
+    ElevenLabsStreamingTTSConfig,
+    LiveAgent,
+    OpenAITranscriber,
+    SoundDevicePlayer,
+    SoundDeviceRecorder,
+)
+
+agent = LiveAgent(
+    "assistant",
+    prompt="You are a voice assistant. Answer in one or two short sentences.",
+    config=CascadeConfig(
+        stt=OpenAITranscriber("gpt-4o-mini-transcribe"),
+        model=config.OpenAIConfig("gpt-5-mini", streaming=True),
+        tts=ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"),
+    ),
+)
+
+async def main() -> None:
+    async with (
+        agent.run() as context,
+        SoundDevicePlayer(context=context),
+        SoundDeviceRecorder(context=context),
+    ):
+        print("Listening — say something. Ctrl+C to stop.")
+        await asyncio.Future()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Swapping to a native S2S model is a one-line change — `config=OpenAIRealTimeConfig("gpt-realtime")` — with prompt, tools, player, and recorder untouched. That substitutability is the property `CascadeConfig` exists to provide.
+
+### Why use it
+
+| | Native S2S | `CascadeConfig` |
+|---|---|---|
+| Latency | Lowest — one socket, no hops | Higher — three sequential API calls per turn |
+| Provider choice | Whatever the S2S vendor offers | Any STT × any LLM × any TTS |
+| Voice | The vendor's voices | Any TTS voice, including cloned |
+| Model | The vendor's realtime model | Any `ModelConfig` AG2 supports |
+| Turn detection | Server-side VAD | Local, energy-gated (see below) |
+
+Reach for it when the voice or the model matters more than the last few hundred milliseconds — a specific ElevenLabs voice, a model with no realtime endpoint, or a provider mix that no single vendor sells.
+
+### Turn detection
+
+An S2S provider segments the microphone stream server-side. A cascade has no server doing that, so the decision *"the user stopped talking, transcribe now"* is made locally by a `TurnDetector`.
+
+The default `SilenceTurnDetector` is energy-gated: root-mean-square amplitude against a fixed threshold, no model. That is enough for a close-talking mic in a quiet room.
+
+```python linenums="1"
+from ag2.live import CascadeConfig, SilenceTurnDetector
+
+config = CascadeConfig(
+    stt=...,
+    model=...,
+    tts=...,
+    turn_detector=lambda: SilenceTurnDetector(
+        threshold=500.0,     # RMS above this counts as speech
+        silence=0.7,         # seconds of quiet that close a turn
+        min_speech=0.2,      # shorter bursts are discarded, not transcribed
+        prefix_padding=0.3,  # audio kept from just before the trigger
+        max_duration=30.0,   # hard cap on a single turn
+    ),
+)
+```
+
+`turn_detector` takes any callable returning a `TurnDetector`, so a real VAD model can be substituted for noisy input.
+
+!!! tip
+    `prefix_padding` exists because the chunk that crosses the threshold is normally already a few milliseconds into the first word. Without it, turns start clipped. `min_speech` is the opposite guard — a cough or a door slam should not cost an STT round-trip.
+
+### Barge-in and echo
+
+The session is **half-duplex by default**: while the reply is playing, the microphone is ignored.
+
+That default is about echo, not simplicity. On speakers, the mic hears the reply; a cascade that listens to itself will interrupt its own sentence and then answer its own words. There is no acoustic echo cancellation in `ag2.live`.
+
+```python linenums="1"
+config = CascadeConfig(stt=..., model=..., tts=..., barge_in=True)
+```
+
+With `barge_in=True`, speech detected during playback cancels the in-flight turn and emits `AudioInterruptedEvent`, which drops any audio still queued in the player.
+
+!!! warning
+    **Use headphones with `barge_in=True`.** On speakers the assistant's own voice trips the detector and interrupts itself. The turn detector is energy-gated with no speaker-voice model, so it cannot tell your voice from its own.
+
+### Streaming TTS
+
+If the TTS config exposes a `stream` method — like `ElevenLabsStreamingTTSConfig` — the session detects it and forwards audio chunk by chunk, so playback starts at time-to-first-byte instead of after the last sample of the sentence. Plain configs are synthesized whole. No flag to set; it is chosen from what the config offers.
+
+Either way the reply is spoken sentence by sentence as the model produces it. `min_chars` (default `60`) sets the smallest amount of text worth a TTS request:
+
+```python linenums="1"
+config = CascadeConfig(stt=..., model=..., tts=..., min_chars=40)
+```
+
+Lowering it starts the first sentence sooner, at the cost of more requests and choppier prosody.
+
+### Tools
+
+Tools work exactly as they do on any other `RealtimeConfig` — declare them on the `LiveAgent` and the cascade runs the loop internally, feeding results back to the model before it speaks.
+
+A cascade turn holds the microphone, so the tool loop is capped at 10 round-trips per turn; a model stuck in a loop would otherwise hold the floor indefinitely. Exceeding the cap raises rather than hanging.
+
+!!! note
+    Raw audio is stripped from the conversation history before each model call. A live session logs every microphone and synthesized chunk — ten-plus events per second, each carrying PCM — and replaying that on every turn would make a long conversation pay for the whole recording each time. Transcripts carry the meaning; the bytes are for the recorder and the player.
 
 ## LiveAgent vs Agent
 
@@ -261,7 +430,14 @@ if __name__ == "__main__":
 
 If you need both — for example, a realtime voice front-end that hands off to a tasking agent — drive the handoff through a tool on the `LiveAgent` that delegates to a separate `Agent` using `Agent.as_tool()`.
 
+## Examples
+
+- `examples/live_playground/live_to_text_and_voice.py` — native S2S, audio in and out
+- `examples/live_playground/live_to_text_only.py` — `TextOutput()`, transcript only
+- `examples/live_playground/cascade_live_agent.py` — `CascadeConfig` with a tool, and the one-line swap to S2S
+- `examples/live_playground/live_tools_execution.py` — tool calls in a realtime session
+
 ## What's next
 
-- **[STT & TTS](/docs/user-guide/live/stt_tts)** — the lower-latency turn-by-turn alternative.
+- **[STT & TTS](/docs/user-guide/live/stt_tts)** — the turn-by-turn alternative, and the `TTSObserver` used above.
 - **[Tools](/docs/user-guide/tools/tools)** — tool authoring, middleware, and approval flows that all work inside a `LiveAgent`.

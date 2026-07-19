@@ -11,7 +11,7 @@ Supports interruptions without any VAD models - so literally any input can inter
 Supports modular construction of the session - TTS, LLM and STT can be three different providers.
 Needs ELEVENLABS_API_KEY and OPENAI_API_KEY.
 
-    python examples/stt_tts.py/cascade_live_agent.py
+    python examples/live_playground/cascade_live_agent.py
 """
 
 import asyncio

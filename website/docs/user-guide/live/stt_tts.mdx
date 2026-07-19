@@ -16,6 +16,9 @@ The STT → Agent → TTS flow turns any existing `Agent` into a voice agent wit
 
 Mixing providers across the two halves is supported and often the best setup: transcribe with OpenAI for live captions, speak with ElevenLabs for low time-to-first-byte.
 
+!!! note
+    The **Audio to Audio** column means a *native* speech-to-speech endpoint. To get continuous, full-duplex audio out of providers that have none — ElevenLabs voices on any LLM, for instance — use [`CascadeConfig`](/docs/user-guide/live/live_agent#cascadeconfig-a-cascade-that-looks-realtime), which presents an STT + LLM + TTS cascade to `LiveAgent` as if it were one realtime session.
+
 ElevenLabs classes need the optional dependency and `ELEVENLABS_API_KEY` in the environment:
 
 ```bash
@@ -131,6 +134,9 @@ if __name__ == "__main__":
 
 !!! warning
     The agent's `config` must be set up for **streaming output** (e.g., `streaming=True`). `TTSObserver` works at the `ModelMessageChunk` granularity — if the model emits a single non-streaming `ModelMessage`, the observer will still synthesize it, but you lose the sentence-level pipelining that keeps latency low.
+
+!!! warning "Never attach it to something that already speaks"
+    `TTSObserver` synthesizes from the model's *text*. A `LiveAgent` running a speech-to-speech config or a `CascadeConfig` already produces its own audio **and** emits the matching transcript — so the observer would speak a second copy over it. Two voices, doubled TTS spend. See [LiveAgent](/docs/user-guide/live/live_agent#keeping-the-session-swapping-the-voice) for the one realtime setup where attaching it is correct.
 
 ### Voice and speed
 
@@ -367,5 +373,5 @@ Run the last two back to back to hear the difference on the first sentence.
 
 ## What's next
 
-- **[LiveAgent](/docs/user-guide/live/live_agent)** — drop the turn-by-turn round-trip in favor of a streaming, full-duplex realtime session.
+- **[LiveAgent](/docs/user-guide/live/live_agent)** — drop the turn-by-turn round-trip in favor of a streaming, full-duplex realtime session. `CascadeConfig` keeps the mix-and-match providers from this page while giving you continuous audio and barge-in.
 - **[Observers](/docs/user-guide/advanced/observers)** — `TTSObserver` is one of many observer patterns; see the harness docs for logging, persistence, and custom observers.

@@ -3,18 +3,23 @@ title: "Voice & Realtime Overview"
 sidebarTitle: "Overview"
 ---
 
-`ag2.live` is the AG2 module for building voice-enabled agents. It covers two complementary patterns:
+`ag2.live` is the AG2 module for building voice-enabled agents. It covers three patterns:
 
-1. **CascadeTurn/Turn-by-Turn/Pipeline** `STT → Agent → TTS` approach built on top of a regular `Agent`
+1. **Turn-by-turn / Pipeline** — an `STT → Agent → TTS` round-trip built on top of a regular `Agent`. One utterance in, one reply out.
 
-2. **Realtime/Speech-to-Speech/S2S** `LiveAgent` approach that streams audio to and from a provider's realtime API.
+2. **Realtime / Speech-to-Speech (S2S)** — a `LiveAgent` streaming audio to and from a provider's realtime API, which owns all three stages.
+
+3. **Cascade** — a `LiveAgent` running `CascadeConfig`: separate STT, LLM, and TTS providers wired to behave like a realtime session.
 
 ## When to use which
 
 | Pattern | Class | Latency | Use when… |
 |---|---|---|---|
-| Turn-by-turn voice | `Agent` + a transcriber + a TTS observer | ~1–3 s per turn | You already have a text agent and want to add a voice front-end; you need tool execution, middleware, structured output, or any other text-agent feature. |
+| Turn-by-turn voice | `Agent` + a transcriber + a TTS observer | ~1–3 s per turn | You already have a text agent and want to add a voice front-end; you need structured output, tasks, or any other text-agent feature. |
 | Realtime full-duplex | `LiveAgent` + `OpenAIRealTimeConfig` / `GeminiRealTimeConfig` | <500 ms | You want barge-in, interruption, semantic VAD, or a phone-call-like UX. |
+| Cascade | `LiveAgent` + `CascadeConfig` | in between | You want the continuous session, but need a specific voice, a specific model, or a provider mix no single S2S vendor sells. |
+
+Patterns 2 and 3 are interchangeable at the config line — `LiveAgent` drives both through the same `RealtimeConfig` protocol, so switching costs nothing but the config.
 
 See [Provider support](/docs/user-guide/live/stt_tts) for the matrix of currently supported providers.
 
@@ -32,7 +37,7 @@ pip install "ag2[openai,gemini,elevenlabs] sounddevice[numpy]"
 !!! warning
     `SoundDevicePlayer` and `SoundDeviceRecorder` require `sounddevice[numpy]` as an **additional** dependency (not optional)
 
-## The two flows at a glance
+## The flows at a glance
 
 <Tabs>
   <Tab title="Turn-by-turn (STT → Agent → TTS)">
@@ -101,9 +106,47 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
   </Tab>
+
+  <Tab title="Cascade (LiveAgent)">
+```python linenums="1"
+import asyncio
+
+from ag2 import config
+from ag2.live import (
+    CascadeConfig,
+    ElevenLabsStreamingTTSConfig,
+    LiveAgent,
+    OpenAITranscriber,
+    SoundDevicePlayer,
+    SoundDeviceRecorder,
+)
+
+agent = LiveAgent(
+    name="assistant",
+    prompt="You are a helpful voice assistant.",
+    config=CascadeConfig(
+        stt=OpenAITranscriber("gpt-4o-mini-transcribe"),
+        model=config.OpenAIConfig("gpt-5-mini", streaming=True),
+        tts=ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"),
+    ),
+)
+
+async def main() -> None:
+    async with (
+        agent.run() as context,
+        SoundDevicePlayer(context=context),
+        SoundDeviceRecorder(context=context),
+    ):
+        print("Starting...")
+        await asyncio.Future()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+  </Tab>
 </Tabs>
 
 ## What's next
 
 - **[STT & TTS](/docs/user-guide/live/stt_tts)** — wrap any `Agent` with speech input and output.
-- **[LiveAgent](/docs/user-guide/live/live_agent)** — realtime, low-latency voice agents with OpenAI or Gemini.
+- **[LiveAgent](/docs/user-guide/live/live_agent)** — realtime voice agents: native speech-to-speech with OpenAI or Gemini, or a `CascadeConfig` mixing providers.
