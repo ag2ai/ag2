@@ -13,8 +13,12 @@ from ag2.observers import CompositeObserver, observer
 
 from .observer import SentenceBuffer
 from .protocols import TTSConfig as TTSConfigProtocol
+from .stt import STTConfig as STTConfigProtocol
+from .stt import VoiceInput, voice_to_wav_buffer
 
-DEFAULT_VOICE_ID = "Rachel"
+DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel
+
+ScribeModelId = Literal["scribe_v2",]
 
 OutputFormat = Literal[
     "pcm_16000",
@@ -34,6 +38,52 @@ StreamingModelId = Literal[
     "eleven_flash_v2_5",
 ]
 SyncOutputModelId = Literal["eleven_v3",]
+
+
+class STTConfig(STTConfigProtocol):
+    """Whole-file transcription via Scribe. Upload the clip, get the text back.
+
+    Synchronous by nature: the endpoint takes a complete recording, so there is
+    nothing to emit until it answers. Unlike OpenAI's transcriber — which
+    streams deltas and sends `TranscriptionChunkEvent` as they arrive — this
+    only ever sends `TranscriptionCompletedEvent`.
+
+    Needs an api key in ELEVENLABS_API_KEY env var.
+    """
+
+    def __init__(
+        self,
+        model_id: "ScribeModelId | str" = "scribe_v2",
+        *,
+        language_code: str | None = None,
+        diarize: bool = False,
+        client: "AsyncElevenLabs | None" = None,
+    ) -> None:
+        self._model_id = model_id
+        self._language_code = language_code
+        self._diarize = diarize
+        self._client = client or AsyncElevenLabs()
+
+    async def transcribe(self, voice: VoiceInput, context: Context) -> str:
+        # `language_code` is only sent when set — the endpoint auto-detects
+        # when it is absent, and an explicit None is not the same thing.
+        extra = {"language_code": self._language_code} if self._language_code else {}
+
+        response = await self._client.speech_to_text.convert(
+            model_id=self._model_id,
+            file=voice_to_wav_buffer(voice),
+            diarize=self._diarize,
+            **extra,
+        )
+
+        # The response is a union; only the single-channel shape carries `text`
+        # directly. Multichannel and webhook jobs would need their own handling.
+        text = getattr(response, "text", None)
+        if not isinstance(text, str):
+            raise TypeError(f"Scribe returned {type(response).__name__}, which carries no transcript text")
+
+        await context.send(events.TranscriptionCompletedEvent(text))
+        return text
 
 
 class TTSConfig(TTSConfigProtocol[bytes]):

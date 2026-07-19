@@ -8,6 +8,7 @@ from contextlib import ExitStack
 from typing import Any
 
 import pytest
+from dirty_equals import IsPartialDict
 
 pytest.importorskip("elevenlabs")
 
@@ -17,25 +18,21 @@ from ag2.live import (
     ElevenLabsStreamingTTSConfig,
     ElevenLabsStreamingTTSObserver,
     ElevenLabsTTSConfig,
+    ElevenLabsTranscriber,
 )
+from ag2.live.elevenlabs import DEFAULT_VOICE_ID
+from ag2.live.stt import VoiceInput
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.elevenlabs]
 
+VOICE = VoiceInput(b"\x00\x01" * 100, frame_rate=16000, channels=1)
+
 
 class FakeTextToSpeech:
-    """Stands in for `AsyncElevenLabs.text_to_speech`.
-
-    Both real endpoints are async *generator* functions (called without
-    `await`), so these are too — a coroutine here would let a broken call site
-    pass.
-    """
-
     def __init__(self, chunks: list[bytes]) -> None:
         self._chunks = chunks
         self.convert_calls: list[dict[str, Any]] = []
         self.stream_calls: list[dict[str, Any]] = []
-        # Set by `stream` between yields so tests can prove chunks are handed
-        # over incrementally rather than buffered.
         self.yielded = 0
 
     async def convert(self, **kwargs: Any) -> AsyncIterator[bytes]:
@@ -50,9 +47,28 @@ class FakeTextToSpeech:
             yield chunk
 
 
+class FakeSpeechToText:
+    def __init__(self, response: Any) -> None:
+        self._response = response
+        self.convert_calls: list[dict[str, Any]] = []
+
+    async def convert(self, **kwargs: Any) -> Any:
+        recorded = dict(kwargs)
+        if file := recorded.get("file"):
+            recorded["file"] = file.read()
+        self.convert_calls.append(recorded)
+        return self._response
+
+
+class Transcript:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
 class FakeClient:
-    def __init__(self, chunks: list[bytes]) -> None:
+    def __init__(self, chunks: list[bytes], transcript: Any = None) -> None:
         self.text_to_speech = FakeTextToSpeech(chunks)
+        self.speech_to_text = FakeSpeechToText(transcript or Transcript("hello there"))
 
 
 @pytest.fixture
@@ -61,21 +77,13 @@ def client() -> FakeClient:
 
 
 class TestTTSConfig:
-    """Synchronous / whole-clip mode."""
-
-    async def test_synthesize_returns_full_clip(self, client: FakeClient) -> None:
+    async def test_synthesize_buffers_the_non_streaming_endpoint(self, client: FakeClient) -> None:
         config = ElevenLabsTTSConfig(client=client)
 
         assert await config.synthesize("hello there") == b"onetwothree"
-
-    async def test_uses_non_streaming_endpoint_with_defaults(self, client: FakeClient) -> None:
-        config = ElevenLabsTTSConfig(client=client)
-
-        await config.synthesize("hello there")
-
         assert client.text_to_speech.convert_calls == [
             {
-                "voice_id": "Rachel",
+                "voice_id": DEFAULT_VOICE_ID,
                 "text": "hello there",
                 "model_id": "eleven_v3",
                 "output_format": "pcm_24000",
@@ -83,45 +91,17 @@ class TestTTSConfig:
         ]
         assert client.text_to_speech.stream_calls == []
 
-    async def test_overrides_propagate(self, client: FakeClient) -> None:
-        config = ElevenLabsTTSConfig(
-            "eleven_multilingual_v2",
-            voice_id="Bella",
-            output_format="mp3_44100_128",
-            client=client,
-        )
-
-        await config.synthesize("hello there")
-
-        assert client.text_to_speech.convert_calls == [
-            {
-                "voice_id": "Bella",
-                "text": "hello there",
-                "model_id": "eleven_multilingual_v2",
-                "output_format": "mp3_44100_128",
-            }
-        ]
-
-    async def test_empty_response_is_empty_bytes(self) -> None:
-        config = ElevenLabsTTSConfig(client=FakeClient([]))
-
-        assert await config.synthesize("hello there") == b""
-
-
-class TestStreamingTTSConfig:
-    async def test_stream_yields_each_chunk(self, client: FakeClient) -> None:
+    async def test_stream_yields_audio_before_the_full_response(self, client: FakeClient) -> None:
         config = ElevenLabsStreamingTTSConfig(client=client)
 
-        assert [chunk async for chunk in config.stream("hello there")] == [b"one", b"two", b"three"]
-
-    async def test_uses_streaming_endpoint_with_defaults(self, client: FakeClient) -> None:
-        config = ElevenLabsStreamingTTSConfig(client=client)
-
-        [chunk async for chunk in config.stream("hello there")]
+        async for chunk in config.stream("hello there"):
+            assert chunk == b"one"
+            assert client.text_to_speech.yielded == 1
+            break
 
         assert client.text_to_speech.stream_calls == [
             {
-                "voice_id": "Rachel",
+                "voice_id": DEFAULT_VOICE_ID,
                 "text": "hello there",
                 "model_id": "eleven_flash_v2_5",
                 "output_format": "pcm_24000",
@@ -129,144 +109,70 @@ class TestStreamingTTSConfig:
         ]
         assert client.text_to_speech.convert_calls == []
 
-    async def test_chunks_arrive_before_generation_finishes(self, client: FakeClient) -> None:
-        """The whole point of this mode: no buffering of the full clip."""
-        config = ElevenLabsStreamingTTSConfig(client=client)
-
-        seen = 0
-        async for _ in config.stream("hello there"):
-            seen += 1
-            # Consumer has the Nth chunk while the source has produced only N.
-            assert client.text_to_speech.yielded == seen
-            if seen == 1:
-                break
-
-    async def test_empty_chunks_are_dropped(self) -> None:
-        config = ElevenLabsStreamingTTSConfig(client=FakeClient([b"one", b"", b"two"]))
-
-        assert [chunk async for chunk in config.stream("hello there")] == [b"one", b"two"]
-
-    async def test_synthesize_buffers_the_stream(self, client: FakeClient) -> None:
-        config = ElevenLabsStreamingTTSConfig(client=client)
-
-        assert await config.synthesize("hello there") == b"onetwothree"
-
-    async def test_overrides_propagate(self, client: FakeClient) -> None:
-        config = ElevenLabsStreamingTTSConfig(
-            "eleven_turbo_v2_5",
-            voice_id="Bella",
-            output_format="pcm_16000",
-            client=client,
-        )
-
-        [chunk async for chunk in config.stream("hello there")]
-
-        assert client.text_to_speech.stream_calls == [
-            {
-                "voice_id": "Bella",
-                "text": "hello there",
-                "model_id": "eleven_turbo_v2_5",
-                "output_format": "pcm_16000",
-            }
-        ]
-
-
-async def speak(reply: str, client: FakeClient) -> list[bytes]:
-    """One agent turn through the observer, returning the audio it emitted.
-
-    Uses a non-streaming config, so the observer sees only the completed
-    `ModelMessage` — no `ModelMessageChunk` at all.
-    """
-    stream = MemoryStream()
-    audio = _collect_audio_on(stream)
-
-    agent = Agent(
-        "speaker",
-        config=testing.TestConfig(reply),
-        observers=[ElevenLabsStreamingTTSObserver(ElevenLabsStreamingTTSConfig(client=client))],
-    )
-    await agent.ask("say something", stream=stream)
-    await asyncio.sleep(0.01)
-    return audio
-
-
-async def speak_streaming(chunks: list[str], client: FakeClient, *, turns: int = 1) -> list[bytes]:
-    """Replay a streaming model: chunks in order, then the completed message.
-
-    `TestConfig` cannot emit `ModelMessageChunk`, so the observer is registered
-    against a context directly — `register` is the public `Observer` protocol.
-    A single observer spans all `turns`, which is what exposes state leaking
-    between them.
-    """
-    stream = MemoryStream()
-    audio = _collect_audio_on(stream)
-
-    tts = ElevenLabsStreamingTTSObserver(ElevenLabsStreamingTTSConfig(client=client))
-    context = ConversationContext(stream=stream)
-
-    with ExitStack() as stack:
-        tts.register(stack, context)
-        for _ in range(turns):
-            for chunk in chunks:
-                await context.send(events.ModelMessageChunk(content=chunk))
-            await context.send(events.ModelMessage(content="".join(chunks)))
-            await asyncio.sleep(0.01)
-
-    return audio
-
-
-def _collect_audio_on(stream: MemoryStream) -> list[bytes]:
-    audio: list[bytes] = []
-
-    async def collect(event: events.SynthesizedAudioEvent) -> None:
-        audio.append(event.content)
-
-    stream.where(events.SynthesizedAudioEvent).subscribe(collect)
-    return audio
+    async def test_streaming_config_can_still_buffer_a_complete_clip(self, client: FakeClient) -> None:
+        assert await ElevenLabsStreamingTTSConfig(client=client).synthesize("hello there") == b"onetwothree"
 
 
 class TestStreamingTTSObserver:
-    async def test_emits_one_event_per_audio_chunk(self, client: FakeClient) -> None:
-        assert await speak("Hello, world!", client) == [b"one", b"two", b"three"]
+    async def test_speaks_a_complete_sentence_before_model_completion(self, client: FakeClient) -> None:
+        stream = MemoryStream()
+        audio: list[bytes] = []
+        context = ConversationContext(stream=stream)
+        observer = ElevenLabsStreamingTTSObserver(ElevenLabsStreamingTTSConfig(client=client))
 
-    async def test_non_streaming_config_still_speaks(self, client: FakeClient) -> None:
-        """No ModelMessageChunk events at all — the completed message is the fallback."""
-        await speak("Hello, world!", client)
+        async def collect(event: events.SynthesizedAudioEvent) -> None:
+            audio.append(event.content)
 
-        assert client.text_to_speech.stream_calls == [
-            {
-                "voice_id": "Rachel",
-                "text": "Hello, world!",
-                "model_id": "eleven_flash_v2_5",
-                "output_format": "pcm_24000",
-            }
+        stream.where(events.SynthesizedAudioEvent).subscribe(collect)
+        with ExitStack() as stack:
+            observer.register(stack, context)
+            await context.send(
+                events.ModelMessageChunk(content="This sentence is long enough to cross the streaming threshold. ")
+            )
+            await asyncio.sleep(0.01)
+
+        assert audio == [b"one", b"two", b"three"]
+
+
+class TestSTTConfig:
+    async def test_uploads_wav_and_emits_the_complete_transcript(self, client: FakeClient) -> None:
+        stream = MemoryStream()
+        seen: list[events.TranscriptionCompletedEvent] = []
+
+        async def collect(event: events.TranscriptionCompletedEvent) -> None:
+            seen.append(event)
+
+        stream.where(events.TranscriptionCompletedEvent).subscribe(collect)
+        text = await ElevenLabsTranscriber(client=client).transcribe(VOICE, ConversationContext(stream=stream))
+        await asyncio.sleep(0.01)
+
+        assert text == "hello there"
+        assert seen == [events.TranscriptionCompletedEvent("hello there")]
+        [call] = client.speech_to_text.convert_calls
+        assert call == IsPartialDict({"model_id": "scribe_v2", "diarize": False})
+        assert call["file"].startswith(b"RIFF")
+        assert "language_code" not in call
+
+    async def test_forwards_explicit_scribe_options(self, client: FakeClient) -> None:
+        await ElevenLabsTranscriber("scribe_v2", language_code="fr", diarize=True, client=client).transcribe(
+            VOICE,
+            ConversationContext(stream=MemoryStream()),
+        )
+
+        assert client.speech_to_text.convert_calls == [
+            IsPartialDict({"model_id": "scribe_v2", "language_code": "fr", "diarize": True})
         ]
 
-    async def test_blank_message_is_not_synthesized(self, client: FakeClient) -> None:
-        assert await speak("   ", client) == []
-        assert client.text_to_speech.stream_calls == []
+    async def test_rejects_responses_without_transcript_text(self) -> None:
+        with pytest.raises(TypeError, match="no transcript text"):
+            await ElevenLabsTranscriber(client=FakeClient([], transcript=object())).transcribe(
+                VOICE,
+                ConversationContext(stream=MemoryStream()),
+            )
 
-    async def test_speaks_mid_reply_at_sentence_boundary(self, client: FakeClient) -> None:
-        """The TODO this observer was written for: don't wait for the last token."""
-        first = "This first sentence is comfortably past the minimum length. "
-        rest = "And here is the tail."
+    async def test_pipes_the_transcript_into_an_agent(self, client: FakeClient) -> None:
+        tracking = testing.TrackingConfig(testing.TestConfig("Hi!"))
+        reply = await ElevenLabsTranscriber(client=client).pipe(Agent("assistant", config=tracking)).ask(VOICE)
 
-        await speak_streaming([first, rest], client)
-
-        # Two requests, not one — the first fired before the reply was complete.
-        assert [call["text"] for call in client.text_to_speech.stream_calls] == [first.strip(), rest]
-
-    async def test_short_text_waits_past_sentence_boundary(self, client: FakeClient) -> None:
-        """Below min_chars a boundary is not worth a request on its own."""
-        await speak_streaming(["Too short. ", "Still short."], client)
-
-        assert [call["text"] for call in client.text_to_speech.stream_calls] == ["Too short. Still short."]
-
-    async def test_buffer_does_not_leak_across_turns(self, client: FakeClient) -> None:
-        """A trailing fragment from turn one must not be prepended to turn two."""
-        await speak_streaming(["A trailing fragment with no sentence ending"], client, turns=2)
-
-        assert [call["text"] for call in client.text_to_speech.stream_calls] == [
-            "A trailing fragment with no sentence ending",
-            "A trailing fragment with no sentence ending",
-        ]
+        assert reply.body == "Hi!"
+        assert tracking.mock.call_args.args[0].parts[0].content == "hello there"

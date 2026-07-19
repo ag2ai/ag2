@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import io
+import wave
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -25,6 +27,19 @@ class VoiceInput:
     content: bytes  # 16-bit PCM bytes
     frame_rate: int
     channels: int
+
+
+def voice_to_wav_buffer(voice: VoiceInput) -> io.BytesIO:
+    """Wrap raw PCM in a WAV container for upload-style STT endpoints."""
+    audio_buffer = io.BytesIO()
+    with wave.open(audio_buffer, "wb") as wav_file:
+        wav_file.setnchannels(voice.channels)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(voice.frame_rate)
+        wav_file.writeframes(voice.content)
+    audio_buffer.seek(0)
+    audio_buffer.name = "speech.wav"
+    return audio_buffer
 
 
 class STTConfig(ABC):
@@ -53,10 +68,8 @@ class VoicePipeline:
         observers: Iterable[Observer] = (),
         hitl_hook: HumanHook | None = None,
     ) -> "VoiceReply":
-        stream = stream or MemoryStream()
-
         context = ConversationContext(
-            stream,
+            stream or MemoryStream(),
             prompt=list(prompt),
             dependencies=self.agent._agent_dependencies | (dependencies or {}),
             variables=self.agent._agent_variables | (variables or {}),
