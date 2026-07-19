@@ -88,6 +88,9 @@ gemini = [
     "pillow",
     "jsonschema",
 ]
+# === Voice / TTS providers (ag2.live) ===
+elevenlabs = ["elevenlabs>=1.50.0,<3"]
+
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
 ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
@@ -271,6 +274,7 @@ markers = [
     "google_api",
     "google_search",
     "websockets",
+    "elevenlabs",
     "commsagent_discord",
     "commsagent_slack",
     "commsagent-telegram",

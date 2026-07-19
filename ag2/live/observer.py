@@ -25,6 +25,45 @@ def TTSObserver(config: TTSConfig[bytes]) -> CompositeObserver:  # noqa: N802
     return CompositeObserver(on_model_message_chunk, on_model_message)
 
 
+class SentenceBuffer:
+    """Accumulates streamed text and releases it at sentence boundaries.
+
+    Pure text bookkeeping — no events, no synthesis — so both the buffering
+    (`TTSObserver`) and streaming (`elevenlabs.StreamingTTSObserver`) paths can
+    share one notion of "enough text to speak yet?".
+    """
+
+    def __init__(self, min_chars: int = 60) -> None:
+        self._min_chars = min_chars
+        self._pending = ""
+
+    def push(self, chunk: str) -> str | None:
+        """Add a chunk of text; return whatever is now ready to speak."""
+        if not chunk:
+            return None
+
+        self._pending += chunk
+
+        if len(self._pending) < self._min_chars:
+            return None
+
+        last_match = 0
+        for match in _SENTENCE_BOUNDARY_RE.finditer(self._pending):
+            last_match = match.end()
+
+        if not last_match:
+            return None
+
+        ready = self._pending[:last_match].strip()
+        self._pending = self._pending[last_match:]
+        return ready or None
+
+    def flush(self) -> str:
+        """Drain the tail. Resets, so the next turn starts clean."""
+        text, self._pending = self._pending.strip(), ""
+        return text
+
+
 class _ChunkToSpeech:
     def __init__(
         self,
@@ -33,37 +72,14 @@ class _ChunkToSpeech:
         min_chars: int = 60,
     ) -> None:
         self._config = config
-        self._min_chars = min_chars
-        self._pending_text = ""
+        self._buffer = SentenceBuffer(min_chars)
 
     async def on_chunk(self, event: events.ModelMessageChunk, context: Context) -> None:
-        chunk = event.content
-        if not chunk:
-            return
-
-        self._pending_text += chunk
-
-        if text := self._should_emit(self._pending_text):
+        if text := self._buffer.push(event.content or ""):
             await self._emit(text, context)
 
     async def on_complete(self, context: Context) -> None:
-        await self._emit(self._pending_text.strip(), context)
-        self._pending_text = ""
-
-    def _should_emit(self, text: str) -> str | None:
-        if len(text) < self._min_chars:
-            return None
-
-        last_match = 0
-        for match in _SENTENCE_BOUNDARY_RE.finditer(text):
-            last_match = match.end()
-
-        if last_match:
-            ready = text[:last_match].strip()
-            self._pending_text = text[last_match:]
-            return ready
-
-        return None
+        await self._emit(self._buffer.flush(), context)
 
     async def _emit(self, text: str, context: Context) -> None:
         if not text:

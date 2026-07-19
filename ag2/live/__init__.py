@@ -30,8 +30,20 @@ try:
 except ImportError as e:
     GeminiRealTimeConfig = missing_optional_dependency("RealTimeConfig", "gemini", e)  # type: ignore[misc]
 
+try:
+    from .elevenlabs import StreamingTTSConfig as ElevenLabsStreamingTTSConfig
+    from .elevenlabs import StreamingTTSObserver as ElevenLabsStreamingTTSObserver
+    from .elevenlabs import TTSConfig as ElevenLabsTTSConfig
+except ImportError as e:
+    ElevenLabsTTSConfig = missing_optional_dependency("TTSConfig", "elevenlabs", e)  # type: ignore[misc]
+    ElevenLabsStreamingTTSConfig = missing_optional_dependency("StreamingTTSConfig", "elevenlabs", e)  # type: ignore[misc]
+    ElevenLabsStreamingTTSObserver = missing_optional_dependency("StreamingTTSObserver", "elevenlabs", e)  # type: ignore[misc]
+
 
 __all__ = (
+    "ElevenLabsStreamingTTSConfig",
+    "ElevenLabsStreamingTTSObserver",
+    "ElevenLabsTTSConfig",
     "GeminiRealTimeConfig",
     "LiveAgent",
     "OpenAIRealTimeConfig",
