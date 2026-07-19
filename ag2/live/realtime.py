@@ -26,17 +26,14 @@ class RealtimeConfig(Protocol):
     Unlike `STTConfig` (one-shot transcribe), realtime configs run for the
     duration of the `session()` context manager. The session subscribes to
     `RecordedAudioEvent` on the supplied context's stream, pumps captured
-    audio into the provider, and emits events back onto the same stream.
+    audio into the provider, and emits transcription events back onto the
+    same stream.
 
-    Both current implementations (`openai.RealTimeConfig`,
-    `gemini.RealTimeConfig`) fuse the whole conversation into one session —
-    transcription, model reply, spoken audio, and tool calls — so a
     `LiveAgent` needs no separate STT/LLM/TTS parts. For a cascade of
     separate providers, see `STTConfig.pipe` and `TTSObserver`.
 
     Framework-level concepts (such as the agent's prompt) flow in via the
     keyword parameters of `session()`, allowing `LiveAgent` to inject them
-    into the provider's session payload at startup.
     """
 
     def session(

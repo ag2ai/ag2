@@ -75,7 +75,7 @@ async def main() -> None:
     agent = Agent(
         "assistant",
         prompt="You are a helpful voice assistant. Keep answers to a few sentences.",
-        config=config.OpenAIConfig("gpt-5", streaming=True),
+        config=config.OpenAIConfig("gpt-5-mini", streaming=True),
         observers=[ElevenLabsStreamingTTSObserver(tts)],
     )
 
