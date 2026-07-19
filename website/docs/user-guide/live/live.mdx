@@ -3,7 +3,11 @@ title: "Voice & Realtime Overview"
 sidebarTitle: "Overview"
 ---
 
-`ag2.live` is the AG2 module for building voice-enabled agents. It covers two complementary patterns: a turn-by-turn **STT → Agent → TTS** pipeline built on top of a regular `Agent`, and a full-duplex **`LiveAgent`** that streams audio to and from a provider's realtime API.
+`ag2.live` is the AG2 module for building voice-enabled agents. It covers two complementary patterns:
+
+1. **CascadeTurn/Turn-by-Turn/Pipeline** `STT → Agent → TTS` approach built on top of a regular `Agent`
+
+2. **Realtime/Speech-to-Speech/S2S** `LiveAgent` approach that streams audio to and from a provider's realtime API.
 
 ## When to use which
 
@@ -12,7 +16,7 @@ sidebarTitle: "Overview"
 | Turn-by-turn voice | `Agent` + a transcriber + a TTS observer | ~1–3 s per turn | You already have a text agent and want to add a voice front-end; you need tool execution, middleware, structured output, or any other text-agent feature. |
 | Realtime full-duplex | `LiveAgent` + `OpenAIRealTimeConfig` / `GeminiRealTimeConfig` | <500 ms | You want barge-in, interruption, semantic VAD, or a phone-call-like UX. |
 
-For the turn-by-turn pattern, OpenAI and ElevenLabs are both available and support different halves incrementally — OpenAI streams transcription, ElevenLabs streams synthesis. See [Provider support](/docs/user-guide/live/stt_tts) for the full matrix. Gemini is realtime-only.
+See [Provider support](/docs/user-guide/live/stt_tts) for the matrix of currently supported providers.
 
 !!! note
     Both patterns share the same audio I/O primitives — [`SoundDevicePlayer`](/docs/user-guide/live/stt_tts) and [`SoundDeviceRecorder`](/docs/user-guide/live/stt_tts) — and the same event stream. You can mix observers (TTS, logging, persistence) across both.

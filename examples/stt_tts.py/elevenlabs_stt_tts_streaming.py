@@ -30,10 +30,10 @@ from ag2 import Agent, config
 from ag2.events import TranscriptionCompletedEvent
 from ag2.live import (
     ElevenLabsStreamingTTSConfig,
-    ElevenLabsStreamingTTSObserver,
     ElevenLabsTranscriber,
     SoundDevicePlayer,
     SoundDeviceRecorder,
+    TTSObserver,
 )
 
 VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel
@@ -76,7 +76,7 @@ async def main() -> None:
         "assistant",
         prompt="You are a helpful voice assistant. Keep answers to a few sentences.",
         config=config.OpenAIConfig("gpt-5-mini", streaming=True),
-        observers=[ElevenLabsStreamingTTSObserver(tts)],
+        observers=[TTSObserver(tts)],
     )
 
     async with SoundDevicePlayer() as player:

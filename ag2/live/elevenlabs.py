@@ -9,9 +9,7 @@ from elevenlabs.client import AsyncElevenLabs
 
 from ag2 import events
 from ag2.annotations import Context
-from ag2.observers import CompositeObserver, observer
 
-from .observer import SentenceBuffer
 from .protocols import TTSConfig as TTSConfigProtocol
 from .stt import STTConfig as STTConfigProtocol
 from .stt import VoiceInput, voice_to_wav_buffer
@@ -125,8 +123,8 @@ class StreamingTTSConfig(TTSConfigProtocol[bytes]):
 
     Yields audio chunks as they are generated for lower time-to-first-byte.
     Also implements `synthesize` (by buffering the full stream) so it satisfies
-    the `TTSConfig` protocol, but prefer `stream` / `StreamingTTSObserver` to
-    actually take advantage of streaming. Not supported by ``eleven_v3``.
+    the plain `TTSConfig` protocol. `TTSObserver` and `CascadeConfig` both
+    detect `stream` and use it automatically. Not supported by ``eleven_v3``.
 
     Needs an api key in ELEVENLABS_API_KEY env var or can accept an api_key argument
     """
@@ -157,44 +155,3 @@ class StreamingTTSConfig(TTSConfigProtocol[bytes]):
 
     async def synthesize(self, text: str) -> bytes:
         return b"".join([chunk async for chunk in self.stream(text)])
-
-
-def StreamingTTSObserver(config: StreamingTTSConfig, *, min_chars: int = 60) -> CompositeObserver:  # noqa: N802
-    """Speak the model's reply, emitting each streamed audio chunk as it lands.
-
-    Incremental on both axes. Text is flushed to ElevenLabs at sentence
-    boundaries as the model produces it (like `TTSObserver`), and the audio for
-    each sentence is forwarded chunk by chunk rather than buffered — so playback
-    starts a sentence into the reply, not after the last token.
-
-    `min_chars` is the smallest amount of text worth a request; below it the
-    buffer keeps accumulating even past a sentence boundary.
-    """
-    buffer = SentenceBuffer(min_chars)
-    # Non-streaming model configs emit no `ModelMessageChunk` at all, which
-    # would otherwise leave the buffer empty and the observer silent.
-    saw_chunks = False
-
-    async def speak(text: str, context: Context) -> None:
-        if not text:
-            return
-        async for chunk in config.stream(text):
-            await context.send(events.SynthesizedAudioEvent(chunk))
-
-    @observer(events.ModelMessageChunk)
-    async def on_model_message_chunk(event: events.ModelMessageChunk, context: Context) -> None:
-        nonlocal saw_chunks
-        if not event.content:
-            return
-        saw_chunks = True
-        if text := buffer.push(event.content):
-            await speak(text, context)
-
-    @observer(events.ModelMessage)
-    async def on_model_message(event: events.ModelMessage, context: Context) -> None:
-        nonlocal saw_chunks
-        text = buffer.flush() if saw_chunks else (event.content or "").strip()
-        saw_chunks = False
-        await speak(text, context)
-
-    return CompositeObserver(on_model_message_chunk, on_model_message)

@@ -4,8 +4,10 @@
 
 from ag2.exceptions import missing_additional_dependency, missing_optional_dependency
 
+from .cascade import CascadeConfig
 from .observer import TTSObserver
 from .realtime import LiveAgent
+from .turn import SilenceTurnDetector, TurnDetector
 
 try:
     from .sound_device import Player as SoundDevicePlayer
@@ -33,18 +35,16 @@ except ImportError as e:
 try:
     from .elevenlabs import STTConfig as ElevenLabsTranscriber
     from .elevenlabs import StreamingTTSConfig as ElevenLabsStreamingTTSConfig
-    from .elevenlabs import StreamingTTSObserver as ElevenLabsStreamingTTSObserver
     from .elevenlabs import TTSConfig as ElevenLabsTTSConfig
 except ImportError as e:
     ElevenLabsTTSConfig = missing_optional_dependency("TTSConfig", "elevenlabs", e)  # type: ignore[misc]
     ElevenLabsStreamingTTSConfig = missing_optional_dependency("StreamingTTSConfig", "elevenlabs", e)  # type: ignore[misc]
-    ElevenLabsStreamingTTSObserver = missing_optional_dependency("StreamingTTSObserver", "elevenlabs", e)  # type: ignore[misc]
     ElevenLabsTranscriber = missing_optional_dependency("STTConfig", "elevenlabs", e)  # type: ignore[misc]
 
 
 __all__ = (
+    "CascadeConfig",
     "ElevenLabsStreamingTTSConfig",
-    "ElevenLabsStreamingTTSObserver",
     "ElevenLabsTTSConfig",
     "ElevenLabsTranscriber",
     "GeminiRealTimeConfig",
@@ -53,7 +53,9 @@ __all__ = (
     "OpenAITTSConfig",
     "OpenAITranscriber",
     "OpenAITranslationTranscriber",
+    "SilenceTurnDetector",
     "SoundDevicePlayer",
     "SoundDeviceRecorder",
     "TTSObserver",
+    "TurnDetector",
 )

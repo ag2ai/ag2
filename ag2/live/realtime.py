@@ -34,6 +34,7 @@ class RealtimeConfig(Protocol):
 
     Framework-level concepts (such as the agent's prompt) flow in via the
     keyword parameters of `session()`, allowing `LiveAgent` to inject them
+    into the provider's session payload at startup.
     """
 
     def session(

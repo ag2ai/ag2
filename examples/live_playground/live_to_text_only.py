@@ -3,7 +3,10 @@ import asyncio
 from ag2.events import ModelMessageChunk
 from ag2.live import (
     LiveAgent,
+    OpenAITTSConfig,
+    SoundDevicePlayer,
     SoundDeviceRecorder,
+    TTSObserver,
     openai,
 )
 
@@ -15,12 +18,14 @@ agent = LiveAgent(
         # audio output is disabled, just text
         output=openai.TextOutput(),
     ),
+    observers=[TTSObserver(config=OpenAITTSConfig(model="gpt-4o-mini-tts"))],
 )
 
 
 async def main() -> None:
     async with (
         agent.run() as context,
+        SoundDevicePlayer(context=context),
         SoundDeviceRecorder(context=context),
     ):
         print("Starting...")

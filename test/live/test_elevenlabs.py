@@ -16,9 +16,9 @@ from ag2 import Agent, MemoryStream, events, testing
 from ag2.context import ConversationContext
 from ag2.live import (
     ElevenLabsStreamingTTSConfig,
-    ElevenLabsStreamingTTSObserver,
     ElevenLabsTTSConfig,
     ElevenLabsTranscriber,
+    TTSObserver,
 )
 from ag2.live.elevenlabs import DEFAULT_VOICE_ID
 from ag2.live.stt import VoiceInput
@@ -113,12 +113,12 @@ class TestTTSConfig:
         assert await ElevenLabsStreamingTTSConfig(client=client).synthesize("hello there") == b"onetwothree"
 
 
-class TestStreamingTTSObserver:
+class TestStreamingViaTTSObserver:
     async def test_speaks_a_complete_sentence_before_model_completion(self, client: FakeClient) -> None:
         stream = MemoryStream()
         audio: list[bytes] = []
         context = ConversationContext(stream=stream)
-        observer = ElevenLabsStreamingTTSObserver(ElevenLabsStreamingTTSConfig(client=client))
+        observer = TTSObserver(ElevenLabsStreamingTTSConfig(client=client))
 
         async def collect(event: events.SynthesizedAudioEvent) -> None:
             audio.append(event.content)
