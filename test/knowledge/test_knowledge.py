@@ -16,7 +16,16 @@ pytest.importorskip("watchdog")
 
 from ag2 import Agent
 from ag2.agent import KnowledgeConfig
-from ag2.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TextInput, UnknownEvent
+from ag2.events import (
+    BinaryInput,
+    BinaryType,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TaskCompleted,
+    TextInput,
+    UnknownEvent,
+)
 from ag2.knowledge import (
     DefaultBootstrap,
     DiskKnowledgeStore,
@@ -124,6 +133,29 @@ class TestEventLogWriter:
         assert loaded[0].parts[0].content == "hello"
         assert loaded[1].agent_name == "analyzer"
         assert loaded[1].result == "done"
+
+    @pytest.mark.asyncio
+    async def test_binary_kind_roundtrip_preserves_enum(self) -> None:
+        """BinaryInput.kind must stay BinaryType after EventLogWriter persist/load (#3084)."""
+        store = MemoryKnowledgeStore()
+        writer = EventLogWriter(store)
+        stream_id = uuid4()
+
+        image = BinaryInput(b"\x89PNG", media_type="image/png", kind=BinaryType.IMAGE)
+        events = [ModelRequest([image, TextInput("caption")])]
+        await writer.persist(stream_id, events)
+
+        loaded = await writer.load(stream_id)
+        assert len(loaded) == 1
+        part = loaded[0].parts[0]
+        assert isinstance(part, BinaryInput)
+        assert isinstance(part.kind, BinaryType)
+        assert part.kind is BinaryType.IMAGE
+        # Identity checks used by OpenAI Responses mapper must keep working.
+        assert part.kind is BinaryType.IMAGE
+        assert part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY, BinaryType.IMAGE)
+        assert part.kind.value == "image"
+        assert part.data == b"\x89PNG"
 
     @pytest.mark.asyncio
     async def test_persist_dropped_segments(self) -> None:
