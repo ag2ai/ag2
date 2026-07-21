@@ -216,22 +216,22 @@ docs = [
 ]
 
 types = [
-    "mypy==2.1.0",
+    "mypy==2.2.0",
     "types-PyYAML",
     "types-requests",
     { include-group = "test" },
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.15.20", "codespell==2.4.2", "zizmor==1.26.1"]
+lint = ["ruff==0.15.21", "codespell==2.4.2", "zizmor==1.26.1"]
 
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
-    "prek==0.4.8",
-    "uv==0.11.26",
+    "prek==0.4.9",
+    "uv==0.11.28",
 ]
 
 [tool.pytest.ini_options]
