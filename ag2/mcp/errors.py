@@ -18,6 +18,20 @@ class MCPAgentConfigError(MCPServerError):
         )
 
 
+class MCPToolNameConflictError(MCPServerError):
+    """Raised when a custom tool's name collides with the agent's ``ask`` tool or another custom tool."""
+
+    def __init__(self, name: str, *, reserved: bool = True) -> None:
+        if reserved:
+            message = (
+                f"Custom tool {name!r} conflicts with the agent's conversational tool; "
+                "rename the tool or pass a different `tool_name=` to MCPServer."
+            )
+        else:
+            message = f"Duplicate custom tool name {name!r}; tool names must be unique."
+        super().__init__(message)
+
+
 class MCPResourceNotFoundError(MCPServerError):
     """Raised when a ``resources/read`` targets an unknown URI."""
 

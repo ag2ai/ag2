@@ -111,6 +111,10 @@ mcp = [
     # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
     "mcp>=1.11.0,<2",
 ]
+# MCP-UI resources (ag2.mcp_ui) — return renderable UI blobs from tool results
+mcp-ui = [
+    "mcp-ui-server>=1.0.0",
+]
 
 [dependency-groups]
 # Dev dependency groups (PEP 735). These replace the former dev *extras* and are
@@ -131,6 +135,7 @@ test = [
     { include-group = "test-core" },
     "docker>=6.0.0,<8",
     "ag2[mcp]",
+    "ag2[mcp-ui]", # ag2.mcp_ui — MCP-UI resource & action builders
     "ipykernel==7.3.0",
     "nbconvert==7.17.1",
     "nbformat==5.10.4",
@@ -145,6 +150,7 @@ optionals = [
     "ag2[ag-ui]",
     "ag2[a2ui]", # provides starlette/jsonschema for AG-UI / a2ui serving tests
     "ag2[mcp]", # ag2.mcp — serve an Agent as an MCP server
+    "ag2[mcp-ui]", # ag2.mcp_ui — MCP-UI resource & action builders
     "ag2[tracing]",
     "ag2[metrics]",
     # search tools
@@ -210,22 +216,22 @@ docs = [
 ]
 
 types = [
-    "mypy==2.1.0",
+    "mypy==2.2.0",
     "types-PyYAML",
     "types-requests",
     { include-group = "test" },
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.15.20", "codespell==2.4.2", "zizmor==1.26.1"]
+lint = ["ruff==0.15.21", "codespell==2.4.2", "zizmor==1.26.1"]
 
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
-    "prek==0.4.8",
-    "uv==0.11.26",
+    "prek==0.4.9",
+    "uv==0.11.28",
 ]
 
 [tool.pytest.ini_options]

@@ -12,7 +12,7 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("perplexity")
 
-from ag2 import Agent, Context, DataInput, ImageInput, Variable
+from ag2 import Agent, Context, DataInput, ImageInput, Variable, __version__
 from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.search.perplexity import (
@@ -238,7 +238,11 @@ class TestSearch:
     async def test_client_kwargs_forwarded_to_sdk(self) -> None:
         custom_url = "https://custom.perplexity.example"
         route = respx.post(f"{custom_url}/search").mock(return_value=httpx.Response(200, json=_search_response()))
-        toolkit = PerplexitySearchToolkit(api_key="test", base_url=custom_url)
+        toolkit = PerplexitySearchToolkit(
+            api_key="test",
+            base_url=custom_url,
+            default_headers={"X-Trace-Id": "abc-123"},
+        )
 
         agent = Agent(
             "a",
@@ -248,6 +252,8 @@ class TestSearch:
         await agent.ask("search")
 
         assert route.called
+        assert route.calls.last.request.headers["X-Pplx-Integration"] == f"ag2/{__version__}"
+        assert route.calls.last.request.headers["X-Trace-Id"] == "abc-123"
 
     @respx.mock
     async def test_custom_tool_name_in_agent(self) -> None:
@@ -393,7 +399,11 @@ class TestAnswer:
         route = respx.post(f"{custom_url}/chat/completions").mock(
             return_value=httpx.Response(200, json=_chat_response())
         )
-        toolkit = PerplexitySearchToolkit(api_key="test", base_url=custom_url)
+        toolkit = PerplexitySearchToolkit(
+            api_key="test",
+            base_url=custom_url,
+            default_headers={"X-Trace-Id": "abc-123"},
+        )
 
         agent = Agent(
             "a",
@@ -403,6 +413,8 @@ class TestAnswer:
         await agent.ask("answer")
 
         assert route.called
+        assert route.calls.last.request.headers["X-Pplx-Integration"] == f"ag2/{__version__}"
+        assert route.calls.last.request.headers["X-Trace-Id"] == "abc-123"
 
     @respx.mock
     async def test_custom_tool_name_in_agent(self) -> None:
