@@ -3,16 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
 from ag2.annotations import Context
 from ag2.middleware.base import ToolMiddleware
-from ag2.stream import MemoryStream
+from ag2.stream import MemoryStream, Stream
 from ag2.tools.final import FunctionTool, tool
 
 from .run_task import run_task
-from .subagent_tool import StreamFactory
+from .subagent_tool import StreamFactory, _as_stream_factory
 
 if TYPE_CHECKING:
     from ag2.agent import Agent
@@ -23,7 +23,7 @@ def background_agent_tool(
     *,
     description: str,
     name: str | None = None,
-    stream: StreamFactory | None = None,
+    stream: Stream | StreamFactory | None = None,
     middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool:
     """Expose ``agent`` as a fire-and-forget background subagent tool.
@@ -32,7 +32,26 @@ def background_agent_tool(
     The parent ``Agent.ask`` loop keeps running and will not return until the
     background task finishes — once it does, its result is delivered to the
     parent LLM as a follow-up turn via ``context.enqueue``.
+
+    Args:
+        agent: The agent to wrap.
+        description: Tool description shown to the calling LLM.
+        name: Optional custom tool name. Defaults to ``background_task_{agent.name}``.
+        stream: A :class:`Stream` instance, a :class:`StreamFactory` callable,
+            or ``None``. If a Stream instance is passed, it is automatically
+            wrapped in a factory that returns that instance on every call.
+            Concurrent background calls therefore share that stream's history
+            and turn lock.
+        middleware: Optional tool middleware.
+
+    Returns:
+        A :class:`FunctionTool` that runs the agent as a background sub-task.
+
+    Raises:
+        TypeError: If ``stream`` is not a Stream, StreamFactory, or None.
     """
+
+    stream_factory = _as_stream_factory(stream)
 
     tool_name = name or f"background_task_{agent.name}"
 
@@ -47,7 +66,11 @@ def background_agent_tool(
         context: str = "",
     ) -> str:
         task_id = uuid4().hex
-        task_stream = stream(agent, ctx) if stream else MemoryStream(storage=ctx.stream.history.storage)
+        task_stream = (
+            stream_factory(agent, ctx)
+            if stream_factory
+            else MemoryStream(storage=cast(MemoryStream, ctx.stream).history.storage)
+        )
 
         ctx.spawn_background(
             _run_and_deliver(
@@ -71,7 +94,7 @@ async def _run_and_deliver(
     *,
     context: str,
     parent_context: Context,
-    stream: MemoryStream,
+    stream: Stream,
     task_id: str,
 ) -> None:
     result = await run_task(

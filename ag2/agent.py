@@ -1432,9 +1432,22 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         description: str,
         name: str | None = None,
-        stream: StreamFactory | None = None,
+        stream: Stream | StreamFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
+        """Wrap this agent as a tool for use by another agent.
+
+        Args:
+            description: What this agent-as-tool does.
+            name: Optional custom tool name. Defaults to ``task_{agent.name}``.
+            stream: A :class:`Stream` instance or a :class:`StreamFactory`
+                callable. If a Stream instance is passed, it is automatically
+                wrapped in a factory that returns that instance on every call.
+            middleware: Optional tool middleware.
+
+        Returns:
+            A :class:`FunctionTool` that delegates to this agent.
+        """
         return subagent_tool(
             self,
             description=description,
