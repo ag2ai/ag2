@@ -83,7 +83,7 @@ from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
-from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
+from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
 from .tools.tool import Tool
 from .types import Omittable, SendableMessage, omit
 from .usage import UsageReport
@@ -1432,7 +1432,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         description: str,
         name: str | None = None,
-        stream: StreamFactory | None = None,
+        stream: StreamOrFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         return subagent_tool(
