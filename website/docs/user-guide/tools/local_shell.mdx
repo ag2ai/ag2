@@ -5,7 +5,7 @@ sidebarTitle: Sandbox Shell
 
 # Sandbox Shell Tool
 
-`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose — a local subprocess, a Docker container, a Daytona sandbox, or any custom backend. Unlike the provider-native [`ShellTool`](/docs/user-guide/tools/builtin_tools#shell) (which runs server-side and only on Anthropic/OpenAI), it executes client-side, so it works with **any model provider**.
+`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose — a local subprocess, a Docker container, a Daytona or Tenki sandbox, or any custom backend. Unlike the provider-native [`ShellTool`](/docs/user-guide/tools/builtin_tools#shell) (which runs server-side and only on Anthropic/OpenAI), it executes client-side, so it works with **any model provider**.
 
 The design has two orthogonal pieces:
 
@@ -36,12 +36,13 @@ With no arguments, `SandboxShellTool` uses a `LocalEnvironment` with a temporary
 
 ## Choosing an Environment
 
-The first argument is the environment. Pass a `LocalEnvironment`, `DockerEnvironment`, or `DaytonaEnvironment`:
+The first argument is the environment. Pass a `LocalEnvironment`, `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment`:
 
 ```python linenums="1"
 from ag2.tools import SandboxShellTool, LocalEnvironment
 from ag2.extensions.docker import DockerEnvironment
 from ag2.extensions.daytona import DaytonaEnvironment
+from ag2.extensions.tenki import TenkiEnvironment
 
 # Local subprocess in a specific directory
 sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"))
@@ -51,6 +52,9 @@ sh = SandboxShellTool(DockerEnvironment(image="python:3.12-slim", network_mode="
 
 # Daytona hosted sandbox
 sh = SandboxShellTool(DaytonaEnvironment(image="python:3.12"))
+
+# Tenki hosted sandbox
+sh = SandboxShellTool(TenkiEnvironment())
 ```
 
 A `LocalEnvironment` directory is created automatically if it does not exist, and is **not** deleted on exit when an explicit path is given.
@@ -74,7 +78,7 @@ sh = SandboxShellTool(
 
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
-| `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment`. `None` → `LocalEnvironment()` |
+| `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment` / `TenkiEnvironment`. `None` → `LocalEnvironment()` |
 | `allowed` | `None` | Whitelist of command prefixes. `None` → all commands allowed |
 | `blocked` | `None` | Blacklist of command prefixes. `None` → nothing blocked |
 | `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"` |
@@ -141,7 +145,7 @@ reply3 = await reply2.ask("Read the counter and tell me the value")
 ```
 
 !!! warning
-    A `LocalEnvironment` gives the agent direct access to your filesystem and the ability to run arbitrary commands. Always set `allowed`, `blocked`, or `readonly` when exposing it to untrusted prompts, or use a `DockerEnvironment` / `DaytonaEnvironment` for real isolation.
+    A `LocalEnvironment` gives the agent direct access to your filesystem and the ability to run arbitrary commands. Always set `allowed`, `blocked`, or `readonly` when exposing it to untrusted prompts, or use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment` for real isolation.
 
 ## SandboxShellTool vs ShellTool
 

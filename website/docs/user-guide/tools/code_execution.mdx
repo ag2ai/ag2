@@ -9,9 +9,9 @@ AG2 supports two ways to let an agent run code: have the LLM provider execute it
 
 | | Built-in Provider | Remote (`SandboxCodeTool`) |
 | :--- | :--- | :--- |
-| **Where it runs** | Provider's sandbox | A `CodeEnvironment` you supply (Daytona, Docker, custom) |
+| **Where it runs** | Provider's sandbox | A `CodeEnvironment` you supply (Tenki, Daytona, Docker, custom) |
 | **Setup** | Add the tool, done | Choose / configure a backend |
-| **Cost** | Bundled in provider tokens | Your sandbox bill (Daytona) or free (local Docker) |
+| **Cost** | Bundled in provider tokens | Your sandbox bill (Tenki/Daytona) or free (local Docker) |
 | **Custom packages, images** | No | Yes |
 | **State persistence** | Provider-defined | Per-environment instance |
 | **Provider support** | Only providers with native code-exec | Any provider |
@@ -42,14 +42,41 @@ See the [Built-in Tools page](/docs/user-guide/tools/builtin_tools#code-executio
 `SandboxCodeTool` exposes a `run_code(code, language)` function the agent can call. Because it's a regular function tool, it works on **any** model provider. Where the code actually runs is decided by the [`CodeEnvironment`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/code/environment/base.py){.external-link target="_blank"} you hand it.
 
 !!! note "`environment` is required"
-    `SandboxCodeTool` has no default backend. Pass `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation.
+    `SandboxCodeTool` has no default backend. Pass `TenkiEnvironment`, `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation.
 
 !!! note "When to use this"
     You need custom packages or images, persistent state across calls, your own infrastructure, or you're working with a provider that doesn't have a native code-execution capability.
 
-Two environments are available: **Daytona** (hosted) and **Docker** (local container). You can also implement your own — see the **Custom** tab below.
+Three environments are available: **Tenki** and **Daytona** (hosted), plus **Docker** (local container). You can also implement your own — see the **Custom** tab below.
 
 <Tabs>
+  <Tab title="Tenki">
+[Tenki](https://tenki.cloud/){.external-link target="_blank"} provides managed, isolated cloud sandboxes with a bounded server-side lifetime.
+
+```bash
+pip install "tenki-sandbox>=0.4.0,<1"
+```
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tenki import TenkiEnvironment
+from ag2.tools import SandboxCodeTool
+
+env = TenkiEnvironment()
+async with env:
+    agent = Agent(
+        "analyst",
+        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        tools=[SandboxCodeTool(env)],
+    )
+    reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
+    print(await reply.content())
+```
+
+`TenkiEnvironment` reads `TENKI_API_KEY` and `TENKI_API_URL`. It auto-selects a sole visible project; pass `project_id` when the key has access to more than one. See the [Tenki Sandbox extension guide](/docs/user-guide/extensions/tenki) for lifecycle and resource configuration.
+  </Tab>
+
   <Tab title="Daytona">
 [Daytona](https://www.daytona.io/){.external-link target="_blank"} is a hosted sandbox service. Strongest isolation; pay per use.
 
@@ -126,7 +153,7 @@ class MyEnvironment(CodeEnvironment):
 sandbox = SandboxCodeTool(MyEnvironment())
 ```
 
-The `context` argument is the active `ConversationContext`, forwarded so backends can resolve [`Variable`](/docs/user-guide/tools/tools#variables) markers from `context.variables` (e.g. per-tenant credentials). Backends with no runtime-configurable parameters can ignore it.
+The `context` argument is the active `ConversationContext`, forwarded so backends can resolve [`Variable`](/docs/user-guide/context/variables) markers from `context.variables` (e.g. per-tenant credentials). Backends with no runtime-configurable parameters can ignore it.
   </Tab>
 </Tabs>
 
@@ -135,7 +162,12 @@ The `context` argument is the active `ConversationContext`, forwarded so backend
 The sandbox / container is created lazily on the first `run_code` call and reused for the lifetime of the environment instance. Cleanup is registered via `atexit` so resources are released even if you forget to close the environment. For tighter scoping, use the environment as an async context manager:
 
 ```python linenums="1"
-async with DaytonaEnvironment(image="python:3.12") as env:
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tenki import TenkiEnvironment
+from ag2.tools import SandboxCodeTool
+
+async with TenkiEnvironment() as env:
     agent = Agent(
         "analyst",
         config=AnthropicConfig(model="claude-sonnet-4-6"),
@@ -145,18 +177,19 @@ async with DaytonaEnvironment(image="python:3.12") as env:
 # sandbox deleted here
 ```
 
-The same pattern works with `DockerEnvironment` (container stopped + removed) and any other backend that implements `__aenter__` / `__aexit__`.
+The same pattern works with `DaytonaEnvironment`, `DockerEnvironment` (container stopped + removed), and any other backend that implements `__aenter__` / `__aexit__`.
 
 ### Credentials and runtime config
 
-`DaytonaEnvironment` accepts `Variable` markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
+`TenkiEnvironment` accepts [`Variable`](/docs/user-guide/context/variables) markers for `api_key`, `api_url`, `project_id`, `image`, and `env_vars`. `DaytonaEnvironment` accepts them for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
 
 ```python linenums="1"
 from ag2 import Variable
-from ag2.extensions.daytona import DaytonaEnvironment
+from ag2.extensions.tenki import TenkiEnvironment
 
-env = DaytonaEnvironment(
-    api_key=Variable("daytona_key"),  # resolved from ctx.variables["daytona_key"]
+env = TenkiEnvironment(
+    api_key=Variable("tenki_key"),  # resolved from ctx.variables["tenki_key"]
+    project_id=Variable("tenki_project"),
     image=Variable("tenant_image"),
 )
 ```
