@@ -215,7 +215,8 @@ class ToolGateway:
             access_log=False,
             lifespan="on",
             # Bounds close(): in-flight tools/call requests (e.g. stuck on a hung
-            # tool) are cancelled instead of blocking shutdown forever.
+            # tool) are cancelled instead of blocking shutdown forever. Best-effort:
+            # a tool that swallows CancelledError can still linger past close().
             timeout_graceful_shutdown=max(1, round(self._close_timeout)),
         )
         self._uvicorn = _EmbeddedServer(config)

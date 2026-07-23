@@ -8,6 +8,7 @@ only the *new* human input since the last turn is sent to the live session,
 tracked by a high-water mark over the run's ``ModelRequest`` events.
 """
 
+import logging
 from asyncio.subprocess import Process
 from collections.abc import Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
@@ -23,6 +24,8 @@ if TYPE_CHECKING:
     from .bridge import ACPBridge
     from .config import ConnectHook
     from .tool_gateway import ToolGateway
+
+logger = logging.getLogger(__name__)
 
 
 def new_prompt_text(messages: Sequence[BaseEvent], sent_count: int) -> tuple[str, int]:
@@ -134,7 +137,13 @@ class ACPSession:
             # Subprocess first: killing it drops any in-flight tools/call HTTP
             # requests, so the gateway shutdown that follows doesn't wait on them.
             if cm is not None:
-                await cm.__aexit__(None, None, None)
+                try:
+                    await cm.__aexit__(None, None, None)
+                except Exception:
+                    # gateway.close() in the finally may re-raise (cancellation)
+                    # and mask this — keep a record of the actual failure.
+                    logger.exception("terminating the ACP agent subprocess failed")
+                    raise
         finally:
             if gateway is not None:
                 await gateway.close()
