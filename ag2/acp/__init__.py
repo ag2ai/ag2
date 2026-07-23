@@ -9,5 +9,6 @@ to the :class:`~ag2.Agent` class.
 """
 
 from .config import ACPConfig, ClaudeCodeConfig, CodexConfig, OpenCodeConfig
+from .tool_gateway import MCPCapabilityError
 
-__all__ = ["ACPConfig", "ClaudeCodeConfig", "CodexConfig", "OpenCodeConfig"]
+__all__ = ["ACPConfig", "ClaudeCodeConfig", "CodexConfig", "MCPCapabilityError", "OpenCodeConfig"]

@@ -13,7 +13,7 @@ keep it out of the extra-free :mod:`ag2.testing`.
 """
 
 import asyncio
-from collections.abc import Iterator, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -43,12 +43,15 @@ class ACPTurn:
         usage: Token usage reported for the turn (``None`` => unreported).
         hang: When ``True`` the turn blocks until ``session/cancel`` (then returns
             ``stop_reason="cancelled"``) — used to exercise ``turn_timeout``.
+        on_prompt: Awaited at the start of the turn, before ``updates`` replay —
+            lets a test act as the CLI agent mid-turn (e.g. call the MCP gateway).
     """
 
     updates: Sequence[SessionUpdate] = field(default_factory=tuple)
     stop_reason: str = "end_turn"
     usage: "schema.Usage | None" = None
     hang: bool = False
+    on_prompt: "Callable[[], Awaitable[None]] | None" = None
 
 
 class _FakeConnection:
@@ -58,16 +61,28 @@ class _FakeConnection:
     (the bridge) exactly as a real agent's ``session/update`` callbacks would.
     """
 
-    def __init__(self, client: acp.Client, turns: Iterator[ACPTurn]) -> None:
+    def __init__(
+        self,
+        client: acp.Client,
+        turns: Iterator[ACPTurn],
+        *,
+        agent_capabilities: "schema.AgentCapabilities | None" = None,
+    ) -> None:
         self._client = client
         self._turns = turns
         self._cancelled = asyncio.Event()
+        self._agent_capabilities = agent_capabilities
+        self.new_session_kwargs: dict[str, Any] | None = None
         self.closed = False
 
     async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
-        return schema.InitializeResponse(protocol_version=acp.PROTOCOL_VERSION)
+        return schema.InitializeResponse(
+            protocol_version=acp.PROTOCOL_VERSION,
+            agent_capabilities=self._agent_capabilities,
+        )
 
     async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
+        self.new_session_kwargs = kwargs
         return schema.NewSessionResponse(session_id="fake-session-1")
 
     async def cancel(self, **kwargs: Any) -> None:
@@ -75,6 +90,8 @@ class _FakeConnection:
 
     async def prompt(self, *, session_id: str, **kwargs: Any) -> schema.PromptResponse:
         turn = next(self._turns)
+        if turn.on_prompt is not None:
+            await turn.on_prompt()
         if turn.hang:
             await self._cancelled.wait()
             self._cancelled.clear()
@@ -84,19 +101,27 @@ class _FakeConnection:
         return schema.PromptResponse(stop_reason=turn.stop_reason, usage=turn.usage)
 
 
-def fake_acp_config(*turns: ACPTurn, **overrides: Any) -> ACPConfig:
+def fake_acp_config(
+    *turns: ACPTurn,
+    agent_capabilities: "schema.AgentCapabilities | None" = None,
+    **overrides: Any,
+) -> ACPConfig:
     """Build an :class:`ACPConfig` backed by an in-process scripted agent.
 
     No subprocess is spawned: each ``Agent.run`` model-turn consumes one ``turns``
     entry in order. ``overrides`` are forwarded to ``ACPConfig`` (e.g.
-    ``permission_policy=...``, ``turn_timeout=...``).
+    ``permission_policy=...``, ``turn_timeout=...``). ``agent_capabilities``
+    shapes the fake's ``initialize`` response; by default it advertises HTTP MCP
+    support like the real Claude Code / Codex / OpenCode adapters do.
     """
+    if agent_capabilities is None:
+        agent_capabilities = schema.AgentCapabilities(mcp_capabilities=schema.McpCapabilities(http=True, sse=True))
     config = ACPConfig(**overrides)
     script = list(turns)
 
     @asynccontextmanager
     async def connect(client: acp.Client) -> "AsyncIterator[tuple[_FakeConnection, None]]":
-        conn = _FakeConnection(client, iter(script))
+        conn = _FakeConnection(client, iter(script), agent_capabilities=agent_capabilities)
         try:
             yield conn, None
         finally:

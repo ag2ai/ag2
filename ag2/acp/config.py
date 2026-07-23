@@ -56,11 +56,20 @@ class ACPConfig:
         fs_root: Root for mediated ``fs/*`` access (defaults to ``cwd``).
         allow_terminal: Whether to advertise the ACP terminal capability.
         additional_directories: Extra ACP workspace roots.
-        startup_timeout: Seconds to allow for subprocess spawn + handshake.
+        startup_timeout: Seconds to allow for the tool gateway's HTTP server
+            to start when tools are exposed.
         turn_timeout: Per-prompt-turn timeout in seconds (``None`` = no limit).
         cancel_timeout: Grace period (seconds) after a timed-out turn signals
             ``session/cancel`` for the agent to return the in-flight prompt. If
             the agent does not respond within it, the subprocess is hard-stopped.
+        expose_tools: When ``True`` (default), the agent's locally-executable
+            tools are served to the CLI agent over an in-process HTTP MCP
+            server, and ``MCPServerTool`` entries are handed to it directly
+            via ACP ``mcp_servers``. ``False`` disables both. The set of
+            servers is fixed when the ACP session is created (first turn):
+            function tools added or removed on later turns hot-update the
+            gateway, but changing the ``MCPServerTool`` set — or introducing
+            function tools when the first turn had none — raises.
     """
 
     command: list[str] = field(default_factory=list)
@@ -74,6 +83,7 @@ class ACPConfig:
     startup_timeout: float = 30.0
     turn_timeout: float | None = None
     cancel_timeout: float = 5.0
+    expose_tools: bool = True
 
     # Run-scoped live sessions, keyed by stream id. Not part of identity and not
     # carried by ``copy()`` (a copy is a distinct config with its own sessions).

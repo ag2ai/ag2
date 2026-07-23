@@ -12,14 +12,16 @@ Lifecycle: the framework calls ``config.create()`` once per ``AgentRun``, so the
 live ACP session is keyed by ``context.stream.id`` in a per-config registry and
 reused across the run's internal model-turns. A ``weakref.finalize`` on the
 stream terminates the subprocess if the run is dropped without an explicit
-``config.aclose()``.
+``config.aclose()``. When the run's tools include function tools, a per-session
+:class:`~.tool_gateway.ToolGateway` serves them to the agent over HTTP MCP; it
+lives and dies with the session.
 """
 
 import asyncio
+import logging
 import weakref
 from asyncio.subprocess import Process
 from collections.abc import Iterable, Sequence
-from contextlib import suppress
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -30,16 +32,20 @@ from ag2.context import ConversationContext
 from ag2.events import BaseEvent
 from ag2.events.types import ModelMessage, ModelResponse
 from ag2.response import ResponseProto
+from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 from .bridge import make_bridge
 from .mappers import map_usage
 from .session import ACPSession, new_prompt_text
+from .tool_gateway import ToolGateway, partition_tools
 
 if TYPE_CHECKING:
     from fast_depends.library.serializer import SerializerProto
 
     from .config import ACPConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _terminate_proc(proc: Process | None) -> None:
@@ -63,25 +69,50 @@ class ACPClient:
             terminal=bool(self.config.allow_terminal),
         )
 
-    async def _session_for(self, context: ConversationContext) -> ACPSession:
+    async def _session_for(self, context: ConversationContext, tools: Sequence[ToolSchema]) -> ACPSession:
         key = context.stream.id
         session = self.config._sessions.get(key)
         if session is not None and session.started:
+            if self.config.expose_tools:
+                _refresh_tools(session, tools)
             return session
 
         session = ACPSession()
         session.bridge = make_bridge(self.config)
-        await session.ensure(
-            session.bridge,
-            self.config.command,
-            cwd=self.config.cwd,
-            env=self.config.env,
-            protocol_version=acp.PROTOCOL_VERSION,
-            client_capabilities=self._client_capabilities(),
-            additional_directories=self.config.additional_directories,
-            connect=self.config._connect,
-        )
 
+        mcp_servers: list[schema.HttpMcpServer] = []
+        functions: list[FunctionToolSchema] = []
+        external: list[schema.HttpMcpServer] = []
+        if self.config.expose_tools:
+            functions, external = partition_tools(tools)
+            mcp_servers.extend(external)
+
+        try:
+            if functions:
+                session.gateway = ToolGateway(
+                    session.bridge.state, functions, startup_timeout=self.config.startup_timeout
+                )
+                await session.gateway.start()
+                mcp_servers.insert(0, session.gateway.as_acp_server())
+            await session.ensure(
+                session.bridge,
+                self.config.command,
+                cwd=self.config.cwd,
+                env=self.config.env,
+                protocol_version=acp.PROTOCOL_VERSION,
+                client_capabilities=self._client_capabilities(),
+                additional_directories=self.config.additional_directories,
+                mcp_servers=mcp_servers or None,
+                connect=self.config._connect,
+            )
+        except BaseException:
+            # ensure() closes itself on failure, but a gateway startup that
+            # raised (or was cancelled) never reached ensure() — make
+            # teardown unconditional so the HTTP server can't outlive this.
+            await session.close()
+            raise
+
+        session.external_servers = external
         self.config._sessions[key] = session
         # Safety net: terminate the subprocess if the stream is dropped without
         # an explicit aclose(). Keyed on the stream, not the (per-run) client.
@@ -97,7 +128,7 @@ class ACPClient:
         response_schema: "ResponseProto | None",
         serializer: "SerializerProto",
     ) -> ModelResponse:
-        session = await self._session_for(context)
+        session = await self._session_for(context, list(tools))
         bridge = session.bridge
         conn = session.conn
         session_id = session.session_id
@@ -138,8 +169,12 @@ class ACPClient:
                     # re-spawns it.
                     task.cancel()
                     # Drain the cancelled/broken prompt before tearing down.
-                    with suppress(BaseException):
+                    try:
                         await task
+                    except asyncio.CancelledError:
+                        pass
+                    except Exception:
+                        logger.debug("draining the hard-stopped prompt raised", exc_info=True)
                     await session.close()
         else:
             response = await _run_turn()
@@ -159,9 +194,32 @@ class ACPClient:
         )
 
 
+def _refresh_tools(session: ACPSession, tools: Sequence[ToolSchema]) -> None:
+    """Re-validate this turn's tools against the session created on turn one.
+
+    Function tools hot-update the gateway's served list (``tools/list`` reads it
+    live). Anything ACP cannot change mid-session is a hard error: the external
+    ``mcp_servers`` set is fixed at ``session/new``, and a gateway cannot be
+    added after the fact.
+    """
+    functions, external = partition_tools(tools)
+    if external != session.external_servers:
+        raise ValueError(
+            "the run's MCPServerTool set changed after the ACP session was created; "
+            "ACP fixes mcp_servers at session/new — keep the set stable for the whole run."
+        )
+    if session.gateway is not None:
+        session.gateway.tools = functions
+    elif functions:
+        raise ValueError(
+            "function tools appeared after the ACP session was created without a tool "
+            "gateway; ACP fixes mcp_servers at session/new — provide the tools on the first turn."
+        )
+
+
 async def _cancel_quietly(session: ACPSession) -> None:
     try:
         if session.conn is not None and session.session_id is not None:
             await session.conn.cancel(session_id=session.session_id)
-    except Exception:  # noqa: BLE001 — cancellation is best-effort
-        pass
+    except Exception as e:  # noqa: BLE001 — cancellation is best-effort
+        logger.debug("session/cancel failed (best-effort): %s", e)

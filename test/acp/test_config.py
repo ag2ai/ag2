@@ -80,3 +80,12 @@ def test_acp_config_is_usable_directly() -> None:
     cfg = ACPConfig(command=["my-agent", "--acp"], permission_policy="auto")
     assert cfg.command == ["my-agent", "--acp"]
     assert cfg.permission_policy == "auto"
+
+
+def test_expose_tools_defaults_on_and_survives_copy() -> None:
+    cfg = ACPConfig()
+    assert cfg.expose_tools is True
+
+    off = cfg.copy(expose_tools=False)
+    assert off.expose_tools is False
+    assert cfg.expose_tools is True  # original untouched
