@@ -396,6 +396,84 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
 
 
 @pytest.mark.asyncio
+async def test_delegate_resolves_functions_namespaced_target() -> None:
+    """A ``functions.``-prefixed target still resolves to the real peer.
+
+    Regression for #3000: LLMs occasionally echo OpenAI's ``functions.`` tool
+    namespace into the delegate target (e.g. ``functions.bob``). The literal
+    name misses the registry, so the consult would fail and the model re-guess
+    into a stalled run. ``delegate`` must fall back to the unprefixed name.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    from ag2.network.policies import AGENT_CLIENT_DEP
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await bob_hc.register(_agent("bob", "the answer is 42"), Passport(name="bob"), Resume())
+
+    delegate_tool = make_delegate_tool(alice)
+    result = await _invoke(
+        delegate_tool,
+        {"target": "functions.bob", "prompt": "what's the answer?"},
+        dependencies={AGENT_CLIENT_DEP: alice},
+    )
+
+    assert "42" in result
+    assert "not found" not in result
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_delegate_unknown_target_lists_available_peers() -> None:
+    """An invented target's not-found error enumerates the real peers.
+
+    Regression for #3000: when the model invents a target (e.g.
+    ``PPTDialogScript``) no prefix-strip recovers it, and a bare ``not found``
+    error gives the model nothing to correct toward, so it re-guesses into a
+    stalled run. The error must list the live targets so the next turn can pick
+    a real one. The caller itself is not a valid delegate target, so it must be
+    excluded from the list.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    from ag2.network.policies import AGENT_CLIENT_DEP
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    carol_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await carol_hc.register(_agent("carol"), Passport(name="carol"), Resume())
+
+    delegate_tool = make_delegate_tool(alice)
+    result = await _invoke(
+        delegate_tool,
+        {"target": "PPTDialogScript", "prompt": "generate a script"},
+        dependencies={AGENT_CLIENT_DEP: alice},
+    )
+
+    assert "not found" in result
+    assert "bob" in result
+    assert "carol" in result
+    # The initiator is not a valid delegate target and must not be suggested.
+    assert "alice" not in result
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await carol_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
 async def test_delegate_to_self_returns_actionable_error() -> None:
     """Delegating to one's own name fails fast with a clear message.
 
