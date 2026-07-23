@@ -179,6 +179,58 @@ async with agent.run("Add a healthcheck endpoint") as run:
 | mode change | `ACPModeChange` |
 | available commands | `ACPAvailableCommands` |
 
+## Your tools inside the CLI agent
+
+If the AG2 agent has tools, they are automatically served to the CLI agent
+over MCP — no configuration needed. When the ACP session starts, AG2 runs an
+in-process MCP server on `127.0.0.1` with the run's tools and hands its URL to
+the CLI agent (`session/new` → `mcp_servers`). Tool calls execute inside your
+AG2 process, through the normal tool pipeline (middleware and events included).
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+def get_ticket(ticket_id: str) -> dict:
+    """Fetch a ticket from the internal tracker."""
+    return {"id": ticket_id, "status": "open"}
+
+agent = Agent(
+    "dev",
+    config=ClaudeCodeConfig(cwd="./repo", permission_policy="auto"),
+    tools=[get_ticket],
+)
+# Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
+```
+
+What reaches the CLI agent:
+
+| AG2 tool | Forwarded? | How |
+| :--- | :--- | :--- |
+| Function tools (Python callables, toolkits) | Yes | served from the in-process MCP server |
+| MCP toolkits mounted on the agent | Yes | same — they are function tools |
+| `MCPServerTool` (external MCP server) | Yes | its URL is passed straight to the CLI agent |
+| Provider server-side builtins (`WebSearchTool`, …) | No — raises `UnsupportedToolError` | these are flags inside a provider API request; the CLI agent has its own native equivalents (web search, shell, file access) |
+
+Details and knobs:
+
+- `expose_tools=False` on the config disables all of this.
+- The set of MCP servers is fixed when the session starts (first turn).
+  Function tools added or removed on later turns update the served list
+  automatically, but changing the `MCPServerTool` set mid-run — or introducing
+  function tools when the first turn had none — raises a `ValueError`.
+- The MCP server binds to `127.0.0.1` on a random port and lives exactly as
+  long as the ACP session. Requests are validated against `Host`/`Origin`
+  allowlists (DNS-rebinding protection); there is no authentication beyond
+  that, so other local processes on the same machine can reach it.
+- A tool result with `final=True` loses its "stop the run now" semantics over
+  ACP: the CLI agent receives it as ordinary tool output and keeps going (a
+  warning is logged).
+- The CLI agent must advertise HTTP MCP support (`mcp_capabilities.http`) —
+  Claude Code, Codex and OpenCode adapters all do; otherwise
+  `MCPCapabilityError` is raised.
+- Requires the `mcp` extra (installed automatically with `ag2[acp]`).
+
 ## Permissions (Human-in-the-Loop)
 
 When the agent asks to perform a sensitive action, it sends a permission
@@ -216,10 +268,9 @@ manager = Agent(
 
 !!! note
 
-    Exposing AG2 `tools=[...]` (including `.as_tool()` subagents) to the CLI agent
-    requires the MCP tool bridge, landing in a follow-up. Today, CLI-backed agents
-    use their own built-in tools; `tools=[...]` orchestration via ACP is on the
-    roadmap.
+    `tools=[...]` (including `.as_tool()` subagents) are served to the CLI agent
+    over MCP automatically — see
+    [Your tools inside the CLI agent](/docs/user-guide/cli_agents/#your-tools-inside-the-cli-agent).
 
 ## Configuration reference
 
@@ -235,9 +286,10 @@ manager = Agent(
 | `fs_root` | `cwd` | Root for mediated `fs/*` access (path-confined) |
 | `allow_terminal` | `True` | Advertise the ACP terminal capability |
 | `additional_directories` | `[]` | Extra workspace roots |
-| `startup_timeout` | `30.0` | Subprocess spawn + handshake timeout (s) |
+| `startup_timeout` | `30.0` | Tool-gateway HTTP server startup timeout (s) |
 | `turn_timeout` | `None` | Per-prompt-turn timeout (s) |
 | `cancel_timeout` | `5.0` | Grace period (s) after a timed-out turn signals `session/cancel` before the subprocess is hard-stopped |
+| `expose_tools` | `True` | Serve the agent's tools to the CLI agent over MCP (default `True`) |
 
 File and terminal operations the agent requests are mediated by AG2: file access
 is confined to `fs_root`, and the agent's commands run under AG2's control.

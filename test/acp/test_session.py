@@ -2,7 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.acp.session import new_prompt_text
+from contextlib import asynccontextmanager
+
+import pytest
+from acp import schema
+
+from ag2.acp import MCPCapabilityError
+from ag2.acp.bridge import make_bridge
+from ag2.acp.session import ACPSession, new_prompt_text
+from ag2.acp.testing import ACPTurn, fake_acp_config
 from ag2.events import ModelRequest, TextInput
 from ag2.events.types import ModelMessage
 
@@ -30,3 +38,83 @@ def test_delta_empty_when_nothing_new() -> None:
     text, count = new_prompt_text(msgs, sent_count=1)
     assert text == ""
     assert count == 1
+
+
+def _msg(text: str) -> schema.AgentMessageChunk:
+    return schema.AgentMessageChunk(
+        session_update="agent_message_chunk",
+        content=schema.TextContentBlock(type="text", text=text),
+    )
+
+
+@pytest.mark.asyncio
+async def test_ensure_passes_mcp_servers_to_new_session() -> None:
+    server = schema.HttpMcpServer(type="http", name="ext", url="http://127.0.0.1:1/mcp", headers=[])
+    cfg = fake_acp_config(ACPTurn(updates=[_msg("hi")]), permission_policy="auto")
+
+    session = ACPSession()
+    session.bridge = make_bridge(cfg)
+    await session.ensure(
+        session.bridge,
+        cfg.command,
+        cwd=".",
+        env=None,
+        protocol_version=1,
+        mcp_servers=[server],
+        connect=cfg._connect,
+    )
+    try:
+        assert session.conn.new_session_kwargs["mcp_servers"] == [server]
+    finally:
+        await session.close()
+
+
+@pytest.mark.asyncio
+async def test_ensure_rejects_agent_without_http_mcp() -> None:
+    server = schema.HttpMcpServer(type="http", name="ext", url="http://127.0.0.1:1/mcp", headers=[])
+    cfg = fake_acp_config(
+        ACPTurn(updates=[_msg("hi")]),
+        permission_policy="auto",
+        agent_capabilities=schema.AgentCapabilities(),  # mcp http defaults to False
+    )
+
+    conns = []
+
+    @asynccontextmanager
+    async def connect(client):
+        async with cfg._connect(client) as (conn, proc):
+            conns.append(conn)
+            yield conn, proc
+
+    session = ACPSession()
+    session.bridge = make_bridge(cfg)
+    with pytest.raises(MCPCapabilityError):
+        await session.ensure(
+            session.bridge,
+            cfg.command,
+            cwd=".",
+            env=None,
+            protocol_version=1,
+            mcp_servers=[server],
+            connect=connect,
+        )
+    assert session.started is False
+    (conn,) = conns
+    assert conn.closed  # ensure tore the connection down, not just left it dangling
+
+
+@pytest.mark.asyncio
+async def test_ensure_skips_capability_check_without_servers() -> None:
+    cfg = fake_acp_config(
+        ACPTurn(updates=[_msg("hi")]),
+        permission_policy="auto",
+        agent_capabilities=schema.AgentCapabilities(),  # http False, but nothing to expose
+    )
+
+    session = ACPSession()
+    session.bridge = make_bridge(cfg)
+    await session.ensure(session.bridge, cfg.command, cwd=".", env=None, protocol_version=1, connect=cfg._connect)
+    try:
+        assert session.started is True
+    finally:
+        await session.close()

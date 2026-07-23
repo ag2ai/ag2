@@ -72,7 +72,11 @@ dependencies = [
 # === Agent protocols ===
 a2a = ["a2a-sdk>=1.1.0,<2"]
 a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<2"]
-acp = ["agent-client-protocol>=0.10.1,<0.12"]
+acp = [
+    "agent-client-protocol>=0.10.1,<0.12",
+    # Tool exposure to CLI agents runs an in-process HTTP MCP server.
+    "mcp>=1.11.0,<2",
+]
 ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
