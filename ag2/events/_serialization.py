@@ -54,7 +54,7 @@ def serialize_value(value: Any) -> Any:
     if _is_event_instance(value):
         return {"__event__": qualified_name(value), **event_to_dict(value)}
     if isinstance(value, Enum):
-        return value.value
+        return {"__enum__": qualified_name_from_class(type(value)), "value": value.value}
     if isinstance(value, Exception):
         return {"__exception__": type(value).__name__, "message": str(value)}
     if isinstance(value, dict):
@@ -104,6 +104,10 @@ def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
             return base64.b64decode(value["__bytes__"])
         if "__uuid__" in value:
             return UUID(value["__uuid__"])
+        if "__enum__" in value:
+            enum_cls = _resolve_class(value["__enum__"])
+            assert issubclass(enum_cls, Enum)
+            return enum_cls(value["value"])
         if "__exception__" in value:
             # Reconstruct as a generic Exception with the original message
             return Exception(value.get("message", ""))
