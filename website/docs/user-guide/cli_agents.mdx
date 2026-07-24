@@ -243,6 +243,9 @@ request. `permission_policy` controls the response:
 | `"deny"` | Reject automatically |
 
 ```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
 agent = Agent(
     "coder",
     config=ClaudeCodeConfig(cwd="/repo", permission_policy="auto"),  # autonomous
