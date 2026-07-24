@@ -61,7 +61,7 @@ async def test_ensure_passes_mcp_servers_to_new_session() -> None:
         env=None,
         protocol_version=1,
         mcp_servers=[server],
-        connect=cfg._connect,
+        connect=cfg.connect,
     )
     try:
         assert session.conn.new_session_kwargs["mcp_servers"] == [server]
@@ -82,7 +82,7 @@ async def test_ensure_rejects_agent_without_http_mcp() -> None:
 
     @asynccontextmanager
     async def connect(client):
-        async with cfg._connect(client) as (conn, proc):
+        async with cfg.connect(client) as (conn, proc):
             conns.append(conn)
             yield conn, proc
 
@@ -113,7 +113,7 @@ async def test_ensure_skips_capability_check_without_servers() -> None:
 
     session = ACPSession()
     session.bridge = make_bridge(cfg)
-    await session.ensure(session.bridge, cfg.command, cwd=".", env=None, protocol_version=1, connect=cfg._connect)
+    await session.ensure(session.bridge, cfg.command, cwd=".", env=None, protocol_version=1, connect=cfg.connect)
     try:
         assert session.started is True
     finally:

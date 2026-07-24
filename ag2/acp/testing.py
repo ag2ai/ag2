@@ -25,10 +25,16 @@ from .config import ACPConfig
 from .types import SessionUpdate
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
+
+    from ag2.context import StreamId
+
+    from .config import ConnectHook
+    from .session import ACPSession
 
 __all__ = (
     "ACPTurn",
+    "FakeACPConfig",
     "fake_acp_config",
 )
 
@@ -101,11 +107,31 @@ class _FakeConnection:
         return schema.PromptResponse(stop_reason=turn.stop_reason, usage=turn.usage)
 
 
+@dataclass(slots=True)
+class FakeACPConfig(ACPConfig):
+    """:class:`ACPConfig` bound to the scripted in-process agent.
+
+    Adds public read-only views of the run-scoped state so tests can assert on
+    session lifecycle (leaks, teardown) without reaching into private fields.
+    """
+
+    @property
+    def sessions(self) -> "dict[StreamId, ACPSession]":
+        """Live sessions keyed by stream id (empty once ``aclose()`` ran)."""
+        return self._sessions
+
+    @property
+    def connect(self) -> "ConnectHook":
+        """The in-process connection opener, for driving ``ACPSession.ensure`` directly."""
+        assert self._connect is not None
+        return self._connect
+
+
 def fake_acp_config(
     *turns: ACPTurn,
     agent_capabilities: "schema.AgentCapabilities | None" = None,
     **overrides: Any,
-) -> ACPConfig:
+) -> FakeACPConfig:
     """Build an :class:`ACPConfig` backed by an in-process scripted agent.
 
     No subprocess is spawned: each ``Agent.run`` model-turn consumes one ``turns``
@@ -116,11 +142,11 @@ def fake_acp_config(
     """
     if agent_capabilities is None:
         agent_capabilities = schema.AgentCapabilities(mcp_capabilities=schema.McpCapabilities(http=True, sse=True))
-    config = ACPConfig(**overrides)
+    config = FakeACPConfig(**overrides)
     script = list(turns)
 
     @asynccontextmanager
-    async def connect(client: acp.Client) -> "AsyncIterator[tuple[_FakeConnection, None]]":
+    async def connect(client: acp.Client) -> "AsyncGenerator[tuple[_FakeConnection, None]]":
         conn = _FakeConnection(client, iter(script), agent_capabilities=agent_capabilities)
         try:
             yield conn, None

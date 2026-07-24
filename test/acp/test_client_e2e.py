@@ -13,7 +13,7 @@ from mcp.client.streamable_http import streamable_http_client
 from ag2 import Agent
 from ag2.acp import MCPCapabilityError
 from ag2.acp.testing import ACPTurn, fake_acp_config
-from ag2.events import BaseEvent, ModelReasoning
+from ag2.events import BaseEvent, ModelReasoning, ModelResponse
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
 from ag2.exceptions import UnsupportedToolError
 from ag2.tools.builtin.mcp_server import MCPServerTool
@@ -70,13 +70,18 @@ async def test_turn_timeout_surfaces_timeout() -> None:
     cfg = fake_acp_config(ACPTurn(hang=True), permission_policy="auto", turn_timeout=0.5)
     agent = Agent("acp", config=cfg)
 
+    seen: list[BaseEvent] = []
     try:
         async with agent.run("hang") as run:
+            run.stream.subscribe(lambda e: seen.append(e))
             result = await run.result()
     finally:
         await cfg.aclose()
+
     # The turn timed out; body is whatever streamed before the timeout (empty here).
     assert result.body == ""
+    [response] = [e for e in seen if isinstance(e, ModelResponse)]
+    assert response.finish_reason == "timeout"
 
 
 @pytest.mark.asyncio
@@ -90,10 +95,10 @@ async def test_aclose_closes_session() -> None:
     async with agent.run("hello") as run:
         await run.result()
 
-    assert cfg._sessions  # a live session was created
-    conns = [s.conn for s in cfg._sessions.values()]
+    assert cfg.sessions  # a live session was created
+    conns = [s.conn for s in cfg.sessions.values()]
     await cfg.aclose()
-    assert cfg._sessions == {}
+    assert cfg.sessions == {}
     for conn in conns:
         assert conn is not None and conn.closed  # the connection context was exited
 
@@ -112,7 +117,7 @@ async def test_function_tools_are_exposed_and_callable_over_mcp() -> None:
     async def drive_mcp() -> None:
         # Runs inside the fake agent's prompt turn — exactly when a real CLI
         # agent would call the gateway.
-        session = next(iter(cfg._sessions.values()))
+        session = next(iter(cfg.sessions.values()))
         assert session.gateway is not None and session.gateway.url is not None
         observed["mcp_servers"] = session.conn.new_session_kwargs["mcp_servers"]
         async with (
@@ -162,7 +167,7 @@ async def test_expose_tools_false_disables_gateway() -> None:
     try:
         async with agent.run("hello") as run:
             await run.result()
-        session = next(iter(cfg._sessions.values()))
+        session = next(iter(cfg.sessions.values()))
         assert session.gateway is None
         assert session.conn.new_session_kwargs.get("mcp_servers") is None
     finally:
@@ -177,7 +182,7 @@ async def test_provider_builtin_tool_is_hard_error() -> None:
         with pytest.raises(UnsupportedToolError):
             async with agent.run("hello") as run:
                 await run.result()
-        assert cfg._sessions == {}  # nothing leaked on the failure path
+        assert cfg.sessions == {}  # nothing leaked on the failure path
     finally:
         await cfg.aclose()
 
@@ -193,7 +198,7 @@ async def test_concurrent_tool_calls_are_correlated() -> None:
     cfg: Any = None
 
     async def drive_mcp() -> None:
-        session = next(iter(cfg._sessions.values()))
+        session = next(iter(cfg.sessions.values()))
         async with (
             streamable_http_client(session.gateway.url) as (read, write, _),
             ClientSession(read, write) as mcp_session,
@@ -226,7 +231,7 @@ async def test_unknown_tool_name_returns_error_not_hang() -> None:
     cfg: Any = None
 
     async def drive_mcp() -> None:
-        session = next(iter(cfg._sessions.values()))
+        session = next(iter(cfg.sessions.values()))
         async with (
             streamable_http_client(session.gateway.url) as (read, write, _),
             ClientSession(read, write) as mcp_session,
@@ -264,7 +269,7 @@ async def test_capability_error_tears_down_gateway_and_session() -> None:
         with pytest.raises(MCPCapabilityError):
             async with agent.run("hello") as run:
                 await run.result()
-        assert cfg._sessions == {}  # the started gateway did not leak a session
+        assert cfg.sessions == {}  # the started gateway did not leak a session
     finally:
         await cfg.aclose()
 
@@ -284,7 +289,7 @@ async def test_second_turn_hot_updates_gateway_tools() -> None:
 
     def snapshot_tools(key: str):
         async def probe() -> None:
-            session = next(iter(cfg._sessions.values()))
+            session = next(iter(cfg.sessions.values()))
             async with (
                 streamable_http_client(session.gateway.url) as (read, write, _),
                 ClientSession(read, write) as mcp_session,
@@ -365,7 +370,7 @@ async def test_gateway_shuts_down_with_session() -> None:
     agent = Agent("acp", config=cfg, tools=[add])
     async with agent.run("hello") as run:
         await run.result()
-    session = next(iter(cfg._sessions.values()))
+    session = next(iter(cfg.sessions.values()))
     gateway = session.gateway
     assert gateway is not None and gateway.url is not None
     await cfg.aclose()

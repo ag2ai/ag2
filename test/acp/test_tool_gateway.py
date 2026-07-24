@@ -14,6 +14,7 @@ import pytest
 from acp import schema
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from mcp.types import CallToolResult
 
 from ag2.acp.bridge import BridgeState
 from ag2.acp.config import ACPConfig
@@ -170,109 +171,80 @@ class _FakeContext:
 
 
 @pytest.mark.asyncio
-async def test_call_tool_executes_via_event_stream() -> None:
-    state = BridgeState(ACPConfig())
-    state.context = _FakeContext(lambda call: ToolResultEvent.from_call(call, "sum is 5"))
-    gateway = ToolGateway(state, [_fn_add()])
-    url = await gateway.start()
-    try:
-        async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool("add", {"a": 2, "b": 3})
-    finally:
-        await gateway.close()
+class TestCallTool:
+    """``tools/call`` end to end: a real MCP HTTP client against the gateway."""
 
-    assert result.isError is not True
-    assert result.content[0].text == "sum is 5"
-    (call,) = state.context.sent
-    assert call.name == "add"
-    assert call.serialized_arguments == {"a": 2, "b": 3}
+    async def _call(self, state: BridgeState, arguments: dict[str, int]) -> CallToolResult:
+        gateway = ToolGateway(state, [_fn_add()])
+        url = await gateway.start()
+        try:
+            async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
+                await session.initialize()
+                return await session.call_tool("add", arguments)
+        finally:
+            await gateway.close()
 
+    async def test_executes_via_event_stream(self) -> None:
+        state = BridgeState(ACPConfig())
+        state.context = _FakeContext(lambda call: ToolResultEvent.from_call(call, "sum is 5"))
 
-@pytest.mark.asyncio
-async def test_call_tool_maps_tool_error_to_is_error() -> None:
-    state = BridgeState(ACPConfig())
-    state.context = _FakeContext(lambda call: ToolErrorEvent.from_call(call, RuntimeError("boom")))
-    gateway = ToolGateway(state, [_fn_add()])
-    url = await gateway.start()
-    try:
-        async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool("add", {"a": 1, "b": 1})
-    finally:
-        await gateway.close()
+        result = await self._call(state, {"a": 2, "b": 3})
 
-    assert result.isError is True
-    assert "boom" in result.content[0].text
+        assert result.isError is not True
+        assert result.content[0].text == "sum is 5"
+        (call,) = state.context.sent
+        assert call.name == "add"
+        assert call.serialized_arguments == {"a": 2, "b": 3}
 
+    async def test_maps_tool_error_to_is_error(self) -> None:
+        state = BridgeState(ACPConfig())
+        state.context = _FakeContext(lambda call: ToolErrorEvent.from_call(call, RuntimeError("boom")))
 
-@pytest.mark.asyncio
-async def test_call_tool_without_active_run_is_error() -> None:
-    state = BridgeState(ACPConfig())  # state.context is None
-    gateway = ToolGateway(state, [_fn_add()])
-    url = await gateway.start()
-    try:
-        async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool("add", {"a": 1, "b": 1})
-    finally:
-        await gateway.close()
-    assert result.isError is True  # the lowlevel server converts the raised RuntimeError
-    assert "no active AG2 run" in result.content[0].text
+        result = await self._call(state, {"a": 1, "b": 1})
 
+        assert result.isError is True
+        assert "boom" in result.content[0].text
 
-@pytest.mark.asyncio
-async def test_call_tool_rejects_client_tool() -> None:
-    state = BridgeState(ACPConfig())
-    state.context = _FakeContext(lambda call: ClientToolCallEvent.from_call(call))
-    gateway = ToolGateway(state, [_fn_add()])
-    url = await gateway.start()
-    try:
-        async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool("add", {"a": 1, "b": 1})
-    finally:
-        await gateway.close()
-    assert result.isError is True
-    assert "client-side execution" in result.content[0].text
+    async def test_without_active_run_is_error(self) -> None:
+        state = BridgeState(ACPConfig())  # state.context is None
 
+        result = await self._call(state, {"a": 1, "b": 1})
 
-@pytest.mark.asyncio
-async def test_call_tool_serializes_data_result_as_json() -> None:
-    state = BridgeState(ACPConfig())
-    state.context = _FakeContext(lambda call: ToolResultEvent.from_call(call, {"sum": 5}))
-    gateway = ToolGateway(state, [_fn_add()])
-    url = await gateway.start()
-    try:
-        async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool("add", {"a": 2, "b": 3})
-    finally:
-        await gateway.close()
-    assert result.isError is not True
-    assert result.content[0].text == '{"sum": 5}'
+        assert result.isError is True  # the lowlevel server converts the raised RuntimeError
+        assert "no active AG2 run" in result.content[0].text
 
+    async def test_rejects_client_tool(self) -> None:
+        state = BridgeState(ACPConfig())
+        state.context = _FakeContext(lambda call: ClientToolCallEvent.from_call(call))
 
-@pytest.mark.asyncio
-async def test_call_tool_maps_image_result_to_image_content() -> None:
-    png = b"\x89PNG\r\n\x1a\nfake"
-    state = BridgeState(ACPConfig())
-    state.context = _FakeContext(
-        lambda call: ToolResultEvent.from_call(call, ToolResult(BinaryInput(png, media_type="image/png")))
-    )
-    gateway = ToolGateway(state, [_fn_add()])
-    url = await gateway.start()
-    try:
-        async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool("add", {"a": 1, "b": 1})
-    finally:
-        await gateway.close()
-    assert result.isError is not True
-    (block,) = result.content
-    assert block.type == "image"
-    assert block.mimeType == "image/png"
-    assert base64.b64decode(block.data) == png
+        result = await self._call(state, {"a": 1, "b": 1})
+
+        assert result.isError is True
+        assert "client-side execution" in result.content[0].text
+
+    async def test_serializes_data_result_as_json(self) -> None:
+        state = BridgeState(ACPConfig())
+        state.context = _FakeContext(lambda call: ToolResultEvent.from_call(call, {"sum": 5}))
+
+        result = await self._call(state, {"a": 2, "b": 3})
+
+        assert result.isError is not True
+        assert result.content[0].text == '{"sum": 5}'
+
+    async def test_maps_image_result_to_image_content(self) -> None:
+        png = b"\x89PNG\r\n\x1a\nfake"
+        state = BridgeState(ACPConfig())
+        state.context = _FakeContext(
+            lambda call: ToolResultEvent.from_call(call, ToolResult(BinaryInput(png, media_type="image/png")))
+        )
+
+        result = await self._call(state, {"a": 1, "b": 1})
+
+        assert result.isError is not True
+        (block,) = result.content
+        assert block.type == "image"
+        assert block.mimeType == "image/png"
+        assert base64.b64decode(block.data) == png
 
 
 @pytest.mark.asyncio
