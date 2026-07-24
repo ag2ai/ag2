@@ -98,8 +98,8 @@ It now lives in its own repository and has its own documentation site:
 If any of the following appear in your code, you are on Classic — stay on it, and use [classic.docs.ag2.ai](https://classic.docs.ag2.ai):
 
 ```python
-import autogen                                    # the autogen.* namespace
-from autogen import ConversableAgent, GroupChat   # classic agent classes
+import autogen  # the autogen.* namespace
+from autogen import ConversableAgent, GroupChat  # classic agent classes
 from autogen import AssistantAgent, UserProxyAgent
 ```
 
@@ -139,7 +139,7 @@ Minimal dependencies are installed by default. Install the extra that matches yo
 Each provider config reads its standard environment variable, so keys never need to be hardcoded or checked in:
 
 ```bash
-export OPENAI_API_KEY="your-api-key"       # or ANTHROPIC_API_KEY, GEMINI_API_KEY, ...
+export OPENAI_API_KEY="<your-api-key>"     # or ANTHROPIC_API_KEY, GEMINI_API_KEY, ...
 ```
 
 You can also pass a key explicitly with `OpenAIConfig(model="gpt-4o-mini", api_key=...)` — useful when each request brings its own key.
