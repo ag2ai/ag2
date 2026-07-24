@@ -23,7 +23,6 @@ import weakref
 from asyncio.subprocess import Process
 from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING
-from uuid import uuid4
 
 import acp
 from acp import schema
@@ -140,10 +139,11 @@ class ACPClient:
         text, new_count = new_prompt_text(messages, session.sent_count)
 
         async def _run_turn() -> schema.PromptResponse:
+            # ACP 0.11 dropped PromptRequest.message_id; extra kwargs would only
+            # end up in the request's `_meta`, so send none.
             return await conn.prompt(
                 prompt=[acp.text_block(text)],
                 session_id=session_id,
-                message_id=str(uuid4()),
             )
 
         timed_out = False

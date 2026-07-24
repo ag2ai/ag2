@@ -11,21 +11,31 @@ friends) are flags inside a provider API request — there is nothing local to
 execute — so they are rejected with :class:`~ag2.exceptions.UnsupportedToolError`;
 CLI agents ship their own native equivalents.
 
-The ``mcp`` SDK ships with the ``acp`` extra, but ``uvicorn``/``starlette`` are
-imported lazily inside :meth:`ToolGateway.start` so importing ``ag2.acp`` stays
-cheap and a broken ``mcp`` install only surfaces when function tools actually
-need exposing.
+The ``mcp`` SDK — together with the ``uvicorn``/``starlette`` server stack it
+depends on — ships with the ``acp`` extra. A broken install surfaces on
+``import ag2.acp`` with the ``ag2[acp]`` install hint (see the package
+``__init__``).
 """
 
 import asyncio
 import base64
 import json
 import logging
-from collections.abc import Iterable, Sequence
-from contextlib import contextmanager, suppress
+import socket
+from collections.abc import AsyncGenerator, Generator, Iterable, Sequence
+from contextlib import asynccontextmanager, contextmanager, suppress
 from typing import TYPE_CHECKING, Any
 
+import uvicorn
 from acp import schema
+from mcp.server.lowlevel import Server
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import CallToolResult, ImageContent, TextContent
+from mcp.types import Tool as MCPTool
+from starlette.applications import Starlette
+from starlette.routing import Mount
+from starlette.types import Receive, Scope, Send
 
 from ag2.events import (
     BinaryInput,
@@ -43,8 +53,6 @@ from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.final import FunctionToolSchema
 
 if TYPE_CHECKING:
-    import uvicorn
-
     from ag2.tools.schemas import ToolSchema
 
     from .bridge import BridgeState
@@ -99,6 +107,15 @@ def partition_tools(tools: "Iterable[ToolSchema]") -> tuple[list[FunctionToolSch
     return functions, external
 
 
+class _EmbeddedServer(uvicorn.Server):
+    # uvicorn's serve() replaces the process-wide SIGINT/SIGTERM handlers for its
+    # lifetime and replays captured signals on exit; an in-process gateway must
+    # never touch the host application's signal handling.
+    @contextmanager
+    def capture_signals(self) -> Generator[None]:
+        yield
+
+
 class ToolGateway:
     """In-process streamable-HTTP MCP server serving the run's function tools.
 
@@ -137,30 +154,6 @@ class ToolGateway:
 
     async def start(self) -> str:
         """Bind 127.0.0.1:<os-assigned port>, start serving, return the MCP URL."""
-        try:
-            import socket
-
-            import uvicorn
-            from mcp.server.lowlevel import Server
-            from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-            from mcp.server.transport_security import TransportSecuritySettings
-            from mcp.types import Tool as MCPTool
-            from starlette.applications import Starlette
-            from starlette.routing import Mount
-        except ImportError as e:  # pragma: no cover - exercised only with a broken install
-            raise ImportError(
-                "Exposing AG2 tools to an ACP agent requires the MCP SDK, which ships with "
-                "the `ag2[acp]` extra — reinstall it (or set expose_tools=False on the ACP config)."
-            ) from e
-
-        class _EmbeddedServer(uvicorn.Server):
-            # uvicorn's serve() replaces the process-wide SIGINT/SIGTERM handlers
-            # for its lifetime and replays captured signals on exit; an in-process
-            # gateway must never touch the host application's signal handling.
-            @contextmanager
-            def capture_signals(self) -> Any:
-                yield
-
         server: Server = Server(name=self.name)
         gateway = self
 
@@ -179,7 +172,7 @@ class ToolGateway:
         # matching the executor path — the SDK's jsonschema check would reject
         # values like "5" for an int that the tool itself accepts.
         @server.call_tool(validate_input=False)  # type: ignore[no-untyped-call, misc, untyped-decorator]
-        async def _call_tool(name: str, arguments: dict[str, Any]) -> Any:
+        async def _call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult | list[TextContent | ImageContent]:
             return await gateway._execute(name, arguments or {})
 
         # Host/Origin validation: without it any local process — or a browser page
@@ -193,13 +186,11 @@ class ToolGateway:
             app=server, stateless=True, json_response=True, security_settings=security
         )
 
-        async def handle(scope: Any, receive: Any, send: Any) -> None:
+        async def handle(scope: Scope, receive: Receive, send: Send) -> None:
             await manager.handle_request(scope, receive, send)
 
-        from contextlib import asynccontextmanager
-
         @asynccontextmanager
-        async def lifespan(_app: Any) -> Any:
+        async def lifespan(_app: Starlette) -> AsyncGenerator[None]:
             async with manager.run():
                 yield
 
@@ -266,9 +257,7 @@ class ToolGateway:
         except Exception:
             logger.exception("MCP tool gateway shutdown raised")
 
-    async def _execute(self, name: str, arguments: dict[str, Any]) -> Any:
-        from mcp.types import CallToolResult, ImageContent, TextContent
-
+    async def _execute(self, name: str, arguments: dict[str, Any]) -> CallToolResult | list[TextContent | ImageContent]:
         context = self.state.context
         if context is None:
             logger.warning("MCP tool gateway: tools/call %r received with no active AG2 run", name)
