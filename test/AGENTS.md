@@ -1,6 +1,6 @@
-# test/beta/ Guidelines
+# test/ Guidelines
 
-Use `just test-beta` as alias for `pytest` execution to run beta tests.
+Use `just test` as alias for `pytest` execution to run the tests.
 
 ## Testing Conventions
 
@@ -164,12 +164,30 @@ Do not use banner-style section dividers (e.g. `# ---\n# Section\n# ---`). Class
 
 ### Structure
 
-Provider-specific tool tests live in `test/beta/config/{provider}/tools/`:
+Provider-specific tool tests live in `test/config/{provider}/tools/`:
 - `test_{tool}.py` — e2e tests for supported tools (one file per tool)
 - `test_unsupported.py` — all unsupported tools for the provider in one file
 - `test_tool_to_api.py` — generic function tool mapping (not builtin-specific)
 
-Variable resolution tests live in `test/beta/tools/test_resolve.py`.
+Variable resolution tests live in `test/tools/test_resolve.py`.
+
+Provider test packages must stay importable when their SDK is absent — the LLM
+CI matrix installs one provider at a time, and an unguarded top-level
+`import anthropic` (directly, or via `ag2.config.{provider}`) breaks *collection*
+for the whole run, even though the test itself would be deselected.
+`test/config/{provider}/__init__.py` already guards the package with
+`pytest.importorskip(...)`, so put provider tests inside that package rather than
+in a new directory. A test that spans providers (e.g. under `test/tools/`) must
+guard itself at the top of the module, before the imports:
+
+```python
+import pytest
+
+pytest.importorskip("anthropic")
+pytest.importorskip("openai")
+
+from ag2.config.anthropic.mappers import tool_to_api
+```
 
 ### Test Pattern
 
@@ -189,7 +207,7 @@ Do **not** instantiate schema classes directly in provider tests — always go t
 
 ### Fixtures
 
-Use the shared `context` pytest fixture from `test/beta/config/conftest.py` (no need to import — pytest discovers it automatically):
+Use the shared `context` pytest fixture from `test/config/conftest.py` (no need to import — pytest discovers it automatically):
 
 ```python
 async def test_defaults(context: Context) -> None: ...
@@ -205,6 +223,6 @@ For OpenAI, test both `tool_to_api` (completions) and `tool_to_responses_api` (r
 
 ### Variable Resolution
 
-Each tool that accepts `Variable` parameters needs exactly 2 tests in `test/beta/tools/test_resolve.py`:
+Each tool that accepts `Variable` parameters needs exactly 2 tests in `test/tools/test_resolve.py`:
 1. Value resolved from context
 2. Missing key raises `KeyError`
