@@ -1,0 +1,92 @@
+---
+title: Tenki Sandbox Integration
+sidebarTitle: Tenki Sandbox
+---
+
+The `ag2.extensions.tenki` module runs AG2 shell and code tools in isolated [Tenki Sandbox](https://tenki.cloud/){.external-link target="_blank"} sessions. It implements AG2's native sandbox factory, so one environment provides persistent files across tool calls and deterministic cleanup.
+
+## Installation
+
+Install AG2, your model provider, and Tenki's Python SDK:
+
+```bash
+pip install "ag2[anthropic]" "tenki-sandbox>=0.4.0,<1"
+```
+
+Create an API key in Tenki and export it:
+
+```bash
+export TENKI_API_KEY="tk_your_api_key"
+```
+
+The SDK uses `https://api.tenki.cloud` by default. Set `TENKI_API_URL` only when targeting another Tenki deployment.
+
+## Use Tenki with an agent
+
+Use the environment as an async context manager. The sandbox is reused for every shell or code call inside the scope and terminated when the scope exits.
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tenki import TenkiEnvironment
+from ag2.tools import SandboxCodeTool, SandboxShellTool
+
+async def main() -> None:
+    env = TenkiEnvironment()
+    async with env:
+        agent = Agent(
+            "developer",
+            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            tools=[SandboxShellTool(env), SandboxCodeTool(env)],
+        )
+        reply = await agent.ask("Write hello.txt, then read it with Python.")
+        print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+`TenkiEnvironment()` discovers the sole project visible to the API key. If the key can access multiple projects, select one explicitly:
+
+```python linenums="1"
+from ag2.extensions.tenki import TenkiEnvironment
+
+env = TenkiEnvironment(project_id="your-project-id")
+```
+
+## Configure the sandbox
+
+The default working directory is `/home/tenki`. Python code uses the image's `python3` interpreter. Inbound networking is disabled, outbound networking is enabled, and every sandbox has a 15-minute `max_duration` backstop if client cleanup cannot run.
+
+```python linenums="1"
+from ag2.extensions.tenki import TenkiEnvironment, TenkiResources
+
+env = TenkiEnvironment(
+    project_id="your-project-id",
+    name="my-agent-sandbox",
+    image="workspace/image:tag",
+    env_vars={"APP_ENV": "sandbox"},
+    resources=TenkiResources(cpu_cores=2, memory_mb=4096, disk_size_gb=5),
+    timeout=60,
+    max_duration=900,
+)
+```
+
+| Parameter | Default | Purpose |
+| :--- | :--- | :--- |
+| `api_key` | `TENKI_API_KEY` | API authentication |
+| `api_url` | `TENKI_API_URL` or production | API endpoint |
+| `project_id` | Auto-detected when unique | Tenki project scope |
+| `name` | `ag2` | Session name for identification |
+| `image` | Tenki default image | Registry image reference |
+| `env_vars` | `{}` | Environment variables applied to the sandbox |
+| `resources` | Tenki defaults | CPU, memory, and disk overrides |
+| `timeout` | `60` seconds | Sandbox startup and command timeout |
+| `max_duration` | `900` seconds | Server-enforced session lifetime backstop |
+| `workdir` | `/home/tenki` | Working directory for commands and files |
+
+All credential and sandbox selection parameters accept [`Variable`](/docs/user-guide/context/variables) values for per-request resolution. Always close the environment with `async with` or `await env.aclose()`; `max_duration` is a fail-safe, not the normal cleanup path.
+
+Maintainer: [@camcalaquian](https://github.com/camcalaquian){.external-link target="_blank"} / Tenki.

@@ -139,6 +139,7 @@ All implementations must be re-exported from their public module's `__init__.py`
 ### Design principles
 
 - **Protocols over inheritance**: `LLMClient`, `ModelConfig`, `Stream`, `Storage`, `Tool` are all `Protocol` classes — implementations satisfy them structurally.
+- Sandbox factories may declare `code_runners`; `SandboxCodeTool` merges them before caller overrides.
 - **Async throughout**: all major operations (`ask`, tool execution, LLM calls) are async. Sync tool functions run via `sync_to_thread`.
 - **Event-driven**: all agent-loop communication flows through the `Stream` as typed events.
 - **Dependency injection**: all user-provided functions (tools, prompt hooks, HITL, etc.) use `Context`, `Inject`, and `Variable` annotations; resolution is handled by `fast_depends`.

@@ -18,7 +18,7 @@ from ag2.tools.tool import Tool
 class SandboxShellTool(Tool):
     """Exposes a single ``run_shell_command(command)`` function that runs
     shell commands inside an *environment* you choose — local subprocess,
-    Docker container, Daytona sandbox, or any custom backend.
+    Docker container, Daytona or Tenki sandbox, or any custom backend.
 
     The **environment** decides *where* commands run and carries all
     backend configuration (image, env vars, network, timeout, …). The
@@ -49,7 +49,7 @@ class SandboxShellTool(Tool):
         environment: The execution backend — a
                      :class:`~ag2.tools.sandbox.SandboxFactory`
                      (``LocalEnvironment`` / ``DockerEnvironment`` /
-                     ``DaytonaEnvironment``). ``None`` defaults to a
+                     ``DaytonaEnvironment`` / ``TenkiEnvironment``). ``None`` defaults to a
                      local subprocess (``LocalEnvironment()``).
         allowed: Whitelist of command prefixes. When ``readonly`` is set and
                  ``allowed`` is ``None``, a read-only command set is used.

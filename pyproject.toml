@@ -160,6 +160,7 @@ optionals = [
     "websockets>=14.0,<17",  # WsLink (ag2.network)
     "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
     "daytona>=0.171.0,<1",
+    "tenki-sandbox>=0.4.0,<1",
     "tinyfish>=0.2.3; python_version>='3.11'",
     "exa-py>=2.12.1,<3",
     # providers
@@ -181,6 +182,7 @@ docs = [
     # Extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.2.3; python_version>='3.11'",
     "daytona>=0.171.0,<1",
+    "tenki-sandbox>=0.4.0,<1",
     "exa-py>=2.12.1,<3",
     "docker>=6.0.0,<8",                # Code execution tools are exposed in the public API by the optional `ag2.tools` module
     "nlip-sdk>=0.1.0,<1",              # NLIP is exposed in the public API by the optional `autogen.extensions.nlip` module
