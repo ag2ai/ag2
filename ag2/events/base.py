@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import operator
+from enum import Enum
 import time
 from collections.abc import Callable
 from types import EllipsisType
@@ -161,6 +162,71 @@ def _process_fields(cls: type) -> None:
     cls._event_fields_ = fields  # type: ignore[attr-defined]
 
 
+
+
+def _resolve_field_annotation(cls: type, field_name: str) -> Any:
+    """Return the annotation for ``field_name`` from ``cls``'s MRO, if any."""
+    for klass in cls.__mro__:
+        if _annotationlib is not None:
+            annotations = _annotationlib.get_annotations(klass, format=_annotationlib.Format.FORWARDREF)
+        else:
+            annotations = getattr(klass, "__annotations__", {}) or vars(klass).get("__annotations__", {})
+        if field_name in annotations:
+            return annotations[field_name]
+    return None
+
+
+def _annotation_enum_candidates(annotation: Any) -> list[type[Enum]]:
+    """Extract Enum types from a field annotation (including unions / ForwardRef)."""
+    candidates: list[type[Enum]] = []
+
+    def _consider(ann: Any) -> None:
+        if ann is None or ann is type(None):
+            return
+        # ForwardRef / string annotations from postponed evaluation
+        if isinstance(ann, str):
+            return
+        if getattr(ann, "__forward_arg__", None) is not None:
+            return
+        if isinstance(ann, type) and issubclass(ann, Enum):
+            candidates.append(ann)
+            return
+        origin = getattr(ann, "__origin__", None)
+        args = getattr(ann, "__args__", None) or ()
+        if origin is not None and args:
+            for arg in args:
+                _consider(arg)
+            return
+        # PEP 604 unions (types.UnionType) expose __args__ without __origin__ on some versions
+        if args:
+            for arg in args:
+                _consider(arg)
+
+    _consider(annotation)
+    return candidates
+
+
+def _coerce_event_field_value(cls: type, field_name: str, value: Any) -> Any:
+    """Coerce JSON-round-tripped values back to annotated Enum types.
+
+    ``serialize_value`` stores Enums as their ``.value`` (often a ``str``).
+    Without this, ``from_dict`` / nested event reconstruction leaves fields
+    like ``BinaryInput.kind`` as plain strings, and identity checks such as
+    ``part.kind is BinaryType.IMAGE`` fail (see issue #3084).
+    """
+    if isinstance(value, Enum) or value is None:
+        return value
+    annotation = _resolve_field_annotation(cls, field_name)
+    if annotation is None:
+        return value
+    for enum_cls in _annotation_enum_candidates(annotation):
+        try:
+            return enum_cls(value)
+        except (TypeError, ValueError):
+            continue
+    return value
+
+
 @dataclass_transform(
     kw_only_default=True,
     field_specifiers=(Field,),
@@ -218,7 +284,7 @@ class BaseEvent(metaclass=_ConditionMeta):
         for key, value in defaults.items():
             setattr(self, key, value)
         for key, value in kwargs.items():
-            setattr(self, key, value)
+            setattr(self, key, _coerce_event_field_value(type(self), key, value))
 
     def __eq__(self, other: object) -> bool:
         if type(self) is not type(other):
