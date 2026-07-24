@@ -15,6 +15,21 @@ def _text(text: str) -> schema.TextContentBlock:
     return schema.TextContentBlock(type="text", text=text)
 
 
+def _model_option(current: str, *values: str) -> schema.SessionConfigOptionSelect:
+    return schema.SessionConfigOptionSelect(
+        id="model",
+        name="Model",
+        category="model",
+        type="select",
+        current_value=current,
+        options=[schema.SessionConfigSelectOption(value=v, name=v) for v in values],
+    )
+
+
+def _hi_turn() -> ACPTurn:
+    return ACPTurn(updates=[schema.AgentMessageChunk(session_update="agent_message_chunk", content=_text("hi"))])
+
+
 @pytest.mark.asyncio
 async def test_ask_streams_thoughts_tools_and_returns_text() -> None:
     cfg = fake_acp_config(
@@ -63,6 +78,76 @@ async def test_turn_timeout_surfaces_timeout() -> None:
         await cfg.aclose()
     # The turn timed out; body is whatever streamed before the timeout (empty here).
     assert result.body == ""
+
+
+@pytest.mark.asyncio
+class TestModelSelection:
+    async def test_selected_via_config_option(self) -> None:
+        calls: list[tuple[str, str | bool]] = []
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[_model_option("provider/default", "provider/default", "provider/smart")],
+            config_option_calls=calls,
+            permission_policy="auto",
+            model="provider/smart",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == "hi"
+        assert calls == [("model", "provider/smart")]
+
+    async def test_matching_current_is_not_resent(self) -> None:
+        calls: list[tuple[str, str | bool]] = []
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[_model_option("provider/default", "provider/default", "provider/smart")],
+            config_option_calls=calls,
+            permission_policy="auto",
+            model="provider/default",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert calls == []
+
+    async def test_ignored_when_agent_has_no_model_option(self) -> None:
+        # No configOptions advertised — `model` stays response metadata, as before.
+        calls: list[tuple[str, str | bool]] = []
+        cfg = fake_acp_config(_hi_turn(), config_option_calls=calls, permission_policy="auto", model="provider/smart")
+        agent = Agent("acp", config=cfg)
+
+        try:
+            reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == "hi"
+        assert calls == []
+        assert reply.response.model == "provider/smart"
+
+    async def test_not_offered_raises(self) -> None:
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[_model_option("provider/default", "provider/default")],
+            permission_policy="auto",
+            model="provider/nonexistent",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with pytest.raises(ValueError, match="not offered by the ACP agent"):
+                await agent.ask("hello")
+        finally:
+            await cfg.aclose()
 
 
 @pytest.mark.asyncio

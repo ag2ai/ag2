@@ -58,17 +58,33 @@ class _FakeConnection:
     (the bridge) exactly as a real agent's ``session/update`` callbacks would.
     """
 
-    def __init__(self, client: acp.Client, turns: Iterator[ACPTurn]) -> None:
+    def __init__(
+        self,
+        client: acp.Client,
+        turns: Iterator[ACPTurn],
+        config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
+        config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    ) -> None:
         self._client = client
         self._turns = turns
+        self._config_options = list(config_options or [])
         self._cancelled = asyncio.Event()
         self.closed = False
+        self.config_option_calls: list[tuple[str, str | bool]] = (
+            config_option_calls if config_option_calls is not None else []
+        )
 
     async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
         return schema.InitializeResponse(protocol_version=acp.PROTOCOL_VERSION)
 
     async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
-        return schema.NewSessionResponse(session_id="fake-session-1")
+        return schema.NewSessionResponse(
+            session_id="fake-session-1",
+            config_options=self._config_options or None,
+        )
+
+    async def set_config_option(self, *, session_id: str, config_id: str, value: Any, **kwargs: Any) -> None:
+        self.config_option_calls.append((config_id, value))
 
     async def cancel(self, **kwargs: Any) -> None:
         self._cancelled.set()
@@ -84,19 +100,29 @@ class _FakeConnection:
         return schema.PromptResponse(stop_reason=turn.stop_reason, usage=turn.usage)
 
 
-def fake_acp_config(*turns: ACPTurn, **overrides: Any) -> ACPConfig:
+def fake_acp_config(
+    *turns: ACPTurn,
+    config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
+    config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    **overrides: Any,
+) -> ACPConfig:
     """Build an :class:`ACPConfig` backed by an in-process scripted agent.
 
     No subprocess is spawned: each ``Agent.run`` model-turn consumes one ``turns``
-    entry in order. ``overrides`` are forwarded to ``ACPConfig`` (e.g.
-    ``permission_policy=...``, ``turn_timeout=...``).
+    entry in order. ``config_options`` are advertised in the ``session/new``
+    response (the agent's model picker et al.); ``session/set_config_option``
+    calls are appended to the caller-supplied ``config_option_calls`` list as
+    ``(config_id, value)`` tuples. ``overrides`` are forwarded to ``ACPConfig``
+    (e.g. ``permission_policy=...``, ``turn_timeout=...``).
     """
     config = ACPConfig(**overrides)
     script = list(turns)
 
     @asynccontextmanager
     async def connect(client: acp.Client) -> "AsyncIterator[tuple[_FakeConnection, None]]":
-        conn = _FakeConnection(client, iter(script))
+        conn = _FakeConnection(
+            client, iter(script), config_options=config_options, config_option_calls=config_option_calls
+        )
         try:
             yield conn, None
         finally:

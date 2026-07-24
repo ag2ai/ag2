@@ -5,9 +5,10 @@
 
 ``ACPConfig`` implements the :class:`~ag2.config.config.ModelConfig`
 protocol; ``create()`` returns an ``ACPClient`` that drives the CLI agent over
-the Agent Client Protocol. ``ClaudeCodeConfig``, ``CodexConfig`` and
-``OpenCodeConfig`` are thin subclasses carrying the launch defaults for the
-Claude Code, Codex and OpenCode ACP adapters respectively.
+the Agent Client Protocol. ``ClaudeCodeConfig``, ``CodexConfig``,
+``OpenCodeConfig`` and ``KiloCodeConfig`` are thin subclasses carrying the
+launch defaults for the Claude Code, Codex, OpenCode and Kilo Code ACP
+adapters respectively.
 """
 
 from dataclasses import dataclass, field, replace
@@ -49,7 +50,12 @@ class ACPConfig:
             inherited, merged with this mapping. So API-key auth must be passed
             here explicitly (a shell ``export`` of the key is not inherited); a
             disk login under ``$HOME`` (e.g. ``~/.claude``) works without it.
-        model: Agent model selection, when the CLI supports it.
+        model: Agent model selection. Applied at session start via ACP
+            ``session/set_config_option`` when the agent advertises a model
+            picker in ``session/new`` (Claude Code, OpenCode and Kilo Code all
+            do); the value must be one of the agent's advertised model ids.
+            ``None`` keeps the agent's default. When the agent has no model
+            option the value is response metadata only.
         permission_policy: How to answer ``session/request_permission``:
             ``"ask"`` routes to the agent's ``hitl_hook``/``context.input``,
             ``"auto"`` allows, ``"deny"`` rejects.
@@ -116,8 +122,8 @@ class ClaudeCodeConfig(ACPConfig):
     ``CLAUDE_CONFIG_DIR`` passed in ``env`` -- which uses that login's plan.
     Only a small env whitelist is inherited, so a shell ``export`` of the key
     does not reach the subprocess; put it in ``env`` (see ``ACPConfig.env``).
-    Select the model via the adapter's ``ANTHROPIC_MODEL`` env var (the
-    ``model`` field is currently response metadata only, not sent to the agent).
+    Select the model via the ``model`` field (one of the adapter's advertised
+    ids — see ``ACPConfig.model``) or the adapter's ``ANTHROPIC_MODEL`` env var.
     """
 
     command: list[str] = field(default_factory=lambda: ["claude-agent-acp"])
@@ -134,8 +140,8 @@ class CodexConfig(ACPConfig):
     billed per-token by the provider's API. Only a small env whitelist is
     inherited, so a shell ``export`` does not reach the subprocess; put the key
     in ``env`` (see ``ACPConfig.env``).
-    Select the model via the adapter's ``MODEL_PROVIDER`` env var (the
-    ``model`` field is currently response metadata only, not sent to the agent).
+    Select the model via the ``model`` field (one of the adapter's advertised
+    ids — see ``ACPConfig.model``) or the adapter's ``MODEL_PROVIDER`` env var.
     """
 
     command: list[str] = field(default_factory=lambda: ["codex-acp"])
@@ -149,10 +155,27 @@ class OpenCodeConfig(ACPConfig):
     ``opencode auth login``; its credentials are stored on disk under ``$HOME``
     (inherited automatically), so no ``env`` is needed. Billing follows the
     provider that login is on (an API key or a subscription). Select the model
-    in OpenCode's
-    config (``opencode.json``: ``"model": "provider/model"``); the ``acp``
-    subcommand takes no ``--model`` flag, and the ``model`` field here is
-    response metadata only, not sent to the agent.
+    via the ``model`` field (``"provider/model"`` as listed by
+    ``opencode models``) or in OpenCode's config (``opencode.json``:
+    ``"model": "provider/model"``).
     """
 
     command: list[str] = field(default_factory=lambda: ["opencode", "acp"])
+
+
+@dataclass(slots=True)
+class KiloCodeConfig(ACPConfig):
+    """``ACPConfig`` preset for the Kilo Code ACP adapter.
+
+    Launches ``kilo acp``; the ``kilo`` CLI must be on ``PATH`` (install with
+    ``npm install -g @kilocode/cli``, or override ``command`` to run it via
+    ``npx -y @kilocode/cli acp``). Authenticate with ``kilo auth login``; its
+    credentials are stored on disk under ``$HOME`` (inherited automatically),
+    so no ``env`` is needed. Billing follows the provider that login is on.
+    Always set ``model`` explicitly (``"provider/model"`` as listed by
+    ``kilo models``, e.g. ``"kilo/anthropic/claude-haiku-4.5"``): a fresh Kilo
+    ACP session may default to an unsuitable model (an image model, at the
+    time of writing), which ends every turn with an empty reply.
+    """
+
+    command: list[str] = field(default_factory=lambda: ["kilo", "acp"])

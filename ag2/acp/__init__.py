@@ -8,6 +8,6 @@ The integration is a :class:`ModelConfig` + :class:`LLMClient` pair — no chang
 to the :class:`~ag2.Agent` class.
 """
 
-from .config import ACPConfig, ClaudeCodeConfig, CodexConfig, OpenCodeConfig
+from .config import ACPConfig, ClaudeCodeConfig, CodexConfig, KiloCodeConfig, OpenCodeConfig
 
-__all__ = ["ACPConfig", "ClaudeCodeConfig", "CodexConfig", "OpenCodeConfig"]
+__all__ = ["ACPConfig", "ClaudeCodeConfig", "CodexConfig", "KiloCodeConfig", "OpenCodeConfig"]

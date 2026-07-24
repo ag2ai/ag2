@@ -79,6 +79,7 @@ class ACPClient:
             protocol_version=acp.PROTOCOL_VERSION,
             client_capabilities=self._client_capabilities(),
             additional_directories=self.config.additional_directories,
+            model=self.config.model,
             connect=self.config._connect,
         )
 

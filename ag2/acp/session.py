@@ -10,10 +10,11 @@ tracked by a high-water mark over the run's ``ModelRequest`` events.
 
 from asyncio.subprocess import Process
 from collections.abc import Mapping, Sequence
-from contextlib import AbstractAsyncContextManager
+from contextlib import AbstractAsyncContextManager, suppress
 from typing import TYPE_CHECKING
 
 import acp
+from acp import schema
 
 from ag2.events import BaseEvent, ModelRequest, TextInput
 
@@ -33,6 +34,45 @@ def new_prompt_text(messages: Sequence[BaseEvent], sent_count: int) -> tuple[str
     new = requests[sent_count:]
     parts = [p.content for req in new for p in req.parts if isinstance(p, TextInput)]
     return "\n".join(parts), len(requests)
+
+
+def _model_option(session: schema.NewSessionResponse) -> schema.SessionConfigOptionSelect | None:
+    """The agent's model picker, if it advertised one in ``session/new``."""
+    for option in session.config_options or []:
+        if isinstance(option, schema.SessionConfigOptionSelect) and option.id == "model":
+            return option
+    return None
+
+
+def _model_values(option: schema.SessionConfigOptionSelect) -> list[str]:
+    """The option's selectable values (entries are plain options or groups)."""
+    values: list[str] = []
+    for entry in option.options:
+        if isinstance(entry, schema.SessionConfigSelectGroup):
+            values.extend(choice.value for choice in entry.options)
+        else:
+            values.append(entry.value)
+    return values
+
+
+async def select_model(
+    conn: "acp.core.ClientSideConnection",
+    session: schema.NewSessionResponse,
+    model: str,
+) -> None:
+    """Apply ``model`` via ``session/set_config_option``.
+
+    No-op when the agent advertises no model picker (``model`` then stays
+    response metadata, as before) or when it already runs the requested model.
+    A value the agent does not offer raises ``ValueError`` up front rather
+    than failing on the wire.
+    """
+    option = _model_option(session)
+    if option is None or option.current_value == model:
+        return
+    if model not in _model_values(option):
+        raise ValueError(f"model {model!r} is not offered by the ACP agent")
+    await conn.set_config_option(session_id=session.session_id, config_id=option.id, value=model)
 
 
 class ACPSession:
@@ -65,6 +105,7 @@ class ACPSession:
         protocol_version: int,
         client_capabilities: acp.schema.ClientCapabilities | None = None,
         additional_directories: list[str] | None = None,
+        model: str | None = None,
         connect: "ConnectHook | None" = None,
     ) -> None:
         """Spawn + initialize + create the session on first use; no-op afterwards.
@@ -94,20 +135,32 @@ class ACPSession:
                 cwd=cwd,
                 additional_directories=additional_directories or None,
             )
+            if model is not None:
+                await select_model(self.conn, session, model)
         except BaseException:
-            # initialize/new_session failed after the subprocess was spawned;
-            # tear it down so a retry doesn't orphan this process.
+            # initialize/new_session/select_model failed after the subprocess
+            # was spawned; tear it down so a retry doesn't orphan this process.
             await self.close()
             raise
         self.session_id = session.session_id
 
     async def close(self) -> None:
-        """Terminate the subprocess and reset the handle."""
+        """Terminate the subprocess and reset the handle. Never raises."""
         cm, self._cm = self._cm, None
+        proc, self.proc = self.proc, None
         self.conn = None
-        self.proc = None
         self.bridge = None
         self.session_id = None
         self.sent_count = 0
-        if cm is not None:
+        if cm is None:
+            return
+        try:
             await cm.__aexit__(None, None, None)
+        except Exception:
+            # Teardown noise — typically the connection's receive loop tripping
+            # over a notification that was in flight when the queue closed. The
+            # transport's own cleanup (wait → terminate → kill) has already run
+            # by the time it propagates here; the terminate below is a backstop.
+            if proc is not None and proc.returncode is None:
+                with suppress(ProcessLookupError):
+                    proc.terminate()
