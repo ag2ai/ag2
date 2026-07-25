@@ -104,6 +104,46 @@ async def test_aclose_closes_session() -> None:
 
 
 @pytest.mark.asyncio
+async def test_config_as_async_context_manager_closes_sessions() -> None:
+    def add(a: int, b: int) -> int:
+        """Add two integers."""
+        return a + b
+
+    cfg = fake_acp_config(ACPTurn(updates=[_text_update("hi")]), permission_policy="auto")
+
+    async with cfg as entered:
+        assert entered is cfg
+        agent = Agent("acp", config=cfg, tools=[add])
+        async with agent.run("hello") as run:
+            await run.result()
+        assert cfg.sessions  # live while the config scope is open
+        gateways = [s.gateway for s in cfg.sessions.values() if s.gateway is not None]
+        assert gateways and all(g.url is not None for g in gateways)
+
+    assert cfg.sessions == {}  # exiting the scope tore everything down
+    assert all(g.url is None for g in gateways)  # and stopped the tool gateways
+
+
+@pytest.mark.asyncio
+async def test_config_context_manager_closes_sessions_on_error() -> None:
+    def add(a: int, b: int) -> int:
+        """Add two integers."""
+        return a + b
+
+    cfg = fake_acp_config(ACPTurn(updates=[_text_update("hi")]), permission_policy="auto")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        async with cfg:
+            agent = Agent("acp", config=cfg, tools=[add])
+            async with agent.run("hello") as run:
+                await run.result()
+            assert cfg.sessions
+            raise RuntimeError("boom")
+
+    assert cfg.sessions == {}  # torn down even though the block raised
+
+
+@pytest.mark.asyncio
 async def test_function_tools_are_exposed_and_callable_over_mcp() -> None:
     observed: dict[str, Any] = {}
 

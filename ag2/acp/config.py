@@ -112,6 +112,18 @@ class ACPConfig:
         for session in sessions:
             await session.close()
 
+    async def __aenter__(self) -> Self:
+        """Enter a scope whose exit tears down every session this config started.
+
+        A session outlives the ``agent.run()`` that created it — ``reply.ask()``
+        reuses it — so the config's scope, not the run's, is the conversation's
+        lifetime. Nothing reclaims a session implicitly.
+        """
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.aclose()
+
 
 @dataclass(slots=True)
 class ClaudeCodeConfig(ACPConfig):

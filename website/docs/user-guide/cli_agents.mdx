@@ -195,13 +195,14 @@ def get_ticket(ticket_id: str) -> dict:
     """Fetch a ticket from the internal tracker."""
     return {"id": ticket_id, "status": "open"}
 
-agent = Agent(
-    "dev",
-    config=ClaudeCodeConfig(cwd="./repo", permission_policy="auto"),
-    tools=[get_ticket],
-)
-# Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
+async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
+    agent = Agent("dev", config=config, tools=[get_ticket])
+    # Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
+    reply = await agent.ask("Look up ticket ACME-4211.")
 ```
+
+The `async with` matters once tools are exposed: the MCP server serving them
+lives until the config is closed. See [Lifecycle](#lifecycle).
 
 What reaches the CLI agent:
 
@@ -300,6 +301,26 @@ is confined to `fs_root`, and the agent's commands run under AG2's control.
 
 ## Lifecycle
 
-The ACP subprocess is created on the first turn and reused for the run. Call
-`await config.aclose()` to tear down any live subprocesses started from a config
-(a finalizer terminates them as a safety net if you don't).
+The ACP subprocess is created on the first turn and reused for the run, and it
+outlives the `agent.run()` that created it — `reply.ask()` continues the same
+session. So the session's lifetime is the *conversation's*, and only you know
+when that ends.
+
+Use the config as an async context manager, and everything it started — the
+subprocess and the tool gateway — is torn down on exit:
+
+```python linenums="1"
+async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
+    agent = Agent("dev", config=config, tools=[get_ticket])
+
+    async with agent.run("Look up ticket ACME-4211.") as run:
+        reply = await run.result()
+
+    follow_up = await reply.ask("What priority is it?")
+# subprocess and gateway are gone here, including if the block raised
+```
+
+`await config.aclose()` does the same thing explicitly. One or the other is
+required: nothing reclaims a session implicitly, so a config used across many
+runs without it accumulates live subprocesses — and, when tools are exposed,
+a listening MCP server per session.
