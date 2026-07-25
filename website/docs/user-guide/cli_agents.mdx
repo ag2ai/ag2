@@ -220,9 +220,10 @@ Details and knobs:
   automatically, but changing the `MCPServerTool` set mid-run — or introducing
   function tools when the first turn had none — raises a `ValueError`.
 - The MCP server binds to `127.0.0.1` on a random port and lives exactly as
-  long as the ACP session. Requests are validated against `Host`/`Origin`
-  allowlists (DNS-rebinding protection); there is no authentication beyond
-  that, so other local processes on the same machine can reach it.
+  long as the ACP session. It is served under an unguessable random path, which
+  acts as its credential — only the CLI agent is given the full URL, so other
+  local processes cannot reach it by scanning ports. Requests are additionally
+  validated against `Host`/`Origin` allowlists (DNS-rebinding protection).
 - A tool result with `final=True` loses its "stop the run now" semantics over
   ACP: the CLI agent receives it as ordinary tool output and keeps going (a
   warning is logged).

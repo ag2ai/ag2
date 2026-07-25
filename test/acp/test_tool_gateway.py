@@ -103,7 +103,7 @@ async def test_gateway_serves_tools_list_over_http() -> None:
     gateway = ToolGateway(state, [_fn_add()])
     url = await gateway.start()
     try:
-        assert url.startswith("http://127.0.0.1:") and url.endswith("/mcp")
+        assert url.startswith("http://127.0.0.1:") and "/mcp/" in url
         assert gateway.as_acp_server().url == url
         async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
             await session.initialize()
@@ -282,6 +282,42 @@ async def test_request_with_foreign_host_header_is_rejected() -> None:
     finally:
         await gateway.close()
     assert response.status_code == 421  # DNS-rebinding protection: Host not in the allowlist
+
+
+@pytest.mark.asyncio
+async def test_guessable_path_does_not_reach_the_tools() -> None:
+    """Knowing the port is not enough: the random path segment is the credential."""
+    state = BridgeState(ACPConfig())
+    gateway = ToolGateway(state, [_fn_add()])
+    url = await gateway.start()
+    try:
+        port = url.removeprefix("http://127.0.0.1:").split("/")[0]
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"http://127.0.0.1:{port}/mcp/",  # what a port scan would try
+                headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            )
+    finally:
+        await gateway.close()
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_each_gateway_gets_a_distinct_path() -> None:
+    state = BridgeState(ACPConfig())
+    first, second = ToolGateway(state, [_fn_add()]), ToolGateway(state, [_fn_add()])
+    first_url = await first.start()
+    try:
+        second_url = await second.start()
+        try:
+            assert first_url != second_url
+            # not merely a different port -- the secret differs too
+            assert first_url.split("/mcp/")[1] != second_url.split("/mcp/")[1]
+        finally:
+            await second.close()
+    finally:
+        await first.close()
 
 
 @pytest.mark.asyncio

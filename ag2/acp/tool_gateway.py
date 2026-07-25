@@ -21,6 +21,7 @@ import asyncio
 import base64
 import json
 import logging
+import secrets
 import socket
 from collections.abc import AsyncGenerator, Generator, Iterable, Sequence
 from contextlib import asynccontextmanager, contextmanager, suppress
@@ -147,6 +148,10 @@ class ToolGateway:
         self._close_timeout = close_timeout
         self._uvicorn: uvicorn.Server | None = None
         self._task: asyncio.Task[None] | None = None
+        # The random path segment is the gateway's credential. It reaches the CLI
+        # agent inside ``mcp_servers.url`` and appears nowhere else — uvicorn's
+        # access log is off, and the URL is never a command-line argument.
+        self._path = f"{GATEWAY_PATH}/{secrets.token_urlsafe(32)}"
 
     def as_acp_server(self) -> schema.HttpMcpServer:
         assert self.url is not None, "start() must succeed before as_acp_server()"
@@ -175,8 +180,9 @@ class ToolGateway:
         async def _call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult | list[TextContent | ImageContent]:
             return await gateway._execute(name, arguments or {})
 
-        # Host/Origin validation: without it any local process — or a browser page
-        # via DNS rebinding — could invoke the agent's tools on this port.
+        # Host/Origin validation stops a browser page reaching this port via DNS
+        # rebinding (a page cannot forge Host). It does not stop a local process,
+        # which can set any header it likes — that is what the secret path is for.
         security = TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=["127.0.0.1:*", "localhost:*"],
@@ -194,7 +200,7 @@ class ToolGateway:
             async with manager.run():
                 yield
 
-        app = Starlette(routes=[Mount(GATEWAY_PATH, app=handle)], lifespan=lifespan)
+        app = Starlette(routes=[Mount(self._path, app=handle)], lifespan=lifespan)
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("127.0.0.1", 0))
@@ -234,7 +240,7 @@ class ToolGateway:
             sock.close()
             raise
 
-        self.url = f"http://127.0.0.1:{port}{GATEWAY_PATH}"
+        self.url = f"http://127.0.0.1:{port}{self._path}"
         return self.url
 
     async def close(self) -> None:
