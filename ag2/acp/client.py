@@ -37,7 +37,7 @@ from ag2.tools.schemas import ToolSchema
 from .bridge import make_bridge
 from .mappers import map_usage
 from .session import ACPSession, new_prompt_text
-from .tool_gateway import ToolGateway, partition_tools
+from .tool_gateway import GATEWAY_SERVER_NAME, ToolGateway, partition_tools
 
 if TYPE_CHECKING:
     from fast_depends.library.serializer import SerializerProto
@@ -88,6 +88,16 @@ class ACPClient:
 
         try:
             if functions:
+                # Two identically-named entries in mcp_servers are not resolvable:
+                # ACP does not define precedence, and agents namespace tools by
+                # server name (mcp__<name>__<tool>), so one set would silently
+                # shadow the other. Checked here, not in partition_tools, because
+                # an external server named "ag2" is fine when no gateway is built.
+                if any(server.name == GATEWAY_SERVER_NAME for server in external):
+                    raise ValueError(
+                        f"MCPServerTool server_label {GATEWAY_SERVER_NAME!r} collides with the name AG2 "
+                        "uses for its own tool gateway in mcp_servers; rename that server."
+                    )
                 session.gateway = ToolGateway(
                     session.bridge.state, functions, startup_timeout=self.config.startup_timeout
                 )

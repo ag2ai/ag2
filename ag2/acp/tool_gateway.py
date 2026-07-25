@@ -117,6 +117,25 @@ class _EmbeddedServer(uvicorn.Server):
         yield
 
 
+@contextmanager
+def _quiet_uvicorn_shutdown() -> Generator[None]:
+    """Mute uvicorn's cancellation noise while the server is stopped on purpose.
+
+    ``timeout_graceful_shutdown`` cancels in-flight requests by design, and uvicorn
+    reports that at ERROR with a full ASGI traceback — on the path that is working
+    correctly, which reads as a crash. ``uvicorn.error`` is a process-wide logger
+    name, so this briefly mutes any concurrent gateway too; the window is bounded
+    by ``close_timeout`` and covers only a deliberate teardown.
+    """
+    log = logging.getLogger("uvicorn.error")
+    previous = log.level
+    log.setLevel(logging.CRITICAL)
+    try:
+        yield
+    finally:
+        log.setLevel(previous)
+
+
 class ToolGateway:
     """In-process streamable-HTTP MCP server serving the run's function tools.
 
@@ -255,7 +274,8 @@ class ToolGateway:
         try:
             # timeout_graceful_shutdown already caps uvicorn's wait on in-flight
             # requests; the margin only guards against the server wedging entirely.
-            await asyncio.wait_for(task, timeout=self._close_timeout + 1.0)
+            with _quiet_uvicorn_shutdown():
+                await asyncio.wait_for(task, timeout=self._close_timeout + 1.0)
         except (TimeoutError, asyncio.TimeoutError):  # separate classes on Python 3.10
             logger.warning("MCP tool gateway did not shut down within %.1fs; cancelled", self._close_timeout)
         except asyncio.CancelledError:

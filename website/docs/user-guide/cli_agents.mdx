@@ -216,6 +216,13 @@ What reaches the CLI agent:
 Details and knobs:
 
 - `expose_tools=False` on the config disables all of this.
+- **Behaviour change:** `tools=[...]` on an ACP-backed agent used to be ignored.
+  They are now exposed, and a provider server-side builtin in that list is a hard
+  `UnsupportedToolError` rather than a silent no-op. Set `expose_tools=False` to
+  keep the previous behaviour.
+- An `MCPServerTool` cannot use the server label `ag2` alongside function tools —
+  that name is taken by AG2's own gateway entry, and ACP has no way to
+  disambiguate two servers sharing a name.
 - The set of MCP servers is fixed when the session starts (first turn).
   Function tools added or removed on later turns update the served list
   automatically, but changing the `MCPServerTool` set mid-run — or introducing

@@ -125,6 +125,49 @@ async def test_config_as_async_context_manager_closes_sessions() -> None:
 
 
 @pytest.mark.asyncio
+async def test_external_server_named_like_the_gateway_is_rejected() -> None:
+    """Two identically-named mcp_servers entries would silently shadow each other."""
+
+    def add(a: int, b: int) -> int:
+        """Add two integers."""
+        return a + b
+
+    cfg = fake_acp_config(ACPTurn(updates=[_text_update("hi")]), permission_policy="auto")
+    agent = Agent(
+        "acp",
+        config=cfg,
+        tools=[add, MCPServerTool(server_url="https://example.com/mcp", server_label="ag2")],
+    )
+    try:
+        with pytest.raises(ValueError, match="collides"):
+            async with agent.run("hello") as run:
+                await run.result()
+        assert cfg.sessions == {}  # nothing leaked on the failure path
+    finally:
+        await cfg.aclose()
+
+
+@pytest.mark.asyncio
+async def test_external_server_named_like_the_gateway_is_fine_without_function_tools() -> None:
+    """No function tools means no gateway, so there is nothing to collide with."""
+    cfg = fake_acp_config(ACPTurn(updates=[_text_update("hi")]), permission_policy="auto")
+    agent = Agent(
+        "acp",
+        config=cfg,
+        tools=[MCPServerTool(server_url="https://example.com/mcp", server_label="ag2")],
+    )
+    try:
+        async with agent.run("hello") as run:
+            result = await run.result()
+        assert result.body == "hi"
+        session = next(iter(cfg.sessions.values()))
+        assert session.gateway is None
+        assert [s.name for s in session.conn.new_session_kwargs["mcp_servers"]] == ["ag2"]
+    finally:
+        await cfg.aclose()
+
+
+@pytest.mark.asyncio
 async def test_config_context_manager_closes_sessions_on_error() -> None:
     def add(a: int, b: int) -> int:
         """Add two integers."""
