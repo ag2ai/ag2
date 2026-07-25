@@ -317,6 +317,9 @@ Use the config as an async context manager, and everything it started — the
 subprocess and the tool gateway — is torn down on exit:
 
 ```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
 async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
     agent = Agent("dev", config=config, tools=[get_ticket])
 
