@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -172,5 +173,10 @@ async def test_terminal_kill(tmp_path: Path) -> None:
     tid = await st.terminals.create("sleep", ["30"])
     await st.terminals.kill(tid)
     exit_status = await st.terminals.wait(tid)
-    assert exit_status.signal is not None  # terminated by signal
+    if sys.platform == "win32":
+        # Windows has no signals: TerminateProcess surfaces as a non-zero exit
+        # code, so exit_status() reports exit_code instead.
+        assert exit_status.exit_code is not None
+    else:
+        assert exit_status.signal is not None  # terminated by signal
     await st.terminals.release(tid)

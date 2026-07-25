@@ -151,6 +151,7 @@ optionals = [
     "ag2[a2ui]", # provides starlette/jsonschema for AG-UI / a2ui serving tests
     "ag2[mcp]", # ag2.mcp — serve an Agent as an MCP server
     "ag2[mcp-ui]", # ag2.mcp_ui — MCP-UI resource & action builders
+    "ag2[acp]",
     "ag2[tracing]",
     "ag2[metrics]",
     # search tools
