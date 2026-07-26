@@ -931,6 +931,43 @@ class TestSubtaskUsageRollup:
         assert report.total == Usage(prompt_tokens=20, completion_tokens=8)
         assert report.by_kind == {"subtask": Usage(prompt_tokens=20, completion_tokens=8)}
 
+    async def test_rollup_reports_usage_incurred_before_a_failure(self) -> None:
+        """A sub-task that fails after a successful, billable call still
+        reports the usage it already incurred, on ``TaskResult.usage`` and as
+        a rollup ``UsageEvent`` on the parent."""
+
+        @tool
+        def noop() -> str:
+            """A tool that does nothing."""
+            return "ok"
+
+        # The first call succeeds and is billable; no scripted response is
+        # left for the follow-up call, so the sub-task fails afterwards.
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=250, completion_tokens=50),
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        result = await run_task(worker, "go", parent_context=parent_ctx)
+
+        assert result.completed is False
+        assert result.error is not None
+        assert result.usage == Usage(prompt_tokens=250, completion_tokens=50)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert usage_events == [
+            UsageEvent(Usage(prompt_tokens=250, completion_tokens=50), kind="subtask"),
+        ]
+        assert usage_events[0].label == "worker"
+
 
 class TestHitlPropagation:
     @pytest.mark.asyncio
