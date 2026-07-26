@@ -8,6 +8,16 @@ The integration is a :class:`ModelConfig` + :class:`LLMClient` pair — no chang
 to the :class:`~ag2.Agent` class.
 """
 
-from .config import ACPConfig, ClaudeCodeConfig, CodexConfig, OpenCodeConfig
+from ag2.exceptions import missing_optional_dependency
 
-__all__ = ["ACPConfig", "ClaudeCodeConfig", "CodexConfig", "OpenCodeConfig"]
+try:
+    from .config import ACPConfig, ClaudeCodeConfig, CodexConfig, OpenCodeConfig
+    from .tool_gateway import MCPCapabilityError
+except ImportError as e:  # pragma: no cover - exercised only when ag2[acp] is absent
+    ACPConfig = missing_optional_dependency("ACPConfig", "acp", e)  # type: ignore[misc]
+    ClaudeCodeConfig = missing_optional_dependency("ClaudeCodeConfig", "acp", e)  # type: ignore[misc]
+    CodexConfig = missing_optional_dependency("CodexConfig", "acp", e)  # type: ignore[misc]
+    OpenCodeConfig = missing_optional_dependency("OpenCodeConfig", "acp", e)  # type: ignore[misc]
+    MCPCapabilityError = missing_optional_dependency("MCPCapabilityError", "acp", e)  # type: ignore[misc]
+
+__all__ = ["ACPConfig", "ClaudeCodeConfig", "CodexConfig", "MCPCapabilityError", "OpenCodeConfig"]

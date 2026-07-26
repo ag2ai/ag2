@@ -72,7 +72,13 @@ dependencies = [
 # === Agent protocols ===
 a2a = ["a2a-sdk>=1.1.0,<2"]
 a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<2"]
-acp = ["agent-client-protocol>=0.10.1,<0.12"]
+acp = [
+    "agent-client-protocol>=0.11.0,<0.12",
+    # Tool exposure to CLI agents runs an in-process HTTP MCP server, also requiring starlette and uvicorn
+    "ag2[mcp]",
+    "starlette>=0.40,<2",
+    "uvicorn>=0.51.0,<1",
+]
 ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
@@ -151,6 +157,7 @@ optionals = [
     "ag2[a2ui]", # provides starlette/jsonschema for AG-UI / a2ui serving tests
     "ag2[mcp]", # ag2.mcp — serve an Agent as an MCP server
     "ag2[mcp-ui]", # ag2.mcp_ui — MCP-UI resource & action builders
+    "ag2[acp]",
     "ag2[tracing]",
     "ag2[metrics]",
     # search tools
