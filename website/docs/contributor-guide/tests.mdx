@@ -4,12 +4,12 @@ title: Tests
 
 Tests are automatically run via GitHub actions. There are two workflows:
 
-1. [core-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-test.yml)
-1. [core-llm-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-llm-test.yml)
+1. [test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/test.yml)
+1. [llm-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/llm-test.yml)
 
-The first workflow is required to pass for all PRs (and it doesn't do any OpenAI calls). The second workflow is required for changes that affect the OpenAI tests (and does actually call LLM). The second workflow requires approval to run. When writing tests that require OpenAI calls, please use [`pytest.mark.skipif`](https://github.com/ag2ai/ag2/blob/b1adac515931bf236ac59224269eeec683a162ba/test/oai/test_client.py#L19) to make them run in only when `openai` package is installed. If additional dependency for this test is required, install the dependency in the corresponding python version in [core-llm-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-llm-test.yml).
+The first workflow is required to pass for all PRs (and it doesn't do any OpenAI calls). The second workflow is required for changes that affect the OpenAI tests (and does actually call LLM). The second workflow requires approval to run. When writing tests that require OpenAI calls, please use [`pytest.mark.skipif`](https://github.com/ag2ai/ag2/blob/b1adac515931bf236ac59224269eeec683a162ba/test/oai/test_client.py#L19) to make them run in only when `openai` package is installed. If additional dependency for this test is required, install the dependency in the corresponding python version in [llm-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/llm-test.yml).
 
-Make sure all tests pass, this is required for [core-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-test.yml) checks to pass
+Make sure all tests pass, this is required for [test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/test.yml) checks to pass
 
 ## Running tests locally
 
@@ -28,8 +28,6 @@ bash scripts/test.sh test
 Tests for the `ag2.agentchat.contrib` module may be skipped automatically if the
 required dependencies are not installed. Please consult the documentation for
 each contrib module to see what dependencies are required.
-
-See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#testing) for how to run notebook tests.
 
 ## Skip flags for tests
 

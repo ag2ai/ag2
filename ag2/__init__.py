@@ -24,6 +24,7 @@ from .spec import AgentSpec
 from .stream import MemoryStream
 from .task import Task, TaskInject, TaskSpec
 from .tools import ToolResult, Toolkit, tool
+from .version import __version__
 
 __all__ = (
     "Agent",
@@ -54,6 +55,7 @@ __all__ = (
     "Toolkit",
     "Variable",
     "VideoInput",
+    "__version__",
     "observer",
     "response_schema",
     "tool",

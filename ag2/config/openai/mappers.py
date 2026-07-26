@@ -8,7 +8,7 @@ from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
-from openai.types.responses import ResponseUsage
+from openai.types.responses import ResponseUsage, SkillReferenceParam
 
 from ag2.compact import CompactionSummary
 from ag2.config.openai.events import OpenAIReasoningEvent, OpenAIServerToolCallEvent
@@ -29,6 +29,7 @@ from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.files.types import FileProvider
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
+from ag2.tools.builtin.file_search import FileSearchToolSchema
 from ag2.tools.builtin.image_generation import ImageGenerationToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.shell import (
@@ -37,6 +38,7 @@ from ag2.tools.builtin.shell import (
     ShellToolSchema,
 )
 from ag2.tools.builtin.skills import SkillsToolSchema
+from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
@@ -47,7 +49,7 @@ def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] |
     if not response or not response.json_schema:
         return
 
-    strict_schema = _ensure_additional_properties_false(response.json_schema)
+    strict_schema = _strictify_schema(response.json_schema)
     schema: dict[str, Any] = {
         "schema": strict_schema,
         "name": response.name,
@@ -59,11 +61,8 @@ def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] |
     return {"type": "json_schema", "json_schema": schema}
 
 
-def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any]:
-    """Recursively add additionalProperties: false to all object schemas.
-
-    The OpenAI Responses API requires this on every object node.
-    """
+def _strictify_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Recursively coerce a JSON Schema into OpenAI's strict subset."""
     schema = dict(schema)
 
     if schema.get("type") == "object":
@@ -71,23 +70,19 @@ def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any
 
     if "properties" in schema:
         schema["properties"] = {
-            k: _ensure_additional_properties_false(v) if isinstance(v, dict) else v
-            for k, v in schema["properties"].items()
+            k: _strictify_schema(v) if isinstance(v, dict) else v for k, v in schema["properties"].items()
         }
+        schema["required"] = list(schema["properties"])
 
     if "$defs" in schema:
-        schema["$defs"] = {
-            k: _ensure_additional_properties_false(v) if isinstance(v, dict) else v for k, v in schema["$defs"].items()
-        }
+        schema["$defs"] = {k: _strictify_schema(v) if isinstance(v, dict) else v for k, v in schema["$defs"].items()}
 
     for key in ("anyOf", "oneOf", "allOf"):
         if key in schema:
-            schema[key] = [
-                _ensure_additional_properties_false(item) if isinstance(item, dict) else item for item in schema[key]
-            ]
+            schema[key] = [_strictify_schema(item) if isinstance(item, dict) else item for item in schema[key]]
 
     if "items" in schema and isinstance(schema["items"], dict):
-        schema["items"] = _ensure_additional_properties_false(schema["items"])
+        schema["items"] = _strictify_schema(schema["items"])
 
     return schema
 
@@ -99,7 +94,7 @@ def response_proto_to_text_config(
     if not response or not response.json_schema:
         return
 
-    strict_schema = _ensure_additional_properties_false(response.json_schema)
+    strict_schema = _strictify_schema(response.json_schema)
 
     fmt: dict[str, Any] = {
         "type": "json_schema",
@@ -383,6 +378,12 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     """Chat Completions API tool format."""
     if isinstance(t, FunctionToolSchema):
+        if t.defer_loading:
+            # Tool search / deferred loading is a Responses-API feature; the
+            # Chat Completions API has no way to load deferred tools. Fail fast
+            # instead of silently sending the tool eagerly (which would defeat
+            # defer_loading and give no error). Use the Responses API instead.
+            raise UnsupportedToolError("function with defer_loading (use the Responses API)", "openai-completions")
         return {
             "type": "function",
             "function": {
@@ -398,12 +399,15 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     """Responses API tool format — name/description at top level."""
     if isinstance(t, FunctionToolSchema):
-        return {
+        fn_tool: dict[str, Any] = {
             "type": "function",
             "name": t.function.name,
             "description": t.function.description,
             "parameters": _ensure_object_schema(t.function.parameters),
         }
+        if t.defer_loading:
+            fn_tool["defer_loading"] = True
+        return fn_tool
 
     elif isinstance(t, WebSearchToolSchema):
         result: dict[str, Any] = {"type": "web_search"}
@@ -425,6 +429,15 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         if t.allowed_domains is not None:
             result["filters"] = {"allowed_domains": t.allowed_domains}
         return result
+
+    elif isinstance(t, FileSearchToolSchema):
+        # https://developers.openai.com/api/docs/guides/tools-file-search
+        result_fs: dict[str, Any] = {"type": "file_search", "vector_store_ids": t.vector_store_ids}
+        if t.max_num_results is not None:
+            result_fs["max_num_results"] = t.max_num_results
+        if t.filters is not None:
+            result_fs["filters"] = t.filters
+        return result_fs
 
     elif isinstance(t, CodeExecutionToolSchema):
         # https://developers.openai.com/api/docs/guides/tools-code-interpreter
@@ -487,10 +500,64 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         return result
 
     elif isinstance(t, SkillsToolSchema):
-        # https://developers.openai.com/api/docs/guides/tools-skills
+        # Skills never appear directly in tools[] — the Responses client extracts
+        # them via extract_skills_for_shell() and attaches them to the hosted
+        # shell tool's container environment (merge_skills_into_shell_tools).
         raise UnsupportedToolError(t.type, "openai-responses")
 
+    elif isinstance(t, ToolSearchToolSchema):
+        # https://developers.openai.com/api/docs/guides/tools-tool-search
+        # OpenAI exposes a single server-side tool-search tool; mode is Anthropic-only.
+        return {"type": "tool_search"}
+
     raise UnsupportedToolError(t.type, "openai-responses")
+
+
+def extract_skills_for_shell(tools: Iterable[ToolSchema]) -> list[SkillReferenceParam]:
+    """Extract OpenAI ``skill_reference`` entries from SkillsToolSchema instances.
+
+    OpenAI Responses attaches skills to the hosted shell tool's container
+    environment rather than as standalone ``tools[]`` entries.
+    https://developers.openai.com/api/docs/guides/tools-skills
+    """
+    skills: list[SkillReferenceParam] = []
+    for t in tools:
+        if isinstance(t, SkillsToolSchema):
+            for s in t.skills:
+                entry: SkillReferenceParam = {"type": "skill_reference", "skill_id": s.id}
+                # A positive-integer string or "latest"; omitted means the
+                # skill's default_version.
+                if s.version is not None:
+                    entry["version"] = s.version
+                skills.append(entry)
+    return skills
+
+
+def merge_skills_into_shell_tools(
+    openai_tools: list[dict[str, Any]],
+    skills: list[SkillReferenceParam],
+) -> list[dict[str, Any]]:
+    """Attach skill references to the hosted shell tool's environment.
+
+    Skills require a ``container_auto`` environment. When no shell tool is
+    present one is appended (mirrors the Anthropic client auto-adding code
+    execution for skills). A ``container_reference`` environment is rejected:
+    skills for existing containers are configured at container creation.
+    """
+    if not skills:
+        return openai_tools
+    for tool_dict in openai_tools:
+        if tool_dict.get("type") == "shell":
+            env = tool_dict.setdefault("environment", {"type": "container_auto"})
+            if env.get("type") == "container_reference":
+                raise ValueError(
+                    "SkillsTool cannot be combined with ContainerReferenceEnvironment: "
+                    "attach skills when creating the container via ContainerManager instead."
+                )
+            env["skills"] = skills
+            return openai_tools
+    openai_tools.append({"type": "shell", "environment": {"type": "container_auto", "skills": skills}})
+    return openai_tools
 
 
 def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
@@ -498,6 +565,9 @@ def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
     for t in tools:
         if isinstance(t, WebSearchToolSchema):
             includes.append("web_search_call.action.sources")
+        elif isinstance(t, FileSearchToolSchema) and t.include_results:
+            # Off by default: results are full text chunks and inflate responses.
+            includes.append("file_search_call.results")
     return includes
 
 

@@ -38,6 +38,7 @@ from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.memory import MemoryToolSchema
 from ag2.tools.builtin.shell import ShellToolSchema
 from ag2.tools.builtin.skills import SkillsToolSchema
+from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_fetch import WebFetchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
@@ -102,11 +103,14 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     if isinstance(t, FunctionToolSchema):
-        return {
+        fn_tool: dict[str, Any] = {
             "name": t.function.name,
             "description": t.function.description,
             "input_schema": _ensure_object_schema(t.function.parameters),
         }
+        if t.defer_loading:
+            fn_tool["defer_loading"] = True
+        return fn_tool
 
     elif isinstance(t, WebSearchToolSchema):
         result: dict[str, Any] = {"type": t.web_search_version, "name": "web_search"}
@@ -178,6 +182,14 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             configs.update({name: {"enabled": False} for name in t.blocked_tools})
             result["configs"] = configs
         return result
+
+    elif isinstance(t, ToolSearchToolSchema):
+        # https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool
+        # The `name` must be the variant id without the date suffix (e.g.
+        # "tool_search_tool_regex"); the API rejects a generic "tool_search"
+        # name, and this matches the server_tool_use block name on the response.
+        variant = "tool_search_tool_bm25" if t.mode == "bm25" else "tool_search_tool_regex"
+        return {"type": f"{variant}_20251119", "name": variant}
 
     raise UnsupportedToolError(t.type, "anthropic")
 

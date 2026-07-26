@@ -8,6 +8,7 @@ from typing import Any, TypeAlias
 
 from openai.types.responses import (
     ResponseCodeInterpreterToolCall,
+    ResponseFileSearchToolCall,
     ResponseFunctionWebSearch,
     ResponseReasoningItem,
 )
@@ -28,10 +29,13 @@ from ag2.events import (
     UrlInput,
 )
 from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
+from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME
 from ag2.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
 from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
-OpenAIServerToolItem: TypeAlias = ResponseFunctionWebSearch | ResponseCodeInterpreterToolCall | ImageGenerationCall
+OpenAIServerToolItem: TypeAlias = (
+    ResponseFunctionWebSearch | ResponseCodeInterpreterToolCall | ImageGenerationCall | ResponseFileSearchToolCall
+)
 
 
 class OpenAIServerToolCallEvent(BuiltinToolCallEvent):
@@ -62,6 +66,13 @@ class OpenAIServerToolCallEvent(BuiltinToolCallEvent):
                 id=item.id,
                 name=IMAGE_GENERATION_TOOL_NAME,
                 arguments="",
+                item=item,
+            )
+        if isinstance(item, ResponseFileSearchToolCall):
+            return cls(
+                id=item.id,
+                name=FILE_SEARCH_TOOL_NAME,
+                arguments=json.dumps({"queries": item.queries}),
                 item=item,
             )
         return None
@@ -109,6 +120,19 @@ class OpenAIServerToolResultEvent(BuiltinToolResultEvent):
             name = IMAGE_GENERATION_TOOL_NAME
             parts = [BinaryInput(b64decode(item.result), media_type="image/png", kind=BinaryType.IMAGE)]
             metadata = item.model_dump(exclude={"result", "status", "type"})
+
+        elif isinstance(item, ResponseFileSearchToolCall):
+            name = FILE_SEARCH_TOOL_NAME
+            metadata = {"status": item.status}
+            results_meta: list[dict[str, Any]] = []
+            for r in item.results or []:
+                # `text` is populated only when the request asked for it via
+                # include=["file_search_call.results"].
+                if r.text:
+                    parts.append(TextInput(r.text))
+                results_meta.append({"file_id": r.file_id, "filename": r.filename, "score": r.score})
+            if results_meta:
+                metadata["results"] = results_meta
 
         else:
             return None

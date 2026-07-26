@@ -37,6 +37,7 @@ DEFAULT_SCHEMA = {
         },
     },
     "type": "function",
+    "defer_loading": False,
 }
 
 
@@ -86,6 +87,7 @@ def test_agent_with_tool_decorator_options_override(mock: MagicMock) -> None:
             "name": "another_name",
         }),
         "type": "function",
+        "defer_loading": False,
     }
 
 

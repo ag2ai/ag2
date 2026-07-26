@@ -34,6 +34,7 @@ from ag2.tools.schemas import ToolSchema
 from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
 from .mappers import (
     build_system_instruction,
+    build_tool_config,
     build_tools,
     convert_messages,
     grounding_tool_name,
@@ -122,7 +123,9 @@ class GeminiClient(LLMClient):
             prompt = context.prompt
 
         system_instruction = build_system_instruction(prompt)
-        gemini_tools = build_tools(list(tools))
+        tool_list = list(tools)
+        gemini_tools = build_tools(tool_list)
+        gemini_tool_config = build_tool_config(tool_list)
 
         cache_kwargs: dict[str, Any] = {}
         if self._cached_content:
@@ -131,6 +134,7 @@ class GeminiClient(LLMClient):
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=gemini_tools,
+            tool_config=gemini_tool_config,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True) if gemini_tools else None,
             **response_proto_to_config(response_schema),
             **self._create_config,

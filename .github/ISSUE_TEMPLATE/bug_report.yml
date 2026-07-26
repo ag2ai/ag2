@@ -1,7 +1,8 @@
 name: Bug Report
 description: File a bug report
 title: "[Bug]: "
-labels: ["bug"]
+type: "Bug"
+labels: ["type:bug", "status:needs-triage"]
 
 body:
   - type: textarea
@@ -22,6 +23,18 @@ body:
         3. ...
         4. See error
       placeholder: How can we replicate the issue?
+  - type: textarea
+    id: mre
+    attributes:
+      label: Minimal reproducible example
+      description: A minimal, self-contained code snippet that reproduces the problem. This is the fastest way to get the bug triaged — reports without it are asked to add one.
+      render: python
+      placeholder: |
+        from ag2 import Agent
+
+        # smallest possible code that triggers the bug
+    validations:
+      required: true
   - type: textarea
     id: modelused
     attributes:

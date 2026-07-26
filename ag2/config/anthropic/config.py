@@ -9,7 +9,7 @@ import httpx
 from anthropic.types import ModelParam
 from typing_extensions import Unpack
 
-from ag2.config.config import ModelConfig
+from ag2.config.config import ModelConfig, ModelProvider
 
 from .anthropic_client import AnthropicClient, CreateOptions
 from .files import AnthropicFilesClient
@@ -54,6 +54,10 @@ class AnthropicConfig(ModelConfig):
     service_tier: str | None = None
     prompt_caching: bool = True
     extra_body: dict[str, Any] | None = None
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.ANTHROPIC
 
     def copy(self, /, **overrides: Unpack[AnthropicConfigOverrides]) -> "AnthropicConfig":
         return replace(self, **overrides)
