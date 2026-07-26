@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from typing import Annotated
 from unittest.mock import MagicMock
 
@@ -1206,7 +1207,18 @@ class TestBackgroundToolStreamArgument:
 
         await coordinator.ask("go")
 
-        events = list(await sub_stream.history.get_events())
+        # ``background_agent_tool`` runs the subagent fire-and-forget via
+        # ``spawn_background``, so ``coordinator.ask`` can return before the
+        # subagent's ModelResponse lands in the stream. Poll until it arrives.
+        async def _events_with_response() -> list:
+            for _ in range(100):
+                events = list(await sub_stream.history.get_events())
+                if any(isinstance(e, ModelResponse) for e in events):
+                    return events
+                await asyncio.sleep(0.01)
+            return list(await sub_stream.history.get_events())
+
+        events = await _events_with_response()
         assert any(isinstance(e, ModelRequest) for e in events)
         assert any(isinstance(e, ModelResponse) for e in events)
 
