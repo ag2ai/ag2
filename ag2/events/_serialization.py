@@ -105,9 +105,16 @@ def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
         if "__uuid__" in value:
             return UUID(value["__uuid__"])
         if "__enum__" in value:
-            enum_cls = _resolve_class(value["__enum__"])
-            assert issubclass(enum_cls, Enum)
-            return enum_cls(value["value"])
+            # Fail open: an enum whose class can no longer be imported, or whose
+            # member has since been removed, degrades to its raw value rather
+            # than failing the load and taking the whole event with it.
+            try:
+                enum_cls = _resolve_class(value["__enum__"])
+                if issubclass(enum_cls, Enum):
+                    return enum_cls(value["value"])
+            except (ImportError, ValueError):
+                pass
+            return value["value"]
         if "__exception__" in value:
             # Reconstruct as a generic Exception with the original message
             return Exception(value.get("message", ""))
