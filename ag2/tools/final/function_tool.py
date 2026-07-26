@@ -35,11 +35,12 @@ class FunctionDefinition:
 class FunctionToolSchema(ToolSchema):
     type: str = field(default="function", init=False)
     function: FunctionDefinition = field(default_factory=lambda: FunctionDefinition(name=""))
+    defer_loading: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FunctionToolSchema":
         func_data = data.get("function", {})
-        return cls(function=FunctionDefinition(**func_data))
+        return cls(function=FunctionDefinition(**func_data), defer_loading=data.get("defer_loading", False))
 
 
 class FunctionTool(Tool):
@@ -67,7 +68,7 @@ class FunctionTool(Tool):
                 name=name,
                 description=description,
                 parameters=schema,
-            )
+            ),
         )
 
         self.name = name

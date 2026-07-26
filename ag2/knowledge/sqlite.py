@@ -166,7 +166,8 @@ class SqliteKnowledgeStore:
 
     async def read(self, path: str) -> str | None:
         normalized = _normalize(path)
-        return await self._run(functools.partial(self._sync_read, normalized))
+        async with self._lock:
+            return await self._run(functools.partial(self._sync_read, normalized))
 
     async def write(self, path: str, content: str) -> None:
         normalized = _normalize(path)
@@ -177,7 +178,8 @@ class SqliteKnowledgeStore:
 
     async def list(self, path: str = "/") -> list[str]:
         prefix = _normalize(path).rstrip("/") + "/"
-        return await self._run(functools.partial(self._sync_list, prefix))
+        async with self._lock:
+            return await self._run(functools.partial(self._sync_list, prefix))
 
     async def delete(self, path: str) -> None:
         normalized = _normalize(path)
@@ -188,7 +190,8 @@ class SqliteKnowledgeStore:
     async def exists(self, path: str) -> bool:
         normalized = _normalize(path)
         prefix = normalized.rstrip("/") + "/"
-        return await self._run(functools.partial(self._sync_exists, normalized, prefix))
+        async with self._lock:
+            return await self._run(functools.partial(self._sync_exists, normalized, prefix))
 
     async def append(self, path: str, content: str) -> int:
         normalized = _normalize(path)
@@ -199,7 +202,8 @@ class SqliteKnowledgeStore:
 
     async def read_range(self, path: str, start: int, end: int | None = None) -> str:
         normalized = _normalize(path)
-        return await self._run(functools.partial(self._sync_read_range, normalized, start, end))
+        async with self._lock:
+            return await self._run(functools.partial(self._sync_read_range, normalized, start, end))
 
     async def list_versions_under(self, prefix: str) -> dict[str, int]:
         """Return ``{path: version}`` for every key under ``prefix``.
@@ -210,7 +214,8 @@ class SqliteKnowledgeStore:
         diff loop O(keys-under-prefix).
         """
         normalized = _normalize(prefix).rstrip("/")
-        return await self._run(functools.partial(self._sync_list_versions, normalized))
+        async with self._lock:
+            return await self._run(functools.partial(self._sync_list_versions, normalized))
 
     async def on_change(self, path: str, callback: ChangeCallback) -> ChangeSubscription:
         watcher = PollingChangeWatcher(

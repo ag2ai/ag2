@@ -226,11 +226,13 @@ class TestEnqueue:
 
 @pytest.mark.asyncio
 async def test_cancelling_result_cancels_turn_inline() -> None:
+    started = asyncio.Event()
     cancelled = asyncio.Event()
 
     @tool
     async def block() -> str:
         """Blocks forever, flagging if it is cancelled."""
+        started.set()
         try:
             await asyncio.Event().wait()
         except asyncio.CancelledError:
@@ -248,9 +250,13 @@ async def test_cancelling_result_cancels_turn_inline() -> None:
     )
 
     async with agent.run("Hi!") as run:
-        with pytest.raises(asyncio.TimeoutError):
-            # asyncio.wait_for (vs asyncio.timeout) keeps this runnable on Python 3.10.
-            await asyncio.wait_for(run.result(), timeout=0.2)
+        # result() drives the turn inline; cancel it only once the tool is in
+        # flight, so the assertion is about propagation, not turn-startup speed.
+        result_task = asyncio.ensure_future(run.result())
+        await asyncio.wait_for(started.wait(), timeout=5)
+        result_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await result_task
 
     assert cancelled.is_set(), "cancelling the result() await must cancel the in-flight turn"
 

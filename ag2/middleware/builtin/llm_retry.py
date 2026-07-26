@@ -48,10 +48,10 @@ class _RetryMiddleware(BaseMiddleware):
         events: Sequence[BaseEvent],
         context: Context,
     ) -> ModelResponse:
-        last_error: Exception | None = None
-        for _ in range(self._max_retries + 1):
+        for _ in range(self._max_retries):
             try:
                 return await call_next(events, context)
-            except self._retry_on as e:
-                last_error = e
-        raise last_error
+            except self._retry_on:
+                pass
+        # Final attempt — let the original exception propagate.
+        return await call_next(events, context)

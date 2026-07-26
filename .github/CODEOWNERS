@@ -1,23 +1,46 @@
 # AG2 code owners
 # About code owners https://docs.github.com/ru/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-# Framework
-/ag2/ @Lancetnik
-/test/ @Lancetnik
-
-# A2A, A2UI, AG-UI
-/ag2/a2a/ @vvlrff
-/test/a2a/ @vvlrff
-/ag2/a2ui/ @vvlrff
-/test/a2ui/ @vvlrff
-/ag2/ag_ui/ @Lancetnik
-/test/ag_ui/ @Lancetnik
-
-# Provider configs
+# area:providers
 /ag2/config/ @marklysze
 /test/config/ @marklysze
 
-# Observability
-/website/docs/user-guide/a2a/ @Lancetnik
-/website/docs/user-guide/ag-ui/ @Lancetnik
-/website/docs/user-guide/observability/ @priyansh4320
+# area:eval
+/ag2/eval/ @marklysze
+/test/eval/ @marklysze
+/website/docs/user-guide/evaluation/ @marklysze
+
+# area:a2a
+/ag2/a2a/ @vvlrff
+/test/a2a/ @vvlrff
+/website/docs/user-guide/a2a/ @vvlrff
+
+# area:a2ui
+/ag2/a2ui/ @vvlrff
+/test/a2ui/ @vvlrff
+/website/docs/user-guide/a2ui/ @vvlrff
+
+# area:acp
+/ag2/acp/ @vvlrff
+/test/acp/ @vvlrff
+/website/docs/user-guide/cli_agents.mdx @vvlrff
+
+# area:ag-ui
+/ag2/ag_ui/ @Lancetnik @vvlrff
+/test/ag_ui/ @Lancetnik @vvlrff
+/website/docs/user-guide/ag-ui/ @Lancetnik @vvlrff
+
+# area:mcp
+/ag2/mcp/ @marklysze
+/test/mcp/ @marklysze
+/website/docs/user-guide/tools/mcp_servers.mdx @marklysze
+
+# area:network
+/ag2/network/ @Lancetnik @marklysze
+/test/network/ @Lancetnik @marklysze
+/website/docs/user-guide/network/ @Lancetnik @marklysze
+
+# area:extensions
+/ag2/extensions/ @marklysze
+/test/extensions/ @marklysze
+/website/docs/user-guide/extensions/ @marklysze

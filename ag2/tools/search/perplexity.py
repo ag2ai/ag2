@@ -4,7 +4,7 @@
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Literal, TypeAlias
+from typing import Annotated, Any, Final, Literal, TypeAlias
 
 import httpx
 from perplexity import AsyncPerplexity
@@ -18,6 +18,7 @@ from ag2.middleware import ToolMiddleware
 from ag2.tools.builtin._resolve import resolve_variable
 from ag2.tools.final import Toolkit, tool
 from ag2.tools.final.function_tool import FunctionTool
+from ag2.version import __version__
 
 SonarModel: TypeAlias = Literal[
     "sonar",
@@ -29,6 +30,8 @@ SonarModel: TypeAlias = Literal[
 SearchMode: TypeAlias = Literal["web", "academic", "sec"]
 SearchContextSize: TypeAlias = Literal["low", "medium", "high"]
 RecencyFilter: TypeAlias = Literal["hour", "day", "week", "month", "year"]
+
+_PPLX_INTEGRATION_HEADERS: Final[dict[str, str]] = {"X-Pplx-Integration": f"ag2/{__version__}"}
 
 
 @dataclass(slots=True)
@@ -101,6 +104,10 @@ class PerplexitySearchToolkit(Toolkit):
         self._proxy = proxy
         self._verify = verify
         self._timeout = timeout
+        client_kwargs["default_headers"] = {
+            **(client_kwargs.get("default_headers") or {}),
+            **_PPLX_INTEGRATION_HEADERS,
+        }
         self._client_kwargs = client_kwargs
 
         super().__init__(

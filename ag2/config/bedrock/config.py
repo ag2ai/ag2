@@ -7,7 +7,7 @@ from typing import Any, TypedDict
 
 from typing_extensions import Unpack
 
-from ag2.config.config import ModelConfig
+from ag2.config.config import ModelConfig, ModelProvider
 
 from .bedrock_client import BedrockClient, CreateOptions
 
@@ -66,6 +66,10 @@ class BedrockConfig(ModelConfig):
     max_retries: int | None = None
     botocore_config: Any | None = None
     session: Any | None = None
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.BEDROCK
 
     def copy(self, /, **overrides: Unpack[BedrockConfigOverrides]) -> "BedrockConfig":
         return replace(self, **overrides)

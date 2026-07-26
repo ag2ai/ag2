@@ -12,6 +12,9 @@ updates:
       time: "00:00"
     cooldown:
       default-days: 7
+    labels:
+      - "type:maintenance"
+      - "area:actions"
     groups:
       github-actions:
         patterns:
@@ -25,6 +28,9 @@ updates:
       time: "00:00"
     cooldown:
       default-days: 7
+    labels:
+      - "type:maintenance"
+      - "area:deps"
     groups:
       uv:
         patterns:
