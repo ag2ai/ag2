@@ -1016,14 +1016,13 @@ class TestHitlPropagation:
 
 
 class TestAsToolStreamArgument:
-    """`as_tool(stream=...)` should accept a Stream instance, a StreamFactory,
-    or None — and reject anything else loudly. Regression for #2888.
+    """`as_tool(stream=...)` accepts a Stream instance, a StreamFactory, or
+    None, and raises ``TypeError`` for anything else.
     """
 
     @pytest.mark.asyncio
     async def test_stream_instance_captures_subagent_events(self):
-        """Passing a bare ``Stream`` instance should now capture sub-agent
-        events directly (previously fell through silently)."""
+        """A ``Stream`` instance captures the sub-agent's events."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Found X.")))
         researcher = Agent("researcher", config=researcher_config)
 
@@ -1041,16 +1040,9 @@ class TestAsToolStreamArgument:
         await coordinator.ask("Find X")
 
         sub_events = list(await sub_stream.history.get_events())
-        # Sub-agent ran at least one model turn against ``sub_stream``, so the
-        # stream must have captured the ModelRequest / ModelResponse pair.
-        # (``TaskStarted`` / ``TaskCompleted`` are emitted on the parent
-        # stream, not the sub stream — see ``run_task``.)
-        assert any(isinstance(e, ModelRequest) for e in sub_events), (
-            "sub_stream should capture sub-agent ModelRequest after #2888 fix"
-        )
-        assert any(isinstance(e, ModelResponse) for e in sub_events), (
-            "sub_stream should capture sub-agent ModelResponse after #2888 fix"
-        )
+        # TaskStarted / TaskCompleted land on the parent stream, not this one.
+        assert any(isinstance(e, ModelRequest) for e in sub_events)
+        assert any(isinstance(e, ModelResponse) for e in sub_events)
 
     @pytest.mark.asyncio
     async def test_stream_factory_still_works(self):

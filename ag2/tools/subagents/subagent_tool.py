@@ -44,9 +44,7 @@ def subagent_tool(
     """
     tool_name = name or f"task_{agent.name}"
 
-    # Resolve `stream=` once at construction time so that misuse (passing a
-    # non-Stream / non-callable) fails loudly here instead of silently
-    # producing an empty per-call MemoryStream every time the tool runs.
+    # Normalize `stream=` into a factory (or None) once, at construction time.
     stream_factory: StreamFactory | None = _resolve_stream_argument(stream)
 
     @tool(
@@ -81,24 +79,11 @@ def _resolve_stream_argument(
 ) -> StreamFactory | None:
     """Normalize the ``stream=`` argument into a ``StreamFactory`` or ``None``.
 
-    ``as_tool(stream=...)`` historically only accepted a ``StreamFactory``
-    (``Callable[[Agent, Context], Stream]``); passing a bare ``Stream``
-    instance silently fell through, because the call site
-    ``stream(agent, ctx)`` either misinterpreted the instance as a factory
-    (and crashed) or, with the old guard, just returned ``None`` — so the
-    sub-agent ran with a fresh ephemeral stream and the caller's stream
-    stayed empty. See #2888.
-
-    The new contract:
-
-    - ``None``                  -> ``None`` (use a fresh per-call stream)
-    - a ``Stream`` instance     -> wrapped in a factory returning that
-                                   exact instance, so callers can hold a
-                                   handle to capture sub-agent events
-    - a ``Stream`` *class*      -> ``TypeError`` (``MemoryStream`` where
-                                   ``MemoryStream()`` was meant)
-    - a callable                -> treated as a ``StreamFactory`` as before
-    - anything else             -> ``TypeError`` raised eagerly
+    - ``None``               -> ``None``; each call builds a fresh stream
+    - a ``Stream`` instance  -> a factory returning that same instance
+    - a ``Stream`` class     -> ``TypeError``
+    - a callable             -> returned unchanged
+    - anything else          -> ``TypeError``
     """
     if stream is None:
         return None
