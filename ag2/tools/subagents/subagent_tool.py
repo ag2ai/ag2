@@ -27,6 +27,21 @@ def subagent_tool(
     stream: StreamOrFactory | None = None,
     middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool:
+    """Expose ``agent`` as a delegation tool that runs it as a sub-task.
+
+    ``stream=`` accepts three shapes:
+
+    - ``None`` (default) — each delegation runs on a fresh ``MemoryStream``.
+    - a ``Stream`` instance — every delegation runs on that same stream, which
+      the caller can read or subscribe to.
+    - a ``StreamFactory`` — called once per delegation to build the stream.
+
+    !!! warning
+        A ``Stream`` instance also makes the sub-agent stateful: each
+        delegation sees every earlier delegation's turns, and token cost grows
+        with them — the same behaviour as ``persistent_stream()``. For events
+        without accumulated history, use a factory returning a fresh stream.
+    """
     tool_name = name or f"task_{agent.name}"
 
     # Resolve `stream=` once at construction time so that misuse (passing a
@@ -80,11 +95,21 @@ def _resolve_stream_argument(
     - a ``Stream`` instance     -> wrapped in a factory returning that
                                    exact instance, so callers can hold a
                                    handle to capture sub-agent events
+    - a ``Stream`` *class*      -> ``TypeError`` (``MemoryStream`` where
+                                   ``MemoryStream()`` was meant)
     - a callable                -> treated as a ``StreamFactory`` as before
     - anything else             -> ``TypeError`` raised eagerly
     """
     if stream is None:
         return None
+    # Reject a Stream class passed where an instance is expected. Runs before
+    # the isinstance branch, which a Stream class also satisfies.
+    if isinstance(stream, type) and all(hasattr(stream, attr) for attr in ("send", "enqueue", "spawn_background")):
+        raise TypeError(
+            "`stream=` for as_tool / subagent_tool got the Stream class "
+            f"`{stream.__name__}` itself, not an instance; "
+            f"did you mean `{stream.__name__}()`?"
+        )
     if isinstance(stream, Stream):
         instance = stream
         return lambda _agent, _ctx: instance

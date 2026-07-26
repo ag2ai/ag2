@@ -1435,6 +1435,12 @@ class Agent(PluginTarget, Generic[TResult]):
         stream: StreamOrFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
+        """Expose this agent as a delegation tool for another agent.
+
+        ``stream=`` accepts ``None`` (a fresh stream per delegation), a
+        ``Stream`` instance (reused by every delegation, which makes this
+        agent stateful), or a ``StreamFactory``. See ``subagent_tool``.
+        """
         return subagent_tool(
             self,
             description=description,
