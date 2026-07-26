@@ -399,7 +399,7 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
 async def test_delegate_resolves_functions_namespaced_target() -> None:
     """A ``functions.``-prefixed target still resolves to the real peer.
 
-    Regression for #3000: LLMs occasionally echo OpenAI's ``functions.`` tool
+    Regression for #3022: LLMs occasionally echo OpenAI's ``functions.`` tool
     namespace into the delegate target (e.g. ``functions.bob``). The literal
     name misses the registry, so the consult would fail and the model re-guess
     into a stalled run. ``delegate`` must fall back to the unprefixed name.
@@ -434,7 +434,7 @@ async def test_delegate_resolves_functions_namespaced_target() -> None:
 async def test_delegate_unknown_target_lists_available_peers() -> None:
     """An invented target's not-found error enumerates the real peers.
 
-    Regression for #3000: when the model invents a target (e.g.
+    Regression for #3022: when the model invents a target (e.g.
     ``PPTDialogScript``) no prefix-strip recovers it, and a bare ``not found``
     error gives the model nothing to correct toward, so it re-guesses into a
     stalled run. The error must list the live targets so the next turn can pick
