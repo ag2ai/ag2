@@ -8,6 +8,7 @@ only the *new* human input since the last turn is sent to the live session,
 tracked by a high-water mark over the run's ``ModelRequest`` events.
 """
 
+import logging
 from asyncio.subprocess import Process
 from collections.abc import Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, suppress
@@ -18,9 +19,14 @@ from acp import schema
 
 from ag2.events import BaseEvent, ModelRequest, TextInput
 
+from .tool_gateway import MCPCapabilityError
+
 if TYPE_CHECKING:
     from .bridge import ACPBridge
     from .config import ConnectHook
+    from .tool_gateway import ToolGateway
+
+logger = logging.getLogger(__name__)
 
 
 def new_prompt_text(messages: Sequence[BaseEvent], sent_count: int) -> tuple[str, int]:
@@ -88,6 +94,8 @@ class ACPSession:
         self.bridge: ACPBridge | None = None  # the bridge bound to this connection
         self.session_id: str | None = None
         self.sent_count: int = 0
+        self.gateway: ToolGateway | None = None
+        self.external_servers: list[acp.schema.HttpMcpServer] = []
         # the spawn_agent_process async context manager
         self._cm: AbstractAsyncContextManager[tuple[acp.core.ClientSideConnection, Process]] | None = None
 
@@ -106,12 +114,18 @@ class ACPSession:
         client_capabilities: acp.schema.ClientCapabilities | None = None,
         additional_directories: list[str] | None = None,
         model: str | None = None,
+        mcp_servers: "Sequence[acp.schema.HttpMcpServer] | None" = None,
         connect: "ConnectHook | None" = None,
     ) -> None:
         """Spawn + initialize + create the session on first use; no-op afterwards.
 
         ``connect`` overrides how the connection is opened (tests inject an
         in-process agent); when ``None`` the real subprocess is spawned.
+
+        ``mcp_servers`` (when non-empty) requires the agent to advertise
+        HTTP MCP capability in ``initialize``; otherwise
+        :class:`~ag2.acp.MCPCapabilityError` is raised and the subprocess is
+        torn down.
 
         Not concurrency-safe: callers rely on model-turns within a run being
         sequential (and on the per-stream session registry in ``ACPClient``) to
@@ -127,13 +141,21 @@ class ACPSession:
             self._cm = acp.spawn_agent_process(client, executable, *args, env=env, cwd=cwd)
         self.conn, self.proc = await self._cm.__aenter__()
         try:
-            await self.conn.initialize(
+            init = await self.conn.initialize(
                 protocol_version=protocol_version,
                 client_capabilities=client_capabilities,
             )
+            if mcp_servers:
+                caps = init.agent_capabilities.mcp_capabilities if init.agent_capabilities else None
+                if caps is None or not caps.http:
+                    agent_name = (init.agent_info.name if init.agent_info else None) or (
+                        command[0] if command else "acp-agent"
+                    )
+                    raise MCPCapabilityError(agent_name)
             session = await self.conn.new_session(
                 cwd=cwd,
                 additional_directories=additional_directories or None,
+                mcp_servers=list(mcp_servers) if mcp_servers else None,
             )
             if model is not None:
                 await select_model(self.conn, session, model)
@@ -145,22 +167,29 @@ class ACPSession:
         self.session_id = session.session_id
 
     async def close(self) -> None:
-        """Terminate the subprocess and reset the handle. Never raises."""
+        """Terminate the subprocess, shut down the tool gateway, reset the handle. Never raises."""
+        gateway, self.gateway = self.gateway, None
         cm, self._cm = self._cm, None
         proc, self.proc = self.proc, None
         self.conn = None
         self.bridge = None
         self.session_id = None
         self.sent_count = 0
-        if cm is None:
-            return
+        self.external_servers = []
         try:
-            await cm.__aexit__(None, None, None)
-        except Exception:
-            # Teardown noise — typically the connection's receive loop tripping
-            # over a notification that was in flight when the queue closed. The
-            # transport's own cleanup (wait → terminate → kill) has already run
-            # by the time it propagates here; the terminate below is a backstop.
-            if proc is not None and proc.returncode is None:
-                with suppress(ProcessLookupError):
-                    proc.terminate()
+            # Subprocess first: killing it drops any in-flight tools/call HTTP
+            # requests, so the gateway shutdown that follows doesn't wait on them.
+            if cm is not None:
+                try:
+                    await cm.__aexit__(None, None, None)
+                except Exception:
+                    # Teardown noise — typically the connection's receive loop tripping
+                    # over a notification that was in flight when the queue closed. The
+                    # transport's own cleanup (wait → terminate → kill) has already run
+                    # by the time it propagates here; the terminate below is a backstop.
+                    if proc is not None and proc.returncode is None:
+                        with suppress(ProcessLookupError):
+                            proc.terminate()
+        finally:
+            if gateway is not None:
+                await gateway.close()
