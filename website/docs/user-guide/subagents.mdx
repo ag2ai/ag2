@@ -250,6 +250,29 @@ researcher.as_tool(
 
 It stores the stream ID in `#!python context.dependencies` keyed by `#!python f"ag:{agent.name}:stream"` and reuses the parent stream's storage backend. This is useful when the sub-agent benefits from seeing its own prior work — for example, a researcher that should avoid repeating searches.
 
+### Shared Stream Instance
+
+Pass a `#!python Stream` instance directly to keep a handle on the sub-agent's events. Every delegation runs against that same stream, so you can read its history — or subscribe to it — from the calling code:
+
+```python linenums="1" hl_lines="3 7"
+from ag2 import MemoryStream
+
+sub_stream = MemoryStream()
+
+researcher.as_tool(
+    description="Research a topic",
+    stream=sub_stream,
+)
+
+# after the run
+events = await sub_stream.history.get_events()
+```
+
+!!! warning
+    Reusing one stream also makes the sub-agent **stateful**: because the history is shared, each delegation sees every earlier delegation's turns, and token cost grows with them. This is the same trade-off as `#!python persistent_stream()`. To observe events *without* accumulating history, use a [custom factory](#custom-factory) that returns a fresh stream per call and subscribe to each one.
+
+Unlike `#!python persistent_stream()`, an instance you construct yourself carries its own storage backend unless you pass the parent's — `#!python MemoryStream(storage=parent_stream.history.storage)`.
+
 ### Custom Factory
 
 For full control, pass any callable matching `#!python StreamFactory = Callable[[Agent, Context], Stream]`:
@@ -266,3 +289,6 @@ researcher.as_tool(
     stream=make_redis_stream,
 )
 ```
+
+!!! note
+    `#!python stream=` accepts exactly these three shapes — `#!python None`, a `#!python Stream` instance, or a factory. Anything else raises `#!python TypeError` when the tool is built, not when it first runs. Passing the class (`#!python stream=MemoryStream`) instead of an instance (`#!python stream=MemoryStream()`) is rejected the same way. The same rules apply to `#!python background_agent_tool()`.

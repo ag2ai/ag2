@@ -24,10 +24,11 @@ from ag2.events import (
     Usage,
     UsageEvent,
 )
+from ag2.middleware import BaseMiddleware
 from ag2.testing import TestConfig
 from ag2.tools import Toolkit
+from ag2.tools.subagents import background_agent_tool, subagent_tool
 from ag2.tools.subagents import run_task as run_task_mod
-from ag2.tools.subagents import subagent_tool
 from ag2.tools.subagents.run_task import run_task
 from ag2.usage import UsageReport
 
@@ -1012,3 +1013,214 @@ class TestHitlPropagation:
         mock.worker_hitl.assert_called_once_with("Need approval")
         mock.tool_got.assert_called_once_with("worker answer")
         mock.parent_hitl.assert_not_called()
+
+
+class TestAsToolStreamArgument:
+    """`as_tool(stream=...)` accepts a Stream instance, a StreamFactory, or
+    None, and raises ``TypeError`` for anything else.
+    """
+
+    @pytest.mark.asyncio
+    async def test_stream_instance_captures_subagent_events(self):
+        """A ``Stream`` instance captures the sub-agent's events."""
+        researcher_config = TestConfig(ModelResponse(ModelMessage("Found X.")))
+        researcher = Agent("researcher", config=researcher_config)
+
+        coordinator_config = TestConfig(
+            ToolCallEvent(name="task_researcher", arguments='{"objective": "Find X"}'),
+            ModelResponse(ModelMessage("OK.")),
+        )
+        sub_stream = MemoryStream()
+        coordinator = Agent(
+            "coordinator",
+            config=coordinator_config,
+            tools=[researcher.as_tool(description="Research", stream=sub_stream)],
+        )
+
+        await coordinator.ask("Find X")
+
+        sub_events = list(await sub_stream.history.get_events())
+        # TaskStarted / TaskCompleted land on the parent stream, not this one.
+        assert any(isinstance(e, ModelRequest) for e in sub_events)
+        assert any(isinstance(e, ModelResponse) for e in sub_events)
+
+    @pytest.mark.asyncio
+    async def test_stream_factory_still_works(self):
+        """The existing ``StreamFactory`` (callable) contract is unchanged."""
+        researcher_config = TestConfig(ModelResponse(ModelMessage("Found X.")))
+        researcher = Agent("researcher", config=researcher_config)
+
+        captured: list[MemoryStream] = []
+
+        def factory(_agent, _ctx) -> MemoryStream:
+            s = MemoryStream()
+            captured.append(s)
+            return s
+
+        coordinator_config = TestConfig(
+            ToolCallEvent(name="task_researcher", arguments='{"objective": "Find X"}'),
+            ModelResponse(ModelMessage("OK.")),
+        )
+        coordinator = Agent(
+            "coordinator",
+            config=coordinator_config,
+            tools=[researcher.as_tool(description="Research", stream=factory)],
+        )
+
+        await coordinator.ask("Find X")
+
+        assert len(captured) == 1
+        events = list(await captured[0].history.get_events())
+        # Factory-produced stream is the sub-agent's stream — same routing as
+        # the instance case: ModelRequest / ModelResponse land here.
+        assert any(isinstance(e, ModelRequest) for e in events)
+        assert any(isinstance(e, ModelResponse) for e in events)
+
+    def test_invalid_stream_type_raises_typeerror(self):
+        """Passing a non-callable / non-Stream / non-None must raise eagerly
+        (no more silent empty-stream surprise)."""
+        researcher_config = TestConfig(ModelResponse(ModelMessage("...")))
+        researcher = Agent("researcher", config=researcher_config)
+
+        with pytest.raises(TypeError, match="must be a Stream instance"):
+            researcher.as_tool(description="Research", stream=42)  # type: ignore[arg-type]
+
+        with pytest.raises(TypeError, match="must be a Stream instance"):
+            researcher.as_tool(description="Research", stream="not a stream")  # type: ignore[arg-type]
+
+    def test_stream_none_keeps_default_behaviour(self):
+        """``stream=None`` (the default) leaves run_task to allocate a fresh
+        per-call stream, just like before."""
+        researcher_config = TestConfig(ModelResponse(ModelMessage("...")))
+        researcher = Agent("researcher", config=researcher_config)
+
+        # Should not raise and should produce a usable FunctionTool.
+        delegate = researcher.as_tool(description="Research", stream=None)
+        assert delegate is not None
+
+    def test_stream_class_instead_of_instance_raises_typeerror(self):
+        """A Stream class is rejected; only an instance is accepted."""
+        researcher = Agent("researcher", config=TestConfig(ModelResponse(ModelMessage("..."))))
+
+        with pytest.raises(TypeError, match="not an instance"):
+            researcher.as_tool(description="Research", stream=MemoryStream)  # type: ignore[arg-type]
+
+    def test_non_stream_factory_class_is_still_accepted(self):
+        """Only *Stream* classes are rejected; other callables stay valid factories."""
+        researcher = Agent("researcher", config=TestConfig(ModelResponse(ModelMessage("..."))))
+
+        class MakeStream:
+            def __init__(self, agent, ctx) -> None:
+                self.stream = MemoryStream()
+
+        assert researcher.as_tool(description="Research", stream=MakeStream) is not None  # type: ignore[arg-type]
+
+    @pytest.mark.asyncio
+    async def test_stream_instance_makes_subagent_stateful(self):
+        """A reused stream carries history forward: the second delegation sees
+        the first one's turns."""
+        seen: list[list[str]] = []
+
+        class CaptureLLMCalls(BaseMiddleware):
+            async def on_llm_call(self, call_next, events, context):
+                seen.append([type(e).__name__ for e in events])
+                return await call_next(events, context)
+
+        researcher_config = TestConfig(
+            ModelResponse(ModelMessage("A1.")),
+            ModelResponse(ModelMessage("A2.")),
+        )
+        researcher = Agent("researcher", config=researcher_config, middleware=[CaptureLLMCalls])
+
+        coordinator_config = TestConfig(
+            ToolCallEvent(name="task_researcher", arguments='{"objective": "FIRST"}'),
+            ToolCallEvent(name="task_researcher", arguments='{"objective": "SECOND"}'),
+            ModelResponse(ModelMessage("Done.")),
+        )
+        sub_stream = MemoryStream()
+        coordinator = Agent(
+            "coordinator",
+            config=coordinator_config,
+            tools=[researcher.as_tool(description="Research", stream=sub_stream)],
+        )
+
+        await coordinator.ask("go")
+
+        # The second delegation replays the first one's turns before its own.
+        assert seen == [
+            ["ModelRequest"],
+            ["ModelRequest", "ModelResponse", "ModelRequest"],
+        ]
+
+    @pytest.mark.asyncio
+    async def test_stream_none_keeps_delegations_isolated(self):
+        """The default gets a fresh stream per delegation, so no history leaks."""
+        seen: list[list[str]] = []
+
+        class CaptureLLMCalls(BaseMiddleware):
+            async def on_llm_call(self, call_next, events, context):
+                seen.append([type(e).__name__ for e in events])
+                return await call_next(events, context)
+
+        researcher_config = TestConfig(
+            ModelResponse(ModelMessage("A1.")),
+            ModelResponse(ModelMessage("A2.")),
+        )
+        researcher = Agent("researcher", config=researcher_config, middleware=[CaptureLLMCalls])
+
+        coordinator_config = TestConfig(
+            ToolCallEvent(name="task_researcher", arguments='{"objective": "FIRST"}'),
+            ToolCallEvent(name="task_researcher", arguments='{"objective": "SECOND"}'),
+            ModelResponse(ModelMessage("Done.")),
+        )
+        coordinator = Agent(
+            "coordinator",
+            config=coordinator_config,
+            tools=[researcher.as_tool(description="Research")],
+        )
+
+        await coordinator.ask("go")
+
+        assert seen == [["ModelRequest"], ["ModelRequest"]]
+
+
+class TestBackgroundToolStreamArgument:
+    """``background_agent_tool(stream=...)`` accepts a Stream instance, a
+    StreamFactory, or None, and raises ``TypeError`` for anything else.
+    """
+
+    @pytest.mark.asyncio
+    async def test_stream_instance_captures_subagent_events(self):
+        researcher = Agent("researcher", config=TestConfig(ModelResponse(ModelMessage("bg done."))))
+        sub_stream = MemoryStream()
+
+        coordinator = Agent(
+            "coordinator",
+            config=TestConfig(
+                ToolCallEvent(name="background_task_researcher", arguments='{"objective": "Q"}'),
+                ModelResponse(ModelMessage("ack")),
+                ModelResponse(ModelMessage("final")),
+            ),
+            tools=[background_agent_tool(researcher, description="bg", stream=sub_stream)],
+        )
+
+        await coordinator.ask("go")
+
+        events = list(await sub_stream.history.get_events())
+        assert any(isinstance(e, ModelRequest) for e in events)
+        assert any(isinstance(e, ModelResponse) for e in events)
+
+    def test_invalid_stream_type_raises_typeerror(self):
+        researcher = Agent("researcher", config=TestConfig(ModelResponse(ModelMessage("..."))))
+
+        with pytest.raises(TypeError, match="must be a Stream instance"):
+            background_agent_tool(researcher, description="bg", stream=42)  # type: ignore[arg-type]
+
+        with pytest.raises(TypeError, match="not an instance"):
+            background_agent_tool(researcher, description="bg", stream=MemoryStream)  # type: ignore[arg-type]
+
+    def test_stream_factory_and_none_still_accepted(self):
+        researcher = Agent("researcher", config=TestConfig(ModelResponse(ModelMessage("..."))))
+
+        assert background_agent_tool(researcher, description="bg", stream=None) is not None
+        assert background_agent_tool(researcher, description="bg", stream=lambda a, c: MemoryStream()) is not None
