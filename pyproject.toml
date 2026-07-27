@@ -203,12 +203,12 @@ docs = [
     "watchdog>=4.0,<7",                # DiskKnowledgeStore (ag2.knowledge) — additional dependency
     "websockets>=14.0,<17",            # WsLink (ag2.network) — additional dependency
     "ag2[tavily,ddgs,perplexity]",     # Search tools are exposed by optional search modules
-    "mkdocs-material==9.7.6",
+    "mkdocs-material==9.7.7",
     "mkdocs-literate-nav==0.6.3",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
     "mkdocs-git-revision-date-localized-plugin==1.5.3",
-    "typer>=0.22,<0.27",
+    "typer>=0.22,<0.28",
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.5.0",                      # includes with variables
     "mkdocs-glightbox==0.5.2",                          # img zoom
@@ -223,22 +223,22 @@ docs = [
 ]
 
 types = [
-    "mypy==2.2.0",
+    "mypy==2.3.0",
     "types-PyYAML",
     "types-requests",
     { include-group = "test" },
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.15.21", "codespell==2.4.2", "zizmor==1.26.1"]
+lint = ["ruff==0.15.22", "codespell==2.4.3", "zizmor==1.26.1"]
 
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
-    "prek==0.4.9",
-    "uv==0.11.28",
+    "prek==0.4.10",
+    "uv==0.11.29",
 ]
 
 [tool.pytest.ini_options]
