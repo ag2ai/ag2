@@ -44,6 +44,11 @@ from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 
+def _kind_label(kind: BinaryType | str) -> str:
+    """Kind for error messages; may be a raw string in logs persisted before the ``__enum__`` marker."""
+    return kind.value if isinstance(kind, BinaryType) else str(kind)
+
+
 def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] | None:
     """Convert a ResponseProto to Chat Completions response_format."""
     if not response or not response.json_schema:
@@ -143,7 +148,7 @@ def events_to_responses_input(
                         blocks.append({"type": "input_text", "text": serializer.encode(part.data).decode()})
                     elif isinstance(part, BinaryInput):
                         b64 = base64.b64encode(part.data).decode()
-                        if part.kind is BinaryType.IMAGE:
+                        if part.kind == BinaryType.IMAGE:
                             # Images in output must use input_image (input_file rejects image/* MIME).
                             blocks.append({
                                 "type": "input_image",
@@ -161,15 +166,15 @@ def events_to_responses_input(
                                 "filename": filename,
                             })
                         else:
-                            raise UnsupportedInputError(f"BinaryInput({part.kind.value})", "openai-responses")
+                            raise UnsupportedInputError(f"BinaryInput({_kind_label(part.kind)})", "openai-responses")
                     elif isinstance(part, UrlInput):
-                        if part.kind is BinaryType.IMAGE:
+                        if part.kind == BinaryType.IMAGE:
                             blocks.append({"type": "input_image", "image_url": part.url})
                         elif part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
                             # file_url forbids filename (API mutual-exclusion).
                             blocks.append({"type": "input_file", "file_url": part.url})
                         else:
-                            raise UnsupportedInputError(f"UrlInput({part.kind.value})", "openai-responses")
+                            raise UnsupportedInputError(f"UrlInput({_kind_label(part.kind)})", "openai-responses")
                     elif isinstance(part, FileIdInput):
                         # file_id forbids filename in output (user-message allows both).
                         blocks.append({"type": "input_file", "file_id": part.file_id})
@@ -226,7 +231,7 @@ def events_to_responses_input(
 
                 elif isinstance(inp, BinaryInput):
                     b64 = base64.b64encode(inp.data).decode()
-                    if inp.kind is BinaryType.IMAGE:
+                    if inp.kind == BinaryType.IMAGE:
                         image_block: dict[str, Any] = {
                             "type": "input_image",
                             "image_url": f"data:{inp.media_type};base64,{b64}",
@@ -253,17 +258,17 @@ def events_to_responses_input(
                         })
 
                     else:
-                        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "openai-responses")
+                        raise UnsupportedInputError(f"BinaryInput({_kind_label(inp.kind)})", "openai-responses")
 
                 elif isinstance(inp, UrlInput):
-                    if inp.kind is BinaryType.IMAGE:
+                    if inp.kind == BinaryType.IMAGE:
                         result.append({"role": "user", "content": [{"type": "input_image", "image_url": inp.url}]})
 
                     elif inp.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
                         result.append({"role": "user", "content": [{"type": "input_file", "file_url": inp.url}]})
 
                     else:
-                        raise UnsupportedInputError(f"UrlInput({inp.kind.value})", "openai-responses")
+                        raise UnsupportedInputError(f"UrlInput({_kind_label(inp.kind)})", "openai-responses")
 
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "openai-responses")
@@ -315,22 +320,22 @@ def convert_messages(
                     parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
 
                 elif isinstance(inp, UrlInput):
-                    if inp.kind is BinaryType.IMAGE:
+                    if inp.kind == BinaryType.IMAGE:
                         parts.append({"type": "image_url", "image_url": {"url": inp.url}})
 
                     else:
-                        raise UnsupportedInputError(f"UrlInput({inp.kind.value})", "openai-completions")
+                        raise UnsupportedInputError(f"UrlInput({_kind_label(inp.kind)})", "openai-completions")
 
                 elif isinstance(inp, FileIdInput):
                     parts.append({"type": "file", "file": {"file_id": inp.file_id}})
 
                 elif isinstance(inp, BinaryInput):
-                    if inp.kind is BinaryType.AUDIO:
+                    if inp.kind == BinaryType.AUDIO:
                         b64 = base64.b64encode(inp.data).decode()
                         fmt = _MIME_TO_AUDIO_FORMAT.get(inp.media_type, inp.media_type.split("/", 1)[1])
                         parts.append({"type": "input_audio", "input_audio": {"data": b64, "format": fmt}})
 
-                    elif inp.kind is BinaryType.IMAGE:
+                    elif inp.kind == BinaryType.IMAGE:
                         b64 = base64.b64encode(inp.data).decode()
                         data_url = f"data:{inp.media_type};base64,{b64}"
                         image_url: dict[str, Any] = {"url": data_url}
@@ -338,7 +343,7 @@ def convert_messages(
                             image_url["detail"] = inp.vendor_metadata["detail"]
                         parts.append({"type": "image_url", "image_url": image_url})
 
-                    elif inp.kind is BinaryType.DOCUMENT:
+                    elif inp.kind == BinaryType.DOCUMENT:
                         b64 = base64.b64encode(inp.data).decode()
                         data_url = f"data:{inp.media_type};base64,{b64}"
                         filename = inp.vendor_metadata.get("filename")
@@ -348,7 +353,7 @@ def convert_messages(
                         parts.append({"type": "file", "file": {"file_data": data_url, "filename": filename}})
 
                     else:
-                        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "openai-completions")
+                        raise UnsupportedInputError(f"BinaryInput({_kind_label(inp.kind)})", "openai-completions")
 
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "openai-completions")

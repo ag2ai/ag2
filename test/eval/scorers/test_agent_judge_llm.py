@@ -5,7 +5,7 @@
 """Real-LLM behaviour tests for the Agent-as-judge scorer.
 
 These hit real provider APIs and are gated by per-provider marks, so they are
-excluded from the default unit run and exercised by the weekly ``beta-llm-test``
+excluded from the default unit run and exercised by the weekly ``llm-test``
 action (``-m openai`` / ``-m anthropic`` / ``-m gemini``). They verify what the
 mock tests in ``test_agent_judge.py`` cannot: that a real model, given the judge
 prompt, returns a valid ``Verdict`` (structured output works end to end) and

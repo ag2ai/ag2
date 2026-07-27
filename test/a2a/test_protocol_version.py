@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Regression tests for issue #2904 — beta A2A must reject AgentCards whose
+"""Regression tests for issue #2904 — AG2 A2A must reject AgentCards whose
 selected interface advertises an A2A protocol version < 1.0, while still
 accepting interfaces that omit the optional ``protocol_version`` field."""
 
