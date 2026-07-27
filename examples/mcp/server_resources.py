@@ -15,7 +15,7 @@ readme = Resource(
     uri="docs://readme",
     name="readme",
     description="Project overview.",
-    read=lambda: "AG2 beta MCP server example.",
+    read=lambda: "AG2 MCP server example.",
     mime_type="text/markdown",
 )
 
