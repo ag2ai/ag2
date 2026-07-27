@@ -68,6 +68,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/extra.js
+  - javascripts/ag2-widget-theme.js
 
 plugins:
   - search:
