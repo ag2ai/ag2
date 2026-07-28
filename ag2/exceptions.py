@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 
 class AG2Error(Exception):
-    """Base exception for all AG2 beta errors."""
+    """Base exception for all AG2 errors."""
 
 
 class ToolConflictError(AG2Error):

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""AG2 Beta evaluation framework.
+"""AG2 evaluation framework.
 
 Offline evaluation of ``ag2`` agents against curated datasets,
 with prebuilt scorers, deterministic runs via ``TestConfig`` cassettes,

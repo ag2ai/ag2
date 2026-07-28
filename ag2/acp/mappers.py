@@ -1,7 +1,7 @@
 # Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Pure translation between ACP SDK models and AG2 beta events.
+"""Pure translation between ACP SDK models and AG2 events.
 
 Functions here take the ``acp.schema`` model objects directly (no ``model_dump``
 indirection) and dispatch with :func:`isinstance`, so the mapping is checked

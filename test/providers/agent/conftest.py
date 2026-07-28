@@ -7,7 +7,7 @@
 Every test parametrizes over ``openai`` / ``anthropic`` / ``gemini`` / ``zai``
 via ``provider_config`` or ``streaming_config``, so each instance carries
 the corresponding per-provider mark and is excluded from
-``test-beta-cov`` by ``_beta_llm_filter``.
+``test-cov`` by ``_llm_filter``.
 
 Credentials are read from the environment — `just` loads ``.env``
 automatically; for direct ``pytest`` invocation, export the keys
