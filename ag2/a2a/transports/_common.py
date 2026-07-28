@@ -21,6 +21,38 @@ from starlette.routing import BaseRoute
 CardModifier: TypeAlias = Callable[[AgentCard], Awaitable[AgentCard]]
 ExtendedCardModifier: TypeAlias = Callable[[AgentCard, ServerCallContext], Awaitable[AgentCard]]
 
+CardSigner: TypeAlias = Callable[[AgentCard], AgentCard]
+
+
+def sign_card(card: AgentCard, signer: CardSigner | None) -> AgentCard:
+    """Apply ``signer`` to ``card``; identity when no signer is configured."""
+    return signer(card) if signer is not None else card
+
+
+def wrap_card_modifier(modifier: CardModifier | None, signer: CardSigner | None) -> CardModifier | None:
+    """Re-sign the modifier's per-request output so mutation doesn't void the JWS."""
+    if modifier is None or signer is None:
+        return modifier
+
+    async def signed_modifier(card: AgentCard) -> AgentCard:
+        return signer(await modifier(card))
+
+    return signed_modifier
+
+
+def wrap_extended_card_modifier(
+    modifier: ExtendedCardModifier | None, signer: CardSigner | None
+) -> ExtendedCardModifier | None:
+    """Extended-card twin of :func:`wrap_card_modifier` (modifier also takes ``ServerCallContext``)."""
+    if modifier is None or signer is None:
+        return modifier
+
+    async def signed_modifier(card: AgentCard, context: ServerCallContext) -> AgentCard:
+        return signer(await modifier(card, context))
+
+    return signed_modifier
+
+
 # Legacy v0.x server-side card alias. Kept so pre-v1 clients still discover the card.
 LEGACY_AGENT_CARD_PATH = "/.well-known/agent.json"
 DEFAULT_AGENT_CARD_PATH = "/.well-known/agent-card.json"

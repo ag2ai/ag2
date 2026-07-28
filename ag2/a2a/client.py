@@ -5,7 +5,7 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import httpx
 from a2a.client import A2ACardResolver, Client, ClientCallInterceptor
@@ -25,6 +25,7 @@ from a2a.types import (
     TaskStatus,
     TaskStatusUpdateEvent,
 )
+from a2a.utils.signing import SignatureVerificationError
 from fast_depends.library.serializer import SerializerProto
 
 from ag2.config.client import LLMClient
@@ -47,6 +48,7 @@ from ag2.tools.final.function_tool import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 from .errors import (
+    A2ACardSignatureError,
     A2AClientToolsNotSupportedError,
     A2AReconnectError,
     A2ATaskAuthRequiredError,
@@ -83,6 +85,9 @@ from .transports._http import make_a2a_client, make_httpx_client, select_interfa
 
 if TYPE_CHECKING:
     import grpc.aio
+
+CardVerifier: TypeAlias = Callable[[AgentCard], None]
+"""JWS verifier for consumed AgentCards (from :func:`a2a.utils.signing.create_signature_verifier`)."""
 
 _PROVIDER = "a2a"
 _CONTEXT_ID_VAR_TEMPLATE = "a2a:context_id:{card_url}"
@@ -166,6 +171,7 @@ class A2AClient(LLMClient):
         interceptors: Sequence[ClientCallInterceptor] = (),
         grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = None,
         preset_card: AgentCard | None = None,
+        card_signature_verifier: CardVerifier | None = None,
         tenant: str | None = None,
         history_length: int | None = None,
     ) -> None:
@@ -182,6 +188,7 @@ class A2AClient(LLMClient):
         self._interceptors = list(interceptors)
         self._grpc_channel_factory = grpc_channel_factory
         self._preset_card = preset_card
+        self._card_signature_verifier = card_signature_verifier
         self._tenant = tenant
         self._history_length = history_length
 
@@ -266,6 +273,15 @@ class A2AClient(LLMClient):
             self._httpx_client = None
         self._sdk_client = None
 
+    def _verify_card(self, card: AgentCard, *, source: str) -> None:
+        """Opt-in JWS check: no-op without a verifier; wraps SDK errors in ag2's."""
+        if self._card_signature_verifier is None:
+            return
+        try:
+            self._card_signature_verifier(card)
+        except SignatureVerificationError as e:
+            raise A2ACardSignatureError(url=self._card_url, source=source, reason=str(e)) from e
+
     async def _ensure_connected(self, context: ConversationContext) -> None:
         if self._sdk_client is not None:
             return
@@ -278,6 +294,9 @@ class A2AClient(LLMClient):
             self._agent_card = await A2ACardResolver(
                 httpx_client=self._httpx_client, base_url=self._card_url
             ).get_agent_card()
+            self._verify_card(self._agent_card, source="fetched agent card")
+        else:
+            self._verify_card(self._preset_card, source="preset agent card")
         iface, transport = select_interface(self._agent_card, url=self._card_url, prefer=self._prefer)
         validate_protocol_version(iface, url=self._card_url, transport=transport)
         self._sdk_client = make_a2a_client(
@@ -290,9 +309,11 @@ class A2AClient(LLMClient):
         )
         if self._agent_card.capabilities.extended_agent_card:
             kwargs = self._maybe_tenant(context)
-            self._agent_card = await self._sdk_client.get_extended_agent_card(
+            extended = await self._sdk_client.get_extended_agent_card(
                 GetExtendedAgentCardRequest(**kwargs),
             )
+            self._verify_card(extended, source="extended agent card")
+            self._agent_card = extended
 
     def _validate_and_extract_tools(
         self,
