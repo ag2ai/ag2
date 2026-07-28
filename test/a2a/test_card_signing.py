@@ -13,9 +13,11 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from ag2 import Agent
-from ag2.a2a import A2AConfig, A2AServer, CardSigner, CardVerifier, build_card
+from ag2.a2a import A2AConfig, A2AServer, build_card
+from ag2.a2a.client import CardVerifier
 from ag2.a2a.errors import A2ACardSignatureError
 from ag2.a2a.testing import make_test_client_factory
+from ag2.a2a.transports._common import CardSigner
 from ag2.testing import TestConfig
 
 
