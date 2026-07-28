@@ -10,7 +10,7 @@ default:
 
 # Tests
 
-_llm_filter := "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or zai or deepseek or ollama or bedrock or cerebras)"
+_llm_filter := "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or zai or mistral or deepseek or ollama or bedrock or cerebras)"
 
 [doc("Run tests")]
 [group("tests")]
