@@ -182,7 +182,7 @@ async def _grade(
 def _error_task_result(ref: TraceRef, exc: BaseException) -> TaskResult:
     """Build a failed :class:`TaskResult` when ``_evaluate_ref`` raises.
 
-    The Trace carries the exception so :attr:`~autogen.beta.eval.Aggregates.errors`
+    The Trace carries the exception so :attr:`~ag2.eval.Aggregates.errors`
     is incremented correctly, and all other fields match what the success path
     would produce for the same ref.
     """

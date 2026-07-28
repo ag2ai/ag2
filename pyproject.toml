@@ -385,10 +385,9 @@ convention = "google"
 [tool.mypy]
 python_version = "3.10"
 
-# The promoted (ex-beta) tree is not yet strict-clean — see
-# docs/adr/0010-promote-beta-to-top-level-and-delete-classic.md. Strict mypy
-# coverage is being (re)introduced module-by-module; until then mypy is scoped
-# to modules that already pass under `strict = true`.
+# The `ag2` tree is not yet strict-clean. Strict mypy coverage is being
+# (re)introduced module-by-module; until then mypy is scoped to modules
+# that already pass under `strict = true`.
 files = [
     "ag2/_import_utils.py",
 ]
