@@ -243,7 +243,7 @@ def _error_trace_pair(task: Task, exc: BaseException) -> tuple[TraceRef, Trace]:
     """Build a failed ``(TraceRef, Trace)`` when ``_produce_one`` raises.
 
     The Trace carries the exception so grading can surface it and
-    :attr:`~autogen.beta.eval.Aggregates.errors` is incremented correctly.
+    :attr:`~ag2.eval.Aggregates.errors` is incremented correctly.
     """
     ref = TraceRef(trace_id=uuid4().hex, task_id=task.task_id)
     trace = Trace(events=(), exception=exc, duration_ms=0)

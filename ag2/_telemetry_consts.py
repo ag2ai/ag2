@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared OpenTelemetry string constants — the AG2 beta telemetry vocabulary.
+"""Shared OpenTelemetry string constants — the AG2 telemetry vocabulary.
 
 Single source of truth for the telemetry strings that cross package
 boundaries:

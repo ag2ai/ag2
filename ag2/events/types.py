@@ -22,7 +22,7 @@ def _add_tokens(a: float | None, b: float | None) -> float | None:
 
 @dataclass(frozen=True, slots=True)
 class Usage:
-    """Token usage normalized across beta LLM providers."""
+    """Token usage normalized across LLM providers."""
 
     prompt_tokens: float | None = None
     completion_tokens: float | None = None

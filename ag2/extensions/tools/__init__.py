@@ -2,4 +2,4 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tool extensions for AG2 Beta."""
+"""Tool extensions for AG2."""
