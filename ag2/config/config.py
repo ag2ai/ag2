@@ -18,6 +18,7 @@ class ModelProvider(str, Enum):
     BEDROCK = "bedrock"
     DASHSCOPE = "dashscope"
     GEMINI = "gemini"
+    MISTRAL = "mistral"
     OLLAMA = "ollama"
     OPENAI = "openai"
     VERTEXAI = "vertexai"
