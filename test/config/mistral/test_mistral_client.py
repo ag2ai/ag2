@@ -326,8 +326,8 @@ class TestStreaming:
     async def test_chunks_are_accumulated_and_emitted(self) -> None:
         chat = FakeChat(
             stream_chunks=[
-                make_stream_chunk(content="Hel", model="mistral-test"),
-                make_stream_chunk(content="lo"),
+                make_stream_chunk(content="Hello, ", model="mistral-test"),
+                make_stream_chunk(content="world"),
                 make_stream_chunk(finish_reason="stop", usage=make_usage(3, 2, 5)),
             ]
         )
@@ -335,11 +335,11 @@ class TestStreaming:
 
         response = await _ask(_make_client(chat, streaming=True), context=context)
 
-        assert response.message == ModelMessage("Hello")
+        assert response.message == ModelMessage("Hello, world")
         assert response.finish_reason == "stop"
         assert response.usage == Usage(prompt_tokens=3, completion_tokens=2, total_tokens=5)
-        context.send.assert_any_await(ModelMessageChunk("Hel"))
-        context.send.assert_any_await(ModelMessageChunk("lo"))
+        context.send.assert_any_await(ModelMessageChunk("Hello, "))
+        context.send.assert_any_await(ModelMessageChunk("world"))
 
     async def test_tool_calls_accumulate_by_index(self) -> None:
         chat = FakeChat(
