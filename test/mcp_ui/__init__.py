@@ -5,5 +5,5 @@
 import pytest
 
 # `mcp` is an optional extra; skip the whole package when it isn't installed
-# (mirrors test/a2a/__init__.py). beta-test.yml runs without ag2[mcp].
+# (mirrors test/a2a/__init__.py). test.yml runs without ag2[mcp].
 pytest.importorskip("mcp")

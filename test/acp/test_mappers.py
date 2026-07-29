@@ -3,7 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+import logging
+from typing import Any
 
+import pytest
 from acp import schema
 from dirty_equals import IsPartialDict
 
@@ -14,6 +17,7 @@ from ag2.acp.mappers import (
     map_session_update,
     map_usage,
 )
+from ag2.acp.types import SessionUpdate
 from ag2.events import ModelMessageChunk, ModelReasoning
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
 from ag2.events.types import Usage
@@ -74,6 +78,48 @@ def test_plan() -> None:
     )
     assert isinstance(plan, ACPPlan)
     assert plan.entries == [ACPPlanEntry(content="do x", status="pending", priority="high")]
+
+
+def test_incremental_plan_items_update_maps_to_plan() -> None:
+    """acp 0.11 `plan_update` carrying items is the same information as `plan`."""
+    plan = map_session_update(
+        schema.AgentPlanContentUpdate(
+            session_update="plan_update",
+            plan=schema.PlanUpdateItems(
+                type="items",
+                id="p1",
+                entries=[schema.PlanEntry(content="do y", status="in_progress", priority="low")],
+            ),
+        )
+    )
+    assert isinstance(plan, ACPPlan)
+    assert plan.entries == [ACPPlanEntry(content="do y", status="in_progress", priority="low")]
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        schema.AgentPlanContentUpdate(
+            session_update="plan_update", plan=schema.PlanUpdateFile(type="file", id="p1", uri="file:///plan.md")
+        ),
+        schema.AgentPlanContentUpdate(
+            session_update="plan_update", plan=schema.PlanUpdateMarkdown(type="markdown", id="p1", content="# plan")
+        ),
+        schema.AgentPlanRemovedUpdate(session_update="plan_removed", id="p1"),
+    ],
+)
+def test_plan_updates_without_an_event_are_logged_not_silent(update: SessionUpdate, caplog: Any) -> None:
+    """These carry no ACPPlan-shaped payload; ignoring them must at least be visible."""
+    with caplog.at_level(logging.DEBUG, logger="ag2.acp.mappers"):
+        assert map_session_update(update) is None
+    assert "no AG2 event for ACP session update" in caplog.text
+
+
+def test_usage_update_is_not_logged_as_unmapped(caplog: Any) -> None:
+    """usage_update is consumed by map_usage by design, so it is not a gap."""
+    with caplog.at_level(logging.DEBUG, logger="ag2.acp.mappers"):
+        assert map_session_update(schema.UsageUpdate(session_update="usage_update", used=10, size=100)) is None
+    assert caplog.text == ""
 
 
 def test_mode_and_commands() -> None:

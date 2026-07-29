@@ -1,7 +1,7 @@
 # Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Pure translation between ACP SDK models and AG2 beta events.
+"""Pure translation between ACP SDK models and AG2 events.
 
 Functions here take the ``acp.schema`` model objects directly (no ``model_dump``
 indirection) and dispatch with :func:`isinstance`, so the mapping is checked
@@ -10,6 +10,8 @@ against the real SDK types rather than stringly-typed dicts.
 
 import base64
 import json
+import logging
+from collections.abc import Sequence
 
 from acp import schema
 
@@ -19,6 +21,8 @@ from ag2.events.types import BinaryResult, Usage
 
 from .events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
 from .types import ContentBlock, SessionUpdate, ToolCallContent
+
+logger = logging.getLogger(__name__)
 
 
 def block_text(block: ContentBlock | None) -> str:
@@ -97,9 +101,13 @@ def map_session_update(update: SessionUpdate) -> BaseEvent | None:
         )
 
     if isinstance(update, schema.AgentPlanUpdate):
-        return ACPPlan(
-            entries=[ACPPlanEntry(content=e.content, status=e.status, priority=e.priority) for e in update.entries]
-        )
+        return _plan(update.entries)
+
+    # acp 0.11 added incremental plan updates. Only the ``items`` payload carries
+    # plan entries; ``file``/``markdown`` reference a plan by URI or raw markdown
+    # and have no ACPPlan equivalent, so they fall through to the debug log below.
+    if isinstance(update, schema.AgentPlanContentUpdate) and isinstance(update.plan, schema.PlanUpdateItems):
+        return _plan(update.plan.entries)
 
     if isinstance(update, schema.CurrentModeUpdate):
         return ACPModeChange(mode_id=update.current_mode_id)
@@ -107,4 +115,13 @@ def map_session_update(update: SessionUpdate) -> BaseEvent | None:
     if isinstance(update, schema.AvailableCommandsUpdate):
         return ACPAvailableCommands(commands=[c.name for c in update.available_commands])
 
+    # ``usage_update`` is consumed out-of-band by map_usage; anything else reaching
+    # here is a session update this version has no event for — say so rather than
+    # dropping it silently, so a protocol addition is visible in a debug log.
+    if not isinstance(update, schema.UsageUpdate):
+        logger.debug("no AG2 event for ACP session update %r; ignored", getattr(update, "session_update", update))
     return None
+
+
+def _plan(entries: "Sequence[schema.PlanEntry]") -> ACPPlan:
+    return ACPPlan(entries=[ACPPlanEntry(content=e.content, status=e.status, priority=e.priority) for e in entries])

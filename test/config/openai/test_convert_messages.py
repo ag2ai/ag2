@@ -253,6 +253,20 @@ class TestBinaryInput:
             }
         ]
 
+    def test_responses_string_kind_from_legacy_log(self) -> None:
+        """Logs persisted before #3084 hold ``kind`` as a raw string; it must still map."""
+        part = BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png", kind="image")
+
+        result = events_to_responses_input([ModelRequest([part])], SerializerCls)
+
+        expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
+        assert result == [
+            {
+                "role": "user",
+                "content": [{"type": "input_image", "image_url": expected_url}],
+            }
+        ]
+
     def test_responses_image_path_no_vendor_leak(self, tmp_path) -> None:
         """ImageInput(path=...) on Responses must produce input_image with no filename leak."""
         png = tmp_path / "plot.png"

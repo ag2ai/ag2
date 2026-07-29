@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Agent-as-judge scorer — grade one criterion with a beta ``Agent``.
+"""Agent-as-judge scorer — grade one criterion with an ``Agent``.
 
 ``agent_judge`` is a *single-purpose* judge: one call grades exactly one
 criterion and emits exactly one :class:`~ag2.eval.Feedback` key. A
