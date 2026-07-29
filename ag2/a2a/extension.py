@@ -20,3 +20,7 @@ EXTRA_PARTS_DEPENDENCY_KEY = "a2a:extra_parts"
 
 # Per-call tenant override in ``context.variables`` — wins over ``A2AConfig.tenant``.
 TENANT_VARIABLE_KEY = "a2a:tenant"
+
+# Extension URIs AG2 itself implements — used by the client to satisfy
+# ``AgentExtension.required`` checks without explicit user activation.
+NATIVE_EXTENSION_URIS = frozenset({EXTENSION_URI})

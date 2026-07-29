@@ -17,6 +17,20 @@ class A2AClientToolsNotSupportedError(A2AError):
     """
 
 
+class A2AExtensionNotSupportedError(A2AError):
+    """Raised when client-activated and server-declared A2A extensions can't be reconciled.
+
+    Two directions: the client requested a URI the card does not advertise,
+    or the card marks an extension ``required=True`` that the client neither
+    activated nor natively implements.
+    """
+
+    def __init__(self, *, url: str, uris: list[str], reason: str) -> None:
+        self.url = url
+        self.uris = uris
+        super().__init__(f"A2A extension mismatch for {url!r} ({reason}): {uris!r}")
+
+
 class A2AInvalidCardError(A2AError):
     """Raised when an ``AgentCard`` is missing data required to connect."""
 

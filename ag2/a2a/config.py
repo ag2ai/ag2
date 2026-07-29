@@ -37,6 +37,7 @@ class A2AConfigOverrides(TypedDict, total=False):
     preset_card: AgentCard | None
     tenant: str | None
     history_length: int | None
+    extensions: Sequence[str]
 
 
 @dataclass(slots=True)
@@ -76,6 +77,13 @@ class A2AConfig(ModelConfig):
     ``history_length`` truncates the server-side ``Task.history`` echoed
     back on ``get_task`` / list operations to the most recent N messages.
     Pure server-side hint — does not change what the client uploads.
+
+    ``extensions`` lists A2A extension URIs to activate on the connection.
+    URIs must be advertised in the server card's
+    ``capabilities.extensions``; cards that *require* an extension the
+    client doesn't activate are rejected
+    (``A2AExtensionNotSupportedError``). Activated URIs ride on
+    ``Message.extensions`` and the ``A2A-Extensions`` header/metadata.
     """
 
     card_url: str
@@ -93,6 +101,7 @@ class A2AConfig(ModelConfig):
     preset_card: AgentCard | None = field(default=None, repr=False)
     tenant: str | None = None
     history_length: int | None = None
+    extensions: Sequence[str] = ()
 
     def copy(self, /, **overrides: Unpack[A2AConfigOverrides]) -> Self:
         return replace(self, **overrides)
@@ -137,6 +146,7 @@ class A2AConfig(ModelConfig):
             preset_card=self.preset_card,
             tenant=self.tenant,
             history_length=self.history_length,
+            extensions=tuple(self.extensions),
         )
 
 

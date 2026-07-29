@@ -6,13 +6,16 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
+from a2a.client import ClientCallContext
 from a2a.client.errors import A2AClientError
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
     Artifact,
     Part,
+    SendMessageRequest,
     StreamResponse,
+    SubscribeToTaskRequest,
     Task,
     TaskArtifactUpdateEvent,
     TaskState,
@@ -94,11 +97,25 @@ class _ScriptedSdk:
         self.send_message_calls = 0
         self.subscribe_calls = 0
 
-    def send_message(self, _request: Any) -> AsyncIterator[StreamResponse]:
+    # Both signatures mirror the real SDK ``Client``: distinct request types,
+    # keyword-only optional ``context``. The scripting ignores the arguments;
+    # the annotations are here so the double documents the interface it stands
+    # in for, and so drift shows up as a plain TypeError at call time.
+    def send_message(
+        self,
+        _request: SendMessageRequest,
+        *,
+        context: ClientCallContext | None = None,
+    ) -> AsyncIterator[StreamResponse]:
         self.send_message_calls += 1
         return self._scripted(self._first_events, drop_after=self._drop_after)
 
-    def subscribe(self, _request: Any) -> AsyncIterator[StreamResponse]:
+    def subscribe(
+        self,
+        _request: SubscribeToTaskRequest,
+        *,
+        context: ClientCallContext | None = None,
+    ) -> AsyncIterator[StreamResponse]:
         self.subscribe_calls += 1
         return self._scripted(self._replay_events, drop_after=None)
 

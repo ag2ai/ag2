@@ -8,8 +8,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from a2a.client import A2ACardResolver, Client, ClientCallInterceptor
+from a2a.client import A2ACardResolver, Client, ClientCallContext, ClientCallInterceptor
 from a2a.client.errors import A2AClientError
+from a2a.client.service_parameters import ServiceParametersFactory, with_a2a_extensions
 from a2a.types import (
     AgentCard,
     GetExtendedAgentCardRequest,
@@ -48,6 +49,7 @@ from ag2.tools.schemas import ToolSchema
 
 from .errors import (
     A2AClientToolsNotSupportedError,
+    A2AExtensionNotSupportedError,
     A2AReconnectError,
     A2ATaskAuthRequiredError,
     A2ATaskFailedError,
@@ -65,6 +67,7 @@ from .extension import (
     EXTENSION_URI,
     EXTRA_PARTS_DEPENDENCY_KEY,
     MIME_TOOL_CALL,
+    NATIVE_EXTENSION_URIS,
     TENANT_VARIABLE_KEY,
 )
 from .mappers import (
@@ -168,6 +171,7 @@ class A2AClient(LLMClient):
         preset_card: AgentCard | None = None,
         tenant: str | None = None,
         history_length: int | None = None,
+        extensions: Sequence[str] = (),
     ) -> None:
         self._card_url = card_url
         self._prefer = prefer
@@ -184,11 +188,15 @@ class A2AClient(LLMClient):
         self._preset_card = preset_card
         self._tenant = tenant
         self._history_length = history_length
+        # Dedup, preserving the user's order — the URIs travel as a list on
+        # ``Message.extensions``.
+        self._extensions = tuple(dict.fromkeys(extensions))
 
         self._httpx_client: httpx.AsyncClient | None = None
         self._sdk_client: Client | None = None
         self._agent_card: AgentCard | None = preset_card
         self._task_id: str | None = None
+        self._call_context: ClientCallContext | None = None
 
     async def __call__(
         self,
@@ -241,6 +249,7 @@ class A2AClient(LLMClient):
                     user_text,
                     task_id=self._task_id or "",
                     context_id=self._read_context_id(context),
+                    extra_extensions=self._extensions,
                 )
 
             if state.terminal_task is not None and (exc_cls := _FAILURE_ERRORS.get(state.finish_reason)):
@@ -280,6 +289,20 @@ class A2AClient(LLMClient):
             ).get_agent_card()
         iface, transport = select_interface(self._agent_card, url=self._card_url, prefer=self._prefer)
         validate_protocol_version(iface, url=self._card_url, transport=transport)
+        self._validate_extensions()
+        # Activation travels on both channels the spec allows: the
+        # ``Message.extensions`` field (handled in ``_build_outgoing``) and the
+        # ``A2A-Extensions`` service parameter, which the SDK renders as an HTTP
+        # header on jsonrpc/rest and as gRPC metadata.
+        self._call_context = (
+            ClientCallContext(
+                service_parameters=ServiceParametersFactory.create([
+                    with_a2a_extensions(list(self._extensions)),
+                ]),
+            )
+            if self._extensions
+            else None
+        )
         self._sdk_client = make_a2a_client(
             card=self._agent_card,
             httpx_client=self._httpx_client,
@@ -292,6 +315,40 @@ class A2AClient(LLMClient):
             kwargs = self._maybe_tenant(context)
             self._agent_card = await self._sdk_client.get_extended_agent_card(
                 GetExtendedAgentCardRequest(**kwargs),
+                context=self._call_context,
+            )
+
+    def _validate_extensions(self) -> None:
+        """Reconcile activated URIs with the card, in both directions.
+
+        Unadvertised activations are a client-side mistake; ``required=True``
+        extensions the client neither activated nor natively implements mean
+        the server expects behavior AG2 won't provide — refuse up front rather
+        than connect and fail opaquely mid-task.
+
+        Runs against the card resolved for this session, before the optional
+        extended-card fetch: activation has to be settled before the first
+        request goes out.
+        """
+        assert self._agent_card is not None
+        advertised = {ext.uri for ext in self._agent_card.capabilities.extensions}
+        unknown = [uri for uri in self._extensions if uri not in advertised]
+        if unknown:
+            raise A2AExtensionNotSupportedError(
+                url=self._card_url,
+                uris=unknown,
+                reason="not advertised by the server card",
+            )
+        unmet = [
+            ext.uri
+            for ext in self._agent_card.capabilities.extensions
+            if ext.required and ext.uri not in self._extensions and ext.uri not in NATIVE_EXTENSION_URIS
+        ]
+        if unmet:
+            raise A2AExtensionNotSupportedError(
+                url=self._card_url,
+                uris=unmet,
+                reason="required by the server card; add these URIs to A2AConfig.extensions",
             )
 
     def _validate_and_extract_tools(
@@ -335,6 +392,7 @@ class A2AClient(LLMClient):
                 task_id=self._task_id,
                 context_id=context_id,
                 context_update=dict(context.variables) or None,
+                extra_extensions=self._extensions,
             )
 
         inputs: list[Input] = next(
@@ -351,6 +409,7 @@ class A2AClient(LLMClient):
             advertise_extension=bool(function_schemas) or self._task_id is not None,
             context_update=dict(context.variables) or None,
             extra_parts=extra_parts,
+            extra_extensions=self._extensions,
         )
 
     async def _drive_task(
@@ -373,7 +432,7 @@ class A2AClient(LLMClient):
         assert self._sdk_client is not None
 
         request = self._build_send_request(message, context)
-        stream = self._sdk_client.send_message(request)
+        stream = self._sdk_client.send_message(request, context=self._call_context)
 
         attempt = 0
         while True:
@@ -386,7 +445,7 @@ class A2AClient(LLMClient):
                 backoff = self._reconnect_backoff * (2 ** (attempt - 1))
                 await asyncio.sleep(backoff)
                 resubscribe = SubscribeToTaskRequest(**self._maybe_tenant(context, id=self._task_id))
-                stream = self._sdk_client.subscribe(resubscribe)
+                stream = self._sdk_client.subscribe(resubscribe, context=self._call_context)
 
     async def _consume_polling(
         self,
@@ -397,7 +456,11 @@ class A2AClient(LLMClient):
         assert self._sdk_client is not None
 
         request = self._build_send_request(message, context)
-        outcome = await self._drain_stream(self._sdk_client.send_message(request), context, state)
+        outcome = await self._drain_stream(
+            self._sdk_client.send_message(request, context=self._call_context),
+            context,
+            state,
+        )
         if state.finish_reason in ("failed", "rejected", "auth_required") or outcome.input_required:
             return outcome
 
@@ -408,7 +471,10 @@ class A2AClient(LLMClient):
             get_kwargs = self._maybe_tenant(context, id=self._task_id)
             if self._history_length is not None:
                 get_kwargs["history_length"] = self._history_length
-            task = await self._sdk_client.get_task(GetTaskRequest(**get_kwargs))
+            task = await self._sdk_client.get_task(
+                GetTaskRequest(**get_kwargs),
+                context=self._call_context,
+            )
             await self._absorb_task_artifacts(task, context, state)
             if task.status.state in _TERMINAL_STATES:
                 if reason := _FAILURE_REASONS.get(task.status.state):
