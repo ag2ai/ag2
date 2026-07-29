@@ -457,6 +457,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[DashScope](https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen)** | `DashScopeConfig` | `pip install "ag2[dashscope]"` |
 | **[xAI](https://docs.x.ai/docs/overview)** | `XAIConfig` | `pip install "ag2[xai]"` |
 | **[Z.AI](https://docs.z.ai)** | `ZAIConfig` | `pip install "ag2[zai]"` |
+| **[Mistral](https://docs.mistral.ai)** | `MistralConfig` | `pip install "ag2[mistral]"` |
 
 *(Note: `OpenAIConfig` is also available for OpenAI-compatible endpoints).*
 
@@ -573,6 +574,18 @@ To configure a model, import the specific provider's configuration class and ini
     # Configure a Z.AI GLM model
     config = ZAIConfig(
         model="glm-4.6",
+        api_key="...",
+        streaming=True
+    )
+    ```
+
+=== "Mistral"
+    ```python linenums="1"
+    from ag2.config import MistralConfig
+
+    # Configure a Mistral model
+    config = MistralConfig(
+        model="mistral-large-latest",
         api_key="...",
         streaming=True
     )
@@ -764,6 +777,68 @@ Reasoning content is streamed as `ModelReasoning` events, and reasoning tokens a
 !!! note "`extra_body` precedence"
 
     Pass `extra_body` to forward provider-specific keys that have no dedicated field. Explicit top-level fields always win over the same key inside `extra_body` - e.g. a top-level `thinking=True` overrides a `thinking` entry inside `extra_body`, while unrelated `extra_body` keys are merged through untouched.
+
+### Mistral Configuration
+
+`MistralConfig` connects to [Mistral's](https://docs.mistral.ai) chat-completions API through the official `mistralai` SDK. Install the optional dependency with `pip install "ag2[mistral]"`.
+
+If `api_key` is not passed explicitly, the SDK resolves it from the `MISTRAL_API_KEY` environment variable.
+
+```python
+from ag2.config import MistralConfig
+
+# Auth resolved from MISTRAL_API_KEY when omitted
+config = MistralConfig(model="mistral-large-latest", streaming=True)
+```
+
+Point `server_url` at a different deployment (for example a private or regional endpoint) when you are not calling `https://api.mistral.ai`.
+
+#### Reasoning Models
+
+Magistral and other reasoning models return their thinking trace alongside the answer. AG2 splits the two: the trace is emitted as `ModelReasoning` events, and only the answer text lands on `ModelResponse.message`.
+
+```python
+from ag2.config import MistralConfig
+
+config = MistralConfig(
+    model="magistral-medium-latest",
+    reasoning_effort="high",
+    streaming=True,
+)
+```
+
+#### Image Generation
+
+`ImageGenerationTool` is executed by Mistral, not locally. The call and its result are surfaced as `BuiltinToolCallEvent` and `BuiltinToolResultEvent`, and the generated image arrives as a `UrlInput`:
+
+```python
+from ag2 import Agent
+from ag2.config import MistralConfig
+from ag2.tools.builtin.image_generation import ImageGenerationTool
+
+agent = Agent(
+    "illustrator",
+    config=MistralConfig(model="mistral-medium-latest"),
+    tools=[ImageGenerationTool()],
+)
+reply = await agent.ask("Draw a red circle over a black square.")
+```
+
+The image URL is a short-lived signed link, so download it promptly if you need to keep it. Mistral's tool takes no options, so `size`, `quality`, and `output_format` are ignored. The model may reply with the image and no commentary, leaving `reply.body` empty - the image is on the tool result either way.
+
+!!! note "Other builtin tools"
+
+    Apart from image generation, Mistral's server-side tools (`web_search`, `code_interpreter`, `document_library`) belong to its Agents API and are rejected by chat-completions. Passing those AG2 builtin tools raises `UnsupportedToolError` rather than failing at request time.
+
+!!! note "OpenTelemetry version ceiling"
+
+    The `mistralai` SDK pins `opentelemetry-semantic-conventions<0.61`, which transitively caps `opentelemetry-api` at 1.39.1. A clean install of `ag2[mistral,tracing]` resolves to a consistent OpenTelemetry 1.39.x stack and traces normally.
+
+    Adding `ag2[mistral]` to an environment that *already* has a newer OpenTelemetry downgrades `opentelemetry-api` on its own, leaving it mismatched against the newer SDK. Reinstall the pair together, or hold the newer versions explicitly - the SDK itself works fine with current OpenTelemetry, the pin is just over-tight:
+
+    ```bash
+    pip install "mistralai>=2.8.0" "opentelemetry-api>=1.43" "opentelemetry-sdk>=1.43" "opentelemetry-semantic-conventions>=0.64b0"
+    ```
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
@@ -4283,18 +4358,18 @@ reply = await agent.ask("Compare these two images.", image1, image2)
 
 Not all providers support all input types. The table below shows what each provider accepts:
 
-| Input Type | OpenAI | OpenAI Responses | Gemini | Anthropic | xAI | Bedrock |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Text** | Yes | Yes | Yes | Yes | Yes | Yes |
-| **Image (URL)** | Yes | Yes | Yes | Yes | Yes | - |
-| **Image (binary)** | Yes | Yes | Yes | Yes | Yes | Yes |
-| **Audio (URL)** | - | - | Yes | - | - | - |
-| **Audio (binary)** | Yes | - | Yes | - | - | - |
-| **Video (URL)** | - | - | Yes | - | - | - |
-| **Video (binary)** | - | - | Yes | - | - | Yes |
-| **Document (URL)** | - | Yes | Yes | Yes | Yes | - |
-| **Document (binary)** | - | - | Yes | Yes | Yes | Yes |
-| **File ID** | - | Yes | - | Yes | Yes | - |
+| Input Type | OpenAI | OpenAI Responses | Gemini | Anthropic | xAI | Mistral | Bedrock |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Text** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| **Image (URL)** | Yes | Yes | Yes | Yes | Yes | Yes | - |
+| **Image (binary)** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| **Audio (URL)** | - | - | Yes | - | - | - | - |
+| **Audio (binary)** | Yes | - | Yes | - | - | - | - |
+| **Video (URL)** | - | - | Yes | - | - | - | - |
+| **Video (binary)** | - | - | Yes | - | - | - | Yes |
+| **Document (URL)** | - | Yes | Yes | Yes | Yes | Yes | - |
+| **Document (binary)** | - | - | Yes | Yes | Yes | Yes | Yes |
+| **File ID** | - | Yes | - | Yes | Yes | Yes | - |
 
 If you pass an unsupported input type to a provider, an `UnsupportedInputError` is raised with a clear message indicating what is not supported and by which provider.
 
@@ -4499,6 +4574,48 @@ doc = BinaryInput(
 )
 ```
 
+### Mistral
+
+Mistral accepts images and documents by URL, binary, or file ID. Audio and video raise `UnsupportedInputError`. Plain text counts as a document, so `DocumentInput(data=b"...", media_type="text/plain")` works alongside PDFs.
+
+**Files API** - uploads must use the `ocr` purpose to be referenceable from a message. That is the default in AG2, so a plain upload is ready to use:
+
+```python
+from ag2.config import MistralConfig
+from ag2.events import FileIdInput
+from ag2.files import FilesAPI
+
+config = MistralConfig(model="mistral-small-latest")
+files = FilesAPI(config)
+uploaded = await files.upload(data=pdf_bytes, filename="report.pdf")
+
+# Reference it as many times as you like - the bytes are never resent
+reply = await agent.ask("Summarise this report.", FileIdInput(file_id=uploaded.file_id))
+```
+
+The other purposes are content-validated: `batch` and `fine-tune` require newline-delimited JSON in a specific schema and reject anything else with HTTP 422.
+
+!!! note "Remote URLs are fetched by Mistral"
+
+    URL inputs are retrieved server-side, so the host must serve them to Mistral. Some hosts refuse, and the API returns "File could not be fetched from url". Pass the bytes instead when that happens.
+
+#### Vendor Metadata
+
+Mistral reads `detail` for image quality from `vendor_metadata` for binary images and `metadata` for URL images - the same split as xAI:
+
+```python
+from ag2.events import BinaryInput, BinaryType
+
+image = BinaryInput(
+    raw_bytes,
+    media_type="image/png",
+    kind=BinaryType.IMAGE,
+    vendor_metadata={"detail": "low"},  # "low", "high", or "auto"
+)
+```
+
+**Document name** - taken from `metadata={"filename": ...}` for URL documents and `vendor_metadata={"filename": ...}` for binary ones (set automatically when using `path=`).
+
 ### Amazon Bedrock
 
 The Bedrock Converse API accepts **binary sources only** - images (JPEG, PNG, GIF, WebP), documents (PDF, CSV, DOC, DOCX, XLS, XLSX, HTML, TXT, Markdown), and video (MP4, WebM, MOV, MKV, and more; Amazon Nova models). URL inputs and file IDs raise `UnsupportedInputError` - Bedrock has no Files API, so source data from a URL must be downloaded and passed as bytes:
@@ -4550,10 +4667,11 @@ AG2 exposes two different mechanisms, because the providers expose two different
 | Provider | Mechanism | How to enable |
 | :--- | :--- | :--- |
 | OpenAI | `ImageGenerationTool` (server-side tool, Responses API) | Add the tool to the agent |
+| Mistral | `ImageGenerationTool` (server-side tool, chat completions) | Add the tool to the agent |
 | Gemini | `IMAGE` response modality on an image model | Set `response_modalities=["TEXT", "IMAGE"]` |
 
 !!! note
-    OpenAI's `ImageGenerationTool` is **not** supported on Gemini, and Gemini's image modality is **not** available on OpenAI. Each provider uses its own mechanism below.
+    Gemini's image modality is **not** available on OpenAI or Mistral, and neither of their tools works on Gemini. Each provider uses its own mechanism below.
 
 ## Reading generated images
 
@@ -4608,6 +4726,32 @@ image = reply.files[0]
 
 !!! warning
     `ImageGenerationTool` requires the Responses API. Using it with the Chat Completions API (`OpenAIConfig`) raises an `UnsupportedToolError`.
+
+## Mistral
+
+Add `ImageGenerationTool` to an agent configured with `MistralConfig`. Unlike OpenAI, this works on the ordinary chat-completions endpoint - no separate API.
+
+```python
+from ag2 import Agent
+from ag2.config import MistralConfig
+from ag2.tools import ImageGenerationTool
+
+agent = Agent(
+    "designer",
+    config=MistralConfig(model="mistral-medium-latest"),
+    tools=[ImageGenerationTool()],
+)
+
+reply = await agent.ask("Generate a logo for a coffee shop.")
+image = reply.files[0]
+```
+
+Mistral's tool takes no configuration, so `quality`, `size`, `background`, and `output_format` are accepted on the AG2 tool but ignored. The generated image is returned to AG2 as a short-lived signed URL rather than inline bytes; AG2 downloads it so `reply.files` stays consistent with the other providers. The originating URL is kept on the image's `metadata` under the `url` key.
+
+!!! note
+    Mistral runs the whole exchange server-side and bills every internal turn, so a generated image costs far more tokens than a plain reply. The model often returns the image with no accompanying text, leaving `reply.body` empty - check `reply.files` rather than the body to detect success.
+
+Mistral's other server-side tools (`web_search`, `code_interpreter`, `document_library`) belong to its Agents API and raise `UnsupportedToolError` on chat completions.
 
 ## Gemini
 
