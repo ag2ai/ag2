@@ -2,10 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import replace
+
 import pytest
 from a2a.server.tasks import InMemoryPushNotificationConfigStore, InMemoryTaskStore
 from a2a.types import TaskState
 
+from ag2.a2a import A2AConfig
 from ag2.a2a.push import (
     A2APushAuthentication,
     A2APushConfig,
@@ -14,89 +17,109 @@ from ag2.a2a.push import (
     get_push_notification_config,
     list_push_notification_configs,
 )
-from ag2.a2a.tasks import ListedTasks, cancel_task, get_task, list_tasks
+from ag2.a2a.tasks import cancel_task, get_task, list_tasks
 from ag2.exceptions import HumanInputNotProvidedError
 
-from ._helpers import PromptThenAckExecutor, make_executor_pair, make_pair
+from ._helpers import PromptThenAckExecutor, a2a_config, make_executor_pair, make_pair
+
+
+def _push_config() -> A2APushConfig:
+    return A2APushConfig(
+        url="https://hooks.example.com/a2a",
+        token="secret",
+        authentication=A2APushAuthentication(scheme="bearer", credentials="abc"),
+    )
+
+
+async def _completed_task_with_push_store() -> tuple[A2AConfig, str]:
+    """Drive one ask to completion on a server that also stores push configs."""
+    pair = make_pair(
+        "hi",
+        streaming=False,
+        task_store=InMemoryTaskStore(),
+        push_config_store=InMemoryPushNotificationConfigStore(),
+    )
+    await pair.client.ask("ping")
+    config = a2a_config(pair.client)
+    [task] = (await list_tasks(config)).tasks
+    return config, task.id
 
 
 @pytest.mark.asyncio
-class TestAdmin:
-    async def test_get_task_returns_completed_task(self) -> None:
-        pair = make_pair(
-            "hi",
-            streaming=False,
-            task_store=InMemoryTaskStore(),
-        )
+class TestTaskAdmin:
+    async def test_completed_task_is_listed_and_fetchable_by_id(self) -> None:
+        pair = make_pair("hi", streaming=False, task_store=InMemoryTaskStore())
         await pair.client.ask("ping")
 
-        listed = await list_tasks(pair.client.config)
-        task = await get_task(pair.client.config, listed.tasks[0].id)
+        [listed] = (await list_tasks(a2a_config(pair.client))).tasks
+        task = await get_task(a2a_config(pair.client), listed.id)
 
-        assert task.id == listed.tasks[0].id
+        assert task.id == listed.id
+        assert task.status.state == TaskState.TASK_STATE_COMPLETED
 
-    async def test_list_tasks_returns_listed_tasks_dataclass(self) -> None:
-        pair = make_pair(
-            "hi",
-            streaming=False,
-            task_store=InMemoryTaskStore(),
-        )
+    async def test_list_tasks_reports_a_single_complete_page(self) -> None:
+        pair = make_pair("hi", streaming=False, task_store=InMemoryTaskStore())
         await pair.client.ask("ping")
 
-        listed = await list_tasks(pair.client.config)
+        listed = await list_tasks(a2a_config(pair.client))
 
-        assert isinstance(listed, ListedTasks)
-        assert len(listed.tasks) >= 1
-        assert isinstance(listed.next_page_token, str)
-        assert isinstance(listed.page_size, int)
-        assert isinstance(listed.total_size, int)
+        # One ask -> exactly one task, and an empty next-page token means the
+        # page held everything there was.
+        assert (len(listed.tasks), listed.total_size, listed.next_page_token) == (1, 1, "")
+        assert listed.page_size >= listed.total_size
 
     async def test_cancel_active_task_marks_it_cancelled(self) -> None:
-        executor = PromptThenAckExecutor(prompt="What's your name?")
         pair = make_executor_pair(
-            executor,
+            PromptThenAckExecutor(prompt="What's your name?"),
             streaming=False,
             task_store=InMemoryTaskStore(),
         )
 
+        # No hitl_hook, so the task is abandoned mid-flight and stays active.
         with pytest.raises(HumanInputNotProvidedError):
             await pair.client.ask("hello")
 
-        [task] = (await list_tasks(pair.client.config)).tasks
-        await cancel_task(pair.client.config, task.id)
+        [task] = (await list_tasks(a2a_config(pair.client))).tasks
+        await cancel_task(a2a_config(pair.client), task.id)
 
-        cancelled = await get_task(pair.client.config, task.id)
+        cancelled = await get_task(a2a_config(pair.client), task.id)
         assert cancelled.status.state == TaskState.TASK_STATE_CANCELED
 
 
 @pytest.mark.asyncio
-class TestPushCRUD:
-    async def test_create_get_list_delete(self) -> None:
-        pair = make_pair(
-            "hi",
-            streaming=False,
-            task_store=InMemoryTaskStore(),
-            push_config_store=InMemoryPushNotificationConfigStore(),
-        )
-        await pair.client.ask("ping")
-        [task] = (await list_tasks(pair.client.config)).tasks
+class TestPushNotificationConfigs:
+    async def test_create_returns_the_config_with_a_server_issued_id(self) -> None:
+        config, task_id = await _completed_task_with_push_store()
+        push = _push_config()
 
-        push = A2APushConfig(
-            url="https://hooks.example.com/a2a",
-            token="secret",
-            authentication=A2APushAuthentication(scheme="bearer", credentials="abc"),
-        )
-        created = await create_push_notification_config(pair.client.config, task.id, push)
-        assert created.url == push.url
-        assert created.id is not None
+        created = await create_push_notification_config(config, task_id, push)
 
-        configs = await list_push_notification_configs(pair.client.config, task.id)
-        assert any(c.url == push.url for c in configs)
+        # Everything sent comes back untouched — the id is the server's only addition.
+        assert created.id
+        assert created == replace(push, id=created.id)
 
-        fetched = await get_push_notification_config(pair.client.config, task.id, created.id)
-        assert fetched.url == push.url
+    async def test_created_config_round_trips_through_get(self) -> None:
+        config, task_id = await _completed_task_with_push_store()
 
-        await delete_push_notification_config(pair.client.config, task.id, created.id)
+        created = await create_push_notification_config(config, task_id, _push_config())
+        assert created.id is not None, "create must return a server-issued id to fetch by"
 
-        after_delete = await list_push_notification_configs(pair.client.config, task.id)
-        assert all(c.id != created.id for c in after_delete)
+        fetched = await get_push_notification_config(config, task_id, created.id)
+
+        assert fetched == created
+
+    async def test_created_config_is_the_only_one_listed(self) -> None:
+        config, task_id = await _completed_task_with_push_store()
+
+        created = await create_push_notification_config(config, task_id, _push_config())
+
+        assert await list_push_notification_configs(config, task_id) == [created]
+
+    async def test_deleting_leaves_no_configs_behind(self) -> None:
+        config, task_id = await _completed_task_with_push_store()
+        created = await create_push_notification_config(config, task_id, _push_config())
+        assert created.id is not None, "create must return a server-issued id to delete by"
+
+        await delete_push_notification_config(config, task_id, created.id)
+
+        assert await list_push_notification_configs(config, task_id) == []
