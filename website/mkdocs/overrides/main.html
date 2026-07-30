@@ -44,3 +44,15 @@
     <strong>Switch to the latest version.</strong>
   </a>
 {% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <!-- AG2 Code Assistant (AgentOS embed) -->
+  <script
+    async
+    src="https://dev-app.ag2.ai/embed.js"
+    data-agent="pub_9C-OPMEyG4fkHiXmtESOUA"
+    data-core="https://dev-core.ag2.ai"
+    data-accent="#422639"
+  ></script>
+{% endblock %}
