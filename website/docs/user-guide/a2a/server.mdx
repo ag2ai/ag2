@@ -164,6 +164,7 @@ await asyncio.gather(
 | `#!python provider` | `#!python AgentProvider` block (organization, URL) |
 | `#!python documentation_url` / `#!python icon_url` | Discovery metadata |
 | `#!python security` | Auth declarations — see below |
+| `#!python extensions` | `#!python Sequence[AgentExtension]` — protocol extensions to declare alongside AG2's own; see below |
 | `#!python tenants` | `#!python Mapping[TransportName, str]` — surface a per-transport tenant on the corresponding `#!python AgentInterface.tenant` |
 | `#!python rest_url` / `#!python rest_path_prefix` / `#!python grpc_url` | Per-transport URL overrides for multi-transport cards |
 
@@ -249,6 +250,34 @@ require(custom)
 
 !!! note
     `#!python build_card` only **declares** auth on the card — it does not enforce it. Wire the actual check into the ASGI app (Starlette middleware, gateway, reverse proxy) or the gRPC server's interceptors.
+
+### Declaring Extensions
+
+A2A extensions let an agent advertise protocol behaviour beyond the base spec. AG2 always declares its own `#!python urn:ag2:client-tools:v1` as `#!python required=False`; pass `#!python extensions=` to declare your own alongside it.
+
+```python linenums="1" hl_lines="8-14"
+from a2a.types import AgentExtension
+
+from ag2.a2a import build_card
+
+card = build_card(
+    agent,
+    url="http://127.0.0.1:8000",
+    extensions=[
+        AgentExtension(
+            uri="urn:acme:billing:v1",
+            description="Attaches a cost breakdown to every reply",
+            required=True,
+        ),
+    ],
+)
+```
+
+`#!python required=True` means a client that does not activate the URI is refused at connect time rather than allowed to proceed and misbehave mid-task. Use it only when the exchange genuinely breaks without the extension — `#!python required=False` lets extension-unaware clients keep working.
+
+Duplicate URIs raise `#!python ValueError`, including redeclaring `#!python urn:ag2:client-tools:v1`, so a card can never ship two entries for the same extension.
+
+See [Extensions](/docs/user-guide/a2a/client#extensions) for activating them on the client.
 
 ## Adding Cross-cutting Middleware
 
