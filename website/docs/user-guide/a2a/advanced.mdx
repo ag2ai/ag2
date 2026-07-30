@@ -110,8 +110,10 @@ await remote.ask("ping")
 
 | Helper | Purpose |
 |---|---|
-| `#!python make_test_client_factory(server, url=..., timeout=...)` | `#!python httpx.AsyncClient` factory dispatching JSON-RPC into the server's ASGI app via `#!python httpx.ASGITransport` |
-| `#!python make_test_rest_client_factory(server, url=..., timeout=...)` | Same idea for REST — builds the REST app and a card declaring only the REST interface |
+| `#!python make_test_client_factory(server, url=..., card=..., timeout=...)` | `#!python httpx.AsyncClient` factory dispatching JSON-RPC into the server's ASGI app via `#!python httpx.ASGITransport` |
+| `#!python make_test_rest_client_factory(server, url=..., card=..., timeout=...)` | Same idea for REST — builds the REST app and a card declaring only the REST interface |
+
+Pass `#!python card=` when the default `#!python build_card(agent, url=url)` can't express what the test needs — a custom `#!python extensions` list, for instance. It defaults to `#!python None`, which keeps the auto-built card.
 | `#!python pick_free_port(host="127.0.0.1")` | Probe a free TCP port. Used by gRPC tests since gRPC has no in-process transport equivalent |
 
 ```python linenums="1"

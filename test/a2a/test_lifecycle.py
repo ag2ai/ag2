@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 from uuid import uuid4
 
@@ -34,7 +34,7 @@ class _SpyAsyncClient(httpx.AsyncClient):
         await super().aclose()
 
 
-def _make_spy_factory(server: A2AServer, url: str):
+def _make_spy_factory(server: A2AServer, url: str) -> Callable[[], httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=server.build_jsonrpc(url=url))
 
     def factory() -> httpx.AsyncClient:
@@ -70,7 +70,7 @@ class TestHttpxLifecycle:
 
         await client.ask("ping")
 
-        assert _SpyAsyncClient.aclose_count >= 1
+        assert _SpyAsyncClient.aclose_count == 1
 
     async def test_client_closes_httpx_when_task_fails(self) -> None:
         _SpyAsyncClient.aclose_count = 0
@@ -87,17 +87,31 @@ class TestHttpxLifecycle:
         with pytest.raises(A2ATaskFailedError):
             await client.ask("ping")
 
-        assert _SpyAsyncClient.aclose_count >= 1
-
-    async def test_aclose_is_idempotent(self) -> None:
-        _SpyAsyncClient.aclose_count = 0
-        client = A2AClient(card_url="http://test")
-        client._httpx_client = _SpyAsyncClient(base_url="http://test")
-
-        await client.aclose()
-        await client.aclose()
-
         assert _SpyAsyncClient.aclose_count == 1
+
+    async def test_closing_leaves_the_client_reusable_for_the_next_turn(self) -> None:
+        # ``A2AClient`` is reused across ``reply.ask(...)`` follow-ups and
+        # closes its httpx client at the end of every turn, so each turn has
+        # to reconnect from scratch rather than reach for a closed client.
+        _SpyAsyncClient.aclose_count = 0
+        server = A2AServer(Agent("server", config=TestConfig("hi")))
+        url = "http://test"
+        client = Agent("client", config=A2AConfig(card_url=url, httpx_client_factory=_make_spy_factory(server, url)))
+
+        first = await client.ask("ping")
+        second = await first.ask("ping again")
+
+        assert second.body == "hi"
+        assert _SpyAsyncClient.aclose_count == 2
+
+    async def test_aclose_on_a_client_that_never_connected_is_a_no_op(self) -> None:
+        _SpyAsyncClient.aclose_count = 0
+        client = A2AClient(card_url="http://test", httpx_client_factory=_SpyAsyncClient)
+
+        await client.aclose()
+        await client.aclose()
+
+        assert _SpyAsyncClient.aclose_count == 0
 
 
 class _ChunkingScript(ModelConfig):

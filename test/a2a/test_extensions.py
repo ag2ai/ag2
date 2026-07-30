@@ -2,273 +2,314 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-import httpx
 import pytest
-from a2a.extensions.common import HTTP_EXTENSION_HEADER
-from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
+from a2a.server.agent_execution import RequestContext
 from a2a.server.events import EventQueue
-from a2a.server.tasks import TaskUpdater
-from a2a.types import AgentCard, AgentExtension, Part, Task, TaskState, TaskStatus
+from a2a.types import AgentCard, AgentExtension
 
 from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer, build_card
 from ag2.a2a.errors import A2AExtensionNotSupportedError
+from ag2.a2a.executor import AgentExecutor
 from ag2.a2a.extension import EXTENSION_URI
-from ag2.a2a.mappers.messages import build_user_message
-from ag2.a2a.testing import make_test_client_factory
-from ag2.events import TextInput
+from ag2.a2a.testing import make_test_client_factory, make_test_rest_client_factory, pick_free_port
+from ag2.hitl import HumanHook
 from ag2.testing import TestConfig
+
+from ._helpers import PromptThenAckExecutor
 
 CUSTOM_URI = "urn:example:custom:v1"
 OTHER_URI = "urn:example:other:v1"
 URL = "http://test"
-
-
-def _agent() -> Agent:
-    return Agent("ext-server", config=TestConfig("ok"))
-
-
-def _server_with_card(*exts: AgentExtension) -> tuple[A2AServer, AgentCard]:
-    """Build a server plus the card it serves, declaring ``exts`` on top of the AG2 native one."""
-    agent = _agent()
-    return A2AServer(agent), build_card(agent, url=URL, extensions=list(exts))
-
-
-def _factory_for(app: object, *, timeout: float = 30.0) -> Callable[[], httpx.AsyncClient]:
-    """``httpx_client_factory`` dispatching into an ASGI ``app`` in-process.
-
-    ``make_test_client_factory`` builds the card itself, so it can't serve a
-    card carrying custom extensions; this drives ``build_jsonrpc(card=...)``
-    through ``httpx.ASGITransport`` directly instead.
-    """
-    transport = httpx.ASGITransport(app=app)
-
-    def factory() -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=transport, base_url=URL, timeout=timeout)
-
-    return factory
-
-
-class _CaptureExtensions:
-    """ASGI wrapper recording the extension-activation request header."""
-
-    def __init__(self, app: object) -> None:
-        self.app = app
-        self.header_values: list[str | None] = []
-
-    async def __call__(self, scope: dict, receive: object, send: object) -> None:
-        if scope["type"] == "http":
-            headers = {k.decode(): v.decode() for k, v in scope["headers"]}
-            self.header_values.append(headers.get(HTTP_EXTENSION_HEADER.lower()))
-        await self.app(scope, receive, send)  # type: ignore[operator]
+REPLY = "ok"
 
 
 @dataclass(slots=True)
-class _Seen:
-    """One server-side observation of an incoming request."""
+class _Activation:
+    """How one incoming request declared its active extensions.
 
-    header_uris: set[str]
-    message_uris: list[str]
+    The spec allows two channels and AG2 uses both, so they are recorded
+    separately: ``header`` comes from the ``A2A-Extensions`` header (gRPC
+    metadata on that transport) and is a set, ``message`` comes from the
+    ordered ``Message.extensions`` field.
+    """
+
+    header: set[str]
+    message: list[str]
 
 
 @dataclass(slots=True)
-class _RecordingExecutor(AgentExecutor):
-    """Records both activation channels per request, then drives one HITL round-trip.
+class _ActivationRecorder(A2AAgentExecutorBase):
+    """Records each request's activation, then delegates to ``inner``.
 
-    First message gets an ``input_required`` prompt, the second completes the
-    task — so the recording covers the continuation leg too, not just the
-    opening turn.
+    Wrapping instead of reimplementing keeps the recording orthogonal to
+    the task choreography — the same recorder sits in front of AG2's own
+    one-shot executor or of a two-leg HITL one.
     """
 
-    seen: list[_Seen] = field(default_factory=list)
+    inner: A2AAgentExecutorBase
+    seen: list[_Activation] = field(default_factory=list)
 
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        msg = request_context.message
-        assert msg is not None
+        message = request_context.message
+        assert message is not None
         self.seen.append(
-            _Seen(
-                header_uris=set(request_context.requested_extensions),
-                message_uris=list(msg.extensions),
+            _Activation(
+                header=set(request_context.requested_extensions),
+                message=list(message.extensions),
             )
         )
-        task_id = msg.task_id or "task-1"
-        context_id = msg.context_id or "ctx-1"
-        updater = TaskUpdater(event_queue, task_id, context_id)
-
-        if request_context.current_task is None:
-            await event_queue.enqueue_event(
-                Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED))
-            )
-            await updater.start_work()
-            await updater.requires_input(message=updater.new_agent_message(parts=[Part(text="more?")]))
-            return
-
-        await updater.complete(message=updater.new_agent_message(parts=[Part(text="ok")]))
+        await self.inner.execute(request_context, event_queue)
 
     async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        raise NotImplementedError
+        await self.inner.cancel(request_context, event_queue)
 
 
-def test_build_card_declares_user_extensions() -> None:
-    card = build_card(
-        _agent(),
-        url="http://test",
-        extensions=[AgentExtension(uri=CUSTOM_URI, description="custom", required=False)],
-    )
-    uris = [ext.uri for ext in card.capabilities.extensions]
-    assert uris == [EXTENSION_URI, CUSTOM_URI]
+def _server_agent() -> Agent:
+    return Agent("ext-server", config=TestConfig(REPLY))
 
 
-def test_build_card_rejects_duplicate_uris() -> None:
-    with pytest.raises(ValueError, match=CUSTOM_URI):
-        build_card(
-            _agent(),
-            url="http://test",
-            extensions=[
-                AgentExtension(uri=CUSTOM_URI),
-                AgentExtension(uri=CUSTOM_URI),
-            ],
-        )
+def _requiring(card: AgentCard, uri: str) -> AgentCard:
+    """Flip an already-declared extension on ``card`` to ``required=True``.
+
+    Looked up by URI rather than by position, so a reordering inside
+    ``build_card`` cannot silently retarget this at a different extension.
+    """
+    next(ext for ext in card.capabilities.extensions if ext.uri == uri).required = True
+    return card
 
 
-def test_build_card_rejects_redeclared_client_tools() -> None:
-    with pytest.raises(ValueError, match="urn:ag2:client-tools:v1"):
-        build_card(_agent(), url="http://test", extensions=[AgentExtension(uri=EXTENSION_URI)])
+def _pair(
+    *,
+    declared: Sequence[AgentExtension] = (),
+    activate: Sequence[str] = (),
+    streaming: bool = True,
+    tools: Sequence[Callable[..., object]] = (),
+    hitl_hook: HumanHook | None = None,
+    inner: Callable[[Agent], A2AAgentExecutorBase] = AgentExecutor,
+    card: AgentCard | None = None,
+) -> tuple[Agent, _ActivationRecorder]:
+    """A client agent talking to a server that records how each request activated extensions.
 
-
-@pytest.mark.asyncio
-async def test_unknown_requested_extension_raises() -> None:
-    server = A2AServer(_agent())
-    config = A2AConfig(
-        card_url=URL,
-        httpx_client_factory=make_test_client_factory(server, url=URL),
-        extensions=["urn:example:not-advertised:v1"],
-    )
-    client = Agent("client", config=config)
-
-    with pytest.raises(A2AExtensionNotSupportedError, match="not-advertised"):
-        await client.ask("hi")
-
-
-@pytest.mark.asyncio
-async def test_required_extension_not_activated_raises() -> None:
-    server, card = _server_with_card(AgentExtension(uri=CUSTOM_URI, required=True))
-    config = A2AConfig(
-        card_url=URL,
-        httpx_client_factory=_factory_for(server.build_jsonrpc(url=URL, card=card)),
-    )
-    client = Agent("client", config=config)
-
-    with pytest.raises(A2AExtensionNotSupportedError, match=CUSTOM_URI):
-        await client.ask("hi")
-
-
-@pytest.mark.asyncio
-async def test_required_extension_activated_connects() -> None:
-    server, card = _server_with_card(AgentExtension(uri=CUSTOM_URI, required=True))
-    config = A2AConfig(
-        card_url=URL,
-        httpx_client_factory=_factory_for(server.build_jsonrpc(url=URL, card=card)),
-        extensions=[CUSTOM_URI],
-    )
-    client = Agent("client", config=config)
-
-    reply = await client.ask("hi")
-
-    assert reply.body == "ok"
-
-
-@pytest.mark.asyncio
-async def test_activated_uris_ride_header_and_message() -> None:
-    server, card = _server_with_card(AgentExtension(uri=CUSTOM_URI, required=False))
-    app = _CaptureExtensions(server.build_jsonrpc(url=URL, card=card))
-    config = A2AConfig(
-        card_url=URL,
-        httpx_client_factory=_factory_for(app),
-        extensions=[CUSTOM_URI],
-    )
-    client = Agent("client", config=config)
-
-    reply = await client.ask("hi")
-
-    assert reply.body == "ok"
-    assert any(v and CUSTOM_URI in v for v in app.header_values), (
-        f"activated URI must appear in the {HTTP_EXTENSION_HEADER} request header, got {app.header_values!r}"
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("streaming", [True, False])
-async def test_server_resolves_activation_on_every_leg(streaming: bool) -> None:
-    """The server sees the activation on both channels, opening turn and continuation alike."""
-    executor = _RecordingExecutor()
-    server_agent = Agent("server-stub", config=TestConfig("unused"))
-    server = A2AServer(server_agent, executor=executor)
-    card = build_card(server_agent, url=URL, extensions=[AgentExtension(uri=CUSTOM_URI)])
-
-    async def hitl_hook() -> str:
-        return "more input"
-
+    ``declared`` lands in the served card's ``capabilities.extensions``;
+    ``activate`` lands in ``A2AConfig.extensions``. ``inner`` picks the
+    server-side choreography — the default AG2 executor answers in a
+    single leg, while ``PromptThenAckExecutor`` forces a HITL
+    continuation so activation can be checked on both legs. ``card``
+    overrides the served card outright, for the cases ``declared`` can't
+    express.
+    """
+    agent = _server_agent()
+    recorder = _ActivationRecorder(inner(agent))
+    server = A2AServer(agent, executor=recorder)
+    served = card if card is not None else build_card(agent, url=URL, extensions=list(declared))
     client = Agent(
         "client",
         config=A2AConfig(
             card_url=URL,
-            httpx_client_factory=_factory_for(server.build_jsonrpc(url=URL, card=card)),
+            httpx_client_factory=make_test_client_factory(server, url=URL, card=served),
             streaming=streaming,
-            extensions=[CUSTOM_URI],
+            extensions=list(activate),
         ),
+        tools=list(tools),
         hitl_hook=hitl_hook,
     )
-
-    await client.ask("hi")
-
-    assert len(executor.seen) == 2, f"expected an opening turn plus a continuation, got {executor.seen!r}"
-    assert all(CUSTOM_URI in seen.header_uris for seen in executor.seen)
-    assert all(CUSTOM_URI in seen.message_uris for seen in executor.seen)
+    return client, recorder
 
 
-@pytest.mark.asyncio
-async def test_no_activation_sends_no_extension_header() -> None:
-    server, card = _server_with_card(AgentExtension(uri=CUSTOM_URI, required=False))
-    app = _CaptureExtensions(server.build_jsonrpc(url=URL, card=card))
-    client = Agent("client", config=A2AConfig(card_url=URL, httpx_client_factory=_factory_for(app)))
+class TestCardDeclaration:
+    def test_user_extensions_are_declared_after_the_native_one(self) -> None:
+        card = build_card(
+            _server_agent(),
+            url=URL,
+            extensions=[AgentExtension(uri=CUSTOM_URI, description="custom", required=False)],
+        )
 
-    await client.ask("hi")
+        assert [ext.uri for ext in card.capabilities.extensions] == [EXTENSION_URI, CUSTOM_URI]
 
-    assert app.header_values and not any(app.header_values)
+    def test_duplicate_uris_are_rejected(self) -> None:
+        with pytest.raises(ValueError, match=CUSTOM_URI):
+            build_card(
+                _server_agent(),
+                url=URL,
+                extensions=[AgentExtension(uri=CUSTOM_URI), AgentExtension(uri=CUSTOM_URI)],
+            )
 
-
-def test_message_extensions_field_carries_activated_uri() -> None:
-    msg = build_user_message([TextInput("hi")], extra_extensions=[CUSTOM_URI, OTHER_URI])
-
-    assert list(msg.extensions) == [CUSTOM_URI, OTHER_URI]
-
-
-def test_message_extensions_do_not_duplicate_native_uri() -> None:
-    msg = build_user_message(
-        [TextInput("hi")],
-        advertise_extension=True,
-        extra_extensions=[EXTENSION_URI, CUSTOM_URI],
-    )
-
-    assert list(msg.extensions) == [EXTENSION_URI, CUSTOM_URI]
+    def test_redeclaring_the_native_extension_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match=EXTENSION_URI):
+            build_card(_server_agent(), url=URL, extensions=[AgentExtension(uri=EXTENSION_URI)])
 
 
 @pytest.mark.asyncio
-async def test_native_extension_required_needs_no_activation() -> None:
-    """A card requiring ``urn:ag2:client-tools:v1`` connects without explicit activation."""
-    agent = _agent()
-    card = build_card(agent, url=URL)
-    card.capabilities.extensions[0].required = True
-    config = A2AConfig(
-        card_url=URL,
-        httpx_client_factory=_factory_for(A2AServer(agent).build_jsonrpc(url=URL, card=card)),
-    )
-    client = Agent("client", config=config)
+class TestCardReconciliation:
+    """``A2AConfig.extensions`` versus the served card, checked before the first request."""
 
-    reply = await client.ask("hi")
+    async def test_activating_an_unadvertised_extension_is_refused(self) -> None:
+        client, recorder = _pair(activate=[CUSTOM_URI])
 
-    assert reply.body == "ok"
+        with pytest.raises(A2AExtensionNotSupportedError) as exc_info:
+            await client.ask("hi")
+
+        assert exc_info.value.uris == [CUSTOM_URI]
+        assert exc_info.value.url == URL
+        assert recorder.seen == [], "refusal must happen before anything reaches the server"
+
+    async def test_a_required_extension_left_inactive_is_refused(self) -> None:
+        client, _ = _pair(declared=[AgentExtension(uri=CUSTOM_URI, required=True)])
+
+        with pytest.raises(A2AExtensionNotSupportedError) as exc_info:
+            await client.ask("hi")
+
+        assert exc_info.value.uris == [CUSTOM_URI]
+
+    async def test_a_required_extension_connects_once_activated(self) -> None:
+        client, _ = _pair(
+            declared=[AgentExtension(uri=CUSTOM_URI, required=True)],
+            activate=[CUSTOM_URI],
+        )
+
+        reply = await client.ask("hi")
+
+        assert reply.body == REPLY
+
+    async def test_a_required_native_extension_needs_no_activation(self) -> None:
+        # A third-party server may mark ``urn:ag2:client-tools:v1`` required.
+        # AG2 implements it natively, so there is nothing for the user to
+        # activate and the connection must go through anyway.
+        client, _ = _pair(card=_requiring(build_card(_server_agent(), url=URL), EXTENSION_URI))
+
+        reply = await client.ask("hi")
+
+        assert reply.body == REPLY
+
+
+@pytest.mark.asyncio
+class TestActivationOnTheWire:
+    async def test_activation_rides_both_the_header_and_the_message(self) -> None:
+        client, recorder = _pair(declared=[AgentExtension(uri=CUSTOM_URI)], activate=[CUSTOM_URI])
+
+        reply = await client.ask("hi")
+
+        assert reply.body == REPLY
+        assert recorder.seen == [_Activation(header={CUSTOM_URI}, message=[CUSTOM_URI])]
+
+    async def test_without_activation_neither_channel_carries_a_uri(self) -> None:
+        client, recorder = _pair(declared=[AgentExtension(uri=CUSTOM_URI)])
+
+        reply = await client.ask("hi")
+
+        assert reply.body == REPLY
+        assert recorder.seen == [_Activation(header=set(), message=[])]
+
+    async def test_duplicate_activations_collapse_and_keep_user_order(self) -> None:
+        client, recorder = _pair(
+            declared=[AgentExtension(uri=CUSTOM_URI), AgentExtension(uri=OTHER_URI)],
+            activate=[OTHER_URI, CUSTOM_URI, OTHER_URI],
+        )
+
+        await client.ask("hi")
+
+        # ``Message.extensions`` is the ordered channel and preserves the
+        # order the user configured; the header is a set server-side, so it
+        # only witnesses the dedup.
+        assert recorder.seen == [_Activation(header={OTHER_URI, CUSTOM_URI}, message=[OTHER_URI, CUSTOM_URI])]
+
+    async def test_activating_the_native_extension_does_not_duplicate_it(self) -> None:
+        # Client tools already put ``EXTENSION_URI`` on ``Message.extensions``;
+        # a user who also names it in ``extensions`` must not get it twice.
+        def look_up(city: str) -> str:
+            return f"sunny in {city}"
+
+        client, recorder = _pair(activate=[EXTENSION_URI], tools=[look_up])
+
+        await client.ask("hi")
+
+        assert recorder.seen == [_Activation(header={EXTENSION_URI}, message=[EXTENSION_URI])]
+
+    @pytest.mark.parametrize("streaming", [True, False])
+    async def test_activation_survives_a_continuation_leg(self, streaming: bool) -> None:
+        async def hitl_hook() -> str:
+            return "more input"
+
+        client, recorder = _pair(
+            declared=[AgentExtension(uri=CUSTOM_URI)],
+            activate=[CUSTOM_URI],
+            streaming=streaming,
+            inner=lambda _: PromptThenAckExecutor("more?"),
+            hitl_hook=hitl_hook,
+        )
+
+        reply = await client.ask("hi")
+
+        assert reply.body == "echo: more input", "the HITL round-trip has to actually complete"
+        assert recorder.seen == [
+            _Activation(header={CUSTOM_URI}, message=[CUSTOM_URI]),
+            _Activation(header={CUSTOM_URI}, message=[CUSTOM_URI]),
+        ]
+
+
+@pytest.mark.asyncio
+class TestActivationAcrossTransports:
+    """JSON-RPC is covered above; these two bindings render activation differently."""
+
+    async def test_activation_rides_the_rest_transport(self) -> None:
+        agent = _server_agent()
+        recorder = _ActivationRecorder(AgentExecutor(agent))
+        server = A2AServer(agent, executor=recorder)
+        card = build_card(agent, url=URL, transports=("rest",), extensions=[AgentExtension(uri=CUSTOM_URI)])
+        client = Agent(
+            "client",
+            config=A2AConfig(
+                card_url=URL,
+                httpx_client_factory=make_test_rest_client_factory(server, url=URL, card=card),
+                prefer="rest",
+                streaming=False,
+                extensions=[CUSTOM_URI],
+            ),
+        )
+
+        reply = await client.ask("hi")
+
+        assert reply.body == REPLY
+        assert recorder.seen == [_Activation(header={CUSTOM_URI}, message=[CUSTOM_URI])]
+
+    async def test_activation_rides_grpc_metadata(self) -> None:
+        # gRPC has no headers; the SDK renders the activation as call
+        # metadata instead. Needs a real socket — there is no in-process
+        # ASGITransport equivalent for gRPC.
+        agent = _server_agent()
+        recorder = _ActivationRecorder(AgentExecutor(agent))
+        server = A2AServer(agent, executor=recorder)
+        grpc_url = f"127.0.0.1:{pick_free_port()}"
+        card = build_card(
+            agent,
+            url=grpc_url,
+            transports=("grpc",),
+            grpc_url=grpc_url,
+            extensions=[AgentExtension(uri=CUSTOM_URI)],
+        )
+        grpc_server = server.build_grpc(bind=grpc_url, grpc_url=grpc_url, card=card)
+        await grpc_server.start()
+
+        try:
+            client = Agent(
+                "client",
+                config=A2AConfig(
+                    card_url=grpc_url,
+                    preset_card=card,
+                    prefer="grpc",
+                    streaming=False,
+                    extensions=[CUSTOM_URI],
+                ),
+            )
+
+            reply = await client.ask("hi")
+
+            assert reply.body == REPLY
+            assert recorder.seen == [_Activation(header={CUSTOM_URI}, message=[CUSTOM_URI])]
+        finally:
+            await grpc_server.stop(grace=0)
