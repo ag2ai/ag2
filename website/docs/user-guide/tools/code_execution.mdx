@@ -54,7 +54,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
 [Tenki](https://tenki.cloud/){.external-link target="_blank"} provides managed, isolated cloud sandboxes with a bounded server-side lifetime.
 
 ```bash
-pip install "tenki-sandbox>=0.4.0,<1"
+pip install "tenki>=0.5.4,<1"
 ```
 
 ```python linenums="1"
@@ -74,7 +74,7 @@ async with env:
     print(await reply.content())
 ```
 
-`TenkiEnvironment` reads `TENKI_API_KEY` and `TENKI_API_URL`. It auto-selects a sole visible project; pass `project_id` when the key has access to more than one. See the [Tenki Sandbox extension guide](/docs/user-guide/extensions/tenki) for lifecycle and resource configuration.
+`TenkiEnvironment` reads `TENKI_API_KEY` and `TENKI_API_URL`. It auto-selects a sole visible workspace; pass `workspace_id` when the key has access to more than one. See the [Tenki Sandbox extension guide](/docs/user-guide/extensions/tenki) for lifecycle and resource configuration.
   </Tab>
 
   <Tab title="Daytona">
@@ -181,7 +181,7 @@ The same pattern works with `DaytonaEnvironment`, `DockerEnvironment` (container
 
 ### Credentials and runtime config
 
-`TenkiEnvironment` accepts [`Variable`](/docs/user-guide/context/variables) markers for `api_key`, `api_url`, `project_id`, `image`, and `env_vars`. `DaytonaEnvironment` accepts them for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
+`TenkiEnvironment` accepts [`Variable`](/docs/user-guide/context/variables) markers for `api_key`, `api_url`, `workspace_id`, `image`, and `env_vars`. `DaytonaEnvironment` accepts them for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
 
 ```python linenums="1"
 from ag2 import Variable
@@ -189,7 +189,7 @@ from ag2.extensions.tenki import TenkiEnvironment
 
 env = TenkiEnvironment(
     api_key=Variable("tenki_key"),  # resolved from ctx.variables["tenki_key"]
-    project_id=Variable("tenki_project"),
+    workspace_id=Variable("tenki_workspace"),
     image=Variable("tenant_image"),
 )
 ```

@@ -13,10 +13,10 @@ try:
     from .environment import TenkiEnvironment, TenkiResources
 except ImportError as e:
     TenkiEnvironment = missing_additional_dependency(  # type: ignore[misc]
-        "TenkiEnvironment", "tenki-sandbox>=0.4.0,<1", e
+        "TenkiEnvironment", "tenki>=0.5.4,<1", e
     )
     TenkiResources = missing_additional_dependency(  # type: ignore[misc]
-        "TenkiResources", "tenki-sandbox>=0.4.0,<1", e
+        "TenkiResources", "tenki>=0.5.4,<1", e
     )
 
 __all__ = (

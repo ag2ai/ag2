@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
-from tenki_sandbox import AsyncClient
+from tenki import AsyncClient
 
 from ag2.annotations import Variable
 from ag2.tools.builtin._resolve import resolve_variable
@@ -42,8 +42,8 @@ class TenkiEnvironment:
     across tool calls.
 
     ``TENKI_API_KEY`` and ``TENKI_API_URL`` are read by the SDK when their
-    constructor arguments are omitted. If ``project_id`` is omitted, the sole
-    project visible to the API key is selected automatically.
+    constructor arguments are omitted. If ``workspace_id`` is omitted, the sole
+    workspace visible to the API key is selected automatically.
     """
 
     def __init__(
@@ -51,7 +51,7 @@ class TenkiEnvironment:
         *,
         api_key: "str | Variable | None" = None,  # pragma: allowlist secret
         api_url: "str | Variable | None" = None,
-        project_id: "str | Variable | None" = None,
+        workspace_id: "str | Variable | None" = None,
         name: "str | Variable | None" = "ag2",
         image: "str | Variable | None" = None,
         env_vars: "dict[str, str] | Variable | None" = None,
@@ -67,7 +67,7 @@ class TenkiEnvironment:
 
         self._api_key = api_key
         self._api_url = api_url
-        self._project_id = project_id
+        self._workspace_id = workspace_id
         self._name = name
         self._image = image
         self._env_vars = env_vars
@@ -96,8 +96,8 @@ class TenkiEnvironment:
     ) -> AsyncIterator[TenkiSandbox]:
         api_key = resolve_variable(self._api_key, context, param_name="api_key") if context else self._api_key
         api_url = resolve_variable(self._api_url, context, param_name="api_url") if context else self._api_url
-        project_id = (
-            resolve_variable(self._project_id, context, param_name="project_id") if context else self._project_id
+        workspace_id = (
+            resolve_variable(self._workspace_id, context, param_name="workspace_id") if context else self._workspace_id
         )
         name = resolve_variable(self._name, context, param_name="name") if context else self._name
         image = resolve_variable(self._image, context, param_name="image") if context else self._image
@@ -105,7 +105,7 @@ class TenkiEnvironment:
             resolve_variable(self._env_vars, context, param_name="env_vars") if context else self._env_vars
         ) or {}
 
-        unresolved = (api_key, api_url, project_id, name, image, env_vars)
+        unresolved = (api_key, api_url, workspace_id, name, image, env_vars)
         if any(isinstance(value, Variable) for value in unresolved):
             raise RuntimeError(
                 "Tenki parameters given as Variable but no Context is available to resolve them. "
@@ -113,7 +113,7 @@ class TenkiEnvironment:
             )
         assert api_key is None or isinstance(api_key, str)
         assert api_url is None or isinstance(api_url, str)
-        assert project_id is None or isinstance(project_id, str)
+        assert workspace_id is None or isinstance(workspace_id, str)
         assert name is None or isinstance(name, str)
         assert image is None or isinstance(image, str)
         assert isinstance(env_vars, dict)
@@ -122,7 +122,7 @@ class TenkiEnvironment:
         key: Hashable = (
             api_key,
             api_url,
-            project_id,
+            workspace_id,
             name,
             image,
             tuple(sorted(env_vars.items())),
@@ -141,7 +141,7 @@ class TenkiEnvironment:
                 sandbox = TenkiSandbox(
                     client=client,
                     create_options={
-                        "project_id": project_id,
+                        "workspace_id": workspace_id,
                         "name": name,
                         "image": image,
                         "env": env_vars,

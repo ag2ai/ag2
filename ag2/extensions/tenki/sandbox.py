@@ -11,13 +11,13 @@ from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
-from tenki_sandbox import (
+from tenki import (
     AsyncClient,
     Client,
     CommandTimeoutError,
     SandboxError,
 )
-from tenki_sandbox import (
+from tenki import (
     FileNotFoundError as TenkiFileNotFoundError,
 )
 
@@ -154,8 +154,8 @@ class TenkiSandbox(SandboxBase):
                 raise RuntimeError("TenkiSandbox client has been closed.")
 
             options = dict(self._create_options)
-            if not options.get("project_id"):
-                options["project_id"] = await self._resolve_project_id()
+            if not options.get("workspace_id"):
+                options["workspace_id"] = await self._resolve_workspace_id()
 
             sandbox = await self._client.create(wait=False, **options)
             self._sandbox = sandbox
@@ -176,16 +176,18 @@ class TenkiSandbox(SandboxBase):
             logger.info("Tenki sandbox created (id=%s)", sandbox.id)
             return sandbox
 
-    async def _resolve_project_id(self) -> str:
+    async def _resolve_workspace_id(self) -> str:
         if self._client is None:
             raise RuntimeError("TenkiSandbox client has been closed.")
         identity = await self._client.who_am_i()
-        projects = [project for workspace in identity.workspaces for project in workspace.projects]
-        if len(projects) == 1:
-            return projects[0].id
-        if not projects:
-            raise RuntimeError("The Tenki API key has no visible project. Create a project before opening a sandbox.")
-        raise RuntimeError("The Tenki API key can access multiple projects. Pass `project_id` to TenkiEnvironment.")
+        workspaces = list(identity.workspaces)
+        if len(workspaces) == 1:
+            return workspaces[0].id
+        if not workspaces:
+            raise RuntimeError(
+                "The Tenki API key has no visible workspace. Create a workspace before opening a sandbox."
+            )
+        raise RuntimeError("The Tenki API key can access multiple workspaces. Pass `workspace_id` to TenkiEnvironment.")
 
     async def aclose(self) -> None:
         self._unregister_atexit()

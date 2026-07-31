@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+"""Offline unit tests for TenkiEnvironment; the Tenki SDK is fully mocked."""
+
 from copy import deepcopy
 from pathlib import PurePosixPath
 from types import SimpleNamespace
@@ -9,7 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from tenki_sandbox import CommandResult
+from tenki import CommandResult
 
 from ag2 import Context, Variable
 from ag2.extensions.tenki import TenkiEnvironment, TenkiResources
@@ -31,9 +33,9 @@ def _fake_remote() -> Any:
     )
 
 
-def _fake_client(remote: Any, project_ids: tuple[str, ...] = ("project-1",)) -> Any:
-    projects = tuple(SimpleNamespace(id=project_id) for project_id in project_ids)
-    identity = SimpleNamespace(workspaces=(SimpleNamespace(projects=projects),))
+def _fake_client(remote: Any, workspace_ids: tuple[str, ...] = ("workspace-1",)) -> Any:
+    workspaces = tuple(SimpleNamespace(id=workspace_id, name="ws") for workspace_id in workspace_ids)
+    identity = SimpleNamespace(workspaces=workspaces)
     return SimpleNamespace(
         auth_token="test",  # pragma: allowlist secret
         base_url="https://api.tenki.cloud",
@@ -73,7 +75,7 @@ class TestOpen:
         with _patch_async_client(client):
             factory = TenkiEnvironment(
                 api_key="test",
-                project_id="project-1",
+                workspace_id="workspace-1",
                 resources=TenkiResources(cpu_cores=2, memory_mb=4096, disk_size_gb=5),
                 max_duration=600,
             )
@@ -83,7 +85,7 @@ class TestOpen:
 
         client.create.assert_awaited_once_with(
             wait=False,
-            project_id="project-1",
+            workspace_id="workspace-1",
             name="ag2",
             image=None,
             env={},
@@ -102,19 +104,19 @@ class TestOpen:
         client = _fake_client(remote)
         context = Context(
             stream=MagicMock(),
-            variables={"tenki_key": "test", "tenki_project": "project-2"},
+            variables={"tenki_key": "test", "tenki_workspace": "workspace-2"},
         )
         with _patch_async_client(client):
             factory = TenkiEnvironment(
                 api_key=Variable("tenki_key"),
-                project_id=Variable("tenki_project"),
+                workspace_id=Variable("tenki_workspace"),
             )
             async with factory.open(context):
                 pass
             await factory.aclose()
 
         client.create.assert_awaited_once()
-        assert client.create.await_args.kwargs["project_id"] == "project-2"
+        assert client.create.await_args.kwargs["workspace_id"] == "workspace-2"
 
     async def test_missing_context_for_variable_raises(self) -> None:
         factory = TenkiEnvironment(api_key=Variable("tenki_key"))
@@ -122,11 +124,11 @@ class TestOpen:
             async with factory.open():
                 pass
 
-    async def test_multiple_projects_requires_explicit_project(self) -> None:
-        client = _fake_client(_fake_remote(), project_ids=("project-1", "project-2"))
+    async def test_multiple_workspaces_requires_explicit_workspace(self) -> None:
+        client = _fake_client(_fake_remote(), workspace_ids=("workspace-1", "workspace-2"))
         with _patch_async_client(client):
             factory = TenkiEnvironment(api_key="test")
-            with pytest.raises(RuntimeError, match="multiple projects"):
+            with pytest.raises(RuntimeError, match="multiple workspaces"):
                 async with factory.open():
                     pass
 
@@ -136,7 +138,7 @@ class TestOpen:
         remote = _fake_remote()
         client = _fake_client(remote)
         with _patch_async_client(client):
-            factory = TenkiEnvironment(api_key="test", project_id="project-1")
+            factory = TenkiEnvironment(api_key="test", workspace_id="workspace-1")
             async with factory.open() as first:
                 pass
             async with factory.open() as second:
@@ -152,7 +154,7 @@ class TestOpen:
         remote = _fake_remote()
         client = _fake_client(remote)
         with _patch_async_client(client):
-            factory = TenkiEnvironment(api_key="test", project_id="project-1")
+            factory = TenkiEnvironment(api_key="test", workspace_id="workspace-1")
             tool = SandboxCodeTool(factory)
             result = await tool.environment.run("print('ok')", "python")
             await factory.aclose()

@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+"""Offline unit tests for TenkiSandbox; the Tenki SDK is fully mocked."""
+
 import asyncio
 from pathlib import PurePosixPath
 from types import SimpleNamespace
@@ -9,7 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from tenki_sandbox import CommandResult
+from tenki import CommandResult
 
 from ag2.annotations import Variable
 from ag2.extensions.tenki.sandbox import TenkiSandbox
@@ -36,8 +38,7 @@ def _fake_remote(
 
 
 def _fake_client(remote: Any) -> Any:
-    project = SimpleNamespace(id="project-1")
-    identity = SimpleNamespace(workspaces=(SimpleNamespace(projects=(project,)),))
+    identity = SimpleNamespace(workspaces=(SimpleNamespace(id="workspace-1", name="ws"),))
     return SimpleNamespace(
         auth_token="test",  # pragma: allowlist secret
         base_url="https://api.tenki.cloud",
@@ -81,7 +82,7 @@ class TestExec:
         remote = _fake_remote(result=result)
         sandbox = TenkiSandbox(
             client=_fake_client(remote),
-            create_options={"project_id": "project-1"},
+            create_options={"workspace_id": "workspace-1"},
             timeout=30,
         )
 
@@ -105,7 +106,7 @@ class TestExec:
         result = CommandResult(argv=["false"], exit_code=1, reason="process exited")
         sandbox = TenkiSandbox(
             client=_fake_client(_fake_remote(result=result)),
-            create_options={"project_id": "project-1"},
+            create_options={"workspace_id": "workspace-1"},
         )
         assert await sandbox.exec(["false"]) == ExecResult(
             output="Tenki execution ended: process exited",
@@ -119,7 +120,7 @@ class TestFileIO:
         remote = _fake_remote()
         sandbox = TenkiSandbox(
             client=_fake_client(remote),
-            create_options={"project_id": "project-1"},
+            create_options={"workspace_id": "workspace-1"},
             workdir="/srv",
         )
         await sandbox.put_file(PurePosixPath("hello.txt"), b"world")
@@ -140,17 +141,17 @@ class TestLifecycle:
     async def test_aenter_creates_without_waiting_in_create_and_aclose_terminates(self) -> None:
         remote = _fake_remote()
         client = _fake_client(remote)
-        sandbox = TenkiSandbox(client=client, create_options={"project_id": "project-1"})
+        sandbox = TenkiSandbox(client=client, create_options={"workspace_id": "workspace-1"})
 
         await sandbox.__aenter__()
         await sandbox.aclose()
         await sandbox.aclose()
 
-        client.create.assert_awaited_once_with(wait=False, project_id="project-1")
+        client.create.assert_awaited_once_with(wait=False, workspace_id="workspace-1")
         remote.close_if_open.assert_awaited_once()
         client.close.assert_awaited_once()
 
-    async def test_project_is_discovered_when_omitted(self) -> None:
+    async def test_workspace_is_discovered_when_omitted(self) -> None:
         remote = _fake_remote()
         client = _fake_client(remote)
         sandbox = TenkiSandbox(client=client, create_options={})
@@ -158,7 +159,7 @@ class TestLifecycle:
         await sandbox.__aenter__()
 
         client.who_am_i.assert_awaited_once()
-        client.create.assert_awaited_once_with(wait=False, project_id="project-1")
+        client.create.assert_awaited_once_with(wait=False, workspace_id="workspace-1")
         await sandbox.aclose()
 
     async def test_readiness_error_terminates_created_sandbox(self) -> None:
@@ -166,7 +167,7 @@ class TestLifecycle:
         remote.wait_ready = AsyncMock(side_effect=RuntimeError("failed"))
         sandbox = TenkiSandbox(
             client=_fake_client(remote),
-            create_options={"project_id": "project-1", "max_duration": 900},
+            create_options={"workspace_id": "workspace-1", "max_duration": 900},
         )
 
         with pytest.raises(RuntimeError, match="failed"):
@@ -179,7 +180,7 @@ class TestLifecycle:
         remote.wait_ready = AsyncMock(side_effect=asyncio.CancelledError())
         sandbox = TenkiSandbox(
             client=_fake_client(remote),
-            create_options={"project_id": "project-1", "max_duration": 900},
+            create_options={"workspace_id": "workspace-1", "max_duration": 900},
         )
 
         with pytest.raises(asyncio.CancelledError):

@@ -10,7 +10,7 @@ The `ag2.extensions.tenki` module runs AG2 shell and code tools in isolated [Ten
 Install AG2, your model provider, and Tenki's Python SDK:
 
 ```bash
-pip install "ag2[anthropic]" "tenki-sandbox>=0.4.0,<1"
+pip install "ag2[anthropic]" "tenki>=0.5.4,<1"
 ```
 
 Create an API key in Tenki and export it:
@@ -48,12 +48,12 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-`TenkiEnvironment()` discovers the sole project visible to the API key. If the key can access multiple projects, select one explicitly:
+`TenkiEnvironment()` discovers the sole workspace visible to the API key. If the key can access multiple workspaces, select one explicitly:
 
 ```python linenums="1"
 from ag2.extensions.tenki import TenkiEnvironment
 
-env = TenkiEnvironment(project_id="your-project-id")
+env = TenkiEnvironment(workspace_id="your-workspace-id")
 ```
 
 ## Configure the sandbox
@@ -64,7 +64,7 @@ The default working directory is `/home/tenki`. Python code uses the image's `py
 from ag2.extensions.tenki import TenkiEnvironment, TenkiResources
 
 env = TenkiEnvironment(
-    project_id="your-project-id",
+    workspace_id="your-workspace-id",
     name="my-agent-sandbox",
     image="workspace/image:tag",
     env_vars={"APP_ENV": "sandbox"},
@@ -78,7 +78,7 @@ env = TenkiEnvironment(
 | :--- | :--- | :--- |
 | `api_key` | `TENKI_API_KEY` | API authentication |
 | `api_url` | `TENKI_API_URL` or production | API endpoint |
-| `project_id` | Auto-detected when unique | Tenki project scope |
+| `workspace_id` | Auto-detected when unique | Tenki workspace scope |
 | `name` | `ag2` | Session name for identification |
 | `image` | Tenki default image | Registry image reference |
 | `env_vars` | `{}` | Environment variables applied to the sandbox |
@@ -88,5 +88,9 @@ env = TenkiEnvironment(
 | `workdir` | `/home/tenki` | Working directory for commands and files |
 
 All credential and sandbox selection parameters accept [`Variable`](/docs/user-guide/context/variables) values for per-request resolution. Always close the environment with `async with` or `await env.aclose()`; `max_duration` is a fail-safe, not the normal cleanup path.
+
+## Testing
+
+The bundled unit tests mock the Tenki SDK and run offline, so no Tenki account is needed for the AG2 test suite. Exercising the integration against real sandboxes requires a Tenki account and a `TENKI_API_KEY`.
 
 Maintainer: [@camcalaquian](https://github.com/camcalaquian){.external-link target="_blank"} / Tenki.
