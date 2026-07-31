@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable
+from difflib import get_close_matches
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ag2.agent import Agent, Plugin
 from ag2.config.config import ModelConfig
@@ -19,7 +20,36 @@ from ag2.tools.final import FunctionTool, Toolkit
 from ag2.tools.tool import Tool
 
 
-class ResponseSchemaSpec(BaseModel):
+def _unknown_field_message(cls: type[BaseModel], unknown: Iterable[str]) -> str:
+    """Name each unknown key and suggest the closest valid field."""
+
+    known = sorted(cls.model_fields)
+    described: list[str] = []
+    for key in sorted(unknown):
+        closest = get_close_matches(key, known, n=1, cutoff=0.6)
+        described.append(f"{key!r} (did you mean {closest[0]!r}?)" if closest else repr(key))
+
+    return f"Unknown field(s) for {cls.__name__}: {', '.join(described)}. Valid fields: {known}."
+
+
+class _SpecModel(BaseModel):
+    """Base for spec models. Unknown keys are rejected."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_unknown_fields(cls, data: Any) -> Any:
+        """Reject unknown keys. ``extra="forbid"`` alone suggests no correction."""
+
+        if isinstance(data, dict):
+            unknown = [key for key in data if key not in cls.model_fields]
+            if unknown:
+                raise ValueError(_unknown_field_message(cls, unknown))
+        return data
+
+
+class ResponseSchemaSpec(_SpecModel):
     """JSON-serializable description of a response schema."""
 
     name: str
@@ -36,7 +66,7 @@ class ResponseSchemaSpec(BaseModel):
         )
 
 
-class AgentSpec(BaseModel):
+class AgentSpec(_SpecModel):
     """JSON-serializable specification of an Agent.
 
     Captures the declarative, data-only parts of an ``Agent``: name, prompt,
@@ -45,6 +75,8 @@ class AgentSpec(BaseModel):
     Non-serializable parts (middleware, callbacks, dependencies, dynamic prompts)
     are intentionally excluded and must be supplied at reconstruction time via
     :meth:`to_agent`.
+
+    Unrecognised keys are rejected.
     """
 
     name: str

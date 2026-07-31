@@ -209,6 +209,8 @@ The LLM builds an `#!python AgentSpec` on every call. It is JSON-serializable an
 | `tool_names` | `list[str]` | Subset of `available_tools` names to give the child |
 | `response_schema` | `ResponseSchemaSpec | None` | Optional structured output schema |
 
+Unrecognised keys are rejected at validation, and the error names the closest valid field.
+
 ### How the LLM discovers available tool names
 
 The pool's names and descriptions are **rendered into the `#!python create_and_run_agent` tool description automatically** when the factory is built. The calling agent's system prompt does not need to enumerate them — the LLM discovers the valid names from the tool schema.

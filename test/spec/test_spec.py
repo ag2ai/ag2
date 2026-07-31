@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from dirty_equals import IsPartialDict
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ag2 import Agent, AgentSpec
 from ag2.exceptions import ToolResolutionError
@@ -196,3 +196,57 @@ class TestToolkit:
         agent = spec.to_agent(available_tools=[add, multiply, ws, fs])
 
         assert [t.name for t in agent.tools] == ["add", "web_search", "read_file"]
+
+
+class TestUnknownFields:
+    def test_unknown_field_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            AgentSpec.model_validate({"name": "x", "tool_nammes": ["add"]})
+
+    def test_error_names_key_and_suggests_nearest_field(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            AgentSpec.model_validate({"name": "x", "tool_nammes": ["add"]})
+
+        message = str(exc_info.value)
+        assert "tool_nammes" in message
+        assert "did you mean 'tool_names'?" in message
+
+    def test_error_reports_every_unknown_key(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            AgentSpec.model_validate({"name": "x", "prompts": [], "tool_nammes": []})
+
+        message = str(exc_info.value)
+        assert "prompts" in message
+        assert "tool_nammes" in message
+
+    def test_unrecognisable_key_reported_without_suggestion(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            AgentSpec.model_validate({"name": "x", "zzzzzz": 1})
+
+        message = str(exc_info.value)
+        assert "zzzzzz" in message
+        assert "did you mean" not in message
+
+    def test_nested_spec_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            AgentSpec.model_validate({
+                "name": "x",
+                "response_schema": {"name": "Answer", "json_schemaa": {}},
+            })
+
+        assert "json_schemaa" in str(exc_info.value)
+
+    def test_response_schema_spec_rejects_unknown_field_directly(self) -> None:
+        with pytest.raises(ValidationError):
+            ResponseSchemaSpec.model_validate({"name": "A", "json_schema": {}, "extra": 1})
+
+    def test_valid_spec_still_validates(self) -> None:
+        spec = AgentSpec.model_validate({"name": "x", "tool_names": ["add"], "prompt": ["p"]})
+
+        assert spec == AgentSpec(name="x", tool_names=["add"], prompt=["p"])
+
+    def test_round_trip_survives_strict_validation(self) -> None:
+        agent = make_agent()
+        spec = AgentSpec.from_agent(agent)
+
+        assert AgentSpec.model_validate(spec.model_dump()) == spec
