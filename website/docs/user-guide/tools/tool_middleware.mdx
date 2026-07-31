@@ -65,6 +65,44 @@ agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
 !!! note
     Tool-scoped hooks are plain callables. They do **not** use the `Middleware(...)` factory or `BaseMiddleware`.
 
+## Making a hook describable
+
+A plain function like `#!python add_request_id` above works, but cannot report its configuration: [`describe_middleware()`](/docs/user-guide/middleware#describing-middleware) returns `#!python complete=False` for it, because its settings live in closure cells that AG2 does not inspect.
+
+For a describable hook, write a class with `#!python async def __call__` and a `#!python describe()` method. It is still a plain callable, so how you pass it does not change:
+
+```python linenums="1" hl_lines="18-22"
+from ag2 import Context, tool
+from ag2.events import ToolCallEvent
+from ag2.middleware import MiddlewareDescription, ToolExecution, ToolResultType
+
+class AddRequestId:
+    def __init__(self, default: str = "unknown") -> None:
+        self._default = default
+
+    async def __call__(
+        self,
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        context: Context,
+    ) -> ToolResultType:
+        context.variables.setdefault("request_id", self._default)
+        return await call_next(event, context)
+
+    def describe(self) -> MiddlewareDescription:
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"default": self._default},
+        )
+
+@tool(middleware=[AddRequestId()])
+def search(query: str) -> str:
+    """Runs a search."""
+    return f"results-for-{query}"
+```
+
+`#!python approval_required()` is the built-in example: it returns an `#!python ApprovalRequired` instance that describes its prompt, timeout, and `#!python allow_always` settings. Keep run-time state such as counters in `#!python context.variables` — `#!python config` is for settings only.
+
 ## Adding middleware to an existing tool
 
 Use `#!python tool.with_middleware()` to wrap a tool with additional hooks **without modifying** the original. The returned tool is an independent copy with the new middleware as the outermost layer:

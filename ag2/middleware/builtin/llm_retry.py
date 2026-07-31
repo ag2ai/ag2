@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from ag2.annotations import Context
 from ag2.events import BaseEvent, ModelResponse
 from ag2.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
+from ag2.middleware.describe import MiddlewareDescription
 
 
 class RetryMiddleware(MiddlewareFactory):
@@ -17,6 +18,15 @@ class RetryMiddleware(MiddlewareFactory):
     ):
         self._max_retries = max_retries
         self._retry_on = retry_on
+
+    def describe(self) -> MiddlewareDescription:
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={
+                "max_retries": self._max_retries,
+                "retry_on": tuple(exc.__qualname__ for exc in self._retry_on),
+            },
+        )
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
         return _RetryMiddleware(

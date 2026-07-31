@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from ag2.annotations import Context
 from ag2.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from ag2.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
+from ag2.middleware.describe import MiddlewareDescription
 
 
 class HistoryLimiter(MiddlewareFactory):
@@ -14,6 +15,12 @@ class HistoryLimiter(MiddlewareFactory):
         if max_events < 1:
             raise ValueError("max_events must be greater than 0")
         self._max_events = max_events
+
+    def describe(self) -> MiddlewareDescription:
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"max_events": self._max_events},
+        )
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
         return _HistoryLimiter(event, context, self._max_events)

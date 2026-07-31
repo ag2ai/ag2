@@ -18,6 +18,7 @@ from ag2.events import (
     ToolResultEvent,
 )
 from ag2.events.conditions import TypeCondition
+from ag2.middleware.describe import MiddlewareDescription, describe_middleware
 
 
 class MiddlewareFactory(Protocol):
@@ -34,6 +35,19 @@ class Middleware(MiddlewareFactory):
     ) -> None:
         self._cls = middleware_cls
         self._options = kwargs
+
+    def describe(self) -> "MiddlewareDescription":
+        """Report the wrapped class and option names, but not option values.
+
+        Always incomplete: option values are caller-supplied and may hold
+        credentials, and the wrapped class is only instantiated per turn.
+        """
+
+        return MiddlewareDescription(
+            kind=self._cls.__qualname__,
+            config={"options": tuple(sorted(self._options))},
+            complete=False,
+        )
 
     def __call__(
         self,
@@ -158,6 +172,13 @@ class ConditionalMiddleware:
     ) -> None:
         self._middleware = middleware
         self._condition = condition if isinstance(condition, Condition) else TypeCondition(condition)
+
+    def describe(self) -> "MiddlewareDescription":
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"condition": type(self._condition).__qualname__},
+            inner=(describe_middleware(self._middleware),),
+        )
 
     def __call__(
         self,

@@ -454,6 +454,67 @@ conditional = ConditionalMiddleware(
 
 `ConditionalMiddleware` wraps any `MiddlewareFactory` — including `Middleware(...)` instances, bare `BaseMiddleware` subclasses, and other `ConditionalMiddleware` wrappers.
 
+## Describing Middleware
+
+`#!python describe_middleware()` reports what a middleware is and how it was configured, so you can log it, compare two instances, or assert on an agent's composition in a test.
+
+```python linenums="1" hl_lines="3 6"
+from ag2.middleware import TokenLimiter, describe_middleware
+
+describe_middleware(TokenLimiter(max_tokens=100))
+# MiddlewareDescription(kind='TokenLimiter', config={'max_tokens': 100, 'chars_per_token': 4}, complete=True)
+
+describe_middleware(TokenLimiter(max_tokens=100)) == describe_middleware(TokenLimiter(max_tokens=100))
+# True
+```
+
+Every built-in describes itself. Your own middleware opts in by implementing `#!python describe()`:
+
+```python linenums="1" hl_lines="9-13"
+from ag2.middleware import MiddlewareDescription
+
+class RateLimit:
+    def __init__(self, per_minute: int) -> None:
+        self._per_minute = per_minute
+
+    async def __call__(self, call_next, event, context):
+        return await call_next(event, context)
+
+    def describe(self) -> MiddlewareDescription:
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"per_minute": self._per_minute},
+        )
+```
+
+Middleware that has not opted in is reported honestly rather than guessed at — `#!python config` is empty and `#!python complete` is `#!python False`. AG2 never inspects `#!python __closure__` to recover configuration, because cell names and ordering are an implementation detail of whatever function produced the closure. `#!python describe_middleware()` never raises: a `#!python describe()` that fails or returns the wrong type degrades to the same honest unknown, so introspection cannot break the code doing the logging.
+
+Middleware that wraps other middleware reports them in `#!python inner`, keeping `#!python config` a flat settings mapping:
+
+```python linenums="1" hl_lines="6-7"
+from ag2.middleware import ConditionalMiddleware, TokenLimiter
+from ag2.events import ToolCallEvent
+
+describe_middleware(ConditionalMiddleware(TokenLimiter(max_tokens=10), ToolCallEvent))
+# MiddlewareDescription(
+#     kind='ConditionalMiddleware', config={'condition': 'TypeCondition'}, complete=True,
+#     inner=(MiddlewareDescription(kind='TokenLimiter', config={'max_tokens': 10, ...}),),
+# )
+```
+
+A composite is only as describable as its parts: `#!python complete` is forced to `#!python False` when any entry in `#!python inner` is incomplete, so composing middleware cannot claim completeness its parts do not support. Because each description applies the rule as it is constructed, it holds at any depth without a parent walking the tree.
+
+Descriptions support equality but are deliberately **not hashable** — `#!python config` may hold arbitrary values, so they cannot go in a `#!python set` or be used as dict keys.
+
+!!! note
+    `#!python Middleware(...)` reports the wrapped class and which options were set, but never their values, and always `#!python complete=False`. The options are caller-supplied and the wrapper cannot know whether one is a credential. Write a `#!python MiddlewareFactory` with its own `#!python describe()` when you want a complete description.
+
+!!! note
+    `#!python config` is for settings only. Counters, caches, and anything else that changes during a run belong in `#!python context.variables` or the per-turn `#!python BaseMiddleware` instance — a description that carries a moving number produces flaky snapshots.
+
+!!! warning
+    Descriptions are meant to be logged and committed as test fixtures, so `#!python describe()` must not expose credentials. The built-ins report live objects by name or presence — `#!python LoggingMiddleware` reports its logger's name, and `#!python TelemetryMiddleware` reports only the *keys* of its `#!python span_attributes`.
+
 ## Choosing the Right Hook
 
 If you are unsure where a behavior belongs, use this rule of thumb:
