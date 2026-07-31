@@ -100,7 +100,7 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 | `stream.py` | In-memory event pub/sub | `MemoryStream`, `SubStream` |
 | `events/` | Event types for the agent loop | `BaseEvent`, `ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `Usage`, … |
 | `config/` | LLM provider clients (see [below](#llm-provider-clients)) | `ModelConfig`, `LLMClient`, `AnthropicConfig`, `OpenAIConfig`, `GeminiConfig`, … |
-| `tools/` | Tool system — builtin + user-defined | `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
+| `tools/` | Tool system — builtin + user-defined | `Tool`, `FunctionTool`, `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
 | `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `persistent_stream`, `StreamFactory` |
 | `eval/` | Offline evaluation framework | `run`, `scorer`, `EvalTarget`, `Suite`, `Task`, `Trace`, `RunResult`, `Feedback`, `BudgetThresholds`, plus prebuilts under `eval.scorers` |
 | `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, … |
@@ -138,7 +138,7 @@ All implementations must be re-exported from their public module's `__init__.py`
 
 ### Design principles
 
-- **Protocols over inheritance**: `LLMClient`, `ModelConfig`, `Stream`, `Storage`, `Tool` are all `Protocol` classes — implementations satisfy them structurally.
+- **Protocols over inheritance**: `LLMClient`, `ModelConfig`, `Stream`, `Storage` are all `Protocol` classes — implementations satisfy them structurally. `Tool` is the exception: it is an `ABC` that tool kinds subclass (see [ADR 0002](docs/adr/0002-tool-composite-hierarchy.md)).
 - **Async throughout**: all major operations (`ask`, tool execution, LLM calls) are async. Sync tool functions run via `sync_to_thread`.
 - **Event-driven**: all agent-loop communication flows through the `Stream` as typed events.
 - **Dependency injection**: all user-provided functions (tools, prompt hooks, HITL, etc.) use `Context`, `Inject`, and `Variable` annotations; resolution is handled by `fast_depends`.
