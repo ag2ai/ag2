@@ -61,13 +61,23 @@ class TestPersistentStream:
 
         assert stream_a.id != stream_b.id
 
-    def test_stores_stream_id_in_dependencies(self, ctx: Context) -> None:
+    def test_stores_stream_in_dependencies(self, ctx: Context) -> None:
         factory = persistent_stream()
         agent = _make_agent("helper")
 
         stream = factory(agent, ctx)
 
-        assert ctx.dependencies["ag:helper:stream"] == stream.id
+        assert ctx.dependencies["ag:helper:stream"] is stream
+
+    def test_reuses_same_stream_object_on_second_call(self, ctx: Context) -> None:
+        # agent.py's turn lock is keyed by stream object identity, not id.
+        factory = persistent_stream()
+        agent = _make_agent()
+
+        first = factory(agent, ctx)
+        second = factory(agent, ctx)
+
+        assert first is second
 
     def test_uses_parent_storage_backend(self, ctx: Context, storage: MemoryStorage) -> None:
         factory = persistent_stream()
