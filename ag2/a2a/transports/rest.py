@@ -21,7 +21,7 @@ from ._common import (
     ExtendedCardModifier,
     build_card_routes_with_legacy,
     build_default_handler,
-    clone_card_with_capabilities,
+    prepare_public_card,
     sign_card,
     wrap_card_modifier,
     wrap_extended_card_modifier,
@@ -49,13 +49,11 @@ def build_rest_asgi(
     ``Mount(path='/{tenant}', ...)`` catch-all that swallows any
     ``/<segment>/...`` path (including ``/.well-known/agent-card.json``).
     """
-    agent_card = sign_card(
-        clone_card_with_capabilities(
-            agent_card,
-            extended=extended_agent_card is not None,
-            push=push_config_store is not None,
-        ),
-        card_signer,
+    agent_card = prepare_public_card(
+        agent_card,
+        extended=extended_agent_card is not None,
+        push=push_config_store is not None,
+        signer=card_signer,
     )
     if extended_agent_card is not None:
         extended_agent_card = sign_card(extended_agent_card, card_signer)

@@ -83,6 +83,8 @@ class A2AConfig(ModelConfig):
     verifies the JWS signatures on every card the client consumes —
     fetched, ``preset_card``, and extended. Setting a verifier makes
     signatures mandatory: the SDK verifier raises on unsigned cards.
+    Anything the verifier raises — including an error from your own key
+    provider — is a rejection, surfaced as ``A2ACardSignatureError``.
     ``None`` (default) disables verification.
     """
 

@@ -275,12 +275,16 @@ class A2AClient(LLMClient):
 
     def _verify_card(self, card: AgentCard, *, source: str) -> None:
         """Opt-in JWS check: no-op without a verifier; wraps SDK errors in ag2's."""
+        # Anything raised is a rejection. The SDK only guards its key lookup
+        # with ``except PyJWTError``, so a key provider that raises (unknown
+        # kid, failed JWKS fetch) would otherwise escape ag2's error type.
         if self._card_signature_verifier is None:
             return
         try:
             self._card_signature_verifier(card)
-        except SignatureVerificationError as e:
-            raise A2ACardSignatureError(url=self._card_url, source=source, reason=str(e)) from e
+        except Exception as e:
+            reason = str(e) if isinstance(e, SignatureVerificationError) else f"{type(e).__name__}: {e}"
+            raise A2ACardSignatureError(url=self._card_url, source=source, reason=reason) from e
 
     async def _ensure_connected(self, context: ConversationContext) -> None:
         if self._sdk_client is not None:

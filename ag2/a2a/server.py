@@ -55,7 +55,11 @@ class A2AServer:
 
     ``card_signer`` (from :func:`a2a.utils.signing.create_agent_card_signer`)
     signs every served card; per-request modifier outputs are re-signed
-    automatically.
+    automatically, and the card is always signed after AG2 derives its
+    capability flags onto it. Passing an already-signed ``card`` to a
+    ``build_*`` method without a ``card_signer`` raises
+    ``A2AStaleCardSignatureError`` if AG2 would have to flip a capability
+    flag on it, since that would invalidate the signature already there.
     """
 
     __slots__ = (

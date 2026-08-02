@@ -80,21 +80,48 @@ JSON-RPC, REST and gRPC all sign the card they publish, and the extended card to
 
 ### Per-request Modifiers Are Re-signed
 
-A `#!python card_modifier` rewrites the card per request, which would ordinarily void a signature computed at startup. AG2 re-signs whatever the modifier returns, so a modified card is served with a signature that matches its final contents — no extra wiring on your side.
+A `#!python card_modifier` rewrites the card per request, which would ordinarily void a signature computed at startup. AG2 re-signs whatever the modifier returns, so a modified card is served with exactly one signature and it matches the card's final contents — no extra wiring on your side.
 
-!!! warning "Return a new card from a modifier — never the one you were handed"
+Two SDK details make that non-trivial, and AG2 absorbs both so you don't have to:
 
-    `#!python create_agent_card_signer` **appends** to `#!python card.signatures` instead of replacing them. A modifier that mutates its argument in place and returns the same object therefore collects one additional signature on every request, and the served card grows without bound. Copy first:
+- `#!python create_agent_card_signer` **appends** to `#!python card.signatures` rather than replacing them. AG2 signs a copy with any prior signatures dropped, so the signature computed before the modifier ran never ships alongside the fresh one.
+- The SDK hands the modifier the one long-lived card object shared by every request. AG2 hands it a scratch copy instead, so a modifier that mutates in place and returns what it was given cannot make the served card drift request over request.
 
-    ```python linenums="1" hl_lines="2-3"
-    async def modifier(card: AgentCard) -> AgentCard:
-        out = AgentCard()
-        out.CopyFrom(card)
-        out.description = "per-request description"
-        return out
-    ```
+Both styles below are safe:
+
+```python linenums="1"
+from a2a.types import AgentCard
+
+async def copying_modifier(card: AgentCard) -> AgentCard:
+    out = AgentCard()
+    out.CopyFrom(card)
+    out.description = "per-request description"
+    return out
+
+async def in_place_modifier(card: AgentCard) -> AgentCard:
+    card.description = "per-request description"
+    return card
+```
 
 The same applies to `#!python extended_card_modifier`, which receives a `#!python ServerCallContext` alongside the card.
+
+### Bringing Your Own Signature
+
+If you sign the card yourself and pass it as `#!python build_jsonrpc(card=...)` instead of configuring `#!python card_signer=`, set the capability flags the server derives **before** signing. AG2 sets `#!python capabilities.extended_agent_card` when an extended card is configured and `#!python capabilities.push_notifications` when a push store is — flipping either after you signed would put a signature on the wire that no longer matches its payload, and with no signer configured there is no key to redo it. AG2 refuses to build in that case, raising `#!python A2AStaleCardSignatureError`:
+
+```python linenums="1" hl_lines="5"
+from ag2.a2a import A2AServer, build_card
+
+extended_card = build_card(agent, url="http://127.0.0.1:8000")  # your richer card
+card = build_card(agent, url="http://127.0.0.1:8000")
+card.capabilities.extended_agent_card = True  # set it BEFORE signing
+app = A2AServer(agent, extended_card=extended_card).build_jsonrpc(
+    url="http://127.0.0.1:8000",
+    card=signer(card),
+)
+```
+
+Passing `#!python card_signer=` avoids the issue entirely: AG2 then signs the final card itself, after the flags are on it.
 
 ## Verifying on the Client
 
@@ -128,7 +155,23 @@ config = A2AConfig.from_card(
 )
 ```
 
-Verification passes when **at least one** signature on the card validates. A server can therefore publish signatures from an old and a new key during rotation, and clients trusting either key keep working.
+Verification passes when **at least one** signature on the card validates. A server can therefore publish signatures from an old and a new key during rotation, and clients trusting either key keep working. Compose the two signers to publish both:
+
+```python linenums="1" hl_lines="9"
+from a2a.types import AgentCard
+
+rotated_signer = create_agent_card_signer(
+    new_private_pem,  # the new key, generated exactly as above
+    {"kid": "agent-card-2027", "alg": "ES256", "jku": None, "typ": "JOSE"},
+)
+
+def rotating_signer(card: AgentCard) -> AgentCard:
+    return rotated_signer(signer(card))
+
+server = A2AServer(agent, card_signer=rotating_signer)
+```
+
+AG2's "drop prior signatures, then sign" step runs once, before your callable — signatures a composed signer adds are all computed over the same served payload, so both land on the card.
 
 !!! warning "Setting a verifier makes signatures mandatory"
 
@@ -146,8 +189,11 @@ Every rejection surfaces as the same exception type; the message tail tells the 
 | Payload altered after signing | `No valid signature found` |
 | Signed with a key the provider doesn't resolve to | `No valid signature found` |
 | Algorithm outside the verifier's allow-list | `No valid signature found` |
+| Your key provider itself raised (unknown `kid`, JWKS fetch failed) | `<ErrorType>: <its message>` |
 
-Note that the last three are indistinguishable by message — a wrong key, a tampered payload and a rejected algorithm all reduce to "no signature on this card validated". If you need to tell them apart while debugging, narrow the verifier's key provider and algorithm list one at a time.
+Note that the middle three are indistinguishable by message — a wrong key, a tampered payload and a rejected algorithm all reduce to "no signature on this card validated". If you need to tell them apart while debugging, narrow the verifier's key provider and algorithm list one at a time.
+
+The last row is the case where the key provider *raises* rather than returning a wrong key. The SDK only guards its key lookup against `#!python PyJWTError`, so a `#!python KeyError` from a registry miss would otherwise escape past a caller catching `#!python A2AError`. AG2 treats anything the verifier raises as a rejection and wraps it, with the original preserved on `#!python err.__cause__`.
 
 The exception also carries *which* card failed, which matters when a server publishes both a base and an extended card:
 
@@ -176,10 +222,12 @@ Treat this as a hard stop rather than something to retry — a card that fails v
 
 The two hooks are plain callables, so any object with the right shape works:
 
-| Hook | Signature |
-|---|---|
-| `#!python card_signer` | `#!python Callable[[AgentCard], AgentCard]` |
-| `#!python card_signature_verifier` | `#!python Callable[[AgentCard], None]` — raises on failure, returns `#!python None` on success |
+| Hook | Signature | Alias |
+|---|---|---|
+| `#!python card_signer` | `#!python Callable[[AgentCard], AgentCard]` | `#!python ag2.a2a.server.CardSigner` |
+| `#!python card_signature_verifier` | `#!python Callable[[AgentCard], None]` — raises on failure, returns `#!python None` on success | `#!python ag2.a2a.client.CardVerifier` |
+
+The aliases are exported from the module that owns the parameter — `#!python A2AServer` takes the signer, `#!python A2AConfig` / `#!python A2AClient` take the verifier — and are there purely as a shorthand for your own annotations.
 
 ## Testing Signed Cards
 

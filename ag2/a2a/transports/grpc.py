@@ -19,7 +19,7 @@ from ._common import (
     CardSigner,
     ExtendedCardModifier,
     build_default_handler,
-    clone_card_with_capabilities,
+    prepare_public_card,
     sign_card,
     wrap_extended_card_modifier,
 )
@@ -48,13 +48,11 @@ def build_grpc_server(
     options: Sequence[tuple[str, Any]] = (),
 ) -> grpc.aio.Server:
     """``grpc.aio.Server`` exposing A2A service; caller starts/awaits it."""
-    agent_card = sign_card(
-        clone_card_with_capabilities(
-            agent_card,
-            extended=extended_agent_card is not None,
-            push=push_config_store is not None,
-        ),
-        card_signer,
+    agent_card = prepare_public_card(
+        agent_card,
+        extended=extended_agent_card is not None,
+        push=push_config_store is not None,
+        signer=card_signer,
     )
     if extended_agent_card is not None:
         extended_agent_card = sign_card(extended_agent_card, card_signer)

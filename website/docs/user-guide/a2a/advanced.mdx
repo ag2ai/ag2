@@ -86,6 +86,7 @@ All A2A errors live in `#!python ag2.a2a.errors` and inherit from `#!python A2AE
 | `#!python A2AInvalidCardError` | The card is missing data required to connect (no `#!python supported_interfaces`, no usable URL) |
 | `#!python A2AClientToolsNotSupportedError` | Client passed `#!python tools=` but the server card doesn't advertise the `#!python urn:ag2:client-tools:v1` extension |
 | `#!python A2ACardSignatureError` | A card failed JWS verification — `#!python err.source` says which card (see [Card Signing](/docs/user-guide/a2a/card_signing#failure-modes)) |
+| `#!python A2AStaleCardSignatureError` | Server-side: a `#!python build_*` call was handed an already-signed card whose capability flags AG2 has to flip, with no `#!python card_signer` to re-sign it (see [Card Signing](/docs/user-guide/a2a/card_signing#bringing-your-own-signature)) |
 | `#!python A2AReconnectError` | Streaming reconnect attempts exhausted — `#!python err.attempts` holds the count |
 | `#!python A2ATaskTerminalError` | Base for the three terminal-state errors below; carries `#!python err.task` with the final `#!python Task` (status, history, artifacts) |
 | `#!python A2ATaskFailedError` | Task ended in `#!python TASK_STATE_FAILED` |
