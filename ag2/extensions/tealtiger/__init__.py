@@ -13,24 +13,12 @@ in <5ms with no LLM in the governance path.
 See: https://github.com/agentguard-ai/tealtiger
 """
 
-from ag2.exceptions import missing_additional_dependency
-
 from .types import (
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
     TEECReceipt,
 )
-
-try:
-    from ._engine import create_default_engine
-except ImportError as e:
-    create_default_engine = missing_additional_dependency(
-        "create_default_engine",
-        'tealtiger>=1.3.0,<2',
-        e,
-    )
-
 from .middleware import TealTigerMiddleware
 
 __all__ = [
@@ -39,5 +27,4 @@ __all__ = [
     "GovernanceMode",
     "GovernancePolicy",
     "TEECReceipt",
-    "create_default_engine",
 ]
