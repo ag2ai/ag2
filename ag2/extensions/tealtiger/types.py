@@ -8,7 +8,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 
 class GovernanceMode(str, Enum):
@@ -105,23 +105,3 @@ SECRET_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----"),
     re.compile(r"(?:AKIA|ASIA)[A-Z0-9]{16}"),
 ]
-
-
-@runtime_checkable
-class GovernanceEngine(Protocol):
-    """Protocol for pluggable governance engines.
-
-    The default implementation wraps the tealtiger package.
-    Users can supply their own engine matching this protocol.
-    """
-
-    def evaluate(
-        self,
-        tool_name: str,
-        arguments: dict[str, Any],
-        agent_name: str,
-        policies: list["GovernancePolicy"],
-        cumulative_cost: float,
-    ) -> "GovernanceDecision":
-        """Evaluate governance policies for a tool call."""
-        ...
