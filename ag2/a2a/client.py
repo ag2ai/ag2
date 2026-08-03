@@ -25,7 +25,6 @@ from a2a.types import (
     TaskStatus,
     TaskStatusUpdateEvent,
 )
-from a2a.utils.signing import SignatureVerificationError
 from fast_depends.library.serializer import SerializerProto
 
 from ag2.config.client import LLMClient
@@ -82,6 +81,19 @@ from .mappers import (
 )
 from .transports import TransportName
 from .transports._http import make_a2a_client, make_httpx_client, select_interface, validate_protocol_version
+
+# ``a2a.utils.signing`` imports PyJWT at module scope and raises if it is absent,
+# so importing it unguarded would make ``ag2.a2a`` unimportable on a plain
+# ``ag2[a2a]`` install — the SDK ships PyJWT behind its own ``signing`` extra.
+# Without that extra no verifier can be constructed either, so the stand-in below
+# is never matched in practice; it only keeps the branch in ``_verify_card`` typed.
+try:
+    from a2a.utils.signing import SignatureVerificationError
+except ImportError:  # pragma: no cover — needs an env without a2a-sdk[signing]
+
+    class SignatureVerificationError(Exception):  # type: ignore[no-redef]
+        """Stand-in for the SDK error when ``a2a-sdk[signing]`` is not installed."""
+
 
 if TYPE_CHECKING:
     import grpc.aio
