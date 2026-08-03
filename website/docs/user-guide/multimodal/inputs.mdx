@@ -128,8 +128,8 @@ Gemini supports provider-specific settings via `#!python vendor_metadata` on bin
 
 | Key | Type | Description |
 | :--- | :--- | :--- |
-| `media_resolution` | `str` | Controls token allocation per image/video frame |
-| `video_metadata` | `dict` | Video clipping (`start_offset`, `end_offset`) and frame rate (`fps`) |
+| `media_resolution` | `str` \| `dict[str, Any]` | Controls token allocation per image/video frame |
+| `video_metadata` | `dict[str, Any]` | Video clipping (`start_offset`, `end_offset`) and frame rate (`fps`) |
 | `display_name` | `str` | Display name for the file |
 
 **Media resolution** — control quality vs cost tradeoff for images and video frames:
@@ -146,6 +146,16 @@ image = ImageInput(
 ```
 
 Available values: `MEDIA_RESOLUTION_LOW`, `MEDIA_RESOLUTION_MEDIUM`, `MEDIA_RESOLUTION_HIGH`, `MEDIA_RESOLUTION_ULTRA_HIGH`.
+
+Pass a `#!python dict` instead of a level string to also cap the tokens spent on the media:
+
+```python linenums="1"
+image = ImageInput(
+    data=raw_bytes,
+    media_type="image/jpeg",
+    vendor_metadata={"media_resolution": {"level": "MEDIA_RESOLUTION_MEDIUM", "num_tokens": 64}},
+)
+```
 
 **Video clipping and frame rate** — process only a portion of a video or adjust the sampling rate:
 

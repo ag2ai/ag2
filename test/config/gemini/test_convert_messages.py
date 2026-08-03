@@ -167,7 +167,25 @@ class TestVendorMetadata:
             "role": "user",
             "parts": [
                 {
-                    "media_resolution": "MEDIA_RESOLUTION_LOW",
+                    "media_resolution": {"level": "MEDIA_RESOLUTION_LOW"},
+                    "inline_data": {"data": self.PNG, "mime_type": "image/png"},
+                }
+            ],
+        }
+
+    def test_media_resolution_dict(self) -> None:
+        inp = BinaryInput(
+            data=self.PNG,
+            media_type="image/png",
+            vendor_metadata={"media_resolution": {"level": "MEDIA_RESOLUTION_MEDIUM", "num_tokens": 64}},
+        )
+        [content] = convert_messages([ModelRequest([inp])], SerializerCls)
+
+        assert content.model_dump(exclude_none=True) == {
+            "role": "user",
+            "parts": [
+                {
+                    "media_resolution": {"level": "MEDIA_RESOLUTION_MEDIUM", "num_tokens": 64},
                     "inline_data": {"data": self.PNG, "mime_type": "image/png"},
                 }
             ],
