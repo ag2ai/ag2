@@ -147,15 +147,21 @@ image = ImageInput(
 
 Available values: `MEDIA_RESOLUTION_LOW`, `MEDIA_RESOLUTION_MEDIUM`, `MEDIA_RESOLUTION_HIGH`, `MEDIA_RESOLUTION_ULTRA_HIGH`.
 
-Pass a `#!python dict` instead of a level string to also cap the tokens spent on the media:
+A `#!python dict` is also accepted and maps straight onto Gemini's `PartMediaResolution`, whose `level` and `num_tokens` keys are mutually exclusive — set exactly one:
 
 ```python linenums="1"
+from ag2.events import ImageInput
+
 image = ImageInput(
     data=raw_bytes,
     media_type="image/jpeg",
-    vendor_metadata={"media_resolution": {"level": "MEDIA_RESOLUTION_MEDIUM", "num_tokens": 64}},
+    vendor_metadata={"media_resolution": {"level": "MEDIA_RESOLUTION_MEDIUM"}},
 )
 ```
+
+!!! warning "Setting both keys is rejected"
+
+    Passing `#!python {"level": ..., "num_tokens": ...}` together makes Gemini reject the request with `400 INVALID_ARGUMENT` (`oneof field 'value' is already set`).
 
 **Video clipping and frame rate** — process only a portion of a video or adjust the sampling rate:
 
