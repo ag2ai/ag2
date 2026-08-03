@@ -23,6 +23,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING
 
+from ag2._telemetry_consts import TRACEPARENT_DEP_KEY
 from ag2.events import BaseEvent, ModelMessage, ModelRequest, TextInput
 from ag2.stream import MemoryStream
 
@@ -246,6 +247,12 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         # folds from the WAL; in-process it reads the hub's cache.
         state = await client._hub_client.adapter_state(metadata.channel_id)
         dependencies = stamp_dependencies(client, channel, state)
+
+        # Relay the inbound envelope's W3C traceparent (stamped by the hub
+        # before WAL when tracing is enabled) to the agent-side
+        # TelemetryMiddleware.
+        if envelope.trace_id:
+            dependencies[TRACEPARENT_DEP_KEY] = envelope.trace_id
 
         # Adapter-scoped LLM tools for this turn (e.g. ``say`` for
         # consulting / discussion). Resolution is cached on the adapter

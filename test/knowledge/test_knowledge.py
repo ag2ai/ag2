@@ -543,6 +543,44 @@ class TestSqliteKnowledgeStore:
         finally:
             store2.close()
 
+    async def test_concurrent_reads_and_writes_do_not_corrupt_connection(self, tmp_path: Path) -> None:
+        """Interleaved reads and writes share one connection and must serialize.
+
+        The single ``sqlite3.connect(check_same_thread=False)`` connection is
+        dispatched across the default executor's thread pool. Without the
+        ``asyncio.Lock`` on the read paths a concurrent read and write land on
+        the connection at the same time and sqlite3 misbehaves — either raising
+        ``sqlite3.InterfaceError: bad parameter or other API misuse`` or leaving
+        a cursor wedged so sibling executor threads block forever. Hammer the
+        store with ~200 interleaved operations on one instance to catch it.
+
+        The whole storm is wrapped in ``asyncio.wait_for`` so a corrupted
+        connection surfaces as a deterministic failure (``TimeoutError`` or the
+        raised ``InterfaceError``) instead of hanging the suite.
+        """
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            ops = []
+            for i in range(50):
+                path = f"/t/{i}"
+                ops.append(store.write(path, f"value-{i}"))
+                ops.append(store.read(path))
+                ops.append(store.exists(path))
+                ops.append(store.list("/t/"))
+            # gather does not swallow exceptions here; an InterfaceError from
+            # any interleaving propagates and fails the test. wait_for guards
+            # against the wedged-connection hang the bug can also produce.
+            await asyncio.wait_for(asyncio.gather(*ops), timeout=15.0)
+
+            # Store is still consistent after the storm.
+            assert await store.read("/t/0") == "value-0"
+            assert await store.read("/t/49") == "value-49"
+            assert await store.exists("/t/25") is True
+            listing = await store.list("/t/")
+            assert len(listing) == 50
+        finally:
+            store.close()
+
 
 class _FakeLock:
     """Minimal Lock protocol implementation for LockedKnowledgeStore tests."""

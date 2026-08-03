@@ -10,6 +10,7 @@ from ag2 import Context, Variable
 from ag2.tools import ImageGenerationTool, UserLocation, WebSearchTool
 from ag2.tools.builtin._resolve import resolve_variable
 from ag2.tools.builtin.file_search import FileSearchTool, FileSearchToolSchema
+from ag2.tools.builtin.google_maps import GoogleMapsTool, GoogleMapsToolSchema
 from ag2.tools.builtin.image_generation import ImageGenerationToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerTool, MCPServerToolSchema
 from ag2.tools.builtin.retrieval import RetrievalTool, RetrievalToolSchema
@@ -192,20 +193,54 @@ class TestRetrievalToolVariable:
             await tool.schemas(context)
 
 
+@pytest.mark.asyncio
 class TestFileSearchToolVariable:
-    @pytest.mark.asyncio
-    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
-        ctx = make_context(stores=["vs_1", "vs_2"])
-        tool = FileSearchTool(vector_store_ids=Variable("stores"))
+    async def test_store_names_resolved(self, make_context: Callable[..., Context]) -> None:
+        ctx = make_context(stores=["projects/p/fileSearchStores/s"])
 
+        tool = FileSearchTool(store_names=Variable("stores"), metadata_filter='author="A"')
         [schema] = await tool.schemas(ctx)
 
         assert isinstance(schema, FileSearchToolSchema)
-        assert schema.vector_store_ids == ["vs_1", "vs_2"]
+        assert schema.store_names == ["projects/p/fileSearchStores/s"]
+        assert schema.metadata_filter == 'author="A"'
 
-    @pytest.mark.asyncio
-    async def test_missing_raises(self, context: Context) -> None:
+    async def test_store_names_missing_raises(self, context: Context) -> None:
+        tool = FileSearchTool(store_names=Variable("stores"))
+
+        with pytest.raises(KeyError, match="stores"):
+            await tool.schemas(context)
+
+    async def test_vector_store_ids_resolved(self, make_context: Callable[..., Context]) -> None:
+        ctx = make_context(stores=["vs_1"])
+
+        tool = FileSearchTool(vector_store_ids=Variable("stores"))
+        [schema] = await tool.schemas(ctx)
+
+        assert isinstance(schema, FileSearchToolSchema)
+        assert schema.vector_store_ids == ["vs_1"]
+
+    async def test_vector_store_ids_missing_raises(self, context: Context) -> None:
         tool = FileSearchTool(vector_store_ids=Variable("stores"))
 
         with pytest.raises(KeyError, match="stores"):
+            await tool.schemas(context)
+
+
+@pytest.mark.asyncio
+class TestGoogleMapsToolVariable:
+    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
+        ctx = make_context(lat=37.4)
+
+        tool = GoogleMapsTool(latitude=Variable("lat"), longitude=-122.1)
+        [schema] = await tool.schemas(ctx)
+
+        assert isinstance(schema, GoogleMapsToolSchema)
+        assert schema.latitude == 37.4
+        assert schema.longitude == -122.1
+
+    async def test_missing_raises(self, context: Context) -> None:
+        tool = GoogleMapsTool(latitude=Variable("lat"))
+
+        with pytest.raises(KeyError):
             await tool.schemas(context)

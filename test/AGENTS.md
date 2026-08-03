@@ -1,6 +1,6 @@
-# test/beta/ Guidelines
+# test/ Guidelines
 
-Use `just test-beta` as alias for `pytest` execution to run beta tests.
+Use `just test` as alias for `pytest` execution to run the tests.
 
 ## Testing Conventions
 
@@ -69,6 +69,46 @@ async def test_collects_events_in_window(self) -> None:
 - Always use `ag2.testing.TestConfig` to mock LLM responses in agent-based tests.
 - Always use `ag2.testing.TrackingConfig` to validate messages the framework sends to the LLM (for example: tool results and user input).
 
+### No monkeypatching internals
+
+Do not use `monkeypatch.setattr`, `setattr` on an instance, or `unittest.mock.patch` to swap out a private function, method, or attribute (anything `_prefixed`). Patching internals pins the test to *how* the code works today, so it keeps passing even after the real behavior breaks.
+
+The agent's public seam is `config=`. Script the LLM's turns with `ag2.testing.TestConfig` instead of reaching for the agent's private client — the same test, before and after:
+
+```python
+from ag2 import Agent
+from ag2.events import ToolCallEvent
+from ag2.testing import TestConfig
+
+
+# BAD — patch the agent's private client to script the turn. The test breaks the
+# moment that internal is renamed, and a green run proves nothing about the wiring.
+async def test_agent_answers_with_tool(monkeypatch):
+    agent = Agent("weather", tools=[get_weather])
+    monkeypatch.setattr(agent, "_client", _scripted_client(...))  # private attribute
+    ...
+
+
+# GOOD — script the same turns through the public `config=` seam.
+async def test_agent_answers_with_tool():
+    agent = Agent(
+        "weather",
+        config=TestConfig(
+            ToolCallEvent(name="get_weather", arguments='{"city": "Tokyo"}'),  # turn 1: call the tool
+            "It's sunny in Tokyo.",  # turn 2: final reply
+        ),
+        tools=[get_weather],
+    )
+
+    reply = await agent.ask("Weather in Tokyo?")
+
+    assert reply.body == "It's sunny in Tokyo."
+```
+
+Use `TrackingConfig` (which wraps a `TestConfig`) when you also need to assert what the framework *sent* the LLM — again, no patching required.
+
+Failure paths follow the same principle: raise from a public collaborator, never a patched internal — an `Agent` double whose `ask` raises, a `TraceSource` whose `load` raises, or a `LinkEndpoint` whose `frames()` raises (registered with `hub.attach_endpoint(...)`). If a branch can *only* be reached by patching an internal, it isn't publicly observable: cover the observable contract instead of reaching in to hit the line.
+
 ### Assertion style
 
 Avoid chained field-access assertions like `result[0]["tool_calls"][0]["function"]["arguments"] == {...}`. Instead, compare the whole object directly (`assert msg == {...}`) or use **dirty-equals** `IsPartialDict` when only some fields matter:
@@ -124,12 +164,30 @@ Do not use banner-style section dividers (e.g. `# ---\n# Section\n# ---`). Class
 
 ### Structure
 
-Provider-specific tool tests live in `test/beta/config/{provider}/tools/`:
+Provider-specific tool tests live in `test/config/{provider}/tools/`:
 - `test_{tool}.py` — e2e tests for supported tools (one file per tool)
 - `test_unsupported.py` — all unsupported tools for the provider in one file
 - `test_tool_to_api.py` — generic function tool mapping (not builtin-specific)
 
-Variable resolution tests live in `test/beta/tools/test_resolve.py`.
+Variable resolution tests live in `test/tools/test_resolve.py`.
+
+Provider test packages must stay importable when their SDK is absent — the LLM
+CI matrix installs one provider at a time, and an unguarded top-level
+`import anthropic` (directly, or via `ag2.config.{provider}`) breaks *collection*
+for the whole run, even though the test itself would be deselected.
+`test/config/{provider}/__init__.py` already guards the package with
+`pytest.importorskip(...)`, so put provider tests inside that package rather than
+in a new directory. A test that spans providers (e.g. under `test/tools/`) must
+guard itself at the top of the module, before the imports:
+
+```python
+import pytest
+
+pytest.importorskip("anthropic")
+pytest.importorskip("openai")
+
+from ag2.config.anthropic.mappers import tool_to_api
+```
 
 ### Test Pattern
 
@@ -149,7 +207,7 @@ Do **not** instantiate schema classes directly in provider tests — always go t
 
 ### Fixtures
 
-Use the shared `context` pytest fixture from `test/beta/config/conftest.py` (no need to import — pytest discovers it automatically):
+Use the shared `context` pytest fixture from `test/config/conftest.py` (no need to import — pytest discovers it automatically):
 
 ```python
 async def test_defaults(context: Context) -> None: ...
@@ -165,6 +223,6 @@ For OpenAI, test both `tool_to_api` (completions) and `tool_to_responses_api` (r
 
 ### Variable Resolution
 
-Each tool that accepts `Variable` parameters needs exactly 2 tests in `test/beta/tools/test_resolve.py`:
+Each tool that accepts `Variable` parameters needs exactly 2 tests in `test/tools/test_resolve.py`:
 1. Value resolved from context
 2. Missing key raises `KeyError`

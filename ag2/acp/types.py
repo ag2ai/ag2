@@ -20,6 +20,8 @@ SessionUpdate: TypeAlias = (
     | schema.ToolCallStart
     | schema.ToolCallProgress
     | schema.AgentPlanUpdate
+    | schema.AgentPlanContentUpdate
+    | schema.AgentPlanRemovedUpdate
     | schema.AvailableCommandsUpdate
     | schema.CurrentModeUpdate
     | schema.ConfigOptionUpdate

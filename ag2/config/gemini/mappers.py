@@ -28,6 +28,8 @@ from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.files.types import FileProvider
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
+from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME, FileSearchToolSchema
+from ag2.tools.builtin.google_maps import GOOGLE_MAPS_TOOL_NAME, GoogleMapsToolSchema
 from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME, WebFetchToolSchema
 from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
@@ -115,6 +117,22 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
         elif isinstance(t, CodeExecutionToolSchema):
             extra_tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
 
+        elif isinstance(t, FileSearchToolSchema):
+            if not t.store_names:
+                raise UnsupportedToolError(t.type, "gemini")
+            extra_tools.append(
+                types.Tool(
+                    file_search=types.FileSearch(
+                        file_search_store_names=t.store_names,
+                        top_k=t.max_num_results,
+                        metadata_filter=t.metadata_filter,
+                    )
+                )
+            )
+
+        elif isinstance(t, GoogleMapsToolSchema):
+            extra_tools.append(types.Tool(google_maps=types.GoogleMaps(enable_widget=t.enable_widget or None)))
+
         elif isinstance(t, SkillsToolSchema):
             raise UnsupportedToolError(t.type, "gemini")
 
@@ -127,6 +145,23 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
     result.extend(extra_tools)
 
     return result or None
+
+
+def build_tool_config(schemas: list[ToolSchema]) -> types.ToolConfig | None:
+    """Build a Gemini ToolConfig for schemas that require one.
+
+    Currently only Google Maps geo-biasing (lat/lng) needs a
+    ``retrieval_config``; returns ``None`` when nothing does.
+    """
+    for t in schemas:
+        if isinstance(t, GoogleMapsToolSchema) and t.latitude is not None and t.longitude is not None:
+            return types.ToolConfig(
+                retrieval_config=types.RetrievalConfig(
+                    lat_lng=types.LatLng(latitude=t.latitude, longitude=t.longitude),
+                    language_code=t.language_code,
+                )
+            )
+    return None
 
 
 _URL_EXTENSION_TO_MIME: dict[str, str] = {
@@ -325,6 +360,14 @@ def _to_float(value: Any) -> float | None:
 
 
 def grounding_tool_name(gm: types.GroundingMetadata) -> str:
+    # Chunk type is the authoritative signal: Google Maps grounding also populates
+    # web_search_queries, so the chunk kind must be checked before falling back to
+    # the queries heuristic — otherwise maps/file_search grounding is misread as web_search.
+    chunks = gm.grounding_chunks or []
+    if any(c.maps for c in chunks):
+        return GOOGLE_MAPS_TOOL_NAME
+    if any(c.retrieved_context for c in chunks):
+        return FILE_SEARCH_TOOL_NAME
     if gm.web_search_queries:
         return WEB_SEARCH_TOOL_NAME
     return WEB_FETCH_TOOL_NAME

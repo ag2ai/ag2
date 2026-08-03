@@ -24,6 +24,11 @@ class TaskStarted(TaskEvent):
     # framework-core ``Task`` primitive (``ag2.task``); legacy
     # ``run_task`` callers leave it ``None``.
     spec: "TaskSpec | None" = Field(None)
+    # Absolute ISO deadline (start + ttl_seconds) if the task was created
+    # with a TTL, else ``None``. Carried on the event so the network's
+    # ``TaskMirror`` can hand it to the hub, whose TTL sweeper expires
+    # tasks past ``expires_at``. ``TaskSpec`` does not hold the TTL.
+    expires_at: str | None = Field(None)
 
 
 class TaskProgress(TaskEvent):
@@ -50,7 +55,9 @@ class TaskCompleted(TaskEvent):
     # owners can return structured results. ``run_task`` still passes a
     # string, so existing callers are unaffected.
     result: Any = Field(None)
-    task_stream: "StreamId"  # Stream reference for inspection
+    # Stream reference for inspection. Resolves against the parent's storage
+    # only when the sub-task's stream shares it, as `stream=None` builds it to.
+    task_stream: "StreamId"
     usage: Usage = Field(default_factory=Usage)
 
 

@@ -10,7 +10,7 @@ import httpx
 from google.genai import types
 from typing_extensions import Unpack
 
-from ag2.config.config import ModelConfig
+from ag2.config.config import ModelConfig, ModelProvider
 
 from .files import GeminiFilesClient
 from .gemini_client import CreateConfig, GeminiClient, ThinkingLevel
@@ -130,6 +130,10 @@ class GeminiConfig(GeminiBaseConfig, ModelConfig):
     def create_files_client(self) -> GeminiFilesClient:
         return GeminiFilesClient(self)
 
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.GEMINI
+
 
 @dataclass(slots=True)
 class VertexAIConfig(GeminiBaseConfig, ModelConfig):
@@ -139,6 +143,10 @@ class VertexAIConfig(GeminiBaseConfig, ModelConfig):
 
     def copy(self, /, **overrides: Unpack[VertexAIConfigOverrides]) -> "VertexAIConfig":
         return replace(self, **overrides)
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.VERTEXAI
 
     def create(self) -> GeminiClient:
         return GeminiClient(

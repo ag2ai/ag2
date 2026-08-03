@@ -5,7 +5,7 @@
 from ag2.exceptions import missing_optional_dependency
 
 from .client import LLMClient
-from .config import ModelConfig
+from .config import ModelConfig, ModelProvider
 
 try:
     from .openai import ContainerInfo, ContainerManager, ExpiresAfter, OpenAIConfig, OpenAIResponsesConfig
@@ -38,6 +38,11 @@ except ImportError as e:
     VertexAIConfig = missing_optional_dependency("VertexAIConfig", "gemini", e)  # type: ignore[misc]
 
 try:
+    from .mistral import MistralConfig
+except ImportError as e:
+    MistralConfig = missing_optional_dependency("MistralConfig", "mistral", e)  # type: ignore[misc]
+
+try:
     from .ollama import OllamaConfig
 except ImportError as e:
     OllamaConfig = missing_optional_dependency("OllamaConfig", "ollama", e)  # type: ignore[misc]
@@ -61,7 +66,9 @@ __all__ = (
     "ExpiresAfter",
     "GeminiConfig",
     "LLMClient",
+    "MistralConfig",
     "ModelConfig",
+    "ModelProvider",
     "OllamaConfig",
     "OpenAIConfig",
     "OpenAIResponsesConfig",

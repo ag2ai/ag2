@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """ACP-specific stream events.
 
-These cover ACP ``session/update`` variants that have no existing AG2 beta
+These cover ACP ``session/update`` variants that have no existing AG2
 equivalent (plan, mode change, available commands). Message chunks, thoughts,
-and tool calls map onto existing beta events (see :mod:`.mappers`).
+and tool calls map onto existing AG2 events (see :mod:`.mappers`).
 """
 
 from dataclasses import dataclass

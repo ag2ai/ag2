@@ -28,7 +28,7 @@ with optional_import_block():
     import yaml
     from jinja2 import Template
 
-BASE_URL = "https://docs.ag2.ai/latest"
+BASE_URL = "https://docs.ag2.ai"
 
 PROJECT_TITLE = "AG2"
 
@@ -47,6 +47,10 @@ DETAILS = (
 
 # Heading used for the standalone (non-grouped) pages.
 DEFAULT_SECTION = "Documentation"
+
+# Navigation groups included in llms.txt, in output order. "User Guide" keeps its
+# nested groups as separate sections; every other group becomes one flat section.
+LLMS_NAV_GROUPS = ("User Guide", "Agents Orchestration", "Examples", "Extensions")
 
 # Capitalization fixes when deriving a title from a filename.
 _TITLE_KEYWORDS = {
@@ -261,17 +265,24 @@ def generate_llms_txt(website_dir: Path, site_root: Path) -> None:
     Args:
         website_dir: The ``website/`` directory (holds ``mint-json-template.json.jinja``).
         site_root: The MkDocs ``docs_dir`` (``website/mkdocs/docs``); files written here
-            are served at the site root, e.g. ``https://docs.ag2.ai/latest/llms.txt``.
+            are served at the site root, e.g. ``https://docs.ag2.ai/llms.txt``.
     """
     template_path = website_dir / "mint-json-template.json.jinja"
     navigation = json.loads(Template(template_path.read_text(encoding="utf-8")).render())["navigation"]
-    user_guide_group = next((group for group in navigation if group["group"] == "User Guide"), None)
-    if user_guide_group is None:
-        # Fail loudly rather than silently shipping no llms.txt — the most likely cause is
-        # the "User Guide" navigation group being renamed in mint-json-template.json.jinja.
-        raise RuntimeError("Could not find the 'User Guide' navigation group; llms.txt was not generated.")
+    groups_by_name = {group["group"]: group for group in navigation}
+    missing_groups = [name for name in LLMS_NAV_GROUPS if name not in groups_by_name]
+    if missing_groups:
+        # Fail loudly rather than silently shipping an incomplete llms.txt — the most likely
+        # cause is a navigation group being renamed in mint-json-template.json.jinja.
+        raise RuntimeError(f"Could not find the navigation group(s) {missing_groups}; llms.txt was not generated.")
 
-    sections = _iter_sections(user_guide_group)
+    sections: list[tuple[str, list[str]]] = []
+    for group_name in LLMS_NAV_GROUPS:
+        group = groups_by_name[group_name]
+        if group_name == "User Guide":
+            sections.extend(_iter_sections(group))
+        else:
+            sections.append((group_name, _flatten_pages(group)))
     pages: dict[str, tuple[str, str, str]] = {}
     for _, page_paths in sections:
         for page_path in page_paths:

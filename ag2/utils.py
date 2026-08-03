@@ -12,6 +12,8 @@ from fast_depends.pydantic import PydanticSerializer
 from fast_depends.utils import is_coroutine_callable, run_in_threadpool
 
 CONTEXT_OPTION_NAME = "__ctx__"
+AGENT_CONTEXT_DEPENDENCY_KEY = "__ag2_agent__"
+MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY = "__ag2_model_config__"
 
 
 def build_model(

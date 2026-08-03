@@ -26,7 +26,9 @@ class WebFetchToolSchema(ToolSchema):
     blocked_domains: list[str] | None = None
     citations: bool | None = None
     max_content_tokens: int | None = None
-    web_fetch_version: Literal["web_fetch_20250910", "web_fetch_20260209"] = "web_fetch_20250910"
+    web_fetch_version: Literal[
+        "web_fetch_20250910", "web_fetch_20260209", "web_fetch_20260309", "web_fetch_20260318"
+    ] = "web_fetch_20250910"
 
 
 class WebFetchTool(Tool):
@@ -43,7 +45,9 @@ class WebFetchTool(Tool):
         blocked_domains: list[str] | Variable | None = None,
         citations: bool | Variable | None = None,
         max_content_tokens: int | Variable | None = None,
-        version: Literal["web_fetch_20250910", "web_fetch_20260209"] | Variable | None = None,
+        version: Literal["web_fetch_20250910", "web_fetch_20260209", "web_fetch_20260309", "web_fetch_20260318"]
+        | Variable
+        | None = None,
     ) -> None:
         self._params: dict[str, object] = {}
         if max_uses is not None:

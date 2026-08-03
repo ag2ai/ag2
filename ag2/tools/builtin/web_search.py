@@ -34,7 +34,9 @@ class WebSearchToolSchema(ToolSchema):
     user_location: UserLocation | None = None
     allowed_domains: list[str] | None = None
     blocked_domains: list[str] | None = None
-    web_search_version: Literal["web_search_20250305", "web_search_20260209"] = "web_search_20250305"
+    web_search_version: Literal["web_search_20250305", "web_search_20260209", "web_search_20260318"] = (
+        "web_search_20250305"
+    )
 
 
 class WebSearchTool(Tool):
@@ -51,7 +53,7 @@ class WebSearchTool(Tool):
         user_location: UserLocation | Variable | None = None,
         allowed_domains: list[str] | Variable | None = None,
         blocked_domains: list[str] | Variable | None = None,
-        version: Literal["web_search_20250305", "web_search_20260209"] | Variable | None = None,
+        version: Literal["web_search_20250305", "web_search_20260209", "web_search_20260318"] | Variable | None = None,
     ) -> None:
         self._params: dict[str, object] = {}
         if search_context_size is not None:

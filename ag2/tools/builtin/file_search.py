@@ -22,7 +22,9 @@ FILE_SEARCH_TOOL_NAME = "file_search"
 class FileSearchToolSchema(ToolSchema):
     type: str = field(default=FILE_SEARCH_TOOL_NAME, init=False)
     vector_store_ids: list[str] = field(default_factory=list)
+    store_names: list[str] = field(default_factory=list)
     max_num_results: int | None = None
+    metadata_filter: str | None = None
     filters: dict[str, Any] | None = None
     include_results: bool = False
 
@@ -37,11 +39,19 @@ class FileSearchTool(Tool):
       compound filter objects). ``include_results=True`` asks the API to return
       the raw retrieved chunks (``include=["file_search_call.results"]``).
 
+    - **Gemini** — maps to the ``file_search`` tool over the given
+      ``store_names`` (Gemini ``FileSearchStore`` resource names).
+      ``max_num_results`` maps to ``top_k``; ``metadata_filter`` is an
+      AIP-160 filter string. ``vector_store_ids`` / ``filters`` are OpenAI-only
+      and Gemini raises :class:`~ag2.exceptions.UnsupportedToolError` if given
+      without ``store_names``.
+
     - All other providers raise
       :class:`~ag2.exceptions.UnsupportedToolError`.
 
     See:
     - https://developers.openai.com/api/docs/guides/tools-file-search
+    - https://ai.google.dev/gemini-api/docs/file-search
     """
 
     __slots__ = (
@@ -51,15 +61,23 @@ class FileSearchTool(Tool):
 
     def __init__(
         self,
-        vector_store_ids: list[str] | Variable,
+        vector_store_ids: list[str] | Variable | None = None,
         *,
+        store_names: list[str] | Variable | None = None,
         max_num_results: int | Variable | None = None,
+        metadata_filter: str | Variable | None = None,
         filters: dict[str, Any] | Variable | None = None,
         include_results: bool = False,
     ) -> None:
-        self._params: dict[str, object] = {"vector_store_ids": vector_store_ids}
+        self._params: dict[str, object] = {}
+        if vector_store_ids is not None:
+            self._params["vector_store_ids"] = vector_store_ids
+        if store_names is not None:
+            self._params["store_names"] = store_names
         if max_num_results is not None:
             self._params["max_num_results"] = max_num_results
+        if metadata_filter is not None:
+            self._params["metadata_filter"] = metadata_filter
         if filters is not None:
             self._params["filters"] = filters
         if include_results:

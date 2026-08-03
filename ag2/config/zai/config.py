@@ -8,7 +8,7 @@ from typing import Any, TypedDict
 import httpx
 from typing_extensions import Unpack
 
-from ag2.config.config import ModelConfig
+from ag2.config.config import ModelConfig, ModelProvider
 
 from .files import ZAIFilesClient
 from .zai_client import CreateOptions, ZAIClient
@@ -77,6 +77,10 @@ class ZAIConfig(ModelConfig):
     thinking: bool | None = None
     extra_headers: dict[str, str] | None = None
     extra_body: dict[str, Any] | None = None
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.ZAI
 
     def copy(self, /, **overrides: Unpack[ZAIConfigOverrides]) -> "ZAIConfig":
         return replace(self, **overrides)
