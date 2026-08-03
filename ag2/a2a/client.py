@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from a2a.client import A2ACardResolver, Client, ClientCallContext, ClientCallInterceptor
 from a2a.client.errors import A2AClientError
-from a2a.client.service_parameters import ServiceParametersFactory, with_a2a_extensions
 from a2a.types import (
     AgentCard,
     GetExtendedAgentCardRequest,
@@ -49,7 +48,6 @@ from ag2.tools.schemas import ToolSchema
 
 from .errors import (
     A2AClientToolsNotSupportedError,
-    A2AExtensionNotSupportedError,
     A2AReconnectError,
     A2ATaskAuthRequiredError,
     A2ATaskFailedError,
@@ -67,8 +65,9 @@ from .extension import (
     EXTENSION_URI,
     EXTRA_PARTS_DEPENDENCY_KEY,
     MIME_TOOL_CALL,
-    NATIVE_EXTENSION_URIS,
     TENANT_VARIABLE_KEY,
+    extension_call_context,
+    validate_extension_activation,
 )
 from .mappers import (
     build_input_response_message,
@@ -153,7 +152,7 @@ class A2AClient(LLMClient):
     stateless on AG2 history (see ``mappers/history.py``).
     """
 
-    def __init__(
+    def __init__(  # type: ignore[no-any-unimported]
         self,
         *,
         card_url: str,
@@ -274,6 +273,7 @@ class A2AClient(LLMClient):
             await self._httpx_client.aclose()
             self._httpx_client = None
         self._sdk_client = None
+        self._call_context = None
 
     async def _ensure_connected(self, context: ConversationContext) -> None:
         if self._sdk_client is not None:
@@ -287,22 +287,11 @@ class A2AClient(LLMClient):
             self._agent_card = await A2ACardResolver(
                 httpx_client=self._httpx_client, base_url=self._card_url
             ).get_agent_card()
+        assert self._agent_card is not None
         iface, transport = select_interface(self._agent_card, url=self._card_url, prefer=self._prefer)
         validate_protocol_version(iface, url=self._card_url, transport=transport)
-        self._validate_extensions()
-        # Activation travels on both channels the spec allows: the
-        # ``Message.extensions`` field (handled in ``_build_outgoing``) and the
-        # ``A2A-Extensions`` service parameter, which the SDK renders as an HTTP
-        # header on jsonrpc/rest and as gRPC metadata.
-        self._call_context = (
-            ClientCallContext(
-                service_parameters=ServiceParametersFactory.create([
-                    with_a2a_extensions(list(self._extensions)),
-                ]),
-            )
-            if self._extensions
-            else None
-        )
+        validate_extension_activation(self._agent_card, self._extensions, url=self._card_url)
+        self._call_context = extension_call_context(self._extensions)
         self._sdk_client = make_a2a_client(
             card=self._agent_card,
             httpx_client=self._httpx_client,
@@ -316,39 +305,6 @@ class A2AClient(LLMClient):
             self._agent_card = await self._sdk_client.get_extended_agent_card(
                 GetExtendedAgentCardRequest(**kwargs),
                 context=self._call_context,
-            )
-
-    def _validate_extensions(self) -> None:
-        """Reconcile activated URIs with the card, in both directions.
-
-        Unadvertised activations are a client-side mistake; ``required=True``
-        extensions the client neither activated nor natively implements mean
-        the server expects behavior AG2 won't provide — refuse up front rather
-        than connect and fail opaquely mid-task.
-
-        Runs against the card resolved for this session, before the optional
-        extended-card fetch: activation has to be settled before the first
-        request goes out.
-        """
-        assert self._agent_card is not None
-        advertised = {ext.uri for ext in self._agent_card.capabilities.extensions}
-        unknown = [uri for uri in self._extensions if uri not in advertised]
-        if unknown:
-            raise A2AExtensionNotSupportedError(
-                url=self._card_url,
-                uris=unknown,
-                reason="not advertised by the server card",
-            )
-        unmet = [
-            ext.uri
-            for ext in self._agent_card.capabilities.extensions
-            if ext.required and ext.uri not in self._extensions and ext.uri not in NATIVE_EXTENSION_URIS
-        ]
-        if unmet:
-            raise A2AExtensionNotSupportedError(
-                url=self._card_url,
-                uris=unmet,
-                reason="required by the server card; add these URIs to A2AConfig.extensions",
             )
 
     def _validate_and_extract_tools(

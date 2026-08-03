@@ -240,8 +240,8 @@ def _build_message(
         kwargs["task_id"] = task_id
     if context_id:
         kwargs["context_id"] = context_id
-    uris: list[str] = [EXTENSION_URI] if advertise_extension else []
-    uris.extend(u for u in extra_extensions if u != EXTENSION_URI)
+    base: list[str] = [EXTENSION_URI] if advertise_extension else []
+    uris: list[str] = list(dict.fromkeys([*base, *extra_extensions]))
     if uris:
         kwargs["extensions"] = uris
     # Caller-supplied keys first; AG2-namespaced keys override on conflict.

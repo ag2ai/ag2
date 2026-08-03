@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Mapping, Sequence
+from typing import Any
 
-from a2a.client.client_factory import TransportProtocol
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
@@ -13,7 +13,7 @@ from a2a.types import (
     AgentProvider,
     AgentSkill,
 )
-from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
+from a2a.utils.constants import PROTOCOL_VERSION_CURRENT, TransportProtocol
 
 from ag2.agent import Agent
 from ag2.tools.skills.toolkit import SkillsToolkit
@@ -90,7 +90,10 @@ def build_card(
     seen_uris = {EXTENSION_URI}
     for ext in extensions:
         if ext.uri in seen_uris:
-            raise ValueError(f"Duplicate extension URI on AgentCard: {ext.uri!r}")
+            reason = (
+                "declared automatically by build_card" if ext.uri == EXTENSION_URI else "already present in extensions="
+            )
+            raise ValueError(f"Duplicate extension URI on AgentCard: {ext.uri!r} is {reason}")
         seen_uris.add(ext.uri)
         declared.append(ext)
     capabilities = AgentCapabilities(
@@ -98,7 +101,7 @@ def build_card(
         push_notifications=push_notifications,
         extensions=declared,
     )
-    card_kwargs: dict[str, object] = {
+    card_kwargs: dict[str, Any] = {
         "name": agent.name,
         "description": description_text,
         "version": version,

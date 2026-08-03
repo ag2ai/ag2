@@ -13,17 +13,21 @@ from a2a.server.agent_execution import RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import InMemoryPushNotificationConfigStore, TaskUpdater
 from a2a.types import Task, TaskState, TaskStatus
+from fast_depends.pydantic import PydanticSerializer
 from typing_extensions import Self
 
-from ag2 import Agent, Context
+from ag2 import Agent, Context, MemoryStream
 from ag2.a2a import A2AConfig, A2AServer, build_card
 from ag2.a2a.client import A2AClient
 from ag2.a2a.errors import A2ATaskFailedError
 from ag2.a2a.testing import make_test_client_factory
 from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig
-from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse
+from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelRequest, ModelResponse, TextInput
 from ag2.testing import TestConfig
+
+# What an ``Agent`` hands its ``LLMClient``, built the same way.
+_SERIALIZER = PydanticSerializer(pydantic_config={"arbitrary_types_allowed": True}, use_fastdepends_errors=False)
 
 
 class _SpyAsyncClient(httpx.AsyncClient):
@@ -112,6 +116,26 @@ class TestHttpxLifecycle:
         await client.aclose()
 
         assert _SpyAsyncClient.aclose_count == 0
+
+    async def test_aclose_after_a_turn_does_not_close_the_same_connection_twice(self) -> None:
+        # The turn closes in its own ``finally``; an explicit ``aclose()``
+        # on top must not reach the httpx client again. Driven directly
+        # because ``Agent`` never hands the client back to the caller.
+        _SpyAsyncClient.aclose_count = 0
+        server = A2AServer(Agent("server", config=TestConfig("hi")))
+        url = "http://test"
+        client = A2AClient(card_url=url, httpx_client_factory=_make_spy_factory(server, url))
+
+        await client(
+            [ModelRequest([TextInput("ping")])],
+            Context(stream=MemoryStream()),
+            tools=[],
+            response_schema=None,
+            serializer=_SERIALIZER,
+        )
+        await client.aclose()
+
+        assert _SpyAsyncClient.aclose_count == 1
 
 
 class _ChunkingScript(ModelConfig):

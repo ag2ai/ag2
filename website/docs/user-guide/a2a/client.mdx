@@ -134,6 +134,8 @@ The card and the activation list are reconciled before the first request goes ou
 
 `#!python urn:ag2:client-tools:v1` is the exception to the second rule: AG2 implements it natively, so a card may require it without the client listing it explicitly.
 
+Activation covers every request the config makes, not just `#!python ask`. The one-shot [task](/docs/user-guide/a2a/tasks) and push-notification helpers open their own connection from the same `#!python A2AConfig`, so they activate the same URIs and run the same reconciliation — a server enforcing a `#!python required=True` extension sees a consistent client on the conversational and the administrative path alike.
+
 ```python linenums="1" hl_lines="5-6"
 from ag2.a2a.errors import A2AExtensionNotSupportedError
 

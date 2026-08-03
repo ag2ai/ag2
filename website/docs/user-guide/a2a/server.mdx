@@ -273,9 +273,9 @@ card = build_card(
 )
 ```
 
-`#!python required=True` means a client that does not activate the URI is refused at connect time rather than allowed to proceed and misbehave mid-task. Use it only when the exchange genuinely breaks without the extension — `#!python required=False` lets extension-unaware clients keep working.
+`#!python required=True` declares that the exchange genuinely breaks without the extension. AG2's *client* honours the flag: it refuses to connect to a card requiring a URI it hasn't activated, rather than proceeding and misbehaving mid-task. Note this is client-side only — `#!python build_card` declares the requirement, it does not enforce it, and a client that ignores the flag is still served. Use `#!python required=False` to let extension-unaware clients keep working.
 
-Duplicate URIs raise `#!python ValueError`, including redeclaring `#!python urn:ag2:client-tools:v1`, so a card can never ship two entries for the same extension.
+Duplicate URIs raise `#!python ValueError`, including redeclaring `#!python urn:ag2:client-tools:v1` — `#!python build_card` always declares that one itself, so a card can never ship two entries for the same extension.
 
 See [Extensions](/docs/user-guide/a2a/client#extensions) for activating them on the client.
 

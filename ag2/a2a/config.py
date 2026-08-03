@@ -33,7 +33,7 @@ class A2AConfigOverrides(TypedDict, total=False):
     input_required_timeout: float | None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None
     interceptors: Sequence[ClientCallInterceptor]
-    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None
+    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None  # type: ignore[no-any-unimported]
     preset_card: AgentCard | None
     tenant: str | None
     history_length: int | None
@@ -41,7 +41,7 @@ class A2AConfigOverrides(TypedDict, total=False):
 
 
 @dataclass(slots=True)
-class A2AConfig(ModelConfig):
+class A2AConfig(ModelConfig):  # type: ignore[no-any-unimported]
     """Connection config for an A2A agent acting as an LLM provider.
 
     ``card_url`` is the HTTP(S) URL where the agent card is published
@@ -83,7 +83,9 @@ class A2AConfig(ModelConfig):
     ``capabilities.extensions``; cards that *require* an extension the
     client doesn't activate are rejected
     (``A2AExtensionNotSupportedError``). Activated URIs ride on
-    ``Message.extensions`` and the ``A2A-Extensions`` header/metadata.
+    ``Message.extensions`` and the ``A2A-Extensions`` header/metadata,
+    on every request this config makes — conversational and ``tasks`` /
+    ``push`` alike.
     """
 
     card_url: str
@@ -97,7 +99,9 @@ class A2AConfig(ModelConfig):
     input_required_timeout: float | None = None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None = field(default=None, repr=False)
     interceptors: Sequence[ClientCallInterceptor] = ()
-    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = field(default=None, repr=False)
+    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = field(  # type: ignore[no-any-unimported]
+        default=None, repr=False
+    )
     preset_card: AgentCard | None = field(default=None, repr=False)
     tenant: str | None = None
     history_length: int | None = None
