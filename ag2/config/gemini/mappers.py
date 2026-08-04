@@ -208,13 +208,27 @@ def _mime_from_url(url: str) -> str | None:
     return None
 
 
+def _media_resolution(value: Any) -> Any:
+    """Coerce a vendor_metadata ``media_resolution`` into the SDK's Part shape.
+
+    ``Part.media_resolution`` is a ``PartMediaResolution`` model, not a bare
+    enum, so a level given as a string (the documented form) has to be wrapped —
+    assigning it directly leaves the Part serializing to the wrong wire shape.
+    """
+    if isinstance(value, types.PartMediaResolution):
+        return value
+    if isinstance(value, dict):
+        return types.PartMediaResolution(**value)
+    return types.PartMediaResolution(level=value)
+
+
 def _apply_vendor_metadata(part: types.Part, metadata: dict[str, Any]) -> None:
     """Apply Gemini-specific vendor_metadata fields to a Part."""
     if not metadata:
         return
 
     if "media_resolution" in metadata:
-        part.media_resolution = metadata["media_resolution"]
+        part.media_resolution = _media_resolution(metadata["media_resolution"])
 
     if "video_metadata" in metadata:
         vm = metadata["video_metadata"]

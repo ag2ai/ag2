@@ -136,6 +136,8 @@ All implementations must be re-exported from their public module's `__init__.py`
 - **Core modules** use **optional dependencies** shipped as pyproject extras — fall back via `missing_optional_dependency`, which hints `pip install "ag2[<extra>]"`.
 - **Extensions** (`ag2/extensions/`) are **not** shipped as extras — declare their third-party packages as **additional dependencies** and fall back via `missing_additional_dependency`, which hints the upstream package directly (e.g. `pip install "daytona>=0.171.0,<1"`).
 
+Either way, add the third-party package to the `optionals` **dependency group** in `pyproject.toml` (PEP 735 — CI-only, never part of `pip install ag2`) so the test workflow installs it. Tests guarded by `pytest.importorskip("<package>")` are silently skipped otherwise, and CI still passes.
+
 ### Design principles
 
 - **Protocols over inheritance**: `LLMClient`, `ModelConfig`, `Stream`, `Storage`, `Tool` are all `Protocol` classes — implementations satisfy them structurally.
