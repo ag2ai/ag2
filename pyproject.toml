@@ -148,6 +148,9 @@ test = [
     "nbconvert==7.17.1",
     "nbformat==5.10.4",
     "respx>=0.23.0,<0.24.0", # search tests
+    # starlette >=1.0 drives `starlette.testclient.TestClient` with httpx2 and warns
+    # (StarletteDeprecationWarning) when it has to fall back to httpx 0.x
+    "httpx2>=2.9.1,<3",
 ]
 
 # All optional feature deps needed so the full (non-LLM) test suite can be
