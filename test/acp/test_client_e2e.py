@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 from typing import Any
 
 import pytest
@@ -167,6 +168,79 @@ class TestModelSelection:
                 await agent.ask("hello")
         finally:
             await cfg.aclose()
+
+
+@pytest.mark.asyncio
+class TestEmptyTurnWarning:
+    """A turn that ends normally yet produced nothing is worth a word.
+
+    Some CLI agents swallow provider-side failures (an unauthorized or
+    text-incapable model) and end the turn with ``end_turn`` and no output at
+    all — indistinguishable, from AG2's side, from a healthy silent turn. Warn
+    so the empty reply is not the only clue.
+    """
+
+    async def test_empty_end_turn_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        cfg = fake_acp_config(ACPTurn(updates=[]), permission_policy="auto", model="provider/model")
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == ""
+        [record] = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert "provider/model" in record.getMessage()
+
+    async def test_tool_only_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The agent worked — it just had nothing to say. Not a silent failure."""
+        cfg = fake_acp_config(
+            ACPTurn(
+                updates=[
+                    schema.ToolCallStart(session_update="tool_call", tool_call_id="t1", title="Write", status="pending")
+                ]
+            ),
+            permission_policy="auto",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == ""
+        assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+    async def test_text_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        cfg = fake_acp_config(_hi_turn(), permission_policy="auto")
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == "hi"
+        assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+    async def test_timed_out_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A timeout already reports itself through ``finish_reason``."""
+        cfg = fake_acp_config(ACPTurn(hang=True), permission_policy="auto", turn_timeout=0.5)
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                reply = await agent.ask("hang")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == ""
+        assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
 
 @pytest.mark.asyncio

@@ -106,6 +106,16 @@ agent = Agent(
     may default to an unsuitable model (an image model, at the time of
     writing), which ends every turn with an empty reply.
 
+!!! warning "Empty replies"
+
+    Some CLI agents swallow provider-side failures — an unauthorized model, or
+    one that cannot produce text — and end the turn with `stop_reason="end_turn"`
+    and no output at all. Nothing reaches the ACP wire, so AG2 can only hand
+    back an empty reply; it logs a warning (`ag2.acp.client`) on such a turn so
+    the emptiness is not the only clue. Run the same prompt through the agent's
+    own CLI (e.g. `kilo run --model <model> "hi"`) to see the real error, and
+    check that the credential covers the model you selected.
+
 ## Authentication & billing
 
 AG2 never meters or bills a run itself — it only launches the CLI agent as a

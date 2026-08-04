@@ -153,11 +153,13 @@ class BridgeState:
         self.context: ConversationContext | None = None  # updated by ACPClient before each turn
         self._turn_parts: list[str] = []
         self._turn_files: list[BinaryResult] = []
+        self._turn_worked = False
         self.terminals = TerminalManager(config.fs_root or config.cwd)
 
     def begin_turn(self) -> None:
         self._turn_parts = []
         self._turn_files = []
+        self._turn_worked = False
 
     @property
     def turn_text(self) -> str:
@@ -167,11 +169,31 @@ class BridgeState:
     def turn_files(self) -> list[BinaryResult]:
         return list(self._turn_files)
 
+    @property
+    def turn_worked(self) -> bool:
+        """Whether the agent did anything this turn beyond replying with text.
+
+        Thoughts, tool calls and plans all count. Session-scoped updates (mode,
+        available commands, usage) do not — they arrive even on a turn where the
+        agent never ran, so counting them would mask exactly the case this
+        tracks: a turn that produced nothing at all.
+        """
+        return self._turn_worked
+
     async def handle_update(self, update: SessionUpdate) -> None:
         """Route one ``session/update`` to the stream + accumulate agent output."""
         if isinstance(update, schema.AgentMessageChunk):
             self._turn_parts.append(block_text(update.content))
             self._turn_files.extend(block_to_files(update.content))
+        if isinstance(
+            update,
+            schema.AgentThoughtChunk
+            | schema.ToolCallStart
+            | schema.ToolCallProgress
+            | schema.AgentPlanUpdate
+            | schema.AgentPlanContentUpdate,
+        ):
+            self._turn_worked = True
         event = map_session_update(update)
         if event is not None and self.context is not None:
             await self.context.send(event)
