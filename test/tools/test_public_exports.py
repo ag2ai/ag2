@@ -3,8 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import ag2.tools
+import ag2.tools.types
 from ag2 import Agent
-from ag2.tools import (
+from ag2.tools import Toolkit, tool
+from ag2.tools.types import (
     ClientTool,
     FunctionDefinition,
     FunctionParameters,
@@ -12,14 +14,40 @@ from ag2.tools import (
     FunctionToolSchema,
     Tool,
     ToolSchema,
-    Toolkit,
-    tool,
 )
+
+# Ready-to-use tools that must stay importable from `ag2.tools`, so the
+# re-homing of the abstractions cannot quietly take them with it.
+_CONCRETE_TOOLS = ("CodeExecutionTool", "ShellTool", "WebSearchTool", "MCPServerTool")
 
 
 def test_every_public_name_resolves() -> None:
     """``__all__`` must not advertise a name the module does not expose."""
     assert [name for name in ag2.tools.__all__ if not hasattr(ag2.tools, name)] == []
+    assert [name for name in ag2.tools.types.__all__ if not hasattr(ag2.tools.types, name)] == []
+
+
+class TestImportPathsStaySeparate:
+    """`ag2.tools` is ready-to-use tools; `ag2.tools.types` is the abstractions."""
+
+    def test_abstractions_are_importable_from_one_place(self) -> None:
+        assert set(ag2.tools.types.__all__) == {
+            "ClientTool",
+            "FunctionDefinition",
+            "FunctionParameters",
+            "FunctionTool",
+            "FunctionToolSchema",
+            "Tool",
+            "ToolSchema",
+            "Toolkit",
+        }
+
+    def test_abstractions_are_not_mixed_into_ag2_tools(self) -> None:
+        # Toolkit predates this split and stays exported from both.
+        assert [name for name in ag2.tools.types.__all__ if name in ag2.tools.__all__] == ["Toolkit"]
+
+    def test_concrete_tools_are_untouched(self) -> None:
+        assert [name for name in _CONCRETE_TOOLS if name not in ag2.tools.__all__] == []
 
 
 class TestToolAbstraction:

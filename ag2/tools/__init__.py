@@ -23,35 +23,20 @@ from .builtin import (
     XSearchTool,
 )
 from .code import SandboxCodeTool
-from .final import (
-    ClientTool,
-    FunctionDefinition,
-    FunctionParameters,
-    FunctionTool,
-    FunctionToolSchema,
-    Toolkit,
-    tool,
-)
+from .final import Toolkit, tool
 from .sandbox import LocalEnvironment
-from .schemas import ToolSchema
 from .search import DuckDuckSearchTool, PerplexitySearchToolkit, TavilySearchTool
 from .shell import SandboxShellTool
 from .skills import MemorySkill, SkillPlugin, SkillSearchToolkit, SkillsToolkit
-from .tool import Tool
 from .toolkits import FilesystemToolkit, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
 
 __all__ = (
-    "ClientTool",
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
     "DuckDuckSearchTool",
     "FileSearchTool",
     "FilesystemToolkit",
-    "FunctionDefinition",
-    "FunctionParameters",
-    "FunctionTool",
-    "FunctionToolSchema",
     "GoogleMapsTool",
     "ImageGenerationTool",
     "LocalEnvironment",
@@ -72,9 +57,7 @@ __all__ = (
     "SkillsTool",
     "SkillsToolkit",
     "TavilySearchTool",
-    "Tool",
     "ToolResult",
-    "ToolSchema",
     "Toolkit",
     "UserLocation",
     "WebFetchTool",
