@@ -16,6 +16,7 @@ from ag2.events import (
     UsageEvent,
 )
 from ag2.stream import MemoryStream, Stream
+from ag2.usage import UsageReport
 
 if TYPE_CHECKING:
     from ag2.agent import Agent
@@ -134,7 +135,16 @@ async def run_task(
         return result
 
     except Exception as e:
+        # The sub-task may already have made billable model calls before it
+        # failed; those UsageEvents are on its own stream, so report them
+        # instead of discarding the usage that was actually incurred.
+        usage = UsageReport.from_events(await task_stream.history.get_events()).total
+
         if emit_events:
+            if usage:
+                await parent_context.send(
+                    UsageEvent(usage, kind="subtask", label=agent.name),
+                )
             await parent_context.send(
                 TaskFailed(
                     task_id=task_id,
@@ -150,7 +160,7 @@ async def run_task(
             completed=False,
             stream=task_stream,
             error=e,
-            usage=Usage(),
+            usage=usage,
         )
 
     finally:
