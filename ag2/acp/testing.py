@@ -100,8 +100,22 @@ class _FakeConnection:
             config_options=self._config_options or None,
         )
 
-    async def set_config_option(self, *, session_id: str, config_id: str, value: Any, **kwargs: Any) -> None:
+    async def set_config_option(
+        self, *, session_id: str, config_id: str, value: Any, **kwargs: Any
+    ) -> schema.SetSessionConfigOptionResponse:
+        """Record the call and echo back the option set with ``value`` applied.
+
+        The real ``set_config_option`` returns the agent's full, updated option
+        list — that response is how a caller could tell an agent accepted the
+        call but ignored it. Returning ``None`` here would let such a bug pass
+        unnoticed in tests.
+        """
         self.config_option_calls.append((config_id, value))
+        self._config_options = [
+            option.model_copy(update={"current_value": value}) if option.id == config_id else option
+            for option in self._config_options
+        ]
+        return schema.SetSessionConfigOptionResponse(config_options=list(self._config_options))
 
     async def cancel(self, **kwargs: Any) -> None:
         self._cancelled.set()
