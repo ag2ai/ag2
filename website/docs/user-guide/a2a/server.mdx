@@ -124,6 +124,35 @@ await grpc_server.wait_for_termination()
 !!! note
     A2A v1.x has no `#!python GetAgentCard` gRPC method — the public card is always served over HTTP at `#!python /.well-known/agent-card.json`. So even for a gRPC-only server clients fetch the card via HTTP first, then switch to gRPC for the actual exchange. Plan your card URL accordingly.
 
+#### TLS
+
+`#!python build_grpc` binds an insecure port by default for backwards compatibility. Pass a `#!python grpc.ServerCredentials` object as `#!python server_credentials=` to bind a secure port, and publish the interface with a `#!python grpcs://` or `#!python grpc+tls://` URL:
+
+```python linenums="1" hl_lines="7-9 11-18"
+from pathlib import Path
+
+import grpc
+
+from ag2.a2a import build_card
+
+private_key = Path("certs/server-key.pem").read_bytes()
+certificate = Path("certs/server.pem").read_bytes()
+credentials = grpc.ssl_server_credentials([(private_key, certificate)])
+
+grpc_url = "grpcs://agents.example.com:50051"
+card = build_card(agent, url="https://agents.example.com", transports=("grpc",), grpc_url=grpc_url)
+grpc_server = server.build_grpc(
+    bind="0.0.0.0:50051",
+    grpc_url=grpc_url,
+    card=card,
+    server_credentials=credentials,
+)
+await grpc_server.start()
+await grpc_server.wait_for_termination()
+```
+
+AG2 does not read certificate files or alter the credentials; certificate loading, rotation and mTLS policy remain under application control. To require client certificates, create the server credentials with `#!python root_certificates=<client CA>` and `#!python require_client_auth=True`. See [gRPC TLS on the client](/docs/user-guide/a2a/client#grpc-tls) for public-CA, private-CA and mTLS channels.
+
 ### One Server, Three Transports
 
 The same `#!python A2AServer` instance can back any combination of transports. Build a single multi-transport `#!python AgentCard` and call each `#!python build_*` against it — they share one task store.
