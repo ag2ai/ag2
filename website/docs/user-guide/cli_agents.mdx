@@ -58,7 +58,8 @@ agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 from ag2 import Agent
 from ag2.acp import CodexConfig
 
-# Launches `codex-acp`. Auth: pass CODEX_API_KEY or OPENAI_API_KEY in env={...}.
+# Launches `codex-acp`. Auth: an existing `codex login` (stored under $HOME), or
+# pass CODEX_API_KEY / OPENAI_API_KEY in env={...}.
 # See "Authentication & billing" below.
 agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
 ```
@@ -156,7 +157,7 @@ inherited — so it works without setting `env` at all.
 | You authenticate with… | How to set it | Billing |
 | :--- | :--- | :--- |
 | **An API key** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` / `CODEX_API_KEY`, or a provider key for OpenCode / Kilo Code) | Pass it in `config.env` — a shell `export` is **not** inherited | The provider's **API**: pay-per-token against that API account |
-| **An existing CLI login** on the host (Claude Code `~/.claude`, `opencode auth login`, `kilo auth login`) | Nothing to set — inherited via `$HOME` | Whatever **plan that login is on**, which may be a **subscription** |
+| **An existing CLI login** on the host (Claude Code `~/.claude`, `codex login` → `~/.codex`, `opencode auth login`, `kilo auth login`) | Nothing to set — inherited via `$HOME` | Whatever **plan that login is on**, which may be a **subscription** |
 
 So "API or subscription" is not a property of ACP or AG2 — it follows the
 credential. By default (no `env`), the agent uses whatever login already exists on
@@ -164,13 +165,14 @@ the host; pass an API key in `env` to bill against the provider's API instead.
 
 !!! note
 
-    The Codex adapter here authenticates only via `CODEX_API_KEY` / `OPENAI_API_KEY`
-    (API billing). The subscription/login path applies to the adapters that read a
-    disk login — Claude Code (`~/.claude`, or a custom location via
-    `CLAUDE_CONFIG_DIR` passed in `env`), OpenCode (`opencode auth login`) and
-    Kilo Code (`kilo auth login`). Exact
-    plan names, quotas, and whether a plan permits programmatic use are set by each
-    provider, not by AG2 — check the provider's terms.
+    Every adapter here reads a disk login under `$HOME` when no key is passed in
+    `env` — Claude Code (`~/.claude`, or a custom location via `CLAUDE_CONFIG_DIR`
+    passed in `env`), Codex (`~/.codex`, or `CODEX_HOME`), OpenCode
+    (`opencode auth login`) and Kilo Code (`kilo auth login`). For Codex that login
+    may be a ChatGPT subscription rather than an API key, in which case billing
+    follows the subscription, not per-token API pricing. Exact plan names, quotas,
+    and whether a plan permits programmatic use are set by each provider, not by
+    AG2 — check the provider's terms.
 
 ## Observing the agent's work
 

@@ -157,11 +157,14 @@ class CodexConfig(ACPConfig):
 
     Launches the ``@agentclientprotocol/codex-acp`` bin, which must be on
     ``PATH`` (install globally, or override ``command`` to run it via
-    ``npx -y @agentclientprotocol/codex-acp``). Authenticate by passing
+    ``npx -y @agentclientprotocol/codex-acp``). Authenticate either by passing
     ``CODEX_API_KEY`` (takes precedence) or ``OPENAI_API_KEY`` in ``env`` --
-    billed per-token by the provider's API. Only a small env whitelist is
-    inherited, so a shell ``export`` does not reach the subprocess; put the key
-    in ``env`` (see ``ACPConfig.env``).
+    billed per-token by the provider's API -- or with an existing ``codex
+    login`` on the host, whose credentials live under ``$HOME`` (``~/.codex``,
+    inherited automatically) and whose billing follows that login, which may be
+    a ChatGPT subscription. Only a small env whitelist is inherited, so a shell
+    ``export`` of a key does not reach the subprocess; put it in ``env`` (see
+    ``ACPConfig.env``).
     Select the model via the ``model`` field (one of the adapter's advertised
     ids — see ``ACPConfig.model``) or the adapter's ``MODEL_PROVIDER`` env var.
     """
