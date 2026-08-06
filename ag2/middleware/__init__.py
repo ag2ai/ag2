@@ -23,7 +23,7 @@ from .builtin import (
     TokenLimiter,
     approval_required,
 )
-from .describe import DescribableMiddleware, MiddlewareDescription
+from .describe import DescribableMiddleware, DescribedMiddleware, MiddlewareDescription
 
 __all__ = (
     "AgentTurn",
@@ -31,6 +31,7 @@ __all__ = (
     "BaseMiddleware",
     "ConditionalMiddleware",
     "DescribableMiddleware",
+    "DescribedMiddleware",
     "HistoryLimiter",
     "HumanInputHook",
     "LLMCall",

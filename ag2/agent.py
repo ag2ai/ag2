@@ -19,7 +19,7 @@ import asyncio
 import json
 import logging
 import types
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
@@ -74,6 +74,7 @@ from .middleware.base import (
     MiddlewareFactory,
     ToolMiddleware,
 )
+from .middleware.describe import DescribedMiddleware
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
@@ -758,6 +759,69 @@ class Agent(PluginTarget, Generic[TResult]):
 
             self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
             self.add_middleware(_HaltCheckMiddlewareFactory())
+
+    # --- Composition -----------------------------------------------------
+    # Read-only views of what this agent is made of, for comparing two agents,
+    # asserting on composition in a test, or logging it. Each returns a copy or
+    # a read-only view, so callers cannot mutate the agent through them.
+
+    @property
+    def system_prompt(self) -> tuple[str, ...]:
+        """Static system prompt fragments, in order."""
+
+        return tuple(self._system_prompt)
+
+    @property
+    def dynamic_prompt(self) -> tuple[PromptType, ...]:
+        """Dynamic prompt hooks, in registration order."""
+
+        return tuple(self._dynamic_prompt)
+
+    @property
+    def middleware(self) -> tuple[DescribedMiddleware, ...]:
+        """Agent-level middleware, in registration order.
+
+        Each entry pairs the middleware object with its description. Entries are
+        built on access, so compare ``entry.middleware`` rather than the entry.
+        """
+
+        return tuple(DescribedMiddleware(m) for m in self._middleware)
+
+    @property
+    def dependencies(self) -> Mapping[Any, Any]:
+        """Dependencies injected into tool calls, keyed as they were supplied."""
+
+        return types.MappingProxyType(self._agent_dependencies)
+
+    @property
+    def variables(self) -> Mapping[Any, Any]:
+        """Variables available to this agent."""
+
+        return types.MappingProxyType(self._agent_variables)
+
+    @property
+    def response_schema(self) -> ResponseProto[TResult] | None:
+        """The response schema, or ``None`` when replies are free text."""
+
+        return self._response_schema
+
+    @property
+    def observers(self) -> tuple[Observer, ...]:
+        """Observers attached to this agent, in registration order."""
+
+        return tuple(self._observers)
+
+    @property
+    def tasks(self) -> TaskConfig | None:
+        """Sub-task configuration, or ``None`` when sub-tasks are not enabled."""
+
+        return self._task_config
+
+    @property
+    def assembly(self) -> tuple[AssemblyPolicy, ...]:
+        """Assembly policies, in the order they are applied."""
+
+        return tuple(self._policies)
 
     def task(
         self,

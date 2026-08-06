@@ -506,8 +506,10 @@ A composite is only as describable as its parts: `#!python complete` is forced t
 
 Descriptions support equality but are deliberately **not hashable** — `#!python config` may hold arbitrary values, so they cannot go in a `#!python set` or be used as dict keys.
 
+To read the middleware attached to an agent or a tool, use `#!python agent.middleware` and `#!python tool.middleware`. Each entry pairs the middleware object with its description, so an entry always has one whether or not that middleware opted in. See [Reading an agent's composition](/docs/user-guide/agent_harness#reading-an-agents-composition).
+
 !!! note
-    `#!python Middleware(...)` reports the wrapped class and which options were set, but never their values, and always `#!python complete=False`. The options are caller-supplied and the wrapper cannot know whether one is a credential. Write a `#!python MiddlewareFactory` with its own `#!python describe()` when you want a complete description.
+    `#!python Middleware(...)` reports the wrapped class and which options were set, but never their values, and always `#!python complete=False`. The options are caller-supplied and the wrapper cannot know whether one is a credential. Write a `#!python MiddlewareFactory` with its own `#!python describe()` when you want a complete description. Its `#!python .cls` and `#!python .options` expose the class and the option values directly, for when you are inspecting a factory you already hold rather than producing something to log.
 
 !!! note
     `#!python config` is for settings only. Counters, caches, and anything else that changes during a run belong in `#!python context.variables` or the per-turn `#!python BaseMiddleware` instance — a description that carries a moving number produces flaky snapshots.

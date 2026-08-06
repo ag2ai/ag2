@@ -8,6 +8,7 @@ from typing import Any, Protocol, runtime_checkable
 
 __all__ = (
     "DescribableMiddleware",
+    "DescribedMiddleware",
     "MiddlewareDescription",
 )
 
@@ -79,3 +80,29 @@ def _describe(middleware: Any) -> MiddlewareDescription:
             return described
 
     return MiddlewareDescription(kind=_kind_of(middleware), config={}, complete=False)
+
+
+@dataclass(frozen=True, slots=True)
+class DescribedMiddleware:
+    """A middleware paired with its description.
+
+    Yielded wherever AG2 exposes attached middleware, so every entry reports
+    itself whether or not that middleware opted in to :class:`DescribableMiddleware`.
+
+    ``middleware`` is the object itself, not a copy. Two entries holding the
+    same instance are the same object, which is how shared state is told apart
+    from independent copies: one rate limiter across ten tools and ten separate
+    ones configured identically produce equal descriptions, so identity is the
+    only thing that distinguishes them.
+
+    Entries are built on access, so ``agent.middleware[0] is agent.middleware[0]``
+    is ``False``. Compare :attr:`middleware` rather than the entry.
+    """
+
+    middleware: Any
+
+    @property
+    def description(self) -> MiddlewareDescription:
+        """What this middleware is and how it was configured."""
+
+        return _describe(self.middleware)

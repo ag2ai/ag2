@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from types import MappingProxyType
 from typing import Any, Protocol, TypeAlias
 
 from ag2.annotations import Context
@@ -35,6 +36,23 @@ class Middleware(MiddlewareFactory):
     ) -> None:
         self._cls = middleware_cls
         self._options = kwargs
+
+    @property
+    def cls(self) -> type["BaseMiddleware"]:
+        """The middleware class this factory instantiates per turn."""
+
+        return self._cls
+
+    @property
+    def options(self) -> Mapping[str, Any]:
+        """The options this factory was constructed with.
+
+        Unlike :meth:`describe`, this exposes the values. A description is meant
+        to be logged or committed as a fixture, so it reports option names only;
+        reading an option off a factory you already hold is a deliberate act.
+        """
+
+        return MappingProxyType(self._options)
 
     def describe(self) -> "MiddlewareDescription":
         """Report the wrapped class and option names, but not option values.
