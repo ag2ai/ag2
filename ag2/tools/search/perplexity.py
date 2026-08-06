@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Final, Literal, TypeAlias
 
@@ -32,6 +32,13 @@ SearchContextSize: TypeAlias = Literal["low", "medium", "high"]
 RecencyFilter: TypeAlias = Literal["hour", "day", "week", "month", "year"]
 
 _PPLX_INTEGRATION_HEADERS: Final[dict[str, str]] = {"X-Pplx-Integration": f"ag2/{__version__}"}
+
+
+def _field(obj: Any, name: str) -> Any:
+    """Read ``name`` off an SDK response node, which may be a model or a raw dict."""
+    if isinstance(obj, Mapping):
+        return obj.get(name)
+    return getattr(obj, name, None)
 
 
 @dataclass(slots=True)
@@ -169,10 +176,10 @@ class PerplexitySearchToolkit(Toolkit):
             raw_results: list[SearchAPIResult] = getattr(raw, "results", None) or []
             results = [
                 PerplexitySearchResult(
-                    title=r.title or "",
-                    url=r.url or "",
-                    snippet=r.snippet,
-                    date=r.date,
+                    title=_field(r, "title") or "",
+                    url=_field(r, "url") or "",
+                    snippet=_field(r, "snippet"),
+                    date=_field(r, "date"),
                 )
                 for r in raw_results
             ]
@@ -248,33 +255,33 @@ class PerplexitySearchToolkit(Toolkit):
             content: str | None = None
             choices = getattr(raw, "choices", None) or []
             if choices:
-                message = getattr(choices[0], "message", None)
-                content = getattr(message, "content", None) if message is not None else None
+                message = _field(choices[0], "message")
+                content = _field(message, "content") if message is not None else None
 
             search_results: list[APIPublicSearchResult] = getattr(raw, "search_results", None) or []
             results = [
                 PerplexitySearchResult(
-                    title=r.title or "",
-                    url=r.url or "",
-                    snippet=r.snippet,
-                    date=r.date,
+                    title=_field(r, "title") or "",
+                    url=_field(r, "url") or "",
+                    snippet=_field(r, "snippet"),
+                    date=_field(r, "date"),
                 )
                 for r in search_results
             ]
 
             citations = list(getattr(raw, "citations", None) or [])
 
-            raw_images: list[dict[str, Any]] = list(getattr(raw, "images", None) or [])
+            raw_images: list[Any] = list(getattr(raw, "images", None) or [])
             images = [
                 PerplexityImageMeta(
                     image_url=url,
-                    origin_url=img.get("origin_url"),
-                    title=img.get("title"),
-                    width=img.get("width"),
-                    height=img.get("height"),
+                    origin_url=_field(img, "origin_url"),
+                    title=_field(img, "title"),
+                    width=_field(img, "width"),
+                    height=_field(img, "height"),
                 )
                 for img in raw_images
-                if (url := img.get("image_url"))
+                if (url := _field(img, "image_url"))
             ]
 
             response = PerplexitySearchResponse(

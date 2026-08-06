@@ -65,11 +65,15 @@ Extensions are held to the same quality bar as Core; the difference is that the 
 - Include **documentation** that lets a new user understand and use it — at minimum a module-level docstring summarising the Extension, docstrings on public classes and functions, and a page under the **Extensions** section of the docs. Following standards as noted in [Code Documentation example](#code-documentation-example).
 - Include **tests** covering the Extension's behaviour.
 - Declare third-party packages as **additional dependencies**, not as `pip install ag2[...]` extras — Extensions are not shipped as pyproject extras. Guard the optional imports with a `try/except ImportError` block in the Extension's `__init__.py` and fall back via `missing_additional_dependency`, so the install hint points at the upstream package directly (for example `pip install "daytona>=0.171.0,<1"`). Use `missing_optional_dependency` (the `ag2[...]` extra form) only for Core modules.
+- Add those same packages to the **`optionals` dependency group** in `pyproject.toml`, so CI installs them and your tests actually run. This is a [PEP 735](https://peps.python.org/pep-0735/){.external-link target="_blank"} dependency group, *not* a published extra — it is never part of `pip install ag2`; it exists so the test workflow can collect and run the full non-LLM suite. Skipping this step is easy to miss: a test module guarded by `pytest.importorskip("<package>")` is silently skipped on every CI run, so the Extension ships with no test coverage and CI still passes.
 - Pass **code review by AG2** so we can confirm it is safe to ship alongside Core.
 - Have a **named maintainer** (you, your team, or a designated successor) who agrees to:
     - respond to issues and PRs,
     - keep the Extension working with current Core releases, and
     - **let us know if you can no longer maintain it**, so we can find a new maintainer or move it to the archive.
+
+!!! note "Keep an eye on the dependency footprint"
+    The `optionals` group is resolved as a single environment alongside every other optional dependency AG2 tests against. A package with heavy or loosely-bounded transitive dependencies can downgrade shared packages (`protobuf`, `httpx`, `pydantic`, provider SDKs) for *unrelated* tests, so prefer upper bounds and a slim dependency list. If your package pulls in large optional subsystems, consider moving them behind its own extras before adding it here.
 
 AG2 facilitates Extension PR reviews, but ongoing bug fixes and evolution are the maintainer's role.
 

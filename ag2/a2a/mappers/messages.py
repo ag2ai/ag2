@@ -70,6 +70,7 @@ def build_user_message(
     advertise_extension: bool = False,
     context_update: Mapping[str, Any] | None = None,
     extra_parts: Sequence[Part] = (),
+    extra_extensions: Sequence[str] = (),
     extra_metadata: Mapping[str, Any] | None = None,
 ) -> Message:
     """Build a ``Message`` from an AG2 client (``role=ROLE_USER``).
@@ -82,7 +83,9 @@ def build_user_message(
     ``context_update``, when provided, is attached to ``Message.metadata``
     so the server can sync into its ``context.variables``. ``extra_parts``
     are appended as-is, useful for extension data that doesn't have a
-    dedicated builder argument. ``extra_metadata`` is merged into
+    dedicated builder argument. ``extra_extensions`` lists additional
+    activated extension URIs to declare on ``Message.extensions``
+    alongside the AG2 one. ``extra_metadata`` is merged into
     ``Message.metadata`` alongside the AG2-namespaced keys; AG2 keys win
     on conflict.
     """
@@ -100,6 +103,7 @@ def build_user_message(
         message_id=message_id,
         advertise_extension=advertise_extension,
         context_update=context_update,
+        extra_extensions=extra_extensions,
         extra_metadata=extra_metadata,
     )
 
@@ -113,6 +117,7 @@ def build_tool_result_message(
     context_id: str | None = None,
     message_id: str | None = None,
     context_update: Mapping[str, Any] | None = None,
+    extra_extensions: Sequence[str] = (),
     extra_metadata: Mapping[str, Any] | None = None,
 ) -> Message:
     """Build a ``Message`` carrying tool results back to the server.
@@ -136,6 +141,7 @@ def build_tool_result_message(
         message_id=message_id,
         advertise_extension=True,
         context_update=context_update,
+        extra_extensions=extra_extensions,
         extra_metadata=extra_metadata,
     )
 
@@ -147,6 +153,7 @@ def build_input_response_message(
     context_id: str | None = None,
     message_id: str | None = None,
     context_update: Mapping[str, Any] | None = None,
+    extra_extensions: Sequence[str] = (),
     extra_metadata: Mapping[str, Any] | None = None,
 ) -> Message:
     """Build a continuation ``Message`` carrying a HITL response back.
@@ -154,7 +161,9 @@ def build_input_response_message(
     Sent after the server transitioned the task to
     ``TASK_STATE_INPUT_REQUIRED``: we wrap the user's reply as a single
     text Part and reuse the existing ``task_id`` so the server can
-    resume the same task.
+    resume the same task. ``extra_extensions`` keeps the connection's
+    activated extension URIs on the continuation — activation is
+    per-request, so dropping them mid-task would silently deactivate.
     """
     return _build_message(
         [Part(text=text)],
@@ -164,6 +173,7 @@ def build_input_response_message(
         message_id=message_id,
         advertise_extension=False,
         context_update=context_update,
+        extra_extensions=extra_extensions,
         extra_metadata=extra_metadata,
     )
 
@@ -218,6 +228,7 @@ def _build_message(
     message_id: str | None,
     advertise_extension: bool,
     context_update: Mapping[str, Any] | None,
+    extra_extensions: Sequence[str] = (),
     extra_metadata: Mapping[str, Any] | None = None,
 ) -> Message:
     kwargs: dict[str, Any] = {
@@ -229,8 +240,10 @@ def _build_message(
         kwargs["task_id"] = task_id
     if context_id:
         kwargs["context_id"] = context_id
-    if advertise_extension:
-        kwargs["extensions"] = [EXTENSION_URI]
+    base: list[str] = [EXTENSION_URI] if advertise_extension else []
+    uris: list[str] = list(dict.fromkeys([*base, *extra_extensions]))
+    if uris:
+        kwargs["extensions"] = uris
     # Caller-supplied keys first; AG2-namespaced keys override on conflict.
     metadata: dict[str, Any] = dict(extra_metadata) if extra_metadata else {}
     if context_update:
