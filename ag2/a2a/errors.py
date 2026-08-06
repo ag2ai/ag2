@@ -58,6 +58,39 @@ class A2AIncompatibleProtocolVersionError(A2AError):
         )
 
 
+class A2ACardSignatureError(A2AError):
+    """Raised when AgentCard JWS signature verification fails.
+
+    Covers missing signatures, tampered payloads, and unknown/wrong keys.
+    ``source`` says which card failed: ``"fetched agent card"``,
+    ``"preset agent card"``, or ``"extended agent card"``.
+    """
+
+    def __init__(self, *, url: str, source: str, reason: str) -> None:
+        self.url = url
+        self.source = source
+        super().__init__(f"AgentCard signature verification failed ({source}) for {url!r}: {reason}")
+
+
+class A2AStaleCardSignatureError(A2AError):
+    """Raised when serving a caller-signed card would invalidate its signature.
+
+    AG2 derives the ``extended_agent_card`` / ``push_notifications``
+    capability flags from how the server was configured; flipping one on an
+    already-signed card voids the JWS, and without a ``card_signer`` there is
+    no key to redo it.
+    """
+
+    def __init__(self, *, flipped: tuple[str, ...]) -> None:
+        self.flipped = flipped
+        flags = ", ".join(repr(f) for f in flipped)
+        super().__init__(
+            f"AgentCard carries signatures, but the server must set {flags} on it, "
+            f"which invalidates them. Either set the capability flags before signing "
+            f"the card, or pass card_signer= so AG2 signs the final card itself."
+        )
+
+
 class A2AReconnectError(A2AError):
     """Raised when reconnect attempts on a streaming Task are exhausted."""
 

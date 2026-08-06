@@ -164,6 +164,7 @@ See [Declaring Extensions](/docs/user-guide/a2a/server#declaring-extensions) for
 | `interceptors` | `#!python Sequence[ClientCallInterceptor]` | `#!python ()` | A2A SDK call interceptors |
 | `grpc_channel_factory` | `#!python Optional[Callable[[str], Channel]]` | `#!python None` | Custom gRPC channel builder (defaults to insecure) |
 | `preset_card` | `#!python Optional[AgentCard]` | `#!python None` | Skip the discovery round-trip when the card is already known |
+| `card_signature_verifier` | `#!python Optional[Callable[[AgentCard], None]]` | `#!python None` | Verify the JWS signature on every card consumed — fetched, preset and extended (see [Card Signing](/docs/user-guide/a2a/card_signing)) |
 | `tenant` | `#!python Optional[str]` | `#!python None` | Multi-tenancy scope on a shared backend |
 | `history_length` | `#!python Optional[int]` | `#!python None` | Server-side hint to truncate echoed `#!python Task.history` |
 | `extensions` | `#!python Sequence[str]` | `#!python ()` | A2A extension URIs to activate on the connection (see [Extensions](/docs/user-guide/a2a/client#extensions)) |

@@ -49,6 +49,7 @@ After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.we
 | `#!python push_sender` | Custom delivery sender. Defaults to no-op when not set |
 | `#!python extended_card` | Auth-aware extra metadata returned via `#!python GetExtendedAgentCard` |
 | `#!python card_modifier` / `#!python extended_card_modifier` | Per-request hooks that mutate the card before it's served |
+| `#!python card_signer` | Attaches a JWS signature to every card served, on all transports (see [Card Signing](/docs/user-guide/a2a/card_signing)). Optional |
 | `#!python executor` | Escape hatch — drop in a custom `#!python AgentExecutor` (see [Advanced](/docs/user-guide/a2a/advanced#custom-agentexecutor)) |
 
 !!! note

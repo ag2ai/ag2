@@ -15,7 +15,14 @@ from a2a.server.tasks import (
 )
 from a2a.types import AgentCard, a2a_pb2_grpc
 
-from ._common import ExtendedCardModifier, build_default_handler, clone_card_with_capabilities
+from ._common import (
+    CardSigner,
+    ExtendedCardModifier,
+    build_default_handler,
+    prepare_public_card,
+    sign_card,
+    wrap_extended_card_modifier,
+)
 
 # ``grpc`` and the generated ``a2a_pb2_grpc`` ship no type information, so
 # every ``grpc.aio.*`` annotation below degrades to ``Any`` and the generated
@@ -39,17 +46,22 @@ def build_grpc_server(  # type: ignore[no-any-unimported]
     bind: str,
     extended_agent_card: AgentCard | None = None,
     extended_card_modifier: ExtendedCardModifier | None = None,
+    card_signer: CardSigner | None = None,
     task_store: TaskStore | None = None,
     push_config_store: PushNotificationConfigStore | None = None,
     push_sender: PushNotificationSender | None = None,
     options: Sequence[tuple[str, Any]] = (),
 ) -> grpc.aio.Server:
     """``grpc.aio.Server`` exposing A2A service; caller starts/awaits it."""
-    agent_card = clone_card_with_capabilities(
+    agent_card = prepare_public_card(
         agent_card,
         extended=extended_agent_card is not None,
         push=push_config_store is not None,
+        signer=card_signer,
     )
+    if extended_agent_card is not None:
+        extended_agent_card = sign_card(extended_agent_card, card_signer)
+    extended_card_modifier = wrap_extended_card_modifier(extended_card_modifier, card_signer)
     handler = build_default_handler(
         agent_executor=agent_executor,
         agent_card=agent_card,
