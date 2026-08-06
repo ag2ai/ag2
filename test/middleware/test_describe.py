@@ -22,8 +22,16 @@ from ag2.middleware import (
     approval_required,
 )
 
-# Internal: describes middleware that did not opt in. Not public API.
-from ag2.middleware.describe import _describe
+
+def described(middleware: object) -> MiddlewareDescription:
+    """Describe ``middleware`` through a public surface.
+
+    ``ConditionalMiddleware`` reports whatever it wraps, so this exercises how
+    the library describes middleware that has not opted in, without the test
+    reaching for internals of its own.
+    """
+
+    return ConditionalMiddleware(middleware, ToolCallEvent).describe().inner[0]  # type: ignore[arg-type]
 
 
 async def undescribed_guard(
@@ -70,9 +78,9 @@ class TestBuiltinsDescribeThemselves:
         )
 
     def test_retry_middleware_names_exception_types(self) -> None:
-        described = RetryMiddleware(max_retries=2, retry_on=(ValueError,)).describe()
+        description = RetryMiddleware(max_retries=2, retry_on=(ValueError,)).describe()
 
-        assert described == MiddlewareDescription(
+        assert description == MiddlewareDescription(
             kind="RetryMiddleware",
             config={"max_retries": 2, "retry_on": ("ValueError",)},
         )
@@ -81,17 +89,17 @@ class TestBuiltinsDescribeThemselves:
         assert LoggingMiddleware().describe().config == {"logger": "ag2"}
 
     def test_approval_required(self) -> None:
-        described = approval_required(timeout=5, allow_always=False).describe()
+        description = approval_required(timeout=5, allow_always=False).describe()
 
-        assert described.kind == "ApprovalRequired"
-        assert described.complete is True
-        assert described.config["timeout"] == 5
-        assert described.config["allow_always"] is False
+        assert description.kind == "ApprovalRequired"
+        assert description.complete is True
+        assert description.config["timeout"] == 5
+        assert description.config["allow_always"] is False
 
 
 class TestUndescribedMiddleware:
     def test_reports_incomplete_rather_than_guessing(self) -> None:
-        assert _describe(undescribed_guard) == MiddlewareDescription(
+        assert described(undescribed_guard) == MiddlewareDescription(
             kind="undescribed_guard",
             config={},
             complete=False,
@@ -104,13 +112,13 @@ class TestUndescribedMiddleware:
 
             return guard
 
-        described = _describe(make_guard(limit=7))
+        description = described(make_guard(limit=7))
 
-        assert described.config == {}
-        assert described.complete is False
+        assert description.config == {}
+        assert description.complete is False
 
     def test_class_based_middleware_without_describe(self) -> None:
-        assert _describe(UndescribedGuard(limit=3)) == MiddlewareDescription(
+        assert described(UndescribedGuard(limit=3)) == MiddlewareDescription(
             kind="UndescribedGuard",
             config={},
             complete=False,
@@ -127,18 +135,18 @@ class TestWrappers:
 
     def test_middleware_wrapper_never_reports_option_values(self) -> None:
         # The wrapper cannot know whether a caller-supplied option is a secret.
-        described = Middleware(LoggingMiddleware, api_key="sk-SECRET-123").describe()
+        description = Middleware(LoggingMiddleware, api_key="sk-SECRET-123").describe()
 
-        assert "sk-SECRET-123" not in repr(described)
-        assert described.config == {"options": ("api_key",)}
-        assert described.complete is False
+        assert "sk-SECRET-123" not in repr(description)
+        assert description.config == {"options": ("api_key",)}
+        assert description.complete is False
 
     def test_conditional_middleware_reports_inner_separately_from_config(self) -> None:
-        described = ConditionalMiddleware(TokenLimiter(max_tokens=10), ToolCallEvent).describe()
+        description = ConditionalMiddleware(TokenLimiter(max_tokens=10), ToolCallEvent).describe()
 
-        assert described.kind == "ConditionalMiddleware"
-        assert described.config == {"condition": "TypeCondition"}
-        assert described.inner == (
+        assert description.kind == "ConditionalMiddleware"
+        assert description.config == {"condition": "TypeCondition"}
+        assert description.inner == (
             MiddlewareDescription(kind="TokenLimiter", config={"max_tokens": 10, "chars_per_token": 4}),
         )
 
@@ -148,14 +156,14 @@ class TestWrappers:
 
 class TestBrokenDescribe:
     def test_raising_describe_does_not_take_down_the_caller(self) -> None:
-        assert _describe(RaisingGuard()) == MiddlewareDescription(
+        assert described(RaisingGuard()) == MiddlewareDescription(
             kind="RaisingGuard",
             config={},
             complete=False,
         )
 
     def test_describe_returning_the_wrong_type_degrades_to_incomplete(self) -> None:
-        assert _describe(WrongTypeGuard()) == MiddlewareDescription(
+        assert described(WrongTypeGuard()) == MiddlewareDescription(
             kind="WrongTypeGuard",
             config={},
             complete=False,
