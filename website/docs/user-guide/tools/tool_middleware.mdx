@@ -90,6 +90,47 @@ audited_delete = delete_record.with_middleware(audit)
 # delete_record is unchanged; audited_delete runs audit → delete_record
 ```
 
+## Sharing one hook across tools
+
+A hook may be a plain function or any async callable, including an instance of a class that keeps state on `self`. Attaching **one instance** to several tools gives those tools a **combined** allowance — a budget of three across ten tools permits three calls in total, not thirty:
+
+```python linenums="1" hl_lines="27 31"
+from ag2 import Agent, Context, tool
+from ag2.config import OpenAIConfig
+from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.middleware import ToolExecution
+
+class CallBudget:
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.used = 0
+
+    async def __call__(
+        self, call_next: ToolExecution, event: ToolCallEvent, context: Context,
+    ) -> ToolResultEvent:
+        if self.used >= self.limit:
+            raise RuntimeError("budget exhausted")
+        self.used += 1
+        return await call_next(event, context)
+
+def search(query: str) -> str:
+    """Searches the web."""
+    return f"results-for-{query}"
+
+def fetch(url: str) -> str:
+    """Fetches a URL."""
+    return f"body-of-{url}"
+
+budget = CallBudget(limit=3)
+agent = Agent(
+    "assistant",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[tool(search, middleware=[budget]), tool(fetch, middleware=[budget])],
+)
+```
+
+`search` and `fetch` draw on the same three calls. The instance stays shared however the tool is later copied — passed to an `Agent`, added to a `Toolkit`, or wrapped with `with_middleware()` — so `budget.used` on the object you created reflects every call.
+
 ## Toolkit-level middleware
 
 Pass `middleware=[...]` to a [`Toolkit`](/docs/user-guide/tools/toolkits) constructor to apply hooks to **all** tools in the set. Toolkit middleware is the outermost layer — it runs before any per-tool hooks. See [Toolkit middleware](/docs/user-guide/tools/toolkits#toolkit-middleware).
