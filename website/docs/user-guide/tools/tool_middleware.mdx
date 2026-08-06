@@ -67,7 +67,7 @@ agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
 
 ## Making a hook describable
 
-A plain function like `#!python add_request_id` above works, but cannot report its configuration: [`describe_middleware()`](/docs/user-guide/middleware#describing-middleware) returns `#!python complete=False` for it, because its settings live in closure cells that AG2 does not inspect.
+A plain function like `#!python add_request_id` above works, but cannot report its configuration: it has no [`describe()`](/docs/user-guide/middleware#describing-middleware), so AG2 reports it as `#!python complete=False` rather than guessing, because its settings live in closure cells that AG2 does not inspect.
 
 For a describable hook, write a class with `#!python async def __call__` and a `#!python describe()` method. It is still a plain callable, so how you pass it does not change:
 

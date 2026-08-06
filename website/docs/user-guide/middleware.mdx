@@ -456,19 +456,19 @@ conditional = ConditionalMiddleware(
 
 ## Describing Middleware
 
-`#!python describe_middleware()` reports what a middleware is and how it was configured, so you can log it, compare two instances, or assert on an agent's composition in a test.
+A middleware can report what it is and how it was configured, so it can be logged, compared against another instance, or asserted on in a test. Every built-in does:
 
 ```python linenums="1" hl_lines="3 6"
-from ag2.middleware import TokenLimiter, describe_middleware
+from ag2.middleware import TokenLimiter
 
-describe_middleware(TokenLimiter(max_tokens=100))
+TokenLimiter(max_tokens=100).describe()
 # MiddlewareDescription(kind='TokenLimiter', config={'max_tokens': 100, 'chars_per_token': 4}, complete=True)
 
-describe_middleware(TokenLimiter(max_tokens=100)) == describe_middleware(TokenLimiter(max_tokens=100))
+TokenLimiter(max_tokens=100).describe() == TokenLimiter(max_tokens=100).describe()
 # True
 ```
 
-Every built-in describes itself. Your own middleware opts in by implementing `#!python describe()`:
+Your own middleware opts in the same way, by implementing `#!python describe()`:
 
 ```python linenums="1" hl_lines="9-13"
 from ag2.middleware import MiddlewareDescription
@@ -487,7 +487,7 @@ class RateLimit:
         )
 ```
 
-Middleware that has not opted in is reported honestly rather than guessed at — `#!python config` is empty and `#!python complete` is `#!python False`. AG2 never inspects `#!python __closure__` to recover configuration, because cell names and ordering are an implementation detail of whatever function produced the closure. `#!python describe_middleware()` never raises: a `#!python describe()` that fails or returns the wrong type degrades to the same honest unknown, so introspection cannot break the code doing the logging.
+Opting in is optional. Where AG2 surfaces middleware, anything that has not opted in is reported honestly rather than guessed at — `#!python config` is empty and `#!python complete` is `#!python False`. AG2 never inspects `#!python __closure__` to recover configuration, because cell names and ordering are an implementation detail of whatever function produced the closure. A `#!python describe()` that fails or returns the wrong type degrades to that same honest unknown, so introspection cannot break the code doing the logging.
 
 Middleware that wraps other middleware reports them in `#!python inner`, keeping `#!python config` a flat settings mapping:
 
@@ -495,7 +495,7 @@ Middleware that wraps other middleware reports them in `#!python inner`, keeping
 from ag2.middleware import ConditionalMiddleware, TokenLimiter
 from ag2.events import ToolCallEvent
 
-describe_middleware(ConditionalMiddleware(TokenLimiter(max_tokens=10), ToolCallEvent))
+ConditionalMiddleware(TokenLimiter(max_tokens=10), ToolCallEvent).describe()
 # MiddlewareDescription(
 #     kind='ConditionalMiddleware', config={'condition': 'TypeCondition'}, complete=True,
 #     inner=(MiddlewareDescription(kind='TokenLimiter', config={'max_tokens': 10, ...}),),

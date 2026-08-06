@@ -9,7 +9,6 @@ from typing import Any, Protocol, runtime_checkable
 __all__ = (
     "DescribableMiddleware",
     "MiddlewareDescription",
-    "describe_middleware",
 )
 
 
@@ -57,8 +56,13 @@ def _kind_of(middleware: Any) -> str:
     return type(middleware).__qualname__
 
 
-def describe_middleware(middleware: Any) -> MiddlewareDescription:
+def _describe(middleware: Any) -> MiddlewareDescription:
     """Describe ``middleware``, whether or not it implements ``describe()``.
+
+    Internal. Middleware that opts in is asked directly; this exists so the
+    library can describe anything uniformly, including middleware that did not
+    opt in. It is not public API: callers reach descriptions through the
+    surfaces that expose middleware.
 
     Never raises. Middleware without ``describe()``, or whose ``describe()``
     raises or returns a non-``MiddlewareDescription``, yields ``complete=False``

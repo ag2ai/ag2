@@ -58,9 +58,9 @@ Typing **y** lets the tool run. Any other input denies it — the agent receives
 `#!python approval_required()` returns an `#!python ApprovalRequired` instance, also exported from `ag2.middleware`. It reports its settings, so you can log or assert on how a tool was gated:
 
 ```python linenums="1"
-from ag2.middleware import approval_required, describe_middleware
+from ag2.middleware import approval_required
 
-describe_middleware(approval_required(timeout=5, allow_always=False)).config
+approval_required(timeout=5, allow_always=False).describe().config
 # {'message': '...', 'denied_message': 'User denied...', 'timeout': 5, 'allow_always': False}
 ```
 

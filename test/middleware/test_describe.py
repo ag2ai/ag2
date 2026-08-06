@@ -4,6 +4,7 @@
 
 import pytest
 
+import ag2.middleware as middleware_pkg
 from ag2 import Context
 from ag2.events import ToolCallEvent
 from ag2.middleware import (
@@ -19,8 +20,10 @@ from ag2.middleware import (
     ToolExecution,
     ToolResultType,
     approval_required,
-    describe_middleware,
 )
+
+# Internal: describes middleware that did not opt in. Not public API.
+from ag2.middleware.describe import _describe
 
 
 async def undescribed_guard(
@@ -55,19 +58,19 @@ class WrongTypeGuard:
 
 class TestBuiltinsDescribeThemselves:
     def test_token_limiter(self) -> None:
-        assert describe_middleware(TokenLimiter(max_tokens=100)) == MiddlewareDescription(
+        assert TokenLimiter(max_tokens=100).describe() == MiddlewareDescription(
             kind="TokenLimiter",
             config={"max_tokens": 100, "chars_per_token": 4},
         )
 
     def test_history_limiter(self) -> None:
-        assert describe_middleware(HistoryLimiter(max_events=5)) == MiddlewareDescription(
+        assert HistoryLimiter(max_events=5).describe() == MiddlewareDescription(
             kind="HistoryLimiter",
             config={"max_events": 5},
         )
 
     def test_retry_middleware_names_exception_types(self) -> None:
-        described = describe_middleware(RetryMiddleware(max_retries=2, retry_on=(ValueError,)))
+        described = RetryMiddleware(max_retries=2, retry_on=(ValueError,)).describe()
 
         assert described == MiddlewareDescription(
             kind="RetryMiddleware",
@@ -75,12 +78,10 @@ class TestBuiltinsDescribeThemselves:
         )
 
     def test_logging_middleware_reports_logger_name_not_object(self) -> None:
-        described = describe_middleware(LoggingMiddleware())
-
-        assert described.config == {"logger": "ag2"}
+        assert LoggingMiddleware().describe().config == {"logger": "ag2"}
 
     def test_approval_required(self) -> None:
-        described = describe_middleware(approval_required(timeout=5, allow_always=False))
+        described = approval_required(timeout=5, allow_always=False).describe()
 
         assert described.kind == "ApprovalRequired"
         assert described.complete is True
@@ -90,7 +91,7 @@ class TestBuiltinsDescribeThemselves:
 
 class TestUndescribedMiddleware:
     def test_reports_incomplete_rather_than_guessing(self) -> None:
-        assert describe_middleware(undescribed_guard) == MiddlewareDescription(
+        assert _describe(undescribed_guard) == MiddlewareDescription(
             kind="undescribed_guard",
             config={},
             complete=False,
@@ -103,13 +104,13 @@ class TestUndescribedMiddleware:
 
             return guard
 
-        described = describe_middleware(make_guard(limit=7))
+        described = _describe(make_guard(limit=7))
 
         assert described.config == {}
         assert described.complete is False
 
     def test_class_based_middleware_without_describe(self) -> None:
-        assert describe_middleware(UndescribedGuard(limit=3)) == MiddlewareDescription(
+        assert _describe(UndescribedGuard(limit=3)) == MiddlewareDescription(
             kind="UndescribedGuard",
             config={},
             complete=False,
@@ -118,7 +119,7 @@ class TestUndescribedMiddleware:
 
 class TestWrappers:
     def test_middleware_wrapper_reports_wrapped_class_and_option_names(self) -> None:
-        assert describe_middleware(Middleware(LoggingMiddleware, level=10)) == MiddlewareDescription(
+        assert Middleware(LoggingMiddleware, level=10).describe() == MiddlewareDescription(
             kind="LoggingMiddleware",
             config={"options": ("level",)},
             complete=False,
@@ -126,14 +127,14 @@ class TestWrappers:
 
     def test_middleware_wrapper_never_reports_option_values(self) -> None:
         # The wrapper cannot know whether a caller-supplied option is a secret.
-        described = describe_middleware(Middleware(LoggingMiddleware, api_key="sk-SECRET-123"))
+        described = Middleware(LoggingMiddleware, api_key="sk-SECRET-123").describe()
 
         assert "sk-SECRET-123" not in repr(described)
         assert described.config == {"options": ("api_key",)}
         assert described.complete is False
 
     def test_conditional_middleware_reports_inner_separately_from_config(self) -> None:
-        described = describe_middleware(ConditionalMiddleware(TokenLimiter(max_tokens=10), ToolCallEvent))
+        described = ConditionalMiddleware(TokenLimiter(max_tokens=10), ToolCallEvent).describe()
 
         assert described.kind == "ConditionalMiddleware"
         assert described.config == {"condition": "TypeCondition"}
@@ -142,21 +143,19 @@ class TestWrappers:
         )
 
     def test_conditional_middleware_propagates_incompleteness(self) -> None:
-        described = describe_middleware(ConditionalMiddleware(undescribed_guard, ToolCallEvent))
-
-        assert described.complete is False
+        assert ConditionalMiddleware(undescribed_guard, ToolCallEvent).describe().complete is False
 
 
 class TestBrokenDescribe:
     def test_raising_describe_does_not_take_down_the_caller(self) -> None:
-        assert describe_middleware(RaisingGuard()) == MiddlewareDescription(
+        assert _describe(RaisingGuard()) == MiddlewareDescription(
             kind="RaisingGuard",
             config={},
             complete=False,
         )
 
     def test_describe_returning_the_wrong_type_degrades_to_incomplete(self) -> None:
-        assert describe_middleware(WrongTypeGuard()) == MiddlewareDescription(
+        assert _describe(WrongTypeGuard()) == MiddlewareDescription(
             kind="WrongTypeGuard",
             config={},
             complete=False,
@@ -197,7 +196,7 @@ class TestHashing:
     def test_description_is_deliberately_unhashable(self) -> None:
         # config holds arbitrary values, so equality is supported but hashing is not.
         with pytest.raises(TypeError, match="unhashable type: 'MiddlewareDescription'"):
-            hash(describe_middleware(TokenLimiter(max_tokens=100)))
+            hash(TokenLimiter(max_tokens=100).describe())
 
 
 class TestProtocol:
@@ -210,10 +209,10 @@ class TestProtocol:
 
 class TestComparison:
     def test_identical_configuration_compares_equal(self) -> None:
-        assert describe_middleware(TokenLimiter(max_tokens=50)) == describe_middleware(TokenLimiter(max_tokens=50))
+        assert TokenLimiter(max_tokens=50).describe() == TokenLimiter(max_tokens=50).describe()
 
     def test_differing_configuration_compares_unequal(self) -> None:
-        assert describe_middleware(TokenLimiter(max_tokens=50)) != describe_middleware(TokenLimiter(max_tokens=99))
+        assert TokenLimiter(max_tokens=50).describe() != TokenLimiter(max_tokens=99).describe()
 
 
 class TestApprovalRequiredRemainsUsable:
@@ -223,3 +222,14 @@ class TestApprovalRequiredRemainsUsable:
     def test_is_still_callable_as_tool_middleware(self) -> None:
         # ToolMiddleware is a Callable alias, so an instance must satisfy it.
         assert callable(approval_required())
+
+
+class TestPublicSurface:
+    def test_no_free_describe_function_is_exported(self) -> None:
+        # Middleware reports itself; there is no public module-level describe().
+        assert not hasattr(middleware_pkg, "describe_middleware")
+        assert "describe_middleware" not in middleware_pkg.__all__
+
+    def test_description_types_are_exported(self) -> None:
+        assert "MiddlewareDescription" in middleware_pkg.__all__
+        assert "DescribableMiddleware" in middleware_pkg.__all__

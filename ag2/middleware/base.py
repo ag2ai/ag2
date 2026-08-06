@@ -18,7 +18,7 @@ from ag2.events import (
     ToolResultEvent,
 )
 from ag2.events.conditions import TypeCondition
-from ag2.middleware.describe import MiddlewareDescription, describe_middleware
+from ag2.middleware.describe import MiddlewareDescription, _describe
 
 
 class MiddlewareFactory(Protocol):
@@ -177,7 +177,7 @@ class ConditionalMiddleware:
         return MiddlewareDescription(
             kind=type(self).__qualname__,
             config={"condition": type(self._condition).__qualname__},
-            inner=(describe_middleware(self._middleware),),
+            inner=(_describe(self._middleware),),
         )
 
     def __call__(
