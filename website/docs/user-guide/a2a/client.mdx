@@ -110,6 +110,43 @@ This composes naturally with several remotes — give each `#!python as_tool()` 
 !!! note
     Each `#!python task_<name>` call spawns a fresh sub-agent stream; history between calls is not preserved on the sub-task side. For a remote that remembers prior turns, prefer the `#!python reply.ask(...)` pattern above instead of `#!python as_tool()`.
 
+## Extensions
+
+A2A extensions are activated **per connection** by URI. List them on `#!python A2AConfig.extensions`; every URI must be advertised in the server card's `#!python capabilities.extensions`.
+
+```python linenums="1" hl_lines="6"
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+
+remote = Agent(
+    "remote",
+    config=A2AConfig(card_url="http://127.0.0.1:8000", extensions=["urn:acme:billing:v1"]),
+)
+reply = await remote.ask("invoice summary for Q3")
+```
+
+Activated URIs travel on both channels the spec allows — the `#!python Message.extensions` field and the `#!python A2A-Extensions` header (gRPC metadata on the gRPC binding) — and stay attached across continuation legs, so a tool-result or HITL round-trip does not silently deactivate them mid-task.
+
+The card and the activation list are reconciled before the first request goes out, so a mismatch surfaces as `#!python A2AExtensionNotSupportedError` at connect time instead of an opaque failure mid-task. It is raised in both directions:
+
+- a URI the card does not advertise — a client-side mistake;
+- an extension the card marks `#!python required=True` that the client did not activate — the server expects behaviour AG2 will not provide.
+
+`#!python urn:ag2:client-tools:v1` is the exception to the second rule: AG2 implements it natively, so a card may require it without the client listing it explicitly.
+
+Activation covers every request the config makes, not just `#!python ask`. The one-shot [task](/docs/user-guide/a2a/tasks) and push-notification helpers open their own connection from the same `#!python A2AConfig`, so they activate the same URIs and run the same reconciliation — a server enforcing a `#!python required=True` extension sees a consistent client on the conversational and the administrative path alike.
+
+```python linenums="1" hl_lines="5-6"
+from ag2.a2a.errors import A2AExtensionNotSupportedError
+
+try:
+    await remote.ask("invoice summary for Q3")
+except A2AExtensionNotSupportedError as err:
+    print(err.uris)  # the URIs that could not be reconciled
+```
+
+See [Declaring Extensions](/docs/user-guide/a2a/server#declaring-extensions) for the server side.
+
 ## A2AConfig Reference
 
 | Field | Type | Default | Purpose |
@@ -127,8 +164,10 @@ This composes naturally with several remotes — give each `#!python as_tool()` 
 | `interceptors` | `#!python Sequence[ClientCallInterceptor]` | `#!python ()` | A2A SDK call interceptors |
 | `grpc_channel_factory` | `#!python Optional[Callable[[str], Channel]]` | `#!python None` | Custom gRPC channel builder (defaults to insecure) |
 | `preset_card` | `#!python Optional[AgentCard]` | `#!python None` | Skip the discovery round-trip when the card is already known |
+| `card_signature_verifier` | `#!python Optional[Callable[[AgentCard], None]]` | `#!python None` | Verify the JWS signature on every card consumed — fetched, preset and extended (see [Card Signing](/docs/user-guide/a2a/card_signing)) |
 | `tenant` | `#!python Optional[str]` | `#!python None` | Multi-tenancy scope on a shared backend |
 | `history_length` | `#!python Optional[int]` | `#!python None` | Server-side hint to truncate echoed `#!python Task.history` |
+| `extensions` | `#!python Sequence[str]` | `#!python ()` | A2A extension URIs to activate on the connection (see [Extensions](/docs/user-guide/a2a/client#extensions)) |
 
 ### Constructing From a Pre-fetched Card
 

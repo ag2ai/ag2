@@ -11,10 +11,12 @@ tracked by a high-water mark over the run's ``ModelRequest`` events.
 import logging
 from asyncio.subprocess import Process
 from collections.abc import Mapping, Sequence
-from contextlib import AbstractAsyncContextManager
+from contextlib import AbstractAsyncContextManager, suppress
+from difflib import get_close_matches
 from typing import TYPE_CHECKING
 
 import acp
+from acp import schema
 
 from ag2.events import BaseEvent, ModelRequest, TextInput
 
@@ -41,6 +43,62 @@ def new_prompt_text(messages: Sequence[BaseEvent], sent_count: int) -> tuple[str
     return "\n".join(parts), len(requests)
 
 
+def _model_option(session: schema.NewSessionResponse) -> schema.SessionConfigOptionSelect | None:
+    """The agent's model picker, if it advertised one in ``session/new``."""
+    for option in session.config_options or []:
+        if isinstance(option, schema.SessionConfigOptionSelect) and option.id == "model":
+            return option
+    return None
+
+
+def current_model(session: schema.NewSessionResponse) -> str | None:
+    """The model the agent reports it is running, if it advertised a picker."""
+    option = _model_option(session)
+    return option.current_value if option is not None else None
+
+
+def _model_values(option: schema.SessionConfigOptionSelect) -> list[str]:
+    """The option's selectable values (entries are plain options or groups)."""
+    values: list[str] = []
+    for entry in option.options:
+        if isinstance(entry, schema.SessionConfigSelectGroup):
+            values.extend(choice.value for choice in entry.options)
+        else:
+            values.append(entry.value)
+    return values
+
+
+async def select_model(
+    conn: "acp.core.ClientSideConnection",
+    session: schema.NewSessionResponse,
+    model: str,
+) -> None:
+    """Apply ``model`` via ``session/set_config_option``.
+
+    No-op when the agent advertises no model picker (``model`` then stays
+    response metadata, as before) or when it already runs the requested model.
+    A value the agent does not offer raises ``ValueError`` up front rather
+    than failing on the wire.
+    """
+    option = _model_option(session)
+    if option is None:
+        # Not an error: `model` legitimately degrades to response metadata on an
+        # agent without a picker. Logged because the *same* typo hard-errors on
+        # an agent that has one, and silence here is the confusing half of that.
+        logger.debug("ACP agent advertises no model picker; model=%r not applied to the session", model)
+        return
+    if option.current_value == model:
+        return
+    values = _model_values(option)
+    if model not in values:
+        # Agents can offer hundreds of ids (Kilo advertises 320), so list close
+        # matches rather than the whole set.
+        close = get_close_matches(model, values, n=3)
+        hint = f"; closest offered: {close}" if close else ""
+        raise ValueError(f"model {model!r} is not offered by the ACP agent ({len(values)} offered){hint}")
+    await conn.set_config_option(session_id=session.session_id, config_id=option.id, value=model)
+
+
 class ACPSession:
     """Live ACP connection + session id for one agent run.
 
@@ -53,6 +111,10 @@ class ACPSession:
         self.proc: Process | None = None
         self.bridge: ACPBridge | None = None  # the bridge bound to this connection
         self.session_id: str | None = None
+        # What the agent reports it is actually running: the selected model, or
+        # the picker's current_value when nothing was selected. None when the
+        # agent advertises no picker (nothing to report beyond config.model).
+        self.model: str | None = None
         self.sent_count: int = 0
         self.gateway: ToolGateway | None = None
         self.external_servers: list[acp.schema.HttpMcpServer] = []
@@ -73,6 +135,7 @@ class ACPSession:
         protocol_version: int,
         client_capabilities: acp.schema.ClientCapabilities | None = None,
         additional_directories: list[str] | None = None,
+        model: str | None = None,
         mcp_servers: "Sequence[acp.schema.HttpMcpServer] | None" = None,
         connect: "ConnectHook | None" = None,
     ) -> None:
@@ -116,21 +179,32 @@ class ACPSession:
                 additional_directories=additional_directories or None,
                 mcp_servers=list(mcp_servers) if mcp_servers else None,
             )
+            if model is not None:
+                await select_model(self.conn, session, model)
+            self.model = model or current_model(session)
         except BaseException:
-            # initialize/new_session failed after the subprocess was spawned;
-            # tear it down so a retry doesn't orphan this process.
+            # initialize/new_session/select_model failed after the subprocess
+            # was spawned; tear it down so a retry doesn't orphan this process.
             await self.close()
             raise
         self.session_id = session.session_id
 
     async def close(self) -> None:
-        """Terminate the subprocess, shut down the tool gateway, reset the handle."""
+        """Terminate the subprocess, shut down the tool gateway, reset the handle.
+
+        Ordinary teardown failures are absorbed so they cannot mask the error
+        that triggered the close (``ensure`` calls this from an ``except``
+        block). Cancellation still propagates: ``CancelledError`` is a
+        ``BaseException``, so it escapes the ``except Exception`` below, and
+        ``gateway.close()`` re-raises it deliberately.
+        """
         gateway, self.gateway = self.gateway, None
         cm, self._cm = self._cm, None
+        proc, self.proc = self.proc, None
         self.conn = None
-        self.proc = None
         self.bridge = None
         self.session_id = None
+        self.model = None
         self.sent_count = 0
         self.external_servers = []
         try:
@@ -140,10 +214,18 @@ class ACPSession:
                 try:
                     await cm.__aexit__(None, None, None)
                 except Exception:
-                    # gateway.close() in the finally may re-raise (cancellation)
-                    # and mask this — keep a record of the actual failure.
-                    logger.exception("terminating the ACP agent subprocess failed")
-                    raise
+                    # Teardown noise — typically the connection's receive loop tripping
+                    # over a notification that was in flight when the queue closed
+                    # ("mssage queue already closed", sic, from `acp`). Routine enough
+                    # to swallow: it fires on essentially every Kilo session teardown,
+                    # and re-raising here would mask the error that caused the close.
+                    # Still logged, or a genuinely wedged subprocess leaves no trace.
+                    # The transport's own cleanup (wait → terminate → kill) has already
+                    # run by the time it propagates here; the terminate is a backstop.
+                    logger.debug("terminating the ACP agent subprocess failed", exc_info=True)
+                    if proc is not None and proc.returncode is None:
+                        with suppress(ProcessLookupError):
+                            proc.terminate()
         finally:
             if gateway is not None:
                 await gateway.close()

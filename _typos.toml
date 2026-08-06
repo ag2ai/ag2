@@ -35,3 +35,6 @@ EHR = "EHR"
 
 # Hyphenated word break in parsed academic text (segmen-tation)
 segmen = "segmen"
+
+# JWS protected-header parameter (RFC 7515 §4.1.9) — not a misspelt "typo"
+typ = "typ"

@@ -6,3 +6,4 @@ import pytest
 
 pytest.importorskip("a2a")
 pytest.importorskip("grpc")
+pytest.importorskip("httpx")
