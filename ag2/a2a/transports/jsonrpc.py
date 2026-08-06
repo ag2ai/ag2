@@ -17,10 +17,14 @@ from ._common import (
     DEFAULT_AGENT_CARD_PATH,
     LEGACY_AGENT_CARD_PATH,
     CardModifier,
+    CardSigner,
     ExtendedCardModifier,
     build_card_routes_with_legacy,
     build_default_handler,
-    clone_card_with_capabilities,
+    prepare_public_card,
+    sign_card,
+    wrap_card_modifier,
+    wrap_extended_card_modifier,
 )
 
 
@@ -31,6 +35,7 @@ def build_jsonrpc_asgi(
     extended_agent_card: AgentCard | None = None,
     card_modifier: CardModifier | None = None,
     extended_card_modifier: ExtendedCardModifier | None = None,
+    card_signer: CardSigner | None = None,
     task_store: TaskStore | None = None,
     push_config_store: PushNotificationConfigStore | None = None,
     push_sender: PushNotificationSender | None = None,
@@ -39,11 +44,16 @@ def build_jsonrpc_asgi(
     legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
 ) -> Starlette:
     """Starlette ASGI app exposing JSON-RPC dispatch + agent-card discovery."""
-    agent_card = clone_card_with_capabilities(
+    agent_card = prepare_public_card(
         agent_card,
         extended=extended_agent_card is not None,
         push=push_config_store is not None,
+        signer=card_signer,
     )
+    if extended_agent_card is not None:
+        extended_agent_card = sign_card(extended_agent_card, card_signer)
+    card_modifier = wrap_card_modifier(card_modifier, card_signer)
+    extended_card_modifier = wrap_extended_card_modifier(extended_card_modifier, card_signer)
     handler = build_default_handler(
         agent_executor=agent_executor,
         agent_card=agent_card,

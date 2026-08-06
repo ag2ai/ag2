@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 from typing import Any
 
 import pytest
@@ -27,6 +28,52 @@ def _text(text: str) -> schema.TextContentBlock:
 
 def _text_update(text: str) -> schema.AgentMessageChunk:
     return schema.AgentMessageChunk(session_update="agent_message_chunk", content=_text(text))
+
+
+def _model_option(current: str, *values: str) -> schema.SessionConfigOptionSelect:
+    return schema.SessionConfigOptionSelect(
+        id="model",
+        name="Model",
+        category="model",
+        type="select",
+        current_value=current,
+        options=[schema.SessionConfigSelectOption(value=v, name=v) for v in values],
+    )
+
+
+def _grouped_model_option(current: str, groups: dict[str, list[str]]) -> schema.SessionConfigOptionSelect:
+    """A model picker whose entries are groups rather than flat options.
+
+    ACP allows either shape. No CLI agent tested so far emits the grouped one
+    (Claude Code advertises 5 flat options, Kilo 320), so it needs covering
+    here or it goes unexercised entirely.
+    """
+    return schema.SessionConfigOptionSelect(
+        id="model",
+        name="Model",
+        category="model",
+        type="select",
+        current_value=current,
+        options=[
+            schema.SessionConfigSelectGroup(
+                group=name,
+                name=name,
+                options=[schema.SessionConfigSelectOption(value=v, name=v) for v in values],
+            )
+            for name, values in groups.items()
+        ],
+    )
+
+
+def _image_update(data: str = "aGVsbG8=") -> schema.AgentMessageChunk:
+    return schema.AgentMessageChunk(
+        session_update="agent_message_chunk",
+        content=schema.ImageContentBlock(type="image", data=data, mime_type="image/png"),
+    )
+
+
+def _hi_turn() -> ACPTurn:
+    return ACPTurn(updates=[_text_update("hi")])
 
 
 @pytest.mark.asyncio
@@ -82,6 +129,241 @@ async def test_turn_timeout_surfaces_timeout() -> None:
     assert result.body == ""
     [response] = [e for e in seen if isinstance(e, ModelResponse)]
     assert response.finish_reason == "timeout"
+
+
+@pytest.mark.asyncio
+class TestModelSelection:
+    async def test_selected_via_config_option(self) -> None:
+        calls: list[tuple[str, str | bool]] = []
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[_model_option("provider/default", "provider/default", "provider/smart")],
+            config_option_calls=calls,
+            permission_policy="auto",
+            model="provider/smart",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == "hi"
+        assert calls == [("model", "provider/smart")]
+
+    async def test_matching_current_is_not_resent(self) -> None:
+        calls: list[tuple[str, str | bool]] = []
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[_model_option("provider/default", "provider/default", "provider/smart")],
+            config_option_calls=calls,
+            permission_policy="auto",
+            model="provider/default",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert calls == []
+
+    async def test_ignored_when_agent_has_no_model_option(self) -> None:
+        # No configOptions advertised — `model` stays response metadata, as before.
+        calls: list[tuple[str, str | bool]] = []
+        cfg = fake_acp_config(_hi_turn(), config_option_calls=calls, permission_policy="auto", model="provider/smart")
+        agent = Agent("acp", config=cfg)
+
+        try:
+            reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == "hi"
+        assert calls == []
+        assert reply.response.model == "provider/smart"
+
+    async def test_reports_agent_default_when_model_unset(self) -> None:
+        """With no `model` set, report what the agent says it runs, not None.
+
+        This is the case that matters most: an agent sitting on a default it
+        cannot answer with (Kilo ships on an image model) produces an empty
+        reply, and `model=None` would strip the one clue worth having.
+        """
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[_model_option("provider/image-only", "provider/image-only", "provider/text")],
+            permission_policy="auto",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.response.model == "provider/image-only"
+
+    async def test_not_offered_raises(self) -> None:
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[_model_option("provider/default", "provider/default")],
+            permission_policy="auto",
+            model="provider/nonexistent",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with pytest.raises(ValueError, match="not offered by the ACP agent"):
+                await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+    async def test_not_offered_suggests_close_matches(self) -> None:
+        """Agents can offer hundreds of ids, so the error points at near misses."""
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[_model_option("a/default", "a/default", "a/claude-haiku-4.5", "a/claude-sonnet-4")],
+            permission_policy="auto",
+            model="a/claude-haiku-4-5",  # dashes instead of the dot
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with pytest.raises(ValueError, match=r"\(3 offered\).*a/claude-haiku-4\.5"):
+                await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+    async def test_selected_from_grouped_options(self) -> None:
+        """ACP allows grouped entries; no live agent emits them, so cover it here."""
+        calls: list[tuple[str, str | bool]] = []
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[
+                _grouped_model_option(
+                    "anthropic/default",
+                    {"Anthropic": ["anthropic/default", "anthropic/haiku"], "Google": ["google/flash"]},
+                )
+            ],
+            config_option_calls=calls,
+            permission_policy="auto",
+            model="google/flash",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == "hi"
+        assert calls == [("model", "google/flash")]
+
+    async def test_not_offered_in_any_group_raises(self) -> None:
+        cfg = fake_acp_config(
+            _hi_turn(),
+            config_options=[_grouped_model_option("anthropic/default", {"Anthropic": ["anthropic/default"]})],
+            permission_policy="auto",
+            model="google/flash",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with pytest.raises(ValueError, match="not offered by the ACP agent"):
+                await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+
+@pytest.mark.asyncio
+class TestEmptyTurnWarning:
+    """A turn that ends normally yet produced nothing is worth a word.
+
+    Some CLI agents swallow provider-side failures (an unauthorized or
+    text-incapable model) and end the turn with ``end_turn`` and no output at
+    all — indistinguishable, from AG2's side, from a healthy silent turn. Warn
+    so the empty reply is not the only clue.
+    """
+
+    async def test_empty_end_turn_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        cfg = fake_acp_config(ACPTurn(updates=[]), permission_policy="auto", model="provider/model")
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == ""
+        [record] = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert "provider/model" in record.getMessage()
+
+    async def test_tool_only_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The agent worked — it just had nothing to say. Not a silent failure."""
+        cfg = fake_acp_config(
+            ACPTurn(
+                updates=[
+                    schema.ToolCallStart(session_update="tool_call", tool_call_id="t1", title="Write", status="pending")
+                ]
+            ),
+            permission_policy="auto",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == ""
+        assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+    async def test_file_only_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        """An image/audio reply is output too, even though it carries no text."""
+        cfg = fake_acp_config(ACPTurn(updates=[_image_update()]), permission_policy="auto")
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                reply = await agent.ask("draw something")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == ""
+        assert len(reply.response.files) == 1
+        assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+    async def test_text_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        cfg = fake_acp_config(_hi_turn(), permission_policy="auto")
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                reply = await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == "hi"
+        assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+    async def test_timed_out_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A timeout already reports itself through ``finish_reason``."""
+        cfg = fake_acp_config(ACPTurn(hang=True), permission_policy="auto", turn_timeout=0.5)
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                reply = await agent.ask("hang")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == ""
+        assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
 
 @pytest.mark.asyncio
