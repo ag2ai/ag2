@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from ag2.config.zai import ZAIClient
 from ag2.config.zai.mappers import response_proto_to_format, schema_instruction
 from ag2.events import ModelRequest, TextInput
-from ag2.response import PromptedSchema, ResponseSchema
+from ag2.response import LastMessagePromptedSchema, PromptedSchema, ResponseSchema
 from test.config.zai._helpers import FakeCompletions, FakeZAIClient, make_call_context
 
 
@@ -28,6 +28,7 @@ def test_none_response_schema_returns_none() -> None:
     assert response_proto_to_format(None) is None
     # PromptedSchema carries no native json_schema — it prompts for JSON itself.
     assert response_proto_to_format(PromptedSchema(Verdict)) is None
+    assert response_proto_to_format(LastMessagePromptedSchema(Verdict)) is None
 
 
 def test_native_schema_uses_json_mode() -> None:
@@ -47,6 +48,8 @@ def test_schema_instruction_describes_schema() -> None:
 def test_schema_instruction_skips_prompted_schema() -> None:
     # PromptedSchema supplies its own system prompt; don't double up.
     assert schema_instruction(PromptedSchema(Verdict)) is None
+    # LastMessagePromptedSchema carries no native json_schema either.
+    assert schema_instruction(LastMessagePromptedSchema(Verdict)) is None
     assert schema_instruction(None) is None
 
 
