@@ -18,8 +18,61 @@ from a2a.server.tasks import (
 from a2a.types import AgentCard
 from starlette.routing import BaseRoute
 
+from ..errors import A2AStaleCardSignatureError
+
 CardModifier: TypeAlias = Callable[[AgentCard], Awaitable[AgentCard]]
 ExtendedCardModifier: TypeAlias = Callable[[AgentCard, ServerCallContext], Awaitable[AgentCard]]
+
+CardSigner: TypeAlias = Callable[[AgentCard], AgentCard]
+
+
+def copy_card(card: AgentCard, *, drop_signatures: bool = False) -> AgentCard:
+    """Deep-copy ``card``, optionally dropping the signatures carried on it."""
+    fresh = AgentCard()
+    fresh.CopyFrom(card)
+    if drop_signatures:
+        del fresh.signatures[:]
+    return fresh
+
+
+def sign_card(card: AgentCard, signer: CardSigner | None) -> AgentCard:
+    """Sign a copy of ``card`` with prior signatures dropped; identity when no signer."""
+    # The SDK signer appends in place instead of replacing, so signing a
+    # stripped copy is what keeps the caller's card unmutated and stops a
+    # signature over some earlier payload shipping next to the fresh one.
+    # Composed signers (key rotation) still land both: the drop happens once,
+    # before the callable runs.
+    if signer is None:
+        return card
+    return signer(copy_card(card, drop_signatures=True))
+
+
+def wrap_card_modifier(modifier: CardModifier | None, signer: CardSigner | None) -> CardModifier | None:
+    """Re-sign the modifier's per-request output so mutation doesn't void the JWS."""
+    # The modifier gets a scratch copy because the SDK hands it the one
+    # long-lived card shared by every request — mutate-and-return must not
+    # make the served card drift.
+    if modifier is None or signer is None:
+        return modifier
+
+    async def signed_modifier(card: AgentCard) -> AgentCard:
+        return sign_card(await modifier(copy_card(card)), signer)
+
+    return signed_modifier
+
+
+def wrap_extended_card_modifier(
+    modifier: ExtendedCardModifier | None, signer: CardSigner | None
+) -> ExtendedCardModifier | None:
+    """Extended-card twin of :func:`wrap_card_modifier` (modifier also takes ``ServerCallContext``)."""
+    if modifier is None or signer is None:
+        return modifier
+
+    async def signed_modifier(card: AgentCard, context: ServerCallContext) -> AgentCard:
+        return sign_card(await modifier(copy_card(card), context), signer)
+
+    return signed_modifier
+
 
 # Legacy v0.x server-side card alias. Kept so pre-v1 clients still discover the card.
 LEGACY_AGENT_CARD_PATH = "/.well-known/agent.json"
@@ -35,6 +88,29 @@ def clone_card_with_capabilities(card: AgentCard, *, extended: bool, push: bool)
     if push:
         new_card.capabilities.push_notifications = True
     return new_card
+
+
+def prepare_public_card(
+    card: AgentCard,
+    *,
+    extended: bool,
+    push: bool,
+    signer: CardSigner | None,
+) -> AgentCard:
+    """Flip the capability flags the server derives, then sign what we serve."""
+    # Signing after the flip puts the flags inside the signed payload. A
+    # caller-signed card with no signer to redo it can't take the flip at
+    # all — that would serve a signature over a different payload.
+    prepared = clone_card_with_capabilities(card, extended=extended, push=push)
+    if signer is None and card.signatures and prepared.capabilities != card.capabilities:
+        raise A2AStaleCardSignatureError(
+            flipped=tuple(
+                name
+                for name, flip in (("extended_agent_card", extended), ("push_notifications", push))
+                if flip and not getattr(card.capabilities, name)
+            )
+        )
+    return sign_card(prepared, signer)
 
 
 def build_default_handler(

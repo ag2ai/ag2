@@ -6,6 +6,7 @@ import socket
 from collections.abc import Callable
 
 import httpx
+from a2a.types import AgentCard
 
 from .card import build_card
 from .server import A2AServer
@@ -15,6 +16,7 @@ def make_test_client_factory(
     server: A2AServer,
     *,
     url: str = "http://test",
+    card: AgentCard | None = None,
     timeout: float = 30.0,
 ) -> Callable[[], httpx.AsyncClient]:
     """Build an ``httpx.AsyncClient`` factory that talks to ``server`` in-process.
@@ -39,8 +41,13 @@ def make_test_client_factory(
     be reused. Each client returned by the factory is independent and
     closed by the caller (``A2AClient`` runs ``aclose()`` after each
     ``ask``); ``ASGITransport`` itself doesn't need explicit cleanup.
+
+    ``card`` overrides the card the server publishes. Pass it when the
+    default ``build_card(agent, url=url)`` can't express what the test
+    needs — a custom ``extensions`` list, for instance. ``None`` keeps
+    the default.
     """
-    app = server.build_jsonrpc(url=url)
+    app = server.build_jsonrpc(url=url, card=card)
     transport = httpx.ASGITransport(app=app)
 
     def factory() -> httpx.AsyncClient:
@@ -53,6 +60,7 @@ def make_test_rest_client_factory(
     server: A2AServer,
     *,
     url: str = "http://test",
+    card: AgentCard | None = None,
     timeout: float = 30.0,
 ) -> Callable[[], httpx.AsyncClient]:
     """Build an ``httpx.AsyncClient`` factory talking REST to ``server`` in-process.
@@ -63,8 +71,11 @@ def make_test_rest_client_factory(
     only the REST interface, so an ``A2AConfig(card_url=url, prefer="rest")``
     client connects through this factory without leaking to other
     transports.
+
+    ``card`` overrides that default REST card; it must still declare a
+    REST interface, or the client will pick a different transport.
     """
-    rest_card = build_card(server.agent, url=url, transports=("rest",))
+    rest_card = card if card is not None else build_card(server.agent, url=url, transports=("rest",))
     app = server.build_rest(url=url, card=rest_card)
     transport = httpx.ASGITransport(app=app)
 
@@ -85,4 +96,5 @@ def pick_free_port(host: str = "127.0.0.1") -> int:
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind((host, 0))
-        return sock.getsockname()[1]
+        port: int = sock.getsockname()[1]
+        return port

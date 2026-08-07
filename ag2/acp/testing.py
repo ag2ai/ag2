@@ -73,13 +73,19 @@ class _FakeConnection:
         turns: Iterator[ACPTurn],
         *,
         agent_capabilities: "schema.AgentCapabilities | None" = None,
+        config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
+        config_option_calls: "list[tuple[str, str | bool]] | None" = None,
     ) -> None:
         self._client = client
         self._turns = turns
+        self._config_options = list(config_options or [])
         self._cancelled = asyncio.Event()
         self._agent_capabilities = agent_capabilities
         self.new_session_kwargs: dict[str, Any] | None = None
         self.closed = False
+        self.config_option_calls: list[tuple[str, str | bool]] = (
+            config_option_calls if config_option_calls is not None else []
+        )
 
     async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
         return schema.InitializeResponse(
@@ -89,7 +95,27 @@ class _FakeConnection:
 
     async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
         self.new_session_kwargs = kwargs
-        return schema.NewSessionResponse(session_id="fake-session-1")
+        return schema.NewSessionResponse(
+            session_id="fake-session-1",
+            config_options=self._config_options or None,
+        )
+
+    async def set_config_option(
+        self, *, session_id: str, config_id: str, value: Any, **kwargs: Any
+    ) -> schema.SetSessionConfigOptionResponse:
+        """Record the call and echo back the option set with ``value`` applied.
+
+        The real ``set_config_option`` returns the agent's full, updated option
+        list — that response is how a caller could tell an agent accepted the
+        call but ignored it. Returning ``None`` here would let such a bug pass
+        unnoticed in tests.
+        """
+        self.config_option_calls.append((config_id, value))
+        self._config_options = [
+            option.model_copy(update={"current_value": value}) if option.id == config_id else option
+            for option in self._config_options
+        ]
+        return schema.SetSessionConfigOptionResponse(config_options=list(self._config_options))
 
     async def cancel(self, **kwargs: Any) -> None:
         self._cancelled.set()
@@ -130,6 +156,8 @@ class FakeACPConfig(ACPConfig):
 def fake_acp_config(
     *turns: ACPTurn,
     agent_capabilities: "schema.AgentCapabilities | None" = None,
+    config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
+    config_option_calls: "list[tuple[str, str | bool]] | None" = None,
     **overrides: Any,
 ) -> FakeACPConfig:
     """Build an :class:`ACPConfig` backed by an in-process scripted agent.
@@ -139,6 +167,10 @@ def fake_acp_config(
     ``permission_policy=...``, ``turn_timeout=...``). ``agent_capabilities``
     shapes the fake's ``initialize`` response; by default it advertises HTTP MCP
     support like the real Claude Code / Codex / OpenCode adapters do.
+    ``config_options`` are advertised in the ``session/new`` response (the
+    agent's model picker et al.); ``session/set_config_option`` calls are
+    appended to the caller-supplied ``config_option_calls`` list as
+    ``(config_id, value)`` tuples.
     """
     if agent_capabilities is None:
         agent_capabilities = schema.AgentCapabilities(mcp_capabilities=schema.McpCapabilities(http=True, sse=True))
@@ -147,7 +179,13 @@ def fake_acp_config(
 
     @asynccontextmanager
     async def connect(client: acp.Client) -> "AsyncGenerator[tuple[_FakeConnection, None]]":
-        conn = _FakeConnection(client, iter(script), agent_capabilities=agent_capabilities)
+        conn = _FakeConnection(
+            client,
+            iter(script),
+            agent_capabilities=agent_capabilities,
+            config_options=config_options,
+            config_option_calls=config_option_calls,
+        )
         try:
             yield conn, None
         finally:
