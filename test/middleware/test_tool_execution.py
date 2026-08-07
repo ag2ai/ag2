@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -273,3 +274,121 @@ class TestToolMiddlewareRegistration:
         await agent.ask("Hi!")
 
         mock.tool_middleware.assert_called_once()
+
+
+class CountingMiddleware:
+    """Class-based tool middleware keeping its budget on the instance."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def __call__(
+        self,
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        ctx: Context,
+    ) -> ToolResultEvent:
+        self.calls += 1
+        return await call_next(event, ctx)
+
+
+@pytest.mark.asyncio()
+class TestSharedToolMiddleware:
+    """One middleware instance across several tools is one shared allowance, not one per tool."""
+
+    @staticmethod
+    def _two_tool_agent(*tools: Any) -> Agent:
+        return Agent(
+            "",
+            config=TestConfig(
+                ToolCallEvent(name="first"),
+                ToolCallEvent(name="second"),
+                "result",
+            ),
+            tools=list(tools),
+        )
+
+    async def test_class_middleware_counts_every_tool(self) -> None:
+        shared = CountingMiddleware()
+
+        def first() -> str:
+            """First."""
+            return "a"
+
+        def second() -> str:
+            """Second."""
+            return "b"
+
+        agent = self._two_tool_agent(tool(first, middleware=[shared]), tool(second, middleware=[shared]))
+
+        await agent.ask("Hi!")
+
+        assert shared.calls == 2
+
+    async def test_closure_middleware_agrees_with_class_middleware(self, mock: MagicMock) -> None:
+        async def hook(
+            call_next: ToolExecution,
+            event: ToolCallEvent,
+            ctx: Context,
+        ) -> ToolResultEvent:
+            mock.hook()
+            return await call_next(event, ctx)
+
+        def first() -> str:
+            """First."""
+            return "a"
+
+        def second() -> str:
+            """Second."""
+            return "b"
+
+        agent = self._two_tool_agent(tool(first, middleware=[hook]), tool(second, middleware=[hook]))
+
+        await agent.ask("Hi!")
+
+        assert mock.hook.call_count == 2
+
+    async def test_shared_across_toolkit_tools(self) -> None:
+        shared = CountingMiddleware()
+
+        def first() -> str:
+            """First."""
+            return "a"
+
+        def second() -> str:
+            """Second."""
+            return "b"
+
+        tk = Toolkit(tool(first, middleware=[shared]), tool(second, middleware=[shared]))
+        agent = self._two_tool_agent(tk)
+
+        await agent.ask("Hi!")
+
+        assert shared.calls == 2
+
+    async def test_with_middleware_keeps_the_original_instance(self) -> None:
+        shared = CountingMiddleware()
+
+        async def noop(
+            call_next: ToolExecution,
+            event: ToolCallEvent,
+            ctx: Context,
+        ) -> ToolResultEvent:
+            return await call_next(event, ctx)
+
+        def first() -> str:
+            """First."""
+            return "a"
+
+        def second() -> str:
+            """Second."""
+            return "b"
+
+        agent = self._two_tool_agent(
+            tool(first, middleware=[shared]).with_middleware(noop),
+            tool(second, middleware=[shared]),
+        )
+
+        await agent.ask("Hi!")
+
+        assert shared.calls == 2
