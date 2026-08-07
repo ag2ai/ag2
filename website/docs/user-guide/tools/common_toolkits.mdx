@@ -309,7 +309,7 @@ tool = TavilySearchTool(
 `SandboxShellTool` gives an agent the ability to run shell commands inside an environment you choose. With no argument it uses a `LocalEnvironment` with a temporary working directory that is cleaned up on process exit. See the [Sandbox Shell page](/docs/user-guide/tools/local_shell) for the full guide.
 
 !!! warning
-    A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run — or a `DockerEnvironment` / `DaytonaEnvironment` for real isolation.
+    A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run — or a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment` for real isolation.
 
 ```python linenums="1"
 from ag2 import Agent

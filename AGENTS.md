@@ -142,6 +142,7 @@ Either way, add the third-party package to the `optionals` **dependency group** 
 ### Design principles
 
 - **Protocols over inheritance**: `LLMClient`, `ModelConfig`, `Stream`, `Storage` are all `Protocol` classes — implementations satisfy them structurally. `Tool` is the exception: it is an `ABC` that tool kinds subclass (see [ADR 0002](docs/adr/0002-tool-composite-hierarchy.md)).
+- Sandbox factories may declare `code_runners`; `SandboxCodeTool` merges them before caller overrides.
 - **Async throughout**: all major operations (`ask`, tool execution, LLM calls) are async. Sync tool functions run via `sync_to_thread`.
 - **Event-driven**: all agent-loop communication flows through the `Stream` as typed events.
 - **Dependency injection**: all user-provided functions (tools, prompt hooks, HITL, etc.) use `Context`, `Inject`, and `Variable` annotations; resolution is handled by `fast_depends`.

@@ -66,11 +66,14 @@ class ShellAdapter:
         :class:`SingletonFactory` wrapping one) this is the real host
         :class:`~pathlib.Path` (so ``.exists()`` etc. work); for a remote /
         container backend it is the sandbox-side :class:`PurePosixPath`. A
-        not-yet-opened remote :class:`SandboxFactory` reports the
-        conventional ``/workspace`` since no sandbox is bound yet.
+        not-yet-opened remote :class:`SandboxFactory` may declare its workdir;
+        otherwise the conventional ``/workspace`` is reported.
         """
         factory = self._factory
         if not isinstance(factory, SingletonFactory):
+            declared = getattr(factory, "workdir", None)
+            if isinstance(declared, Path | PurePosixPath):
+                return declared
             return PurePosixPath("/workspace")
         sandbox = factory.sandbox
         host = sandbox.host_workdir
