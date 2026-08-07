@@ -150,7 +150,7 @@ class TestToolResultText:
     def test_non_string_results_render_as_text(self, value: object, expected: str) -> None:
         assert tool_result_text(ToolResult(value)) == expected
 
-    def test_binary_parts_are_placeheld_not_inlined(self) -> None:
+    def test_binary_parts_get_a_placeholder_not_the_bytes(self) -> None:
         result = ToolResult(BinaryInput(b"\x89PNG", media_type="image/png"))
 
         rendered = tool_result_text(result)

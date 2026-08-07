@@ -263,9 +263,9 @@ def tool_result_text(result: ToolResult) -> str:
     """Flatten a tool result's parts into the text ACP carries in ``content``.
 
     A tool returning a non-string (an ``int``, a ``dict``) is coerced by AG2 into
-    a :class:`DataInput`, so rendering only :class:`TextInput` would show every
-    such result as a placeholder. Binary parts *are* placeheld — their bytes have
-    no faithful text form and must not be smuggled into a text block.
+    a :class:`DataInput`, so rendering only :class:`TextInput` would reduce every
+    such result to a placeholder. Binary parts *do* get a placeholder — their
+    bytes have no faithful text form and must not be smuggled into a text block.
     """
     pieces: list[str] = []
     for part in result.parts:
