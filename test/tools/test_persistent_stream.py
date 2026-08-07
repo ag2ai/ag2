@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from ag2 import Context
+from ag2.agent import _get_stream_turn_lock
 from ag2.history import MemoryStorage
 from ag2.stream import MemoryStream
 from ag2.tools.subagents.persistent_stream import persistent_stream
@@ -61,13 +62,31 @@ class TestPersistentStream:
 
         assert stream_a.id != stream_b.id
 
-    def test_stores_stream_id_in_dependencies(self, ctx: Context) -> None:
+    def test_stores_stream_in_dependencies(self, ctx: Context) -> None:
         factory = persistent_stream()
         agent = _make_agent("helper")
 
         stream = factory(agent, ctx)
 
-        assert ctx.dependencies["ag:helper:stream"] == stream.id
+        assert ctx.dependencies["ag:helper:stream"] is stream
+
+    def test_reuses_same_stream_object_on_second_call(self, ctx: Context) -> None:
+        factory = persistent_stream()
+        agent = _make_agent()
+
+        first = factory(agent, ctx)
+        second = factory(agent, ctx)
+
+        assert first is second
+
+    def test_turn_lock_is_shared_across_factory_calls(self, ctx: Context) -> None:
+        factory = persistent_stream()
+        agent = _make_agent()
+
+        first = factory(agent, ctx)
+        second = factory(agent, ctx)
+
+        assert _get_stream_turn_lock(first) is _get_stream_turn_lock(second)
 
     def test_uses_parent_storage_backend(self, ctx: Context, storage: MemoryStorage) -> None:
         factory = persistent_stream()

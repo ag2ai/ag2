@@ -17,12 +17,19 @@ if TYPE_CHECKING:
 def persistent_stream() -> StreamFactory:
     def stream_factory(agent: "Agent", ctx: "Context") -> MemoryStream:
         key = f"ag:{agent.name}:stream"
-        if not (stream_id := ctx.dependencies.get(key)):
-            stream_id = ctx.dependencies[key] = uuid4()
+        # Cache the stream object itself (not just its id) so every call for
+        # the same sub-agent/context returns the same instance. The turn lock
+        # Agent._execute attaches via `_get_stream_turn_lock` is keyed by
+        # object identity, so a per-call rebuild would give concurrent
+        # delegations independent locks and the lock would never serialize
+        # overlapping turns on a shared persistent stream.
+        if not (stream := ctx.dependencies.get(key)):
+            stream = MemoryStream(
+                storage=ctx.stream.history.storage,
+                id=uuid4(),
+            )
+            ctx.dependencies[key] = stream
 
-        return MemoryStream(
-            storage=ctx.stream.history.storage,
-            id=stream_id,
-        )
+        return stream
 
     return stream_factory
