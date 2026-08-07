@@ -53,6 +53,19 @@ Typing **y** lets the tool run. Any other input denies it — the agent receives
 !!! note
     `approval_required()` relies on the agent's `#!python hitl_hook` to collect user input. If no `hitl_hook` is configured, `#!python context.input()` will raise an error at runtime. Read more about [Human in the Loop](/docs/user-guide/context/human_in_the_loop) to learn how to configure a HITL hook.
 
+## Inspecting the configuration
+
+`#!python approval_required()` returns an `#!python ApprovalRequired` instance, also exported from `ag2.middleware`. It reports its settings, so you can log or assert on how a tool was gated:
+
+```python linenums="1"
+from ag2.middleware import approval_required
+
+approval_required(timeout=5, allow_always=False).describe().config
+# {'message': '...', 'denied_message': 'User denied...', 'timeout': 5, 'allow_always': False}
+```
+
+Approval state (which tools the user answered "always" for) lives in `#!python context.variables`, not on the instance, so it never appears in the description. See [Describing middleware](/docs/user-guide/middleware#describing-middleware).
+
 ## Customizing the prompt
 
 Override the `message` parameter to tailor the approval prompt:
