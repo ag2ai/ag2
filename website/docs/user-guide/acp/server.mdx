@@ -1,0 +1,281 @@
+---
+title: Serving an Agent over ACP
+sidebarTitle: Server
+---
+
+`#!python ACPAgent` wraps an existing `#!python Agent` and serves it over the
+[Agent Client Protocol](https://agentclientprotocol.com){.external-link target="_blank"} (ACP),
+so any ACP client — an editor, a chat integration, your own tool — can drive it.
+
+This is the mirror of the [Client](/docs/user-guide/acp/client) page, which covers AG2
+*driving* an external CLI coding agent.
+
+```bash
+pip install "ag2[acp]"
+```
+
+## Two roles, and who starts whom
+
+ACP has exactly two sides: **Client** and **Agent**. They map onto your world cleanly —
+the Agent is your AG2 agent, the Client is whatever wants to talk to it.
+
+The part that surprises most people is the direction: **the Client launches the Agent**.
+You are not standing a service up and waiting for traffic. ACP's stable transport is
+stdio, so the Client starts your process and the two talk over the pipe between them. No
+ports, no URLs, nothing to deploy.
+
+!!! note
+    The class is `#!python ACPAgent`, not `ACPServer`. AG2 names each protocol adapter
+    after that protocol's own word for the side that answers — MCP and A2A both call it a
+    *Server*, and ACP has no "server" at all. It is a wrapper around an AG2
+    `#!python Agent`, not a subclass of one.
+
+## Minimal Server
+
+The whole integration is the last line.
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.acp import ACPAgent
+from ag2.config import AnthropicConfig
+from ag2.tools import tool
+
+@tool(description="Add two integers and return the sum as a string.")
+async def calc_add(a: int, b: int) -> str:
+    return f"{a + b}"
+
+async def main() -> None:
+    agent = Agent(
+        name="workie",
+        prompt="You are Workie. Answer briefly.",
+        config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+        tools=[calc_add],
+    )
+    await ACPAgent(agent).run_stdio()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Point an ACP client at that file and it runs the agent as a subprocess:
+
+```console
+stop_reason: end_turn
+answer: 2 + 2 = 4
+```
+
+!!! warning
+    Inside that process **stdout is the wire**. A stray `#!python print()` corrupts the
+    protocol. Use stderr, or a logger, when you need to debug.
+
+## What Happens in One Turn
+
+| ACP method | What it does |
+|---|---|
+| `#!python initialize` | Negotiates the protocol version and advertises exactly which optional features are implemented |
+| `#!python session/new` | Opens an independent conversation and returns its id |
+| `#!python session/prompt` | Runs one ordinary AG2 turn — tools and all — and returns when it ends |
+| `#!python session/update` | Pushed *during* the turn: text as it is generated, every tool call, every result |
+| `#!python session/cancel` | Stops that session's turn and anything queued behind it |
+
+A prompt is one AG2 turn through the same path `#!python Agent.ask()` uses, so dynamic
+prompts, middleware, observers and tool events all behave exactly as they do off-protocol.
+
+## Sessions
+
+Each `#!python session/new` gets its own conversation. Two things are isolated per session:
+
+- **History.** A session never sees another session's messages.
+- **Context variables.** Seeded by value from the agent's defaults, so writes in one
+  session are invisible to the others, and survive to that session's next prompt.
+
+Concurrent prompts on **one** session queue rather than interleave, matching how
+[`#!python MCPServer`](/docs/user-guide/tools/mcp_servers) already treats overlapping calls on one
+session.
+
+!!! warning "Session isolation is not tenant isolation"
+    Everything else is shared, because every session runs the *same*
+    `#!python Agent`: its tools and whatever state they hold, its dependencies, and any
+    [`#!python KnowledgeStore`](/docs/user-guide/advanced/knowledge_store) attached to it.
+
+    A tool that reads records, or a knowledge store holding one customer's documents, is
+    reachable from every session equally — and, as
+    [Authentication](#authentication) explains, nothing tells that tool which client is
+    asking.
+
+    So sessions separate *conversations*, not *tenants*. Give each tenant its own process
+    and its own `#!python ACPAgent`.
+
+## Cancelling
+
+`#!python session/cancel` names a session, so that is exactly how far it reaches: the turn
+running there stops, anything queued behind it is dropped, and every other session carries
+on untouched.
+
+Two details worth knowing:
+
+- The prompt still **returns** — with `#!python stop_reason="cancelled"`, not an error.
+- Whatever already reached the client stays. Stopping the work does not un-say what was
+  already said.
+
+Cancelling four seconds into a long streamed answer:
+
+```console
+stop_reason: cancelled
+updates kept: 12
+```
+
+How many updates survive depends on how much the model had streamed by then. The point is
+that it is not zero.
+
+If the cancellation lands between a tool call and its result, the transcript is repaired
+before the session is released, so the next prompt still sends a valid conversation to the
+model.
+
+## Configuring the Agent
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ACPAgent, PromptContent, SessionConfig, StaticTokenAuth
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="workie", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+
+acp_agent = ACPAgent(
+    agent,
+    name="workie",
+    version="1.0.0",
+    sessions=SessionConfig(
+        max_sessions=256,
+        ttl=3600,
+        max_queued=4,
+        max_concurrent_turns=4,
+        max_active_prompts=32,
+    ),
+    auth=StaticTokenAuth("shared-secret"),
+    prompt_content=PromptContent(image=True, audio=False, embedded_context=True),
+    stream_thoughts=False,
+)
+```
+
+| Constructor argument | Purpose |
+|---|---|
+| `#!python agent` | The AG2 `#!python Agent` exposed over ACP |
+| `#!python name` / `#!python version` / `#!python title` | What the `#!python initialize` handshake advertises. `#!python name` defaults to the agent's |
+| `#!python sessions` | Session registry bounds — see [Bounds](#bounds) |
+| `#!python auth` | Authentication provider. `#!python None` (the default) advertises no methods and rejects `#!python authenticate` |
+| `#!python prompt_content` | Which non-text prompt content to advertise — see [Multimodal content](#multimodal-content) |
+| `#!python stream_thoughts` | Whether to forward the agent's reasoning as `#!python agent_thought_chunk` updates. Off by default |
+
+### Bounds
+
+`#!python SessionConfig` bounds both a single session and the connection as a whole.
+
+| Setting | Default | What it bounds |
+|---|---|---|
+| `#!python max_sessions` | 1024 | Conversations held at once. Idle ones are evicted first; a session with work running is never evicted |
+| `#!python ttl` | `#!python None` | Idle expiry in seconds, measured from the last time the session was *used* |
+| `#!python max_queued` | 8 | Prompts waiting behind the running turn **on one session** |
+| `#!python max_concurrent_turns` | 8 | Turns running at once **across all sessions**. Prompts past this wait for a slot |
+| `#!python max_active_prompts` | 64 | Prompts admitted at once across all sessions, running and waiting. Past this they are refused |
+
+The last two are what keep one client from opening every session and starting a paid turn
+in each. `#!python max_concurrent_turns` bounds spend; `#!python max_active_prompts` bounds
+how many request handlers can be parked at once.
+
+### Multimodal content
+
+`#!python PromptContent` declares what the model behind your agent can actually take.
+
+Whether an image or an audio clip *works* depends on the provider, and AG2 has no registry
+of provider modalities to consult — the ACP mapper will happily build an
+`#!python AudioInput` that the Anthropic mapper then rejects. So this is a declaration by
+whoever deploys the agent, not a guess. Audio is off by default because most providers do
+not accept it.
+
+## Authentication
+
+Local stdio needs none: the client already launched the process. A provider becomes
+necessary for a remote transport, or for the ACP Registry.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ACPAgent, StaticTokenAuth
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="workie", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+acp_agent = ACPAgent(agent, auth=StaticTokenAuth("shared-secret"))
+```
+
+With a provider attached, session methods are refused until the client authenticates:
+
+```console
+auth methods: ['token']
+unauthenticated session refused: ok
+session opened after auth: True
+```
+
+Implement `#!python AuthProvider` to plug in your own identity system.
+
+!!! warning
+    This seam authenticates a **connection**, not a tenant. `#!python authenticate` returns
+    nothing, so no principal reaches the turn: every authenticated client drives the same
+    agent, tools and knowledge store, and downstream code has no trusted identity to
+    authorize against.
+
+    Serve one tenant per `#!python ACPAgent`. Multi-tenant deployments need one process and
+    one agent per tenant.
+
+## What It Refuses to Pretend
+
+During `#!python initialize` the agent declares what it supports, and the client builds its
+interface from that answer. Claiming a feature that is not wired is worse than admitting
+its absence — the client offers users a button that cannot work.
+
+Reported as **not** supported, because they are not implemented:
+`#!python session/load`, `#!python session/resume`, `#!python session/fork`,
+`#!python session/list`, `#!python session/delete`, client filesystem and terminal access,
+and connecting to client-provided MCP servers.
+
+A `#!python cwd`, an additional directory or an MCP server named by a client is recorded as
+*context* and acted on by nothing. A path a client names is not authority to reach it;
+deciding what to honour belongs to the application embedding the agent.
+
+## Testing
+
+`#!python ag2.acp.testing.connect` wires a real ACP client to your `#!python ACPAgent` over
+an in-memory pipe — genuine protocol, no subprocess to manage. Pair it with
+`#!python TestConfig` so no provider is called.
+
+```python linenums="1"
+import acp
+from acp import schema
+
+from ag2 import Agent
+from ag2.acp import ACPAgent
+from ag2.acp.testing import connect
+from ag2.testing import TestConfig
+
+async def test_the_agent_answers() -> None:
+    agent = Agent(name="workie", config=TestConfig("200"))
+
+    async with connect(ACPAgent(agent)) as (client, recorder):
+        session = await client.new_session(cwd=".")
+        response = await client.prompt(
+            session_id=session.session_id,
+            prompt=[acp.text_block("what's 100 + 100")],
+        )
+
+    assert response.stop_reason == "end_turn"
+    texts = [
+        update.content.text
+        for update in recorder.updates_for(session.session_id)
+        if isinstance(update, schema.AgentMessageChunk)
+    ]
+    assert texts == ["200"]
+```
+
+`#!python recorder` is a `#!python RecordingClient`: it captures every `session/update` the
+agent pushed, so you can assert on what the client actually saw and in what order.
