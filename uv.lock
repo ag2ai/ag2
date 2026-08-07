@@ -50,6 +50,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cd/91/ab2ba19dea0771f7d5503f80e2f756f8f7195acd0e91d55e8ea893bf626f/a2a_sdk-1.1.1-py3-none-any.whl", hash = "sha256:60608eb77d62ae962795cf0bcb06f24be8470b4bf97adbc4ed32f170e9f40c3e", size = 244090, upload-time = "2026-07-16T13:29:57.387Z" },
 ]
 
+[package.optional-dependencies]
+signing = [
+    { name = "pyjwt" },
+]
+
 [[package]]
 name = "ag-ui-protocol"
 version = "0.1.19"
@@ -234,7 +239,8 @@ lint = [
     { name = "zizmor" },
 ]
 optionals = [
-    { name = "ag2", extra = ["a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "a2a-sdk", extra = ["signing"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "daytona" },
     { name = "docker" },
     { name = "exa-py" },
@@ -434,6 +440,8 @@ lint = [
     { name = "zizmor", specifier = "==1.26.1" },
 ]
 optionals = [
+    { name = "a2a-sdk", extras = ["signing"] },
+    { name = "ag2", extras = ["a2a"] },
     { name = "ag2", extras = ["a2ui"] },
     { name = "ag2", extras = ["acp"] },
     { name = "ag2", extras = ["ag-ui"] },

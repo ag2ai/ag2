@@ -123,24 +123,24 @@ class AgentExecutor(A2AAgentExecutorBase):
                 # a2a-sdk rejects append=True before the artifact exists, so the first chunk creates it.
                 is_first_chunk = not text_pieces
                 text_pieces.append(event.content)
-                a2a_event = chunk_to_text_artifact(
+                chunk_artifact = chunk_to_text_artifact(
                     event,
                     artifact_id=text_artifact_id,
                     task_id=task_id,
                     context_id=context_id,
                     append=not is_first_chunk,
                 )
-                await event_queue.enqueue_event(a2a_event_to_sdk(a2a_event))
+                await event_queue.enqueue_event(a2a_event_to_sdk(chunk_artifact))
                 return
 
             if isinstance(event, ClientToolCallEvent):
                 pending_client_calls.append(event)
-                a2a_event = client_call_to_artifact(
+                call_artifact = client_call_to_artifact(
                     event,
                     task_id=task_id,
                     context_id=context_id,
                 )
-                await event_queue.enqueue_event(a2a_event_to_sdk(a2a_event))
+                await event_queue.enqueue_event(a2a_event_to_sdk(call_artifact))
                 return
 
             # Lifecycle status updates are already on the wire via

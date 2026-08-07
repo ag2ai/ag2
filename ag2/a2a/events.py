@@ -28,26 +28,26 @@ class A2AEvent(BaseEvent):
 class A2ATaskSnapshot(A2AEvent):
     """Full ``Task`` snapshot (``StreamResponse.payload="task"``)."""
 
-    task: Task = Field(repr=False)
+    task: Task = Field(repr=False)  # type: ignore[assignment]
 
 
 class A2AMessage(A2AEvent):
     """Standalone ``Message`` (``StreamResponse.payload="message"``)."""
 
-    message: Message = Field(repr=False)
+    message: Message = Field(repr=False)  # type: ignore[assignment]
 
 
 class A2ATaskStatusUpdate(A2AEvent):
     """``TaskStatusUpdateEvent`` (``payload="status_update"``); ``state`` is duplicated for filtering."""
 
-    update: TaskStatusUpdateEvent = Field(repr=False)
+    update: TaskStatusUpdateEvent = Field(repr=False)  # type: ignore[assignment]
     state: TaskState
 
 
 class A2ATaskArtifactUpdate(A2AEvent):
     """``TaskArtifactUpdateEvent`` (``payload="artifact_update"``); ``append``/``last_chunk`` exposed for chunk-aware logic."""
 
-    update: TaskArtifactUpdateEvent = Field(repr=False)
+    update: TaskArtifactUpdateEvent = Field(repr=False)  # type: ignore[assignment]
     append: bool = False
     last_chunk: bool = False
 

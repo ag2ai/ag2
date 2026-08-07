@@ -111,6 +111,7 @@ class ACPClient:
                 protocol_version=acp.PROTOCOL_VERSION,
                 client_capabilities=self._client_capabilities(),
                 additional_directories=self.config.additional_directories,
+                model=self.config.model,
                 mcp_servers=mcp_servers or None,
                 connect=self.config._connect,
             )
@@ -194,13 +195,32 @@ class ACPClient:
 
         finish_reason = "timeout" if timed_out else (response.stop_reason if response is not None else None)
 
+        # What the agent says it is running beats what was asked for: with no
+        # `model` set, config.model is None while the agent may be on a default
+        # that cannot answer at all — exactly the case the warning below is for.
+        model = session.model or self.config.model
+
+        if finish_reason == "end_turn" and not state.turn_text and not state.turn_files and not state.turn_worked:
+            # The agent reported a clean finish yet emitted nothing at all. Some
+            # CLI agents end a turn this way when the provider call failed on
+            # their side (an unauthorized model, or one that cannot do text) —
+            # nothing reaches the ACP wire, so the empty reply would otherwise
+            # be the only clue.
+            logger.warning(
+                "ACP agent ended the turn with stop_reason='end_turn' but produced no output "
+                "(command=%r, model=%r). The agent may have failed the provider call silently — "
+                "check its own logs, and that the model is spelled right and authorized.",
+                self.config.command,
+                model,
+            )
+
         return ModelResponse(
             message=ModelMessage(state.turn_text),
             usage=map_usage(response.usage if response is not None else None),
             files=state.turn_files,
             finish_reason=finish_reason,
             provider="acp",
-            model=self.config.model,
+            model=model,
         )
 
 

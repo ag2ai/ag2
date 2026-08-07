@@ -6,7 +6,7 @@ sidebarTitle: CLI Agents (ACP)
 # Orchestrating CLI Coding Agents
 
 AG2 can drive external CLI coding agents — **Claude Code**, **Codex**, **OpenCode**,
-**Gemini CLI**, and others — as first-class agents, using the
+**Kilo Code**, **Gemini CLI**, and others — as first-class agents, using the
 [Agent Client Protocol](https://agentclientprotocol.com){.external-link target="_blank"} (ACP).
 
 AG2 plays the ACP **Client** role; each CLI agent runs as an ACP **Agent**
@@ -20,7 +20,7 @@ pip install "ag2[acp]"
 
 The integration is a configuration class — a subclass of `ACPConfig` carrying the
 launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
-`OpenCodeConfig`) — and there are no changes to the `Agent` API.
+`OpenCodeConfig`, `KiloCodeConfig`) — and there are no changes to the `Agent` API.
 
 ## Basic Usage
 
@@ -58,7 +58,8 @@ agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 from ag2 import Agent
 from ag2.acp import CodexConfig
 
-# Launches `codex-acp`. Auth: pass CODEX_API_KEY or OPENAI_API_KEY in env={...}.
+# Launches `codex-acp`. Auth: an existing `codex login` (stored under $HOME), or
+# pass CODEX_API_KEY / OPENAI_API_KEY in env={...}.
 # See "Authentication & billing" below.
 agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
 ```
@@ -71,20 +72,50 @@ from ag2.acp import OpenCodeConfig
 
 # Launches `opencode acp`. Auth: `opencode auth login` (stored under $HOME).
 # See "Authentication & billing" below.
-# Pick the model in OpenCode's own config (opencode.json: "model": "provider/model").
+# model: "provider/model" as listed by `opencode models` (optional).
 agent = Agent("coder", config=OpenCodeConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+
+  <Tab title="Kilo Code">
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import KiloCodeConfig
+
+# Launches `kilo acp` (install: npm install -g @kilocode/cli).
+# Auth: `kilo auth login` (stored under $HOME). See "Authentication & billing" below.
+# Always set model ("provider/model" as listed by `kilo models`) — see the note below.
+agent = Agent(
+    "coder",
+    config=KiloCodeConfig(cwd="/path/to/repo", model="kilo/anthropic/claude-haiku-4.5"),
+)
 ```
   </Tab>
 </Tabs>
 
-!!! note "OpenCode model selection"
+!!! note "Model selection"
 
-    As with the Claude Code and Codex adapters, `OpenCodeConfig`'s `model` field is
-    response metadata only. OpenCode's `acp` subcommand takes no `--model` flag —
-    select the model in OpenCode's own config (`opencode.json`:
-    `"model": "provider/model"`). With nothing configured and no authenticated
-    provider, OpenCode falls back to the first model of its built-in `opencode`
-    provider (OpenCode Zen).
+    `model` is applied at session start via ACP `session/set_config_option`
+    when the agent advertises a model picker — Claude Code, Codex, OpenCode
+    and Kilo Code all do. Use the agent's own advertised ids: for OpenCode and
+    Kilo Code that is `"provider/model"` as listed by `opencode models` /
+    `kilo models`; Claude Code and Codex advertise bare ids. A value the agent
+    does not offer raises `ValueError` before the first turn; leaving `model`
+    unset keeps the agent's default.
+
+    **For Kilo Code, always set `model` explicitly**: a fresh Kilo ACP session
+    may default to an unsuitable model (an image model, at the time of
+    writing), which ends every turn with an empty reply.
+
+!!! warning "Empty replies"
+
+    Some CLI agents swallow provider-side failures — an unauthorized model, or
+    one that cannot produce text — and end the turn with `stop_reason="end_turn"`
+    and no output at all. Nothing reaches the ACP wire, so AG2 can only hand
+    back an empty reply; it logs a warning (`ag2.acp.client`) on such a turn so
+    the emptiness is not the only clue. Run the same prompt through the agent's
+    own CLI (e.g. `kilo run --model <model> "hi"`) to see the real error, and
+    check that the credential covers the model you selected.
 
 ## Authentication & billing
 
@@ -125,8 +156,8 @@ inherited — so it works without setting `env` at all.
 
 | You authenticate with… | How to set it | Billing |
 | :--- | :--- | :--- |
-| **An API key** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` / `CODEX_API_KEY`, or a provider key for OpenCode) | Pass it in `config.env` — a shell `export` is **not** inherited | The provider's **API**: pay-per-token against that API account |
-| **An existing CLI login** on the host (Claude Code `~/.claude`, `opencode auth login`) | Nothing to set — inherited via `$HOME` | Whatever **plan that login is on**, which may be a **subscription** |
+| **An API key** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` / `CODEX_API_KEY`, or a provider key for OpenCode / Kilo Code) | Pass it in `config.env` — a shell `export` is **not** inherited | The provider's **API**: pay-per-token against that API account |
+| **An existing CLI login** on the host (Claude Code `~/.claude`, `codex login` → `~/.codex`, `opencode auth login`, `kilo auth login`) | Nothing to set — inherited via `$HOME` | Whatever **plan that login is on**, which may be a **subscription** |
 
 So "API or subscription" is not a property of ACP or AG2 — it follows the
 credential. By default (no `env`), the agent uses whatever login already exists on
@@ -134,12 +165,14 @@ the host; pass an API key in `env` to bill against the provider's API instead.
 
 !!! note
 
-    The Codex adapter here authenticates only via `CODEX_API_KEY` / `OPENAI_API_KEY`
-    (API billing). The subscription/login path applies to the adapters that read a
-    disk login — Claude Code (`~/.claude`, or a custom location via
-    `CLAUDE_CONFIG_DIR` passed in `env`) and OpenCode (`opencode auth login`). Exact
-    plan names, quotas, and whether a plan permits programmatic use are set by each
-    provider, not by AG2 — check the provider's terms.
+    Every adapter here reads a disk login under `$HOME` when no key is passed in
+    `env` — Claude Code (`~/.claude`, or a custom location via `CLAUDE_CONFIG_DIR`
+    passed in `env`), Codex (`~/.codex`, or `CODEX_HOME`), OpenCode
+    (`opencode auth login`) and Kilo Code (`kilo auth login`). For Codex that login
+    may be a ChatGPT subscription rather than an API key, in which case billing
+    follows the subscription, not per-token API pricing. Exact plan names, quotas,
+    and whether a plan permits programmatic use are set by each provider, not by
+    AG2 — check the provider's terms.
 
 ## Observing the agent's work
 
@@ -293,7 +326,7 @@ manager = Agent(
 | `command` | preset per agent | Executable + args launching the agent in ACP mode |
 | `cwd` | `"."` | Workspace root for the session |
 | `env` | `None` | Extra environment variables for the subprocess |
-| `model` | `None` | Agent model selection, when supported |
+| `model` | `None` | Agent model selection — applied via `session/set_config_option` when the agent advertises a model picker |
 | `permission_policy` | `"ask"` | `ask` / `auto` / `deny` |
 | `fs_root` | `cwd` | Root for mediated `fs/*` access (path-confined) |
 | `allow_terminal` | `True` | Advertise the ACP terminal capability |
