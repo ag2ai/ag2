@@ -13,10 +13,11 @@ keep it out of the extra-free :mod:`ag2.testing`.
 """
 
 import asyncio
+import os
 from collections.abc import Awaitable, Callable, Iterator, Sequence
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import acp
 from acp import schema
@@ -27,14 +28,19 @@ from .types import SessionUpdate
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from acp.core import ClientSideConnection
+
     from ag2.context import StreamId
 
+    from .agent import ACPAgent
     from .config import ConnectHook
     from .session import ACPSession
 
 __all__ = (
     "ACPTurn",
     "FakeACPConfig",
+    "RecordingClient",
+    "connect",
     "fake_acp_config",
 )
 
@@ -193,3 +199,101 @@ def fake_acp_config(
 
     config._connect = connect
     return config
+
+
+class RecordingClient:
+    """An :class:`acp.Client` that records every ``session/update`` it receives.
+
+    The server side of the harness: pair it with :func:`connect` to assert on the
+    notifications an :class:`~ag2.acp.agent.ACPAgent` actually emitted, in the
+    order it emitted them.
+
+    Client capabilities are all off — this client implements no filesystem,
+    terminal or permission behaviour, so advertising any would let a test pass
+    against a capability nothing here provides.
+    """
+
+    def __init__(self) -> None:
+        self.updates: list[tuple[str, SessionUpdate]] = []
+
+    def updates_for(self, session_id: str) -> "list[SessionUpdate]":
+        """Only the updates belonging to ``session_id``, in arrival order."""
+        return [u for sid, u in self.updates if sid == session_id]
+
+    async def session_update(self, *, session_id: str, update: Any, **kwargs: Any) -> None:
+        self.updates.append((session_id, update))
+
+    async def request_permission(self, **kwargs: Any) -> Any:
+        raise NotImplementedError("RecordingClient does not implement permissions.")
+
+    async def write_text_file(self, **kwargs: Any) -> Any:
+        raise NotImplementedError("RecordingClient does not implement fs/write_text_file.")
+
+    async def read_text_file(self, **kwargs: Any) -> Any:
+        raise NotImplementedError("RecordingClient does not implement fs/read_text_file.")
+
+    async def create_terminal(self, **kwargs: Any) -> Any:
+        raise NotImplementedError("RecordingClient does not implement terminals.")
+
+    async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError(f"RecordingClient does not implement ext method {method!r}.")
+
+    async def ext_notification(self, method: str, params: dict[str, Any]) -> None:
+        return None
+
+
+@asynccontextmanager
+async def connect(
+    server: "ACPAgent",
+    *,
+    client: "RecordingClient | None" = None,
+    initialize: bool = True,
+) -> "AsyncGenerator[tuple[ClientSideConnection, RecordingClient]]":
+    """Yield a real ACP ``ClientSideConnection`` driving ``server`` in-process.
+
+    Both sides are the genuine SDK connection classes, wired over an in-memory
+    duplex pipe — no subprocess, no sockets — so tests exercise real JSON-RPC
+    framing, dispatch and error mapping. The ACP analogue of
+    :func:`ag2.mcp.testing.connect`.
+
+    Yields the connection (call ``new_session``, ``prompt``, … on it) and the
+    :class:`RecordingClient` that captured the notifications.
+    """
+    from acp.core import ClientSideConnection
+
+    recorder = client or RecordingClient()
+
+    # Two one-directional pipes: client writes -> agent reads, agent writes ->
+    # client reads. `acp` speaks newline-delimited JSON over asyncio streams.
+    to_agent_r, to_agent_w = await _pipe()
+    to_client_r, to_client_w = await _pipe()
+
+    # ``ACPAgent`` / ``RecordingClient`` implement the SDK's Agent / Client
+    # Protocols structurally; mypy cannot see that through the ``**kwargs``
+    # signatures the Protocols declare.
+    from .guard import serve
+
+    agent_task = asyncio.create_task(serve(server.bind, to_agent_r, to_client_w))
+    conn = ClientSideConnection(cast("Any", lambda _agent: recorder), to_agent_w, to_client_r)
+    try:
+        if initialize:
+            await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
+        yield conn, recorder
+    finally:
+        for writer in (to_agent_w, to_client_w):
+            writer.close()
+        agent_task.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await agent_task
+
+
+async def _pipe() -> "tuple[asyncio.StreamReader, asyncio.StreamWriter]":
+    """An in-memory duplex byte pipe as an asyncio reader/writer pair."""
+    read_fd, write_fd = os.pipe()
+    loop = asyncio.get_running_loop()
+
+    reader = asyncio.StreamReader()
+    await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), os.fdopen(read_fd, "rb", 0))
+    transport, protocol = await loop.connect_write_pipe(asyncio.streams.FlowControlMixin, os.fdopen(write_fd, "wb", 0))
+    writer = asyncio.StreamWriter(transport, protocol, None, loop)
+    return reader, writer
