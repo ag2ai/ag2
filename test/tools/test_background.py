@@ -12,7 +12,9 @@ from ag2.events import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
+    TaskCompleted,
     ToolCallEvent,
+    ToolCallsEvent,
 )
 from ag2.testing import TestConfig
 from ag2.tools.subagents import background_agent_tool
@@ -20,6 +22,62 @@ from ag2.tools.subagents import background_agent_tool
 
 @pytest.mark.asyncio
 class TestBackgroundDelivery:
+    async def test_shared_stream_instance_is_reused_across_concurrent_calls(self) -> None:
+        """Concurrent calls share the supplied stream's history and turn lock."""
+
+        @tool
+        async def wait_for_background_tasks(ctx: Context) -> str:
+            for _ in range(300):
+                events = list(await ctx.stream.history.get_events())
+                if len([event for event in events if isinstance(event, TaskCompleted)]) == 2:
+                    return "done"
+                await asyncio.sleep(0.01)
+            raise AssertionError("background tasks never completed")
+
+        shared_stream = MemoryStream()
+        researcher = Agent(
+            "researcher",
+            config=TestConfig(ModelResponse(ModelMessage("Research complete."))),
+        )
+        bg_tool = background_agent_tool(
+            researcher,
+            description="Run researcher in the background.",
+            stream=shared_stream,
+        )
+        orchestrator = Agent(
+            "orchestrator",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(
+                        calls=[
+                            ToolCallEvent(
+                                name="background_task_researcher",
+                                arguments='{"objective": "Find A"}',
+                            ),
+                            ToolCallEvent(
+                                name="background_task_researcher",
+                                arguments='{"objective": "Find B"}',
+                            ),
+                        ]
+                    )
+                ),
+                ToolCallEvent(name="wait_for_background_tasks", arguments="{}"),
+                ModelResponse(ModelMessage("Both complete.")),
+            ),
+            tools=[bg_tool, wait_for_background_tasks],
+        )
+
+        reply = await asyncio.wait_for(orchestrator.ask("research both"), timeout=3.0)
+
+        assert reply.body == "Both complete."
+        shared_events = list(await shared_stream.history.get_events())
+        assert len([event for event in shared_events if isinstance(event, ModelRequest)]) == 2
+
+        parent_events = list(await reply.context.stream.history.get_events())
+        completions = [event for event in parent_events if isinstance(event, TaskCompleted)]
+        assert len(completions) == 2
+        assert {event.task_stream for event in completions} == {shared_stream.id}
+
     async def test_delivery_via_enqueue(self) -> None:
         """Background tool returns a task id; its enqueued result lands in the
         inbox before the next LLM call thanks to a follow-up tool that polls
