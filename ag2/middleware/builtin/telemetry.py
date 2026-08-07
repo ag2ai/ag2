@@ -38,6 +38,7 @@ from ag2.middleware.base import (
     ToolExecution,
     ToolResultType,
 )
+from ag2.middleware.describe import MiddlewareDescription
 
 try:
     from opentelemetry import trace
@@ -85,6 +86,19 @@ class TelemetryMiddleware(MiddlewareFactory):
         self._provider_name = provider_name
         self._model_name = model_name
         self._span_attributes: dict[str, str] = span_attributes or {}
+
+    def describe(self) -> MiddlewareDescription:
+        # span_attributes may carry secrets; report keys only.
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={
+                "capture_content": self._capture_content,
+                "agent_name": self._agent_name,
+                "provider_name": self._provider_name,
+                "model_name": self._model_name,
+                "span_attributes": tuple(sorted(self._span_attributes)),
+            },
+        )
 
     def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
         return _TelemetryMiddlewareInstance(

@@ -104,7 +104,7 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 | `tools/types.py` | Tool abstractions & schema types | `Tool`, `FunctionTool`, `ClientTool`, `Toolkit`, `ToolSchema`, … |
 | `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `persistent_stream`, `StreamFactory` |
 | `eval/` | Offline evaluation framework | `run`, `scorer`, `EvalTarget`, `Suite`, `Task`, `Trace`, `RunResult`, `Feedback`, `BudgetThresholds`, plus prebuilts under `eval.scorers` |
-| `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, … |
+| `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, `MiddlewareDescription`, … |
 | `response/` | Structured output validation | `ResponseSchema`, `PromptedSchema`, `ResponseProto`, `response_schema` |
 | `history.py` | Conversation history storage | `History`, `Storage`, `MemoryStorage` |
 | `hitl.py` | Human-in-the-loop hooks | — |
