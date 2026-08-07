@@ -13,7 +13,7 @@ keep it out of the extra-free :mod:`ag2.testing`.
 """
 
 import asyncio
-import os
+import socket
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
@@ -41,6 +41,7 @@ __all__ = (
     "FakeACPConfig",
     "RecordingClient",
     "connect",
+    "duplex",
     "fake_acp_config",
 )
 
@@ -263,37 +264,42 @@ async def connect(
 
     recorder = client or RecordingClient()
 
-    # Two one-directional pipes: client writes -> agent reads, agent writes ->
-    # client reads. `acp` speaks newline-delimited JSON over asyncio streams.
-    to_agent_r, to_agent_w = await _pipe()
-    to_client_r, to_client_w = await _pipe()
+    # One socket pair carries both directions. `acp` speaks newline-delimited
+    # JSON over asyncio streams, and a connected socket gives each side a real
+    # ``StreamReader``/``StreamWriter`` on every platform.
+    agent_end, client_end = socket.socketpair()
+    agent_reader, agent_writer = await asyncio.open_connection(sock=agent_end)
+    client_reader, client_writer = await asyncio.open_connection(sock=client_end)
 
     # ``ACPAgent`` / ``RecordingClient`` implement the SDK's Agent / Client
     # Protocols structurally; mypy cannot see that through the ``**kwargs``
     # signatures the Protocols declare.
     from .guard import serve
 
-    agent_task = asyncio.create_task(serve(server.bind, to_agent_r, to_client_w))
-    conn = ClientSideConnection(cast("Any", lambda _agent: recorder), to_agent_w, to_client_r)
+    agent_task = asyncio.create_task(serve(server.bind, agent_reader, agent_writer))
+    conn = ClientSideConnection(cast("Any", lambda _agent: recorder), client_writer, client_reader)
     try:
         if initialize:
             await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
         yield conn, recorder
     finally:
-        for writer in (to_agent_w, to_client_w):
+        for writer in (client_writer, agent_writer):
             writer.close()
         agent_task.cancel()
         with suppress(asyncio.CancelledError, Exception):
             await agent_task
 
 
-async def _pipe() -> "tuple[asyncio.StreamReader, asyncio.StreamWriter]":
-    """An in-memory duplex byte pipe as an asyncio reader/writer pair."""
-    read_fd, write_fd = os.pipe()
-    loop = asyncio.get_running_loop()
+async def duplex() -> (
+    "tuple[tuple[asyncio.StreamReader, asyncio.StreamWriter], tuple[asyncio.StreamReader, asyncio.StreamWriter]]"
+):
+    """A connected pair of asyncio stream endpoints, one per side.
 
-    reader = asyncio.StreamReader()
-    await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), os.fdopen(read_fd, "rb", 0))
-    transport, protocol = await loop.connect_write_pipe(asyncio.streams.FlowControlMixin, os.fdopen(write_fd, "wb", 0))
-    writer = asyncio.StreamWriter(transport, protocol, None, loop)
-    return reader, writer
+    Backed by :func:`socket.socketpair` rather than :func:`os.pipe`. An anonymous
+    pipe cannot be registered with Windows' IOCP, so the proactor event loop
+    rejects it — ``connect_read_pipe`` there raises
+    ``OSError: [WinError 6] The handle is invalid``. A socket works on every
+    platform asyncio supports.
+    """
+    left, right = socket.socketpair()
+    return await asyncio.open_connection(sock=left), await asyncio.open_connection(sock=right)

@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-import os
 from collections.abc import Sequence
 from typing import Any
 
@@ -16,7 +15,7 @@ from typing_extensions import Self
 from ag2 import Agent, Context
 from ag2.acp import ACPAgent, SessionConfig
 from ag2.acp.guard import serve
-from ag2.acp.testing import RecordingClient, connect
+from ag2.acp.testing import RecordingClient, connect, duplex
 from ag2.config import LLMClient, ModelConfig
 from ag2.events import BaseEvent, ModelResponse, ToolCallEvent
 from ag2.history import MemoryStorage
@@ -74,22 +73,6 @@ class _StaticAgent:
 
     async def aclose(self) -> None:
         self.closed = True
-
-
-async def _pipe() -> "tuple[asyncio.StreamReader, asyncio.StreamWriter]":
-    """A one-directional byte pipe as an asyncio reader/writer pair.
-
-    ``ag2.acp.testing.connect`` tears the agent down by *cancelling* it, which is
-    not how a real Client leaves; driving ``serve`` over raw pipes is what lets a
-    test close the far end and exercise the disconnect path ``run_stdio`` sees.
-    """
-    read_fd, write_fd = os.pipe()
-    loop = asyncio.get_running_loop()
-
-    reader = asyncio.StreamReader()
-    await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), os.fdopen(read_fd, "rb", 0))
-    transport, protocol = await loop.connect_write_pipe(asyncio.streams.FlowControlMixin, os.fdopen(write_fd, "wb", 0))
-    return reader, asyncio.StreamWriter(transport, protocol, None, loop)
 
 
 @pytest.mark.asyncio
@@ -214,42 +197,40 @@ class TestServeOverStreams:
 
     async def test_eof_from_the_client_releases_the_scope(self) -> None:
         server = ACPAgent(Agent("workie", config=TestConfig("ok")))
-        to_agent_r, to_agent_w = await _pipe()
-        to_client_r, to_client_w = await _pipe()
-        served = asyncio.create_task(serve(server.bind, to_agent_r, to_client_w))
-        conn = ClientSideConnection(lambda _agent: RecordingClient(), to_agent_w, to_client_r)
+        (agent_r, agent_w), (client_r, client_w) = await duplex()
+        served = asyncio.create_task(serve(server.bind, agent_r, agent_w))
+        conn = ClientSideConnection(lambda _agent: RecordingClient(), client_w, client_r)
 
         try:
             await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
             await conn.new_session(cwd="/tmp")
             assert len(server.sessions) == 1
 
-            to_agent_w.close()  # EOF on the agent's input: the Client hung up
+            client_w.close()  # EOF on the agent's input: the Client hung up
             await asyncio.wait_for(served, timeout=5)
 
             assert len(server.sessions) == 0
         finally:
             await conn.close()
-            to_client_w.close()
+            agent_w.close()
 
     async def test_an_agent_object_the_caller_built_is_not_closed(self) -> None:
         """``serve`` only releases the scope it created; a passed-in agent is not one."""
         agent = _StaticAgent()
-        to_agent_r, to_agent_w = await _pipe()
-        to_client_r, to_client_w = await _pipe()
-        served = asyncio.create_task(serve(agent, to_agent_r, to_client_w))
-        conn = ClientSideConnection(lambda _agent: RecordingClient(), to_agent_w, to_client_r)
+        (agent_r, agent_w), (client_r, client_w) = await duplex()
+        served = asyncio.create_task(serve(agent, agent_r, agent_w))
+        conn = ClientSideConnection(lambda _agent: RecordingClient(), client_w, client_r)
 
         try:
             await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
-            to_agent_w.close()
+            client_w.close()
             await asyncio.wait_for(served, timeout=5)
 
             assert agent.initialized is True
             assert agent.closed is False
         finally:
             await conn.close()
-            to_client_w.close()
+            agent_w.close()
 
 
 @pytest.mark.asyncio
