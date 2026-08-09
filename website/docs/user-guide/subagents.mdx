@@ -209,6 +209,15 @@ The LLM builds an `#!python AgentSpec` on every call. It is JSON-serializable an
 | `tool_names` | `list[str]` | Subset of `available_tools` names to give the child |
 | `response_schema` | `ResponseSchemaSpec | None` | Optional structured output schema |
 
+Unrecognised keys are ignored, as Pydantic would anyway, but they raise an `#!python UnknownSpecFieldWarning` naming the key and suggesting the closest valid field — so a misspelled `#!python tool_nammes` no longer silently produces a child with no tools. To make it fatal, promote the warning:
+
+```python linenums="1"
+import warnings
+from ag2.spec import UnknownSpecFieldWarning
+
+warnings.simplefilter("error", UnknownSpecFieldWarning)
+```
+
 ### How the LLM discovers available tool names
 
 The pool's names and descriptions are **rendered into the `#!python create_and_run_agent` tool description automatically** when the factory is built. The calling agent's system prompt does not need to enumerate them — the LLM discovers the valid names from the tool schema.

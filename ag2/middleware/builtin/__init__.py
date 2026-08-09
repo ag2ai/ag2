@@ -8,7 +8,7 @@ from .history_limiter import HistoryLimiter
 from .llm_retry import RetryMiddleware
 from .logging import LoggingMiddleware
 from .token_limiter import TokenLimiter
-from .tools import approval_required
+from .tools import ApprovalRequired, approval_required
 
 try:
     from .telemetry import TelemetryMiddleware
@@ -21,6 +21,7 @@ except ImportError as e:
     MetricsMiddleware = missing_optional_dependency("MetricsMiddleware", "metrics", e)
 
 __all__ = (
+    "ApprovalRequired",
     "HistoryLimiter",
     "LoggingMiddleware",
     "MetricsMiddleware",
