@@ -252,10 +252,10 @@ async def connect(
 ) -> "AsyncGenerator[tuple[ClientSideConnection, RecordingClient]]":
     """Yield a real ACP ``ClientSideConnection`` driving ``server`` in-process.
 
-    Both sides are the genuine SDK connection classes, wired over an in-memory
-    duplex pipe — no subprocess, no sockets — so tests exercise real JSON-RPC
-    framing, dispatch and error mapping. The ACP analogue of
-    :func:`ag2.mcp.testing.connect`.
+    Both sides are the genuine SDK connection classes, wired over a connected
+    socket pair inside this process — no subprocess to spawn and no port to
+    bind — so tests exercise real JSON-RPC framing, dispatch and error mapping.
+    The ACP analogue of :func:`ag2.mcp.testing.connect`.
 
     Yields the connection (call ``new_session``, ``prompt``, … on it) and the
     :class:`RecordingClient` that captured the notifications.

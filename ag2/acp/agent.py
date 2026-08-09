@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any
 
 import acp
 from acp import schema
+from acp.core import DEFAULT_STDIO_BUFFER_LIMIT_BYTES
+from acp.stdio import stdio_streams
 
 from ag2.agent import Agent
 
@@ -41,7 +43,7 @@ from .sessions import (
 )
 
 if TYPE_CHECKING:
-    from .types import ContentBlock
+    from .types import ContentBlock, McpServer
 
 logger = logging.getLogger(__name__)
 
@@ -214,9 +216,6 @@ class ACPAgent:
         drops the connection, while this agent advertises image and embedded
         content as supported.
         """
-        from acp.core import DEFAULT_STDIO_BUFFER_LIMIT_BYTES
-        from acp.stdio import stdio_streams
-
         limit = DEFAULT_STDIO_BUFFER_LIMIT_BYTES if buffer_limit_bytes is None else buffer_limit_bytes
         reader, writer = await stdio_streams(limit=limit)
         await serve(self.bind, reader, writer)
@@ -320,7 +319,7 @@ class _ConnectionScope:
         self,
         cwd: str,
         additional_directories: "list[str] | None" = None,
-        mcp_servers: "list[Any] | None" = None,
+        mcp_servers: "list[McpServer] | None" = None,
         **kwargs: Any,
     ) -> schema.NewSessionResponse:
         """Create an isolated session and return its id.

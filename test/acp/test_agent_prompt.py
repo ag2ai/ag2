@@ -426,7 +426,30 @@ class TestSessionContext:
             session = await server.sessions.get(created.session_id)
 
         # Captured for an embedding application to inspect — and nothing more.
-        assert len(session.mcp_servers) == 1
+        assert session.mcp_servers == [declared]
+
+    async def test_every_declared_transport_round_trips_as_its_own_model(self) -> None:
+        """A recorded server keeps the shape the Client declared it in.
+
+        ``session/new`` crosses the wire as JSON, so a declared server is only
+        ever as good as what comes back out of it — a stdio entry that lands as a
+        dict, or as the wrong union member, is recorded just as happily. Every
+        shape ``NewSessionRequest.mcp_servers`` admits is pinned once, here.
+        """
+        server = ACPAgent(_agent())
+        declared = [
+            schema.HttpMcpServer(type="http", name="over-http", url="http://127.0.0.1:9/mcp", headers=[]),
+            schema.SseMcpServer(type="sse", name="over-sse", url="http://127.0.0.1:9/sse", headers=[]),
+            schema.AcpMcpServer(type="acp", name="over-acp", id="peer-1"),
+            schema.McpServerStdio(name="over-stdio", command="/bin/true", args=["--serve"], env=[]),
+        ]
+
+        async with connect(server) as (conn, _):
+            created = await conn.new_session(cwd="/tmp", mcp_servers=declared)
+            session = await server.sessions.get(created.session_id)
+
+        # Pydantic equality is class-sensitive, so this pins the model too.
+        assert session.mcp_servers == declared
 
 
 @pytest.mark.asyncio

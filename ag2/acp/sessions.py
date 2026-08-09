@@ -29,6 +29,8 @@ from uuid import UUID, uuid4
 from ag2.history import MemoryStorage, Storage
 from ag2.stream import MemoryStream
 
+from .types import McpServer
+
 logger = logging.getLogger(__name__)
 
 __all__ = (
@@ -169,7 +171,7 @@ class AgentSession:
     stream_id: UUID
     cwd: str = "."
     additional_directories: list[str] = field(default_factory=list)
-    mcp_servers: list[Any] = field(default_factory=list)
+    mcp_servers: list[McpServer] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
     max_queued: int = 8
 
