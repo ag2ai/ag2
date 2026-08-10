@@ -3,18 +3,24 @@
 # SPDX-License-Identifier: Apache-2.0
 """Config classes for ACP-backed agents.
 
-``ACPConfig`` implements the :class:`~ag2.config.config.ModelConfig`
-protocol; ``create()`` returns an ``ACPClient`` that drives the CLI agent over
-the Agent Client Protocol. ``ClaudeCodeConfig``, ``CodexConfig``,
-``OpenCodeConfig`` and ``KiloCodeConfig`` are thin subclasses carrying the
-launch defaults for the Claude Code, Codex, OpenCode and Kilo Code ACP
-adapters respectively.
+:class:`ACPBaseConfig` holds everything about *driving* an agent — workspace,
+model, policies, timeouts, tool exposure. :class:`ACPConfig` adds what it takes
+to *launch* one locally, and :class:`~ag2.acp.remote.ACPRemoteConfig` adds what
+it takes to reach one that is already running elsewhere. Both implement the
+:class:`~ag2.config.config.ModelConfig` protocol; ``create()`` returns an
+``ACPClient`` that drives the agent over the Agent Client Protocol.
+
+``ClaudeCodeConfig``, ``CodexConfig``, ``OpenCodeConfig`` and ``KiloCodeConfig``
+are thin subclasses of :class:`ACPConfig` carrying the launch defaults for the
+Claude Code, Codex, OpenCode and Kilo Code ACP adapters respectively.
 """
 
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from typing_extensions import Self
+
+from .tool_gateway import GatewayAddress
 
 if TYPE_CHECKING:
     from asyncio.subprocess import Process
@@ -29,8 +35,10 @@ if TYPE_CHECKING:
 
     from .session import ACPSession
 
-    # Opens the ACP connection for a session. Production uses ``spawn_agent_process``
-    # (a subprocess); tests inject an in-process double (see ``acp.testing``).
+    # Opens the ACP connection for a session. ``ACPConfig`` spawns a subprocess,
+    # ``ACPRemoteConfig`` dials a URL, and tests inject an in-process double
+    # (see ``acp.testing``) — the process handle is optional precisely so a
+    # connection that has no process can satisfy this.
     ConnectHook = Callable[["acp.Client"], "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]"]
 
 PermissionPolicy = Literal["ask", "auto", "deny"]
@@ -42,20 +50,23 @@ PermissionPolicy = Literal["ask", "auto", "deny"]
 ElicitationPolicy = Literal["ask", "decline"]
 
 
-@dataclass(slots=True)
-class ACPConfig:
-    """Configuration for driving a CLI coding agent over ACP.
+@dataclass(slots=True, kw_only=True)
+class ACPBaseConfig:
+    """Everything about driving a CLI coding agent over ACP, minus how to reach it.
+
+    Subclasses add the transport: :class:`ACPConfig` launches a local
+    subprocess, :class:`~ag2.acp.remote.ACPRemoteConfig` dials a URL. Nothing
+    above the connection hook knows which of the two it is talking to.
+
+    Fields are keyword-only. There are a dozen of them, positional construction
+    was never meaningful, and keyword-only means a field added between two
+    others can never silently shift a caller's arguments.
 
     Attributes:
-        command: Executable + base args launching the agent in ACP mode,
-            e.g. ``["claude-agent-acp"]``. The first element is the executable.
-        cwd: Workspace root passed to ``session/new``.
-        env: Extra environment variables for the subprocess. The subprocess does
-            NOT inherit the full parent environment: only a small whitelist
-            (``HOME``, ``LOGNAME``, ``PATH``, ``SHELL``, ``TERM``, ``USER``) is
-            inherited, merged with this mapping. So API-key auth must be passed
-            here explicitly (a shell ``export`` of the key is not inherited); a
-            disk login under ``$HOME`` (e.g. ``~/.claude``) works without it.
+        cwd: Workspace root passed to ``session/new``. Local to the AG2 process
+            even when the agent is remote: ACP's ``fs/*`` and terminal methods
+            are requests *from* the agent *to* the client, and AG2 is the
+            client, so a remote agent works on the files in front of you.
         model: Agent model selection. Applied at session start via ACP
             ``session/set_config_option`` when the agent advertises a model
             picker in ``session/new`` (Claude Code, OpenCode and Kilo Code all
@@ -72,10 +83,7 @@ class ACPConfig:
             ``hitl_hook``/``context.input``, the same channel permissions use.
             ``"decline"`` does not advertise the capability at all, so a
             conforming agent never asks; one that asks anyway is declined.
-            There is no ``"auto"``: see :data:`ElicitationPolicy`. Documented
-            here beside the permission policy it mirrors, but *declared last*
-            among the fields: these are positional, so inserting one mid-list
-            would silently shift every field after it for a positional caller.
+            There is no ``"auto"``: see :data:`ElicitationPolicy`.
         fs_root: Root for mediated ``fs/*`` access (defaults to ``cwd``).
         allow_terminal: Whether to advertise the ACP terminal capability.
         additional_directories: Extra ACP workspace roots.
@@ -84,7 +92,8 @@ class ACPConfig:
         turn_timeout: Per-prompt-turn timeout in seconds (``None`` = no limit).
         cancel_timeout: Grace period (seconds) after a timed-out turn signals
             ``session/cancel`` for the agent to return the in-flight prompt. If
-            the agent does not respond within it, the subprocess is hard-stopped.
+            the agent does not respond within it, the connection is torn down —
+            hard-stopping the subprocess where there is one.
         expose_tools: When ``True`` (default), the agent's locally-executable
             tools are served to the CLI agent over an in-process HTTP MCP
             server, and ``MCPServerTool`` entries are handed to it directly
@@ -95,9 +104,7 @@ class ACPConfig:
             function tools when the first turn had none — raises.
     """
 
-    command: list[str] = field(default_factory=list)
     cwd: str = "."
-    env: dict[str, str] | None = None
     model: str | None = None
     permission_policy: PermissionPolicy = "ask"
     fs_root: str | None = None
@@ -113,9 +120,47 @@ class ACPConfig:
     # carried by ``copy()`` (a copy is a distinct config with its own sessions).
     _sessions: "dict[StreamId, ACPSession]" = field(init=False, compare=False, repr=False, default_factory=dict)
 
-    # Optional connection opener. ``None`` means spawn the real subprocess; tests
-    # set this to inject an in-process agent. Behavior, not identity — carried by copy().
+    # Optional connection opener. ``None`` means open the subclass's own
+    # connection; tests set this to inject an in-process agent. Behavior, not
+    # identity — carried by copy().
     _connect: "ConnectHook | None" = field(init=False, compare=False, repr=False, default=None)
+
+    # Exception types that mean "the connection to the agent broke", so a turn
+    # that hits one fails with ``ACPTransportError`` instead of coming back
+    # empty. Subclasses widen this with whatever their transport raises.
+    _transport_errors: ClassVar[tuple[type[BaseException], ...]] = (ConnectionError,)
+
+    @property
+    def _transport_label(self) -> str:
+        """How this config's transport is named in errors and logs."""
+        return "acp"
+
+    @property
+    def _agent_label(self) -> str:
+        """How the agent is named in errors, before it introduces itself."""
+        return "acp-agent"
+
+    def _open_connection(
+        self, client: "acp.Client"
+    ) -> "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]":
+        """Open the ACP connection for a session, honouring an injected opener."""
+        if self._connect is not None:
+            return self._connect(client)
+        return self._connect_transport(client)
+
+    def _connect_transport(
+        self, client: "acp.Client"
+    ) -> "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]":
+        """The subclass's own way of reaching the agent."""
+        raise NotImplementedError(f"{type(self).__name__} does not know how to reach an ACP agent")
+
+    def _gateway_address(self) -> GatewayAddress:
+        """Where the tool gateway should bind, and what address the agent gets.
+
+        Loopback-only by default, which is everything a locally-launched agent
+        needs and nothing a remote one can reach.
+        """
+        return GatewayAddress()
 
     def copy(self, /, **overrides: object) -> Self:
         # dataclasses.replace can't statically check dynamic **overrides against
@@ -130,7 +175,7 @@ class ACPConfig:
         return ACPClient(self)
 
     async def aclose(self) -> None:
-        """Tear down every live ACP subprocess started from this config."""
+        """Tear down every live ACP session started from this config."""
         sessions = list(self._sessions.values())
         self._sessions.clear()
         for session in sessions:
@@ -149,7 +194,48 @@ class ACPConfig:
         await self.aclose()
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
+class ACPConfig(ACPBaseConfig):
+    """Drive a CLI coding agent that AG2 launches as a local subprocess.
+
+    Attributes:
+        command: Executable + base args launching the agent in ACP mode,
+            e.g. ``["claude-agent-acp"]``. The first element is the executable.
+        env: Extra environment variables for the subprocess. The subprocess does
+            NOT inherit the full parent environment: only a small whitelist
+            (``HOME``, ``LOGNAME``, ``PATH``, ``SHELL``, ``TERM``, ``USER``) is
+            inherited, merged with this mapping. So API-key auth must be passed
+            here explicitly (a shell ``export`` of the key is not inherited); a
+            disk login under ``$HOME`` (e.g. ``~/.claude``) works without it.
+    """
+
+    command: list[str] = field(default_factory=list)
+    env: dict[str, str] | None = None
+
+    @property
+    def _transport_label(self) -> str:
+        return "stdio"
+
+    @property
+    def _agent_label(self) -> str:
+        return self.command[0] if self.command else "acp-agent"
+
+    def _connect_transport(
+        self, client: "acp.Client"
+    ) -> "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]":
+        import acp
+
+        executable, *args = self.command
+        # `use_unstable_protocol` is what registers the `elicitation/*` routes
+        # on the client side; without it the SDK answers the agent's question
+        # with method-not-found before the bridge ever sees it. Elicitation is
+        # the only unstable route a Client serves, so this enables nothing else.
+        return acp.spawn_agent_process(
+            client, executable, *args, env=self.env, cwd=self.cwd, use_unstable_protocol=True
+        )
+
+
+@dataclass(slots=True, kw_only=True)
 class ClaudeCodeConfig(ACPConfig):
     """``ACPConfig`` preset for the Claude Code ACP adapter.
 
@@ -163,13 +249,13 @@ class ClaudeCodeConfig(ACPConfig):
     Only a small env whitelist is inherited, so a shell ``export`` of the key
     does not reach the subprocess; put it in ``env`` (see ``ACPConfig.env``).
     Select the model via the ``model`` field (one of the adapter's advertised
-    ids — see ``ACPConfig.model``) or the adapter's ``ANTHROPIC_MODEL`` env var.
+    ids — see ``ACPBaseConfig.model``) or the adapter's ``ANTHROPIC_MODEL`` env var.
     """
 
     command: list[str] = field(default_factory=lambda: ["claude-agent-acp"])
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CodexConfig(ACPConfig):
     """``ACPConfig`` preset for the Codex ACP adapter.
 
@@ -184,13 +270,13 @@ class CodexConfig(ACPConfig):
     ``export`` of a key does not reach the subprocess; put it in ``env`` (see
     ``ACPConfig.env``).
     Select the model via the ``model`` field (one of the adapter's advertised
-    ids — see ``ACPConfig.model``) or the adapter's ``MODEL_PROVIDER`` env var.
+    ids — see ``ACPBaseConfig.model``) or the adapter's ``MODEL_PROVIDER`` env var.
     """
 
     command: list[str] = field(default_factory=lambda: ["codex-acp"])
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class OpenCodeConfig(ACPConfig):
     """``ACPConfig`` preset for the OpenCode ACP adapter.
 
@@ -206,7 +292,7 @@ class OpenCodeConfig(ACPConfig):
     command: list[str] = field(default_factory=lambda: ["opencode", "acp"])
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class KiloCodeConfig(ACPConfig):
     """``ACPConfig`` preset for the Kilo Code ACP adapter.
 

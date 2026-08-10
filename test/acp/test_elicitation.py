@@ -81,8 +81,8 @@ async def _reply_body(cfg: Any, human: Human | None = None) -> str:
     return result.body
 
 
+@pytest.mark.asyncio
 class TestCapabilityAdvertisement:
-    @pytest.mark.asyncio
     async def test_ask_advertises_form_and_url(self) -> None:
         initialized: list[schema.ClientCapabilities | None] = []
         cfg = fake_acp_config(_asks(), initialize_calls=initialized)
@@ -96,7 +96,6 @@ class TestCapabilityAdvertisement:
             url=schema.ElicitationUrlCapabilities(),
         )
 
-    @pytest.mark.asyncio
     async def test_decline_advertises_nothing(self) -> None:
         # Not "advertise and refuse": a conforming agent must never ask at all.
         initialized: list[schema.ClientCapabilities | None] = []

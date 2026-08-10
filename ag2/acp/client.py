@@ -21,7 +21,7 @@ import asyncio
 import logging
 import weakref
 from asyncio.subprocess import Process
-from collections.abc import Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from typing import TYPE_CHECKING
 
 import acp
@@ -38,11 +38,12 @@ from .bridge import make_bridge
 from .mappers import map_usage
 from .session import ACPSession, new_prompt_text
 from .tool_gateway import GATEWAY_SERVER_NAME, ToolGateway, partition_tools
+from .transport import ACPTransportError
 
 if TYPE_CHECKING:
     from fast_depends.library.serializer import SerializerProto
 
-    from .config import ACPConfig, ElicitationPolicy
+    from .config import ACPBaseConfig, ElicitationPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +73,14 @@ def _terminate_proc(proc: Process | None) -> None:
 
 
 class ACPClient:
-    """ACP client implementing :class:`LLMClient`, one live session per run."""
+    """ACP client implementing :class:`LLMClient`, one live session per run.
 
-    def __init__(self, config: "ACPConfig") -> None:
+    Transport-blind: every difference between a locally-launched agent and a
+    remote one is settled by the config, through the connection hook it opens
+    and the gateway address it nominates.
+    """
+
+    def __init__(self, config: "ACPBaseConfig") -> None:
         self.config = config
 
     def _client_capabilities(self) -> schema.ClientCapabilities:
@@ -118,22 +124,27 @@ class ACPClient:
                         f"MCPServerTool server_label {GATEWAY_SERVER_NAME!r} collides with the name AG2 "
                         "uses for its own tool gateway in mcp_servers; rename that server."
                     )
+                # Asked for before the server starts: a config whose agent could
+                # never reach the gateway refuses here rather than handing out an
+                # address that does not work.
                 session.gateway = ToolGateway(
-                    session.bridge.state, functions, startup_timeout=self.config.startup_timeout
+                    session.bridge.state,
+                    functions,
+                    address=self.config._gateway_address(),
+                    startup_timeout=self.config.startup_timeout,
                 )
                 await session.gateway.start()
                 mcp_servers.insert(0, session.gateway.as_acp_server())
             await session.ensure(
                 session.bridge,
-                self.config.command,
+                connect=self.config._open_connection,
                 cwd=self.config.cwd,
-                env=self.config.env,
                 protocol_version=acp.PROTOCOL_VERSION,
                 client_capabilities=self._client_capabilities(),
                 additional_directories=self.config.additional_directories,
                 model=self.config.model,
                 mcp_servers=mcp_servers or None,
-                connect=self.config._connect,
+                agent_label=self.config._agent_label,
             )
         except BaseException:
             # ensure() closes itself on failure, but a gateway startup that
@@ -146,6 +157,7 @@ class ACPClient:
         self.config._sessions[key] = session
         # Safety net: terminate the subprocess if the stream is dropped without
         # an explicit aclose(). Keyed on the stream, not the (per-run) client.
+        # A connection with no process behind it makes this a no-op.
         weakref.finalize(context.stream, _terminate_proc, session.proc)
         return session
 
@@ -170,45 +182,29 @@ class ACPClient:
         text, new_count = new_prompt_text(messages, session.sent_count)
 
         async def _run_turn() -> schema.PromptResponse:
-            # ACP 0.11 dropped PromptRequest.message_id; extra kwargs would only
-            # end up in the request's `_meta`, so send none.
-            return await conn.prompt(
-                prompt=[acp.text_block(text)],
-                session_id=session_id,
-            )
+            try:
+                # ACP 0.11 dropped PromptRequest.message_id; extra kwargs would only
+                # end up in the request's `_meta`, so send none.
+                return await conn.prompt(
+                    prompt=[acp.text_block(text)],
+                    session_id=session_id,
+                )
+            except self.config._transport_errors as e:
+                # A connection that dropped mid-turn must not read as an agent
+                # with nothing to say; name the transport and fail the turn.
+                raise ACPTransportError(self.config._transport_label, e) from e
 
-        timed_out = False
-        response: schema.PromptResponse | None = None
-        if self.config.turn_timeout is not None:
-            # Prefer cooperative cancellation: signal session/cancel and let the
-            # agent return the in-flight prompt with stop_reason="cancelled".
-            # Cancelling the coroutine outright would corrupt the JSON-RPC stream.
-            task = asyncio.ensure_future(_run_turn())
-            done, _ = await asyncio.wait({task}, timeout=self.config.turn_timeout)
-            if task in done:
-                response = await task
-            else:
-                timed_out = True
-                await _cancel_quietly(session)
-                # Bounded grace for the agent to honor the cancel.
-                done, _ = await asyncio.wait({task}, timeout=self.config.cancel_timeout)
-                if task in done:
-                    response = await task
-                else:
-                    # Agent ignored the cancel; hard-stop so we never block the
-                    # turn forever. The session is torn down and the next turn
-                    # re-spawns it.
-                    task.cancel()
-                    # Drain the cancelled/broken prompt before tearing down.
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
-                    except Exception:
-                        logger.debug("draining the hard-stopped prompt raised", exc_info=True)
-                    await session.close()
-        else:
-            response = await _run_turn()
+        try:
+            timed_out, response = await self._drive_turn(session, _run_turn)
+        except ACPTransportError:
+            # The connection is gone, so the session it carried is gone too:
+            # drop it rather than leaving a started session with a dead
+            # connection (and, for a remote agent, an open client) that the next
+            # turn on this stream would reuse. Nothing is resumed or replayed —
+            # a later turn starts a new session, as it does after a hard stop.
+            self.config._sessions.pop(context.stream.id, None)
+            await session.close()
+            raise
 
         if response is not None:
             session.sent_count = new_count
@@ -228,9 +224,9 @@ class ACPClient:
             # be the only clue.
             logger.warning(
                 "ACP agent ended the turn with stop_reason='end_turn' but produced no output "
-                "(command=%r, model=%r). The agent may have failed the provider call silently — "
+                "(agent=%r, model=%r). The agent may have failed the provider call silently — "
                 "check its own logs, and that the model is spelled right and authorized.",
-                self.config.command,
+                self.config._agent_label,
                 model,
             )
 
@@ -242,6 +238,47 @@ class ACPClient:
             provider="acp",
             model=model,
         )
+
+    async def _drive_turn(
+        self,
+        session: ACPSession,
+        run_turn: "Callable[[], Awaitable[schema.PromptResponse]]",
+    ) -> "tuple[bool, schema.PromptResponse | None]":
+        """Run one prompt turn under the configured timeout; report (timed out, response)."""
+        timed_out = False
+        response: schema.PromptResponse | None = None
+        if self.config.turn_timeout is not None:
+            # Prefer cooperative cancellation: signal session/cancel and let the
+            # agent return the in-flight prompt with stop_reason="cancelled".
+            # Cancelling the coroutine outright would corrupt the JSON-RPC stream.
+            task = asyncio.ensure_future(run_turn())
+            done, _ = await asyncio.wait({task}, timeout=self.config.turn_timeout)
+            if task in done:
+                response = await task
+            else:
+                timed_out = True
+                await _cancel_quietly(session)
+                # Bounded grace for the agent to honor the cancel.
+                done, _ = await asyncio.wait({task}, timeout=self.config.cancel_timeout)
+                if task in done:
+                    response = await task
+                else:
+                    # Agent ignored the cancel; hard-stop so we never block the
+                    # turn forever. The session is torn down and the next turn
+                    # re-opens it — closing the connection where a remote agent
+                    # leaves no process to kill.
+                    task.cancel()
+                    # Drain the cancelled/broken prompt before tearing down.
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                    except Exception:
+                        logger.debug("draining the hard-stopped prompt raised", exc_info=True)
+                    await session.close()
+        else:
+            response = await run_turn()
+        return timed_out, response
 
 
 def _refresh_tools(session: ACPSession, tools: Sequence[ToolSchema]) -> None:

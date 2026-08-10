@@ -10,9 +10,11 @@ AG2 can drive external CLI coding agents — **Claude Code**, **Codex**, **OpenC
 [Agent Client Protocol](https://agentclientprotocol.com){.external-link target="_blank"} (ACP).
 
 AG2 plays the ACP **Client** role; each CLI agent runs as an ACP **Agent**
-subprocess. Everything the agent does — message output, thinking, tool calls,
-plans, and permission prompts — is **externalized onto AG2's event stream**, so
-you can observe, gate, and orchestrate it like any other AG2 agent.
+subprocess — or, if you prefer, as a process
+[already running on another machine](#driving-an-agent-on-another-machine).
+Everything the agent does — message output, thinking, tool calls, plans, and
+permission prompts — is **externalized onto AG2's event stream**, so you can
+observe, gate, and orchestrate it like any other AG2 agent.
 
 ```bash
 pip install "ag2[acp]"
@@ -311,7 +313,7 @@ There is deliberately no `"auto"`. A permission request has an allow option AG2
 could pick blind; an arbitrary form has no answer AG2 could invent without
 fabricating data on your behalf.
 
-```python linenums="1" hl_lines="10-12"
+```python linenums="1" hl_lines="5-7 12"
 from ag2 import Agent
 from ag2.acp import ClaudeCodeConfig
 from ag2.events import HumanInputRequest
@@ -336,7 +338,9 @@ Two shapes reach you:
   number was asked for, a value outside the allowed set — is asked again rather
   than passed through, so the agent only ever receives values its own schema
   permits. Answer `!decline` at any field to refuse the whole request — a
-  half-filled form is never sent.
+  half-filled form is never sent. A field that stays unanswerable after ten
+  tries declines the request too, so a programmatic hook (which cannot type
+  `!decline`) can never hang the turn.
 - **A URL** (OAuth, payment, device authorization) is shown with the agent's
   message, and the agent resumes only once you confirm you have finished there.
 
@@ -375,6 +379,87 @@ manager = Agent(
     over MCP automatically — see
     [Your tools inside the CLI agent](/docs/user-guide/acp/client/#your-tools-inside-the-cli-agent).
 
+## Driving an agent on another machine
+
+An agent does not have to be one AG2 launches. Point `ACPRemoteConfig` at a URL
+instead of a command and everything else works unchanged — the same `ask`/`run`,
+the same events, the same permission policy, the same model selection:
+
+```bash
+pip install "ag2[acp]" "agent-client-protocol[http]"
+```
+
+```python linenums="1"
+import os
+
+from ag2 import Agent
+from ag2.acp import ACPRemoteConfig
+
+config = ACPRemoteConfig(
+    url="https://dev-box.internal/acp",
+    # Source the token the way you would any other secret — a token written into
+    # a config literal is a token committed.
+    headers={"Authorization": f"Bearer {os.environ['ACP_TOKEN']}"},
+    cwd="/path/to/repo",
+    expose_tools=False,
+)
+
+agent = Agent("coder", config=config)
+reply = await agent.ask("Refactor the auth module and add tests")
+```
+
+The URL's scheme picks the transport — `http`/`https` use ACP's streamable HTTP
+transport, `ws`/`wss` the WebSocket one. Behind a proxy that does not follow that
+convention, `transport="http"` or `transport="websocket"` overrides it.
+
+**The workspace stays on your side.** ACP's file and terminal methods are
+requests *from* the agent *to* the client, and AG2 is the client — so what moves
+off-host is the agent's *reasoning*, not its working copy. A remote agent reads
+and writes your local files through AG2's `fs_root`-confined mediation, and the
+commands it asks to run execute where that workspace is.
+
+There is no `command` field on a remote config, and that is deliberate: a config
+that cannot launch anything should not carry launch-only fields, so an ambiguous
+config is a `TypeError` rather than a precedence rule you have to remember.
+
+A dropped connection fails the turn with an error naming the transport, rather
+than returning a blank reply you cannot distinguish from an agent that had
+nothing to say. There is no reconnect or session resume.
+
+### Exposing your tools to a remote agent
+
+Tool exposure works by running an in-process MCP server and handing the agent its
+URL. That server binds loopback only — which a remote agent cannot reach — so a
+remote config with `expose_tools` on and no reachable address **refuses at
+session start** rather than handing out a URL that silently yields no tools.
+
+Two ways forward. If the agent does not need your tools, turn exposure off
+(`expose_tools=False`, as above) and nothing else is required. If it does, tell
+AG2 what address the agent should dial:
+
+```python linenums="1"
+config = ACPRemoteConfig(
+    url="https://dev-box.internal/acp",
+    cwd="/path/to/repo",
+    gateway_address="10.0.0.5:8931",  # what the agent dials, and where AG2 binds
+)
+```
+
+!!! warning
+
+    `gateway_address` opens a local port to the network. The gateway binds that
+    address instead of loopback, its DNS-rebinding allowlist widens to match, and
+    it serves **plain HTTP** whose only credential is an unguessable path segment
+    in the URL — which proxies and gateways log by design. Anyone who can reach
+    that address and observe that URL can execute your agent's function tools in
+    your process.
+
+    That is why the address is explicit — it is never inferred from the presence
+    of a URL — and why the default stays closed. Arrange the reachability
+    yourself and keep it narrow: a private network, a VPN, or an SSH tunnel to
+    the agent's host, never a public interface. When in doubt, prefer
+    `expose_tools=False`.
+
 ## Configuration reference
 
 `ACPConfig` (and its presets like `ClaudeCodeConfig`) accept:
@@ -394,6 +479,17 @@ manager = Agent(
 | `turn_timeout` | `None` | Per-prompt-turn timeout (s) |
 | `cancel_timeout` | `5.0` | Grace period (s) after a timed-out turn signals `session/cancel` before the subprocess is hard-stopped |
 | `expose_tools` | `True` | Serve the agent's tools to the CLI agent over MCP (default `True`) |
+
+Every field above except `command` and `env` lives on the shared
+`ACPBaseConfig`, so it means the same thing for a remote agent.
+`ACPRemoteConfig` swaps the two launch fields for these:
+
+| Field | Default | Purpose |
+| :--- | :--- | :--- |
+| `url` | *required* | Where the agent speaks ACP; the scheme picks the transport |
+| `headers` | `{}` | Sent with every request — e.g. `Authorization` |
+| `transport` | `None` | `"http"` / `"websocket"`, overriding the URL's scheme |
+| `gateway_address` | `None` | `host` or `host:port` the agent should dial to reach the tool gateway |
 
 File and terminal operations the agent requests are mediated by AG2: file access
 is confined to `fs_root`, and the agent's commands run under AG2's control.

@@ -17,6 +17,7 @@ import socket
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
+from functools import cache
 from typing import TYPE_CHECKING, Any, cast
 
 import acp
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 
     from .agent import ACPAgent
     from .config import ConnectHook
+    from .remote import ACPRemoteConfig
     from .session import ACPSession
 
 FAKE_SESSION_ID = "fake-session-1"
@@ -47,6 +49,7 @@ __all__ = (
     "connect",
     "duplex",
     "fake_acp_config",
+    "fake_remote_acp_config",
 )
 
 
@@ -194,24 +197,84 @@ class _FakeConnection:
         return schema.PromptResponse(stop_reason=turn.stop_reason, usage=turn.usage)
 
 
-@dataclass(slots=True)
-class FakeACPConfig(ACPConfig):
-    """:class:`ACPConfig` bound to the scripted in-process agent.
+class _FakeConfigViews:
+    """Public read-only views of a fake config's run-scoped state.
 
-    Adds public read-only views of the run-scoped state so tests can assert on
-    session lifecycle (leaks, teardown) without reaching into private fields.
+    Lets tests assert on session lifecycle (leaks, teardown) without reaching
+    into private fields. Mixed into the launch-based and remote fakes alike —
+    the whole point of the design is that a behavioural test cannot tell them
+    apart, so neither should the harness.
     """
+
+    __slots__ = ()
 
     @property
     def sessions(self) -> "dict[StreamId, ACPSession]":
         """Live sessions keyed by stream id (empty once ``aclose()`` ran)."""
-        return self._sessions
+        return self._sessions  # type: ignore[attr-defined]
 
     @property
     def connect(self) -> "ConnectHook":
         """The in-process connection opener, for driving ``ACPSession.ensure`` directly."""
-        assert self._connect is not None
-        return self._connect
+        connect = self._connect  # type: ignore[attr-defined]
+        assert connect is not None
+        return cast("ConnectHook", connect)
+
+
+@dataclass(slots=True, kw_only=True)
+class FakeACPConfig(_FakeConfigViews, ACPConfig):
+    """:class:`ACPConfig` bound to the scripted in-process agent."""
+
+
+@cache
+def _fake_remote_config_type() -> "type[ACPRemoteConfig]":
+    """The remote fake's class, built on first use.
+
+    Deferred so importing this module does not require
+    ``agent-client-protocol[http]``: a caller who only drives local subprocesses
+    still gets the rest of the harness.
+    """
+    from .remote import ACPRemoteConfig
+
+    @dataclass(slots=True, kw_only=True)
+    class FakeACPRemoteConfig(_FakeConfigViews, ACPRemoteConfig):
+        """:class:`ACPRemoteConfig` bound to the scripted in-process agent."""
+
+    return FakeACPRemoteConfig
+
+
+def _scripted_connect(
+    *turns: ACPTurn,
+    agent_capabilities: "schema.AgentCapabilities | None" = None,
+    config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
+    config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
+    initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
+    elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
+) -> "ConnectHook":
+    """A connection hook yielding the scripted in-process agent and no process."""
+    if agent_capabilities is None:
+        agent_capabilities = schema.AgentCapabilities(mcp_capabilities=schema.McpCapabilities(http=True, sse=True))
+    script = list(turns)
+
+    @asynccontextmanager
+    async def connect(client: acp.Client) -> "AsyncGenerator[tuple[_FakeConnection, None]]":
+        conn = _FakeConnection(
+            client,
+            iter(script),
+            agent_capabilities=agent_capabilities,
+            config_options=config_options,
+            config_option_calls=config_option_calls,
+            initialize_calls=initialize_calls,
+            initialize_elicitations=initialize_elicitations,
+            elicitation_responses=elicitation_responses,
+        )
+        try:
+            yield conn, None
+        finally:
+            conn.closed = True
+
+    return cast("ConnectHook", connect)
 
 
 def fake_acp_config(
@@ -247,30 +310,49 @@ def fake_acp_config(
     * the ``client_capabilities`` of each ``initialize`` is appended to
       ``initialize_calls``, which is how a test sees what the agent was told AG2
       supports.
+
+    See :func:`fake_remote_acp_config` for the same agent behind a remote config.
     """
-    if agent_capabilities is None:
-        agent_capabilities = schema.AgentCapabilities(mcp_capabilities=schema.McpCapabilities(http=True, sse=True))
     config = FakeACPConfig(**overrides)
-    script = list(turns)
+    config._connect = _scripted_connect(
+        *turns,
+        agent_capabilities=agent_capabilities,
+        config_options=config_options,
+        config_option_calls=config_option_calls,
+        initialize_calls=initialize_calls,
+        initialize_elicitations=initialize_elicitations,
+        elicitation_responses=elicitation_responses,
+    )
+    return config
 
-    @asynccontextmanager
-    async def connect(client: acp.Client) -> "AsyncGenerator[tuple[_FakeConnection, None]]":
-        conn = _FakeConnection(
-            client,
-            iter(script),
-            agent_capabilities=agent_capabilities,
-            config_options=config_options,
-            config_option_calls=config_option_calls,
-            initialize_calls=initialize_calls,
-            initialize_elicitations=initialize_elicitations,
-            elicitation_responses=elicitation_responses,
-        )
-        try:
-            yield conn, None
-        finally:
-            conn.closed = True
 
-    config._connect = connect
+def fake_remote_acp_config(
+    *turns: ACPTurn,
+    url: str = "https://agent.example/acp",
+    agent_capabilities: "schema.AgentCapabilities | None" = None,
+    config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
+    config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
+    initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
+    elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
+    **overrides: Any,
+) -> "ACPRemoteConfig":
+    """:func:`fake_acp_config`, but behind an :class:`ACPRemoteConfig`.
+
+    Same scripted agent, same arguments; only the config the turns run through
+    differs. No socket is opened — ``url`` is there because a remote config must
+    have one, and to prove behaviour does not depend on it.
+    """
+    config = _fake_remote_config_type()(url=url, **overrides)
+    config._connect = _scripted_connect(
+        *turns,
+        agent_capabilities=agent_capabilities,
+        config_options=config_options,
+        config_option_calls=config_option_calls,
+        initialize_calls=initialize_calls,
+        initialize_elicitations=initialize_elicitations,
+        elicitation_responses=elicitation_responses,
+    )
     return config
 
 
