@@ -104,6 +104,16 @@ def test_acp_config_is_usable_directly() -> None:
     assert cfg.permission_policy == "auto"
 
 
+def test_elicitation_policy_defaults_to_ask_and_survives_copy() -> None:
+    # Same default as the permission policy: asking is what a caller gets for free.
+    assert ACPConfig().elicitation_policy == "ask"
+    assert ClaudeCodeConfig().elicitation_policy == "ask"
+
+    unattended = ACPConfig().copy(elicitation_policy="decline")
+    assert unattended.elicitation_policy == "decline"
+    assert ACPConfig().elicitation_policy == "ask"  # original untouched
+
+
 def test_expose_tools_defaults_on_and_survives_copy() -> None:
     cfg = ACPConfig()
     assert cfg.expose_tools is True

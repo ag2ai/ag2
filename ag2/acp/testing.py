@@ -36,14 +36,38 @@ if TYPE_CHECKING:
     from .config import ConnectHook
     from .session import ACPSession
 
+FAKE_SESSION_ID = "fake-session-1"
+
 __all__ = (
+    "FAKE_SESSION_ID",
     "ACPTurn",
     "FakeACPConfig",
     "RecordingClient",
+    "ScriptedElicitation",
     "connect",
     "duplex",
     "fake_acp_config",
 )
+
+
+@dataclass
+class ScriptedElicitation:
+    """One ``elicitation/create`` the scripted agent issues — the agent asking the user.
+
+    Attributes:
+        message: The human-readable message describing what input is needed.
+        mode: The requested mode — normally one of ACP's four
+            ``ElicitationMode`` models (form/url × session/request scope).
+            Anything else stands in for a mode a later protocol release adds,
+            which the client is expected to decline rather than error on.
+        complete: When ``True`` the agent follows the answer with an
+            ``elicitation/complete`` notification, as an agent may alongside a
+            ``url``-mode flow. Requires a ``mode`` carrying an ``elicitation_id``.
+    """
+
+    message: str
+    mode: Any
+    complete: bool = False
 
 
 @dataclass
@@ -58,6 +82,11 @@ class ACPTurn:
             ``stop_reason="cancelled"``) — used to exercise ``turn_timeout``.
         on_prompt: Awaited at the start of the turn, before ``updates`` replay —
             lets a test act as the CLI agent mid-turn (e.g. call the MCP gateway).
+        elicitations: Questions the agent puts to the user during the turn, issued
+            in order after ``on_prompt`` and before ``updates`` replay — so a turn
+            scripts the question *and* the reply the agent gives once answered.
+            Each response the client sends back is appended to the
+            ``elicitation_responses`` list passed to :func:`fake_acp_config`.
     """
 
     updates: Sequence[SessionUpdate] = field(default_factory=tuple)
@@ -65,6 +94,7 @@ class ACPTurn:
     usage: "schema.Usage | None" = None
     hang: bool = False
     on_prompt: "Callable[[], Awaitable[None]] | None" = None
+    elicitations: Sequence[ScriptedElicitation] = field(default_factory=tuple)
 
 
 class _FakeConnection:
@@ -82,19 +112,31 @@ class _FakeConnection:
         agent_capabilities: "schema.AgentCapabilities | None" = None,
         config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
         config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+        initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
+        initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
+        elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
     ) -> None:
         self._client = client
         self._turns = turns
         self._config_options = list(config_options or [])
         self._cancelled = asyncio.Event()
         self._agent_capabilities = agent_capabilities
+        self._initialize_elicitations = initialize_elicitations
         self.new_session_kwargs: dict[str, Any] | None = None
         self.closed = False
         self.config_option_calls: list[tuple[str, str | bool]] = (
             config_option_calls if config_option_calls is not None else []
         )
+        self.initialize_calls: list[schema.ClientCapabilities | None] = (
+            initialize_calls if initialize_calls is not None else []
+        )
+        self.elicitation_responses: list[schema.CreateElicitationResponse] = (
+            elicitation_responses if elicitation_responses is not None else []
+        )
 
     async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
+        self.initialize_calls.append(kwargs.get("client_capabilities"))
+        await self._elicit(self._initialize_elicitations)
         return schema.InitializeResponse(
             protocol_version=acp.PROTOCOL_VERSION,
             agent_capabilities=self._agent_capabilities,
@@ -103,9 +145,20 @@ class _FakeConnection:
     async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
         self.new_session_kwargs = kwargs
         return schema.NewSessionResponse(
-            session_id="fake-session-1",
+            session_id=FAKE_SESSION_ID,
             config_options=self._config_options or None,
         )
+
+    async def _elicit(self, elicitations: "Sequence[ScriptedElicitation]") -> None:
+        """Put each scripted question to the client, recording what it answered."""
+        for elicitation in elicitations:
+            response = await self._client.create_elicitation(
+                message=elicitation.message,
+                mode=elicitation.mode,
+            )
+            self.elicitation_responses.append(response)
+            if elicitation.complete:
+                await self._client.complete_elicitation(elicitation_id=elicitation.mode.elicitation_id)
 
     async def set_config_option(
         self, *, session_id: str, config_id: str, value: Any, **kwargs: Any
@@ -131,6 +184,7 @@ class _FakeConnection:
         turn = next(self._turns)
         if turn.on_prompt is not None:
             await turn.on_prompt()
+        await self._elicit(turn.elicitations)
         if turn.hang:
             await self._cancelled.wait()
             self._cancelled.clear()
@@ -165,6 +219,9 @@ def fake_acp_config(
     agent_capabilities: "schema.AgentCapabilities | None" = None,
     config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
     config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
+    initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
+    elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
     **overrides: Any,
 ) -> FakeACPConfig:
     """Build an :class:`ACPConfig` backed by an in-process scripted agent.
@@ -178,6 +235,18 @@ def fake_acp_config(
     agent's model picker et al.); ``session/set_config_option`` calls are
     appended to the caller-supplied ``config_option_calls`` list as
     ``(config_id, value)`` tuples.
+
+    The elicitation seam works the same way — one field for what the agent asks,
+    one list for what the client answered:
+
+    * ``ACPTurn.elicitations`` are the questions the agent puts to the user
+      mid-turn, and ``initialize_elicitations`` the ones it puts *before* any
+      session exists (a pre-session auth flow, necessarily request-scoped).
+    * every response the client sends back is appended to
+      ``elicitation_responses`` in order.
+    * the ``client_capabilities`` of each ``initialize`` is appended to
+      ``initialize_calls``, which is how a test sees what the agent was told AG2
+      supports.
     """
     if agent_capabilities is None:
         agent_capabilities = schema.AgentCapabilities(mcp_capabilities=schema.McpCapabilities(http=True, sse=True))
@@ -192,6 +261,9 @@ def fake_acp_config(
             agent_capabilities=agent_capabilities,
             config_options=config_options,
             config_option_calls=config_option_calls,
+            initialize_calls=initialize_calls,
+            initialize_elicitations=initialize_elicitations,
+            elicitation_responses=elicitation_responses,
         )
         try:
             yield conn, None

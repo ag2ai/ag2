@@ -19,6 +19,7 @@ from acp import schema
 
 from ag2.events.types import BinaryResult
 
+from .elicitation import resolve_elicitation_response
 from .mappers import block_text, block_to_files, map_session_update
 from .permissions import resolve_permission_option_id
 from .types import SessionUpdate
@@ -225,6 +226,9 @@ class BridgeState:
     ) -> str | None:
         return await resolve_permission_option_id(self.config.permission_policy, options, tool_call, self.context)
 
+    async def resolve_elicitation(self, message: str, mode: Any) -> schema.CreateElicitationResponse:
+        return await resolve_elicitation_response(self.config.elicitation_policy, message, mode, self.context)
+
 
 class ACPBridge(acp.Client):
     """Concrete ``acp.Client`` that routes ACP callbacks into a ``BridgeState``."""
@@ -246,6 +250,25 @@ class ACPBridge(acp.Client):
         if chosen is None:
             return schema.RequestPermissionResponse(outcome=schema.DeniedOutcome(outcome="cancelled"))
         return schema.RequestPermissionResponse(outcome=schema.AllowedOutcome(option_id=chosen, outcome="selected"))
+
+    async def create_elicitation(self, message: str, mode: Any, **kwargs: Any) -> schema.CreateElicitationResponse:
+        """Answer the agent's question — accept, decline or cancel.
+
+        ``mode`` is typed loosely on purpose: the four known form/url modes are
+        rendered, and anything a later protocol release adds is declined rather
+        than raising, so an agent using a newer mode falls back instead of seeing
+        a transport failure.
+        """
+        return await self.state.resolve_elicitation(message, mode)
+
+    async def complete_elicitation(self, elicitation_id: str, **kwargs: Any) -> None:
+        """Accept the agent's ``elicitation/complete`` and do nothing with it.
+
+        It signals that an out-of-band ``url``-mode flow finished. AG2 waits on
+        the *human's* confirmation rather than on this notification (the human is
+        the one who knows the flow really completed), so there is nothing to act
+        on — but it must not error, or the agent's turn fails over a courtesy.
+        """
 
     async def read_text_file(
         self,

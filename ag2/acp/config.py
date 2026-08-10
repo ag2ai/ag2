@@ -35,6 +35,12 @@ if TYPE_CHECKING:
 
 PermissionPolicy = Literal["ask", "auto", "deny"]
 
+# Deliberately two-valued, unlike ``PermissionPolicy``: a permission request
+# carries an allow option a client can pick blind, whereas an arbitrary
+# elicitation form has no answer AG2 could invent without fabricating data on
+# the user's behalf. So there is no ``"auto"`` — only ask a human, or decline.
+ElicitationPolicy = Literal["ask", "decline"]
+
 
 @dataclass(slots=True)
 class ACPConfig:
@@ -59,6 +65,17 @@ class ACPConfig:
         permission_policy: How to answer ``session/request_permission``:
             ``"ask"`` routes to the agent's ``hitl_hook``/``context.input``,
             ``"auto"`` allows, ``"deny"`` rejects.
+        elicitation_policy: How to answer ``elicitation/create`` — the agent
+            asking the *user* a question (a form, or a URL to complete an
+            out-of-band flow such as OAuth). ``"ask"`` (default) advertises the
+            elicitation capability and routes the question to the agent's
+            ``hitl_hook``/``context.input``, the same channel permissions use.
+            ``"decline"`` does not advertise the capability at all, so a
+            conforming agent never asks; one that asks anyway is declined.
+            There is no ``"auto"``: see :data:`ElicitationPolicy`. Documented
+            here beside the permission policy it mirrors, but *declared last*
+            among the fields: these are positional, so inserting one mid-list
+            would silently shift every field after it for a positional caller.
         fs_root: Root for mediated ``fs/*`` access (defaults to ``cwd``).
         allow_terminal: Whether to advertise the ACP terminal capability.
         additional_directories: Extra ACP workspace roots.
@@ -90,6 +107,7 @@ class ACPConfig:
     turn_timeout: float | None = None
     cancel_timeout: float = 5.0
     expose_tools: bool = True
+    elicitation_policy: ElicitationPolicy = "ask"
 
     # Run-scoped live sessions, keyed by stream id. Not part of identity and not
     # carried by ``copy()`` (a copy is a distinct config with its own sessions).

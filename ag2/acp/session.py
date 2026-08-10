@@ -160,7 +160,11 @@ class ACPSession:
             self._cm = connect(client)
         else:
             executable, *args = command
-            self._cm = acp.spawn_agent_process(client, executable, *args, env=env, cwd=cwd)
+            # `use_unstable_protocol` is what registers the `elicitation/*` routes
+            # on the client side; without it the SDK answers the agent's question
+            # with method-not-found before the bridge ever sees it. Elicitation is
+            # the only unstable route a Client serves, so this enables nothing else.
+            self._cm = acp.spawn_agent_process(client, executable, *args, env=env, cwd=cwd, use_unstable_protocol=True)
         self.conn, self.proc = await self._cm.__aenter__()
         try:
             init = await self.conn.initialize(

@@ -42,9 +42,24 @@ from .tool_gateway import GATEWAY_SERVER_NAME, ToolGateway, partition_tools
 if TYPE_CHECKING:
     from fast_depends.library.serializer import SerializerProto
 
-    from .config import ACPConfig
+    from .config import ACPConfig, ElicitationPolicy
 
 logger = logging.getLogger(__name__)
+
+
+def _elicitation_capabilities(policy: "ElicitationPolicy") -> schema.ElicitationCapabilities | None:
+    """What ``initialize`` advertises for elicitation, per policy.
+
+    ``"decline"`` advertises nothing at all rather than advertising support and
+    refusing every request: the protocol already has a way to say "don't ask me",
+    and using it saves the agent a round trip and a branch on the refusal.
+    """
+    if policy == "decline":
+        return None
+    return schema.ElicitationCapabilities(
+        form=schema.ElicitationFormCapabilities(),
+        url=schema.ElicitationUrlCapabilities(),
+    )
 
 
 def _terminate_proc(proc: Process | None) -> None:
@@ -66,6 +81,7 @@ class ACPClient:
         return schema.ClientCapabilities(
             fs=schema.FileSystemCapabilities(read_text_file=True, write_text_file=True),
             terminal=bool(self.config.allow_terminal),
+            elicitation=_elicitation_capabilities(self.config.elicitation_policy),
         )
 
     async def _session_for(self, context: ConversationContext, tools: Sequence[ToolSchema]) -> ACPSession:
@@ -78,6 +94,10 @@ class ACPClient:
 
         session = ACPSession()
         session.bridge = make_bridge(self.config)
+        # Before `ensure`, not after: an elicitation scoped to a *request* rather
+        # than a session (a pre-session auth flow) arrives during initialize, and
+        # the bridge needs a context to reach the human with it.
+        session.bridge.state.context = context
 
         mcp_servers: list[schema.HttpMcpServer] = []
         functions: list[FunctionToolSchema] = []

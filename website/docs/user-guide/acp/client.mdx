@@ -211,6 +211,7 @@ async with agent.run("Add a healthcheck endpoint") as run:
 | plan | `ACPPlan` |
 | mode change | `ACPModeChange` |
 | available commands | `ACPAvailableCommands` |
+| question for the user | `ACPElicitation` (see [Questions the agent asks you](#questions-the-agent-asks-you-elicitation)) |
 
 ## Your tools inside the CLI agent
 
@@ -294,6 +295,63 @@ agent = Agent(
 )
 ```
 
+## Questions the agent asks you (elicitation)
+
+A permission request asks "may I do this?". An *elicitation* asks something the
+agent cannot answer itself — "which refactoring strategy?", or "authorize access
+to your GitHub repos". It arrives on the same HITL channel, governed by
+`elicitation_policy`:
+
+| Policy | Behavior |
+| :--- | :--- |
+| `"ask"` (default) | Advertise the capability and route the question to the agent's `hitl_hook` / `context.input` |
+| `"decline"` | Do not advertise the capability at all, so a conforming agent never asks |
+
+There is deliberately no `"auto"`. A permission request has an allow option AG2
+could pick blind; an arbitrary form has no answer AG2 could invent without
+fabricating data on your behalf.
+
+```python linenums="1" hl_lines="10-12"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.events import HumanInputRequest
+
+def answer(event: HumanInputRequest) -> str:
+    """Show the agent's question and return the human's answer."""
+    return input(f"{event.content}\n> ")
+
+agent = Agent(
+    "coder",
+    config=ClaudeCodeConfig(cwd="/repo"),  # elicitation_policy="ask" by default
+    hitl_hook=answer,
+)
+reply = await agent.ask("Split this module up — ask me before choosing a layout.")
+```
+
+Two shapes reach you:
+
+- **A form** is rendered one prompt per requested field, in schema order, showing
+  the field's title, description, allowed values, bounds and default. An empty
+  answer takes the default; an answer the field cannot take — a word where a
+  number was asked for, a value outside the allowed set — is asked again rather
+  than passed through, so the agent only ever receives values its own schema
+  permits. Answer `!decline` at any field to refuse the whole request — a
+  half-filled form is never sent.
+- **A URL** (OAuth, payment, device authorization) is shown with the agent's
+  message, and the agent resumes only once you confirm you have finished there.
+
+The question also surfaces on the Run's stream as an `ACPElicitation` event
+(see [Observing the agent's work](#observing-the-agents-work)) *before* you are
+prompted, so an observer sees it even when something other than an interactive
+human answers.
+
+!!! warning "Unattended runs should decline"
+
+    Under `"ask"` with no `hitl_hook` anywhere, there is no human to reach: the
+    request is cancelled so the turn cannot deadlock. That works, but the agent
+    spends a round trip finding out. For headless orchestration set
+    `elicitation_policy="decline"` and the agent never asks in the first place.
+
 ## Orchestrating multiple agents
 
 Because each CLI agent is an `Agent`, you can compose them — including as tools
@@ -328,6 +386,7 @@ manager = Agent(
 | `env` | `None` | Extra environment variables for the subprocess |
 | `model` | `None` | Agent model selection — applied via `session/set_config_option` when the agent advertises a model picker |
 | `permission_policy` | `"ask"` | `ask` / `auto` / `deny` |
+| `elicitation_policy` | `"ask"` | `ask` / `decline` — whether the agent may ask *you* a question |
 | `fs_root` | `cwd` | Root for mediated `fs/*` access (path-confined) |
 | `allow_terminal` | `True` | Advertise the ACP terminal capability |
 | `additional_directories` | `[]` | Extra workspace roots |
