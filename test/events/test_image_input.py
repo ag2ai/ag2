@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
@@ -46,13 +47,13 @@ class TestData:
 
 
 def test_accepts_gemini_image_formats() -> None:
-    gemini_media_types: tuple[ImageMediaType, ...] = ("image/heic", "image/heif")
+    heic_input: BinaryInput = ImageInput(data=b"raw", media_type="image/heic")
+    heif_input: BinaryInput = ImageInput(data=b"raw", media_type="image/heif")
 
-    for media_type in gemini_media_types:
-        result = ImageInput(data=b"raw", media_type=media_type)
-
-        assert isinstance(result, BinaryInput)
-        assert result.media_type == media_type
+    assert "image/heic" in get_args(ImageMediaType)
+    assert "image/heif" in get_args(ImageMediaType)
+    assert heic_input.media_type == "image/heic"
+    assert heif_input.media_type == "image/heif"
 
 
 class TestPath:
