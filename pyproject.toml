@@ -88,7 +88,7 @@ gemini = [
     "google-api-core",
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
-    "google-genai>=1.20.0,<3.0",
+    "google-genai>=1.68.0,<3.0",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",

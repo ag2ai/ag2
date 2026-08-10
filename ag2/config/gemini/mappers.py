@@ -147,21 +147,41 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
     return result or None
 
 
-def build_tool_config(schemas: list[ToolSchema]) -> types.ToolConfig | None:
+#: Schemas ``build_tools`` maps onto Gemini's server-side (builtin) tools.
+SERVER_SIDE_SCHEMAS: tuple[type[ToolSchema], ...] = (
+    WebSearchToolSchema,
+    WebFetchToolSchema,
+    CodeExecutionToolSchema,
+    FileSearchToolSchema,
+    GoogleMapsToolSchema,
+)
+
+
+def build_tool_config(schemas: list[ToolSchema], *, vertexai: bool = False) -> types.ToolConfig | None:
     """Build a Gemini ToolConfig for schemas that require one.
 
-    Currently only Google Maps geo-biasing (lat/lng) needs a
-    ``retrieval_config``; returns ``None`` when nothing does.
+    Google Maps geo-biasing (lat/lng) needs a ``retrieval_config``.
+
+    Returns ``None`` when nothing needs a config.
     """
+    config: types.ToolConfig | None = None
+
     for t in schemas:
         if isinstance(t, GoogleMapsToolSchema) and t.latitude is not None and t.longitude is not None:
-            return types.ToolConfig(
-                retrieval_config=types.RetrievalConfig(
-                    lat_lng=types.LatLng(latitude=t.latitude, longitude=t.longitude),
-                    language_code=t.language_code,
-                )
+            config = config or types.ToolConfig()
+            config.retrieval_config = types.RetrievalConfig(
+                lat_lng=types.LatLng(latitude=t.latitude, longitude=t.longitude),
+                language_code=t.language_code,
             )
-    return None
+
+    mixes_server_side_with_functions = any(isinstance(t, SERVER_SIDE_SCHEMAS) for t in schemas) and any(
+        isinstance(t, FunctionToolSchema) for t in schemas
+    )
+    if mixes_server_side_with_functions and not vertexai:
+        config = config or types.ToolConfig()
+        config.include_server_side_tool_invocations = True
+
+    return config
 
 
 _URL_EXTENSION_TO_MIME: dict[str, str] = {
