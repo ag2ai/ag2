@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from ag2.events import BinaryInput, FileIdInput, ImageInput, UrlInput
+from ag2.types import ImageMediaType
 
 
 def test_url_returns_image_url_input() -> None:
@@ -42,6 +43,16 @@ class TestData:
     def test_missing_media_type_raises(self) -> None:
         with pytest.raises(ValueError, match="media_type"):
             ImageInput(data=b"raw")
+
+
+def test_accepts_gemini_image_formats() -> None:
+    gemini_media_types: tuple[ImageMediaType, ...] = ("image/heic", "image/heif")
+
+    for media_type in gemini_media_types:
+        result = ImageInput(data=b"raw", media_type=media_type)
+
+        assert isinstance(result, BinaryInput)
+        assert result.media_type == media_type
 
 
 class TestPath:
