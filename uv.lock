@@ -303,7 +303,7 @@ requires-dist = [
     { name = "google-api-core", marker = "extra == 'gemini'" },
     { name = "google-auth", marker = "extra == 'gemini'" },
     { name = "google-cloud-aiplatform", marker = "extra == 'gemini'" },
-    { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.20.0,<3.0" },
+    { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.68.0,<3.0" },
     { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "jsonschema", marker = "extra == 'a2ui'", specifier = ">=4.18.0,<5" },
     { name = "jsonschema", marker = "extra == 'gemini'" },
