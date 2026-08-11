@@ -352,12 +352,14 @@ def _make_solve_subtasks_tool(
 
         accepted = subtasks[:max_children]
         dropped = subtasks[max_children:]
-        children = []
-        unspawned = []
+        children: list[Agent] = []
+        child_specs: list[SubtaskSpec] = []
+        unspawned: list[SubtaskSpec] = []
         for index, spec in enumerate(accepted):
             if budget is not None and not budget.spend():
                 unspawned.append(spec)
                 continue
+            child_specs.append(spec)
             children.append(
                 _make_search_node(
                     f"node_{spec.mode.value}_{index}",
@@ -389,11 +391,11 @@ def _make_solve_subtasks_tool(
                     context=spec.context,
                     stream=stream(child, ctx) if stream else None,
                 )
-                for child, spec in zip(children, accepted, strict=True)
+                for child, spec in zip(children, child_specs, strict=True)
             )
         )
 
-        evidence = _format_results(accepted[: len(children)], list(results), dropped, max_evidence_chars)
+        evidence = _format_results(child_specs, list(results), dropped, max_evidence_chars)
         if unspawned:
             skipped = "\n".join(f"- {s.objective}" for s in unspawned)
             evidence += (
