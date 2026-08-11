@@ -1,0 +1,214 @@
+---
+title: Hub and Identity
+sidebarTitle: Hub & Identity
+---
+
+The hub is the network's single source of truth: registry, audit log, channel table, write-ahead logs, expectation evaluators, sweepers. Every send, observation, and rule check goes through it.
+
+This page covers the registry-side primitives — what you stand up before any agent connects.
+
+## Hub.open
+
+```python linenums="1"
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import Hub
+
+hub = await Hub.open(
+    MemoryKnowledgeStore(),
+    ttl_sweep_interval=30.0,        # default: 30s
+    expectation_sweep_interval=10.0,# default: 10s
+    invite_ack_timeout=30.0,        # default: 30s
+)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `store` | `KnowledgeStore` | Persistent backing for the audit log, registry, and WAL. `MemoryKnowledgeStore` for in-process; `DiskKnowledgeStore(path)` for durability across restarts. |
+| `auth` | `AuthRegistry` \| `None` | Authentication adapters. Defaults to `AuthRegistry.default()` (which has `NoAuth` only). |
+| `clock` | `Callable[[], str]` \| `None` | ISO-8601 clock. Tests override with a `MockClock`; production uses the default UTC clock. |
+| `ttl_sweep_interval` | `float` | How often the TTL sweeper walks active channels. Set to `0` to disable. |
+| `expectation_sweep_interval` | `float` | How often the expectation sweeper checks declared expectations. Set to `0` to disable. |
+| `invite_ack_timeout` | `float` | Per-channel ack window before the hub auto-closes. |
+
+`#!python Hub.open(...)` is the factory; the constructor `#!python Hub(...)` exists but doesn't start sweepers. Use `#!python open()` unless you have a reason not to.
+
+!!! note
+    All side effects (sweeper tasks, store initialisation) happen inside `#!python Hub.open()`, never in the constructor — this matches the AGENTS.md "no side effects in `__init__`" rule. The same pattern applies throughout the package.
+
+## Identity Model
+
+Three small dataclasses describe an agent on the network:
+
+```python linenums="1"
+from ag2.network import Passport, Resume, ResumeExample
+
+passport = Passport(
+    name="alice",
+    owner="acme",
+    model="claude-sonnet-4-6",
+)
+
+resume = Resume(
+    claimed_capabilities=["analysis", "policy"],
+    domains=["finance"],
+    summary="Senior policy analyst — scenario synthesis and rebuttal review.",
+    examples=[ResumeExample(title="Q3 risk brief", note="…")],
+)
+```
+
+### Passport — stable identity
+
+| Field | Required | Notes |
+|---|---|---|
+| `name` | ✓ | Unique within the hub. The human-readable handle. |
+| `agent_id` | hub-stamped | Issued by the hub at registration; use this for routing. |
+| `owner` | optional | Tenant id for multi-tenant deployments. |
+| `model` | optional | Free-form model identifier; surfaces on peer-lookup results when peer discovery ships. |
+| `kind` | optional | One of `#!python "agent"`, `#!python "human"`, `#!python "remote_agent"`, or `#!python None`. `#!python None` is the back-compat alias for `#!python "agent"`. `#!python "human"` is set automatically by `#!python hc.register_human(...)`; `#!python "remote_agent"` is reserved for a future federation / A2A bridge. `#!python __post_init__` rejects any other value. Exported as `#!python PassportKind` / `#!python PASSPORT_KINDS`. |
+| `created_at` | hub-stamped | ISO-Z timestamp. |
+
+`#!python hub.list_agents(kind=...)` filters the registry by participant kind — `#!python kind="human"` returns only humans, `#!python kind="agent"` returns agents (and matches `#!python kind=None` passports), `#!python kind=None` returns everything. Non-LLM participants are registered via `#!python hc.register_human(...)` — see [HumanClient (HITL)](/docs/user-guide/network/human_client).
+
+### Resume — capability claims and observed track record
+
+| Field | Source | Notes |
+|---|---|---|
+| `claimed_capabilities` | tenant | Free-form capability strings (e.g. `"research"`, `"summarisation"`). |
+| `domains` | tenant | Coarse subject-matter areas. |
+| `summary` | tenant | One-line description, indexed for peer lookup. |
+| `examples` | tenant | Optional `#!python ResumeExample` records — exemplar past work. |
+| `observed` | **hub-mutated** | Per-capability `#!python ObservedStat`: counts of completed/failed/expired tasks plus a `p50_latency_ms`. Updated automatically when an agent runs a capability-tagged `#!python agent.task(...)` inside a network turn — see [Task Observation](/docs/user-guide/network/task_observation). |
+| `last_updated` | hub-stamped | ISO-Z, refreshed on every mutation. |
+
+`#!python Resume` is the agent's network "CV" — both what it claims to do and what the hub has observed it actually doing.
+
+## Rule — per-agent governance
+
+Optional per-agent policy. Pass to `#!python hub.register(agent, passport, resume, rule=...)`.
+
+```python linenums="1"
+from ag2.network import Rule, AccessBlock, LimitsBlock, RateBlock, InboxBlock
+
+rule = Rule(
+    access=AccessBlock(
+        outbound_to=["bob", "carol"],   # whitelist who this agent can address
+        channel_types_allowed=["consulting", "discussion"],
+    ),
+    limits=LimitsBlock(
+        channel_ttl_default="4h",
+        delegation_depth=2,
+    ),
+    rate=RateBlock(
+        envelopes_per_minute=60,
+    ),
+    inbox=InboxBlock(
+        max_pending=100,
+    ),
+)
+```
+
+| Block | Controls |
+|---|---|
+| `AccessBlock` | Who this agent can talk to; which channel types it can create or join. |
+| `LimitsBlock` | Default TTLs for channels this agent creates; max delegation depth. |
+| `RateBlock` | Rate limits on outbound envelopes. |
+| `InboxBlock` | Inbound queue cap — protects an agent from being flooded. |
+
+When a rule's check fails, the hub raises `#!python AccessDeniedError` (deny by access) or `#!python InboxFull` (queue cap) instead of letting the envelope through.
+
+## Authentication
+
+```python linenums="1"
+from ag2.network import AuthAdapter, AuthRegistry, NoAuth
+
+# default: NoAuth registered for the empty scheme
+hub = await Hub.open(store)
+
+# explicit:
+auth = AuthRegistry()
+auth.register("hmac", MyHMACAdapter())
+hub = await Hub.open(store, auth=auth)
+```
+
+`#!python AuthAdapter` is a `#!python Protocol`:
+
+```python
+class AuthAdapter(Protocol):
+    async def verify(self, passport: Passport, credentials: AuthBlock) -> None: ...
+```
+
+Hub calls `verify(...)` at registration. Raise `#!python AuthError` to reject. The default registry registers `#!python NoAuth` for the empty scheme so the simple in-process flow works with no setup.
+
+## Audit Log
+
+Every governance-relevant event the hub processes lands in `#!python hub.audit_log` (an `#!python AuditLog`, which is itself a registered `#!python HubListener`):
+
+```python linenums="1"
+records = await hub.audit_log.read_all()
+for r in records:
+    print(r["kind"], r["at"], r)
+```
+
+Audit kinds (re-exported from `#!python ag2.network`):
+
+| Kind | When |
+|---|---|
+| `#!python AUDIT_KIND_AGENT_REGISTERED` | `#!python hub.register(...)` |
+| `#!python AUDIT_KIND_AGENT_UNREGISTERED` | `#!python hc.unregister(...)` |
+| `#!python AUDIT_KIND_RESUME_SET` | `#!python hub.set_resume(...)` |
+| `#!python AUDIT_KIND_SKILL_SET` | `#!python hub.set_skill(...)` |
+| `#!python AUDIT_KIND_RULE_SET` | `#!python hub.set_rule(...)` |
+| `#!python AUDIT_KIND_CHANNEL_CREATED` | `#!python alice.open(...)` |
+| `#!python AUDIT_KIND_CHANNEL_CLOSED` | adapter close, explicit close, or `auto_close` violation |
+| `#!python AUDIT_KIND_CHANNEL_EXPIRED` | TTL sweep |
+| `#!python AUDIT_KIND_TASK_TERMINATED` | A task observed via `#!python TaskMirror` reached a terminal state |
+| `#!python AUDIT_KIND_EXPECTATION_VIOLATED` | An expectation evaluator's threshold elapsed |
+| `#!python AUDIT_KIND_TURN_FAILED` | A notify handler crashed while processing an inbound envelope (channel stays alive — see resilience note below) |
+
+The kind set is **open** — tenants and hub subclasses can write their own kinds via `#!python hub.audit_log.append(record)`. The audit log is the single trail for compliance and debugging — see [Governance, Audit & Observability](/docs/user-guide/network/expectations_and_audit).
+
+## Reading Hub State
+
+| Call | Returns |
+|---|---|
+| `#!python await hub.get_channel(channel_id)` | `#!python ChannelMetadata` snapshot. |
+| `#!python await hub.get_resume(agent_id)` | Current `#!python Resume`. |
+| `#!python await hub.get_passport(agent_id)` | Current `#!python Passport`. |
+| `#!python await hub.read_wal(channel_id)` | Ordered list of `#!python Envelope`s in that channel. |
+| `#!python hub.audit_log` | The `#!python AuditLog` instance — `#!python await hub.audit_log.read_all()` for every record, `#!python hub.audit_log.subscribe(cb)` to live-tail. |
+| `#!python hub.health()` | Cheap in-memory operational snapshot (`active_channels`, `registered_agents`, `pending_inbox_total`, `max_pending_inbox_depth`, `registered_listeners`, `adapters_loaded`, `audit_log_bytes`). |
+
+## Hub TTL & Sweepers
+
+Two background tasks run as long as the hub is open:
+
+- **TTL sweeper** — walks active channels and expires those past `#!python created_at + ttl`. Default TTL comes from `#!python Rule.limits.channel_ttl_default` or the adapter's manifest.
+- **Expectation sweeper** — walks the expectation evaluators registered for each open channel, fires `#!python ViolationHandler`s on threshold breach.
+
+Both are tunable via `#!python ttl_sweep_interval` and `#!python expectation_sweep_interval`. Set to `0` to disable for tests; in those cases call `#!python await hub._ttl_tick()` or `#!python await hub._expectation_tick()` manually for deterministic timing.
+
+### Custom sweepers
+
+Attach your own periodic worker — protocol-specific background work like polling a chat platform's presence list or refreshing an auth token:
+
+```python linenums="1"
+async def heartbeat() -> None:
+    ...  # runs every 30s
+
+hub.register_sweeper("heartbeat", 30.0, heartbeat)
+# later, e.g. on a config reload:
+await hub.unregister_sweeper("heartbeat")
+```
+
+- `#!python register_sweeper(name, interval_seconds, fn)` is **synchronous** (it only updates bookkeeping). If the hub has already started (`#!python Hub.open(...)` calls `#!python start()` for you), the sweeper begins immediately; if you registered it before `#!python start()`, it begins then.
+- `#!python unregister_sweeper(name)` is **async** — it awaits clean cancellation of the running task. Unknown names are a no-op.
+- A duplicate `name` raises `#!python ValueError` (call `#!python unregister_sweeper` first to replace); a non-positive interval raises `#!python ValueError`.
+- `#!python hub.close()` stops every custom sweeper automatically — you don't need to track them yourself.
+
+## Closing Down
+
+```python
+await hub.close()
+```
+
+Cancels all sweeper tasks, closes the underlying store, drains pending I/O. Always pair `#!python Hub.open(...)` with `#!python hub.close()` (typically in a `try/finally`).

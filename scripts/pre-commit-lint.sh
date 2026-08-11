@@ -17,10 +17,7 @@ cd "$(dirname "$0")"/..
 # likely cause of failure is lack of VPN connection.
 pip uninstall ag2 --yes --quiet
 
-pip install --editable ".[lint]" \
- --retries 1 \
- --no-input \
- --quiet
+uv pip install --editable . --group lint --quiet
 
 # Run on all files,
 # ignoring the paths passed to this script,

@@ -1,6 +1,7 @@
 name: Feature Request
 description: File a feature request
-labels: ["enhancement"]
+type: "Feature"
+labels: ["type:feature", "status:needs-triage"]
 title: "[Feature Request]: "
 
 body:

@@ -128,7 +128,7 @@ export const GalleryPage = ({
     if (!item.source) {
       return null;
     }
-    const source = item.source.replace(/^\//, '');
+    const source = item.source.replace(/^\/+/, '');
     const colab_href = `https://colab.research.google.com/github/ag2ai/ag2/blob/main/${source}`;
     const github_href = `https://github.com/ag2ai/ag2/blob/main/${source}`;
     return (<span class="badges">

@@ -1,0 +1,5 @@
+{"task_id": "weather-001", "inputs": {"input": "What's the weather in Melbourne?"}, "reference_outputs": {"city": "Melbourne"}, "tags": ["happy-path"]}
+{"task_id": "weather-002", "inputs": {"input": "How's the weather in Tokyo today?"}, "reference_outputs": {"city": "Tokyo"}, "tags": ["happy-path"]}
+{"task_id": "weather-003", "inputs": {"input": "Tell me about Paris weather."}, "reference_outputs": {"city": "Paris"}, "tags": ["happy-path"]}
+{"task_id": "weather-004", "inputs": {"input": "Is it cold in Reykjavik right now?"}, "reference_outputs": {"city": "Reykjavik"}, "tags": ["happy-path", "uncommon-city"]}
+{"task_id": "weather-005", "inputs": {"input": "weather in São Paulo please"}, "reference_outputs": {"city": "São Paulo"}, "tags": ["happy-path", "diacritics"]}

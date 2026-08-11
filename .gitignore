@@ -1,8 +1,3 @@
-.agents
-.claude
-.rtk
-skills-lock.json
-
 .docusaurus/
 node_modules/
 .vite/
@@ -12,6 +7,23 @@ node_modules/
 .vscode/
 .idea/
 .DS_Store
+
+# Agents
+.agents
+.cursor
+.claude
+.vercel
+superpowers
+.codex
+.serena
+
+.codegraph
+.rtk
+
+skills-lock.json
+.mcp.json
+
+/CLAUDE.md
 
 # Log files
 *.log
@@ -207,8 +219,3 @@ notebook/mcp/wikipedia_articles/
 notebook/mcp/arxiv_papers/
 
 remote-examples
-
-*CLAUDE.md:
-.cursor/
-.claude/
-.vercel/

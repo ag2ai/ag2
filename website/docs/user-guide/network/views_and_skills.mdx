@@ -1,0 +1,192 @@
+---
+title: Views and Skills
+sidebarTitle: Views & Skills
+---
+
+Two LLM-facing concerns:
+
+- **Views** decide what each participant *sees* of a channel — the projection of the WAL that becomes the LLM's history when its handler runs `#!python Agent.ask(...)`.
+- **Skills** decide what each agent *advertises about itself* — the markdown describing its capabilities, surfaced to other agents during peer lookup.
+
+## ViewPolicy
+
+`#!python ViewPolicy` is a `#!python Protocol`:
+
+```python linenums="1"
+class ViewPolicy(Protocol):
+    name: ClassVar[str]
+    async def project(
+        self,
+        wal: list[Envelope],
+        *,
+        participant_id: str,
+        channel: ChannelMetadata,
+        render_envelope: EnvelopeRenderer,
+        name_for: NameResolver = default_name_resolver,
+    ) -> list[BaseEvent]: ...
+```
+
+It takes the WAL up to the current envelope and returns a list of `#!python BaseEvent`s that the framework feeds into the LLM turn as pre-populated stream history. Adapters declare a default; tenants can override per-channel.
+
+Two callables are supplied per call so view policies stay adapter-neutral and identity-aware without depending on hub internals:
+
+- `#!python render_envelope: Callable[[Envelope], str | None]` — comes from the channel's `#!python ChannelAdapter.render_envelope`. Lets a view ask "what's the LLM-visible text for this envelope?" without knowing the channel type's envelope shape.
+- `#!python name_for: Callable[[str], str]` — comes from `#!python Hub.name_for`. Lets a view resolve an `#!python agent_id` to its registered `#!python Passport.name` for projection lines that need a speaker label. Falls back to the raw id when the sender is unknown so projection never fails.
+
+## Built-in Views
+
+| View | Behaviour | Default for |
+|---|---|---|
+| `#!python FullTranscript()` | Every visible envelope, in order, no filtering beyond audience. Non-self envelopes become bare `#!python ModelRequest`s. | `#!python consulting` (2-party) |
+| `#!python WindowedSummary(recent_n=N)` | The last `N` visible envelopes. If the WAL is longer, prepends a `#!python CompactionSummary` placeholder with a count of the elided turns. Non-self envelopes become bare `#!python ModelRequest`s. | `#!python conversation` (2-party) |
+| `#!python NamedTranscript()` | Like `#!python FullTranscript`, but each non-self envelope is prefixed with `#!python [<sender name>]:` so the LLM can tell its peers apart. Resolves names via the supplied `#!python NameResolver`. | — |
+| `#!python NamedWindowedSummary(recent_n=N)` | Like `#!python WindowedSummary`, but with the same `#!python [<sender name>]:` labelling on non-self lines and on the head `#!python CompactionSummary`'s speakers list. | `#!python discussion`, `#!python workflow` (N-party) |
+
+All four views honour audience: an envelope addressed only to `[bob]` doesn't appear in `carol`'s projection.
+
+!!! tip "Why two flavours?"
+    In a **2-party** channel, the assistant/user role bit already disambiguates speakers — the LLM sees its own past as `#!python role: "assistant"` and the only other party as `#!python role: "user"`. Labels would be redundant.
+
+    In a **3+ party** channel (discussion, workflow), every non-self envelope collapses into the same `#!python role: "user"` stream. Without a sender label the LLM can't tell which peer said which message. The `#!python Named*` variants put `#!python [<sender name>]:` on each non-self line so the orchestrator / next speaker can route accurately. This is the default for N-party adapters precisely because the role bit alone isn't enough.
+
+```python linenums="1"
+from ag2.network import FullTranscript, WindowedSummary
+
+view = WindowedSummary(recent_n=12)
+projected = await view.project(
+    history=wal_slice,
+    participant_id=carol.agent_id,
+    channel=metadata,
+)
+```
+
+## Resolving the Default
+
+```python linenums="1"
+from ag2.network import resolve_view_policy
+
+policy = resolve_view_policy(client, metadata)
+```
+
+`#!python resolve_view_policy` reads the adapter manifest's `default_view_policy` and instantiates the matching view from the registry. The default handler calls this once per turn — custom handlers should too, unless they're deliberately bypassing the standard projection model.
+
+## Custom Views
+
+Implement the protocol, give it a unique `name`, and pass to the policy resolver. Common shapes:
+
+```python linenums="1"
+from typing import ClassVar
+from ag2.events import BaseEvent, ModelMessage, ModelRequest, TextInput
+from ag2.network import (
+    ChannelMetadata,
+    EV_TEXT,
+    Envelope,
+    EnvelopeRenderer,
+    NameResolver,
+    ViewPolicy,
+    default_name_resolver,
+)
+
+class FromOneOnly(ViewPolicy):
+    """Show only envelopes from a single named sender, prefixed with their name."""
+    name: ClassVar[str] = "from_one_only"
+
+    def __init__(self, sender_id: str) -> None:
+        self.sender_id = sender_id
+
+    async def project(
+        self,
+        wal: list[Envelope],
+        *,
+        participant_id: str,
+        channel: ChannelMetadata,
+        render_envelope: EnvelopeRenderer,
+        name_for: NameResolver = default_name_resolver,
+    ) -> list[BaseEvent]:
+        out: list[BaseEvent] = []
+        for env in wal:
+            if env.event_type != EV_TEXT or env.sender_id != self.sender_id:
+                continue
+            text = render_envelope(env) or ""
+            if env.sender_id == participant_id:
+                out.append(ModelMessage(text))
+            else:
+                # Use name_for to label so the LLM knows who said it.
+                label = name_for(env.sender_id)
+                out.append(ModelRequest([TextInput(f"[{label}]: {text}")]))
+        return out
+```
+
+The `#!python BaseEvent` types you emit determine how the LLM sees the history: `#!python ModelRequest` for messages "from the user," `#!python ModelMessage` for messages "from the assistant," and so on. Look at `#!python ag2.events` for the full taxonomy.
+
+## CompactionSummary
+
+When `#!python WindowedSummary` elides envelopes outside its window, it prepends a `#!python CompactionSummary(text="...elided N turns")` event. This is from `ag2.compact` — the LLM sees it as a system-supplied note that "there is earlier history I'm not showing you." This keeps the LLM's behaviour grounded in long-running discussions without exploding the token budget.
+
+## Skills (Markdown Frontmatter)
+
+Skills are how an agent describes itself to other agents — markdown-with-frontmatter that's parsed by the hub and surfaced to LLM tools during peer lookup. Pass at registration:
+
+```python linenums="1"
+agent_client = await hub.register(
+    agent,
+    Passport(name="researcher"),
+    Resume(claimed_capabilities=["research"]),
+    skill_md="""\
+---
+title: Research Assistant
+expertise: [policy, finance]
+---
+
+# Researcher
+
+A senior policy analyst. Best at:
+
+- Scenario synthesis from multi-source briefs.
+- Rebuttal review with confidence scores.
+
+Limitations: not for code review or numerical analysis.
+""",
+)
+```
+
+The hub stores the markdown verbatim and parses the frontmatter via `#!python parse_skill_frontmatter`:
+
+```python linenums="1"
+from ag2.network import parse_skill_frontmatter, ParsedSkill
+
+parsed: ParsedSkill = parse_skill_frontmatter(skill_md)
+print(parsed.frontmatter)  # {"title": "Research Assistant", "expertise": [...]}
+print(parsed.body)         # the markdown body
+```
+
+## Fallback Skills
+
+When no `skill_md` is provided, the hub generates one from the resume so peer lookup doesn't return empty handles:
+
+```python linenums="1"
+from ag2.network import render_fallback_skill
+
+skill_md = render_fallback_skill(passport, resume)
+```
+
+Use this if you're constructing skills programmatically — for example, when a tenant uploads a resume but no markdown.
+
+## Updating a Skill After Registration
+
+```python linenums="1"
+await hub.set_skill(agent_id, new_skill_md)
+```
+
+Emits `#!python AUDIT_KIND_SKILL_SET`. Same audit shape as `#!python set_resume`; tenant code can replace skills at any time.
+
+## Picking a View
+
+Some heuristics for choosing or building a view:
+
+- **Short, focused exchanges** — `#!python FullTranscript()`. Token budget isn't the bottleneck; coherence is.
+- **Long-running discussions** — `#!python WindowedSummary(recent_n=N)` with `N` tuned to your participant count and turn density.
+- **Specialist agents that should ignore unrelated chatter** — a custom view that filters by audience or tags.
+- **Privacy-sensitive workflows** — a custom view that strips fields or redacts before projection.
+
+Switching the view doesn't affect the WAL — every envelope is still there, every operator can still inspect it. Only the LLM's perception of history is shaped by the view.

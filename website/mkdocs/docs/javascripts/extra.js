@@ -268,10 +268,6 @@
 
     // If edit link exists, check and modify if needed
     if (editLink) {
-      // Hide edit link for API reference pages
-      if (window.location.pathname.includes("/docs/api-reference/")) {
-        editLink.classList.add("hide-edit-link");
-      }
       const href = editLink.getAttribute("href");
       // Special case for notebooks
       if (

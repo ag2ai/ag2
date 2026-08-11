@@ -1,7 +1,8 @@
 name: Bug Report
 description: File a bug report
 title: "[Bug]: "
-labels: ["bug"]
+type: "Bug"
+labels: ["type:bug", "status:needs-triage"]
 
 body:
   - type: textarea
@@ -22,6 +23,18 @@ body:
         3. ...
         4. See error
       placeholder: How can we replicate the issue?
+  - type: textarea
+    id: mre
+    attributes:
+      label: Minimal reproducible example
+      description: A minimal, self-contained code snippet that reproduces the problem. This is the fastest way to get the bug triaged — reports without it are asked to add one.
+      render: python
+      placeholder: |
+        from ag2 import Agent
+
+        # smallest possible code that triggers the bug
+    validations:
+      required: true
   - type: textarea
     id: modelused
     attributes:
@@ -45,7 +58,7 @@ body:
     attributes:
       label: Additional Information
       description: |
-        - Package Name & Version: <!-- Specify the package name and version (e.g., autogen v0.7.2) -->
+        - Package Name & Version: <!-- Specify the package name and version (e.g., ag2 v0.7.2) -->
         - Operating System: <!-- Specify the OS (e.g., Windows 10, Ubuntu 20.04) -->
         - Python Version: <!-- Specify the Python version (e.g., 3.9) -->
         - Related Issues: <!-- Link to any related issues here (e.g., #1) -->
