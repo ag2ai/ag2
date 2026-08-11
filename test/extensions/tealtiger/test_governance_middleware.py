@@ -11,11 +11,11 @@ import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from ag2.events import ToolCallEvent, ToolErrorEvent
+from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
+
 from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTigerMiddleware
 from ag2.extensions.tealtiger.types import TEECReceipt
-from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 # ─── Test fixtures ───────────────────────────────────────────────────────────
 

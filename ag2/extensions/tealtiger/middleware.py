@@ -23,15 +23,16 @@ if TYPE_CHECKING:
     from ag2.middleware.base import ToolExecution
 
 from ag2.events import ToolErrorEvent
+from ag2.middleware import BaseMiddleware
+from ag2.middleware.base import ToolResultType
+from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
+
 from ag2.extensions.tealtiger.types import (
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
     TEECReceipt,
 )
-from ag2.middleware import BaseMiddleware
-from ag2.middleware.base import ToolResultType
-from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 # ── PII and secret patterns ──────────────────────────────────────────────────
 
@@ -169,6 +170,49 @@ class _TealTigerPerTurn(BaseMiddleware):
         self._factory = factory
         self._agent_name = self._get_agent_name(context)
 
+    async def on_turn(
+        self,
+        call_next: Callable[..., Any],
+        event: "BaseEvent",
+        context: "Context",
+    ) -> Any:
+        """Kill switch enforcement at the turn level.
+
+        ENFORCE mode: frozen agent's turn is blocked with ToolErrorEvent.
+        MONITOR mode: frozen agent is logged but allowed through.
+        OBSERVE mode: no evaluation, pass through.
+        """
+        agent_name = self._agent_name or "unknown"
+
+        # OBSERVE: no evaluation at turn level
+        if self._factory.mode == GovernanceMode.OBSERVE:
+            return await call_next(event, context)
+
+        # Check kill switch
+        if agent_name != "unknown" and self._factory.is_frozen(agent_name):
+            decision = GovernanceDecision(
+                action="DENY",
+                mode=self._factory.mode.value,
+                agent_name=agent_name,
+                tool_name="*",
+                reason_codes=["AGENT_FROZEN"],
+                risk_score=100,
+            )
+            self._factory._decisions.append(decision)
+            if self._factory.on_decision:
+                self._factory.on_decision(decision)
+
+            if self._factory.mode == GovernanceMode.ENFORCE:
+                return ToolErrorEvent.from_call(
+                    event,
+                    error=Exception(
+                        f"[GOVERNANCE DENIED] Agent '{agent_name}' is frozen (kill switch active). All actions blocked."
+                    ),
+                )
+            # MONITOR: record but allow through
+
+        return await call_next(event, context)
+
     async def on_tool_execution(
         self,
         call_next: "ToolExecution",
@@ -180,7 +224,27 @@ class _TealTigerPerTurn(BaseMiddleware):
         tool_name = event.name
         tool_args = event.serialized_arguments
 
-        # Evaluate governance
+        # OBSERVE mode: skip policy evaluation, just pass through with audit
+        if self._factory.mode == GovernanceMode.OBSERVE:
+            self._factory._cumulative_cost += self._factory.cost_per_call
+            result = await call_next(event, context)
+            decision = GovernanceDecision(
+                action="ALLOW",
+                mode="OBSERVE",
+                agent_name=self._agent_name or "unknown",
+                tool_name=tool_name,
+                reason_codes=["OBSERVE_PASSTHROUGH"],
+            )
+            decision.evaluation_time_ms = round((time.perf_counter() - start_time) * 1000, 3)
+            decision.cumulative_cost = self._factory._cumulative_cost
+            self._factory._decisions.append(decision)
+            if self._factory.on_decision:
+                self._factory.on_decision(decision)
+            outcome = "error" if isinstance(result, ToolErrorEvent) else "executed"
+            self._emit_receipt(decision, execution_outcome=outcome)
+            return result
+
+        # MONITOR and ENFORCE: evaluate policies
         decision = self._evaluate(tool_name, tool_args)
         decision.evaluation_time_ms = round((time.perf_counter() - start_time) * 1000, 3)
 
