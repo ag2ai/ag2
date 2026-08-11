@@ -11,6 +11,7 @@ level reconstructs the whole tree.
 """
 
 import asyncio
+import time
 from collections.abc import Sequence
 from unittest.mock import MagicMock
 
@@ -30,6 +31,7 @@ from ag2.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
+from ag2.history import Storage
 from ag2.stream import Stream
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.subagents import (
@@ -894,4 +896,90 @@ class TestRecursiveSearchAgent:
         assert reply.body == "agent answer"
         events = await _collect_tree(stream, stream.id)
         assert len(_starts(events)) == 2  # root + one child level
+        assert _failures(events) == []
+
+
+@pytest.mark.asyncio
+class TestActivityStorageProxy:
+    """Direct tests for ``_ActivityStorage``: the storage proxy installed
+    on the shared history when ``timeout`` is set, so a slow-but-progressing
+    search is never interrupted.
+
+    The search itself only ever calls ``save_event`` (every model call,
+    tool result, and message bumps the idle clock). ``set_history`` and
+    ``drop_history`` are pass-throughs that exist so the proxy satisfies
+    the full ``Storage`` interface — exercising them keeps coverage at 100%
+    without making them part of the runtime contract.
+    """
+
+    async def test_set_history_is_a_pass_through(self):
+        from ag2.tools.subagents.recursive_search import _ActivityStorage
+
+        inner = MagicMock(spec=Storage)
+        last_activity = [0.0]
+        proxy = _ActivityStorage(inner, last_activity)
+        stream_id = MagicMock()
+        events = [MagicMock(name="e1"), MagicMock(name="e2")]
+
+        await proxy.set_history(stream_id, events)
+
+        inner.set_history.assert_awaited_once_with(stream_id, events)
+        # Pass-through must not touch the idle clock — set_history
+        # rewrites history wholesale, it isn't a model/tool event.
+        assert last_activity[0] == 0.0
+
+    async def test_drop_history_is_a_pass_through(self):
+        from ag2.tools.subagents.recursive_search import _ActivityStorage
+
+        inner = MagicMock(spec=Storage)
+        last_activity = [0.0]
+        proxy = _ActivityStorage(inner, last_activity)
+        stream_id = MagicMock()
+
+        await proxy.drop_history(stream_id)
+
+        inner.drop_history.assert_awaited_once_with(stream_id)
+        assert last_activity[0] == 0.0
+
+    async def test_save_event_bumps_idle_clock(self):
+        from ag2.tools.subagents.recursive_search import _ActivityStorage
+
+        inner = MagicMock(spec=Storage)
+        last_activity = [0.0]
+        proxy = _ActivityStorage(inner, last_activity)
+        stream_id = MagicMock()
+        event = MagicMock(name="event")
+
+        before = time.monotonic()
+        await proxy.save_event(event, MagicMock(spec=Context))
+        after = time.monotonic()
+
+        inner.save_event.assert_awaited_once_with(event, inner.save_event.await_args.args[1])
+        assert before <= last_activity[0] <= after
+
+
+@pytest.mark.asyncio
+class TestNoTimeout:
+    async def test_timeout_none_skips_idle_tracking(self):
+        """With timeout=None the search runs straight through run_task:
+        no activity proxy is installed, no idle deadline fires, and the
+        search finishes normally even if the root is silent for minutes.
+        """
+        node_config = TestConfig(ModelResponse(ModelMessage("done")))
+        parent_config = TestConfig(
+            ToolCallEvent(name="recursive_search", arguments='{"query": "research X"}'),
+            ModelResponse(ModelMessage("final synthesis")),
+        )
+        stream = MemoryStream()
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            tools=[recursive_search_tool(config=node_config, timeout=None)],
+        )
+
+        body, events = await _run_search(parent, stream)
+
+        assert body == "final synthesis"
+        assert len(_starts(events)) == 1
+        assert len(_completions(events)) == 1
         assert _failures(events) == []
