@@ -219,14 +219,22 @@ async def _run_with_idle_timeout(
             if task in done:
                 break
     finally:
-        if not task.done():
+        # Defensive: redundant if we exited via the timeout path (cancel was
+        # already issued above), and unreachable if we exited via the
+        # ``task in done`` path. Covers the race where the inner task is
+        # cancelled but the cancel hasn't propagated to a state where
+        # ``task.done()`` is True. Hard to exercise deterministically.
+        if not task.done():  # pragma: no cover
             task.cancel()
     try:
         return await task
     except asyncio.CancelledError:
         if timed_out:
             raise TimeoutError(f"no progress for {timeout}s") from None
-        raise
+        # Unreachable under the current structure: the loop's try has no
+        # except, so any CancelledError raised inside it bypasses this
+        # handler. Kept as a defensive guard if the structure ever changes.
+        raise  # pragma: no cover
 
 
 def _node_prompt(mode: SearchMode, cap: int) -> str:
