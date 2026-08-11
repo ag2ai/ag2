@@ -48,6 +48,7 @@ from ag2.events import (
     ToolResult,
     UrlInput,
 )
+from ag2.policies import ConversationPolicy
 from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME
 from ag2.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
@@ -187,6 +188,35 @@ class TestReasoning:
         api_input = events_to_responses_input(events, serializer=None)  # type: ignore[arg-type]
 
         assert api_input == [
+            reasoning_item.model_dump(exclude_none=True, mode="json"),
+            web_item.model_dump(exclude_none=True, mode="json"),
+        ]
+
+    async def test_survives_conversation_policy(self) -> None:
+        # ConversationPolicy must not strip the reasoning item while keeping the
+        # server-side tool call it is paired with; the API rejects that pairing.
+        reasoning_item = ResponseReasoningItem(
+            id="rs_1",
+            type="reasoning",
+            summary=[Summary(type="summary_text", text="Looking up bitcoin price")],
+        )
+        web_item = ResponseFunctionWebSearch(
+            id="ws_1",
+            action=ActionSearch(type="search", query="bitcoin"),
+            status="completed",
+            type="web_search_call",
+        )
+        events = [
+            OpenAIReasoningEvent("Looking up bitcoin price", item=reasoning_item),
+            OpenAIServerToolCallEvent(
+                id="ws_1", name=WEB_SEARCH_TOOL_NAME, arguments=web_item.action.model_dump_json(), item=web_item
+            ),
+            OpenAIServerToolResultEvent(parent_id="ws_1", name=WEB_SEARCH_TOOL_NAME, result=ToolResult()),
+        ]
+
+        _, filtered = await ConversationPolicy().apply([], events, Context(stream=MemoryStream()))
+
+        assert events_to_responses_input(filtered, serializer=None) == [  # type: ignore[arg-type]
             reasoning_item.model_dump(exclude_none=True, mode="json"),
             web_item.model_dump(exclude_none=True, mode="json"),
         ]

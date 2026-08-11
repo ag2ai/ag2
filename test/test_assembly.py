@@ -11,6 +11,7 @@ from ag2.assembly import AssemblerMiddleware
 from ag2.compact import CompactionSummary
 from ag2.events import (
     ModelMessage,
+    ModelReasoning,
     ModelRequest,
     ModelResponse,
     ObserverAlert,
@@ -30,6 +31,12 @@ from ag2.policies import (
 from ag2.stream import MemoryStream
 
 
+class DurableReasoning(ModelReasoning):
+    """Provider reasoning item that must be replayed, like OpenAIReasoningEvent."""
+
+    __transient__ = False
+
+
 class TestConversationPolicy:
     @pytest.mark.asyncio
     async def test_filters_to_conversation_events(self) -> None:
@@ -45,6 +52,28 @@ class TestConversationPolicy:
         prompts, filtered = await policy.apply([], events, ctx)
         assert len(filtered) == 4
         assert all(not isinstance(e, ObserverAlert) for e in filtered)
+
+    @pytest.mark.asyncio
+    async def test_drops_transient_reasoning(self) -> None:
+        policy = ConversationPolicy()
+        events = [ModelReasoning("thinking out loud"), ModelRequest([TextInput("hello")])]
+        ctx = Context(stream=MemoryStream())
+        _, filtered = await policy.apply([], events, ctx)
+        assert all(not isinstance(e, ModelReasoning) for e in filtered)
+
+    @pytest.mark.asyncio
+    async def test_keeps_durable_reasoning_with_tool_call(self) -> None:
+        policy = ConversationPolicy()
+        reasoning = DurableReasoning("planning the search")
+        events = [
+            ModelRequest([TextInput("hello")]),
+            reasoning,
+            ToolCallEvent(name="search", arguments="{}"),
+            ToolResultEvent(id="1", name="search", content="result"),
+        ]
+        ctx = Context(stream=MemoryStream())
+        _, filtered = await policy.apply([], events, ctx)
+        assert filtered == events
 
     @pytest.mark.asyncio
     async def test_includes_compaction_summary(self) -> None:
