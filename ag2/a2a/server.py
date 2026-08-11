@@ -30,6 +30,7 @@ from .transports.jsonrpc import build_jsonrpc_asgi
 from .transports.rest import build_rest_asgi
 
 if TYPE_CHECKING:
+    import grpc
     from grpc.aio import Server
     from starlette.applications import Starlette
 
@@ -193,13 +194,16 @@ class A2AServer:
         grpc_url: str,
         card: AgentCard | None = None,
         options: Sequence[tuple[str, Any]] = (),
+        server_credentials: "grpc.ServerCredentials | None" = None,
     ) -> "Server":
         """``grpc.aio.Server`` bound to ``bind``; caller starts/awaits it.
 
         ``bind`` is the listener address (e.g. ``"0.0.0.0:50051"``).
         ``grpc_url`` is the public URL clients will connect to (used in
         the AgentCard interface entry — usually identical to ``bind``,
-        but not when behind a load balancer). Insecure binding only.
+        but not when behind a load balancer). Binding is insecure by default;
+        pass ``server_credentials`` (for example, from
+        ``grpc.ssl_server_credentials(...)``) to enable TLS.
 
         ``card_modifier`` does not apply: A2A v1.x has no ``GetAgentCard``
         gRPC method — the public card is served over HTTP only.
@@ -216,5 +220,6 @@ class A2AServer:
             agent_card=resolved_card,
             bind=bind,
             options=options,
+            server_credentials=server_credentials,
             **self._shared_kwargs(include_card_modifier=False),
         )

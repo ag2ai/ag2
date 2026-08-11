@@ -16,8 +16,16 @@ try:
 except ImportError as e:
     A2AServer = missing_additional_dependency("A2AServer", "a2a-sdk[http-server]", e)  # type: ignore[misc]
 
+try:
+    from .transports.grpc import secure_grpc_channel_factory
+except ImportError as e:
+    secure_grpc_channel_factory = missing_additional_dependency(  # type: ignore[misc]
+        "secure_grpc_channel_factory", "a2a-sdk[grpc]", e
+    )
+
 __all__ = (
     "A2AConfig",
     "A2AServer",
     "build_card",
+    "secure_grpc_channel_factory",
 )
