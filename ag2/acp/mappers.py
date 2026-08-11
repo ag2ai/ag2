@@ -41,6 +41,7 @@ from ag2.events import (
 )
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent, ToolResult
 from ag2.events.types import BinaryResult, Usage
+from ag2.types import SendableMessage
 
 from .events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
 from .types import ContentBlock, SessionUpdate, ToolCallContent
@@ -278,7 +279,7 @@ def tool_result_text(result: ToolResult) -> str:
     return "".join(pieces)
 
 
-def _render_data(data: Any) -> str:
+def _render_data(data: SendableMessage) -> str:
     """Render a ``DataInput`` payload as text, preferring JSON for structures."""
     if isinstance(data, str):
         return data

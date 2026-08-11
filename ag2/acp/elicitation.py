@@ -21,13 +21,14 @@ request is cancelled, never accepted with fabricated content.
 import logging
 import math
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from acp import schema
 
 from ag2.exceptions import HumanInputNotProvidedError
 
 from .events import ACPElicitation
+from .types import ElicitationProperty, ElicitationValue
 
 if TYPE_CHECKING:
     from ag2.context import ConversationContext
@@ -53,16 +54,6 @@ REFUSE = "!decline"
 # the field is evidently unanswerable — and never fabricates a value.
 MAX_ATTEMPTS = 10
 
-# One property's declared schema, as ACP's restricted form schema allows.
-_Property = (
-    schema.ElicitationStringPropertySchema
-    | schema.ElicitationNumberPropertySchema
-    | schema.ElicitationIntegerPropertySchema
-    | schema.ElicitationBooleanPropertySchema
-    | schema.ElicitationMultiSelectPropertySchema
-    | schema.ElicitationOtherPropertySchema
-)
-
 
 class _RefusedError(Exception):
     """The human refused the request part-way through rendering a form."""
@@ -72,7 +63,7 @@ class _UncoercibleError(Exception):
     """The answer cannot be represented as the property's declared type."""
 
 
-def _mode_name(mode: Any) -> str:
+def _mode_name(mode: schema.ElicitationMode) -> str:
     if isinstance(mode, _FORM_MODES):
         return "form"
     if isinstance(mode, _URL_MODES):
@@ -80,7 +71,7 @@ def _mode_name(mode: Any) -> str:
     return "other"
 
 
-def elicitation_event(message: str, mode: Any) -> ACPElicitation:
+def elicitation_event(message: str, mode: schema.ElicitationMode) -> ACPElicitation:
     """The stream event describing this question, whoever ends up answering it."""
     schema_properties = mode.requested_schema.properties if isinstance(mode, _FORM_MODES) else None
     return ACPElicitation(
@@ -94,7 +85,7 @@ def elicitation_event(message: str, mode: Any) -> ACPElicitation:
 async def resolve_elicitation_response(
     policy: "ElicitationPolicy",
     message: str,
-    mode: Any,
+    mode: schema.ElicitationMode,
     context: "ConversationContext | None",
 ) -> schema.CreateElicitationResponse:
     """Return the ``elicitation/create`` response for one request.
@@ -180,16 +171,17 @@ async def _resolve_form(
         logger.debug("no rendering for ACP elicitation properties %r; declined", unrenderable)
         return schema.DeclineElicitationResponse(action="decline")
 
-    content: dict[str, Any] = {}
+    content: dict[str, ElicitationValue] = {}
     for name, prop in properties.items():
-        answered, value = await _ask_property(message, name, prop, name in required, context)
-        if answered:
+        value = await _ask_property(message, name, prop, name in required, context)
+        # `is not None`, not truthiness: "" and False and 0 are answers.
+        if value is not None:
             content[name] = value
 
     return schema.AcceptElicitationResponse(action="accept", content=content)
 
 
-def _unrenderable(prop: _Property) -> bool:
+def _unrenderable(prop: ElicitationProperty) -> bool:
     """Whether this property declares a shape there is no prompt for.
 
     Both cases are additions a later protocol release may make: a property type
@@ -207,15 +199,16 @@ def _unrenderable(prop: _Property) -> bool:
 async def _ask_property(
     message: str,
     name: str,
-    prop: _Property,
+    prop: ElicitationProperty,
     required: bool,
     context: "ConversationContext",
-) -> tuple[bool, Any]:
+) -> ElicitationValue | None:
     """Prompt for one property until it is answered, defaulted, or skipped.
 
-    Returns ``(answered, value)``; ``(False, None)`` for an optional property the
-    human left empty, which is omitted from the accepted content rather than
-    filled in with a guess.
+    Returns the value to send, or ``None`` for an optional property the human left
+    empty — omitted from the accepted content rather than filled in with a guess.
+    ``None`` carries that on its own: a coerced answer is never ``None``, and a
+    default is only taken when the property declares one.
 
     Raises:
         _RefusedError: The human refused, or gave ``MAX_ATTEMPTS`` answers none of
@@ -227,24 +220,25 @@ async def _ask_property(
         if answer == REFUSE:
             raise _RefusedError
         if not answer:
-            default = getattr(prop, "default", None)
+            default: ElicitationValue | None = getattr(prop, "default", None)
             if default is not None:
-                return True, default
+                return default
             if not required:
-                return False, None
+                return None
             continue  # required, no default -> ask again
         try:
-            return True, _coerce(answer, prop)
+            return _coerce(answer, prop)
         except _UncoercibleError:
             continue
     logger.debug("property %r went unanswered after %d attempts; declined", name, MAX_ATTEMPTS)
     raise _RefusedError
 
 
-def _prompt_for(message: str, name: str, prop: _Property) -> str:
+def _prompt_for(message: str, name: str, prop: ElicitationProperty) -> str:
     """One property's prompt: what it is, what it accepts, and what it defaults to."""
-    lines = [f"Agent asks: {message}", f"{getattr(prop, 'title', None) or name} ({_type_label(prop)}):"]
-    description = getattr(prop, "description", None)
+    title: str | None = getattr(prop, "title", None)
+    lines = [f"Agent asks: {message}", f"{title or name} ({_type_label(prop)}):"]
+    description: str | None = getattr(prop, "description", None)
     if description:
         lines.append(description)
     allowed = _allowed_values(prop)
@@ -253,14 +247,14 @@ def _prompt_for(message: str, name: str, prop: _Property) -> str:
     bounds = _bounds_note(prop)
     if bounds is not None:
         lines.append(bounds)
-    default = getattr(prop, "default", None)
+    default: ElicitationValue | None = getattr(prop, "default", None)
     if default is not None:
         lines.append(f"Default (press enter to accept): {_render_default(default)}")
     lines.append(f"Answer, or {REFUSE} to refuse:")
     return "\n".join(lines)
 
 
-def _type_label(prop: _Property) -> str:
+def _type_label(prop: ElicitationProperty) -> str:
     if isinstance(prop, schema.ElicitationMultiSelectPropertySchema):
         return "select any, comma-separated"
     if isinstance(prop, schema.ElicitationBooleanPropertySchema):
@@ -268,7 +262,7 @@ def _type_label(prop: _Property) -> str:
     return str(getattr(prop, "type", "string"))
 
 
-def _render_default(default: Any) -> str:
+def _render_default(default: ElicitationValue) -> str:
     if isinstance(default, list):
         return ", ".join(str(item) for item in default)
     if isinstance(default, bool):
@@ -276,7 +270,7 @@ def _render_default(default: Any) -> str:
     return str(default)
 
 
-def _allowed_values(prop: _Property) -> list[str] | None:
+def _allowed_values(prop: ElicitationProperty) -> list[str] | None:
     """The values this property declares, or ``None`` when it declares none."""
     if isinstance(prop, schema.ElicitationStringPropertySchema):
         if prop.enum:
@@ -293,7 +287,7 @@ def _allowed_values(prop: _Property) -> list[str] | None:
     return None
 
 
-def _bounds_note(prop: _Property) -> str | None:
+def _bounds_note(prop: ElicitationProperty) -> str | None:
     """The numeric bounds this property declares, phrased for the human.
 
     Shown because they are *enforced*: a re-prompt after breaking a limit the
@@ -325,7 +319,7 @@ def _within(value: float, low: float | None, high: float | None) -> bool:
     return (low is None or value >= low) and (high is None or value <= high)
 
 
-def _coerce(answer: str, prop: _Property) -> Any:
+def _coerce(answer: str, prop: ElicitationProperty) -> ElicitationValue:
     """Coerce one text answer to the value the property declared it wants.
 
     Raises:
@@ -371,7 +365,7 @@ def _coerce_bool(answer: str) -> bool:
     raise _UncoercibleError
 
 
-def _coerce_string(answer: str, prop: _Property) -> str:
+def _coerce_string(answer: str, prop: ElicitationProperty) -> str:
     allowed = _allowed_values(prop)
     # A value outside the declared set is as wrong as a word where a number was
     # asked for: the agent branches on those values.

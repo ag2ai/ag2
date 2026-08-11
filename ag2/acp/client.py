@@ -47,6 +47,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Ceiling on waiting for received `session/update`s to finish being handled. Only
+# approached if a handler is wedged — the normal wait is a scheduling round or
+# two — and exceeding it costs the tail of the turn's text, never a hung turn.
+_UPDATE_SETTLE_TIMEOUT = 10.0
+
 
 def _elicitation_capabilities(policy: "ElicitationPolicy") -> schema.ElicitationCapabilities | None:
     """What ``initialize`` advertises for elicitation, per policy.
@@ -205,6 +210,21 @@ class ACPClient:
             self.config._sessions.pop(context.stream.id, None)
             await session.close()
             raise
+
+        # The prompt response arriving does not mean the `session/update`s that
+        # preceded it on the wire have been handled — see `dispatch`. Reading the
+        # turn now would cut off its tail, so wait for them first. Bounded only
+        # against a wedged update handler: the normal wait is the time it takes to
+        # drain a queue whose items are already there.
+        try:
+            await asyncio.wait_for(state.updates.settle(), _UPDATE_SETTLE_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Timed out after %.0fs waiting for streamed updates to be handled; "
+                "the reply may be missing its tail (agent=%r).",
+                _UPDATE_SETTLE_TIMEOUT,
+                self.config._agent_label,
+            )
 
         if response is not None:
             session.sent_count = new_count

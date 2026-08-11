@@ -19,6 +19,7 @@ from acp import schema
 
 from ag2.events.types import BinaryResult
 
+from .dispatch import InboundUpdates
 from .elicitation import resolve_elicitation_response
 from .mappers import block_text, block_to_files, map_session_update
 from .permissions import resolve_permission_option_id
@@ -156,6 +157,9 @@ class BridgeState:
         self._turn_files: list[BinaryResult] = []
         self._turn_worked = False
         self.terminals = TerminalManager(config.fs_root or config.cwd)
+        # Owned here because the connection is built from this bridge and a turn
+        # is read out of this bridge: both ends of `settle()` are already here.
+        self.updates = InboundUpdates()
 
     def begin_turn(self) -> None:
         self._turn_parts = []
@@ -226,7 +230,7 @@ class BridgeState:
     ) -> str | None:
         return await resolve_permission_option_id(self.config.permission_policy, options, tool_call, self.context)
 
-    async def resolve_elicitation(self, message: str, mode: Any) -> schema.CreateElicitationResponse:
+    async def resolve_elicitation(self, message: str, mode: schema.ElicitationMode) -> schema.CreateElicitationResponse:
         return await resolve_elicitation_response(self.config.elicitation_policy, message, mode, self.context)
 
 
@@ -251,13 +255,16 @@ class ACPBridge(acp.Client):
             return schema.RequestPermissionResponse(outcome=schema.DeniedOutcome(outcome="cancelled"))
         return schema.RequestPermissionResponse(outcome=schema.AllowedOutcome(option_id=chosen, outcome="selected"))
 
-    async def create_elicitation(self, message: str, mode: Any, **kwargs: Any) -> schema.CreateElicitationResponse:
+    async def create_elicitation(
+        self, message: str, mode: schema.ElicitationMode, **kwargs: Any
+    ) -> schema.CreateElicitationResponse:
         """Answer the agent's question — accept, decline or cancel.
 
-        ``mode`` is typed loosely on purpose: the four known form/url modes are
-        rendered, and anything a later protocol release adds is declined rather
-        than raising, so an agent using a newer mode falls back instead of seeing
-        a transport failure.
+        ``mode`` is ``acp``'s own union of the four form/url × session/request
+        models, which is what its router validates before dispatching here. The
+        rendering still guards with ``isinstance``: a mode a later protocol release
+        adds is declined rather than raising, so an agent using a newer mode falls
+        back instead of seeing a transport failure.
         """
         return await self.state.resolve_elicitation(message, mode)
 

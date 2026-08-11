@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, cast
 import acp
 from acp import schema
 
-from .config import ACPConfig
+from .config import ACPConfig, _dispatch_kwargs
 from .types import SessionUpdate
 
 if TYPE_CHECKING:
@@ -48,6 +48,7 @@ __all__ = (
     "ScriptedElicitation",
     "connect",
     "duplex",
+    "duplex_acp_config",
     "fake_acp_config",
     "fake_remote_acp_config",
 )
@@ -353,6 +354,61 @@ def fake_remote_acp_config(
         initialize_elicitations=initialize_elicitations,
         elicitation_responses=elicitation_responses,
     )
+    return config
+
+
+def _duplex_connect(agent: "Callable[[acp.Client], Any] | Any") -> "ConnectHook":
+    """A connection hook that reaches ``agent`` over a real ACP connection in-process.
+
+    ``agent`` is what ``acp.run_agent`` takes: an object implementing the SDK's
+    ``Agent`` protocol, or a callable handed the connection to talk back through.
+    """
+
+    @asynccontextmanager
+    async def connect(client: acp.Client) -> "AsyncGenerator[tuple[ClientSideConnection, None]]":
+        from acp.agent.connection import AgentSideConnection
+
+        (agent_reader, agent_writer), (client_reader, client_writer) = await duplex()
+        # `listening=False` + an explicit task: the receive loop must be owned here
+        # so it is cancelled with the connection rather than outliving the test.
+        agent_conn = AgentSideConnection(agent, agent_writer, agent_reader, listening=False)
+        serving = asyncio.ensure_future(agent_conn.listen())
+        # The same arguments the real transports pass, `_dispatch_kwargs` included:
+        # a harness that connected differently would not be exercising AG2's wiring.
+        conn = acp.connect_to_agent(
+            client, client_writer, client_reader, use_unstable_protocol=True, **_dispatch_kwargs(client)
+        )
+        try:
+            yield conn, None
+        finally:
+            await conn.close()
+            serving.cancel()
+            with suppress(asyncio.CancelledError):
+                await serving
+            await agent_conn.close()
+            for writer in (client_writer, agent_writer):
+                writer.close()
+
+    return cast("ConnectHook", connect)
+
+
+def duplex_acp_config(agent: "Callable[[acp.Client], Any] | Any", **overrides: Any) -> FakeACPConfig:
+    """An :class:`~.config.ACPConfig` reaching ``agent`` over a real ACP connection.
+
+    Unlike :func:`fake_acp_config`, which calls the client's methods directly, both
+    ends here are the genuine SDK connection classes over a socket pair — real
+    JSON-RPC framing, real receive loop, real notification queue, real routers —
+    with no subprocess to spawn and no agent program to keep on disk.
+
+    Reach for it when the transport *is* the subject: notification dispatch and the
+    ordering it implies, capability negotiation through ``initialize``, whether an
+    unstable route reaches the client at all. For everything else prefer
+    :func:`fake_acp_config` — a scripted turn says more about behaviour with less
+    machinery. What this does not cover is the launch path itself (argv, env,
+    ``cwd``, a process to terminate); a test about that needs a real subprocess.
+    """
+    config = FakeACPConfig(**overrides)
+    config._connect = _duplex_connect(agent)
     return config
 
 
