@@ -29,7 +29,7 @@ class GovernancePolicy:
     config: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def tool_allowlist(cls, allowed: list[str]) -> GovernancePolicy:
+    def tool_allowlist(cls, allowed: list[str]) -> "GovernancePolicy":
         """Only allow tools matching these patterns (supports glob-style '*' suffix).
 
         Args:
@@ -38,7 +38,7 @@ class GovernancePolicy:
         return cls(type="tool_allowlist", config={"allowed": allowed})
 
     @classmethod
-    def pii_block(cls, categories: list[str] | None = None) -> GovernancePolicy:
+    def pii_block(cls, categories: list[str] | None = None) -> "GovernancePolicy":
         """Block tool calls containing PII in arguments.
 
         Args:
@@ -50,12 +50,12 @@ class GovernancePolicy:
         )
 
     @classmethod
-    def secret_detection(cls) -> GovernancePolicy:
+    def secret_detection(cls) -> "GovernancePolicy":
         """Block tool calls containing API keys/tokens in arguments."""
         return cls(type="secret_detection", config={})
 
     @classmethod
-    def cost_limit(cls, max_per_session: float) -> GovernancePolicy:
+    def cost_limit(cls, max_per_session: float) -> "GovernancePolicy":
         """Deny tool calls once cumulative session cost exceeds the limit.
 
         Args:
