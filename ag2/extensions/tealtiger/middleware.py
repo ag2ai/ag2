@@ -23,16 +23,15 @@ if TYPE_CHECKING:
     from ag2.middleware.base import ToolExecution
 
 from ag2.events import ToolErrorEvent
-from ag2.middleware import BaseMiddleware
-from ag2.middleware.base import ToolResultType
-from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
-
 from ag2.extensions.tealtiger.types import (
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
     TEECReceipt,
 )
+from ag2.middleware import BaseMiddleware
+from ag2.middleware.base import ToolResultType
+from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 # ── PII and secret patterns ──────────────────────────────────────────────────
 
