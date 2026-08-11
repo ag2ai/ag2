@@ -39,6 +39,54 @@ config = A2AConfig(
 !!! tip
     `#!python card_url` is always an HTTP URL — even when the resolved transport is gRPC. The card is served over HTTP per spec; only the actual message exchange uses the resolved binding.
 
+## gRPC TLS
+
+The default gRPC channel factory selects security from the interface URL published in the agent card. `#!python grpcs://` and `#!python grpc+tls://` create a TLS channel using the system CA roots; `#!python grpc://`, `#!python grpc+insecure://` and a bare `#!python host:port` keep the backwards-compatible insecure channel.
+
+For a server certificate issued by a public CA, the client needs no TLS-specific configuration. It fetches the card over HTTPS and follows the secure gRPC interface declared there:
+
+```python linenums="1" hl_lines="7"
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+
+remote = Agent(
+    "remote",
+    config=A2AConfig(
+        card_url="https://agents.example.com",
+        prefer="grpc",
+    ),
+)
+reply = await remote.ask("Summarize the latest report.")
+```
+
+Private CAs, self-signed certificates and mTLS need custom `#!python grpc.ChannelCredentials`. Wrap those credentials with `#!python secure_grpc_channel_factory(...)` and pass the returned callable through the existing `#!python grpc_channel_factory` escape hatch:
+
+```python linenums="1" hl_lines="7-8 11-16"
+from pathlib import Path
+
+import grpc
+
+from ag2 import Agent
+from ag2.a2a import A2AConfig, secure_grpc_channel_factory
+
+ca_certificate = Path("certs/ca.pem").read_bytes()
+credentials = grpc.ssl_channel_credentials(root_certificates=ca_certificate)
+remote = Agent(
+    "remote",
+    config=A2AConfig(
+        card_url="https://agents.internal.example",
+        prefer="grpc",
+        grpc_channel_factory=secure_grpc_channel_factory(credentials),
+    ),
+)
+reply = await remote.ask("Run the internal health check.")
+```
+
+The secure factory always creates a TLS channel, regardless of whether the card uses a secure, insecure or bare gRPC URL spelling. It also accepts gRPC channel options via `#!python options=`. For mTLS, construct the credentials with `#!python root_certificates=`, `#!python private_key=` and `#!python certificate_chain=`; AG2 passes the resulting object to gRPC unchanged.
+
+!!! warning
+    TLS protects the gRPC connection only. Card discovery is a separate HTTP request, so publish the card over HTTPS as well and keep `#!python card_url` on that HTTPS origin.
+
 ## Multi-turn — `reply.ask`
 
 A2A servers are stateless from AG2's perspective: every call ships the full conversation history as a `#!python application/vnd.ag2.history+json` `#!python DataPart` attached to the outgoing message. The continuation API is the regular `#!python reply.ask(...)`:
@@ -162,7 +210,7 @@ See [Declaring Extensions](/docs/user-guide/a2a/server#declaring-extensions) for
 | `input_required_timeout` | `#!python Optional[float]` | `#!python None` | Cap how long the client waits on a HITL hook |
 | `httpx_client_factory` | `#!python Optional[Callable[[], AsyncClient]]` | `#!python None` | Custom `#!python httpx.AsyncClient` (proxies, custom TLS, etc.) |
 | `interceptors` | `#!python Sequence[ClientCallInterceptor]` | `#!python ()` | A2A SDK call interceptors |
-| `grpc_channel_factory` | `#!python Optional[Callable[[str], Channel]]` | `#!python None` | Custom gRPC channel builder (defaults to insecure) |
+| `grpc_channel_factory` | `#!python Optional[Callable[[str], Channel]]` | `#!python None` | Custom gRPC channel builder. The default follows the card URL scheme: `#!python grpcs://` / `#!python grpc+tls://` use system CA roots; other gRPC URL forms stay insecure. See [gRPC TLS](/docs/user-guide/a2a/client#grpc-tls) |
 | `preset_card` | `#!python Optional[AgentCard]` | `#!python None` | Skip the discovery round-trip when the card is already known |
 | `card_signature_verifier` | `#!python Optional[Callable[[AgentCard], None]]` | `#!python None` | Verify the JWS signature on every card consumed — fetched, preset and extended (see [Card Signing](/docs/user-guide/a2a/card_signing)) |
 | `tenant` | `#!python Optional[str]` | `#!python None` | Multi-tenancy scope on a shared backend |
