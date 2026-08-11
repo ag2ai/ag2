@@ -486,3 +486,97 @@ class TestReset:
         assert len(mw.receipts) == 0
         assert mw.total_cost == 0.0
         assert not mw.is_frozen("assistant")
+
+
+# ─── on_turn kill switch tests ───────────────────────────────────────────────
+
+
+class TestOnTurn:
+    @pytest.mark.asyncio
+    async def test_frozen_agent_blocked_enforce(self):
+        """ENFORCE mode: frozen agent's turn is blocked with ToolErrorEvent."""
+        mw = TealTigerMiddleware(mode=GovernanceMode.ENFORCE)
+        mw.freeze("assistant")
+
+        ctx = _make_context("assistant")
+        per_turn = mw(MagicMock(), ctx)
+        call_next = AsyncMock()
+        event = MagicMock()
+
+        result = await per_turn.on_turn(call_next, event, ctx)
+
+        assert isinstance(result, ToolErrorEvent)
+        assert "AGENT_FROZEN" in str(result.error) or "frozen" in str(result.error).lower()
+        call_next.assert_not_awaited()
+        assert len(mw.decisions) == 1
+        assert mw.decisions[0].action == "DENY"
+        assert "AGENT_FROZEN" in mw.decisions[0].reason_codes
+
+    @pytest.mark.asyncio
+    async def test_frozen_agent_allowed_monitor(self):
+        """MONITOR mode: frozen agent is logged but turn is allowed through."""
+        mw = TealTigerMiddleware(mode=GovernanceMode.MONITOR)
+        mw.freeze("assistant")
+
+        ctx = _make_context("assistant")
+        per_turn = mw(MagicMock(), ctx)
+        call_next = AsyncMock(return_value=MagicMock())
+        event = MagicMock()
+
+        await per_turn.on_turn(call_next, event, ctx)
+
+        # MONITOR: records DENY but allows through
+        call_next.assert_awaited_once()
+        assert len(mw.decisions) == 1
+        assert mw.decisions[0].action == "DENY"
+        assert "AGENT_FROZEN" in mw.decisions[0].reason_codes
+
+    @pytest.mark.asyncio
+    async def test_observe_skips_evaluation(self):
+        """OBSERVE mode: no evaluation at turn level, passes through even if frozen."""
+        mw = TealTigerMiddleware(mode=GovernanceMode.OBSERVE)
+        mw.freeze("assistant")
+
+        ctx = _make_context("assistant")
+        per_turn = mw(MagicMock(), ctx)
+        call_next = AsyncMock(return_value=MagicMock())
+        event = MagicMock()
+
+        await per_turn.on_turn(call_next, event, ctx)
+
+        # OBSERVE: passes through without evaluation
+        call_next.assert_awaited_once()
+        assert len(mw.decisions) == 0
+
+    @pytest.mark.asyncio
+    async def test_unfrozen_agent_passes_enforce(self):
+        """Unfrozen agent passes through in ENFORCE mode."""
+        mw = TealTigerMiddleware(mode=GovernanceMode.ENFORCE)
+
+        ctx = _make_context("assistant")
+        per_turn = mw(MagicMock(), ctx)
+        call_next = AsyncMock(return_value=MagicMock())
+        event = MagicMock()
+
+        await per_turn.on_turn(call_next, event, ctx)
+
+        call_next.assert_awaited_once()
+        assert len(mw.decisions) == 0
+
+    @pytest.mark.asyncio
+    async def test_on_decision_callback_fired_on_freeze(self):
+        """on_decision callback is invoked when kill switch fires at turn level."""
+        received = []
+        mw = TealTigerMiddleware(mode=GovernanceMode.ENFORCE, on_decision=lambda d: received.append(d))
+        mw.freeze("assistant")
+
+        ctx = _make_context("assistant")
+        per_turn = mw(MagicMock(), ctx)
+        call_next = AsyncMock()
+        event = MagicMock()
+
+        await per_turn.on_turn(call_next, event, ctx)
+
+        assert len(received) == 1
+        assert received[0].action == "DENY"
+        assert received[0].agent_name == "assistant"
