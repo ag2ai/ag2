@@ -189,6 +189,7 @@ optionals = [
     "ag2[xai]",
     "ag2[zai]",
     "ag2[mistral]",
+    "ag2[elevenlabs]",
 ]
 
 docs = [

@@ -243,7 +243,7 @@ lint = [
 ]
 optionals = [
     { name = "a2a-sdk", extra = ["signing"] },
-    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "daytona" },
     { name = "docker" },
     { name = "exa-py" },
@@ -452,6 +452,7 @@ optionals = [
     { name = "ag2", extras = ["anthropic"] },
     { name = "ag2", extras = ["bedrock"] },
     { name = "ag2", extras = ["dashscope"] },
+    { name = "ag2", extras = ["elevenlabs"] },
     { name = "ag2", extras = ["gemini"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
