@@ -20,6 +20,8 @@ SessionUpdate: TypeAlias = (
     | schema.ToolCallStart
     | schema.ToolCallProgress
     | schema.AgentPlanUpdate
+    | schema.AgentPlanContentUpdate
+    | schema.AgentPlanRemovedUpdate
     | schema.AvailableCommandsUpdate
     | schema.CurrentModeUpdate
     | schema.ConfigOptionUpdate
@@ -40,3 +42,9 @@ ContentBlock: TypeAlias = (
 ToolCallContent: TypeAlias = (
     schema.ContentToolCallContent | schema.FileEditToolCallContent | schema.TerminalToolCallContent
 )
+
+# Every MCP server shape a Client may declare in ``session/new``, mirroring
+# ``NewSessionRequest.mcp_servers``. The ``acp`` SDK parses the request; naming
+# the result here is what keeps a recorded server readable as its own model
+# rather than as ``Any`` at every point it is passed along.
+McpServer: TypeAlias = schema.HttpMcpServer | schema.SseMcpServer | schema.AcpMcpServer | schema.McpServerStdio

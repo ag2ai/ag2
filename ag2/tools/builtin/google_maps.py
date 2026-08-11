@@ -40,7 +40,7 @@ class GoogleMapsTool(Tool):
       :class:`~ag2.exceptions.UnsupportedToolError`.
 
     See:
-    - https://ai.google.dev/gemini-api/docs/google-maps
+    - https://ai.google.dev/gemini-api/docs/maps-grounding
     """
 
     __slots__ = (

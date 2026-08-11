@@ -22,6 +22,7 @@ from .transports._common import (
     DEFAULT_AGENT_CARD_PATH,
     LEGACY_AGENT_CARD_PATH,
     CardModifier,
+    CardSigner,
     ExtendedCardModifier,
 )
 from .transports.grpc import build_grpc_server
@@ -29,6 +30,7 @@ from .transports.jsonrpc import build_jsonrpc_asgi
 from .transports.rest import build_rest_asgi
 
 if TYPE_CHECKING:
+    import grpc
     from grpc.aio import Server
     from starlette.applications import Starlette
 
@@ -51,11 +53,20 @@ class A2AServer:
 
     A2A spec doesn't define middleware — attach cross-cutting concerns
     (CORS, auth, tracing) to the returned transport object directly.
+
+    ``card_signer`` (from :func:`a2a.utils.signing.create_agent_card_signer`)
+    signs every served card; per-request modifier outputs are re-signed
+    automatically, and the card is always signed after AG2 derives its
+    capability flags onto it. Passing an already-signed ``card`` to a
+    ``build_*`` method without a ``card_signer`` raises
+    ``A2AStaleCardSignatureError`` if AG2 would have to flip a capability
+    flag on it, since that would invalidate the signature already there.
     """
 
     __slots__ = (
         "_agent",
         "_card_modifier",
+        "_card_signer",
         "_executor",
         "_extended_card",
         "_extended_card_modifier",
@@ -71,6 +82,7 @@ class A2AServer:
         extended_card: AgentCard | None = None,
         card_modifier: CardModifier | None = None,
         extended_card_modifier: ExtendedCardModifier | None = None,
+        card_signer: CardSigner | None = None,
         task_store: TaskStore | None = None,
         push_config_store: PushNotificationConfigStore | None = None,
         push_sender: PushNotificationSender | None = None,
@@ -80,6 +92,7 @@ class A2AServer:
         self._extended_card = extended_card
         self._card_modifier = card_modifier
         self._extended_card_modifier = extended_card_modifier
+        self._card_signer = card_signer
         # Materialise the store eagerly so multi-transport setups (same
         # server exposed via JSON-RPC + REST + gRPC) all share one task
         # store. Otherwise each builder defaults to its own.
@@ -112,6 +125,7 @@ class A2AServer:
             "agent_executor": self._executor,
             "extended_agent_card": self._extended_card,
             "extended_card_modifier": self._extended_card_modifier,
+            "card_signer": self._card_signer,
             "task_store": self._task_store,
             "push_config_store": self._push_config_store,
             "push_sender": self._push_sender,
@@ -173,20 +187,23 @@ class A2AServer:
             **self._shared_kwargs(include_card_modifier=True),
         )
 
-    def build_grpc(
+    def build_grpc(  # type: ignore[no-any-unimported]
         self,
         *,
         bind: str,
         grpc_url: str,
         card: AgentCard | None = None,
         options: Sequence[tuple[str, Any]] = (),
+        server_credentials: "grpc.ServerCredentials | None" = None,
     ) -> "Server":
         """``grpc.aio.Server`` bound to ``bind``; caller starts/awaits it.
 
         ``bind`` is the listener address (e.g. ``"0.0.0.0:50051"``).
         ``grpc_url`` is the public URL clients will connect to (used in
         the AgentCard interface entry — usually identical to ``bind``,
-        but not when behind a load balancer). Insecure binding only.
+        but not when behind a load balancer). Binding is insecure by default;
+        pass ``server_credentials`` (for example, from
+        ``grpc.ssl_server_credentials(...)``) to enable TLS.
 
         ``card_modifier`` does not apply: A2A v1.x has no ``GetAgentCard``
         gRPC method — the public card is served over HTTP only.
@@ -203,5 +220,6 @@ class A2AServer:
             agent_card=resolved_card,
             bind=bind,
             options=options,
+            server_credentials=server_credentials,
             **self._shared_kwargs(include_card_modifier=False),
         )

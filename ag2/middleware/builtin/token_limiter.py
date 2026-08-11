@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from ag2.annotations import Context
 from ag2.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent, estimated_tokens
 from ag2.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
+from ag2.middleware.describe import MiddlewareDescription
 
 
 class TokenLimiter(MiddlewareFactory):
@@ -24,6 +25,12 @@ class TokenLimiter(MiddlewareFactory):
             raise ValueError("chars_per_token must be greater than 0")
         self._max_tokens = max_tokens
         self._chars_per_token = chars_per_token
+
+    def describe(self) -> MiddlewareDescription:
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"max_tokens": self._max_tokens, "chars_per_token": self._chars_per_token},
+        )
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
         return _TokenLimiter(event, context, self._max_tokens, self._chars_per_token)

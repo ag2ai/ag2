@@ -17,6 +17,20 @@ class A2AClientToolsNotSupportedError(A2AError):
     """
 
 
+class A2AExtensionNotSupportedError(A2AError):
+    """Raised when client-activated and server-declared A2A extensions can't be reconciled.
+
+    Two directions: the client requested a URI the card does not advertise,
+    or the card marks an extension ``required=True`` that the client neither
+    activated nor natively implements.
+    """
+
+    def __init__(self, *, url: str, uris: list[str], reason: str) -> None:
+        self.url = url
+        self.uris = uris
+        super().__init__(f"A2A extension mismatch for {url!r} ({reason}): {uris!r}")
+
+
 class A2AInvalidCardError(A2AError):
     """Raised when an ``AgentCard`` is missing data required to connect."""
 
@@ -41,6 +55,39 @@ class A2AIncompatibleProtocolVersionError(A2AError):
             f"AgentCard at {url!r} declares an incompatible A2A protocol version "
             f"{protocol_version!r} for transport {transport!r}; AG2 requires "
             f">= {PROTOCOL_VERSION_1_0} (see https://a2a-protocol.org/latest/announcing-1.0/)."
+        )
+
+
+class A2ACardSignatureError(A2AError):
+    """Raised when AgentCard JWS signature verification fails.
+
+    Covers missing signatures, tampered payloads, and unknown/wrong keys.
+    ``source`` says which card failed: ``"fetched agent card"``,
+    ``"preset agent card"``, or ``"extended agent card"``.
+    """
+
+    def __init__(self, *, url: str, source: str, reason: str) -> None:
+        self.url = url
+        self.source = source
+        super().__init__(f"AgentCard signature verification failed ({source}) for {url!r}: {reason}")
+
+
+class A2AStaleCardSignatureError(A2AError):
+    """Raised when serving a caller-signed card would invalidate its signature.
+
+    AG2 derives the ``extended_agent_card`` / ``push_notifications``
+    capability flags from how the server was configured; flipping one on an
+    already-signed card voids the JWS, and without a ``card_signer`` there is
+    no key to redo it.
+    """
+
+    def __init__(self, *, flipped: tuple[str, ...]) -> None:
+        self.flipped = flipped
+        flags = ", ".join(repr(f) for f in flipped)
+        super().__init__(
+            f"AgentCard carries signatures, but the server must set {flags} on it, "
+            f"which invalidates them. Either set the capability flags before signing "
+            f"the card, or pass card_signer= so AG2 signs the final card itself."
         )
 
 

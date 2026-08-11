@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
 import os
 from collections.abc import Iterable
 from enum import Enum
@@ -82,6 +83,22 @@ class BinaryType(str, Enum):
     VIDEO = "video"
 
 
+def _coerce_kind(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Restore ``kind`` to :class:`BinaryType` when it arrives as a raw string.
+
+    Logs written before the ``__enum__`` wire marker store ``kind`` as its bare
+    value. Unrecognised values pass through untouched -- a log must stay loadable.
+
+    Stopgap for one field. Superseded once event reconstruction restores declared
+    field types generally.
+    """
+    kind = kwargs.get("kind")
+    if kind is not None and not isinstance(kind, BinaryType):
+        with contextlib.suppress(ValueError):
+            kwargs["kind"] = BinaryType(kind)
+    return kwargs
+
+
 class BinaryInput(Input):
     """Binary data input event sent to the model."""
 
@@ -90,6 +107,9 @@ class BinaryInput(Input):
     vendor_metadata: dict[str, Any] = Field(default_factory=dict)
 
     kind: BinaryType = BinaryType.BINARY
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **_coerce_kind(kwargs))
 
 
 class FileIdInput(Input):
@@ -103,6 +123,9 @@ class UrlInput(Input):
     kind: BinaryType
 
     url: str = Field(kw_only=False)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **_coerce_kind(kwargs))
 
 
 @overload
@@ -419,6 +442,8 @@ _EXTENSION_TO_MEDIA_TYPE: dict[str, ImageMediaType] = {
     ".png": "image/png",
     ".gif": "image/gif",
     ".webp": "image/webp",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
 }
 
 

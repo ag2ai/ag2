@@ -71,18 +71,18 @@ reply = await agent.ask("Compare these two images.", image1, image2)
 
 Not all providers support all input types. The table below shows what each provider accepts:
 
-| Input Type | OpenAI | OpenAI Responses | Gemini | Anthropic | xAI | Bedrock |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Text** | Yes | Yes | Yes | Yes | Yes | Yes |
-| **Image (URL)** | Yes | Yes | Yes | Yes | Yes | - |
-| **Image (binary)** | Yes | Yes | Yes | Yes | Yes | Yes |
-| **Audio (URL)** | - | - | Yes | - | - | - |
-| **Audio (binary)** | Yes | - | Yes | - | - | - |
-| **Video (URL)** | - | - | Yes | - | - | - |
-| **Video (binary)** | - | - | Yes | - | - | Yes |
-| **Document (URL)** | - | Yes | Yes | Yes | Yes | - |
-| **Document (binary)** | - | - | Yes | Yes | Yes | Yes |
-| **File ID** | - | Yes | - | Yes | Yes | - |
+| Input Type | OpenAI | OpenAI Responses | Gemini | Anthropic | xAI | Mistral | Bedrock |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Text** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| **Image (URL)** | Yes | Yes | Yes | Yes | Yes | Yes | - |
+| **Image (binary)** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| **Audio (URL)** | - | - | Yes | - | - | - | - |
+| **Audio (binary)** | Yes | - | Yes | - | - | - | - |
+| **Video (URL)** | - | - | Yes | - | - | - | - |
+| **Video (binary)** | - | - | Yes | - | - | - | Yes |
+| **Document (URL)** | - | Yes | Yes | Yes | Yes | Yes | - |
+| **Document (binary)** | - | - | Yes | Yes | Yes | Yes | Yes |
+| **File ID** | - | Yes | - | Yes | Yes | Yes | - |
 
 If you pass an unsupported input type to a provider, an `#!python UnsupportedInputError` is raised with a clear message indicating what is not supported and by which provider.
 
@@ -128,8 +128,8 @@ Gemini supports provider-specific settings via `#!python vendor_metadata` on bin
 
 | Key | Type | Description |
 | :--- | :--- | :--- |
-| `media_resolution` | `str` | Controls token allocation per image/video frame |
-| `video_metadata` | `dict` | Video clipping (`start_offset`, `end_offset`) and frame rate (`fps`) |
+| `media_resolution` | `str` \| `dict[str, Any]` | Controls token allocation per image/video frame |
+| `video_metadata` | `dict[str, Any]` | Video clipping (`start_offset`, `end_offset`) and frame rate (`fps`) |
 | `display_name` | `str` | Display name for the file |
 
 **Media resolution** — control quality vs cost tradeoff for images and video frames:
@@ -146,6 +146,22 @@ image = ImageInput(
 ```
 
 Available values: `MEDIA_RESOLUTION_LOW`, `MEDIA_RESOLUTION_MEDIUM`, `MEDIA_RESOLUTION_HIGH`, `MEDIA_RESOLUTION_ULTRA_HIGH`.
+
+A `#!python dict` is also accepted and maps straight onto Gemini's `PartMediaResolution`, whose `level` and `num_tokens` keys are mutually exclusive — set exactly one:
+
+```python linenums="1"
+from ag2.events import ImageInput
+
+image = ImageInput(
+    data=raw_bytes,
+    media_type="image/jpeg",
+    vendor_metadata={"media_resolution": {"level": "MEDIA_RESOLUTION_MEDIUM"}},
+)
+```
+
+!!! warning "Setting both keys is rejected"
+
+    Passing `#!python {"level": ..., "num_tokens": ...}` together makes Gemini reject the request with `400 INVALID_ARGUMENT` (`oneof field 'value' is already set`).
 
 **Video clipping and frame rate** — process only a portion of a video or adjust the sampling rate:
 
@@ -286,6 +302,48 @@ doc = BinaryInput(
     vendor_metadata={"filename": "Q4-report.pdf"},
 )
 ```
+
+### Mistral
+
+Mistral accepts images and documents by URL, binary, or file ID. Audio and video raise `#!python UnsupportedInputError`. Plain text counts as a document, so `#!python DocumentInput(data=b"...", media_type="text/plain")` works alongside PDFs.
+
+**Files API** — uploads must use the `ocr` purpose to be referenceable from a message. That is the default in AG2, so a plain upload is ready to use:
+
+```python linenums="1" hl_lines="7 10"
+from ag2.config import MistralConfig
+from ag2.events import FileIdInput
+from ag2.files import FilesAPI
+
+config = MistralConfig(model="mistral-small-latest")
+files = FilesAPI(config)
+uploaded = await files.upload(data=pdf_bytes, filename="report.pdf")
+
+# Reference it as many times as you like — the bytes are never resent
+reply = await agent.ask("Summarise this report.", FileIdInput(file_id=uploaded.file_id))
+```
+
+The other purposes are content-validated: `batch` and `fine-tune` require newline-delimited JSON in a specific schema and reject anything else with HTTP 422.
+
+!!! note "Remote URLs are fetched by Mistral"
+
+    URL inputs are retrieved server-side, so the host must serve them to Mistral. Some hosts refuse, and the API returns "File could not be fetched from url". Pass the bytes instead when that happens.
+
+#### Vendor Metadata
+
+Mistral reads `detail` for image quality from `#!python vendor_metadata` for binary images and `#!python metadata` for URL images — the same split as xAI:
+
+```python linenums="1" hl_lines="6"
+from ag2.events import BinaryInput, BinaryType
+
+image = BinaryInput(
+    raw_bytes,
+    media_type="image/png",
+    kind=BinaryType.IMAGE,
+    vendor_metadata={"detail": "low"},  # "low", "high", or "auto"
+)
+```
+
+**Document name** — taken from `#!python metadata={"filename": ...}` for URL documents and `#!python vendor_metadata={"filename": ...}` for binary ones (set automatically when using `path=`).
 
 ### Amazon Bedrock
 

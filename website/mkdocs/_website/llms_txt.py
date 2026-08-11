@@ -28,7 +28,7 @@ with optional_import_block():
     import yaml
     from jinja2 import Template
 
-BASE_URL = "https://docs.ag2.ai/latest"
+BASE_URL = "https://docs.ag2.ai"
 
 PROJECT_TITLE = "AG2"
 
@@ -265,7 +265,7 @@ def generate_llms_txt(website_dir: Path, site_root: Path) -> None:
     Args:
         website_dir: The ``website/`` directory (holds ``mint-json-template.json.jinja``).
         site_root: The MkDocs ``docs_dir`` (``website/mkdocs/docs``); files written here
-            are served at the site root, e.g. ``https://docs.ag2.ai/latest/llms.txt``.
+            are served at the site root, e.g. ``https://docs.ag2.ai/llms.txt``.
     """
     template_path = website_dir / "mint-json-template.json.jinja"
     navigation = json.loads(Template(template_path.read_text(encoding="utf-8")).render())["navigation"]

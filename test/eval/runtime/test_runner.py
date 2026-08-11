@@ -11,6 +11,7 @@ user passes through the factory still work, and the run is persisted
 to ``store_dir`` automatically.
 """
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -40,6 +41,22 @@ from ag2.testing import TestConfig
 @tool
 async def get_weather(city: str) -> str:
     return f"Sunny, 72F in {city}"
+
+
+@tool
+async def explode() -> str:
+    """A tool that always raises — the public way to drive an in-agent failure.
+
+    ``ask`` re-surfaces the tool error to the next LLM turn, so the runner sees a real
+    exception out of ``ask`` (captured onto the trace) — no agent double required.
+    """
+    raise RuntimeError("tool exploded")
+
+
+@tool
+async def cancel() -> str:
+    """A tool that raises ``CancelledError`` — models a cooperative cancellation / timeout."""
+    raise asyncio.CancelledError
 
 
 def _build_weather_agent(*, config: object = None) -> Agent:
@@ -147,29 +164,52 @@ async def test_global_model_config_applied_to_every_task(tmp_path: Path) -> None
 
 @pytest.mark.asyncio
 async def test_agent_ask_exception_is_captured_not_raised(tmp_path: Path) -> None:
-    """An agent whose ``ask`` explodes does not abort the run — the error is captured on the trace."""
+    """An agent whose turn explodes does not abort the run — the error is captured on the trace.
 
-    class ExplodingAgent:
-        name = "exploding"
-
-        async def ask(self, *args: object, **kwargs: object) -> object:
-            raise RuntimeError("ask exploded")
-
+    The failure is injected the public way: the task's cassette calls a tool that raises, so
+    ``ask`` surfaces a real ``RuntimeError`` through ``run_agent`` with no agent double or patching.
+    """
+    agent = Agent("weather", prompt="You are a weather assistant.", tools=[get_weather, explode])
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}])
 
     result = await run_agent(
         suite,
-        agent=ExplodingAgent(),  # type: ignore[arg-type]
+        agent=agent,
         scorers=[called_get_weather],
         store_dir=tmp_path,
+        model_config={"t1": TestConfig(ToolCallEvent(name="explode"))},
         concurrency=1,
     )
 
     [task_result] = result.tasks
     assert isinstance(task_result.trace.exception, RuntimeError)
-    assert task_result.trace.events == ()
-    # Scorers should still run — `called_get_weather` returns False on empty trace.
+    # Scorers still run on the failed trace — `get_weather` was never called, so it scores False.
     assert task_result.feedback == (Feedback(key="called_get_weather", score=False),)
+
+
+@pytest.mark.asyncio
+async def test_agent_ask_cancellation_propagates(tmp_path: Path) -> None:
+    """A CancelledError from ``ask`` (a cancelling tool/timeout) propagates out of run_agent.
+
+    Unlike a regular exception — which ``_produce_one`` captures onto the trace — a
+    CancelledError is a BaseException that escapes the ``except Exception`` guard,
+    reaches the gather loop, and is re-raised so the run aborts instead of returning
+    a partial RunResult.
+
+    Injected publicly: the cassette calls a tool that raises ``CancelledError``.
+    """
+    agent = Agent("weather", prompt="You are a weather assistant.", tools=[get_weather, cancel])
+    suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "hi"}}])
+
+    with pytest.raises(asyncio.CancelledError):
+        await run_agent(
+            suite,
+            agent=agent,
+            scorers=[called_get_weather],
+            store_dir=tmp_path,
+            model_config={"t1": TestConfig(ToolCallEvent(name="cancel"))},
+            concurrency=1,
+        )
 
 
 @pytest.mark.asyncio
@@ -635,3 +675,41 @@ class TestTelemetryInjection:
             Feedback(key="city_argument_correct", score=True),
         )
         assert result.tasks[0].trace_ref is not None
+
+
+@pytest.mark.asyncio
+async def test_one_task_failure_does_not_abort_whole_run(tmp_path: Path) -> None:
+    """One failing task is isolated: its error lands on the trace while the surviving task
+    still runs and scores, so the run returns both entries instead of aborting.
+
+    The failure is injected the public way — one task's cassette calls a tool that raises, so
+    ``ask`` surfaces the error through ``run_agent`` with no patching of runner internals.
+    """
+    agent = Agent(
+        "weather",
+        prompt="You are a weather assistant. Use get_weather to answer.",
+        tools=[get_weather, explode],
+    )
+
+    suite = Suite.from_list([
+        {"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}},
+        {"task_id": "t2", "inputs": {"input": "Paris?"}, "reference_outputs": {"city": "Paris"}},
+    ])
+
+    result = await run_agent(
+        suite,
+        agent=agent,
+        scorers=[called_get_weather],
+        store_dir=tmp_path,
+        model_config={"t1": TestConfig(ToolCallEvent(name="explode")), "t2": _cassette("Paris")},
+        concurrency=2,
+    )
+
+    # Run must not raise — returns a RunResult with both task entries.
+    assert len(result.tasks) == 2
+    # The failed task has its exception on the trace.
+    failed = next(tr for tr in result.tasks if tr.task.task_id == "t1")
+    assert isinstance(failed.trace.exception, RuntimeError)
+    # The surviving task scored normally.
+    surviving = next(tr for tr in result.tasks if tr.task.task_id == "t2")
+    assert surviving.feedback == (Feedback(key="called_get_weather", score=True),)

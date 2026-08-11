@@ -25,6 +25,7 @@ class FileProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
+    MISTRAL = "mistral"
     XAI = "xai"
     ZAI = "zai"
 
