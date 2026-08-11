@@ -75,6 +75,22 @@ class TestPath:
 
         assert result.media_type == "image/jpeg"
 
+    def test_infers_heic(self, tmp_path: Path) -> None:
+        f = tmp_path / "photo.heic"
+        f.write_bytes(b"heic-data")
+
+        result = ImageInput(path=f)
+
+        assert result.media_type == "image/heic"
+
+    def test_infers_heif(self, tmp_path: Path) -> None:
+        f = tmp_path / "photo.heif"
+        f.write_bytes(b"heif-data")
+
+        result = ImageInput(path=f)
+
+        assert result.media_type == "image/heif"
+
     def test_unknown_extension_raises(self, tmp_path: Path) -> None:
         f = tmp_path / "photo.bmp"
         f.write_bytes(b"bmp-data")
