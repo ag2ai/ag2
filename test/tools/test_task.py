@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+from collections.abc import Iterable
 from typing import Annotated
 from unittest.mock import MagicMock
 
@@ -11,7 +12,9 @@ import pytest
 from ag2 import Agent, Context, MemoryStream, Variable, tool
 from ag2 import agent as actor_mod
 from ag2.agent import TaskConfig
+from ag2.context import StreamId
 from ag2.events import (
+    BaseEvent,
     HumanInputRequest,
     HumanMessage,
     ModelMessage,
@@ -25,6 +28,7 @@ from ag2.events import (
     Usage,
     UsageEvent,
 )
+from ag2.history import MemoryStorage, Storage
 from ag2.middleware import BaseMiddleware
 from ag2.testing import TestConfig
 from ag2.tools import Toolkit
@@ -43,6 +47,41 @@ def _tool_names(tools: list) -> set[str]:
         else:
             names.add(t.schema.function.name)
     return names
+
+
+class _BreakableStorage(Storage):
+    """A storage backend whose reads start failing once ``break_reads()`` is called.
+
+    Models a backend that goes down mid-run: writes still land, history can no
+    longer be read back.
+    """
+
+    def __init__(self) -> None:
+        self._inner = MemoryStorage()
+        self._broken = False
+
+    def break_reads(self) -> None:
+        self._broken = True
+
+    async def save_event(self, event: BaseEvent, context: Context) -> None:
+        await self._inner.save_event(event, context)
+
+    async def get_history(self, stream_id: StreamId) -> Iterable[BaseEvent]:
+        if self._broken:
+            raise ConnectionError("storage backend is down")
+        return await self._inner.get_history(stream_id)
+
+    async def set_history(self, stream_id: StreamId, events: Iterable[BaseEvent]) -> None:
+        await self._inner.set_history(stream_id, events)
+
+    async def drop_history(self, stream_id: StreamId) -> None:
+        await self._inner.drop_history(stream_id)
+
+
+@tool
+def flaky() -> str:
+    """A tool that fails the way a downstream API does."""
+    raise RuntimeError("downstream API is down")
 
 
 def _make_parent_context(
@@ -934,41 +973,181 @@ class TestSubtaskUsageRollup:
         assert report.by_kind == {"subtask": Usage(prompt_tokens=20, completion_tokens=8)}
 
     async def test_rollup_reports_usage_incurred_before_a_failure(self) -> None:
-        """A sub-task that fails after a successful, billable call still
-        reports the usage it already incurred, on ``TaskResult.usage`` and as
-        a rollup ``UsageEvent`` on the parent."""
+        """A sub-task that bills a model call and *then* dies still reports that
+        spend — on ``TaskResult.usage`` and as a rollup on the parent.
 
-        @tool
-        def noop() -> str:
-            """A tool that does nothing."""
-            return "ok"
-
-        # The first call succeeds and is billable; no scripted response is
-        # left for the follow-up call, so the sub-task fails afterwards.
+        The failure is a tool blowing up, the common real-world case: a flaky
+        downstream API takes the run down after the tokens are already spent.
+        """
         worker = Agent(
             "worker",
             config=TestConfig(
                 ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
-                    usage=Usage(prompt_tokens=250, completion_tokens=50),
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="flaky", arguments="{}")]),
+                    usage=Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300),
                 ),
             ),
-            tools=[noop],
+            tools=[flaky],
         )
 
         parent_ctx = _make_parent_context()
         result = await run_task(worker, "go", parent_context=parent_ctx)
 
+        spent = Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300)
         assert result.completed is False
-        assert result.error is not None
-        assert result.usage == Usage(prompt_tokens=250, completion_tokens=50)
+        assert isinstance(result.error, RuntimeError)
+        assert result.usage == spent
 
         events = list(await parent_ctx.stream.history.get_events())
         usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert usage_events == [
-            UsageEvent(Usage(prompt_tokens=250, completion_tokens=50), kind="subtask"),
+        # ``label`` is ``compare=False``, so equality alone would not pin it.
+        assert [(e.usage, e.kind, e.label) for e in usage_events] == [(spent, "subtask", "worker")]
+
+        # The rollup precedes the terminal lifecycle event, as on the success path.
+        assert [type(e) for e in events if isinstance(e, (UsageEvent, TaskFailed))] == [UsageEvent, TaskFailed]
+
+        report = UsageReport.from_events(events)
+        assert report.total == spent
+        assert report.by_kind == {"subtask": spent}
+        assert [(r.kind, r.label) for r in report.records] == [("subtask", "worker")]
+
+    async def test_failure_before_any_billable_call_emits_no_rollup(self) -> None:
+        """A sub-task that dies before spending anything contributes nothing, so
+        no zero-valued rollup pollutes the parent's report."""
+
+        worker = Agent("worker", config=TestConfig())  # no scripted responses
+
+        parent_ctx = _make_parent_context()
+        result = await run_task(worker, "go", parent_context=parent_ctx)
+
+        assert result.completed is False
+        assert result.usage == Usage()
+
+        events = list(await parent_ctx.stream.history.get_events())
+        assert [e for e in events if isinstance(e, UsageEvent)] == []
+        assert UsageReport.from_events(events).by_kind == {}
+
+    async def test_failure_populates_usage_with_emit_events_disabled(self) -> None:
+        """``emit_events=False`` keeps the numbers on the result while emitting
+        nothing, so a caller doing its own lifecycle accounting loses neither."""
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="flaky", arguments="{}")]),
+                    usage=Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300),
+                ),
+            ),
+            tools=[flaky],
+        )
+
+        parent_ctx = _make_parent_context()
+        result = await run_task(worker, "go", parent_context=parent_ctx, emit_events=False)
+
+        assert result.completed is False
+        assert result.usage == Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300)
+        assert list(await parent_ctx.stream.history.get_events()) == []
+
+    async def test_unreadable_history_after_a_failure_still_yields_a_result(self) -> None:
+        """A storage outage that kills the sub-task must not kill the reporting.
+
+        The backend goes down mid-run, so the failure path's own read of the
+        cumulative number fails too. ``run_task`` still returns a
+        ``TaskResult`` — the read is not allowed to escape and take the
+        ``TaskFailed`` event with it — and degrades the number to what this
+        invocation was seen to spend.
+
+        The sub-task's error here *is* the outage: the sub-agent reads its own
+        history to build the next request, so it hits the broken backend before
+        the tool's ``RuntimeError`` can surface. Preserving a sub-task error
+        raised for some other reason is covered by
+        ``test_rollup_reports_usage_incurred_before_a_failure``, where the read
+        succeeds.
+        """
+        storage = _BreakableStorage()
+
+        @tool
+        def breaks_storage() -> str:
+            """A tool that takes the storage backend down with it."""
+            storage.break_reads()
+            raise RuntimeError("downstream API is down")
+
+        spent = Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300)
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="breaks_storage", arguments="{}")]),
+                    usage=spent,
+                ),
+            ),
+            tools=[breaks_storage],
+        )
+
+        parent_ctx = _make_parent_context()
+        result = await run_task(
+            worker,
+            "go",
+            parent_context=parent_ctx,
+            stream=MemoryStream(storage=storage),
+        )
+
+        assert result.completed is False
+        # Reported, not swallowed: the outage is what actually killed the run.
+        assert isinstance(result.error, ConnectionError)
+        # Degraded to this invocation's spend, rather than lost to the failed read.
+        assert result.usage == spent
+
+        events = list(await parent_ctx.stream.history.get_events())
+        assert [e for e in events if isinstance(e, UsageEvent)] == [UsageEvent(spent, kind="subtask")]
+        assert [e.error for e in events if isinstance(e, TaskFailed)] == [result.error]
+
+    async def test_failing_grandchild_rolls_up_through_the_child_exactly_once(self) -> None:
+        """A failing grandchild's spend reaches the top exactly once.
+
+        The delegation tool returns only an error string, so the cost has to be
+        visible where the result is not — and nesting must not distort it.
+        """
+        grandchild_spend = Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110)
+        grandchild = Agent(
+            "grandchild",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="flaky", arguments="{}")]),
+                    usage=grandchild_spend,
+                ),
+            ),
+            tools=[flaky],
+        )
+
+        dispatch = Usage(prompt_tokens=20, completion_tokens=2, total_tokens=22)
+        wrapup = Usage(prompt_tokens=30, completion_tokens=3, total_tokens=33)
+        child = Agent(
+            "child",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(
+                        calls=[ToolCallEvent(name="task_grandchild", arguments='{"objective": "dig"}')]
+                    ),
+                    usage=dispatch,
+                ),
+                ModelResponse(ModelMessage("gave up"), usage=wrapup),
+            ),
+            tools=[subagent_tool(grandchild, description="Delegate to the grandchild")],
+        )
+
+        parent_ctx = _make_parent_context()
+        result = await run_task(child, "top", parent_context=parent_ctx)
+
+        assert result.completed is True
+
+        # One rollup on the parent, carrying the child's own two calls plus the
+        # grandchild's spend — counted once, not once per level.
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert [(e.usage, e.kind, e.label) for e in usage_events] == [
+            (dispatch + wrapup + grandchild_spend, "subtask", "child"),
         ]
-        assert usage_events[0].label == "worker"
 
 
 class TestHitlPropagation:
