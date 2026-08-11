@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
 from ag2.events import BinaryInput, FileIdInput, ImageInput, UrlInput
+from ag2.types import ImageMediaType
 
 
 def test_url_returns_image_url_input() -> None:
@@ -44,6 +46,16 @@ class TestData:
             ImageInput(data=b"raw")
 
 
+def test_accepts_gemini_image_formats() -> None:
+    heic_input: BinaryInput = ImageInput(data=b"raw", media_type="image/heic")
+    heif_input: BinaryInput = ImageInput(data=b"raw", media_type="image/heif")
+
+    assert "image/heic" in get_args(ImageMediaType)
+    assert "image/heif" in get_args(ImageMediaType)
+    assert heic_input.media_type == "image/heic"
+    assert heif_input.media_type == "image/heif"
+
+
 class TestPath:
     def test_infers_png(self, tmp_path: Path) -> None:
         f = tmp_path / "photo.png"
@@ -62,6 +74,22 @@ class TestPath:
         result = ImageInput(path=f)
 
         assert result.media_type == "image/jpeg"
+
+    def test_infers_heic(self, tmp_path: Path) -> None:
+        f = tmp_path / "photo.heic"
+        f.write_bytes(b"heic-data")
+
+        result = ImageInput(path=f)
+
+        assert result.media_type == "image/heic"
+
+    def test_infers_heif(self, tmp_path: Path) -> None:
+        f = tmp_path / "photo.heif"
+        f.write_bytes(b"heif-data")
+
+        result = ImageInput(path=f)
+
+        assert result.media_type == "image/heif"
 
     def test_unknown_extension_raises(self, tmp_path: Path) -> None:
         f = tmp_path / "photo.bmp"
