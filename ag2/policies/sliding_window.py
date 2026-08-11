@@ -7,7 +7,7 @@
 from ag2.context import ConversationContext as Context
 from ag2.events import BaseEvent
 
-from ._pairing import ensure_tool_pairing
+from ._pairing import ensure_tool_pairing, safe_cut
 
 
 class SlidingWindowPolicy:
@@ -31,7 +31,7 @@ class SlidingWindowPolicy:
         total = len(events)
         if total <= self._max:
             return prompts, events
-        trimmed = ensure_tool_pairing(events[-self._max :])
+        trimmed = ensure_tool_pairing(events[safe_cut(events, total - self._max) :])
         if self._transparent:
             prompts = prompts + [f"[{self.name}] Showing last {len(trimmed)} of {total} events."]
         return prompts, trimmed

@@ -7,7 +7,7 @@
 from ag2.context import ConversationContext as Context
 from ag2.events import BaseEvent
 
-from ._pairing import ensure_tool_pairing
+from ._pairing import ensure_tool_pairing, safe_cut
 
 
 class TokenBudgetPolicy:
@@ -42,7 +42,8 @@ class TokenBudgetPolicy:
             retained.append(event)
             budget -= cost
         retained.reverse()
-        retained = ensure_tool_pairing(retained)
+        # Advancing the cut only removes events, so the budget still holds.
+        retained = ensure_tool_pairing(events[safe_cut(events, len(events) - len(retained)) :])
 
         if self._transparent:
             prompts = prompts + [f"[{self.name}] Showing {len(retained)} of {len(events)} events (token budget)."]
