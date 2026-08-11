@@ -28,7 +28,7 @@ Once you've installed...
 pip install "ag2[openai] sounddevice[numpy]"
 ```
 
-..., import **`LiveAgent`**, **`SoundDevicePlayer`**, **`SoundDeviceRecorder`**, and the **`openai`** config helpers from **`autogen.beta.live`**. The **running** session is then just **three lines**: construct the agent, open the session and shared I/O on one **`async with`**, then block until you cancel.
+..., import **`LiveAgent`**, **`SoundDevicePlayer`**, **`SoundDeviceRecorder`**, and the **`openai`** config helpers from **`ag2.live`**. The **running** session is then just **three lines**: construct the agent, open the session and shared I/O on one **`async with`**, then block until you cancel.
 
 ```python linenums="1" hl_lines="1-3"
 agent = LiveAgent("assistant", "You are a helpful voice assistant.", config=openai.RealTimeConfig("gpt-realtime-2", output=openai.AudioOutput(voice="ballad")))
@@ -42,7 +42,7 @@ That is the whole “wire microphone and speaker to GPT Realtime 2” loop. A se
 """The same 3 lines with formatting and imports"""
 import asyncio
 
-from autogen.beta.live import (
+from ag2.live import (
     LiveAgent,
     SoundDevicePlayer,
     SoundDeviceRecorder,
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-Beyond the defaults, you can tune how the assistant **sounds** and **when it speaks**: OpenAI realtime **`AudioOutput`** accepts **`voice`** and **`speed`**, and **`InputConfig`** carries **VAD / turn-detection** options (for example semantic VAD with interruption). See the [Providers (OpenAI) documentation](/docs/beta/live/live_agent#providers){target="_blank"} for voices and configs.
+Beyond the defaults, you can tune how the assistant **sounds** and **when it speaks**: OpenAI realtime **`AudioOutput`** accepts **`voice`** and **`speed`**, and **`InputConfig`** carries **VAD / turn-detection** options (for example semantic VAD with interruption). See the [Providers (OpenAI) documentation](/docs/user-guide/live/live_agent#providers){target="_blank"} for voices and configs.
 
 ## How it works with tools and subagents
 
@@ -82,7 +82,7 @@ Beyond the defaults, you can tune how the assistant **sounds** and **when it spe
 `LiveAgent` uses the same **`@agent.tool`** decorator as a text **`Agent`**. Calls go through AG2’s normal tool executor; results are sent back into the realtime session automatically—so middleware and HITL patterns you use elsewhere can stay aligned with the rest of your stack.
 
 ```python linenums="1" hl_lines="9-12"
-from autogen.beta.live import LiveAgent, OpenAIRealTimeConfig, SoundDevicePlayer, SoundDeviceRecorder
+from ag2.live import LiveAgent, OpenAIRealTimeConfig, SoundDevicePlayer, SoundDeviceRecorder
 
 agent = LiveAgent(
     name="assistant",
@@ -98,16 +98,16 @@ async def sum_numbers(a: int, b: int) -> int:
 # async with agent.run() as context, SoundDevicePlayer(...), SoundDeviceRecorder(...): ...
 ```
 
-More detail: [Tools in a realtime session](/docs/beta/live/live_agent#tools-in-a-realtime-session){target="_blank"} and [Tools](/docs/beta/tools/tools){target="_blank"}.
+More detail: [Tools in a realtime session](/docs/user-guide/live/live_agent#tools-in-a-realtime-session){target="_blank"} and [Tools](/docs/user-guide/tools/tools){target="_blank"}.
 
 ### Subagents (delegation)
 
 **`LiveAgent`** is built around a **realtime audio session**, not the same **`ask()`** loop as a text **`Agent`**. When the voice surface needs **deeper reasoning**, **longer context work**, or **tooling you prefer to keep on the text side**, expose a separate **`Agent`** as a callable tool with **`Agent.as_tool()`** and pass it into **`LiveAgent`** via **`tools=[...]`**. The realtime model issues a tool call; AG2 runs that nested **`Agent`** and sends the result back into the live session.
 
 ```python linenums="1" hl_lines="11-13 19"
-from autogen.beta import Agent
-from autogen.beta.config import OpenAIConfig
-from autogen.beta.live import LiveAgent, OpenAIRealTimeConfig, SoundDevicePlayer, SoundDeviceRecorder
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.live import LiveAgent, OpenAIRealTimeConfig, SoundDevicePlayer, SoundDeviceRecorder
 
 researcher = Agent(
     name="researcher",
@@ -129,7 +129,7 @@ voice = LiveAgent(
 # async with voice.run() as context, SoundDevicePlayer(...), SoundDeviceRecorder(...): ...
 ```
 
-That gives you **subagent-style delegation** without pretending the realtime session is a full **`Agent.ask`** loop. See [LiveAgent vs Agent](/docs/beta/live/live_agent#liveagent-vs-agent){target="_blank"}.
+That gives you **subagent-style delegation** without pretending the realtime session is a full **`Agent.ask`** loop. See [LiveAgent vs Agent](/docs/user-guide/live/live_agent#liveagent-vs-agent){target="_blank"}.
 
 ## Supported providers
 
@@ -138,9 +138,9 @@ That gives you **subagent-style delegation** without pretending the realtime ses
 - **OpenAI** — **`gpt-realtime-2`** with **`AudioOutput`** for **`voice`** and **`speed`**, or **`TextOutput`** for text-only replies; **`InputConfig`** controls **VAD and turn detection** (defaults lean toward semantic VAD with interruption).
 - **Gemini** — e.g. **`gemini-3.1-flash-live-preview`** with live audio.
 
-OpenAI and Gemini voices and config snippets: [Providers](/docs/beta/live/live_agent#providers){target="_blank"}.
+OpenAI and Gemini voices and config snippets: [Providers](/docs/user-guide/live/live_agent#providers){target="_blank"}.
 
-Broader install and I/O notes: [Voice & Realtime overview](/docs/beta/live/live){target="_blank"}.
+Broader install and I/O notes: [Voice & Realtime overview](/docs/user-guide/live/live){target="_blank"}.
 
 ## LiveAgent or STT–TTS
 
@@ -157,7 +157,7 @@ The two are complementary, not competing. Reach for **STT–TTS** when the text 
 
 ## What's next
 
-- **Read the docs** — start with [LiveAgent — Realtime Voice Sessions](/docs/beta/live/live_agent){target="_blank"} and the [Voice & Realtime overview](/docs/beta/live/live){target="_blank"}.
+- **Read the docs** — start with [LiveAgent — Realtime Voice Sessions](/docs/user-guide/live/live_agent){target="_blank"} and the [Voice & Realtime overview](/docs/user-guide/live/live){target="_blank"}.
 - **Install and try** — `pip install "ag2[openai] sounddevice[numpy]"`, then run the sketches under **`examples/live_playground/`** in the [AG2 repo](https://github.com/ag2ai/ag2/tree/main/examples/live_playground){.external-link target="_blank"}.
 - **Star the repo** — if **`LiveAgent`** is useful, a star on [github.com/ag2ai/ag2](https://github.com/ag2ai/ag2){.external-link target="_blank"} helps others find the project.
 - **Join the community** — share builds, ask questions, and compare notes on the [AG2 Discord](https://discord.gg/pAbnFJrkgZ){.external-link target="_blank"}.

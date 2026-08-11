@@ -1,0 +1,140 @@
+---
+title: Network-Assigned Tools
+sidebarTitle: Network Tools
+---
+
+When you call `#!python hub.register(agent, ...)` with the default `#!python attach_plugin=True`, the framework attaches `#!python NetworkPlugin` to your agent. The plugin does two things:
+
+1. Adds an **assembly policy** that prefixes every LLM call with the agent's name and id.
+2. Adds the **identity-level tools** to `#!python agent.tools`: `#!python delegate`, `#!python peers`, `#!python channels`, `#!python tasks`, `#!python context`. These are stable for the life of the registration and work in any channel context — discovery, channel lifecycle, task observation, and the one-shot `#!python delegate` convenience.
+
+The per-turn tool list an agent actually sees is the **union of two streams**:
+
+| Stream | Where it comes from | Examples |
+|---|---|---|
+| **Identity-level** | `#!python NetworkPlugin`, attached once at registration | `#!python delegate`, `#!python peers`, `#!python channels`, `#!python tasks`, `#!python context` |
+| **Channel-level** | `#!python adapter.tools_for(...)`, resolved per turn by the default handler and merged into `#!python agent.ask(tools=...)` | `#!python say` (text channels), user-authored `#!python Handoff`-returning tools (workflow) |
+
+So `#!python say` is **not** on every agent's `#!python agent.tools` — it's contributed by the adapter that owns the channel, only when that adapter accepts free-form text and only when it's this participant's turn. A workflow participant never sees `#!python say`; it routes via handoff tools instead. See [Channel-level tools](#channel-level-tools-adaptertools_for) below.
+
+## `delegate` — the flat hot-path tool
+
+| Tool | Signature | Purpose |
+|---|---|---|
+| `#!python delegate` | `#!python delegate(target, prompt, capability?, timeout=300)` | One-shot consult: open a `#!python consulting` channel with `target`, send `prompt`, await the single reply, return its text. |
+
+`#!python delegate` is the most common cross-cutting verb because "ask one specialist a question, take their answer" is the canonical multi-agent pattern — and unlike `#!python say` it isn't tied to a channel the agent is already in, so it lives at the identity level.
+
+```python linenums="1"
+# The LLM emits, e.g.:
+#   delegate(target="bob", prompt="What's the right way to model X?", capability="modeling")
+```
+
+The framework resolves `#!python ChannelInject` (current channel) and `#!python AgentClientInject` (calling agent's hub client) automatically inside the notify handler, so the LLM never sees those parameters.
+
+## Four grouped action-dispatch tools
+
+Each grouped tool takes an `#!python action` literal plus action-specific args, keeping the LLM's tool list short.
+
+### `peers(action)` — discovery
+
+| Action | Args | Returns |
+|---|---|---|
+| `#!python "find"` | `#!python query?, capability?, sort_by?, limit=20` | List of peer summaries (excludes the calling agent). |
+| `#!python "describe"` | `#!python name` | One peer's full profile: `#!python {passport, resume, skill_md}`. `skill_md` falls back to a rendered passport+resume when no `#!python SKILL.md` is registered. |
+
+### `channels(action)` — lifecycle
+
+| Action | Args | Returns |
+|---|---|---|
+| `#!python "list"` | `#!python state="active"\|"all"` | Channels this agent participates in. |
+| `#!python "open"` | `#!python type, target, knobs?, intent?, ttl?, message?` | Mirrors `#!python AgentClient.open`. Returns `#!python {channel_id, type, participants}` — plus `#!python seed_envelope_id` when `message` was supplied. |
+| `#!python "info"` | `#!python channel_id` | Full `#!python ChannelMetadata` if the agent is a participant. |
+| `#!python "close"` | `#!python channel_id?` (defaults to current) | Closes the channel with reason `#!python "closed_by_agent"`. |
+
+`#!python "open"` accepts an optional `#!python message`: when set, the tool opens the channel and — once it transitions to `OPENED` — posts that text as the first envelope on the initiator's behalf, in the same call. If the seed send fails, the just-opened channel is closed (`#!python reason="seed_failed"`) so you never leave a dangling-open channel nobody ever sends into. Use it for short-lived channels where the agent wants "open and ask" to be one atomic step rather than two tool calls.
+
+### `tasks(action)` — task lifecycle
+
+Two halves: **active actions** (the agent is inside its own `#!python agent.task(...)` block) and **observation actions** (any task the hub has observed).
+
+| Action | Half | Args | Returns |
+|---|---|---|---|
+| `#!python "progress"` | active | `#!python payload` | Emits `#!python TaskProgress` on the active task. |
+| `#!python "complete"` | active | `#!python result?` | Terminal — emits `#!python TaskCompleted`. |
+| `#!python "list"` | observation | `#!python scope="own"\|"all", state="active"\|"all", limit=20` | Task summaries. |
+| `#!python "status"` | observation | `#!python task_id` | Refreshed `#!python TaskMetadata`. |
+| `#!python "wait"` | observation | `#!python task_id, timeout=300, poll_interval=0.1` | Blocks until the task reaches a terminal state. |
+| `#!python "cancel"` | — | — | Not implemented; returns an error placeholder. |
+
+`#!python "start"` is intentionally **not** a tool — calling it from the LLM would bypass the `#!python async with agent.task(...)` lifecycle that scopes `#!python TaskInject` correctly. Owners start tasks in their own code; the LLM uses `#!python "progress"`/`#!python "complete"` once a task is active, and `#!python delegate` for one-shot remote work.
+
+### `context(action)` — past content
+
+| Action | Args | Returns |
+|---|---|---|
+| `#!python "search"` | `#!python query, scope="channel"\|"knowledge", limit=10` | Excerpts of envelopes whose text matches `#!python query` (case-insensitive substring). |
+| `#!python "quote"` | `#!python speaker, recent_n=1, channel_id?` | The last `recent_n` `#!python EV_TEXT` envelopes from `speaker` in the current (or specified) channel. |
+
+`#!python scope="knowledge"` reaches into the calling agent's own `#!python KnowledgeStore`. Substring search only — for vector / semantic search, the agent's own loop calls into framework-core `#!python recall` directly.
+
+## Channel-level tools — `adapter.tools_for`
+
+The tools above are *identity-level* — the same on every turn. The tools an agent needs to actually **participate** in a given channel depend on the channel's protocol and on whose turn it is, so they come from the adapter, not the plugin:
+
+```python
+def tools_for(
+    self,
+    client: AgentClient,
+    metadata: ChannelMetadata,
+    state: AdapterState,
+    participant_id: str,
+) -> list[Tool]: ...
+```
+
+The default handler calls `#!python adapter.tools_for(...)` once per turn and merges the result into the per-call `#!python agent.ask(tools=...)` override. The built-in adapters use it like this:
+
+| Adapter | `tools_for` returns | Gating |
+|---|---|---|
+| `conversation` | `#!python [say]` | Always — no turn order, both participants can post any time. |
+| `discussion` | `#!python [say]` on your round, else `#!python []` | Round-robin: `#!python say` only when `state.expected_next_speaker` is you. |
+| `consulting` | `#!python [say]` to whoever holds the floor, else `#!python []` | Initiator until the prompt is sent; respondent after, until the one reply lands; then the channel auto-closes and nobody gets `#!python say`. |
+| `workflow` | `#!python []` | Workflow agents route via user-authored `#!python Handoff`-returning tools (already on `#!python agent.tools`) — see [Workflow](/docs/user-guide/network/workflow#writing-a-handoff-tool). |
+
+`#!python say(content, audience?, channel_id?)` posts `#!python EV_TEXT` into the active channel (`#!python audience` is a list of peer **names**, resolved to ids; `#!python None` broadcasts). Internally it builds the envelope via `#!python adapter.build_text_envelope(...)` — the same Layer-2 helper a non-AG2 bridge would call — so per-adapter envelope shaping is honoured automatically. See [Adapters Overview → The Adapter Protocol](/docs/user-guide/network/adapters_overview#the-adapter-protocol) for the full three-layer picture.
+
+Tool resolution is memoized per `#!python client.agent_id` inside each adapter, so the `#!python fast_depends` schema-build cost is paid once, not on every notify turn.
+
+If you write a custom adapter, override `#!python tools_for` to offer your channel's verbs (or leave the default, which returns `#!python []`).
+
+## What gets injected, automatically
+
+Every grouped tool accepts `#!python AgentClientInject`, `#!python ChannelInject`, and (for `#!python tasks`) `#!python TaskInject` parameters that the framework resolves from `#!python context.dependencies` when the tool runs inside a notify handler. Your code does not need to wire them up — the default handler stamps them via `#!python stamp_dependencies` before invoking the agent's turn.
+
+If you are testing a tool *outside* the notify-handler context, pass them yourself:
+
+```python linenums="1"
+from ag2 import Context
+from ag2.network import AGENT_CLIENT_DEP, CHANNEL_DEP, Channel
+
+ctx = Context(
+    dependencies={
+        AGENT_CLIENT_DEP: alice,
+        CHANNEL_DEP: Channel(metadata=channel.metadata, client=alice),
+    },
+)
+```
+
+## Opting out
+
+Pass `#!python attach_plugin=False` to `#!python hub.register` for a bare agent — useful for headless workers or gateways that handle envelopes entirely in your own code without needing the LLM-facing tool surface.
+
+```python linenums="1"
+worker = await hub.register(agent, passport, resume, attach_plugin=False)
+worker.on_envelope(my_custom_handler)
+```
+
+## See also
+
+* [Agent Clients and Handlers](/docs/user-guide/network/agent_clients) — what the default handler does and how to replace it.
+* [Workflow](/docs/user-guide/network/workflow) — hand-written `#!python Handoff`-returning tools complement `#!python ToolCalled → AgentTarget` transitions for graph-driven routing.

@@ -24,12 +24,12 @@ same execution machinery:
 
 A naïve design would give each kind its own container type and its own
 registration path, and would make `Toolkit` a separate "bag of tools" that the
-agent has to special-case. The legacy `autogen/tools/Toolkit` does exactly that
+agent has to special-case. The legacy `ag2/tools/Toolkit` does exactly that
 — it is a plain container that is **not** a `Tool`.
 
 ## Decision
 
-There is **one** abstraction: `Tool` (ABC, `autogen/beta/tools/tool.py`), with
+There is **one** abstraction: `Tool` (ABC, `ag2/tools/tool.py`), with
 exactly three seams that every kind implements:
 
 - **`schemas(context) -> Iterable[ToolSchema]`** — what capability(ies) this
@@ -68,7 +68,7 @@ just calls `tool.register(...)` over a flat `Iterable[Tool]`, plus a fallback
   `register` override would be wrong even though the body is `pass`.
 
 - **`Toolkit` *is a* `Tool` (composite), unlike the legacy
-  `autogen/tools/Toolkit`.** Do not "align" the two. The beta toolkit being a
+  `ag2/tools/Toolkit`.** Do not "align" the two. The beta toolkit being a
   `Tool` is what lets an agent accept a toolkit anywhere it accepts a tool, lets
   toolkits nest, and lets `MCPToolkit` lazily turn a server into a toolkit of
   proxies without the agent knowing.

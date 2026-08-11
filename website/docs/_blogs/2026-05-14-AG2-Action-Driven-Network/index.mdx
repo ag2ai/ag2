@@ -78,17 +78,13 @@ The simplest possible network: one agent asks another a single question, gets a 
 ```python linenums="1"
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.knowledge import MemoryKnowledgeStore
-from autogen.beta.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_CLOSED,
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
 
 
@@ -97,21 +93,12 @@ async def main() -> None:
 
     # Hub: registry + WAL + audit log + adapters live here.
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub)  # in-process duplex transport
 
-    # One HubClient per process boundary. Locally they share a process.
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt="Ask one focused question and stop.", config=config),
-        Passport(name="alice"),
-        Resume(),
     )
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt="Answer in one short sentence.", config=config),
-        Passport(name="bob"),
-        Resume(),
     )
 
     # Strict 1Q1R; the adapter auto-closes on bob's reply.
@@ -135,8 +122,6 @@ async def main() -> None:
             speaker = "alice" if env.sender_id == alice.agent_id else "bob"
             print(f"{speaker}: {env.event_data['text']}")
 
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
 
 
@@ -151,7 +136,7 @@ alice: What's the single most important property of a distributed system?
 bob: Fault tolerance — because a system that can't survive partial failures defeats its entire purpose.
 ```
 
-Reach for `consulting` when you want a tool-like agent call: a single specialist invocation with a structured boundary. See [Consulting Adapter](/docs/beta/network/consulting) for the full surface.
+Reach for `consulting` when you want a tool-like agent call: a single specialist invocation with a structured boundary. See [Consulting Adapter](/docs/user-guide/network/consulting) for the full surface.
 
 ### `conversation` — 1:1 free-form
 
@@ -162,16 +147,12 @@ A 2-party channel with no turn ordering. Either side can speak. Useful for an ag
 ```python linenums="1"
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.knowledge import MemoryKnowledgeStore
-from autogen.beta.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
 
 
@@ -193,18 +174,12 @@ async def wait_for_text_count(hub: Hub, channel_id: str, expected: int) -> None:
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt="You are alice. Ask follow-ups, one short sentence at a time.", config=config),
-        Passport(name="alice"), Resume(),
     )
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt="You are bob. Answer in one short sentence; ask one follow-up.", config=config),
-        Passport(name="bob"), Resume(),
     )
 
     channel = await alice.open(type="conversation", target="bob")
@@ -219,12 +194,12 @@ async def main() -> None:
             speaker = "alice" if env.sender_id == alice.agent_id else "bob"
             print(f"{speaker}: {env.event_data['text']}")
 
-    await alice_hc.close(); await bob_hc.close(); await hub.close()
+    await hub.close()
 ```
 
 (`wait_for_text_count` is a small helper that tails the WAL until it sees N `EV_TEXT` envelopes — `conversation` and `discussion` don't auto-terminate, so the application decides when enough has been said.)
 
-`conversation` doesn't auto-terminate. The application decides when the work is done. See [Conversation Adapter](/docs/beta/network/conversation).
+`conversation` doesn't auto-terminate. The application decides when the work is done. See [Conversation Adapter](/docs/user-guide/network/conversation).
 
 ### `discussion` — N-party round-robin
 
@@ -235,13 +210,13 @@ Three agents — an optimist, a realist, a skeptic — debate a topic, round-rob
 ```python linenums="1"
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.knowledge import MemoryKnowledgeStore
-from autogen.beta.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     ORDERING_ROUND_ROBIN,
-    Hub, HubClient, LocalLink, Passport, Resume,
+    Hub,
 )
 
 
@@ -263,21 +238,15 @@ async def wait_for_text_count(hub: Hub, channel_id: str, expected: int) -> None:
 async def main() -> None:
     config = AnthropicConfig(model="claude-sonnet-4-6")
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc, bob_hc, carol_hc = (HubClient(link, hub=hub) for _ in range(3))
-
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt="You are the optimist. One short sentence.", config=config),
-        Passport(name="alice"), Resume(),
     )
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt="You are the realist. One short sentence.", config=config),
-        Passport(name="bob"), Resume(),
     )
-    carol = await carol_hc.register(
+    carol = await hub.register(
         Agent("carol", prompt="You are the skeptic. One short sentence.", config=config),
-        Passport(name="carol"), Resume(),
     )
 
     channel = await alice.open(
@@ -296,14 +265,13 @@ async def main() -> None:
         if env.event_type == EV_TEXT:
             print(f"{names[env.sender_id]:>6}: {env.event_data['text']}")
 
-    await alice_hc.close(); await bob_hc.close(); await carol_hc.close()
     await hub.close()
 
 
 asyncio.run(main())
 ```
 
-Reach for `discussion` when you want a fixed cast taking turns — brainstorms, panel reviews, devil's-advocate debates. See [Discussion Adapter](/docs/beta/network/discussion).
+Reach for `discussion` when you want a fixed cast taking turns — brainstorms, panel reviews, devil's-advocate debates. See [Discussion Adapter](/docs/user-guide/network/discussion).
 
 ### `workflow` — graph-driven
 
@@ -317,8 +285,8 @@ In this example: researcher gathers facts, writer drafts, reviewer either approv
 - **Static** — `approve` returns a plain string and is matched by `ToolCalled("approve")` → `TerminateTarget("approved")`. The graph owns the decision. Use this when routing is fixed at channel-open time.
 
 ```python linenums="1" hl_lines="9 10 11 12 41 42 43 44 45 46 47 48 49"
-from autogen.beta import Agent, tool
-from autogen.beta.network import (
+from ag2 import Agent, tool
+from ag2.network import (
     AgentTarget, FromSpeaker, Handoff, TerminateTarget,
     ToolCalled, Transition, TransitionGraph,
 )
@@ -334,15 +302,15 @@ def approve() -> str:
     """Approve the draft and end the workflow."""
     return "Approved."
 
-researcher = await researcher_hc.register(
+researcher = await hub.register(
     Agent("researcher", prompt="Given a topic, list 3 concrete factual bullets.", config=config),
     Passport(name="researcher"), Resume(claimed_capabilities=["research"]),
 )
-writer = await writer_hc.register(
+writer = await hub.register(
     Agent("writer", prompt="Given research bullets, draft a 2-sentence explanation for a novice.", config=config),
     Passport(name="writer"), Resume(claimed_capabilities=["writing"]),
 )
-reviewer = await reviewer_hc.register(
+reviewer = await hub.register(
     Agent(
         "reviewer",
         prompt=(
@@ -388,7 +356,7 @@ Note that `Handoff(target="writer", ...)` uses the participant's `Passport.name`
 
 The four conditions — `ToolCalled`, `FromSpeaker`, `ContextEquals`, and `Always` — cover most routing needs out of the box. For graphs that need to inspect arbitrary state, you can write a custom `TransitionCondition` and register it.
 
-Reach for `workflow` when "who speaks next" is structured — pipelines, escalation, conditional routing. See [Workflow Adapter](/docs/beta/network/workflow).
+Reach for `workflow` when "who speaks next" is structured — pipelines, escalation, conditional routing. See [Workflow Adapter](/docs/user-guide/network/workflow).
 
 ## The Bigger Picture
 
@@ -409,6 +377,6 @@ Jump into [AG2's Playground](https://playground.ag2.ai/) to take an interactive 
 - [**Networks You Can Deploy**](/docs/blog/2026/06/16/AG2-Network-Networks-You-Can-Deploy/) *(WebSocket, auth, at-least-once delivery)*
 
 A deeper dive into agents:
-- **The Agent Harness** *(knowledge, long-context memory)*
+- [**The Agent Harness**](/docs/blog/2026/06/17/AG2-Agent-Harness/) *(knowledge, long-context memory)*
 
-Docs: [Network Quick Start](/docs/beta/network/quick_start) · [Channel Adapters Overview](/docs/beta/network/adapters_overview) · [Hub & Identity](/docs/beta/network/hub_and_identity) · [Migrating from Group Chat](/docs/beta/network/migration_from_group_chat)
+Docs: [Network Quick Start](/docs/user-guide/network/quick_start) · [Channel Adapters Overview](/docs/user-guide/network/adapters_overview) · [Hub & Identity](/docs/user-guide/network/hub_and_identity) · [Migrating from Group Chat](/docs/user-guide/network/migration_from_group_chat)

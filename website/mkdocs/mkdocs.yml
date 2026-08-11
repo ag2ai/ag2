@@ -68,6 +68,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/extra.js
+  - javascripts/ag2-widget-theme.js
 
 plugins:
   - search:
@@ -75,13 +76,9 @@ plugins:
   # - meta                         # (insiders) use .meta.yml files
   - redirects:
       redirect_maps:
-        'docs/home/home.md': 'docs/quick-start.md'
-        'docs/home/quick-start.md': 'docs/quick-start.md'
-        'docs/home.md': 'docs/quick-start.md'
-        'docs/home/user.md': 'docs/quick-start.md'
-        'docs/user-guide/quick-start.md': 'docs/quick-start.md'
-        'docs/user-guide/models.md': 'docs/user-guide/models/amazon-bedrock.md'
-        'docs/user-guide/advanced-concepts/resuming-group-chat.md': 'docs/user-guide/advanced-concepts/orchestration/group-chat/introduction.md'
+        docs/quick-start.md: docs/user-guide/quick-start.md
+        docs/user-guide/contribution_policy.md: docs/contributor-guide/contribution_policy.md
+        docs/user-guide/cli_agents.md: docs/user-guide/acp/client.md
   - glightbox:                   # image zoom
       manual: true
   - macros:                      # Jinja templates
@@ -102,10 +99,6 @@ plugins:
       cache_safe: true
       css_files:
         - stylesheets/extra.css
-  - mike:                        # versioning
-      alias_type: copy
-      redirect_template: templates/redirect.html
-      canonical_version: latest
   - blog:
       blog_dir: docs/blog
       blog_toc: true
@@ -152,6 +145,3 @@ extra:
       link: https://www.youtube.com/@ag2ai
     - icon: fontawesome/brands/linkedin
       link: https://www.linkedin.com/company/ag2ai
-
-  version:
-    provider: mike

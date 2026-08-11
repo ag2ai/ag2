@@ -1,28 +1,46 @@
 # AG2 code owners
 # About code owners https://docs.github.com/ru/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-# A2A, AG-UI, beta and Remote
-/autogen/a2a/ @Lancetnik
-/autogen/ag_ui/ @Lancetnik
-/autogen/agentchat/remote/ @Lancetnik
-/autogen/beta/ @Lancetnik
-/autogen/beta/a2a/ @vvlrff
-/autogen/beta/config/ @marklysze
+# area:providers
+/ag2/config/ @marklysze
+/test/config/ @marklysze
 
-/test/a2a/ @Lancetnik
-/test/ag_ui/ @Lancetnik
-/test/agentchat/remote/ @Lancetnik
-/test/beta/ @Lancetnik
-/test/beta/config/ @marklysze
+# area:eval
+/ag2/eval/ @marklysze
+/test/eval/ @marklysze
+/website/docs/user-guide/evaluation/ @marklysze
 
-/website/docs/user-guide/a2a/ @Lancetnik
-/website/docs/user-guide/ag-ui/ @Lancetnik
+# area:a2a
+/ag2/a2a/ @vvlrff
+/test/a2a/ @vvlrff
+/website/docs/user-guide/a2a/ @vvlrff
 
-# Observability
-/website/docs/user-guide/observability/ @priyansh4320
+# area:a2ui
+/ag2/a2ui/ @vvlrff
+/test/a2ui/ @vvlrff
+/website/docs/user-guide/a2ui/ @vvlrff
 
-# GPT Apply Patch Tool & Shell Tool
-/autogen/tools/experimental/apply_patch/ @priyansh4320
-/autogen/tools/experimental/shell/ @priyansh4320
-/test/tools/experimental/apply_patch/ @priyansh4320
-/test/tools/experimental/shell/ @priyansh4320
+# area:acp
+/ag2/acp/ @vvlrff
+/test/acp/ @vvlrff
+/website/docs/user-guide/cli_agents.mdx @vvlrff
+
+# area:ag-ui
+/ag2/ag_ui/ @Lancetnik @vvlrff
+/test/ag_ui/ @Lancetnik @vvlrff
+/website/docs/user-guide/ag-ui/ @Lancetnik @vvlrff
+
+# area:mcp
+/ag2/mcp/ @marklysze
+/test/mcp/ @marklysze
+/website/docs/user-guide/tools/mcp_servers.mdx @marklysze
+
+# area:network
+/ag2/network/ @Lancetnik @marklysze
+/test/network/ @Lancetnik @marklysze
+/website/docs/user-guide/network/ @Lancetnik @marklysze
+
+# area:extensions
+/ag2/extensions/ @marklysze
+/test/extensions/ @marklysze
+/website/docs/user-guide/extensions/ @marklysze

@@ -62,16 +62,12 @@ The default `MemoryKnowledgeStore` is in-process — fine for development, but n
 import asyncio
 from pathlib import Path
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.knowledge import DiskKnowledgeStore
-from autogen.beta.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
 
 DATA_DIR = Path("./hub-data")  # persisted across restarts
@@ -80,20 +76,12 @@ DATA_DIR = Path("./hub-data")  # persisted across restarts
 async def first_run() -> str:
     """Alice asks, Bob's LLM replies — then abruptly stop."""
     hub = await Hub.open(DiskKnowledgeStore(DATA_DIR), ttl_sweep_interval=0)
-    link = LocalLink(hub)
 
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
-
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt="Ask one short question.", config=AnthropicConfig(model="claude-sonnet-4-6")),
-        Passport(name="alice"),
-        Resume(),
     )
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt="Answer in one sentence.", config=AnthropicConfig(model="claude-sonnet-4-6")),
-        Passport(name="bob"),
-        Resume(),
     )
 
     channel = await alice.open(type="consulting", target="bob")
@@ -161,10 +149,10 @@ The reconnect pattern is different from re-registration. After a restart, `hydra
 import asyncio
 from pathlib import Path
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.knowledge import DiskKnowledgeStore
-from autogen.beta.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.network import (
     EV_TEXT,
     AgentClient,
     Channel,
@@ -172,8 +160,6 @@ from autogen.beta.network import (
     HubClient,
     LocalLink,
     NetworkPlugin,
-    Passport,
-    Resume,
     Rule,
 )
 
@@ -210,24 +196,16 @@ async def _reconnect(hub, hc, agent, name, *, llm_handler=True):
 async def first_run() -> str:
     """Alice and Bob start a discussion — then the process crashes mid-conversation."""
     hub = await Hub.open(DiskKnowledgeStore(DATA_DIR), ttl_sweep_interval=0)
-    link = LocalLink(hub)
-
-    alice_hc = HubClient(link, hub=hub)
-    bob_hc = HubClient(link, hub=hub)
 
     # Alice sends manually; bob responds automatically via LLM.
-    alice = await alice_hc.register(
+    alice = await hub.register(
         Agent("alice", prompt=PROMPT, config=AnthropicConfig(model="claude-sonnet-4-6")),
-        Passport(name="alice"),
-        Resume(),
         attach_plugin=False,
     )
     alice.on_envelope(_noop_handler)
 
-    bob = await bob_hc.register(
+    bob = await hub.register(
         Agent("bob", prompt=PROMPT, config=AnthropicConfig(model="claude-sonnet-4-6")),
-        Passport(name="bob"),
-        Resume(),
     )
 
     channel = await alice.open(type="discussion", target="bob")
@@ -243,8 +221,6 @@ async def first_run() -> str:
 
     print("=== Process crashes here — channel still open ===")
     channel_id = channel.channel_id
-    await alice_hc.close()
-    await bob_hc.close()
     await hub.close()
     return channel_id
 
@@ -516,6 +492,6 @@ All of `/registry/` is a derived cache — safe to delete, since `hydrate()` reb
 
 - [**Networks You Can Deploy**](/docs/blog/2026/06/16/AG2-Network-Networks-You-Can-Deploy/) — WebSocket transport, authentication, at-least-once delivery, and dynamic membership.
 - **The Agent Harness: An Agent Is More Than a Loop**: what's inside each node in the network.
-- Docs: [Hub & Identity](/docs/beta/network/hub_and_identity) · [Network Quick Start](/docs/beta/network/quick_start) · [Channel Adapters Overview](/docs/beta/network/adapters_overview)
+- Docs: [Hub & Identity](/docs/user-guide/network/hub_and_identity) · [Network Quick Start](/docs/user-guide/network/quick_start) · [Channel Adapters Overview](/docs/user-guide/network/adapters_overview)
 
 Moving to production, you need an agent network that you can trust. The WAL, the identity records, and the audit log are what make the AG2 Network something you can deploy, inspect, and rely on.

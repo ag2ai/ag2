@@ -9,12 +9,9 @@ import re
 import shutil
 from pathlib import Path
 
-from autogen.import_utils import optional_import_block, require_optional_import
+from ag2._import_utils import optional_import_block, require_optional_import
 
-from .notebook_processor import (
-    create_base_argument_parser,
-    process_notebooks_core,
-)
+from .llms_txt import generate_llms_txt
 from .utils import (
     NavigationGroup,
     add_authors_and_social_preview,
@@ -566,18 +563,7 @@ def format_navigation(
                 # Handle individual pages
                 result.append(format_page_entry(page, indent, keywords, mkdocs_docs_dir))
 
-    ret_val = "\n".join(result)
-
-    ret_val = ret_val.replace(
-        "- Quick Start\n    - [Quick Start](docs/quick-start.md)\n",
-        "- [Quick Start](docs/quick-start.md)\n",
-    )
-    ret_val = ret_val.replace(
-        "- Basic Concepts\n",
-        "- [Basic Concepts](docs/user-guide/basic-concepts/overview.md)\n",
-    )
-    ret_val = ret_val.replace("- FAQs\n    - [Faq](docs/faq/FAQ.md)\n", "- [FAQs](docs/faq/FAQ.md)\n")
-    return ret_val
+    return "\n".join(result)
 
 
 @require_optional_import("jinja2", "docs")
@@ -1245,22 +1231,11 @@ def add_authors_info_to_user_stories(website_dir: Path) -> None:
 
 
 def main(force: bool) -> None:
-    parser = create_base_argument_parser()
-    args = parser.parse_args(["render"])
-    args.dry_run = False
-    args.quarto_bin = "quarto"
-    args.notebooks = None
-
-    # check if args.force is set
     if force and mkdocs_output_dir.exists():
         shutil.rmtree(mkdocs_output_dir)
 
     exclusion_list = [
         "docs/.gitignore",
-        "docs/installation",
-        "docs/user-guide/getting-started",
-        "docs/user-guide/models/litellm-with-watsonx.md",
-        "docs/contributor-guide/Migration-Guide.md",
     ]
     nav_exclusions = [""]
 
@@ -1274,39 +1249,10 @@ def main(force: bool) -> None:
     copy_assets(website_dir)
     process_and_copy_files(mint_docs_dir, mkdocs_output_dir, filtered_files)
 
-    snippets_dir_path = website_dir / "snippets"
     authors_yml_path = website_dir / "blogs_and_user_stories_authors.yml"
+    process_blog_files(mkdocs_output_dir, authors_yml_path, website_dir / "snippets")
 
-    process_blog_files(mkdocs_output_dir, authors_yml_path, snippets_dir_path)
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
 
-    if args.website_build_directory is None:
-        args.website_build_directory = mkdocs_output_dir
-
-    if args.notebook_directory is None:
-        args.notebook_directory = mkdocs_root_dir / "../../notebook"
-
-    metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
-
-    if not metadata_yml_path.exists() or (force and mkdocs_output_dir.exists()):
-        process_notebooks_core(args, post_process_func, target_dir_func)
-
-    # Render Notebooks Gallery HTML
-    notebooks_md_path = mkdocs_output_dir / "use-cases" / "notebooks" / "Notebooks.md"
-    inject_gallery_html(notebooks_md_path, metadata_yml_path)
-
-    # Add Notebooks Navigation to Summary.md
-    mkdocs_nav_path = mkdocs_root_dir / "docs" / "navigation_template.txt"
-    add_notebooks_nav(mkdocs_nav_path, metadata_yml_path)
-
-    # Render Community Gallery HTML
-    community_md_path = mkdocs_output_dir / "use-cases" / "community-gallery" / "community-gallery.md"
-    metadata_yml_path = Path(args.website_build_directory) / "../../data/gallery_items.yml"
-    inject_gallery_html(community_md_path, metadata_yml_path)
-
-    # Generate Navigation for User Stories
-    docs_dir = mkdocs_root_dir / "docs"
-    generate_community_insights_nav(docs_dir, mkdocs_nav_path)
-
-    # Add Authors info to User Stories
-    add_authors_info_to_user_stories(website_dir)
+    # Generate llms.txt / llms-full.txt (https://llmstxt.org/) at the site root.
+    generate_llms_txt(website_dir, mkdocs_docs_dir)

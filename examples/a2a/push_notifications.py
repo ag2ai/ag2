@@ -1,7 +1,7 @@
 import asyncio
 
-from autogen.beta.a2a import A2AConfig
-from autogen.beta.a2a.push import (
+from ag2.a2a import A2AConfig
+from ag2.a2a.push import (
     A2APushAuthentication,
     A2APushConfig,
     create_push_notification_config,

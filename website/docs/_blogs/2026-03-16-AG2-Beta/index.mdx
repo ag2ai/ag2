@@ -14,7 +14,7 @@ That experience also made the limits of the original design clearer over time. A
 
 We found that some of these needs were challenging to address cleanly inside the original framework model. In many cases, shipping more production-suitable behavior meant adding complexity around the edges instead of improving the core abstraction itself, taking the focus of developers away from building agentic capabilities. That is a big part of why we decided to create **AG2 Beta**: a new framework track built around lessons we learned from the original AG2 to better support modern, real-world agentic systems.
 
-You can read more about the motivation behind **AG2 Beta** in the [AG2 Beta overview](/docs/beta/motivation/).
+You can read more about the motivation behind **AG2 Beta** in the [AG2 Beta overview](/docs/user-guide/motivation/).
 
 <!-- more -->
 
@@ -45,15 +45,15 @@ That provides a better model for real systems:
 - concurrent users can share the same agent safely while keeping separate histories
 - the application can decide when to persist or discard a conversation
 
-If you want to explore the details of how streams work as the event bus behind a conversation, see [Events Streaming](/docs/beta/advanced/stream).
+If you want to explore the details of how streams work as the event bus behind a conversation, see [Events Streaming](/docs/user-guide/advanced/stream).
 
 ## Basic Example: One Agent, Two Sequential Turns
 
 Here is the simplest form of the new model:
 
 ```python linenums="1" hl_lines="12 16 22 27 31"
-from autogen.beta import Agent, MemoryStream
-from autogen.beta.config import OpenAIConfig
+from ag2 import Agent, MemoryStream
+from ag2.config import OpenAIConfig
 
 agent = Agent(
     "assistant",
@@ -118,8 +118,8 @@ from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 
-from autogen.beta import Agent, MemoryStream
-from autogen.beta.config import OpenAIConfig
+from ag2 import Agent, MemoryStream
+from ag2.config import OpenAIConfig
 
 agent = Agent(
     "ambient-agent",
@@ -192,9 +192,9 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from pydantic import Field
 
-from autogen.beta import Agent, MemoryStream, Variable, tool
-from autogen.beta.config import OpenAIConfig
-from autogen.beta.events import ModelRequest, ModelResponse
+from ag2 import Agent, MemoryStream, Variable, tool
+from ag2.config import OpenAIConfig
+from ag2.events import ModelRequest, ModelResponse
 
 MEMORY_DIR = Path("./memory")
 
@@ -297,10 +297,10 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from pydantic import Field
 
-from autogen.beta import Agent, MemoryStream, Variable
-from autogen.beta.config import OpenAIConfig
-from autogen.beta.events import ModelRequest, ModelResponse
-from autogen.beta.middleware import LoggingMiddleware
+from ag2 import Agent, MemoryStream, Variable
+from ag2.config import OpenAIConfig
+from ag2.events import ModelRequest, ModelResponse
+from ag2.middleware import LoggingMiddleware
 
 MEMORY_DIR = Path("./memory")
 
@@ -441,14 +441,14 @@ We want to make the most common real-world cases easy first:
 That model is already enough to power ambient assistants, bots, web co-pilots, and background workers in a clean way.
 
 <Note>
-Ready for multi-agent workflows? They're on the way, but you can start experimenting with Beta agents in existing AG2 workflows right now. Beta agents can be converted to ConversableAgents using `as_conversable()`. This allows them to be used in existing group chats, sequential workflows, and with handoffs. See [AG2 Compatibility](/docs/beta/ag2_compatibility) for the current integration path.
+Ready for multi-agent workflows? They're on the way, but you can start experimenting with Beta agents in existing AG2 workflows right now. Beta agents can be converted to ConversableAgents using `as_conversable()`. This allows them to be used in existing group chats, sequential workflows, and with handoffs. See the AG2 Compatibility guide for the current integration path.
 
 You can introduce new agents from the Beta API right into your current AG2 chat topologies.
 </Note>
 
 ## Try AG2 Beta
 
-**AG2 Beta** is available today inside the `ag2` package. Just `pip install ag2` like you already do and check out the [docs](/docs/beta/motivation/).
+**AG2 Beta** is available today inside the `ag2` package. Just `pip install ag2` like you already do and check out the [docs](/docs/user-guide/motivation/).
 
 Here's a suggested mental model to get started:
 

@@ -1,13 +1,13 @@
 ---
 sidebarTitle: AG-UI
 title: "AG-UI (Agent-User Interaction) Integration"
-description: "Expose AG2 ConversableAgent agents to AG-UI-compatible frontends using AGUIStream."
+description: "Expose AG2 agents to AG-UI-compatible frontends using AGUIStream."
 ---
 
 ## Overview
 
 The Agent-User Interaction (AG-UI) protocol standardizes how frontend applications communicate with agents.
-In AG2, `autogen.ag_ui.AGUIStream` bridges a `ConversableAgent` to AG-UI event streams.
+In AG2, `ag2.ag_ui.AGUIStream` bridges an `Agent` to AG-UI event streams.
 
 This solves common integration problems:
 
@@ -49,22 +49,22 @@ pip install "ag2[ag-ui]"
 
 Use the manual-dispatch pattern when you want full control over auth, logging, and middleware:
 
-```python title="run_ag_ui.py" linenums="1" hl_lines="13 16-24"
+```python title="run_ag_ui.py" linenums="1" hl_lines="14 17-25"
 from fastapi import FastAPI, Header
 from fastapi.responses import StreamingResponse
 
-from autogen import ConversableAgent, LLMConfig
-from autogen.ag_ui import AGUIStream, RunAgentInput
+from ag2 import Agent
+from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.config import OpenAIConfig
 
-agent = ConversableAgent(
+agent = Agent(
     name="support_bot",
-    system_message="You help users with billing questions.",
-    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+    prompt="You help users with billing questions.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
 )
 
 stream = AGUIStream(agent)
 app = FastAPI()
-
 
 @app.post("/chat")
 async def run_agent(
@@ -87,7 +87,7 @@ uvicorn run_ag_ui:app --reload --port 8000
     If you want to use ASGI endpoint without additional logic, you can use the `AGUIStream.build_asgi()` method to build an ASGI endpoint and mount it to your ASGI application.
 
     ```python linenums="1" hl_lines="5-6"
-    from autogen.ag_ui import AGUIStream
+    from ag2.ag_ui import AGUIStream
     from fastapi import FastAPI
 
     app = FastAPI()
@@ -118,10 +118,6 @@ data: {"type":"RUN_STARTED","threadId":"thread-1","runId":"run-1",...}
 data: {"type":"TEXT_MESSAGE_CHUNK","delta":"Hello! How can I help?",...}
 data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",...}
 ```
-
-## Rich UI with A2UIAgent
-
-A2UIAgent extends AG-UI with support for the A2UI protocol, enabling agents to generate structured UI components (cards, forms, buttons, images) instead of plain text. See the dedicated [A2UI page](/docs/user-guide/ag-ui/a2ui) for setup details, or the full [A2UIAgent reference](/docs/user-guide/reference-agents/a2uiagent) for configuration, validation, actions, and A2A integration.
 
 ## UI clients
 

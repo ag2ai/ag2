@@ -17,7 +17,7 @@ the duplication.
 
 ## Decision
 
-Collapse the shared surface into two base classes in `autogen/beta/plugin.py`:
+Collapse the shared surface into two base classes in `ag2/plugin.py`:
 
 - **`PromptObserverMixin`** — the authoring/collection surface common to *all
   three*: `prompt`/`observer`/`tool` decorators, `add_middleware` /

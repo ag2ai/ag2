@@ -1,8 +1,8 @@
 import uvicorn
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.mcp import MCPServer, Prompt, PromptArgument, Resource, ResourceTemplate, SessionConfig
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, Prompt, PromptArgument, Resource, ResourceTemplate, SessionConfig
 
 agent = Agent(
     name="claude",
@@ -15,7 +15,7 @@ readme = Resource(
     uri="docs://readme",
     name="readme",
     description="Project overview.",
-    read=lambda: "AG2 beta MCP server example.",
+    read=lambda: "AG2 MCP server example.",
     mime_type="text/markdown",
 )
 

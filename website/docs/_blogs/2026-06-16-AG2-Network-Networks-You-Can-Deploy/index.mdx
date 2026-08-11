@@ -27,12 +27,12 @@ In the previous posts every example used `LocalLink` — an in-process link that
 
 ```python
 # In-process (development)
-from autogen.beta.network import LocalLink
+from ag2.network import LocalLink
 
 hc = HubClient(LocalLink(hub))  # hub is a Hub object in this process
 
 # Cross-process (production)
-from autogen.beta.network import WsLink
+from ag2.network import WsLink
 
 hc = HubClient(WsLink("ws://hub:8765"))  # hub is a running process elsewhere
 ```
@@ -43,8 +43,8 @@ The hub process itself runs `serve_ws` — an async context manager that binds a
 import asyncio
 from pathlib import Path
 
-from autogen.beta.knowledge import DiskKnowledgeStore
-from autogen.beta.network import Hub, serve_ws
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.network import Hub, serve_ws
 
 async def main() -> None:
     hub = await Hub.open(DiskKnowledgeStore(Path("./hub-data")))
@@ -61,9 +61,9 @@ Agent processes are entirely separate Python programs. Each constructs its own `
 ```python linenums="1"
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.network import (
     EV_TEXT,
     HubClient,
     Passport,
@@ -110,8 +110,8 @@ When agents run in separate processes, the hub needs to verify that a connecting
 Pass an `AuthRegistry` to `Hub.open`. The registry maps scheme names to adapters; `ApiKeyAuth` handles the `"api_key"` scheme:
 
 ```python linenums="1"
-from autogen.beta.knowledge import DiskKnowledgeStore
-from autogen.beta.network import ApiKeyAuth, AuthRegistry, Hub, serve_ws
+from ag2.knowledge import DiskKnowledgeStore
+from ag2.network import ApiKeyAuth, AuthRegistry, Hub, serve_ws
 
 AGENT_KEYS = {
     "alice": "ak-alice-f3a2b1",
@@ -135,7 +135,7 @@ async def main() -> None:
 Each agent's `Passport` carries an `AuthBlock` that tells the hub which scheme to validate and what claim to present:
 
 ```python linenums="1"
-from autogen.beta.network import AuthBlock, HubClient, Passport, Resume, WsLink
+from ag2.network import AuthBlock, HubClient, Passport, Resume, WsLink
 
 hc = HubClient(WsLink("ws://hub:8765"))
 alice = await hc.register(
@@ -179,7 +179,7 @@ Every `HelloFrame` that opens a WebSocket connection carries an optional `since_
 `HubClient.attach` is the reconnect-aware entry point. It binds the same identity (same `agent_id`, same WAL history) to a fresh connection:
 
 ```python linenums="1"
-from autogen.beta.network import HubClient, Passport, Resume, WsLink
+from ag2.network import HubClient, Passport, Resume, WsLink
 
 # Original node (simulating a process that dropped)
 bob_hc1 = HubClient(WsLink("ws://hub:8765"))
@@ -227,7 +227,7 @@ replayed = await bob2.resume_pending_turns()
 Agents that do long-running LLM tasks need to survive a process restart mid-task. `HubBackedCheckpointStore` delegates `checkpoint_task` / `read_task_checkpoint` to the hub's `KnowledgeStore`, so task state is durable wherever the hub persists its own data (`DiskKnowledgeStore`, `RedisKnowledgeStore`, …):
 
 ```python linenums="1"
-from autogen.beta.network import HubBackedCheckpointStore, HubClient, WsLink
+from ag2.network import HubBackedCheckpointStore, HubClient, WsLink
 
 hc = HubClient(WsLink("ws://hub:8765"))
 checkpoint_store = HubBackedCheckpointStore(hc)
@@ -273,6 +273,6 @@ From the channel's perspective, a `remote_agent` participant is indistinguishabl
 ## Where to Next
 
 - **The Agent Harness: An Agent Is More Than a Loop** — what's inside each node in the network: Stream, middleware, tools, observers, HITL, memory.
-- Docs: [Hub & Identity](/docs/beta/network/hub_and_identity) · [Network Quick Start](/docs/beta/network/quick_start) · [Channel Adapters Overview](/docs/beta/network/adapters_overview)
+- Docs: [Hub & Identity](/docs/user-guide/network/hub_and_identity) · [Network Quick Start](/docs/user-guide/network/quick_start) · [Channel Adapters Overview](/docs/user-guide/network/adapters_overview)
 
 The three previous posts described the protocol. This one described the deployment. The two together are the full picture: a network that is durable by construction, authenticated from the handshake, and capable of surviving the failures that always eventually happen.

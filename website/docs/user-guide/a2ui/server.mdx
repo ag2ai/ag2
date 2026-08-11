@@ -1,0 +1,165 @@
+---
+title: Serving A2UI over HTTP
+sidebarTitle: Server
+---
+
+`#!python A2UIServer` wraps a plain `#!python ag2.Agent` and **is** a ready-to-serve [Starlette](https://www.starlette.io){.external-link target="_blank"} ASGI app that speaks **canonical A2UI** over HTTP. It mirrors `#!python ag2.a2a.A2AServer`: hold the agent, configure A2UI with flat kwargs, pick a `#!python transport=` for the wire encoding, and bring your own `#!python uvicorn` (or any ASGI server) to run the `#!python A2UIServer` instance directly.
+
+A2UI's wire is transport-agnostic, so one deployment serves one frontend over one `#!python transport`:
+
+- `#!python RestTransport(encoding="sse")` — Server-Sent Events (`#!python text/event-stream`), suited to browser `#!python EventSource` clients and reconnection.
+- `#!python RestTransport(encoding="jsonl")` — canonical A2UI NDJSON (`#!python application/x-ndjson`), suited to generic A2UI clients that consume the native JSON Lines wire.
+- `#!python AgUiTransport()` — [AG-UI](https://docs.ag-ui.com){.external-link target="_blank"} events for CopilotKit's renderer (see [Serving over AG-UI](#serving-over-ag-ui-copilotkit) below).
+
+The transports live in `#!python ag2.a2ui.transports`.
+
+!!! note
+    `#!python A2UIServer` is re-exported from the top-level `#!python ag2.a2ui`. It depends on Starlette (declared as an additional dependency, not a core extra); a missing install surfaces as a clear hint rather than an opaque `#!python ImportError`.
+
+## Minimal Server
+
+The `#!python A2UIServer` instance is itself the ASGI app — hand it straight to `#!python uvicorn`:
+
+```python linenums="1" hl_lines="12"
+import uvicorn
+
+from ag2 import Agent
+from ag2.a2ui import A2UIServer
+from ag2.a2ui.transports import RestTransport
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+app = A2UIServer(
+    agent,
+    transport=RestTransport(encoding="jsonl"),  # POST /a2ui  →  A2UI NDJSON
+    protocol_version="v0.9",
+)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+The turn is served at `#!python POST /a2ui` by default; pass `#!python RestTransport(encoding="jsonl", path="/chat")` to change it. Swap `#!python encoding="jsonl"` for `#!python encoding="sse"` to stream Server-Sent Events instead.
+
+## The Request Contract
+
+The adapter speaks a minimal, dependency-free JSON body (no `#!python ag-ui` / `#!python a2a-sdk` types) so any client that can POST JSON can drive the agent:
+
+```json
+{
+  "messages":  [{"role": "user", "content": "show a booking form"}],
+  "variables": {"locale": "en"},
+  "a2ui":      [{"version": "v0.9", "action": {"name": "confirm", "...": "..."}}],
+  "a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": ["..."]}}
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `#!python messages` | The conversation. A trailing run of `#!python user` messages is the current turn; earlier messages become history. `#!python system` / `#!python developer` roles become prompt; `#!python assistant` becomes a prior response. |
+| `#!python variables` | Context variables merged into the turn (e.g. locale, user id). |
+| `#!python a2ui` | Client→server envelopes — button clicks (`#!python action`), v1.0 `#!python functionResponse`, and client errors — rewritten into corrective prompts for the turn. See [Actions](/docs/user-guide/a2ui/actions). |
+| `#!python a2uiClientCapabilities` | Optional catalog negotiation, nested under the protocol version. Folded into the prompt so the LLM only targets components the client can render. |
+
+A body that is not valid JSON, not a JSON object, or has a mistyped field returns **400** with an `#!python {"error": ...}` payload. A failure *during* the turn (after the 200 has been sent) surfaces as a final `#!python event: error` (SSE) or `#!python {"error": ...}` (NDJSON) frame and is logged — the connection is not torn down silently.
+
+!!! note "The server is stateless"
+    There is no session store: the client resends the full conversation on every request. Each turn runs on a fresh stream, so horizontal scaling needs no sticky sessions — but the client owns the history.
+
+## Response Frames
+
+Each turn streams the conversational prose first (when present), then one frame per validated A2UI message.
+
+<Tabs>
+  <Tab title="NDJSON">
+```text
+{"text": "Here is your booking form."}
+{"version":"v0.9","createSurface":{"surfaceId":"s1","catalogId":"https://a2ui.org/..."}}
+{"version":"v0.9","updateComponents":{"surfaceId":"s1","components":[...]}}
+```
+The optional leading `#!python {"text": ...}` line is AG2 framing (the prose), not itself an A2UI message. The remaining lines are canonical A2UI messages, one per line, ending at EOF.
+  </Tab>
+
+  <Tab title="SSE">
+```text
+event: text
+data: {"text": "Here is your booking form."}
+
+data: {"version":"v0.9","createSurface":{"surfaceId":"s1","catalogId":"https://a2ui.org/..."}}
+
+event: done
+data: {}
+```
+The prose arrives as an `#!python event: text` frame, each A2UI message as a default (unnamed) `#!python data:` frame, and the turn closes with `#!python event: done`.
+  </Tab>
+</Tabs>
+
+When the agent answers in plain prose (or validation degrades after exhausting retries), only the prose frame is emitted — there are no A2UI message frames.
+
+## Driving It From a Client
+
+Any HTTP client works. Here is a full round-trip with `#!python httpx`, reading the NDJSON stream line by line:
+
+```python linenums="1"
+import json
+
+import httpx
+
+async def ask_ui(text: str) -> tuple[str, list[dict]]:
+    prose, messages = "", []
+    async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
+        async with client.stream("POST", "/a2ui", json={"messages": [{"role": "user", "content": text}]}) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                frame = json.loads(line)
+                if "text" in frame:
+                    prose = frame["text"]
+                elif "error" in frame:
+                    raise RuntimeError(frame["error"])
+                else:
+                    messages.append(frame)  # a canonical A2UI message
+    return prose, messages
+```
+
+Because the server is stateless, a follow-up turn just resends the prior messages plus the new one:
+
+```python linenums="1"
+json={
+    "messages": [
+        {"role": "user", "content": "show a booking form"},
+        {"role": "assistant", "content": "Here is your booking form."},
+        {"role": "user", "content": "make it for 4 people"},
+    ]
+}
+```
+
+!!! tip
+    For an end-to-end, runnable example that exercises both the NDJSON and SSE encodings over a real HTTP transport — including a button-click round-trip — see `#!python test/a2ui/transports/test_e2e_rest.py` in the repository.
+
+## Serving over AG-UI (CopilotKit)
+
+Swap `#!python RestTransport` for `#!python AgUiTransport` to serve the **same agent** as [AG-UI](https://docs.ag-ui.com){.external-link target="_blank"} events — the protocol CopilotKit's [`#!python @copilotkit/a2ui-renderer`](https://docs.copilotkit.ai){.external-link target="_blank"} consumes. Nothing about the agent changes; only the wire encoding does:
+
+```python linenums="1" hl_lines="10"
+import uvicorn
+
+from ag2 import Agent
+from ag2.a2ui import A2UIServer
+from ag2.a2ui.transports import AgUiTransport
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+app = A2UIServer(agent, transport=AgUiTransport())  # POST /  →  AG-UI SSE events
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+The turn is served at `#!python POST /` by default (pass `#!python AgUiTransport(path="/agent")` to change it) and the request body is an AG-UI `#!python RunAgentInput`. Each validated A2UI message reaches the renderer as an `#!python ACTIVITY_SNAPSHOT` event with `#!python activityType="a2ui-surface"` and the operations under `#!python content["a2ui_operations"]`; the prose arrives as `#!python TEXT_MESSAGE_CHUNK`. A CopilotKit button click rides `#!python forwardedProps.a2uiAction` and is rewritten into the next turn — the same click round-trip as REST (see [Actions](/docs/user-guide/a2ui/actions)).
+
+!!! tip
+    For a runnable AG-UI round-trip — text + `#!python ACTIVITY_SNAPSHOT` emission and a `#!python forwardedProps` button click — see `#!python test/a2ui/transports/test_e2e_ag_ui.py` in the repository.

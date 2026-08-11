@@ -1,0 +1,323 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+import asyncio
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from functools import partial
+from typing import Any, overload
+from uuid import uuid4
+
+from fast_depends.core import CallModel
+
+from ag2.types import ClassInfo, SendableMessage
+
+from .annotations import Context as AnnotatedContext
+from .context import ConversationContext, Stream, StreamId, SubId, drop_background_task
+from .events import BaseEvent, Input, ModelRequest
+from .events.conditions import Condition, TypeCondition
+from .history import History, MemoryStorage, Storage
+from .utils import CONTEXT_OPTION_NAME, build_model
+
+__all__ = ("MemoryStream", "Stream")
+
+
+class ABCStream(Stream):
+    @contextmanager
+    def sub_scope(
+        self,
+        func: Callable[..., Any],
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+    ) -> Iterator[None]:
+        sub_id = self.subscribe(
+            func,
+            interrupt=interrupt,
+            sync_to_thread=sync_to_thread,
+        )
+
+        try:
+            yield
+        finally:
+            self.unsubscribe(sub_id)
+
+    @contextmanager
+    def join(self, *, max_events: int | None = None) -> Iterator[AsyncIterator[BaseEvent]]:
+        queue = asyncio.Queue[BaseEvent]()
+
+        async def write_events(event: BaseEvent) -> None:
+            await queue.put(event)
+
+        if max_events:
+
+            async def listen_events() -> AsyncIterator[BaseEvent]:
+                for _ in range(max_events):
+                    yield await queue.get()
+
+        else:
+
+            async def listen_events() -> AsyncIterator[BaseEvent]:
+                while True:
+                    yield await queue.get()
+
+        with self.sub_scope(write_events):
+            yield listen_events()
+
+    def where(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> "Stream":
+        if not isinstance(condition, Condition):
+            condition = TypeCondition(condition)
+        return SubStream(self, condition)
+
+    @asynccontextmanager
+    async def get(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> AsyncIterator[asyncio.Future[BaseEvent]]:
+        result = asyncio.Future[BaseEvent]()
+
+        async def wait_result(event: BaseEvent) -> None:
+            if not result.done():
+                result.set_result(event)
+
+        with self.where(condition).sub_scope(wait_result):
+            yield result
+
+
+class _FilteredStorage:
+    """Wraps a Storage backend, skipping events marked ``__transient__``."""
+
+    __slots__ = ("_inner",)
+
+    def __init__(self, inner: Storage) -> None:
+        self._inner = inner
+
+    async def save_event(self, event: BaseEvent, context: AnnotatedContext) -> None:
+        if not getattr(type(event), "__transient__", False):
+            await self._inner.save_event(event, context)
+
+
+class MemoryStream(ABCStream):
+    __slots__ = (
+        "id",
+        "_subscribers",
+        "_interrupters",
+        "history",
+        "pending_messages",
+        "_background_tasks",
+        # Lazy per-stream asyncio.Lock used by Agent._execute to serialize
+        # concurrent turns on a shared stream. See agent.py's
+        # `_get_stream_turn_lock`. Declared here (not initialized in
+        # __init__) so __slots__ doesn't reject the attribute set.
+        "_ag2_turn_lock",
+    )
+
+    def __init__(
+        self,
+        storage: Storage | None = None,
+        *,
+        id: StreamId | None = None,
+        persist_all: bool = False,
+    ) -> None:
+        self.id: StreamId = id or uuid4()
+
+        self._subscribers: dict[SubId, tuple[Condition | None, CallModel]] = {}
+        # ordered dict
+        self._interrupters: dict[SubId, tuple[Condition | None, CallModel]] = {}
+
+        storage = storage or MemoryStorage()
+        self.history = History(self.id, storage)
+
+        # Stream-scoped inbox + background task set. The inbox outlives any
+        # single ``ask`` so a background task that finishes after ``ask``
+        # returns still delivers — the next ``ask`` on this stream merges
+        # the leftover into its initial request.
+        self.pending_messages: list[ModelRequest] = []
+        self._background_tasks: set[asyncio.Task[None]] = set()
+
+        # Agent._execute populates this lazily on first turn — setting it
+        # to None here so `getattr(..., None)` returns None instead of
+        # hitting a slot-uninitialized AttributeError.
+        self._ag2_turn_lock = None  # type: ignore[assignment]
+
+        if persist_all:
+            # Persist every event including transient ones (streaming chunks, lifecycle, etc.)
+            self.subscribe(storage.save_event)
+        else:
+            # Default: skip events marked __transient__ (ModelMessageChunk, TaskProgress, etc.)
+            # These are real-time streaming artifacts superseded by their final counterparts.
+            self.subscribe(_FilteredStorage(storage).save_event)
+
+    def enqueue(self, *content: "SendableMessage | Input") -> None:
+        if not content:
+            return
+        parts = [Input.ensure_input(item) for item in content]
+        self.pending_messages.append(ModelRequest(parts))
+
+    def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(partial(drop_background_task, self._background_tasks))
+        return task
+
+    @overload
+    def subscribe(
+        self,
+        func: Callable[..., Any],
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> SubId: ...
+
+    @overload
+    def subscribe(
+        self,
+        func: None = None,
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId]: ...
+
+    def subscribe(
+        self,
+        func: Callable[..., Any] | None = None,
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId] | SubId:
+        def sub(s: Callable[..., Any]) -> SubId:
+            sub_id = uuid4()
+            model = build_model(s, sync_to_thread=sync_to_thread, serialize_result=False)
+            if interrupt:
+                self._interrupters[sub_id] = (condition, model)
+            else:
+                self._subscribers[sub_id] = (condition, model)
+            return sub_id
+
+        if func:
+            return sub(func)
+        return sub
+
+    def unsubscribe(self, sub_id: SubId) -> None:
+        self._subscribers.pop(sub_id, None)
+        self._interrupters.pop(sub_id, None)
+
+    async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
+        # interrupters should follow registration order
+        for condition, interrupter in tuple(self._interrupters.values()):
+            if condition and not condition(event):
+                continue
+
+            async with AsyncExitStack() as stack:
+                if not (
+                    e := await interrupter.asolve(
+                        event,
+                        cache_dependencies={},
+                        stack=stack,
+                        dependency_provider=context.dependency_provider,
+                        **{CONTEXT_OPTION_NAME: context},
+                    )
+                ):
+                    return
+
+            event = e
+
+        # TODO: we need to publish under RWLock to prevent
+        # subscribers dictionary mutation. Now it is protected by copy
+        for condition, s in tuple(self._subscribers.values()):
+            if condition and not condition(event):
+                continue
+
+            async with AsyncExitStack() as stack:
+                await s.asolve(
+                    event,
+                    cache_dependencies={},
+                    stack=stack,
+                    dependency_provider=context.dependency_provider,
+                    **{CONTEXT_OPTION_NAME: context},
+                )
+
+
+class SubStream(ABCStream):
+    __slots__ = (
+        "id",
+        "_filter_condition",
+        "_parent",
+    )
+
+    def __init__(
+        self,
+        parent: Stream,
+        condition: Condition,
+    ) -> None:
+        self.id: StreamId = uuid4()
+
+        self._filter_condition = condition
+        self._parent = parent
+
+    @overload
+    def subscribe(
+        self,
+        func: Callable[..., Any],
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> SubId: ...
+
+    @overload
+    def subscribe(
+        self,
+        func: None = None,
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId]: ...
+
+    def subscribe(
+        self,
+        func: Callable[..., Any] | None = None,
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId] | SubId:
+        def sub(s: Callable[..., Any]) -> SubId:
+            c = self._filter_condition
+            if condition:
+                c = c & condition
+
+            return self._parent.subscribe(
+                s,
+                condition=c,
+                interrupt=interrupt,
+                sync_to_thread=sync_to_thread,
+            )
+
+        if func:
+            return sub(func)
+        return sub
+
+    def unsubscribe(self, sub_id: SubId) -> None:
+        return self._parent.unsubscribe(sub_id)
+
+    async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
+        await self._parent.send(event, context)
+
+    @property
+    def pending_messages(self) -> list[ModelRequest]:
+        return self._parent.pending_messages
+
+    def enqueue(self, *content: "SendableMessage | Input") -> None:
+        self._parent.enqueue(*content)
+
+    def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+        return self._parent.spawn_background(coro)

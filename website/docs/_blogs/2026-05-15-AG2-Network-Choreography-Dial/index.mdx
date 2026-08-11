@@ -23,7 +23,7 @@ This is the second post in a four-part series introducing the AG2 Network:
 3. [**What Survives, Survives Exactly**](/docs/blog/2026/05/16/AG2-Network-What-Survives/) — the substrate: write-ahead log + fold + hub restart, plus identity (Passport / Resume / SKILL.md) and the audit log.
 4. [**Networks You Can Deploy**](/docs/blog/2026/06/16/AG2-Network-Networks-You-Can-Deploy/) — WebSocket transport, authentication, at-least-once delivery, and dynamic membership.
 
-In parallel, to build strong and capable agents, we're preparing a companion post, **The Agent Harness: An Agent Is More Than a Loop**, that zooms *inside* a single agent to make them long-running and knowledge-centric. Keep an eye out for that one (we'll update this when it's ready).
+In parallel, to build strong and capable agents, a companion post, [**The Agent Harness: An Agent Is More Than a Loop**](/docs/blog/2026/06/17/AG2-Agent-Harness/), zooms *inside* a single agent to make them long-running and knowledge-centric.
 
 ## Choreography you can dial in
 
@@ -79,8 +79,8 @@ The example below has three participants on a discussion channel. After a public
 ```python linenums="1"
 import asyncio
 
-from autogen.beta.knowledge import MemoryKnowledgeStore
-from autogen.beta.network import (
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_CLOSED, EV_TEXT,
     Hub, HubClient, LocalLink, Passport,
 )
@@ -164,7 +164,7 @@ Both WALs are first-class objects on the hub. Bob can replay the main channel fr
 **Dynamic Handoff — routing by return value, not graph edge.** Any `@tool` on a workflow agent can return a `Handoff` instance. The framework extracts the target from the tool's result and overrides the graph rule for that turn. This means the drafter doesn't need a separate `ToolCalled("classify")` edge for every possible specialist — it calls one tool and lets the return value decide:
 
 ```python linenums="1"
-from autogen.beta.network import AgentTarget, FromSpeaker, Handoff, Transition, TransitionGraph
+from ag2.network import AgentTarget, FromSpeaker, Handoff, Transition, TransitionGraph
 
 drafter_agent = Agent("drafter", prompt="Call classify(topic) for complex topics.", config=config)
 
@@ -191,11 +191,11 @@ When the `classify()` tool returns `Handoff(target=specialist_id)`, the fold set
 **ContextEquals — routing on state, not sender.** `ContextEquals(key, value)` fires when `channel.context_vars[key] == value`. You write context vars from a `@tool` via `set_context(channel, key, value)`. Similar to a tool returning a Handoff, this is evaluated before evaluating transitions, so the same turn that sets a var can immediately route on it:
 
 ```python linenums="1"
-from autogen.beta.network import (
+from ag2.network import (
     AgentTarget, ContextEquals, FromSpeaker,
     TerminateTarget, ToolCalled, Transition, TransitionGraph,
 )
-from autogen.beta.network.workflow_helpers import set_context
+from ag2.network.workflow_helpers import set_context
 
 reviewer_agent = Agent("reviewer", prompt="Call review_draft(quality, reason) once per turn.", config=config)
 
@@ -237,16 +237,16 @@ The final example combines both dials on a single workflow channel:
 ```python linenums="1"
 import asyncio
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.knowledge import MemoryKnowledgeStore
-from autogen.beta.network import (
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import (
     EV_CHANNEL_CLOSED,
     AgentTarget, ChannelInject, ContextEquals, FromSpeaker, Handoff,
     Hub, HubClient, LocalLink, Passport, Resume,
     TerminateTarget, ToolCalled, Transition, TransitionGraph,
 )
-from autogen.beta.network.workflow_helpers import set_context
+from ag2.network.workflow_helpers import set_context
 
 
 async def main() -> None:

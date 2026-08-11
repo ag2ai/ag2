@@ -1,0 +1,82 @@
+---
+title: Catalogs & Client Capabilities
+sidebarTitle: Catalogs & Capabilities
+---
+
+A **catalog** is the schema that defines which components and functions an A2UI message may use — buttons, forms, lists, cards, and so on. An A2UI transport validates the agent's output against a catalog, and the catalog's id is stamped into each `#!python createSurface` message so the client knows how to render it. **Client capabilities** are the other half: the client tells the agent which catalogs *it* can render, and the transport folds that into the prompt so it only targets components the client supports.
+
+## The Default Catalog
+
+Out of the box a transport uses the protocol version's **basic** catalog. Selecting `#!python protocol_version=` on the transport picks the matching catalog id, which is stamped into every `#!python createSurface` message — for `#!python "v0.9"`:
+
+```text
+https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json
+```
+
+The basic catalog covers the common building blocks (surfaces, text, buttons, inputs, lists). It's enough for most forms, lists, and cards — reach for a custom catalog only when you need components the basic one doesn't define.
+
+!!! note
+    `#!python "v0.9"` and `#!python "v0.9.1"` share the same basic-catalog id on purpose — the upstream v0.9.1 catalog file declares the v0.9 `#!python $id`. `#!python "v1.0"` has its own. Selecting `#!python protocol_version=` picks the matching catalog automatically.
+
+## Extending With a Custom Catalog
+
+To let the LLM emit components beyond the basic set, pass a `#!python custom_catalog` that **extends** the basic catalog. It can be a dict or a path to a JSON file, and must declare a `#!python $id` — that id becomes the active catalog id. Pair it with `#!python custom_catalog_rules` to tell the LLM how to use the new components. These are flat kwargs on the transport:
+
+```python linenums="1" hl_lines="6-11 18 19"
+from ag2 import Agent
+from ag2.a2ui import A2UIServer
+from ag2.a2ui.transports import RestTransport
+from ag2.config import AnthropicConfig
+
+custom_catalog = {
+    "$id": "https://example.com/catalogs/charts/catalog.json",
+    "components": {
+        # component definitions that extend the basic catalog ...
+    },
+}
+
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+
+server = A2UIServer(
+    agent,
+    transport=RestTransport(encoding="jsonl"),
+    custom_catalog=custom_catalog,
+    custom_catalog_rules="Use `chart` to visualize numeric series; never for text.",
+)
+```
+
+The custom catalog's rules are appended to the basic catalog's rules in the system prompt, and its component schemas are added to the validation registry — so malformed uses of your components are caught and retried just like the built-ins.
+
+!!! tip
+    Two knobs control prompt size: `#!python include_schema_in_prompt` (the full JSON schema — better validation, more tokens) and `#!python include_rules_in_prompt` (the plain-text catalog rules). Both default to `#!python True`; turn them off to trade strictness for a shorter prompt.
+
+## Client Capability Negotiation
+
+A client advertises what its renderer supports via `#!python A2UIClientCapabilities` — a list of `#!python supported_catalog_ids` and, optionally, `#!python inline_catalogs` (catalog definitions the client supplies inline). The transport renders this into a per-turn prompt fragment so the LLM targets only components the client can render.
+
+Negotiation is **advisory**: if the client's supported catalogs don't include the active catalog id, the mismatch is noted in the prompt and logged as a warning — it never blocks output. The A2UI spec frames capabilities as a hint, not a contract.
+
+How capabilities reach the agent depends on the transport:
+
+<Tabs>
+  <Tab title="REST">
+Send them in the request body under `#!python a2uiClientCapabilities`, nested by protocol version (see the [Server](/docs/user-guide/a2ui/server) request contract):
+
+```json
+{
+  "messages": [{"role": "user", "content": "show a booking form"}],
+  "a2uiClientCapabilities": {
+    "v0.9": {
+      "supportedCatalogIds": ["https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"]
+    }
+  }
+}
+```
+  </Tab>
+
+  <Tab title="A2A">
+The client puts the same shape on the A2A message `#!python metadata`. The [A2A executor](/docs/user-guide/a2ui/a2a) reads it off the incoming message and folds it into the turn's system prompt automatically.
+  </Tab>
+</Tabs>
+
+Whatever the transport, the capabilities become a short prompt section listing the supported catalogs (and a summary of any inline catalogs), so the LLM steers toward what the client can render.

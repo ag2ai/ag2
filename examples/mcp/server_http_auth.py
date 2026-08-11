@@ -2,11 +2,11 @@ from collections.abc import Sequence
 
 import uvicorn
 
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.mcp import MCPServer
-from autogen.beta.mcp.security import AccessToken, oauth2_scheme, require
-from autogen.beta.tools import tool
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+from ag2.mcp.security import AccessToken, oauth2_scheme, require
+from ag2.tools import tool
 
 
 @tool(description="Add two integers.")
