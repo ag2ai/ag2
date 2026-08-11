@@ -442,6 +442,8 @@ _EXTENSION_TO_MEDIA_TYPE: dict[str, ImageMediaType] = {
     ".png": "image/png",
     ".gif": "image/gif",
     ".webp": "image/webp",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
 }
 
 

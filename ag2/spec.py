@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from collections.abc import Callable, Iterable
+from difflib import get_close_matches
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ag2.agent import Agent, Plugin
 from ag2.config.config import ModelConfig
@@ -19,7 +21,53 @@ from ag2.tools.final import FunctionTool, Toolkit
 from ag2.tools.tool import Tool
 
 
-class ResponseSchemaSpec(BaseModel):
+class UnknownSpecFieldWarning(UserWarning):
+    """A spec carried a field this version of AG2 does not recognise.
+
+    Warns rather than raises, so a spec written against a newer AG2 still loads
+    here. To make it fatal, promote it with the standard warning filters::
+
+        warnings.simplefilter("error", UnknownSpecFieldWarning)
+    """
+
+
+def _unknown_field_message(cls: type[BaseModel], unknown: Iterable[str]) -> str:
+    """Name each unknown key and suggest the closest valid field."""
+
+    known = sorted(cls.model_fields)
+    described: list[str] = []
+    for key in sorted(unknown):
+        closest = get_close_matches(key, known, n=1, cutoff=0.6)
+        described.append(f"{key!r} (did you mean {closest[0]!r}?)" if closest else repr(key))
+
+    return (
+        f"Unknown field(s) for {cls.__name__}: {', '.join(described)}. "
+        f"Valid fields: {known}. Unknown fields are ignored."
+    )
+
+
+class _SpecModel(BaseModel):
+    """Base for spec models. Unknown keys are ignored, with a warning."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_on_unknown_fields(cls, data: Any) -> Any:
+        """Name unknown keys rather than dropping them silently.
+
+        Pydantic ignores them by default, so a misspelled key produces a spec
+        that loads cleanly and builds the wrong agent. Warning keeps that
+        non-breaking while making the mistake visible, and the message suggests
+        the closest valid field so a typo diagnoses itself.
+        """
+
+        if isinstance(data, dict):
+            unknown = [key for key in data if key not in cls.model_fields]
+            if unknown:
+                warnings.warn(_unknown_field_message(cls, unknown), UnknownSpecFieldWarning, stacklevel=2)
+        return data
+
+
+class ResponseSchemaSpec(_SpecModel):
     """JSON-serializable description of a response schema."""
 
     name: str
@@ -36,7 +84,7 @@ class ResponseSchemaSpec(BaseModel):
         )
 
 
-class AgentSpec(BaseModel):
+class AgentSpec(_SpecModel):
     """JSON-serializable specification of an Agent.
 
     Captures the declarative, data-only parts of an ``Agent``: name, prompt,
@@ -45,6 +93,8 @@ class AgentSpec(BaseModel):
     Non-serializable parts (middleware, callbacks, dependencies, dynamic prompts)
     are intentionally excluded and must be supplied at reconstruction time via
     :meth:`to_agent`.
+
+    Unrecognised keys are ignored, with an :class:`UnknownSpecFieldWarning`.
     """
 
     name: str

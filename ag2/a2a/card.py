@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Mapping, Sequence
+from typing import Any
 
-from a2a.client.client_factory import TransportProtocol
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
@@ -13,7 +13,7 @@ from a2a.types import (
     AgentProvider,
     AgentSkill,
 )
-from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
+from a2a.utils.constants import PROTOCOL_VERSION_CURRENT, TransportProtocol
 
 from ag2.agent import Agent
 from ag2.tools.skills.toolkit import SkillsToolkit
@@ -44,12 +44,15 @@ def build_card(
     documentation_url: str | None = None,
     icon_url: str | None = None,
     tenants: Mapping[TransportName, str] | None = None,
+    extensions: Sequence[AgentExtension] = (),
 ) -> AgentCard:
     """Construct an ``AgentCard`` describing an AG2 agent for A2A discovery.
 
     Always declares the ``urn:ag2:client-tools:v1`` extension as
     ``required=False`` — the server can transparently fall back to a
     plain text exchange when the client doesn't speak the extension.
+    User extensions passed via ``extensions`` are declared after it;
+    duplicate URIs raise ``ValueError``.
 
     ``supported_interfaces`` is built from ``transports`` — one
     ``AgentInterface`` per enabled binding. JSON-RPC URL is ``url``;
@@ -77,18 +80,28 @@ def build_card(
 
     description_text = description or _agent_description(agent)
     resolved_skills = _resolve_skills(agent, skills, description_text)
+    declared: list[AgentExtension] = [
+        AgentExtension(
+            uri=EXTENSION_URI,
+            description="AG2 client-side tool execution",
+            required=False,
+        ),
+    ]
+    seen_uris = {EXTENSION_URI}
+    for ext in extensions:
+        if ext.uri in seen_uris:
+            reason = (
+                "declared automatically by build_card" if ext.uri == EXTENSION_URI else "already present in extensions="
+            )
+            raise ValueError(f"Duplicate extension URI on AgentCard: {ext.uri!r} is {reason}")
+        seen_uris.add(ext.uri)
+        declared.append(ext)
     capabilities = AgentCapabilities(
         streaming=True,
         push_notifications=push_notifications,
-        extensions=[
-            AgentExtension(
-                uri=EXTENSION_URI,
-                description="AG2 client-side tool execution",
-                required=False,
-            ),
-        ],
+        extensions=declared,
     )
-    card_kwargs: dict[str, object] = {
+    card_kwargs: dict[str, Any] = {
         "name": agent.name,
         "description": description_text,
         "version": version,
