@@ -423,6 +423,175 @@ class TestParamValidation:
 
 
 @pytest.mark.asyncio
+class TestEmptySubtasks:
+    async def test_empty_subtasks_returns_guidance_message(self):
+        """solve_subtasks with an empty list returns guidance instead of
+        spawning nothing silently — the LLM should be told to try again
+        with at least one subtask."""
+        node_config = TrackingConfig(
+            TestConfig(
+                ToolCallEvent(name="solve_subtasks", arguments='{"subtasks": []}'),
+                ModelResponse(ModelMessage("ok, I will answer directly")),
+            )
+        )
+        parent_config = TestConfig(
+            ToolCallEvent(name="recursive_search", arguments='{"query": "research X"}'),
+            ModelResponse(ModelMessage("final synthesis")),
+        )
+        stream = MemoryStream()
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            tools=[recursive_search_tool(config=node_config, max_depth=2)],
+        )
+
+        body, events = await _run_search(parent, stream)
+
+        assert body == "final synthesis"
+        # No children spawned — only the root ran.
+        assert len(_starts(events)) == 1
+        assert _failures(events) == []
+        # The guidance was fed back to the root as a tool result.
+        tool_results = _tool_results_sent_to_llm(node_config.mock)
+        assert "No subtasks provided" in tool_results
+
+
+@pytest.mark.asyncio
+class TestSubtaskFailure:
+    async def test_failed_subtask_is_marked_in_evidence(self):
+        """When a delegated child fails, its slot in the parent's evidence
+        carries a FAILED marker with the error.
+
+        Each child runs an independent TestClient over the same event list,
+        so every atom child consumes its first event identically. We make
+        the first event a delegation attempt: atom children carry no
+        ``solve_subtasks`` tool, so the call fails as an unknown tool —
+        exactly the failure path ``_format_results`` renders as
+        ``FAILED: <error>``.
+        """
+        node_config = TrackingConfig(
+            TestConfig(
+                _delegate_script("aspect A", mode="atom"),
+                ModelResponse(ModelMessage("root fallback")),
+            )
+        )
+        parent_config = TestConfig(
+            ToolCallEvent(name="recursive_search", arguments='{"query": "research X"}'),
+            ModelResponse(ModelMessage("final synthesis")),
+        )
+        stream = MemoryStream()
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            tools=[recursive_search_tool(config=node_config, max_depth=1)],
+        )
+
+        body, events = await _run_search(parent, stream)
+
+        assert body == "final synthesis"
+        # root + 1 atom child. The atom child's first move is to try
+        # solve_subtasks (from the shared event stream), which it does not
+        # carry, so it fails.
+        assert len(_starts(events)) == 2
+        assert len(_failures(events)) == 1
+        assert _failures(events)[0].agent_name == "node_atom_0"
+        # The FAILED marker reached the root as part of the evidence.
+        tool_results = _tool_results_sent_to_llm(node_config.mock)
+        assert "FAILED" in tool_results
+        assert "aspect A" in tool_results
+
+
+@pytest.mark.asyncio
+class TestNodeBudgetMidFlight:
+    async def test_node_budget_can_be_spent_by_a_child(self):
+        """max_nodes=2 with depth>0: the root (1) + one child (2), then the
+        child tries to delegate further and gets NODE_BUDGET_EXHAUSTED — the
+        budget sentinel is reachable by a child, not just the root."""
+        node_config = TrackingConfig(
+            TestConfig(
+                _delegate_script("drill down"),
+                ModelResponse(ModelMessage("solved it myself")),
+            )
+        )
+        parent_config = TestConfig(
+            ToolCallEvent(name="recursive_search", arguments='{"query": "research X"}'),
+            ModelResponse(ModelMessage("final synthesis")),
+        )
+        stream = MemoryStream()
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            tools=[
+                recursive_search_tool(
+                    config=node_config,
+                    max_depth=3,
+                    max_children=3,
+                    max_nodes=2,
+                )
+            ],
+        )
+
+        body, events = await _run_search(parent, stream)
+
+        assert body == "final synthesis"
+        # root + exactly one child: budget stopped the tree at 2 nodes.
+        assert len(_starts(events)) == 2
+        assert len(_completions(events)) == 2
+        assert _failures(events) == []
+        # The child — not the root — received the budget sentinel.
+        tool_results = _tool_results_sent_to_llm(node_config.mock)
+        assert "NODE_BUDGET_EXHAUSTED" in tool_results
+        assert "drill down" in tool_results
+
+    async def test_partial_node_budget_within_one_call(self):
+        """A single solve_subtasks call where the budget runs out halfway
+        through the accepted list spawns the first children and reports
+        the rest as 'Node budget reached' (not 'Fan-out cap reached').
+
+        Setup: max_nodes=3 (root=1, then budget=2). Root delegates three
+        subtasks; only two budget units remain, so the third is dropped
+        mid-call and listed under the budget-reached notice.
+        """
+        node_config = TrackingConfig(
+            TestConfig(
+                _delegate_script("first", "second", "third"),
+                ModelResponse(ModelMessage("level findings")),
+            )
+        )
+        parent_config = TestConfig(
+            ToolCallEvent(name="recursive_search", arguments='{"query": "research X"}'),
+            ModelResponse(ModelMessage("final synthesis")),
+        )
+        stream = MemoryStream()
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            tools=[
+                recursive_search_tool(
+                    config=node_config,
+                    max_depth=1,
+                    max_children=3,
+                    max_nodes=3,
+                )
+            ],
+        )
+
+        body, events = await _run_search(parent, stream)
+
+        assert body == "final synthesis"
+        # root + 2 children: "third" was dropped by the budget inside the
+        # single solve_subtasks call, not by the fan-out cap (cap=3).
+        assert len(_starts(events)) == 3
+        assert len(_completions(events)) == 3
+        assert _failures(events) == []
+        tool_results = _tool_results_sent_to_llm(node_config.mock)
+        assert "Node budget reached" in tool_results
+        assert "third" in tool_results
+        # The fan-out cap message must not appear — the cap was 3.
+        assert "Fan-out cap reached" not in tool_results
+
+
+@pytest.mark.asyncio
 class TestEvidenceTruncation:
     async def test_long_child_results_are_truncated(self):
         """max_evidence_chars caps how much of a child result flows up the
@@ -683,6 +852,28 @@ class TestRecursiveSearchAgent:
         assert isinstance(agent, Agent)
         assert agent.name == "recursive_researcher"
         assert [t.schema.function.name for t in agent.tools] == ["recursive_search"]
+
+    @pytest.mark.parametrize(
+        "kwargs, match",
+        [
+            ({"max_depth": -1}, "max_depth"),
+            ({"max_children": 0}, "max_children"),
+            ({"timeout": 0}, "timeout"),
+            (
+                {"timeout": 30, "stream": lambda _agent, _ctx: MemoryStream()},
+                "cannot be combined",
+            ),
+            ({"max_nodes": 0}, "max_nodes"),
+            ({"max_evidence_chars": 0}, "max_evidence_chars"),
+        ],
+    )
+    async def test_validates_arguments(self, kwargs, match):
+        """recursive_search_agent mirrors recursive_search_tool's argument
+        validation — every ValueError raised by the tool factory must also
+        be raised by the agent factory before it builds an Agent."""
+        config = TestConfig(ModelResponse(ModelMessage("done")))
+        with pytest.raises(ValueError, match=match):
+            recursive_search_agent(config=config, **kwargs)
 
     async def test_agent_end_to_end(self):
         node_config = TestConfig(
