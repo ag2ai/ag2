@@ -25,5 +25,6 @@ Conventions:
 | `security-report.md` | Possible vulnerability filed publicly | `security` label, notify maintainers |
 | `extension-suggestion.md` | Feature belongs as an Extension, not in Core | — |
 | `extension-maintainer-ping.md` | Issue/PR touches a community Extension | `status:awaiting-response` |
-| `ai-slop.md` | Signs of unverified AI-generated content | `status:needs-template` |
+| `ai-slop.md` | Signs of unverified AI-generated content (PR/issue description) | `status:needs-template` |
+| `ai-slop-review.md` | Signs of unverified AI-generated content (a review, not the PR itself) | hide/minimize the review; no label change |
 | `welcome-first-pr.md` | First-time contributor opened a PR | — |
