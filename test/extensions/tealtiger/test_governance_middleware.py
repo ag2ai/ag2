@@ -580,3 +580,81 @@ class TestOnTurn:
         assert len(received) == 1
         assert received[0].action == "DENY"
         assert received[0].agent_name == "assistant"
+
+
+# --- cost_limit policy tests --------------------------------------------------
+
+
+class TestCostLimitPolicy:
+    """Test GovernancePolicy.cost_limit() enforcement (policy-level path)."""
+
+    @pytest.mark.asyncio
+    async def test_under_limit_passes(self):
+        """cost_limit policy allows when cumulative cost is under max_per_session."""
+        mw = TealTigerMiddleware(
+            policies=[GovernancePolicy.cost_limit(max_per_session=1.0)],
+            mode=GovernanceMode.ENFORCE,
+            cost_per_call=0.01,
+        )
+        ctx = _make_context()
+        per_turn = mw(MagicMock(), ctx)
+        call_next = AsyncMock(return_value=MagicMock())
+
+        await per_turn.on_tool_execution(call_next, _make_tool_event(), ctx)
+
+        call_next.assert_awaited_once()
+        assert mw.decisions[0].action == "ALLOW"
+
+    @pytest.mark.asyncio
+    async def test_over_limit_blocked(self):
+        """cost_limit policy denies with BUDGET_EXCEEDED when over max_per_session."""
+        mw = TealTigerMiddleware(
+            policies=[GovernancePolicy.cost_limit(max_per_session=0.015)],
+            mode=GovernanceMode.ENFORCE,
+            cost_per_call=0.01,
+        )
+        ctx = _make_context()
+        call_next = AsyncMock(return_value=MagicMock())
+
+        # First call: cost 0 < 0.015 -> ALLOW, cost becomes 0.01
+        per_turn = mw(MagicMock(), ctx)
+        await per_turn.on_tool_execution(call_next, _make_tool_event(), ctx)
+
+        # Second call: cost 0.01 < 0.015 -> ALLOW, cost becomes 0.02
+        per_turn = mw(MagicMock(), ctx)
+        await per_turn.on_tool_execution(call_next, _make_tool_event(), ctx)
+
+        # Third call: cost 0.02 >= 0.015 -> DENY
+        per_turn = mw(MagicMock(), ctx)
+        call_next_deny = AsyncMock()
+        result = await per_turn.on_tool_execution(call_next_deny, _make_tool_event(), ctx)
+
+        assert isinstance(result, ToolErrorEvent)
+        assert "BUDGET_EXCEEDED" in str(result.error)
+        call_next_deny.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_policy_limit_wins_over_factory_budget(self):
+        """Policy max_per_session is checked before factory budget_limit."""
+        mw = TealTigerMiddleware(
+            policies=[GovernancePolicy.cost_limit(max_per_session=0.005)],
+            mode=GovernanceMode.ENFORCE,
+            budget_limit=10.0,
+            cost_per_call=0.01,
+        )
+        ctx = _make_context()
+        call_next = AsyncMock(return_value=MagicMock())
+
+        # First call: cost 0 < 0.005 -> ALLOW, cost becomes 0.01
+        per_turn = mw(MagicMock(), ctx)
+        await per_turn.on_tool_execution(call_next, _make_tool_event(), ctx)
+
+        # Second call: cost 0.01 >= 0.005 (policy limit) -> DENY
+        per_turn = mw(MagicMock(), ctx)
+        call_next_deny = AsyncMock()
+        result = await per_turn.on_tool_execution(call_next_deny, _make_tool_event(), ctx)
+
+        assert isinstance(result, ToolErrorEvent)
+        assert "BUDGET_EXCEEDED" in str(result.error)
+        call_next_deny.assert_not_awaited()
+        assert mw.total_cost == pytest.approx(0.01)
