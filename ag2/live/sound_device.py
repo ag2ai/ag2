@@ -13,7 +13,14 @@ import sounddevice as sd
 
 from ag2 import MemoryStream
 from ag2.context import ConversationContext, Stream, SubId
-from ag2.events import RecordedAudioEvent, SynthesizedAudioEvent
+from ag2.events import (
+    AudioInterruptedEvent,
+    AudioPlaybackCompletedEvent,
+    AudioPlaybackStartedEvent,
+    BaseEvent,
+    RecordedAudioEvent,
+    SynthesizedAudioEvent,
+)
 
 from .protocols import AudioPlayer
 from .stt import VoiceInput
@@ -22,6 +29,11 @@ from .stt import VoiceInput
 # when full — stale mic bytes are useless for STT, so we keep the most
 # recent ~1 second (10 × 100ms blocks) under sustained load.
 _AUDIO_BUFFER_CHUNKS = 10
+
+# How long the speaker must stay quiet before playback counts as finished.
+# Long enough to bridge the gaps between streamed TTS chunks, short enough to
+# double as the echo tail a half-duplex session waits out before listening again.
+_PLAYBACK_SETTLE = 0.25
 
 
 class Recorder:
@@ -134,14 +146,21 @@ class Player(AudioPlayer[bytes]):
         self._audio_queue: queue.Queue[bytes | None] = queue.Queue()
         self._worker: threading.Thread | None = None
         self._sub_id: SubId | None = None
+        self._interrupt_sub_id: SubId | None = None
 
         self._speaker_lock = threading.Lock()
+        # Set by the worker thread, read by nobody else: whether the speaker is
+        # mid-reply, so start/completed events are emitted once per stretch of
+        # playback rather than once per chunk.
+        self._playing = False
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def stream(self) -> Stream:
         return self.context.stream
 
     async def __aenter__(self) -> "Player":
+        self._loop = asyncio.get_running_loop()
         if self._output_stream is None:
             self._output_stream = sd.OutputStream(
                 samplerate=24000,
@@ -152,6 +171,9 @@ class Player(AudioPlayer[bytes]):
         self._worker = threading.Thread(target=self._run_worker, daemon=True)
         self._worker.start()
         self._sub_id = self.context.stream.where(SynthesizedAudioEvent).subscribe(self._on_audio)
+        self._interrupt_sub_id = self.context.stream.where(AudioInterruptedEvent).subscribe(
+            self._on_interrupted,
+        )
         return self
 
     async def __aexit__(
@@ -163,6 +185,9 @@ class Player(AudioPlayer[bytes]):
         if self._sub_id is not None:
             self.context.stream.unsubscribe(self._sub_id)
             self._sub_id = None
+        if self._interrupt_sub_id is not None:
+            self.context.stream.unsubscribe(self._interrupt_sub_id)
+            self._interrupt_sub_id = None
         self.close()
         if self._output_stream is not None:
             self._output_stream.__exit__(exc_type, exc_value, traceback)
@@ -188,17 +213,72 @@ class Player(AudioPlayer[bytes]):
         self._worker.join()
         self._worker = None
 
+    def clear(self) -> None:
+        """Drop queued audio that has not reached the speaker yet.
+
+        Barge-in: synthesis stops at the source, but everything already handed
+        to the player would otherwise still be played out. The chunk currently
+        being written is not interrupted — it is one block, so the tail is a
+        few tens of milliseconds, well below what a listener notices.
+        """
+        stopping = False
+        while True:
+            try:
+                if self._audio_queue.get_nowait() is None:
+                    # The sentinel from `close` must survive the flush, or the
+                    # worker thread would never be told to stop. Drain past it
+                    # rather than stopping here: returning early would strand
+                    # whatever sits behind it and put that audio ahead of the
+                    # stop signal on re-queue.
+                    stopping = True
+            except queue.Empty:
+                break
+
+        if stopping:
+            self._audio_queue.put(None)
+
     async def _on_audio(self, event: SynthesizedAudioEvent) -> None:
         await self.play(event.content)
 
+    async def _on_interrupted(self, event: AudioInterruptedEvent) -> None:
+        self.clear()
+
     def _run_worker(self) -> None:
         while True:
-            pcm = self._audio_queue.get()
+            try:
+                # An empty queue does not mean the reply is over: streaming TTS
+                # arrives in bursts and the speaker regularly outruns the
+                # network. Only a gap longer than the settle window ends
+                # playback — which also covers the barge-in flush.
+                pcm = self._audio_queue.get(timeout=_PLAYBACK_SETTLE if self._playing else None)
+            except queue.Empty:
+                self._set_playing(False)
+                continue
+
             if pcm is None:
+                self._set_playing(False)
                 return
+
+            self._set_playing(True)
 
             np_bytes = np.frombuffer(pcm, dtype=np.int16).reshape(-1, 1)
 
             with self._speaker_lock:
                 assert self._output_stream is not None
                 self._output_stream.write(np_bytes)
+
+    def _set_playing(self, playing: bool) -> None:
+        """Announce a playback edge. Runs on the worker thread."""
+        if playing == self._playing:
+            return
+        self._playing = playing
+        self._publish(AudioPlaybackStartedEvent() if playing else AudioPlaybackCompletedEvent())
+
+    def _publish(self, event: BaseEvent) -> None:
+        # Worker thread → loop thread. `spawn_background` keeps a reference to
+        # the task, so the send is not garbage-collected mid-flight.
+        loop = self._loop
+        if loop is None:
+            return
+        with contextlib.suppress(RuntimeError):  # loop already closed on shutdown
+            loop.call_soon_threadsafe(lambda: self.context.spawn_background(self.context.send(event)))

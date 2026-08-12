@@ -112,6 +112,9 @@ dashscope = [
 ddgs = [
     { name = "ddgs" },
 ]
+elevenlabs = [
+    { name = "elevenlabs" },
+]
 gemini = [
     { name = "google-api-core" },
     { name = "google-auth" },
@@ -240,7 +243,7 @@ lint = [
 ]
 optionals = [
     { name = "a2a-sdk", extra = ["signing"] },
-    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "daytona" },
     { name = "docker" },
     { name = "exa-py" },
@@ -298,6 +301,7 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'bedrock'", specifier = ">=1.34.149" },
     { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.25.13" },
     { name = "ddgs", marker = "extra == 'ddgs'", specifier = ">=9.0.0,<10" },
+    { name = "elevenlabs", marker = "extra == 'elevenlabs'", specifier = ">=1.50.0,<3" },
     { name = "fast-depends", extras = ["pydantic"], specifier = ">=3.0.8,<4.0.0" },
     { name = "fix-busted-json", marker = "extra == 'ollama'", specifier = ">=0.0.18" },
     { name = "google-api-core", marker = "extra == 'gemini'" },
@@ -332,7 +336,7 @@ requires-dist = [
     { name = "xai-sdk", marker = "extra == 'xai'", specifier = ">=1.12.2,<2" },
     { name = "zai-sdk", marker = "extra == 'zai'", specifier = ">=0.2.3,<1" },
 ]
-provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini", "xai", "zai", "mistral", "ollama", "bedrock", "dashscope", "redis", "tracing", "metrics", "tavily", "ddgs", "perplexity", "mcp", "mcp-ui"]
+provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini", "elevenlabs", "xai", "zai", "mistral", "ollama", "bedrock", "dashscope", "redis", "tracing", "metrics", "tavily", "ddgs", "perplexity", "mcp", "mcp-ui"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -448,6 +452,7 @@ optionals = [
     { name = "ag2", extras = ["anthropic"] },
     { name = "ag2", extras = ["bedrock"] },
     { name = "ag2", extras = ["dashscope"] },
+    { name = "ag2", extras = ["elevenlabs"] },
     { name = "ag2", extras = ["gemini"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
@@ -1798,6 +1803,23 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e0/4d/f332313098c1de1b2d2ff91cf2674415cc7cddab2ca1b01ae29774bd5fdf/docstring_parser-0.18.0.tar.gz", hash = "sha256:292510982205c12b1248696f44959db3cdd1740237a968ea1e2e7a900eeb2015", size = 29341, upload-time = "2026-04-14T04:09:19.867Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/5f/ed01f9a3cdffbd5a008556fc7b2a08ddb1cc6ace7effa7340604b1d16699/docstring_parser-0.18.0-py3-none-any.whl", hash = "sha256:b3fcbed555c47d8479be0796ef7e19c2670d428d72e96da63f3a40122860374b", size = 22484, upload-time = "2026-04-14T04:09:18.638Z" },
+]
+
+[[package]]
+name = "elevenlabs"
+version = "2.63.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/be/b9/81e0c61cc07bffeeba0592cd493f756b1622cb9c2f0fb5eb1278fe2851ba/elevenlabs-2.63.0.tar.gz", hash = "sha256:ad5e2beef622ee409a9c07e3951bfe1a039abfaeb04dab615bf2cc32eeabc4e2", size = 751861, upload-time = "2026-08-11T12:10:18.296Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/3f/67a8c1ba674d20b9f24fe131defb082473a3ca4a2beb95b7ecaea99bb6ab/elevenlabs-2.63.0-py3-none-any.whl", hash = "sha256:997cc8e9f641327cd7a1db840232c0e246b99bc8ef3c777770d30283c4d737c0", size = 1979963, upload-time = "2026-08-11T12:10:16.724Z" },
 ]
 
 [[package]]
