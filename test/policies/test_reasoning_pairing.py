@@ -8,20 +8,21 @@ import pytest
 
 from ag2 import Context, ToolResult
 from ag2.events import (
+    BaseEvent,
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
-    ModelReasoning,
     ModelRequest,
+    ModelResponse,
     TextInput,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
+    UsageEvent,
 )
 from ag2.policies.sliding_window import SlidingWindowPolicy
 from ag2.policies.token_budget import TokenBudgetPolicy
-
-
-class DurableReasoning(ModelReasoning):
-    """Provider reasoning item that must be replayed, like OpenAIReasoningEvent."""
-
-    __transient__ = False
+from test._helpers import DurableReasoning
 
 
 def _call(call_id: str) -> BuiltinToolCallEvent:
@@ -32,9 +33,14 @@ def _result(parent_id: str) -> BuiltinToolResultEvent:
     return BuiltinToolResultEvent(parent_id=parent_id, name="web_search", result=ToolResult("ok"))
 
 
-def _budget_for(events: list) -> int:
+def _chars(events: list[BaseEvent]) -> int:
+    """Size of the given events in the characters the policy counts."""
+    return sum(len(str(e)) for e in events)
+
+
+def _budget_for(events: list[BaseEvent]) -> int:
     """Token budget that fits exactly the given events."""
-    return sum(len(str(e)) for e in events) // 4 + 1
+    return _chars(events) // 4 + 1
 
 
 @pytest.mark.asyncio
@@ -107,6 +113,69 @@ class TestSlidingWindow:
         assert len(result) == 1
         assert "last 1 of 4" in prompts[-1]
 
+    async def test_group_is_kept_whole_when_no_smaller_window_is_legal(self, context: Context) -> None:
+        # Nothing follows the group, so advancing the cut would leave an empty
+        # request. Overshooting the window beats sending nothing.
+        events = [
+            ModelRequest([TextInput("q")]),
+            DurableReasoning("plan"),
+            _call("ws_1"),
+            _result("ws_1"),
+        ]
+        policy = SlidingWindowPolicy(max_events=2)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events[1:]
+
+    async def test_anchor_is_found_across_interleaved_events(self, context: Context) -> None:
+        # UsageEvent is persisted but not conversation, so it can sit between a
+        # reasoning item and the call it anchors. The anchor is still its anchor.
+        events = [
+            DurableReasoning("plan"),
+            UsageEvent(),
+            _call("ws_1"),
+            _result("ws_1"),
+            ModelRequest([TextInput("next")]),
+        ]
+        policy = SlidingWindowPolicy(max_events=3)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == [events[-1]]
+
+    async def test_window_widens_past_stray_local_call_events(self, context: Context) -> None:
+        # A local call is announced by the ModelResponse that requested it; the
+        # standalone call events map to no provider item. A window holding only
+        # those maps to an empty request, so it must widen to reach the response.
+        call = ToolCallEvent(id="c_1", name="convert", arguments="{}")
+        events = [
+            ModelRequest([TextInput("q")]),
+            ModelResponse(tool_calls=ToolCallsEvent(calls=[call])),
+            ToolCallsEvent(calls=[call]),
+            call,
+            ToolResultsEvent(results=[ToolResultEvent(parent_id="c_1", name="convert", result=ToolResult("ok"))]),
+        ]
+        policy = SlidingWindowPolicy(max_events=3)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events[1:]
+
+    async def test_orphaned_builtin_result_is_dropped(self, context: Context) -> None:
+        # A builtin call never appears in ModelResponse.tool_calls, so its result
+        # needs the call event itself to survive the cut.
+        events = [
+            _call("ws_1"),
+            _result("ws_1"),
+            ModelRequest([TextInput("next")]),
+        ]
+        policy = SlidingWindowPolicy(max_events=2)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == [events[-1]]
+
 
 @pytest.mark.asyncio
 class TestTokenBudget:
@@ -123,19 +192,19 @@ class TestTokenBudget:
 
         assert result == [events[-1]]
 
-    async def test_stays_within_budget_after_advancing_the_cut(self, context: Context) -> None:
+    async def test_stays_within_budget_after_dropping_the_group(self, context: Context) -> None:
         events = [
             DurableReasoning("plan"),
             _call("ws_1"),
             _result("ws_1"),
             ModelRequest([TextInput("next")]),
         ]
-        budget_chars = _budget_for(events[1:]) * 4
-        policy = TokenBudgetPolicy(max_tokens=_budget_for(events[1:]))
+        budget = _budget_for(events[1:])
+        policy = TokenBudgetPolicy(max_tokens=budget)
 
         _, result = await policy.apply([], events, context)
 
-        assert sum(len(str(e)) for e in result) <= budget_chars
+        assert _chars(result) <= budget * 4
 
     async def test_intact_group_is_kept(self, context: Context) -> None:
         events = [
@@ -149,3 +218,20 @@ class TestTokenBudget:
         _, result = await policy.apply([], events, context)
 
         assert result == events[1:]
+
+    async def test_budget_is_overshot_when_no_smaller_span_is_legal(self, context: Context) -> None:
+        # The budget fits only the result, whose call is outside it. Dropping the
+        # orphan would leave nothing, so the span widens past the budget instead —
+        # an oversized request is recoverable, an empty one is rejected outright.
+        events = [
+            DurableReasoning("plan"),
+            _call("ws_1"),
+            _result("ws_1"),
+        ]
+        budget = _budget_for(events[-1:])
+        policy = TokenBudgetPolicy(max_tokens=budget)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events
+        assert _chars(result) > budget * 4

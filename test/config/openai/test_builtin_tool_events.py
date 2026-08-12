@@ -193,8 +193,9 @@ class TestReasoning:
         ]
 
     async def test_window_trim_never_orphans_a_server_tool_call(self) -> None:
-        # The API rejects a replayed web_search_call whose reasoning item is gone,
-        # so a trim landing inside the group must drop the whole group.
+        # The API rejects a replayed web_search_call whose reasoning item is gone.
+        # Here every smaller window is illegal, so the trim keeps the group whole
+        # rather than sending an empty input the API also rejects.
         reasoning_item = ResponseReasoningItem(
             id="rs_1",
             type="reasoning",
@@ -216,7 +217,10 @@ class TestReasoning:
 
         _, trimmed = await SlidingWindowPolicy(max_events=2).apply([], events, Context(stream=MemoryStream()))
 
-        assert events_to_responses_input(trimmed, serializer=None) == []  # type: ignore[arg-type]
+        assert events_to_responses_input(trimmed, serializer=None) == [  # type: ignore[arg-type]
+            reasoning_item.model_dump(exclude_none=True, mode="json"),
+            web_item.model_dump(exclude_none=True, mode="json"),
+        ]
 
     async def test_emits_one_event_per_summary(self) -> None:
         reasoning_item = ResponseReasoningItem(
