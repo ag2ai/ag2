@@ -104,6 +104,21 @@ def test_acp_config_is_usable_directly() -> None:
     assert cfg.permission_policy == "auto"
 
 
+def test_command_can_be_passed_positionally() -> None:
+    # The launch command is the one positional parameter, on the base config and
+    # on every preset: splitting the transport-agnostic fields into a base class
+    # must not move it out from under callers who never named it.
+    assert ACPConfig(["my-agent", "--acp"]).command == ["my-agent", "--acp"]
+    assert ClaudeCodeConfig(["npx", "-y", "@agentclientprotocol/claude-agent-acp"]).command == [
+        "npx",
+        "-y",
+        "@agentclientprotocol/claude-agent-acp",
+    ]
+    assert CodexConfig(["npx", "-y", "@agentclientprotocol/codex-acp"]).cwd == "."
+    assert OpenCodeConfig(["opencode", "acp"], cwd="/w").cwd == "/w"
+    assert KiloCodeConfig(["npx", "-y", "@kilocode/cli", "acp"]).command[0] == "npx"
+
+
 def test_elicitation_policy_defaults_to_ask_and_survives_copy() -> None:
     # Same default as the permission policy: asking is what a caller gets for free.
     assert ACPConfig().elicitation_policy == "ask"

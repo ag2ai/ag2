@@ -74,9 +74,11 @@ class ACPBaseConfig:
     subprocess, :class:`~ag2.acp.remote.ACPRemoteConfig` dials a URL. Nothing
     above the connection hook knows which of the two it is talking to.
 
-    Fields are keyword-only. There are a dozen of them, positional construction
-    was never meaningful, and keyword-only means a field added between two
-    others can never silently shift a caller's arguments.
+    Fields here are keyword-only. There are a dozen of them, positional
+    construction was never meaningful, and keyword-only means a field added
+    between two others can never silently shift a caller's arguments. The one
+    exception lives on :class:`ACPConfig`, whose ``command`` stays positional
+    (see there).
 
     Attributes:
         cwd: Workspace root passed to ``session/new``. Local to the AG2 process
@@ -210,9 +212,16 @@ class ACPBaseConfig:
         await self.aclose()
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(slots=True)
 class ACPConfig(ACPBaseConfig):
     """Drive a CLI coding agent that AG2 launches as a local subprocess.
+
+    ``command`` is the sole positional parameter — ``ACPConfig(["claude-agent-acp"])``
+    reads well and has always worked — and every inherited field is keyword-only,
+    so it stays first no matter what the base grows. Every other field is
+    keyword-only too: a second positional argument meant ``cwd`` before this class
+    was split from :class:`ACPBaseConfig`, and any new meaning for that slot would
+    reinterpret an old call silently instead of failing it.
 
     Attributes:
         command: Executable + base args launching the agent in ACP mode,
@@ -226,7 +235,7 @@ class ACPConfig(ACPBaseConfig):
     """
 
     command: list[str] = field(default_factory=list)
-    env: dict[str, str] | None = None
+    env: dict[str, str] | None = field(default=None, kw_only=True)
 
     @property
     def _transport_label(self) -> str:
@@ -257,7 +266,7 @@ class ACPConfig(ACPBaseConfig):
         )
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(slots=True)
 class ClaudeCodeConfig(ACPConfig):
     """``ACPConfig`` preset for the Claude Code ACP adapter.
 
@@ -277,7 +286,7 @@ class ClaudeCodeConfig(ACPConfig):
     command: list[str] = field(default_factory=lambda: ["claude-agent-acp"])
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(slots=True)
 class CodexConfig(ACPConfig):
     """``ACPConfig`` preset for the Codex ACP adapter.
 
@@ -298,7 +307,7 @@ class CodexConfig(ACPConfig):
     command: list[str] = field(default_factory=lambda: ["codex-acp"])
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(slots=True)
 class OpenCodeConfig(ACPConfig):
     """``ACPConfig`` preset for the OpenCode ACP adapter.
 
@@ -314,7 +323,7 @@ class OpenCodeConfig(ACPConfig):
     command: list[str] = field(default_factory=lambda: ["opencode", "acp"])
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(slots=True)
 class KiloCodeConfig(ACPConfig):
     """``ACPConfig`` preset for the Kilo Code ACP adapter.
 
