@@ -18,9 +18,7 @@ import subprocess
 import sys
 import textwrap
 
-from ag2 import Agent
 from ag2.acp import ACPConfig, ACPRemoteConfig, ClaudeCodeConfig
-from ag2.acp.config import ACPBaseConfig
 from ag2.acp.tool_gateway import GatewayAddress
 from ag2.config.client import LLMClient
 
@@ -138,29 +136,27 @@ class TestGatewayAddress:
         assert ACPRemoteConfig(url="https://box.internal/acp").gateway_address is None
 
 
-class TestBaseSplit:
-    def test_launch_fields_live_only_on_the_launch_config(self) -> None:
-        assert not hasattr(ACPBaseConfig(), "command")
-        assert not hasattr(ACPRemoteConfig(url="https://box.internal/acp"), "command")
-        assert ACPConfig(command=["agent"]).command == ["agent"]
+class TestLaunchFields:
+    """A remote config drives an agent the same way, and launches nothing."""
 
-    def test_driving_fields_live_on_the_base(self) -> None:
-        base = ACPBaseConfig()
-        assert (base.cwd, base.permission_policy, base.elicitation_policy) == (".", "ask", "ask")
-        assert (base.allow_terminal, base.expose_tools) == (True, True)
-        assert (base.startup_timeout, base.turn_timeout, base.cancel_timeout) == (30.0, None, 5.0)
+    @pytest.mark.parametrize("launch_field", ["command", "env"])
+    def test_a_launch_field_is_refused(self, launch_field: str) -> None:
+        # Refused rather than ignored: a caller who passes a command is telling
+        # AG2 to launch something, and this config cannot.
+        with pytest.raises(TypeError, match=launch_field):
+            ACPRemoteConfig(url="https://box.internal/acp", **{launch_field: ["agent"]})
 
-    def test_both_configs_are_base_configs(self) -> None:
-        assert isinstance(ACPConfig(), ACPBaseConfig)
-        assert isinstance(ACPRemoteConfig(url="https://box.internal/acp"), ACPBaseConfig)
+    def test_a_launch_field_is_not_in_the_repr(self) -> None:
+        assert "command" not in repr(ACPRemoteConfig(url="https://box.internal/acp"))
+
+    def test_the_driving_fields_are_shared_with_the_launch_config(self) -> None:
+        remote = ACPRemoteConfig(url="https://box.internal/acp", cwd="/w", permission_policy="auto")
+        assert (remote.cwd, remote.permission_policy) == (ACPConfig(cwd="/w", permission_policy="auto").cwd, "auto")
+        assert (remote.expose_tools, remote.elicitation_policy) == (True, "ask")
+
+    def test_every_config_is_an_acp_config(self) -> None:
+        assert isinstance(ACPRemoteConfig(url="https://box.internal/acp"), ACPConfig)
         assert isinstance(ClaudeCodeConfig(), ACPConfig)
-
-    @pytest.mark.asyncio
-    async def test_the_base_cannot_reach_an_agent_on_its_own(self) -> None:
-        # The base carries the driving fields and nothing that reaches an agent,
-        # so a caller who binds one to an Agent is told at the first turn.
-        with pytest.raises(NotImplementedError, match="ACPBaseConfig"):
-            await Agent("acp", config=ACPBaseConfig()).ask("hello")
 
 
 def test_import_without_the_extra_names_what_to_install() -> None:

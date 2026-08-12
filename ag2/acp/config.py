@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Config classes for ACP-backed agents.
 
-:class:`ACPBaseConfig` holds everything about *driving* an agent — workspace,
-model, policies, timeouts, tool exposure. :class:`ACPConfig` adds what it takes
-to *launch* one locally, and :class:`~ag2.acp.remote.ACPRemoteConfig` adds what
-it takes to reach one that is already running elsewhere. Both implement the
+:class:`ACPConfig` is everything about driving an agent — workspace, model,
+policies, timeouts, tool exposure — plus what it takes to *launch* one as a local
+subprocess. :class:`~ag2.acp.remote.ACPRemoteConfig` extends it with what it
+takes to reach one that is already running elsewhere. Both implement the
 :class:`~ag2.config.config.ModelConfig` protocol; ``create()`` returns an
 ``ACPClient`` that drives the agent over the Agent Client Protocol.
 
@@ -66,21 +66,31 @@ PermissionPolicy = Literal["ask", "auto", "deny"]
 ElicitationPolicy = Literal["ask", "decline"]
 
 
-@dataclass(slots=True, kw_only=True)
-class ACPBaseConfig:
-    """Everything about driving a CLI coding agent over ACP, minus how to reach it.
+@dataclass(slots=True)
+class ACPConfig:
+    """Drive a CLI coding agent over ACP, launching it as a local subprocess.
 
-    Subclasses add the transport: :class:`ACPConfig` launches a local
-    subprocess, :class:`~ag2.acp.remote.ACPRemoteConfig` dials a URL. Nothing
-    above the connection hook knows which of the two it is talking to.
+    Also the base every other ACP config extends:
+    :class:`~ag2.acp.remote.ACPRemoteConfig` swaps the subprocess for a URL, and
+    the four presets below carry a known launch command. Nothing above the
+    connection hook knows which of them it is talking to.
 
-    Fields here are keyword-only. There are a dozen of them, positional
-    construction was never meaningful, and keyword-only means a field added
-    between two others can never silently shift a caller's arguments. The one
-    exception lives on :class:`ACPConfig`, whose ``command`` stays positional
-    (see there).
+    Field order is published API — ``ACPConfig(["claude-agent-acp"])`` is how the
+    docs have always spelled it — which is also why this class, not a shared
+    base, is where the fields live: an inherited field necessarily comes first in
+    a generated ``__init__``, and ``command`` has to stay there. A new field goes
+    after ``expose_tools``, never between two a caller may have passed
+    positionally.
 
     Attributes:
+        command: Executable + base args launching the agent in ACP mode,
+            e.g. ``["claude-agent-acp"]``. The first element is the executable.
+        env: Extra environment variables for the subprocess. The subprocess does
+            NOT inherit the full parent environment: only a small whitelist
+            (``HOME``, ``LOGNAME``, ``PATH``, ``SHELL``, ``TERM``, ``USER``) is
+            inherited, merged with this mapping. So API-key auth must be passed
+            here explicitly (a shell ``export`` of the key is not inherited); a
+            disk login under ``$HOME`` (e.g. ``~/.claude``) works without it.
         cwd: Workspace root passed to ``session/new``. Local to the AG2 process
             even when the agent is remote: ACP's ``fs/*`` and terminal methods
             are requests *from* the agent *to* the client, and AG2 is the
@@ -122,7 +132,9 @@ class ACPBaseConfig:
             function tools when the first turn had none — raises.
     """
 
+    command: list[str] = field(default_factory=list)
     cwd: str = "."
+    env: dict[str, str] | None = None
     model: str | None = None
     permission_policy: PermissionPolicy = "ask"
     fs_root: str | None = None
@@ -151,12 +163,12 @@ class ACPBaseConfig:
     @property
     def _transport_label(self) -> str:
         """How this config's transport is named in errors and logs."""
-        return "acp"
+        return "stdio"
 
     @property
     def _agent_label(self) -> str:
         """How the agent is named in errors, before it introduces itself."""
-        return "acp-agent"
+        return self.command[0] if self.command else "acp-agent"
 
     def _open_connection(
         self, client: "acp.Client"
@@ -169,8 +181,23 @@ class ACPBaseConfig:
     def _connect_transport(
         self, client: "acp.Client"
     ) -> "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]":
-        """The subclass's own way of reaching the agent."""
-        raise NotImplementedError(f"{type(self).__name__} does not know how to reach an ACP agent")
+        """Reach the agent by launching it, which is what this config is for."""
+        import acp
+
+        executable, *args = self.command
+        # `use_unstable_protocol` is what registers the `elicitation/*` routes
+        # on the client side; without it the SDK answers the agent's question
+        # with method-not-found before the bridge ever sees it. Elicitation is
+        # the only unstable route a Client serves, so this enables nothing else.
+        return acp.spawn_agent_process(
+            client,
+            executable,
+            *args,
+            env=self.env,
+            cwd=self.cwd,
+            use_unstable_protocol=True,
+            **_dispatch_kwargs(client),
+        )
 
     def _gateway_address(self) -> GatewayAddress:
         """Where the tool gateway should bind, and what address the agent gets.
@@ -213,60 +240,6 @@ class ACPBaseConfig:
 
 
 @dataclass(slots=True)
-class ACPConfig(ACPBaseConfig):
-    """Drive a CLI coding agent that AG2 launches as a local subprocess.
-
-    ``command`` is the sole positional parameter — ``ACPConfig(["claude-agent-acp"])``
-    reads well and has always worked — and every inherited field is keyword-only,
-    so it stays first no matter what the base grows. Every other field is
-    keyword-only too: a second positional argument meant ``cwd`` before this class
-    was split from :class:`ACPBaseConfig`, and any new meaning for that slot would
-    reinterpret an old call silently instead of failing it.
-
-    Attributes:
-        command: Executable + base args launching the agent in ACP mode,
-            e.g. ``["claude-agent-acp"]``. The first element is the executable.
-        env: Extra environment variables for the subprocess. The subprocess does
-            NOT inherit the full parent environment: only a small whitelist
-            (``HOME``, ``LOGNAME``, ``PATH``, ``SHELL``, ``TERM``, ``USER``) is
-            inherited, merged with this mapping. So API-key auth must be passed
-            here explicitly (a shell ``export`` of the key is not inherited); a
-            disk login under ``$HOME`` (e.g. ``~/.claude``) works without it.
-    """
-
-    command: list[str] = field(default_factory=list)
-    env: dict[str, str] | None = field(default=None, kw_only=True)
-
-    @property
-    def _transport_label(self) -> str:
-        return "stdio"
-
-    @property
-    def _agent_label(self) -> str:
-        return self.command[0] if self.command else "acp-agent"
-
-    def _connect_transport(
-        self, client: "acp.Client"
-    ) -> "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]":
-        import acp
-
-        executable, *args = self.command
-        # `use_unstable_protocol` is what registers the `elicitation/*` routes
-        # on the client side; without it the SDK answers the agent's question
-        # with method-not-found before the bridge ever sees it. Elicitation is
-        # the only unstable route a Client serves, so this enables nothing else.
-        return acp.spawn_agent_process(
-            client,
-            executable,
-            *args,
-            env=self.env,
-            cwd=self.cwd,
-            use_unstable_protocol=True,
-            **_dispatch_kwargs(client),
-        )
-
-
-@dataclass(slots=True)
 class ClaudeCodeConfig(ACPConfig):
     """``ACPConfig`` preset for the Claude Code ACP adapter.
 
@@ -280,7 +253,7 @@ class ClaudeCodeConfig(ACPConfig):
     Only a small env whitelist is inherited, so a shell ``export`` of the key
     does not reach the subprocess; put it in ``env`` (see ``ACPConfig.env``).
     Select the model via the ``model`` field (one of the adapter's advertised
-    ids — see ``ACPBaseConfig.model``) or the adapter's ``ANTHROPIC_MODEL`` env var.
+    ids — see ``ACPConfig.model``) or the adapter's ``ANTHROPIC_MODEL`` env var.
     """
 
     command: list[str] = field(default_factory=lambda: ["claude-agent-acp"])
@@ -301,7 +274,7 @@ class CodexConfig(ACPConfig):
     ``export`` of a key does not reach the subprocess; put it in ``env`` (see
     ``ACPConfig.env``).
     Select the model via the ``model`` field (one of the adapter's advertised
-    ids — see ``ACPBaseConfig.model``) or the adapter's ``MODEL_PROVIDER`` env var.
+    ids — see ``ACPConfig.model``) or the adapter's ``MODEL_PROVIDER`` env var.
     """
 
     command: list[str] = field(default_factory=lambda: ["codex-acp"])

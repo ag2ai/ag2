@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Drive an ACP agent that is already running somewhere else.
 
-:class:`ACPRemoteConfig` is an :class:`~.config.ACPBaseConfig` pointed at a URL
+:class:`ACPRemoteConfig` is an :class:`~.config.ACPConfig` pointed at a URL
 instead of a command, and :func:`open_remote_connection` is a third
 implementation of the connection hook the launch-based config already uses — it
 yields a connection and no process handle. Nothing above that hook learns that
@@ -22,39 +22,43 @@ for a WebSocket stack. A broken install surfaces on
 ``from ag2.acp import ACPRemoteConfig`` with that install hint.
 """
 
-from contextlib import asynccontextmanager
+from asyncio.subprocess import Process
+from collections.abc import AsyncGenerator, Mapping
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar
 
 import acp
 import httpx
 import websockets
+from acp.core import ClientSideConnection
 from acp.http.client import AcpHttpStatusError, create_http_stream
 from acp.ws.client import create_websocket_stream
 
-from .config import ACPBaseConfig, _dispatch_kwargs
+from .config import ACPConfig, _dispatch_kwargs
 from .tool_gateway import GatewayAddress, MCPCapabilityError
 from .transport import ACPTransport, resolve_transport
 
 if TYPE_CHECKING:
-    from asyncio.subprocess import Process
-    from collections.abc import AsyncGenerator, Mapping
-    from contextlib import AbstractAsyncContextManager
-
     from acp._transport import Transport
-    from acp.core import ClientSideConnection
 
 __all__ = ("ACPRemoteConfig", "open_remote_connection")
 
 
 @dataclass(slots=True, kw_only=True)
-class ACPRemoteConfig(ACPBaseConfig):
+class ACPRemoteConfig(ACPConfig):
     """Drive a CLI coding agent reachable at a URL.
 
-    There is no ``command`` here, and that is the point: a config that cannot
-    launch anything should not carry launch-only fields, so passing both a
-    command and a URL is rejected at construction rather than resolved by some
-    precedence rule.
+    An :class:`~ag2.acp.config.ACPConfig` that dials instead of launching: the
+    workspace, model, policies and timeouts are inherited and mean exactly what
+    they mean locally, and the launch-only fields are taken out of the
+    constructor rather than left as arguments that would do nothing. Passing
+    ``command=`` or ``env=`` here is a ``TypeError``, so a command and a URL can
+    never disagree about how to reach the agent.
+
+    Its own fields are keyword-only. Nothing was ever constructed positionally
+    here — the class is new — so keyword-only costs nothing and means a field
+    added between two others cannot shift a call.
 
     Attributes:
         url: Where the agent speaks ACP, e.g. ``https://box.internal/acp`` or
@@ -82,9 +86,16 @@ class ACPRemoteConfig(ACPBaseConfig):
             on a network only the agent can reach.
     """
 
+    # Inherited, then withdrawn from the constructor: ``init=False`` is what
+    # makes ``ACPRemoteConfig(url=..., command=[...])`` a TypeError instead of an
+    # argument that quietly launches nothing. They keep their empty defaults, so
+    # the inherited code that reads them — ``_agent_label`` — still works.
+    command: list[str] = field(init=False, repr=False, default_factory=list)
+    env: dict[str, str] | None = field(init=False, repr=False, default=None)
+
     url: str
     headers: dict[str, str] = field(default_factory=dict, repr=False)
-    transport: "ACPTransport | None" = None
+    transport: ACPTransport | None = None
     gateway_address: str | None = None
 
     # A dropped SSE stream or closed socket reaches the caller as
@@ -114,8 +125,8 @@ class ACPRemoteConfig(ACPBaseConfig):
         return self.url
 
     def _connect_transport(
-        self, client: "acp.Client"
-    ) -> "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]":
+        self, client: acp.Client
+    ) -> AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]:
         return open_remote_connection(
             client,
             url=self.url,
@@ -139,12 +150,12 @@ class ACPRemoteConfig(ACPBaseConfig):
 
 @asynccontextmanager
 async def open_remote_connection(
-    client: "acp.Client",
+    client: acp.Client,
     *,
     url: str,
     transport: ACPTransport,
-    headers: "Mapping[str, str] | None" = None,
-) -> "AsyncGenerator[tuple[ClientSideConnection, Process | None]]":
+    headers: Mapping[str, str] | None = None,
+) -> AsyncGenerator[tuple[ClientSideConnection, Process | None]]:
     """Open an ACP connection to a remote agent; yield it with no process handle.
 
     The third implementation of the connection hook, alongside the subprocess

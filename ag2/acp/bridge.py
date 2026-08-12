@@ -28,7 +28,7 @@ from .types import SessionUpdate
 if TYPE_CHECKING:
     from ag2.context import ConversationContext
 
-    from .config import ACPBaseConfig
+    from .config import ACPConfig
 
 
 def _confine(fs_root: str, path: str) -> str:
@@ -150,7 +150,7 @@ class TerminalManager:
 class BridgeState:
     """Run-scoped state and behavior for the ACP client."""
 
-    def __init__(self, config: "ACPBaseConfig") -> None:
+    def __init__(self, config: "ACPConfig") -> None:
         self.config = config
         self.context: ConversationContext | None = None  # updated by ACPClient before each turn
         self._turn_parts: list[str] = []
@@ -340,7 +340,7 @@ class ACPBridge(acp.Client):
         """Ignore unsupported extension notifications."""
 
 
-def make_bridge(config: "ACPBaseConfig") -> ACPBridge:
+def make_bridge(config: "ACPConfig") -> ACPBridge:
     """Build an :class:`ACPBridge` bound to a fresh ``BridgeState``.
 
     ``bridge.state`` exposes the ``BridgeState`` so ``ACPClient`` can update

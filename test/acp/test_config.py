@@ -104,19 +104,32 @@ def test_acp_config_is_usable_directly() -> None:
     assert cfg.permission_policy == "auto"
 
 
-def test_command_can_be_passed_positionally() -> None:
-    # The launch command is the one positional parameter, on the base config and
-    # on every preset: splitting the transport-agnostic fields into a base class
-    # must not move it out from under callers who never named it.
-    assert ACPConfig(["my-agent", "--acp"]).command == ["my-agent", "--acp"]
-    assert ClaudeCodeConfig(["npx", "-y", "@agentclientprotocol/claude-agent-acp"]).command == [
-        "npx",
-        "-y",
-        "@agentclientprotocol/claude-agent-acp",
-    ]
-    assert CodexConfig(["npx", "-y", "@agentclientprotocol/codex-acp"]).cwd == "."
-    assert OpenCodeConfig(["opencode", "acp"], cwd="/w").cwd == "/w"
-    assert KiloCodeConfig(["npx", "-y", "@kilocode/cli", "acp"]).command[0] == "npx"
+def test_the_published_parameter_order_still_holds() -> None:
+    # The parameter order is API: a caller who passed these positionally wrote
+    # against it, so growing the config — a shared base for the remote one, a new
+    # policy — must leave every existing position meaning what it meant. A new
+    # field therefore goes after ``expose_tools``, never between.
+    cfg = ACPConfig(["my-agent", "--acp"], "/work", {"KEY": "v"}, "sonnet", "auto", "/root", False, ["/extra"])
+
+    assert cfg == ACPConfig(
+        command=["my-agent", "--acp"],
+        cwd="/work",
+        env={"KEY": "v"},
+        model="sonnet",
+        permission_policy="auto",
+        fs_root="/root",
+        allow_terminal=False,
+        additional_directories=["/extra"],
+    )
+
+
+def test_presets_take_a_command_positionally_too() -> None:
+    # A preset is an ACPConfig whose command has a default, and overriding that
+    # default positionally is how the docs' `npx -y ...` variants are written.
+    assert ClaudeCodeConfig(["npx", "-y", "@agentclientprotocol/claude-agent-acp"]).command[0] == "npx"
+    assert CodexConfig(["npx", "-y", "@agentclientprotocol/codex-acp"], "/work").cwd == "/work"
+    assert OpenCodeConfig(["opencode", "acp"]).cwd == "."
+    assert KiloCodeConfig(["npx", "-y", "@kilocode/cli", "acp"]).command[-1] == "acp"
 
 
 def test_elicitation_policy_defaults_to_ask_and_survives_copy() -> None:

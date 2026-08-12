@@ -480,9 +480,9 @@ config = ACPRemoteConfig(
 | `cancel_timeout` | `5.0` | Grace period (s) after a timed-out turn signals `session/cancel` before the subprocess is hard-stopped |
 | `expose_tools` | `True` | Serve the agent's tools to the CLI agent over MCP (default `True`) |
 
-Every field above except `command` and `env` lives on the shared
-`ACPBaseConfig`, so it means the same thing for a remote agent.
-`ACPRemoteConfig` swaps the two launch fields for these:
+`ACPRemoteConfig` is an `ACPConfig`, so every field above means the same thing
+for a remote agent — except the two launch-only ones, `command` and `env`, which
+it does not accept. In their place:
 
 | Field | Default | Purpose |
 | :--- | :--- | :--- |

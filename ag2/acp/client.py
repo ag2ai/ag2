@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 
 import acp
 from acp import schema
+from fast_depends.library.serializer import SerializerProto
 
 from ag2.context import ConversationContext
 from ag2.events import BaseEvent
@@ -41,9 +42,7 @@ from .tool_gateway import GATEWAY_SERVER_NAME, ToolGateway, partition_tools
 from .transport import ACPTransportError
 
 if TYPE_CHECKING:
-    from fast_depends.library.serializer import SerializerProto
-
-    from .config import ACPBaseConfig, ElicitationPolicy
+    from .config import ACPConfig, ElicitationPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +84,7 @@ class ACPClient:
     and the gateway address it nominates.
     """
 
-    def __init__(self, config: "ACPBaseConfig") -> None:
+    def __init__(self, config: "ACPConfig") -> None:
         self.config = config
 
     def _client_capabilities(self) -> schema.ClientCapabilities:
@@ -173,7 +172,7 @@ class ACPClient:
         *,
         tools: Iterable[ToolSchema],
         response_schema: "ResponseProto | None",
-        serializer: "SerializerProto",
+        serializer: SerializerProto,
     ) -> ModelResponse:
         session = await self._session_for(context, list(tools))
         bridge = session.bridge
