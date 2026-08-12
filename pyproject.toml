@@ -94,6 +94,9 @@ gemini = [
     "pillow",
     "jsonschema",
 ]
+# === Voice / TTS providers (ag2.live) ===
+elevenlabs = ["elevenlabs>=1.50.0,<3"]
+
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
 mistral = ["mistralai>=2.8.0,<3"]
@@ -187,6 +190,7 @@ optionals = [
     "ag2[xai]",
     "ag2[zai]",
     "ag2[mistral]",
+    "ag2[elevenlabs]",
 ]
 
 docs = [
@@ -295,6 +299,7 @@ markers = [
     "google_api",
     "google_search",
     "websockets",
+    "elevenlabs",
     "commsagent_discord",
     "commsagent_slack",
     "commsagent-telegram",

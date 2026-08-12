@@ -6,10 +6,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ag2 import Context
+from ag2 import Agent, Context, tool
+from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
 from ag2.history import MemoryStorage
 from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 from ag2.tools.subagents.persistent_stream import persistent_stream
+from ag2.tools.subagents.run_task import run_task
+from ag2.usage import UsageReport
 
 
 @pytest.fixture()
@@ -88,3 +92,83 @@ class TestPersistentStream:
         stream2 = factory(agent, ctx2)
 
         assert stream1.id != stream2.id
+
+
+@pytest.mark.asyncio
+class TestUsageAccountingOnAReusedStream:
+    """Delegating repeatedly to the same long-lived worker must add up linearly.
+
+    The rollup the parent receives carries *this invocation's* spend; the
+    ``TaskResult.usage`` field keeps the cumulative reading of the worker's
+    stream. On a fresh stream per call the two coincide — reusing the stream is
+    what tells them apart.
+    """
+
+    async def test_repeated_delegations_do_not_inflate_the_parent_total(self, ctx: Context) -> None:
+        billed = Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110)
+        worker = Agent(
+            "worker",
+            config=TestConfig(*(ModelResponse(ModelMessage("done"), usage=billed) for _ in range(3))),
+        )
+        factory = persistent_stream()
+
+        readings = [
+            (await run_task(worker, "go", parent_context=ctx, stream=factory(worker, ctx))).usage for _ in range(3)
+        ]
+
+        # The field is the worker's running total across the session.
+        assert readings == [billed, billed + billed, billed + billed + billed]
+
+        # The parent's report equals what was actually spent — not the sum of
+        # three cumulative readings.
+        spent = billed + billed + billed
+        report = UsageReport.from_events(await ctx.stream.history.get_events())
+        assert report.total == spent
+        assert report.by_kind == {"subtask": spent}
+
+    async def test_a_failed_delegation_on_a_reused_stream_reports_only_its_own_spend(self, ctx: Context) -> None:
+        """The failure path must not carry the over-count either.
+
+        The worker's downstream API works once and then breaks, so the second
+        delegation dies after billing. The parent must be told what that attempt
+        spent, not everything the worker has ever spent.
+        """
+        calls = 0
+
+        @tool
+        def flaky() -> str:
+            """A downstream API that works once and then breaks."""
+            nonlocal calls
+            calls += 1
+            if calls > 1:
+                raise RuntimeError("downstream API is down")
+            return "ok"
+
+        dispatch = Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110)
+        wrapup = Usage(prompt_tokens=40, completion_tokens=4, total_tokens=44)
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="flaky", arguments="{}")]),
+                    usage=dispatch,
+                ),
+                ModelResponse(ModelMessage("done"), usage=wrapup),
+            ),
+            tools=[flaky],
+        )
+        factory = persistent_stream()
+
+        ok = await run_task(worker, "go", parent_context=ctx, stream=factory(worker, ctx))
+        failed = await run_task(worker, "go again", parent_context=ctx, stream=factory(worker, ctx))
+
+        assert ok.completed is True
+        assert failed.completed is False
+        # Cumulative on the field: everything this worker has spent on its stream.
+        assert failed.usage == dispatch + wrapup + dispatch
+
+        # Per-invocation on the parent: the successful attempt's two calls, then
+        # the failed attempt's single call.
+        report = UsageReport.from_events(await ctx.stream.history.get_events())
+        assert report.total == dispatch + wrapup + dispatch
+        assert report.by_kind == {"subtask": dispatch + wrapup + dispatch}
