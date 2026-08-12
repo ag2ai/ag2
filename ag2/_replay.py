@@ -4,9 +4,10 @@
 
 """Replay invariants for a trimmed span of history.
 
-Every reducer of history — the assembly policies and the compaction strategies —
-cuts the event list at an index and replays ``events[cut:]`` to the provider.
-That tail has to stand on its own, and three retained events cannot:
+Every reducer of history — the assembly policies, the limiter middleware, and the
+compaction strategies — cuts the event list at an index and replays
+``events[cut:]`` to the provider. That tail has to stand on its own, and three
+retained events cannot:
 
 | retained event             | required companion             | if missing                      |
 |----------------------------|--------------------------------|---------------------------------|
@@ -14,10 +15,10 @@ That tail has to stand on its own, and three retained events cannot:
 | builtin (server-side) call | its **reasoning** item         | orphan ``web_search_call``      |
 | local call event           | the **response** announcing it | maps to nothing at all          |
 
-The remedy differs by caller because what they own differs: a policy persists
-nothing, so it drops the offending event (:func:`replayable_span`); compaction
-persists everything it drops, so it moves the cut (:func:`snap`) — filtering
-there would leave an event neither retained nor persisted.
+The remedy differs by caller because what they own differs: a policy or limiter
+persists nothing, so it drops the offending event (:func:`replayable_span`);
+compaction persists everything it drops, so it moves the cut (:func:`snap`) —
+filtering there would leave an event neither retained nor persisted.
 """
 
 from collections.abc import Sequence
@@ -26,6 +27,7 @@ from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
     ModelReasoning,
+    ModelRequest,
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
@@ -70,15 +72,24 @@ def _prune(events: Sequence[BaseEvent], cut: int) -> list[BaseEvent]:
 
     ``anchor`` is the nearest preceding durable reasoning item, tracked across the
     whole list rather than read off the events adjacent to the cut. That makes the
-    answer independent of whatever else the provider interleaved into the turn,
+    answer independent of whatever else the provider interleaved into the response,
     and silent for models that emit no reasoning at all — a builtin call that
     never had an anchor cannot lose one.
+
+    It is scoped to one response, though: a reasoning item anchors only the builtin
+    calls of the response that emitted it, and ``ModelRequest`` / ``ModelResponse``
+    close that response. Without the reset a stale anchor from an earlier response
+    would condemn a later builtin call that never needed one — and a history can
+    genuinely mix the two, since the same model emits a reasoning item only when
+    asked for a summary (see ``ag2.config.openai.openai_responses_client``).
     """
     anchor: int | None = None
     kept: list[BaseEvent] = []
     for index, event in enumerate(events):
         if _is_anchor(event):
             anchor = index
+        elif isinstance(event, (ModelRequest, ModelResponse)):
+            anchor = None
         if index < cut:
             continue
         if isinstance(event, BuiltinToolCallEvent) and anchor is not None and anchor < cut:

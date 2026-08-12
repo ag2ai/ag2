@@ -374,7 +374,9 @@ agent = Agent(..., middleware=[HistoryLimiter(max_events=100)])
 ```
 
 Trims the event history to a maximum number of events before the model call.
-It preserves the first `ModelRequest` when possible and avoids leaving leading orphaned tool results in the trimmed history.
+It preserves the first `ModelRequest` when possible, and drops whatever the cut orphaned so the trimmed history still replays.
+
+`max_events` is a target rather than a hard cap, for the same reason it is one on the reduction policies — see [Reduction limits are targets](/docs/user-guide/advanced/assembly#reduction-limits-are-targets).
 
 Use it when you want a simple, deterministic cap on context length by event count.
 
@@ -389,6 +391,8 @@ agent = Agent(..., middleware=[TokenLimiter(max_tokens=1000)])
 
 Trims the event history to fit within an approximate token budget before the model call.
 It uses a character-based estimate controlled by `chars_per_token`.
+
+`max_tokens` is a target rather than a hard cap — see [Reduction limits are targets](/docs/user-guide/advanced/assembly#reduction-limits-are-targets).
 
 Use it when you need lightweight context budgeting without depending on a model-specific tokenizer.
 

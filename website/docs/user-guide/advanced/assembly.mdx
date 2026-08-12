@@ -193,7 +193,9 @@ Also requires a `KnowledgeStore` in `#!python context.dependencies`; a no-op oth
 
 ## Reduction limits are targets
 
-`max_events` and `max_tokens` are targets, not guarantees. A reduction policy cuts history at an index and sends everything after it, and a provider only accepts that tail if it can stand on its own. Three retained events cannot:
+`max_events` and `max_tokens` are targets, not guarantees. This applies to `SlidingWindowPolicy` and `TokenBudgetPolicy` here, and equally to the [`HistoryLimiter` and `TokenLimiter`](/docs/user-guide/middleware) middleware, which reduce history the same way.
+
+A reduction cuts history at an index and sends everything after it, and a provider only accepts that tail if it can stand on its own. Three retained events cannot:
 
 | Retained event | Needs | If the cut dropped it |
 |---|---|---|

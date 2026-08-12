@@ -99,6 +99,42 @@ class TestSlidingWindow:
 
         assert result == events[2:]
 
+    async def test_anchor_does_not_leak_past_a_response_boundary(self, context: Context) -> None:
+        # The second group is self-contained: it has no reasoning item of its own,
+        # so nothing about it was orphaned and the first group's anchor must not
+        # condemn it. Live, the same model emits a reasoning item only when asked
+        # for a summary, so one history really can mix anchored and unanchored
+        # builtin calls.
+        events = [
+            DurableReasoning("plan one"),
+            _call("ws_1"),
+            _result("ws_1"),
+            ModelRequest([TextInput("next")]),
+            _call("ws_2"),
+            _result("ws_2"),
+        ]
+        policy = SlidingWindowPolicy(max_events=2)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events[4:]
+
+    async def test_anchor_does_not_leak_past_a_model_response(self, context: Context) -> None:
+        # A ModelResponse closes the response that emitted the anchor, so a builtin
+        # call after it belongs to a later response and needs its own anchor.
+        events = [
+            DurableReasoning("plan one"),
+            _call("ws_1"),
+            ModelResponse(tool_calls=ToolCallsEvent(calls=[])),
+            _call("ws_2"),
+            _result("ws_2"),
+        ]
+        policy = SlidingWindowPolicy(max_events=2)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events[3:]
+
     async def test_transparent_count_reflects_dropped_group(self, context: Context) -> None:
         events = [
             DurableReasoning("plan"),
