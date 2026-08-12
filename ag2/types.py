@@ -28,6 +28,8 @@ ImageMediaType: TypeAlias = Literal[
     "image/png",
     "image/gif",
     "image/webp",
+    "image/heic",
+    "image/heif",
 ]
 DocumentMediaType: TypeAlias = Literal[
     "application/pdf",
