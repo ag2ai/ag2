@@ -4,14 +4,16 @@
 
 """SlidingWindowPolicy — keep the last N events."""
 
+from ag2._replay import replayable_span
 from ag2.context import ConversationContext as Context
 from ag2.events import BaseEvent
-
-from ._pairing import ensure_tool_pairing
 
 
 class SlidingWindowPolicy:
     """Keep the last N events. Drop older events.
+
+    The window is a target, not a guarantee: events the cut orphaned are dropped
+    from it, and a window that would reduce to nothing widens instead.
 
     Optional transparency: injects a note about how many events were omitted.
     """
@@ -31,7 +33,7 @@ class SlidingWindowPolicy:
         total = len(events)
         if total <= self._max:
             return prompts, events
-        trimmed = ensure_tool_pairing(events[-self._max :])
+        trimmed = replayable_span(events, total - self._max)
         if self._transparent:
             prompts = prompts + [f"[{self.name}] Showing last {len(trimmed)} of {total} events."]
         return prompts, trimmed
