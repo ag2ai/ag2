@@ -65,6 +65,9 @@ from .types import (
     UsageEvent,
 )
 from .voice import (
+    AudioInterruptedEvent,
+    AudioPlaybackCompletedEvent,
+    AudioPlaybackStartedEvent,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
     TranscriptionChunkEvent,
@@ -76,6 +79,9 @@ __all__ = (
     "AggregationFailed",
     "AggregationStarted",
     "AudioInput",
+    "AudioInterruptedEvent",
+    "AudioPlaybackCompletedEvent",
+    "AudioPlaybackStartedEvent",
     "BaseEvent",
     "BinaryInput",
     "BinaryResult",
