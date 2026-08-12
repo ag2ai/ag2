@@ -88,12 +88,15 @@ gemini = [
     "google-api-core",
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
-    "google-genai>=1.20.0,<3.0",
+    "google-genai>=1.68.0,<3.0",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
     "jsonschema",
 ]
+# === Voice / TTS providers (ag2.live) ===
+elevenlabs = ["elevenlabs>=1.50.0,<3"]
+
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
 mistral = ["mistralai>=2.8.0,<3"]
@@ -186,6 +189,7 @@ optionals = [
     "ag2[xai]",
     "ag2[zai]",
     "ag2[mistral]",
+    "ag2[elevenlabs]",
 ]
 
 docs = [
@@ -294,6 +298,7 @@ markers = [
     "google_api",
     "google_search",
     "websockets",
+    "elevenlabs",
     "commsagent_discord",
     "commsagent_slack",
     "commsagent-telegram",

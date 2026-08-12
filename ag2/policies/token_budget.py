@@ -4,16 +4,19 @@
 
 """TokenBudgetPolicy — keep events within a token budget."""
 
+from ag2._replay import replayable_span
 from ag2.context import ConversationContext as Context
 from ag2.events import BaseEvent
-
-from ._pairing import ensure_tool_pairing
 
 
 class TokenBudgetPolicy:
     """Keep events within a token budget.
 
     Estimates tokens by character count. Retains most recent events first.
+
+    The budget is a target, not a guarantee: events the cut orphaned are dropped
+    from the span, and a span that would reduce to nothing widens past the budget
+    instead.
     """
 
     name = "token_budget"
@@ -42,7 +45,12 @@ class TokenBudgetPolicy:
             retained.append(event)
             budget -= cost
         retained.reverse()
-        retained = ensure_tool_pairing(retained)
+        # The loop breaks on the first event that does not fit, so `retained` is a
+        # contiguous suffix and its length names the cut. Pruning that span only
+        # removes events, so the budget holds — except where the span would prune
+        # to nothing and widens instead, which overshoots the budget deliberately:
+        # an empty request is rejected outright, an oversized one is not.
+        retained = replayable_span(events, len(events) - len(retained))
 
         if self._transparent:
             prompts = prompts + [f"[{self.name}] Showing {len(retained)} of {len(events)} events (token budget)."]

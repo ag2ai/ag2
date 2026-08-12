@@ -13,10 +13,11 @@ keep it out of the extra-free :mod:`ag2.testing`.
 """
 
 import asyncio
+import socket
 from collections.abc import Awaitable, Callable, Iterator, Sequence
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import acp
 from acp import schema
@@ -27,14 +28,20 @@ from .types import SessionUpdate
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from acp.core import ClientSideConnection
+
     from ag2.context import StreamId
 
+    from .agent import ACPAgent
     from .config import ConnectHook
     from .session import ACPSession
 
 __all__ = (
     "ACPTurn",
     "FakeACPConfig",
+    "RecordingClient",
+    "connect",
+    "duplex",
     "fake_acp_config",
 )
 
@@ -193,3 +200,106 @@ def fake_acp_config(
 
     config._connect = connect
     return config
+
+
+class RecordingClient:
+    """An :class:`acp.Client` that records every ``session/update`` it receives.
+
+    The server side of the harness: pair it with :func:`connect` to assert on the
+    notifications an :class:`~ag2.acp.agent.ACPAgent` actually emitted, in the
+    order it emitted them.
+
+    Client capabilities are all off — this client implements no filesystem,
+    terminal or permission behaviour, so advertising any would let a test pass
+    against a capability nothing here provides.
+    """
+
+    def __init__(self) -> None:
+        self.updates: list[tuple[str, SessionUpdate]] = []
+
+    def updates_for(self, session_id: str) -> "list[SessionUpdate]":
+        """Only the updates belonging to ``session_id``, in arrival order."""
+        return [u for sid, u in self.updates if sid == session_id]
+
+    async def session_update(self, *, session_id: str, update: Any, **kwargs: Any) -> None:
+        self.updates.append((session_id, update))
+
+    async def request_permission(self, **kwargs: Any) -> Any:
+        raise NotImplementedError("RecordingClient does not implement permissions.")
+
+    async def write_text_file(self, **kwargs: Any) -> Any:
+        raise NotImplementedError("RecordingClient does not implement fs/write_text_file.")
+
+    async def read_text_file(self, **kwargs: Any) -> Any:
+        raise NotImplementedError("RecordingClient does not implement fs/read_text_file.")
+
+    async def create_terminal(self, **kwargs: Any) -> Any:
+        raise NotImplementedError("RecordingClient does not implement terminals.")
+
+    async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError(f"RecordingClient does not implement ext method {method!r}.")
+
+    async def ext_notification(self, method: str, params: dict[str, Any]) -> None:
+        return None
+
+
+@asynccontextmanager
+async def connect(
+    server: "ACPAgent",
+    *,
+    client: "RecordingClient | None" = None,
+    initialize: bool = True,
+) -> "AsyncGenerator[tuple[ClientSideConnection, RecordingClient]]":
+    """Yield a real ACP ``ClientSideConnection`` driving ``server`` in-process.
+
+    Both sides are the genuine SDK connection classes, wired over a connected
+    socket pair inside this process — no subprocess to spawn and no port to
+    bind — so tests exercise real JSON-RPC framing, dispatch and error mapping.
+    The ACP analogue of :func:`ag2.mcp.testing.connect`.
+
+    Yields the connection (call ``new_session``, ``prompt``, … on it) and the
+    :class:`RecordingClient` that captured the notifications.
+    """
+    from acp.core import ClientSideConnection
+
+    recorder = client or RecordingClient()
+
+    # One socket pair carries both directions. `acp` speaks newline-delimited
+    # JSON over asyncio streams, and a connected socket gives each side a real
+    # ``StreamReader``/``StreamWriter`` on every platform.
+    agent_end, client_end = socket.socketpair()
+    agent_reader, agent_writer = await asyncio.open_connection(sock=agent_end)
+    client_reader, client_writer = await asyncio.open_connection(sock=client_end)
+
+    # ``ACPAgent`` / ``RecordingClient`` implement the SDK's Agent / Client
+    # Protocols structurally; mypy cannot see that through the ``**kwargs``
+    # signatures the Protocols declare.
+    from .guard import serve
+
+    agent_task = asyncio.create_task(serve(server.bind, agent_reader, agent_writer))
+    conn = ClientSideConnection(cast("Any", lambda _agent: recorder), client_writer, client_reader)
+    try:
+        if initialize:
+            await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
+        yield conn, recorder
+    finally:
+        for writer in (client_writer, agent_writer):
+            writer.close()
+        agent_task.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await agent_task
+
+
+async def duplex() -> (
+    "tuple[tuple[asyncio.StreamReader, asyncio.StreamWriter], tuple[asyncio.StreamReader, asyncio.StreamWriter]]"
+):
+    """A connected pair of asyncio stream endpoints, one per side.
+
+    Backed by :func:`socket.socketpair` rather than :func:`os.pipe`. An anonymous
+    pipe cannot be registered with Windows' IOCP, so the proactor event loop
+    rejects it — ``connect_read_pipe`` there raises
+    ``OSError: [WinError 6] The handle is invalid``. A socket works on every
+    platform asyncio supports.
+    """
+    left, right = socket.socketpair()
+    return await asyncio.open_connection(sock=left), await asyncio.open_connection(sock=right)

@@ -48,6 +48,7 @@ from ag2.events import (
     ToolResult,
     UrlInput,
 )
+from ag2.policies import SlidingWindowPolicy
 from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME
 from ag2.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
@@ -187,6 +188,36 @@ class TestReasoning:
         api_input = events_to_responses_input(events, serializer=None)  # type: ignore[arg-type]
 
         assert api_input == [
+            reasoning_item.model_dump(exclude_none=True, mode="json"),
+            web_item.model_dump(exclude_none=True, mode="json"),
+        ]
+
+    async def test_window_trim_never_orphans_a_server_tool_call(self) -> None:
+        # The API rejects a replayed web_search_call whose reasoning item is gone.
+        # Here every smaller window is illegal, so the trim keeps the group whole
+        # rather than sending an empty input the API also rejects.
+        reasoning_item = ResponseReasoningItem(
+            id="rs_1",
+            type="reasoning",
+            summary=[Summary(type="summary_text", text="Looking up bitcoin price")],
+        )
+        web_item = ResponseFunctionWebSearch(
+            id="ws_1",
+            action=ActionSearch(type="search", query="bitcoin"),
+            status="completed",
+            type="web_search_call",
+        )
+        events = [
+            OpenAIReasoningEvent("Looking up bitcoin price", item=reasoning_item),
+            OpenAIServerToolCallEvent(
+                id="ws_1", name=WEB_SEARCH_TOOL_NAME, arguments=web_item.action.model_dump_json(), item=web_item
+            ),
+            OpenAIServerToolResultEvent(parent_id="ws_1", name=WEB_SEARCH_TOOL_NAME, result=ToolResult()),
+        ]
+
+        _, trimmed = await SlidingWindowPolicy(max_events=2).apply([], events, Context(stream=MemoryStream()))
+
+        assert events_to_responses_input(trimmed, serializer=None) == [  # type: ignore[arg-type]
             reasoning_item.model_dump(exclude_none=True, mode="json"),
             web_item.model_dump(exclude_none=True, mode="json"),
         ]

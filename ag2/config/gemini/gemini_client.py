@@ -125,7 +125,7 @@ class GeminiClient(LLMClient):
         system_instruction = build_system_instruction(prompt)
         tool_list = list(tools)
         gemini_tools = build_tools(tool_list)
-        gemini_tool_config = build_tool_config(tool_list)
+        gemini_tool_config = build_tool_config(tool_list, vertexai=bool(self._client.vertexai))
 
         cache_kwargs: dict[str, Any] = {}
         if self._cached_content:
