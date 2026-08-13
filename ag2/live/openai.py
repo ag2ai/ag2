@@ -4,8 +4,6 @@
 
 import asyncio
 import base64
-import io
-import wave
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
@@ -51,7 +49,7 @@ from ag2.tools.schemas import ToolSchema
 from .protocols import TTSConfig as TTSConfigProtocol
 from .realtime import RealtimeConfig
 from .stt import STTConfig as STTConfigProtocol
-from .stt import VoiceInput
+from .stt import VoiceInput, voice_to_wav_buffer
 
 if TYPE_CHECKING:
     from openai.types.audio.speech_model import SpeechModel
@@ -146,7 +144,7 @@ class STTConfig(STTConfigProtocol):
     async def transcribe(self, voice: "VoiceInput", context: "Context") -> str:
         stream = await self.client.audio.transcriptions.create(
             model=self.model,
-            file=_voice_to_wav_buffer(voice),
+            file=voice_to_wav_buffer(voice),
             response_format="text",
             stream=True,
         )
@@ -174,7 +172,7 @@ class STTTranslationConfig(STTConfigProtocol):
     async def transcribe(self, voice: "VoiceInput", context: "Context") -> str:
         result = await self.client.audio.translations.create(
             model=self.model,
-            file=_voice_to_wav_buffer(voice),
+            file=voice_to_wav_buffer(voice),
             response_format="text",
         )
 
@@ -209,7 +207,7 @@ class TTSConfig(TTSConfigProtocol[bytes]):
 
 
 class RealTimeConfig(RealtimeConfig):
-    """Realtime STT config backed by OpenAI's bidirectional realtime API.
+    """Realtime (Speech-to-Speech/S2S) config backed by OpenAI's bidirectional realtime API.
 
     Implements the `RealtimeConfig` protocol — call `session(...)` to open
     a connection that pumps captured audio into the API and emits transcription
@@ -420,15 +418,3 @@ async def _pump_events(
                 )
             )
             text = ""
-
-
-def _voice_to_wav_buffer(voice: "VoiceInput") -> io.BytesIO:
-    audio_buffer = io.BytesIO()
-    with wave.open(audio_buffer, "wb") as wav_file:
-        wav_file.setnchannels(voice.channels)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(voice.frame_rate)
-        wav_file.writeframes(voice.content)
-    audio_buffer.seek(0)
-    audio_buffer.name = "speech.wav"
-    return audio_buffer

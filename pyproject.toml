@@ -94,6 +94,9 @@ gemini = [
     "pillow",
     "jsonschema",
 ]
+# === Voice / TTS providers (ag2.live) ===
+elevenlabs = ["elevenlabs>=1.50.0,<3"]
+
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
 mistral = ["mistralai>=2.8.0,<3"]
@@ -174,6 +177,7 @@ optionals = [
     "websockets>=14.0,<17",  # WsLink (ag2.network)
     "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
     "daytona>=0.171.0,<1",
+    "tenki>=0.5.4,<1",
     "tinyfish>=0.5,<0.6; python_version>='3.11'",
     "exa-py>=2.12.1,<3",
     # providers
@@ -186,6 +190,7 @@ optionals = [
     "ag2[xai]",
     "ag2[zai]",
     "ag2[mistral]",
+    "ag2[elevenlabs]",
 ]
 
 docs = [
@@ -196,6 +201,7 @@ docs = [
     # Extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.5,<0.6; python_version>='3.11'",
     "daytona>=0.171.0,<1",
+    "tenki>=0.5.4,<1",
     "exa-py>=2.12.1,<3",
     "docker>=6.0.0,<8",                # Code execution tools are exposed in the public API by the optional `ag2.tools` module
     "nlip-sdk>=0.1.0,<1",              # NLIP is exposed in the public API by the optional `autogen.extensions.nlip` module
@@ -294,6 +300,7 @@ markers = [
     "google_api",
     "google_search",
     "websockets",
+    "elevenlabs",
     "commsagent_discord",
     "commsagent_slack",
     "commsagent-telegram",
