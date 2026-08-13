@@ -81,7 +81,7 @@ class TenkiEnvironment:
 
     @property
     def workdir(self) -> PurePosixPath:
-        """Sandbox-side working directory advertised to AG2 tools."""
+        """Sandbox-side working directory commands and file writes resolve against."""
         return PurePosixPath(self._workdir)
 
     def code_environment(self, *, languages: tuple[CodeLanguage, ...] = ("python", "bash")) -> CodeAdapter:

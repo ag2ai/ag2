@@ -62,7 +62,11 @@ The default working directory is `/home/tenki`. Inbound networking is disabled, 
 
 !!! note "Use `code_environment()` for `SandboxCodeTool`"
 
-    Tenki's image ships `python3`, not `python`, so `SandboxCodeTool`'s default interpreter mapping does not apply. `env.code_environment()` returns a `CodeAdapter` with the right runner already wired; pass `languages=` to it to restrict what the tool accepts. `SandboxShellTool` takes the environment directly — it runs whatever command it is given.
+    A Tenki sandbox runs as `uid=1000(tenki)` with a read-only root, so it works out of `/home/tenki` and its image ships `python3` rather than `python`.
+
+    `TenkiEnvironment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py){.external-link target="_blank"}, so `SandboxShellTool(env)` reports the real working directory to the model on its own — no extra wiring.
+
+    `SandboxCodeTool` needs one: pass `env.code_environment()` instead of `env` to get a `CodeAdapter` whose `python` runner is `python3`. It accepts `languages=` to restrict what the tool runs.
 
 ```python linenums="1"
 from ag2.extensions.tenki import TenkiEnvironment, TenkiResources

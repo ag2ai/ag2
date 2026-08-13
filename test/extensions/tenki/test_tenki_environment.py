@@ -17,7 +17,7 @@ from ag2 import Context, Variable
 from ag2.extensions.tenki import TenkiEnvironment, TenkiResources
 from ag2.extensions.tenki.sandbox import TenkiSandbox
 from ag2.tools import SandboxCodeTool, SandboxShellTool
-from ag2.tools.sandbox import SandboxFactory
+from ag2.tools.sandbox import SandboxFactory, WorkdirAware
 
 
 def _fake_remote() -> Any:
@@ -61,8 +61,12 @@ def test_invalid_durations_rejected() -> None:
         TenkiEnvironment(max_duration=0)
 
 
-def test_declares_real_tenki_workdir_to_shell_tool() -> None:
-    env = TenkiEnvironment(workdir="/home/tenki/project")
+def test_declares_its_workdir_to_the_shell_tool() -> None:
+    # A Tenki sandbox runs as uid 1000 under a read-only root, so it works out of
+    # /home/tenki and cannot use the /workspace the shell tool otherwise assumes.
+    env = TenkiEnvironment(api_key="test", workdir="/home/tenki/project")
+
+    assert isinstance(env, WorkdirAware)
     assert env.workdir == PurePosixPath("/home/tenki/project")
     assert SandboxShellTool(env).workdir == PurePosixPath("/home/tenki/project")
 

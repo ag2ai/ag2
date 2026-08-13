@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from ag2 import Context
+from ag2.tools.sandbox import SandboxFactory, WorkdirAware
 from ag2.tools.sandbox.adapter import ShellAdapter
 from ag2.tools.sandbox.local import LocalSandbox
 from test.tools.sandbox._helpers import RecordingFactory, RecordingSandbox, WorkdirDeclaringFactory
@@ -101,7 +102,7 @@ class TestShellAdapterWithFactory:
 
 class TestShellAdapterWorkdir:
     """A remote factory is not bound to a sandbox until it is opened, so the
-    workdir it reports up-front comes from the factory itself.
+    workdir reported up front is whatever the factory itself declares.
     """
 
     def test_undeclared_factory_reports_conventional_workspace(self, tmp_path: Path) -> None:
@@ -109,14 +110,16 @@ class TestShellAdapterWorkdir:
 
         assert adapter.workdir == PurePosixPath("/workspace")
 
-    def test_declared_workdir_is_reported(self) -> None:
+    def test_workdir_aware_factory_is_reported(self) -> None:
         factory = WorkdirDeclaringFactory(PurePosixPath("/home/agent"))
 
+        assert isinstance(factory, WorkdirAware)
         assert ShellAdapter(factory).workdir == PurePosixPath("/home/agent")
 
-    def test_declaration_that_is_not_a_path_is_ignored(self) -> None:
-        # `workdir` is read reflectively, so a factory that happens to expose an
-        # unrelated attribute of that name must not poison the reported path.
-        factory = WorkdirDeclaringFactory("/home/agent")
+    def test_declaring_a_workdir_is_optional_for_a_factory(self, tmp_path: Path) -> None:
+        # WorkdirAware must stay separate from SandboxFactory: every backend that
+        # predates it still satisfies the factory protocol without declaring one.
+        factory = RecordingFactory(LocalSandbox(tmp_path))
 
-        assert ShellAdapter(factory).workdir == PurePosixPath("/workspace")
+        assert isinstance(factory, SandboxFactory)
+        assert not isinstance(factory, WorkdirAware)

@@ -6,9 +6,7 @@
 
 A remote backend reaches AG2 as a :class:`~ag2.tools.sandbox.SandboxFactory`
 that opens a :class:`~ag2.tools.sandbox.Sandbox`. These doubles stand in for
-that pair without a container or a cloud account. The optional ``workdir``
-hook a factory may declare is exposed only on the class that opts into it —
-exactly as a real backend does.
+that pair without a container or a cloud account.
 """
 
 from collections.abc import AsyncGenerator
@@ -67,17 +65,12 @@ class RecordingFactory:
 
 
 class WorkdirDeclaringFactory(RecordingFactory):
-    """A remote factory that advertises its sandbox-side workdir before any
-    sandbox is opened.
+    """A remote factory that satisfies :class:`~ag2.tools.sandbox.WorkdirAware`."""
 
-    ``workdir`` is deliberately typed loosely: the adapter reads it
-    reflectively, so tests need to be able to declare a non-path value.
-    """
-
-    def __init__(self, workdir: object, sandbox: Sandbox | None = None) -> None:
+    def __init__(self, workdir: PurePosixPath, sandbox: Sandbox | None = None) -> None:
         super().__init__(sandbox)
         self._declared = workdir
 
     @property
-    def workdir(self) -> object:
+    def workdir(self) -> PurePosixPath:
         return self._declared
