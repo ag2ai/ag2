@@ -190,25 +190,27 @@ class TenkiSandbox(SandboxBase):
         raise RuntimeError("The Tenki API key can access multiple workspaces. Pass `workspace_id` to TenkiEnvironment.")
 
     async def aclose(self) -> None:
-        self._unregister_atexit()
         self._closed = True
-        error: BaseException | None = None
+        terminated = True
         if self._sandbox is not None:
             try:
                 await self._sandbox.close_if_open()
-            except BaseException as e:
-                error = e
+            except Exception as e:
+                terminated = False
+                logger.debug("Suppressed exception during Tenki sandbox close: %s", e)
             else:
                 self._sandbox = None
                 self._ready = False
+        # Only disarm the atexit fallback once the session is really gone: a failed
+        # close leaves a live sandbox that still deserves a last attempt at exit.
+        if terminated:
+            self._unregister_atexit()
         if self._client is not None:
             try:
                 await self._client.close()
-            except BaseException as e:
-                error = error or e
+            except Exception as e:
+                logger.debug("Suppressed exception during Tenki client close: %s", e)
             self._client = None
-        if error is not None:
-            raise error
 
     def _register_atexit(self) -> None:
         if not self._atexit_registered:

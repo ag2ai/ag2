@@ -5,7 +5,7 @@
 """Configure reusable Tenki cloud sandboxes for AG2 tools."""
 
 import threading
-from collections.abc import AsyncIterator, Hashable
+from collections.abc import AsyncGenerator, Hashable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from pathlib import PurePosixPath
@@ -93,7 +93,7 @@ class TenkiEnvironment:
     async def open(
         self,
         context: "ConversationContext | None" = None,
-    ) -> AsyncIterator[TenkiSandbox]:
+    ) -> AsyncGenerator[TenkiSandbox]:
         api_key = resolve_variable(self._api_key, context, param_name="api_key") if context else self._api_key
         api_url = resolve_variable(self._api_url, context, param_name="api_url") if context else self._api_url
         workspace_id = (
@@ -175,14 +175,8 @@ class TenkiEnvironment:
         with self._cache_lock:
             sandboxes = list(self._cache.values())
             self._cache.clear()
-        errors: list[Exception] = []
         for sandbox in sandboxes:
-            try:
-                await sandbox.aclose()
-            except Exception as e:
-                errors.append(e)
-        if errors:
-            raise errors[0]
+            await sandbox.aclose()
 
     async def __aenter__(self) -> "TenkiEnvironment":
         return self
