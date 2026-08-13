@@ -118,6 +118,13 @@ class TestOpen:
         client.create.assert_awaited_once()
         assert client.create.await_args.kwargs["workspace_id"] == "workspace-2"
 
+    async def test_open_missing_variable_raises_key_error(self) -> None:
+        context = Context(stream=MagicMock(), variables={})
+        factory = TenkiEnvironment(api_key="test", image=Variable("tenant_image"))
+        with pytest.raises(KeyError, match="tenant_image"):
+            async with factory.open(context):
+                pass
+
     async def test_missing_context_for_variable_raises(self) -> None:
         factory = TenkiEnvironment(api_key=Variable("tenki_key"))
         with pytest.raises(RuntimeError, match="Variable but no Context"):

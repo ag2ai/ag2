@@ -151,6 +151,20 @@ class TestLifecycle:
         remote.close_if_open.assert_awaited_once()
         client.close.assert_awaited_once()
 
+    async def test_failed_close_is_not_raised_and_stays_retryable(self) -> None:
+        remote = _fake_remote()
+        remote.close_if_open = AsyncMock(side_effect=RuntimeError("server unreachable"))
+        sandbox = TenkiSandbox(client=_fake_client(remote), create_options={"workspace_id": "workspace-1"})
+        await sandbox.__aenter__()
+
+        await sandbox.aclose()
+
+        assert sandbox.closed
+        # The session is still alive, so a second close retries it rather than
+        # dropping the handle and leaking the sandbox until `max_duration`.
+        await sandbox.aclose()
+        assert remote.close_if_open.await_count == 2
+
     async def test_workspace_is_discovered_when_omitted(self) -> None:
         remote = _fake_remote()
         client = _fake_client(remote)
