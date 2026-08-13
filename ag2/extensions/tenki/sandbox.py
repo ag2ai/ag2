@@ -119,7 +119,10 @@ class TenkiSandbox(SandboxBase):
             return ExecResult(output=f"Tenki error: {e}", exit_code=1)
 
         output = result.stdout_text + result.stderr_text
-        if result.reason and not output:
+        # `reason` is set on every result ("exit" for a clean finish), so surface it
+        # only when the command really ended abnormally — otherwise a silent success
+        # like `echo hi > file` would report "Tenki execution ended: exit".
+        if result.reason and not output and not result.ok:
             output = f"Tenki execution ended: {result.reason}"
         if result.signal:
             output += f"\nTenki execution signal: {result.signal}"

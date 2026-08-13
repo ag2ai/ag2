@@ -113,6 +113,16 @@ class TestExec:
             exit_code=1,
         )
 
+    async def test_silent_success_stays_silent(self) -> None:
+        # Tenki reports reason="exit" on a clean finish too, so a command that
+        # simply prints nothing must not be dressed up as an abnormal ending.
+        result = CommandResult(argv=["touch", "f"], exit_code=0, reason="exit")
+        sandbox = TenkiSandbox(
+            client=_fake_client(_fake_remote(result=result)),
+            create_options={"workspace_id": "workspace-1"},
+        )
+        assert await sandbox.exec(["touch", "f"]) == ExecResult(output="", exit_code=0)
+
 
 @pytest.mark.asyncio
 class TestFileIO:
