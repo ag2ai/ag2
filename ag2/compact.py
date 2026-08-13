@@ -23,15 +23,13 @@ from ag2.context import ConversationContext
 from ag2.events import (
     BaseEvent,
     ModelRequest,
-    ModelResponse,
-    ToolResultEvent,
-    ToolResultsEvent,
     UsageEvent,
     is_conversational,
     render_for_prompt,
 )
 from ag2.stream import MemoryStream
 
+from ._replay import snap
 from .knowledge import EventLogWriter, KnowledgeStore
 
 
@@ -70,27 +68,6 @@ class CompactStrategy(Protocol):
                    None if not configured.
         """
         ...
-
-
-def _retained_is_self_contained(events: list[BaseEvent], cut: int) -> bool:
-    """True when no tool result in events[cut:] references a dropped tool call."""
-    have: set[str] = set()
-    need: set[str] = set()
-    for event in events[cut:]:
-        if isinstance(event, ModelResponse):
-            have.update(call.id for call in event.tool_calls.calls)
-        elif isinstance(event, ToolResultsEvent):
-            need.update(r.parent_id for r in event.results if r.parent_id)
-        elif isinstance(event, ToolResultEvent) and event.parent_id:
-            need.add(event.parent_id)
-    return need <= have
-
-
-def _snap_to_turn_boundary(events: list[BaseEvent], cut: int) -> int:
-    """Advance `cut` so a tool-cycle split by the boundary compacts whole."""
-    while cut < len(events) and not _retained_is_self_contained(events, cut):
-        cut += 1
-    return cut
 
 
 def _cut_for_target(events: list[BaseEvent], target: int) -> int:
@@ -139,7 +116,7 @@ class TailWindowCompact:
         if cut == 0:
             return events
 
-        cut = _snap_to_turn_boundary(events, cut)
+        cut = snap(events, cut)
         dropped = events[:cut]
         retained = events[cut:]
 
@@ -181,7 +158,7 @@ class SummarizeCompact:
         if cut == 0:
             return events
 
-        cut = _snap_to_turn_boundary(events, cut)
+        cut = snap(events, cut)
         old = events[:cut]
         recent = events[cut:]
 

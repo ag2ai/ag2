@@ -9,17 +9,21 @@ import pytest
 from ag2 import Context
 from ag2.events import (
     BaseEvent,
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     ModelMessage,
     ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
     estimated_tokens,
 )
 from ag2.middleware import TokenLimiter
+from test._helpers import DurableReasoning
 
 
 @pytest.mark.asyncio()
@@ -137,3 +141,33 @@ def test_token_limiter_rejects_invalid_limits() -> None:
 
     with pytest.raises(ValueError, match="chars_per_token must be greater than 0"):
         TokenLimiter(max_tokens=1, chars_per_token=0)
+
+
+@pytest.mark.asyncio()
+async def test_token_limiter_never_orphans_a_builtin_tool_call(mock: MagicMock) -> None:
+    """Same invariant as ``HistoryLimiter``: the budget must not strand a ws_ item.
+
+    Verified live against ``gpt-5.6-terra`` + ``WebSearchTool``: replaying a
+    ``web_search_call`` whose ``reasoning`` item was trimmed is rejected with
+    ``400 invalid_request_error``.
+    """
+    events = [
+        ModelRequest([TextInput("q")]),
+        DurableReasoning("plan"),
+        BuiltinToolCallEvent(id="ws_1", name="web_search", arguments="{}"),
+        BuiltinToolResultEvent(parent_id="ws_1", name="web_search", result=ToolResult("ok")),
+        ModelResponse(ModelMessage("answer")),
+        ModelRequest([TextInput("next")]),
+    ]
+    # Fits everything but the reasoning item, so the cut lands on the builtin call.
+    budget = sum(estimated_tokens(event, 1) for event in [events[0], *events[2:]])
+    middleware = TokenLimiter(max_tokens=budget, chars_per_token=1)(events[-1], mock)
+
+    async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
+        mock.llm_call(history)
+        return ModelResponse(ModelMessage("result"))
+
+    await middleware.on_llm_call(llm_call, events, mock)
+
+    # The whole group goes with its anchor: no web_search_call is left behind.
+    mock.llm_call.assert_called_once_with([events[0], events[4], events[5]])
