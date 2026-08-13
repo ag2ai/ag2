@@ -39,7 +39,7 @@ async def main() -> None:
         agent = Agent(
             "developer",
             config=AnthropicConfig(model="claude-sonnet-4-6"),
-            tools=[SandboxShellTool(env), SandboxCodeTool(env)],
+            tools=[SandboxShellTool(env), SandboxCodeTool(env.code_environment())],
         )
         reply = await agent.ask("Write hello.txt, then read it with Python.")
         print(await reply.content())
@@ -58,7 +58,11 @@ env = TenkiEnvironment(workspace_id="your-workspace-id")
 
 ## Configure the sandbox
 
-The default working directory is `/home/tenki`. Python code uses the image's `python3` interpreter. Inbound networking is disabled, outbound networking is enabled, and every sandbox has a 15-minute `max_duration` backstop if client cleanup cannot run.
+The default working directory is `/home/tenki`. Inbound networking is disabled, outbound networking is enabled, and every sandbox has a 15-minute `max_duration` backstop if client cleanup cannot run.
+
+!!! note "Use `code_environment()` for `SandboxCodeTool`"
+
+    Tenki's image ships `python3`, not `python`, so `SandboxCodeTool`'s default interpreter mapping does not apply. `env.code_environment()` returns a `CodeAdapter` with the right runner already wired; pass `languages=` to it to restrict what the tool accepts. `SandboxShellTool` takes the environment directly — it runs whatever command it is given.
 
 ```python linenums="1"
 from ag2.extensions.tenki import TenkiEnvironment, TenkiResources

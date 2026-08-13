@@ -157,12 +157,12 @@ class TestOpen:
         client.create.assert_awaited_once()
         remote.close_if_open.assert_awaited_once()
 
-    async def test_code_tool_uses_python3_from_backend_runner(self) -> None:
+    async def test_code_environment_runs_python3(self) -> None:
         remote = _fake_remote()
         client = _fake_client(remote)
         with _patch_async_client(client):
             factory = TenkiEnvironment(api_key="test", workspace_id="workspace-1")
-            tool = SandboxCodeTool(factory)
+            tool = SandboxCodeTool(factory.code_environment())
             result = await tool.environment.run("print('ok')", "python")
             await factory.aclose()
 

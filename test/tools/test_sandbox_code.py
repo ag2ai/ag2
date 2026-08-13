@@ -11,8 +11,6 @@ from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultE
 from ag2.testing import TestConfig
 from ag2.tools import SandboxCodeTool
 from ag2.tools.code import CodeEnvironment, CodeLanguage, CodeRunResult
-from ag2.tools.sandbox import LanguageRunner
-from test.tools.sandbox._helpers import RecordingFactory, RecordingSandbox, RunnerDeclaringFactory
 
 
 class FakeEnv:
@@ -37,9 +35,6 @@ class FakeEnv:
     async def run(self, code: str, language: CodeLanguage, *, context=None) -> CodeRunResult:
         self.calls.append((code, language))
         return CodeRunResult(output=self._output, exit_code=self._exit_code)
-
-
-PYTHON3: dict[CodeLanguage, LanguageRunner] = {"python": LanguageRunner(inline_argv=("python3", "-c"))}
 
 
 def _tool_call(code: str, language: str = "python") -> ToolCallEvent:
@@ -126,46 +121,6 @@ class TestSandboxCodeToolExecution:
         await agent.ask("run")
 
         assert env.calls == [("print(1)", "python")]
-
-
-@pytest.mark.asyncio
-class TestSandboxCodeToolBackendRunners:
-    """A backend may declare the interpreters its image actually ships; the
-    caller's ``runners`` still have the final say.
-    """
-
-    async def test_undeclared_backend_keeps_the_default_runner(self) -> None:
-        sandbox = RecordingSandbox()
-
-        await SandboxCodeTool(RecordingFactory(sandbox)).environment.run("print(1)", "python")
-
-        assert sandbox.execs == [["python", "-c", "print(1)"]]
-
-    async def test_backend_declaration_replaces_the_default_runner(self) -> None:
-        sandbox = RecordingSandbox()
-
-        await SandboxCodeTool(RunnerDeclaringFactory(PYTHON3, sandbox)).environment.run("print(1)", "python")
-
-        assert sandbox.execs == [["python3", "-c", "print(1)"]]
-
-    async def test_caller_runners_override_the_backend(self) -> None:
-        sandbox = RecordingSandbox()
-        factory = RunnerDeclaringFactory(PYTHON3, sandbox)
-        tool = SandboxCodeTool(factory, runners={"python": LanguageRunner(inline_argv=("pypy3", "-c"))})
-
-        await tool.environment.run("print(1)", "python")
-
-        assert sandbox.execs == [["pypy3", "-c", "print(1)"]]
-
-    async def test_caller_override_keeps_backend_runners_for_other_languages(self) -> None:
-        sandbox = RecordingSandbox()
-        factory = RunnerDeclaringFactory(PYTHON3, sandbox)
-        tool = SandboxCodeTool(factory, runners={"bash": LanguageRunner(inline_argv=("sh", "-c"))})
-
-        await tool.environment.run("print(1)", "python")
-        await tool.environment.run("echo hi", "bash")
-
-        assert sandbox.execs == [["python3", "-c", "print(1)"], ["sh", "-c", "echo hi"]]
 
 
 class TestSandboxCodeToolWithCustomEnvironment:

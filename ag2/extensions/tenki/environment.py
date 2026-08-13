@@ -16,7 +16,7 @@ from tenki import AsyncClient
 from ag2.annotations import Variable
 from ag2.tools.builtin._resolve import resolve_variable
 from ag2.tools.code import CodeLanguage
-from ag2.tools.sandbox import LanguageRunner
+from ag2.tools.sandbox import CodeAdapter, LanguageRunner
 
 from .sandbox import TenkiSandbox
 
@@ -84,10 +84,24 @@ class TenkiEnvironment:
         """Sandbox-side working directory advertised to AG2 tools."""
         return PurePosixPath(self._workdir)
 
-    @property
-    def code_runners(self) -> dict[CodeLanguage, LanguageRunner]:
-        """Interpreter overrides for Tenki's default guest image."""
-        return {"python": LanguageRunner(inline_argv=("python3", "-c"))}
+    def code_environment(self, *, languages: tuple[CodeLanguage, ...] = ("python", "bash")) -> CodeAdapter:
+        """A :class:`~ag2.tools.sandbox.CodeAdapter` wired for Tenki's guest image.
+
+        The image ships ``python3`` rather than ``python``, so the default
+        interpreter mapping does not apply. Pass the result straight to
+        :class:`~ag2.tools.SandboxCodeTool`::
+
+            env = TenkiEnvironment()
+            tool = SandboxCodeTool(env.code_environment())
+
+        Build the :class:`~ag2.tools.sandbox.CodeAdapter` yourself when you need
+        runners beyond the ones this image dictates.
+        """
+        return CodeAdapter(
+            self,
+            languages=languages,
+            runners={"python": LanguageRunner(inline_argv=("python3", "-c"))},
+        )
 
     @asynccontextmanager
     async def open(

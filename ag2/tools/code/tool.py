@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 class SandboxCodeTool(Tool):
     """Exposes a single ``run_code(code, language)`` function that runs
-    code inside an *environment* you choose — Docker, Daytona, Tenki, or any
+    code inside an *environment* you choose — Docker, Daytona, or any
     custom backend.
 
     The **environment** decides *where* code runs and carries all backend
@@ -63,15 +63,14 @@ class SandboxCodeTool(Tool):
     Args:
         environment: What runs the code. Either a **backend** — a
                      :class:`~ag2.tools.sandbox.SandboxFactory`
-                     (``DockerEnvironment`` / ``DaytonaEnvironment`` / ``TenkiEnvironment`` /
+                     (``DockerEnvironment`` / ``DaytonaEnvironment`` /
                      ``LocalEnvironment``), wrapped in a :class:`CodeAdapter`
                      using ``languages`` / ``runners`` — or a ready
                      :class:`~ag2.tools.code.CodeEnvironment` (incl.
                      a pre-built :class:`CodeAdapter`), used as-is. Required.
         languages: Languages this tool accepts (backend form only).
         runners: Override / extend the default language→runner mapping
-                 (backend form only). Backend-declared runners are applied
-                 first, then caller overrides.
+                 (backend form only).
         name / description / middleware: Tool wiring.
     """
 
@@ -87,9 +86,7 @@ class SandboxCodeTool(Tool):
     ) -> None:
         env: CodeEnvironment
         if isinstance(environment, SandboxFactory):
-            backend_runners = getattr(environment, "code_runners", {})
-            merged_runners = {**backend_runners, **(runners or {})}
-            env = CodeAdapter(environment, languages=languages, runners=merged_runners)
+            env = CodeAdapter(environment, languages=languages, runners=runners)
         else:
             # Already a CodeEnvironment (incl. CodeAdapter) — use as-is.
             if runners is not None:

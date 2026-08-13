@@ -6,17 +6,16 @@
 
 A remote backend reaches AG2 as a :class:`~ag2.tools.sandbox.SandboxFactory`
 that opens a :class:`~ag2.tools.sandbox.Sandbox`. These doubles stand in for
-that pair without a container or a cloud account, and cover the optional hooks
-a factory may declare (``workdir``, ``code_runners``) by exposing each one only
-on the class that opts into it — exactly as a real backend does.
+that pair without a container or a cloud account. The optional ``workdir``
+hook a factory may declare is exposed only on the class that opts into it —
+exactly as a real backend does.
 """
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
 
-from ag2.tools.code import CodeLanguage
-from ag2.tools.sandbox import ExecResult, LanguageRunner, Sandbox, SandboxBase
+from ag2.tools.sandbox import ExecResult, Sandbox, SandboxBase
 
 
 class RecordingSandbox(SandboxBase):
@@ -82,15 +81,3 @@ class WorkdirDeclaringFactory(RecordingFactory):
     @property
     def workdir(self) -> object:
         return self._declared
-
-
-class RunnerDeclaringFactory(RecordingFactory):
-    """A remote factory whose guest image needs non-default interpreters."""
-
-    def __init__(self, code_runners: dict[CodeLanguage, LanguageRunner], sandbox: Sandbox | None = None) -> None:
-        super().__init__(sandbox)
-        self._code_runners = code_runners
-
-    @property
-    def code_runners(self) -> dict[CodeLanguage, LanguageRunner]:
-        return self._code_runners

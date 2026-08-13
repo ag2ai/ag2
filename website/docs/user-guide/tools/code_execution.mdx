@@ -68,13 +68,13 @@ async with env:
     agent = Agent(
         "analyst",
         config=AnthropicConfig(model="claude-sonnet-4-6"),
-        tools=[SandboxCodeTool(env)],
+        tools=[SandboxCodeTool(env.code_environment())],
     )
     reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
     print(await reply.content())
 ```
 
-`TenkiEnvironment` reads `TENKI_API_KEY` and `TENKI_API_URL`. It auto-selects a sole visible workspace; pass `workspace_id` when the key has access to more than one. See the [Tenki Sandbox extension guide](/docs/user-guide/extensions/tenki) for lifecycle and resource configuration.
+`TenkiEnvironment` reads `TENKI_API_KEY` and `TENKI_API_URL`. It auto-selects a sole visible workspace; pass `workspace_id` when the key has access to more than one. `code_environment()` supplies a `CodeAdapter` matching the guest image, whose Python interpreter is `python3`. See the [Tenki Sandbox extension guide](/docs/user-guide/extensions/tenki) for lifecycle and resource configuration.
   </Tab>
 
   <Tab title="Daytona">
