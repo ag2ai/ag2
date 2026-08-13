@@ -78,6 +78,7 @@ plugins:
       redirect_maps:
         docs/quick-start.md: docs/user-guide/quick-start.md
         docs/user-guide/contribution_policy.md: docs/contributor-guide/contribution_policy.md
+        docs/user-guide/cli_agents.md: docs/user-guide/acp/client.md
   - glightbox:                   # image zoom
       manual: true
   - macros:                      # Jinja templates

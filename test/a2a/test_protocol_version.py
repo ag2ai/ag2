@@ -8,13 +8,19 @@ accepting interfaces that omit the optional ``protocol_version`` field."""
 
 import pytest
 from a2a.client.client_factory import TransportProtocol
-from a2a.types import AgentCapabilities, AgentCard, AgentInterface
+from a2a.types import AgentCard, AgentInterface
 from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
 
 from ag2 import Agent
-from ag2.a2a import A2AConfig
-from ag2.a2a.errors import A2AIncompatibleProtocolVersionError
-from ag2.a2a.transports._http import select_interface, validate_protocol_version
+from ag2.a2a import A2AConfig, A2AServer, build_card
+from ag2.a2a.errors import A2AError, A2AIncompatibleProtocolVersionError
+from ag2.a2a.testing import make_test_client_factory
+from ag2.a2a.transports import TransportName
+from ag2.testing import TestConfig
+
+URL = "http://test"
+LEGACY_URL = "http://legacy"
+REPLY = "pong"
 
 
 def _iface(*, url: str, version: str, binding: str = TransportProtocol.JSONRPC.value) -> AgentInterface:
@@ -22,89 +28,116 @@ def _iface(*, url: str, version: str, binding: str = TransportProtocol.JSONRPC.v
 
 
 def _card(*interfaces: AgentInterface) -> AgentCard:
-    return AgentCard(
-        name="t",
-        description="",
-        version="1.0.0",
-        default_input_modes=["text/plain"],
-        default_output_modes=["text/plain"],
-        capabilities=AgentCapabilities(),
-        skills=[],
-        supported_interfaces=list(interfaces),
+    """A serviceable AG2 card whose ``supported_interfaces`` are overridden.
+
+    ``AgentCard`` is a protobuf message, so a repeated field is rebuilt by
+    clearing and extending — it cannot be assigned to.
+    """
+    card = build_card(Agent("server", config=TestConfig(REPLY)), url=URL)
+    card.ClearField("supported_interfaces")
+    card.supported_interfaces.extend(interfaces)
+    return card
+
+
+def _client(card: AgentCard, *, card_url: str = URL, prefer: TransportName | None = None) -> Agent:
+    """Client that connects using ``card``, backed by an in-process server.
+
+    ``preset_card`` is what puts ``card`` in front of the version gate; the
+    factory is only there to carry the request once the gate lets it through.
+    """
+    server = A2AServer(Agent("server", config=TestConfig(REPLY)))
+    return Agent(
+        "client",
+        config=A2AConfig(
+            card_url=card_url,
+            preset_card=card,
+            prefer=prefer,
+            httpx_client_factory=make_test_client_factory(server, url=URL),
+        ),
     )
-
-
-class TestValidateProtocolVersion:
-    @pytest.mark.parametrize(
-        "version",
-        ["1.0", "1.0.0", "2.5", PROTOCOL_VERSION_CURRENT],
-    )
-    def test_accepts_compatible(self, version: str) -> None:
-        iface = _iface(url="http://example", version=version)
-        validate_protocol_version(iface, url="http://example", transport="jsonrpc")
-
-    @pytest.mark.parametrize(
-        "version",
-        ["", "garbage", "not-a-version"],
-    )
-    def test_accepts_empty_or_unparsable(self, version: str) -> None:
-        # The field is optional; the A2A SDK defaults a missing/unknown version
-        # to the current one, so we must not reject these as incompatible.
-        iface = _iface(url="http://example", version=version)
-        validate_protocol_version(iface, url="http://example", transport="jsonrpc")
-
-    @pytest.mark.parametrize("version", ["0.3", "0.9", "0.3.0"])
-    def test_rejects_legacy(self, version: str) -> None:
-        iface = _iface(url="http://example", version=version)
-        with pytest.raises(A2AIncompatibleProtocolVersionError) as exc:
-            validate_protocol_version(iface, url="http://example", transport="jsonrpc")
-        assert exc.value.protocol_version == version
-        assert exc.value.transport == "jsonrpc"
-        assert exc.value.url == "http://example"
-
-
-class TestSelectInterface:
-    def test_prefer_selects_matching_binding(self) -> None:
-        card = _card(
-            _iface(url="http://jsonrpc", version="1.0"),
-            _iface(url="http://grpc", version="1.0", binding=TransportProtocol.GRPC.value),
-        )
-        iface, transport = select_interface(card, url="http://jsonrpc", prefer="grpc")
-        assert transport == "grpc"
-        assert iface.url == "http://grpc"
-
-    def test_url_match_picks_exact_interface_among_same_binding(self) -> None:
-        # Two JSON-RPC interfaces: a legacy one and a current one. URL resolution
-        # must pick the interface matching the connect URL, not the first by
-        # binding — otherwise validation would inspect the wrong interface.
-        legacy = _iface(url="http://legacy", version="0.3")
-        current = _iface(url="http://current", version="1.0")
-        card = _card(legacy, current)
-
-        iface, transport = select_interface(card, url="http://current", prefer=None)
-        assert iface.url == "http://current"
-        # The selected (current) interface validates cleanly even though a
-        # legacy interface is listed first.
-        validate_protocol_version(iface, url="http://current", transport=transport)
-
-    def test_url_match_to_legacy_interface_is_rejected(self) -> None:
-        legacy = _iface(url="http://legacy", version="0.3")
-        current = _iface(url="http://current", version="1.0")
-        card = _card(legacy, current)
-
-        iface, transport = select_interface(card, url="http://legacy", prefer=None)
-        assert iface.url == "http://legacy"
-        with pytest.raises(A2AIncompatibleProtocolVersionError):
-            validate_protocol_version(iface, url="http://legacy", transport=transport)
 
 
 @pytest.mark.asyncio
-async def test_ask_raises_on_legacy_card() -> None:
-    card = _card(_iface(url="http://legacy", version="0.3"))
-    agent = Agent(
-        "client-agent",
-        config=A2AConfig(card_url="http://legacy", preset_card=card),
-    )
-    with pytest.raises(A2AIncompatibleProtocolVersionError) as exc:
-        await agent.ask("hello")
-    assert exc.value.protocol_version == "0.3"
+class TestVersionGate:
+    @pytest.mark.parametrize("version", ["1.0", "1.0.0", "2.5", PROTOCOL_VERSION_CURRENT])
+    async def test_connects_on_a_compatible_version(self, version: str) -> None:
+        reply = await _client(_card(_iface(url=URL, version=version))).ask("ping")
+
+        assert reply.body == REPLY
+
+    async def test_connects_when_the_version_is_absent(self) -> None:
+        # ``protocol_version`` is optional and the A2A SDK defaults a missing
+        # one to the current version, so an empty field is not legacy.
+        reply = await _client(_card(_iface(url=URL, version=""))).ask("ping")
+
+        assert reply.body == REPLY
+
+    @pytest.mark.parametrize("version", ["garbage", "not-a-version"])
+    async def test_an_unparsable_version_is_not_treated_as_legacy(self, version: str) -> None:
+        # The #2904 guard is specifically that *AG2's* gate stays out of the
+        # way here. Connecting still fails — the SDK refuses to build a
+        # transport for a version it cannot parse — but that is the SDK's
+        # own ValueError, not anything from AG2's A2A error hierarchy.
+        client = _client(_card(_iface(url=URL, version=version)))
+
+        with pytest.raises(ValueError) as exc_info:
+            await client.ask("ping")
+
+        assert not isinstance(exc_info.value, A2AError)
+
+    @pytest.mark.parametrize("version", ["0.3", "0.9", "0.3.0"])
+    async def test_refuses_a_legacy_version(self, version: str) -> None:
+        client = _client(_card(_iface(url=URL, version=version)))
+
+        with pytest.raises(A2AIncompatibleProtocolVersionError) as exc_info:
+            await client.ask("ping")
+
+        assert exc_info.value.protocol_version == version
+        assert exc_info.value.transport == "jsonrpc"
+        assert exc_info.value.url == URL
+
+
+@pytest.mark.asyncio
+class TestInterfaceSelection:
+    async def test_connect_url_picks_its_own_interface_not_the_first_listed(self) -> None:
+        # A legacy interface is listed first, but the connect URL names the
+        # current one — resolution must follow the URL, or the version gate
+        # would inspect the wrong interface and reject a valid server.
+        card = _card(
+            _iface(url=LEGACY_URL, version="0.3"),
+            _iface(url=URL, version=PROTOCOL_VERSION_CURRENT),
+        )
+
+        reply = await _client(card).ask("ping")
+
+        assert reply.body == REPLY
+
+    async def test_connecting_to_the_legacy_interface_is_refused(self) -> None:
+        card = _card(
+            _iface(url=LEGACY_URL, version="0.3"),
+            _iface(url=URL, version=PROTOCOL_VERSION_CURRENT),
+        )
+
+        client = _client(card, card_url=LEGACY_URL)
+
+        with pytest.raises(A2AIncompatibleProtocolVersionError) as exc_info:
+            await client.ask("ping")
+
+        assert exc_info.value.url == LEGACY_URL
+
+    async def test_prefer_overrides_the_url_match(self) -> None:
+        # ``prefer`` must win over the URL match. The gRPC interface is the
+        # legacy one, so a gRPC-tagged version error is proof that selection
+        # went to gRPC rather than quietly staying on JSON-RPC.
+        card = _card(
+            _iface(url=URL, version=PROTOCOL_VERSION_CURRENT),
+            _iface(url="grpc.example:50051", version="0.3", binding=TransportProtocol.GRPC.value),
+        )
+
+        client = _client(card, prefer="grpc")
+
+        with pytest.raises(A2AIncompatibleProtocolVersionError) as exc_info:
+            await client.ask("ping")
+
+        assert exc_info.value.transport == "grpc"
+        assert exc_info.value.protocol_version == "0.3"
