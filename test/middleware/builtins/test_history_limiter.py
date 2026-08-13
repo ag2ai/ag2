@@ -9,16 +9,20 @@ import pytest
 from ag2 import Context
 from ag2.events import (
     BaseEvent,
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     ModelMessage,
     ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
 )
 from ag2.middleware import HistoryLimiter
+from test._helpers import DurableReasoning
 
 
 @pytest.mark.asyncio()
@@ -136,3 +140,54 @@ async def test_history_limiter_drops_incomplete_tool_interaction(mock: MagicMock
         ModelResponse(ModelMessage("answer 1")),
         ModelRequest([TextInput("turn 2")]),
     ])
+
+
+@pytest.mark.asyncio()
+async def test_history_limiter_never_orphans_a_builtin_tool_call(mock: MagicMock) -> None:
+    """A builtin call replayed without its reasoning item is a hard provider error.
+
+    Verified live against ``gpt-5.6-terra`` + ``WebSearchTool``: the tail this
+    middleware used to produce is rejected with ``400 invalid_request_error —
+    Item 'ws_…' of type 'web_search_call' was provided without its required
+    'reasoning' item: 'rs_…'``. Skipping leading ``ToolResultsEvent``s did not
+    cover it; the call event is neither a tool result nor named in
+    ``ModelResponse.tool_calls``.
+    """
+    events = [
+        ModelRequest([TextInput("q")]),
+        DurableReasoning("plan"),
+        BuiltinToolCallEvent(id="ws_1", name="web_search", arguments="{}"),
+        BuiltinToolResultEvent(parent_id="ws_1", name="web_search", result=ToolResult("ok")),
+        ModelResponse(ModelMessage("answer")),
+        ModelRequest([TextInput("next")]),
+    ]
+    middleware = HistoryLimiter(max_events=5)(events[-1], mock)
+
+    async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
+        mock.llm_call(history)
+        return ModelResponse(ModelMessage("result"))
+
+    await middleware.on_llm_call(llm_call, events, mock)
+
+    # The whole group goes with its anchor: no web_search_call is left behind.
+    mock.llm_call.assert_called_once_with([events[0], events[4], events[5]])
+
+
+@pytest.mark.asyncio()
+async def test_history_limiter_keeps_an_intact_builtin_group(mock: MagicMock) -> None:
+    events = [
+        ModelRequest([TextInput("q")]),
+        ModelResponse(ModelMessage("old")),
+        DurableReasoning("plan"),
+        BuiltinToolCallEvent(id="ws_1", name="web_search", arguments="{}"),
+        BuiltinToolResultEvent(parent_id="ws_1", name="web_search", result=ToolResult("ok")),
+    ]
+    middleware = HistoryLimiter(max_events=4)(events[-1], mock)
+
+    async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
+        mock.llm_call(history)
+        return ModelResponse(ModelMessage("result"))
+
+    await middleware.on_llm_call(llm_call, events, mock)
+
+    mock.llm_call.assert_called_once_with([events[0], *events[2:]])
