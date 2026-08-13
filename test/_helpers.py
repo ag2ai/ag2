@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.events import ModelReasoning
+from ag2.events import BaseEvent, ModelReasoning, ProviderReplay
 
 
-class DurableReasoning(ModelReasoning):
+class DurableReasoning(ModelReasoning, ProviderReplay):
     """Provider reasoning item that must be replayed, like OpenAIReasoningEvent.
 
     Reasoning is transient by default; a provider that persists its item opts out
@@ -14,3 +14,13 @@ class DurableReasoning(ModelReasoning):
     """
 
     __transient__ = False
+
+
+class ProviderTurnState(BaseEvent, ProviderReplay):
+    """Provider-native object standing in for a whole assistant turn.
+
+    Like ``XAIAssistantEvent``: the only way to rebuild a turn carrying
+    ``tool_calls`` for a provider whose SDK cannot construct one from primitives.
+    Redeclared here so tests outside a provider package can exercise the case
+    without importing its SDK.
+    """

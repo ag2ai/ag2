@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Trimming policies must not split a builtin tool call from its reasoning item."""
+"""Trimming policies must not split a retained event from the provider-native
+item it needs — a builtin tool call from its reasoning item, or a response
+carrying tool calls from the turn object that is the only record of them."""
 
 import pytest
 
@@ -11,6 +13,7 @@ from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
+    ModelMessage,
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -22,7 +25,7 @@ from ag2.events import (
 )
 from ag2.policies.sliding_window import SlidingWindowPolicy
 from ag2.policies.token_budget import TokenBudgetPolicy
-from test._helpers import DurableReasoning
+from test._helpers import DurableReasoning, ProviderTurnState
 
 
 def _call(call_id: str) -> BuiltinToolCallEvent:
@@ -211,6 +214,70 @@ class TestSlidingWindow:
         _, result = await policy.apply([], events, context)
 
         assert result == [events[-1]]
+
+
+@pytest.mark.asyncio
+class TestProviderTurnItem:
+    """A response's tool calls may live only in a provider-native turn object."""
+
+    async def test_response_orphaned_from_its_turn_item_is_dropped(self, context: Context) -> None:
+        # Keeping the response without the turn object rebuilds the turn text-only:
+        # the tool calls vanish and the results below reference calls the model was
+        # never told it made. Dropping the response takes the results with it.
+        events = [
+            ProviderTurnState(),
+            ModelResponse(tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="tc_1", name="multiply")])),
+            ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="multiply", result=ToolResult("ok"))]),
+            ModelRequest([TextInput("next")]),
+        ]
+        policy = SlidingWindowPolicy(max_events=3)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == [events[-1]]
+
+    async def test_intact_turn_is_kept(self, context: Context) -> None:
+        events = [
+            ModelRequest([TextInput("old")]),
+            ProviderTurnState(),
+            ModelResponse(tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="tc_1", name="multiply")])),
+            ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="multiply", result=ToolResult("ok"))]),
+        ]
+        policy = SlidingWindowPolicy(max_events=3)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events[1:]
+
+    async def test_plain_response_survives_without_its_turn_item(self, context: Context) -> None:
+        # Only tool calls live exclusively in the turn object; the text is on the
+        # response, so an answer with no tool calls loses nothing.
+        events = [
+            ProviderTurnState(),
+            ModelResponse(message=ModelMessage("hi")),
+            ModelRequest([TextInput("next")]),
+        ]
+        policy = SlidingWindowPolicy(max_events=2)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events[1:]
+
+    async def test_turn_item_does_not_leak_to_a_later_response(self, context: Context) -> None:
+        # A turn object belongs to the response that follows it. A later response
+        # that never had one must not be condemned by the earlier one being cut.
+        events = [
+            ProviderTurnState(),
+            ModelResponse(tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="tc_1", name="multiply")])),
+            ModelRequest([TextInput("next")]),
+            ModelResponse(tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="tc_2", name="multiply")])),
+            ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_2", name="multiply", result=ToolResult("ok"))]),
+        ]
+        policy = SlidingWindowPolicy(max_events=3)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events[2:]
 
 
 @pytest.mark.asyncio
