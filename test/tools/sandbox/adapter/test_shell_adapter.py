@@ -2,48 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator, Sequence
-from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
 from unittest.mock import MagicMock
 
 import pytest
 
 from ag2 import Context
-from ag2.tools.sandbox import ExecResult, Sandbox
 from ag2.tools.sandbox.adapter import ShellAdapter
 from ag2.tools.sandbox.local import LocalSandbox
-
-
-class _RecordingFactory:
-    def __init__(self, sandbox: Sandbox) -> None:
-        self._sandbox = sandbox
-        self.contexts: list[object] = []
-
-    @asynccontextmanager
-    async def open(self, context: object = None) -> AsyncIterator[Sandbox]:
-        self.contexts.append(context)
-        yield self._sandbox
-
-
-class _FakeRemoteSandbox:
-    """A remote/container-style sandbox: a sandbox-side ``PurePosixPath``
-    workdir and no host filesystem (``host_workdir is None``)."""
-
-    def __init__(self) -> None:
-        self.execs: list[Sequence[str]] = []
-
-    @property
-    def workdir(self) -> PurePosixPath:
-        return PurePosixPath("/workspace")
-
-    @property
-    def host_workdir(self) -> None:
-        return None
-
-    async def exec(self, argv: Sequence[str], *, env: object = None, timeout: object = None) -> ExecResult:
-        self.execs.append(argv)
-        return ExecResult(output="ok", exit_code=0)
+from test.tools.sandbox._helpers import RecordingFactory, RecordingSandbox, WorkdirDeclaringFactory
 
 
 @pytest.mark.asyncio
@@ -70,14 +37,14 @@ class TestShellAdapterFiltering:
     async def test_ignore_applies_on_remote_backend(self) -> None:
         # A remote backend has no host workdir; ignore must still apply by
         # matching literal argv paths against the sandbox-side workdir.
-        sandbox = _FakeRemoteSandbox()
+        sandbox = RecordingSandbox()
         adapter = ShellAdapter(sandbox, ignore=["**/.env"])
         result = await adapter.run("cat .env")
         assert "Access denied" in result
         assert sandbox.execs == []  # blocked before reaching the backend
 
     async def test_ignore_allows_non_matching_on_remote_backend(self) -> None:
-        sandbox = _FakeRemoteSandbox()
+        sandbox = RecordingSandbox()
         adapter = ShellAdapter(sandbox, ignore=["**/.env"])
         result = await adapter.run("cat README.md")
         assert "ok" in result
@@ -114,7 +81,7 @@ class TestShellAdapterAsync:
 @pytest.mark.asyncio
 class TestShellAdapterWithFactory:
     async def test_factory_opens_per_call(self, tmp_path: Path) -> None:
-        factory = _RecordingFactory(LocalSandbox(tmp_path))
+        factory = RecordingFactory(LocalSandbox(tmp_path))
         adapter = ShellAdapter(factory)
 
         await adapter.run("echo a")
@@ -123,10 +90,33 @@ class TestShellAdapterWithFactory:
         assert len(factory.contexts) == 2
 
     async def test_context_variables_forwarded_to_factory(self, tmp_path: Path) -> None:
-        factory = _RecordingFactory(LocalSandbox(tmp_path))
+        factory = RecordingFactory(LocalSandbox(tmp_path))
         adapter = ShellAdapter(factory)
         ctx = Context(stream=MagicMock(), variables={"x": "value"})
 
         await adapter.run("echo a", context=ctx)
 
         assert factory.contexts == [ctx]
+
+
+class TestShellAdapterWorkdir:
+    """A remote factory is not bound to a sandbox until it is opened, so the
+    workdir it reports up-front comes from the factory itself.
+    """
+
+    def test_undeclared_factory_reports_conventional_workspace(self, tmp_path: Path) -> None:
+        adapter = ShellAdapter(RecordingFactory(LocalSandbox(tmp_path)))
+
+        assert adapter.workdir == PurePosixPath("/workspace")
+
+    def test_declared_workdir_is_reported(self) -> None:
+        factory = WorkdirDeclaringFactory(PurePosixPath("/home/agent"))
+
+        assert ShellAdapter(factory).workdir == PurePosixPath("/home/agent")
+
+    def test_declaration_that_is_not_a_path_is_ignored(self) -> None:
+        # `workdir` is read reflectively, so a factory that happens to expose an
+        # unrelated attribute of that name must not poison the reported path.
+        factory = WorkdirDeclaringFactory("/home/agent")
+
+        assert ShellAdapter(factory).workdir == PurePosixPath("/workspace")
