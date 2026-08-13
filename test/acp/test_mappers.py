@@ -87,7 +87,7 @@ def test_incremental_plan_items_update_maps_to_plan() -> None:
             session_update="plan_update",
             plan=schema.PlanUpdateItems(
                 type="items",
-                id="p1",
+                plan_id="p1",
                 entries=[schema.PlanEntry(content="do y", status="in_progress", priority="low")],
             ),
         )
@@ -100,12 +100,13 @@ def test_incremental_plan_items_update_maps_to_plan() -> None:
     "update",
     [
         schema.AgentPlanContentUpdate(
-            session_update="plan_update", plan=schema.PlanUpdateFile(type="file", id="p1", uri="file:///plan.md")
+            session_update="plan_update", plan=schema.PlanUpdateFile(type="file", plan_id="p1", uri="file:///plan.md")
         ),
         schema.AgentPlanContentUpdate(
-            session_update="plan_update", plan=schema.PlanUpdateMarkdown(type="markdown", id="p1", content="# plan")
+            session_update="plan_update",
+            plan=schema.PlanUpdateMarkdown(type="markdown", plan_id="p1", content="# plan"),
         ),
-        schema.AgentPlanRemovedUpdate(session_update="plan_removed", id="p1"),
+        schema.AgentPlanRemovedUpdate(session_update="plan_removed", plan_id="p1"),
     ],
 )
 def test_plan_updates_without_an_event_are_logged_not_silent(update: SessionUpdate, caplog: Any) -> None:

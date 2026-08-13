@@ -440,7 +440,7 @@ class TestSessionContext:
         declared = [
             schema.HttpMcpServer(type="http", name="over-http", url="http://127.0.0.1:9/mcp", headers=[]),
             schema.SseMcpServer(type="sse", name="over-sse", url="http://127.0.0.1:9/sse", headers=[]),
-            schema.AcpMcpServer(type="acp", name="over-acp", id="peer-1"),
+            schema.AcpMcpServer(type="acp", name="over-acp", server_id="peer-1"),
             schema.McpServerStdio(name="over-stdio", command="/bin/true", args=["--serve"], env=[]),
         ]
 
