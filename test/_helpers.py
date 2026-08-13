@@ -10,10 +10,11 @@ class DurableReasoning(ModelReasoning, ProviderReplay):
 
     Reasoning is transient by default; a provider that persists its item opts out
     (see ``ag2.config.openai.events``). Redeclared here so tests outside a
-    provider package can exercise the durable case without importing its SDK.
+    provider package can exercise the anchor case without importing its SDK.
     """
 
     __transient__ = False
+    __replay_role__ = "anchor"
 
 
 class ProviderTurnState(BaseEvent, ProviderReplay):
@@ -21,6 +22,8 @@ class ProviderTurnState(BaseEvent, ProviderReplay):
 
     Like ``XAIAssistantEvent``: the only way to rebuild a turn carrying
     ``tool_calls`` for a provider whose SDK cannot construct one from primitives.
-    Redeclared here so tests outside a provider package can exercise the case
-    without importing its SDK.
+    Redeclared here so tests outside a provider package can exercise the turn
+    case without importing its SDK.
     """
+
+    __replay_role__ = "turn"

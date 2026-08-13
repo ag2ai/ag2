@@ -17,9 +17,12 @@ class XAIAssistantEvent(BaseEvent, ProviderReplay):
     no public helper that constructs an assistant message with tool_calls from
     primitives. Persisted (NOT transient) so it survives history storage.
 
-    ProviderReplay: without the proto the mapper falls back to text-only and the
-    turn's tool calls are lost silently.
+    ProviderReplay turn item: without the proto the mapper falls back to text-only
+    and the turn's tool calls are lost silently — xAI accepts the truncated payload
+    rather than rejecting it, so nothing else would catch the loss.
     """
+
+    __replay_role__ = "turn"
 
     proto_bytes: bytes = Field(repr=False)
     model: str | None = Field(default=None, compare=False)

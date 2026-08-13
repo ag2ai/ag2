@@ -27,7 +27,6 @@ from collections.abc import Sequence
 from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
-    ModelReasoning,
     ModelRequest,
     ModelResponse,
     ProviderReplay,
@@ -64,27 +63,27 @@ def _required_ids(event: BaseEvent) -> set[str]:
 
 
 def _is_anchor(event: BaseEvent) -> bool:
-    """True for a reasoning item the provider requires back verbatim.
+    """True for an item the builtin calls of its response are paired with.
 
-    ``ProviderReplay`` is what marks that requirement, so it — not durability —
-    is the test. The two coincide today (only ``OpenAIReasoningEvent`` is a
-    durable reasoning item, and it is marked), but they answer different
-    questions: durability is about storage, the marker is about replay.
+    ``ProviderReplay`` marks the requirement and the event's own
+    ``__replay_role__`` names which half of it applies, so neither durability nor
+    the event's base classes decide this. Durability answers a different question
+    (storage, not replay), and reading the role off ``ModelReasoning`` would
+    misfile any provider whose turn carrier happened to subclass it.
     """
-    return isinstance(event, ProviderReplay) and isinstance(event, ModelReasoning)
+    return isinstance(event, ProviderReplay) and event.__replay_role__ == "anchor"
 
 
 def _is_turn_item(event: BaseEvent) -> bool:
     """True for provider-native state standing in for a whole assistant turn.
 
-    The other half of ``ProviderReplay``: some providers hand back an object
-    that is the only way to reconstruct the turn they just produced.
-    ``XAIAssistantEvent`` carries the response proto, and xai-sdk offers no way
-    to build an assistant message with ``tool_calls`` from primitives. Reasoning
-    items are excluded — they anchor a single builtin call, which is a narrower
-    relationship.
+    The other ``ProviderReplay`` role: some providers hand back an object that is
+    the only way to reconstruct the turn they just produced. ``XAIAssistantEvent``
+    carries the response proto, and xai-sdk offers no way to build an assistant
+    message with ``tool_calls`` from primitives. Anchors are excluded — they cover
+    a single builtin call, which is a narrower relationship than a whole turn.
     """
-    return isinstance(event, ProviderReplay) and not isinstance(event, ModelReasoning)
+    return isinstance(event, ProviderReplay) and event.__replay_role__ == "turn"
 
 
 def _prune(events: Sequence[BaseEvent], cut: int) -> list[BaseEvent]:

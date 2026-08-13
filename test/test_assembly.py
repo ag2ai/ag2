@@ -36,6 +36,7 @@ class ProviderReasoning(ModelReasoning, ProviderReplay):
     """Stands in for OpenAIReasoningEvent, keeping these tests provider-free."""
 
     __transient__ = False
+    __replay_role__ = "anchor"
 
 
 class TestConversationPolicy:

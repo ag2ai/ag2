@@ -144,10 +144,11 @@ class OpenAIServerToolResultEvent(BuiltinToolResultEvent):
 class OpenAIReasoningEvent(ModelReasoning, ProviderReplay):
     """Reasoning item the Responses API pairs with a server-side tool call.
 
-    ProviderReplay: the API rejects a replayed ``web_search_call`` whose
+    ProviderReplay anchor: the API rejects a replayed ``web_search_call`` whose
     ``reasoning`` item is missing. Persisted, unlike ``ModelReasoning``.
     """
 
     __transient__ = False
+    __replay_role__ = "anchor"
 
     item: ResponseReasoningItem = Field(repr=False)
