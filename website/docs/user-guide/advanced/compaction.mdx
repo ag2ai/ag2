@@ -101,9 +101,9 @@ retained = await compact.compact(events, ctx, store)
 The summarization model is independent from the agent's main model — pick a smaller / cheaper one. Token usage is recorded on the strategy instance as `#!python strategy.last_usage`.
 
 !!! note
-    Both built-ins snap the retained boundary to whole turns, so the retained window can be slightly smaller than `target`. A partial turn straddling the boundary is compacted as a unit — and three things count as partial: a tool result without the call it answers, a builtin (server-side) call without its reasoning item, and a bare call event without the `ModelResponse` that announced it. Whatever the boundary skips over is dropped *and persisted*, so nothing is silently lost. This keeps the retained history valid for providers that reject any of the three.
+    Both built-ins snap the retained boundary to whole turns, so the retained window can be slightly smaller than `target`. A partial turn straddling the boundary is compacted as a unit — and four things count as partial: a tool result without the call it answers, a builtin (server-side) call without its reasoning item, a response carrying tool calls without the provider turn item recording them, and a bare call event without the `ModelResponse` that announced it. Whatever the boundary skips over is dropped *and persisted*, so nothing is silently lost. This keeps the retained history valid — providers reject some of the four outright and quietly lose the turn's tool calls on the rest.
 
-    Reduction policies enforce the same three invariants at assembly time, but drop the offending events instead of moving the boundary — see [Reduction limits are targets](/docs/user-guide/advanced/assembly#reduction-limits-are-targets).
+    Reduction policies enforce the same four invariants at assembly time, but drop the offending events instead of moving the boundary — see [Reduction limits are targets](/docs/user-guide/advanced/assembly#reduction-limits-are-targets).
 
 ## CompactionSummary
 
