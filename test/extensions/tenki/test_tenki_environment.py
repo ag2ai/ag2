@@ -170,7 +170,7 @@ class TestOpen:
             result = await tool.environment.run("print('ok')", "python")
             await factory.aclose()
 
-        assert result.output == "ok\n"
+        assert result.output == "ok"
         assert remote.exec.await_args.args[:2] == ("python3", "-c")
 
 

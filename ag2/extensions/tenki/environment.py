@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator, Hashable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from tenki import AsyncClient
 
@@ -26,7 +26,15 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class TenkiResources:
-    """Resource limits for a Tenki sandbox."""
+    """Resource limits for a Tenki sandbox.
+
+    A field left as ``None`` defers to the workspace default.
+
+    Attributes:
+        cpu_cores: Virtual CPUs allotted to the sandbox.
+        memory_mb: Memory ceiling in megabytes.
+        disk_size_gb: Root filesystem size in gigabytes.
+    """
 
     cpu_cores: int | None = None
     memory_mb: int | None = None
@@ -60,6 +68,32 @@ class TenkiEnvironment:
         max_duration: float = 900,
         workdir: str = "/home/tenki",
     ) -> None:
+        """Configure the sandboxes this factory hands out.
+
+        Every ``Variable``-accepting argument is resolved per :meth:`open`
+        call, so one factory can serve several tenants.
+
+        Args:
+            api_key: Tenki API key. Falls back to ``TENKI_API_KEY``.
+            api_url: Tenki API base URL. Falls back to ``TENKI_API_URL``.
+            workspace_id: Workspace to create sandboxes in. When omitted, the
+                sole workspace visible to the key is selected, and a key with
+                access to several workspaces is an error.
+            name: Sandbox name reported by the Tenki dashboard.
+            image: Guest image reference. ``None`` uses the workspace default.
+            env_vars: Environment variables baked into the sandbox at creation.
+            resources: CPU/memory/disk limits; ``None`` uses workspace defaults.
+            timeout: Default per-command timeout in seconds, also the budget
+                for waiting on a new sandbox to become ready. Must be > 0.
+            max_duration: Server-side lifetime cap in seconds. It is the
+                backstop that reclaims the sandbox if client cleanup never
+                runs. Must be > 0.
+            workdir: Sandbox-side directory commands and relative paths
+                resolve against.
+
+        Raises:
+            ValueError: If ``timeout`` or ``max_duration`` is not positive.
+        """
         if timeout <= 0:
             raise ValueError("`timeout` must be greater than 0 seconds.")
         if max_duration <= 0:
@@ -108,6 +142,25 @@ class TenkiEnvironment:
         self,
         context: "ConversationContext | None" = None,
     ) -> AsyncGenerator[TenkiSandbox]:
+        """Yield the sandbox matching the resolved parameters.
+
+        Sandboxes are cached by those parameters, so repeated calls reuse one
+        session and files survive across tool calls. The factory keeps
+        ownership: leaving this scope does not close the sandbox, only
+        :meth:`aclose` does.
+
+        Args:
+            context: Conversation context used to resolve ``Variable``
+                parameters. ``None`` requires every parameter to be concrete.
+
+        Yields:
+            The ready sandbox for this parameter set.
+
+        Raises:
+            RuntimeError: If a parameter is a ``Variable`` but no ``context``
+                was supplied to resolve it.
+            KeyError: If a ``Variable`` names a key absent from the context.
+        """
         api_key = resolve_variable(self._api_key, context, param_name="api_key") if context else self._api_key
         api_url = resolve_variable(self._api_url, context, param_name="api_url") if context else self._api_url
         workspace_id = (
@@ -198,5 +251,5 @@ class TenkiEnvironment:
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
-    def __deepcopy__(self, memo: dict) -> "TenkiEnvironment":  # type: ignore[type-arg]
+    def __deepcopy__(self, memo: dict[int, Any]) -> "TenkiEnvironment":
         return self

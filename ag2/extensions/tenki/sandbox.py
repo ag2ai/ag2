@@ -6,14 +6,17 @@
 
 import asyncio
 import atexit
+import errno
 import logging
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
-from typing import Any, cast
+from typing import Any
 
 from tenki import (
     AsyncClient,
+    AsyncSandbox,
     Client,
+    CommandResult,
     CommandTimeoutError,
     SandboxError,
 )
@@ -25,6 +28,36 @@ from ag2.annotations import Variable
 from ag2.tools.sandbox import ExecResult, SandboxBase
 
 logger = logging.getLogger(__name__)
+
+
+def _posix_exit_code(result: CommandResult) -> int:
+    """Map a Tenki result onto the POSIX codes ``ExecResult`` promises.
+
+    Tenki reports ``exit_code == -1`` whenever the command produced no real
+    wait status — it timed out, was signalled, or could never be exec'd. A
+    negative code is not a POSIX status and means nothing to a model reading
+    tool output, so translate it the way a shell would.
+    """
+    if result.exit_code >= 0:
+        return result.exit_code
+    # A timeout is also reported with signal="terminated", so it has to be read
+    # before the signal case, or every timeout would surface as a plain kill.
+    if result.reason == "timeout":
+        return 124
+    if result.signal:
+        # 128 is the base a shell adds a signal number to. Tenki reports the
+        # signal by name ("killed", "terminated"), so the number isn't available
+        # to add — the name stays in `output` instead.
+        return 128
+    # Anything left never started. Tenki describes those in prose and fills
+    # `errno` only sometimes — EACCES arrives with it set, ENOENT with it
+    # unset — so both have to be consulted.
+    reason = result.reason or ""
+    if result.errno == errno.EACCES or "permission denied" in reason:
+        return 126  # found, but not executable
+    if result.errno == errno.ENOENT or "executable file not found" in reason:
+        return 127
+    return 1
 
 
 class TenkiSandbox(SandboxBase):
@@ -56,14 +89,16 @@ class TenkiSandbox(SandboxBase):
         self._create_options = create_options
         self._default_timeout = timeout
         self._workdir = PurePosixPath(workdir)
-        self._sandbox: Any = None
+        self._sandbox: AsyncSandbox | None = None
         self._ready = False
         self._lock: asyncio.Lock | None = None
         self._lock_loop: asyncio.AbstractEventLoop | None = None
         self._closed = False
         self._atexit_registered = False
-        self._sync_auth_token = cast(str | None, getattr(client, "auth_token", None))
-        self._sync_base_url = cast(str | None, getattr(client, "base_url", None))
+        # Captured up front: the atexit fallback runs after `aclose` has already
+        # dropped the async client, and has to build a fresh sync one.
+        self._sync_auth_token = client.auth_token
+        self._sync_base_url = client.base_url
 
     @property
     def workdir(self) -> PurePosixPath:
@@ -91,7 +126,7 @@ class TenkiSandbox(SandboxBase):
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
-    def __deepcopy__(self, memo: dict) -> "TenkiSandbox":  # type: ignore[type-arg]
+    def __deepcopy__(self, memo: dict[int, Any]) -> "TenkiSandbox":
         return self
 
     async def exec(
@@ -118,16 +153,16 @@ class TenkiSandbox(SandboxBase):
         except SandboxError as e:
             return ExecResult(output=f"Tenki error: {e}", exit_code=1)
 
-        output = result.stdout_text + result.stderr_text
-        # `reason` is set on every result ("exit" for a clean finish), so surface it
-        # only when the command really ended abnormally — otherwise a silent success
-        # like `echo hi > file` would report "Tenki execution ended: exit".
-        if result.reason and not output and not result.ok:
-            output = f"Tenki execution ended: {result.reason}"
-        if result.signal:
-            output += f"\nTenki execution signal: {result.signal}"
-        exit_code = result.exit_code if not result.signal else result.exit_code or 128
-        return ExecResult(output=output, exit_code=exit_code)
+        output = (result.stdout_text + result.stderr_text).strip()
+        if result.reason == "timeout":
+            note = f"Tenki execution timed out after {exec_timeout}s"
+            output = f"{output}\n{note}" if output else note
+        else:
+            if result.reason and not output and not result.ok:
+                output = f"Tenki execution ended: {result.reason}"
+            if result.signal:
+                output += f"\nTenki execution signal: {result.signal}"
+        return ExecResult(output=output, exit_code=_posix_exit_code(result))
 
     async def put_file(self, path: PurePosixPath, content: bytes) -> None:
         if path.is_absolute():
@@ -142,7 +177,7 @@ class TenkiSandbox(SandboxBase):
         with suppress(TenkiFileNotFoundError):
             await sandbox.fs.remove(str(self._workdir / path), recursive=False)
 
-    async def _ensure_sandbox(self) -> Any:
+    async def _ensure_sandbox(self) -> AsyncSandbox:
         if self._closed:
             raise RuntimeError("TenkiSandbox has been closed.")
         if self._sandbox is not None and self._ready:
@@ -193,6 +228,12 @@ class TenkiSandbox(SandboxBase):
         raise RuntimeError("The Tenki API key can access multiple workspaces. Pass `workspace_id` to TenkiEnvironment.")
 
     async def aclose(self) -> None:
+        """Terminate the session and release the client.
+
+        Safe to call repeatedly. A close that fails leaves both the session
+        handle and the client intact so a later call can retry; the atexit
+        fallback stays armed for the case where no retry comes.
+        """
         self._closed = True
         terminated = True
         if self._sandbox is not None:
@@ -206,8 +247,12 @@ class TenkiSandbox(SandboxBase):
                 self._ready = False
         # Only disarm the atexit fallback once the session is really gone: a failed
         # close leaves a live sandbox that still deserves a last attempt at exit.
-        if terminated:
-            self._unregister_atexit()
+        if not terminated:
+            # Keep the client open too. The sandbox handle routes through it, so
+            # closing it here would leave the retained handle unusable and turn
+            # every later `aclose` into a silent no-op.
+            return
+        self._unregister_atexit()
         if self._client is not None:
             try:
                 await self._client.close()

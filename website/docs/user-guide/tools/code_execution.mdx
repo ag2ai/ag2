@@ -42,7 +42,7 @@ See the [Built-in Tools page](/docs/user-guide/tools/builtin_tools#code-executio
 `SandboxCodeTool` exposes a `run_code(code, language)` function the agent can call. Because it's a regular function tool, it works on **any** model provider. Where the code actually runs is decided by the [`CodeEnvironment`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/code/environment/base.py){.external-link target="_blank"} you hand it.
 
 !!! note "`environment` is required"
-    `SandboxCodeTool` has no default backend. Pass `TenkiEnvironment`, `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation.
+    `SandboxCodeTool` has no default backend. Pass `TenkiEnvironment().code_environment()`, `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation. Tenki needs the `code_environment()` call because its guest image ships `python3` rather than `python`.
 
 !!! note "When to use this"
     You need custom packages or images, persistent state across calls, your own infrastructure, or you're working with a provider that doesn't have a native code-execution capability.

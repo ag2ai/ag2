@@ -88,7 +88,8 @@ class TestExec:
 
         actual = await sandbox.exec(["python", "-c", "print(42)"], env={"FOO": "bar"}, timeout=12)
 
-        assert actual == ExecResult(output="out\nerr\n", exit_code=3)
+        # `ExecResult.output` is contracted to arrive already trimmed.
+        assert actual == ExecResult(output="out\nerr", exit_code=3)
         remote.exec.assert_awaited_once_with(
             "python",
             "-c",
@@ -111,6 +112,81 @@ class TestExec:
         assert await sandbox.exec(["false"]) == ExecResult(
             output="Tenki execution ended: process exited",
             exit_code=1,
+        )
+
+    @pytest.mark.parametrize(
+        ("label", "result", "expected"),
+        [
+            # Every shape below was captured from the live Tenki API: a command
+            # that never produced a wait status comes back as exit_code == -1,
+            # which is not a POSIX status and must be translated.
+            (
+                "timeout",
+                CommandResult(argv=["sleep", "10"], exit_code=-1, signal="terminated", reason="timeout"),
+                124,
+            ),
+            (
+                "not found",
+                CommandResult(
+                    argv=["nope"],
+                    exit_code=-1,
+                    reason='exec: "nope": executable file not found in $PATH',
+                ),
+                127,
+            ),
+            (
+                "permission denied",
+                CommandResult(
+                    argv=["/home/tenki"],
+                    exit_code=-1,
+                    errno=13,
+                    reason="fork/exec /home/tenki: permission denied",
+                ),
+                126,
+            ),
+            (
+                "sigkill",
+                CommandResult(argv=["sh"], exit_code=-1, signal="killed", reason="signaled"),
+                128,
+            ),
+            (
+                "sigterm",
+                CommandResult(argv=["sh"], exit_code=-1, signal="terminated", reason="signaled"),
+                128,
+            ),
+            (
+                "unknown abnormal end",
+                CommandResult(argv=["sh"], exit_code=-1, reason="something else"),
+                1,
+            ),
+            ("clean failure keeps its status", CommandResult(argv=["sh"], exit_code=3, reason="exit"), 3),
+        ],
+    )
+    async def test_abnormal_endings_map_onto_posix_exit_codes(
+        self, label: str, result: CommandResult, expected: int
+    ) -> None:
+        sandbox = TenkiSandbox(
+            client=_fake_client(_fake_remote(result=result)),
+            create_options={"workspace_id": "workspace-1"},
+        )
+
+        actual = await sandbox.exec(["sh"])
+
+        assert actual.exit_code == expected, f"{label}: got {actual.exit_code}"
+        assert actual.exit_code >= 0
+
+    async def test_timeout_result_is_reported_with_the_budget(self) -> None:
+        # Tenki returns a result for an exec timeout instead of raising, so the
+        # message has to come from the result path.
+        result = CommandResult(argv=["sleep", "10"], exit_code=-1, signal="terminated", reason="timeout")
+        sandbox = TenkiSandbox(
+            client=_fake_client(_fake_remote(result=result)),
+            create_options={"workspace_id": "workspace-1"},
+        )
+
+        assert await sandbox.exec(["sleep", "10"], timeout=2) == ExecResult(
+            output="Tenki execution timed out after 2s",
+            exit_code=124,
         )
 
     async def test_silent_success_stays_silent(self) -> None:
@@ -164,16 +240,32 @@ class TestLifecycle:
     async def test_failed_close_is_not_raised_and_stays_retryable(self) -> None:
         remote = _fake_remote()
         remote.close_if_open = AsyncMock(side_effect=RuntimeError("server unreachable"))
-        sandbox = TenkiSandbox(client=_fake_client(remote), create_options={"workspace_id": "workspace-1"})
+        client = _fake_client(remote)
+        sandbox = TenkiSandbox(client=client, create_options={"workspace_id": "workspace-1"})
         await sandbox.__aenter__()
 
         await sandbox.aclose()
 
         assert sandbox.closed
+        # The retained session handle routes through the client, so a failed
+        # close must leave the client open — otherwise the retry below would
+        # run against a dead transport and silently do nothing.
+        client.close.assert_not_awaited()
         # The session is still alive, so a second close retries it rather than
         # dropping the handle and leaking the sandbox until `max_duration`.
         await sandbox.aclose()
         assert remote.close_if_open.await_count == 2
+
+    async def test_successful_close_releases_the_client(self) -> None:
+        remote = _fake_remote()
+        client = _fake_client(remote)
+        sandbox = TenkiSandbox(client=client, create_options={"workspace_id": "workspace-1"})
+        await sandbox.__aenter__()
+
+        await sandbox.aclose()
+
+        remote.close_if_open.assert_awaited_once()
+        client.close.assert_awaited_once()
 
     async def test_workspace_is_discovered_when_omitted(self) -> None:
         remote = _fake_remote()
