@@ -15,6 +15,7 @@ from ag2.events import (
     ModelRequest,
     ModelResponse,
     ObserverAlert,
+    ProviderReplay,
     Severity,
     TextInput,
     ToolCallEvent,
@@ -31,8 +32,8 @@ from ag2.policies import (
 from ag2.stream import MemoryStream
 
 
-class DurableReasoning(ModelReasoning):
-    """Provider reasoning item that must be replayed, like OpenAIReasoningEvent."""
+class ProviderReasoning(ModelReasoning, ProviderReplay):
+    """Stands in for OpenAIReasoningEvent, keeping these tests provider-free."""
 
     __transient__ = False
 
@@ -54,20 +55,20 @@ class TestConversationPolicy:
         assert all(not isinstance(e, ObserverAlert) for e in filtered)
 
     @pytest.mark.asyncio
-    async def test_drops_transient_reasoning(self) -> None:
+    async def test_drops_streamed_thinking(self) -> None:
         policy = ConversationPolicy()
-        events = [ModelReasoning("thinking out loud"), ModelRequest([TextInput("hello")])]
+        request = ModelRequest([TextInput("hello")])
+        events = [ModelReasoning("thinking out loud"), request]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
-        assert all(not isinstance(e, ModelReasoning) for e in filtered)
+        assert filtered == [request]
 
     @pytest.mark.asyncio
-    async def test_keeps_durable_reasoning_with_tool_call(self) -> None:
+    async def test_keeps_provider_replay_with_tool_call(self) -> None:
         policy = ConversationPolicy()
-        reasoning = DurableReasoning("planning the search")
         events = [
             ModelRequest([TextInput("hello")]),
-            reasoning,
+            ProviderReasoning("planning the search"),
             ToolCallEvent(name="search", arguments="{}"),
             ToolResultEvent(id="1", name="search", content="result"),
         ]

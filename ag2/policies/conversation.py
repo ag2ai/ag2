@@ -8,23 +8,23 @@ from ag2.compact import CompactionSummary
 from ag2.context import ConversationContext as Context
 from ag2.events import (
     BaseEvent,
-    ModelReasoning,
     ModelRequest,
     ModelResponse,
+    ProviderReplay,
     ToolCallEvent,
     ToolCallsEvent,
     ToolErrorEvent,
     ToolResultEvent,
     ToolResultsEvent,
-    is_conversational,
 )
 
-# Event types that are always part of conversation context. ModelReasoning is
-# admitted only in its durable form (see apply).
+# Event types that are always part of conversation context. ProviderReplay
+# covers provider-native items the provider requires back verbatim (e.g. the
+# reasoning item the Responses API pairs with a server-side tool call).
 CONVERSATION_TYPES = (
     ModelRequest,
     ModelResponse,
-    ModelReasoning,
+    ProviderReplay,
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultEvent,
@@ -50,7 +50,5 @@ class ConversationPolicy:
         events: list[BaseEvent],
         context: Context,
     ) -> tuple[list[str], list[BaseEvent]]:
-        # is_conversational keeps durable provider reasoning items (needed
-        # alongside replayed server-side tool calls) and drops thinking text.
-        filtered = [e for e in events if isinstance(e, CONVERSATION_TYPES) and is_conversational(e)]
+        filtered = [e for e in events if isinstance(e, CONVERSATION_TYPES)]
         return prompts, filtered

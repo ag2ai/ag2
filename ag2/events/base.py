@@ -49,6 +49,25 @@ def is_conversational(event: Any) -> bool:
     return not getattr(cls, "__transient__", False) and getattr(cls, "__conversational__", True)
 
 
+class ProviderReplay:
+    """Marker: provider-native state the provider requires back verbatim.
+
+    History shaping (``ConversationPolicy``, trimming, compaction) must keep these.
+
+    Carries no ``__transient__`` on purpose: ``ModelReasoning`` is transient, so
+    a marker declaring ``__transient__ = False`` would be shadowed by it under
+    the natural base order. Subclasses declare their own persistence.
+    """
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if getattr(cls, "__transient__", False):
+            raise TypeError(
+                f"{cls.__name__} is a ProviderReplay but is __transient__; "
+                "a transient event is never replayed. Set __transient__ = False."
+            )
+
+
 class Field:
     def __init__(
         self,
