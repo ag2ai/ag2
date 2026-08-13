@@ -277,7 +277,7 @@ class TestToolMiddlewareRegistration:
 
 
 class CountingMiddleware:
-    """Class-based tool middleware keeping its budget on the instance."""
+    """Class-based tool middleware keeping its count on the instance."""
 
     def __init__(self) -> None:
         self.calls = 0
@@ -292,12 +292,40 @@ class CountingMiddleware:
         return await call_next(event, ctx)
 
 
+class SharedCounter:
+    def __init__(self) -> None:
+        self.calls = 0
+
+
+class BudgetMiddleware:
+    """Settings only: the count it guards lives in ``context.dependencies``."""
+
+    async def __call__(
+        self,
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        ctx: Context,
+    ) -> ToolResultEvent:
+        ctx.dependencies[SharedCounter].calls += 1
+        return await call_next(event, ctx)
+
+
+def first() -> str:
+    """First."""
+    return "a"
+
+
+def second() -> str:
+    """Second."""
+    return "b"
+
+
 @pytest.mark.asyncio()
 class TestSharedToolMiddleware:
-    """One middleware instance across several tools is one shared allowance, not one per tool."""
+    """A hook instance is not shared between tools; a dependency is."""
 
     @staticmethod
-    def _two_tool_agent(*tools: Any) -> Agent:
+    def _two_tool_agent(*tools: Any, **kwargs: Any) -> Agent:
         return Agent(
             "",
             config=TestConfig(
@@ -306,26 +334,32 @@ class TestSharedToolMiddleware:
                 "result",
             ),
             tools=list(tools),
+            **kwargs,
         )
 
-    async def test_class_middleware_counts_every_tool(self) -> None:
+    async def test_class_hook_is_copied_per_tool(self) -> None:
         shared = CountingMiddleware()
-
-        def first() -> str:
-            """First."""
-            return "a"
-
-        def second() -> str:
-            """Second."""
-            return "b"
 
         agent = self._two_tool_agent(tool(first, middleware=[shared]), tool(second, middleware=[shared]))
 
         await agent.ask("Hi!")
 
-        assert shared.calls == 2
+        # Registering deep-copies each tool, so neither ran the instance passed in.
+        assert shared.calls == 0
+        hooks = [t.middleware[0].middleware for t in agent.tools]
+        assert hooks[0] is not hooks[1]
 
-    async def test_closure_middleware_agrees_with_class_middleware(self, mock: MagicMock) -> None:
+    async def test_toolkit_copies_per_tool_too(self) -> None:
+        shared = CountingMiddleware()
+
+        tk = Toolkit(tool(first, middleware=[shared]), tool(second, middleware=[shared]))
+        agent = self._two_tool_agent(tk)
+
+        await agent.ask("Hi!")
+
+        assert shared.calls == 0
+
+    async def test_function_hook_stays_shared(self, mock: MagicMock) -> None:
         async def hook(
             call_next: ToolExecution,
             event: ToolCallEvent,
@@ -334,61 +368,38 @@ class TestSharedToolMiddleware:
             mock.hook()
             return await call_next(event, ctx)
 
-        def first() -> str:
-            """First."""
-            return "a"
-
-        def second() -> str:
-            """Second."""
-            return "b"
-
         agent = self._two_tool_agent(tool(first, middleware=[hook]), tool(second, middleware=[hook]))
 
         await agent.ask("Hi!")
 
+        # deepcopy returns functions as-is, so both tools call the same object.
         assert mock.hook.call_count == 2
 
-    async def test_shared_across_toolkit_tools(self) -> None:
-        shared = CountingMiddleware()
-
-        def first() -> str:
-            """First."""
-            return "a"
-
-        def second() -> str:
-            """Second."""
-            return "b"
-
-        tk = Toolkit(tool(first, middleware=[shared]), tool(second, middleware=[shared]))
-        agent = self._two_tool_agent(tk)
-
-        await agent.ask("Hi!")
-
-        assert shared.calls == 2
-
-    async def test_with_middleware_keeps_the_original_instance(self) -> None:
-        shared = CountingMiddleware()
-
-        async def noop(
-            call_next: ToolExecution,
-            event: ToolCallEvent,
-            ctx: Context,
-        ) -> ToolResultEvent:
-            return await call_next(event, ctx)
-
-        def first() -> str:
-            """First."""
-            return "a"
-
-        def second() -> str:
-            """Second."""
-            return "b"
+    async def test_dependency_gives_a_combined_allowance(self) -> None:
+        counter = SharedCounter()
+        budget = BudgetMiddleware()
 
         agent = self._two_tool_agent(
-            tool(first, middleware=[shared]).with_middleware(noop),
-            tool(second, middleware=[shared]),
+            tool(first, middleware=[budget]),
+            tool(second, middleware=[budget]),
+            dependencies={SharedCounter: counter},
         )
 
         await agent.ask("Hi!")
 
-        assert shared.calls == 2
+        assert counter.calls == 2
+
+    async def test_dependency_survives_a_second_ask(self) -> None:
+        counter = SharedCounter()
+        budget = BudgetMiddleware()
+
+        agent = self._two_tool_agent(
+            tool(first, middleware=[budget]),
+            tool(second, middleware=[budget]),
+            dependencies={SharedCounter: counter},
+        )
+
+        await agent.ask("Hi!")
+        await agent.ask("Again!")
+
+        assert counter.calls == 4

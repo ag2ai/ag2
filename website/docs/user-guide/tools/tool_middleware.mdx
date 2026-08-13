@@ -101,7 +101,11 @@ def search(query: str) -> str:
     return f"results-for-{query}"
 ```
 
-`#!python approval_required()` is the built-in example: it returns an `#!python ApprovalRequired` instance that describes its prompt, timeout, and `#!python allow_always` settings. Keep run-time state such as counters in `#!python context.variables` — `#!python config` is for settings only.
+`#!python approval_required()` is the built-in example: it returns an `#!python ApprovalRequired` instance that describes its prompt, timeout, and `#!python allow_always` settings. Keep run-time state out of the hook — `#!python config` is for settings only.
+
+!!! note "Which carrier to use for run-time state"
+
+    `#!python context.variables` is rebuilt for every `#!python ask()` and is copied into a sub-task without being copied back, so state kept there is scoped to one run. For state that must outlive a single `#!python ask()` or count work done by sub-tasks, use `#!python context.dependencies`: values are passed by reference into every run and into sub-tasks, and are never copied or serialised.
 
 ## Adding middleware to an existing tool
 
@@ -130,25 +134,38 @@ audited_delete = delete_record.with_middleware(audit)
 
 ## Sharing one hook across tools
 
-A hook may be a plain function or any async callable, including an instance of a class that keeps state on `self`. Attaching **one instance** to several tools gives those tools a **combined** allowance — a budget of three across ten tools permits three calls in total, not thirty:
+Attaching **one hook instance** to several tools does **not** give those tools a combined allowance. Registering a tool deep-copies it, so a class-based hook is duplicated and each tool ends up counting on its own instance. A plain function is left as-is by `#!python deepcopy` and stays shared, which is why the same hook behaves differently depending on how it was written.
 
-```python linenums="1" hl_lines="27 31"
+Do not rely on either. Put the shared state in `#!python context.dependencies` and keep the hook itself a settings object — then it does not matter how many copies of the hook exist:
+
+```python linenums="1" hl_lines="24 43"
 from ag2 import Agent, Context, tool
 from ag2.config import OpenAIConfig
 from ag2.events import ToolCallEvent, ToolResultEvent
-from ag2.middleware import ToolExecution
+from ag2.middleware import MiddlewareDescription, ToolExecution, ToolResultType
+
+class Counter:
+    def __init__(self) -> None:
+        self.used = 0
 
 class CallBudget:
-    def __init__(self, limit: int) -> None:
-        self.limit = limit
-        self.used = 0
+    def __init__(self, limit: int, *, key: str = "default") -> None:
+        self._limit = limit
+        self._key = key
+
+    def describe(self) -> MiddlewareDescription:
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"limit": self._limit, "key": self._key},
+        )
 
     async def __call__(
         self, call_next: ToolExecution, event: ToolCallEvent, context: Context,
-    ) -> ToolResultEvent:
-        if self.used >= self.limit:
-            raise RuntimeError("budget exhausted")
-        self.used += 1
+    ) -> ToolResultType:
+        counter: Counter = context.dependencies[("budget", self._key)]
+        if counter.used >= self._limit:
+            return ToolResultEvent.from_call(event, result="budget exhausted")
+        counter.used += 1
         return await call_next(event, context)
 
 def search(query: str) -> str:
@@ -159,15 +176,16 @@ def fetch(url: str) -> str:
     """Fetches a URL."""
     return f"body-of-{url}"
 
-budget = CallBudget(limit=3)
+budget = CallBudget(limit=3, key="web")
 agent = Agent(
     "assistant",
     config=OpenAIConfig("gpt-4o-mini"),
     tools=[tool(search, middleware=[budget]), tool(fetch, middleware=[budget])],
+    dependencies={("budget", "web"): Counter()},
 )
 ```
 
-`search` and `fetch` draw on the same three calls. The instance stays shared however the tool is later copied — passed to an `Agent`, added to a `Toolkit`, or wrapped with `with_middleware()` — so `budget.used` on the object you created reflects every call.
+`search` and `fetch` draw on the same three calls, and the allowance survives every `#!python ask()` and counts calls made by sub-tasks. The hook stays describable, because the limit is a setting and only the counter lives in the context.
 
 ## Toolkit-level middleware
 
