@@ -164,10 +164,10 @@ The sandbox / container is created lazily on the first `run_code` call and reuse
 ```python linenums="1"
 from ag2 import Agent
 from ag2.config import AnthropicConfig
-from ag2.extensions.tenki import TenkiEnvironment
+from ag2.extensions.daytona import DaytonaEnvironment
 from ag2.tools import SandboxCodeTool
 
-async with TenkiEnvironment() as env:
+async with DaytonaEnvironment(image="python:3.12") as env:
     agent = Agent(
         "analyst",
         config=AnthropicConfig(model="claude-sonnet-4-6"),
@@ -177,19 +177,18 @@ async with TenkiEnvironment() as env:
 # sandbox deleted here
 ```
 
-The same pattern works with `DaytonaEnvironment`, `DockerEnvironment` (container stopped + removed), and any other backend that implements `__aenter__` / `__aexit__`.
+The same pattern works with `TenkiEnvironment`, `DockerEnvironment` (container stopped + removed), and any other backend that implements `__aenter__` / `__aexit__`.
 
 ### Credentials and runtime config
 
-`TenkiEnvironment` accepts [`Variable`](/docs/user-guide/context/variables) markers for `api_key`, `api_url`, `workspace_id`, `image`, and `env_vars`. `DaytonaEnvironment` accepts them for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
+`DaytonaEnvironment` accepts [`Variable`](/docs/user-guide/context/variables) markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `TenkiEnvironment` accepts them for `api_key`, `api_url`, `workspace_id`, `image`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
 
 ```python linenums="1"
 from ag2 import Variable
-from ag2.extensions.tenki import TenkiEnvironment
+from ag2.extensions.daytona import DaytonaEnvironment
 
-env = TenkiEnvironment(
-    api_key=Variable("tenki_key"),  # resolved from ctx.variables["tenki_key"]
-    workspace_id=Variable("tenki_workspace"),
+env = DaytonaEnvironment(
+    api_key=Variable("daytona_key"),  # resolved from ctx.variables["daytona_key"]
     image=Variable("tenant_image"),
 )
 ```
