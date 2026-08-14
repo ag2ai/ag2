@@ -194,7 +194,7 @@ The LLM is told (via the tool description) that `run_subtask` may be invoked mul
 
 ### persistent_stream
 
-`persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It stores the stream ID in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.
+`persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It caches the `MemoryStream` in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.
 
 Use it when sub-task history should accumulate across calls rather than starting fresh each time:
 

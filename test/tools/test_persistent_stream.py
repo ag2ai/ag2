@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from unittest.mock import MagicMock
 
 import pytest
@@ -65,13 +66,25 @@ class TestPersistentStream:
 
         assert stream_a.id != stream_b.id
 
-    def test_stores_stream_id_in_dependencies(self, ctx: Context) -> None:
+    def test_caches_stream_object_in_dependencies(self, ctx: Context) -> None:
         factory = persistent_stream()
         agent = _make_agent("helper")
 
         stream = factory(agent, ctx)
 
-        assert ctx.dependencies["ag:helper:stream"] == stream.id
+        assert ctx.dependencies["ag:helper:stream"] is stream
+
+    def test_reuses_same_stream_object_on_second_call(self, ctx: Context) -> None:
+        factory = persistent_stream()
+        agent = _make_agent()
+
+        first = factory(agent, ctx)
+        second = factory(agent, ctx)
+
+        # Same identity, not just the same id: the turn lock in
+        # ``Agent._execute`` is attached to the stream instance, so concurrent
+        # delegations only serialize if they share one object.
+        assert first is second
 
     def test_uses_parent_storage_backend(self, ctx: Context, storage: MemoryStorage) -> None:
         factory = persistent_stream()
@@ -92,6 +105,26 @@ class TestPersistentStream:
         stream2 = factory(agent, ctx2)
 
         assert stream1.id != stream2.id
+
+
+@pytest.mark.asyncio
+class TestConcurrentPersistentDelegations:
+    """Concurrent delegations into the same persistent sub-agent must land on
+    one stream instance, or the per-stream turn lock cannot serialize them."""
+
+    async def test_concurrent_delegations_share_one_stream(self, ctx: Context) -> None:
+        worker = Agent(
+            "worker",
+            config=TestConfig(*(ModelResponse(ModelMessage("done")) for _ in range(2))),
+        )
+        factory = persistent_stream()
+
+        first, second = await asyncio.gather(
+            run_task(worker, "first", parent_context=ctx, stream=factory(worker, ctx)),
+            run_task(worker, "second", parent_context=ctx, stream=factory(worker, ctx)),
+        )
+
+        assert first.stream is second.stream
 
 
 @pytest.mark.asyncio
