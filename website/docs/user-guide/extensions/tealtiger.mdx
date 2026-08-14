@@ -1,0 +1,465 @@
+---
+title: TealTiger Governance
+sidebar_label: TealTiger
+description: Deterministic governance middleware for AG2 agents — tool allowlists, PII detection, secret scanning, cost budgets, kill switches, and structured audit trails with zero external dependencies.
+---
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/agentguard-ai/tealtiger/main/.github/logo/tealtiger-logo-256.png" alt="TealTiger" width="150" />
+</p>
+
+# TealTiger Governance Middlewaare
+
+`TealTigerMiddleware` adds deterministic governance guardrails to AG2 agents. It enforces tool allowlists, detects PII and secrets in tool arguments, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — all evaluated in under 2ms with no LLM in the governance path.
+
+:::info No external dependencies
+This extension has zero third-party dependencies. All governance evaluation runs inline using pattern matching (fnmatch, regex) — pure AG2 + stdlib.
+:::
+
+## Installation
+
+The extension ships with AG2 — no additional installation required:
+
+```bash
+pip install ag2
+```
+
+Import directly:
+
+```python
+from ag2.extensions.tealtiger import (
+    TealTigerMiddleware,
+    GovernanceMode,
+    GovernancePolicy,
+)
+```
+
+## Quick Start
+
+```python
+from ag2 import Agent
+from ag2.extensions.tealtiger import TealTigerMiddleware, GovernanceMode, GovernancePolicy
+
+# Configure governance with multiple policy layers
+governance = TealTigerMiddleware(
+    mode=GovernanceMode.ENFORCE,
+    policies=[
+        GovernancePolicy.tool_allowlist(["search", "read_*"]),
+        GovernancePolicy.pii_block(["ssn", "credit_card", "email", "phone"]),
+        GovernancePolicy.secret_block(),
+        GovernancePolicy.cost_limit(max_per_session=5.0),
+    ],
+)
+
+# Attach to any AG2 agent
+agent = Agent("assistant", middleware=[governance])
+
+# Governance state is accessible on the factory
+governance.freeze("assistant")         # Kill switch — block everything
+print(governance.decisions)            # Full audit trail
+print(f"Cost: ${governance._state.cumulative_cost:.4f}")
+```
+
+Every tool call now flows through deterministic governance evaluation before execution.
+
+## Multi-Stage Defense
+
+TealTiger governs at multiple stages of the AG2 agent lifecycle:
+
+```mermaid
+flowchart LR
+    A[👤 User Message] --> B{🛡️ Stage 1\non_turn}
+    B -->|Kill Switch\nCheck| C[🤖 Agent\nProcessing]
+    C --> D[🔧 Tool Call]
+    D --> E{🛡️ Stage 2\non_tool_execution}
+    E -->|"✅ ALLOW"| F[⚡ Execute Tool]
+    E -->|"❌ DENY"| G[🚫 ToolErrorEvent]
+    F --> H[📝 Stage 3\nTEEC Receipt]
+    G --> H
+
+    style B fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style E fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style H fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style F fill:#f0fdf4,stroke:#16a34a
+    style G fill:#fef2f2,stroke:#dc2626
+```
+
+| Hook | Stage | What It Does |
+|------|-------|-------------|
+| `on_turn` | Turn defense | Kill switch enforcement — frozen agents cannot take turns |
+| `on_tool_execution` | Pre-tool defense | Tool allowlist, PII scan, secret scan, cost limit check |
+| Post-execution | Audit | TEEC receipt generation for every tool call (allowed or denied) |
+
+All stages activate from a single middleware instance. The **MiddlewareFactory** pattern ensures state (decisions, receipts, cost, frozen agents) persists across all turns.
+
+## Governance Modes
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| **ENFORCE** | Evaluates all policies. Blocks violations with `ToolErrorEvent`. | Production |
+| **MONITOR** | Evaluates all policies, records decisions, but **never blocks**. | Staging / shadow testing |
+| **OBSERVE** | Skips policy evaluation entirely. Passes through with minimal audit receipt. | Initial rollout / lowest overhead |
+
+Start with `MONITOR` in staging to see what would be blocked, then switch to `ENFORCE` in production:
+
+```python
+# Shadow mode — see what governance would deny without blocking anything
+governance = TealTigerMiddleware(
+    mode=GovernanceMode.MONITOR,
+    policies=[
+        GovernancePolicy.tool_allowlist(["search", "read_*"]),
+        GovernancePolicy.pii_block(["ssn", "credit_card"]),
+    ],
+)
+
+# After validation, promote to ENFORCE
+governance.mode = GovernanceMode.ENFORCE
+```
+
+## Policy Types
+
+### Tool Allowlist
+
+Restrict which tools the agent can call. Supports glob patterns via `fnmatch`:
+
+```python
+GovernancePolicy.tool_allowlist(["search", "read_*", "github_*"])
+```
+
+Any tool not matching the patterns is denied with reason code `TOOL_NOT_ALLOWED` and risk score 0.9.
+
+### PII Detection
+
+Block tool calls containing sensitive data in their arguments:
+
+```python
+GovernancePolicy.pii_block(["ssn", "credit_card", "email", "phone"])
+```
+
+| Category | Pattern | Example Match |
+|----------|---------|---------------|
+| `ssn` | `\d{3}-\d{2}-\d{4}` | 123-45-6789 |
+| `credit_card` | `(\d{4}[-\s]?){3}\d{4}` | 4111-1111-1111-1111 |
+| `email` | Standard email regex | user@example.com |
+| `phone` | US phone with optional +1 | +1-555-123-4567 |
+
+Denied with reason code `PII_DETECTED` and risk score 0.85. The decision includes `findings` with the detected category and position.
+
+### Secret Detection
+
+Block tool calls containing API keys, tokens, or credentials:
+
+```python
+GovernancePolicy.secret_block()
+```
+
+| Pattern | What It Catches |
+|---------|----------------|
+| `api_key=...` / `apikey:...` | Generic API keys (20+ chars) |
+| `password=...` / `pwd:...` | Passwords in config strings |
+| `token=...` / `bearer:...` | Auth tokens (20+ chars) |
+| `-----BEGIN PRIVATE KEY-----` | RSA, EC, DSA private keys |
+| `AKIA...` / `ASIA...` | AWS access key IDs |
+
+Denied with reason code `SECRET_DETECTED` and risk score 0.95 (highest of all policies).
+
+### Cost Limit
+
+Enforce per-session cost ceilings:
+
+```python
+GovernancePolicy.cost_limit(max_per_session=5.0)
+```
+
+Cumulative cost is tracked across all tool calls using `cost_per_call` (configurable, defaults to $0.002). Once the limit is reached, further calls are denied with `BUDGET_EXCEEDED`.
+
+## Factory-Level Budget
+
+In addition to policy-level `cost_limit`, you can set a factory-level budget that's always enforced (no policy needed):
+
+```python
+governance = TealTigerMiddleware(
+    budget_limit=10.0,      # Hard ceiling — always enforced
+    cost_per_call=0.002,    # Estimated cost per tool call
+    policies=[...],
+)
+```
+
+The factory-level budget is checked before policies, providing an immutable spending cap.
+
+## Kill Switch
+
+Freeze an agent immediately — blocks all actions regardless of policies:
+
+```python
+governance.freeze("assistant")    # Block everything for this agent
+governance.unfreeze("assistant")  # Restore normal governance
+governance.freeze("*")            # Freeze ALL agents
+governance.unfreeze("*")          # Unfreeze all
+```
+
+The kill switch is enforced at both the **turn level** (`on_turn`) and the **tool level** (`on_tool_execution`):
+
+- **ENFORCE mode**: Returns `ToolErrorEvent`, blocking the entire turn or tool call
+- **MONITOR mode**: Records a DENY decision but allows the action through
+- **OBSERVE mode**: Not evaluated (passthrough)
+
+Kill switch decisions carry reason code `KILL_SWITCH` and risk score 1.0 (maximum).
+
+## Audit Trail
+
+Every governance decision produces a structured `GovernanceDecision`:
+
+```python
+for decision in governance.decisions:
+    print(
+        f"[{decision.action}] tool={decision.tool_name} "
+        f"agent={decision.agent_name} "
+        f"reason_codes={decision.reason_codes} "
+        f"risk={decision.risk_score} "
+        f"latency={decision.evaluation_time_ms:.2f}ms "
+        f"cost=${decision.cumulative_cost:.4f}"
+    )
+```
+
+### Decision Contract Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `decision_id` | UUID | Unique identifier for correlation |
+| `action` | `ALLOW` / `DENY` | Governance verdict |
+| `reason` | str | Human-readable explanation |
+| `reason_codes` | list[str] | Machine-readable codes: `TOOL_NOT_ALLOWED`, `PII_DETECTED`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `KILL_SWITCH` |
+| `risk_score` | float | 0.0 (safe) to 1.0 (critical) |
+| `tool_name` | str | Tool that was evaluated |
+| `agent_name` | str | Agent that made the call |
+| `evaluation_time_ms` | float | Governance latency |
+| `findings` | list[dict] | PII findings with category and position |
+| `cumulative_cost` | float | Running session cost in USD |
+
+### TEEC Receipts
+
+Every tool execution (allowed or denied) produces a `TEECReceipt`:
+
+```python
+for receipt in governance.receipts:
+    print(
+        f"{receipt.execution_outcome} | {receipt.tool_name} | "
+        f"agent={receipt.agent_name} | decision={receipt.decision_id}"
+    )
+```
+
+| Field | Description |
+|-------|-------------|
+| `receipt_id` | Unique receipt UUID |
+| `decision_id` | Links back to the governance decision |
+| `agent_name` | Agent that triggered the evaluation |
+| `tool_name` | Tool that was called |
+| `action` | `ALLOW` or `DENY` |
+| `execution_outcome` | `executed` or `blocked` |
+| `timestamp_ms` | Unix timestamp in milliseconds |
+
+## Callbacks
+
+React to governance decisions in real time:
+
+```python
+def on_deny(decision):
+    if decision.action == "DENY":
+        alert_ops_team(decision.tool_name, decision.reason_codes)
+
+def on_receipt(receipt):
+    audit_log.append(receipt)
+
+governance = TealTigerMiddleware(
+    policies=[...],
+    on_decision=on_deny,       # Called for every decision (ALLOW and DENY)
+    on_receipt=on_receipt,     # Called for every TEEC receipt
+)
+```
+
+## Use with GroupChat (Multi-Agent)
+
+Share governance across multiple agents in a GroupChat — state, decisions, and cost are tracked across the entire conversation:
+
+```mermaid
+flowchart TB
+    GOV["🛡️ TealTigerMiddleware — Shared Instance\n(decisions, receipts, cost, frozen_agents)"]
+    GOV -->|evaluates| R["🔬 Researcher\ntools: search, read_*"]
+    GOV -->|evaluates| AN["📊 Analyst\ntools: calculator, chart"]
+    GOV -->|"🧊 FROZEN"| W["✍️ Writer\ntools: write_file, send"]
+
+    style GOV fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style R fill:#eff6ff,stroke:#93c5fd
+    style AN fill:#eff6ff,stroke:#93c5fd
+    style W fill:#fef2f2,stroke:#fca5a5
+```
+
+```python
+from ag2 import Agent, GroupChat, GroupChatManager
+from ag2.extensions.tealtiger import TealTigerMiddleware, GovernanceMode, GovernancePolicy
+
+# Single governance instance shared across all agents
+governance = TealTigerMiddleware(
+    mode=GovernanceMode.ENFORCE,
+    policies=[
+        GovernancePolicy.tool_allowlist(["search", "read_*", "calculator"]),
+        GovernancePolicy.pii_block(["ssn", "credit_card", "email"]),
+        GovernancePolicy.secret_block(),
+        GovernancePolicy.cost_limit(max_per_session=10.0),
+    ],
+)
+
+researcher = Agent("researcher", middleware=[governance])
+analyst = Agent("analyst", middleware=[governance])
+writer = Agent("writer", middleware=[governance])
+
+group_chat = GroupChat(agents=[researcher, analyst, writer])
+manager = GroupChatManager(groupchat=group_chat)
+
+# Cost, decisions, and receipts are shared across all agents
+manager.initiate_chat(message="Research AI governance trends")
+
+print(f"Total decisions: {len(governance.decisions)}")
+print(f"Total cost: ${governance._state.cumulative_cost:.4f}")
+
+# Freeze a specific agent mid-conversation
+governance.freeze("writer")  # Writer can no longer take turns or call tools
+```
+
+## Complete Example: Governed Research Agent
+
+```python
+from ag2 import Agent
+from ag2.extensions.tealtiger import TealTigerMiddleware, GovernanceMode, GovernancePolicy
+
+# Full governance configuration
+governance = TealTigerMiddleware(
+    mode=GovernanceMode.ENFORCE,
+    budget_limit=10.0,
+    cost_per_call=0.003,
+    policies=[
+        # Tool governance — only safe tools
+        GovernancePolicy.tool_allowlist(["web_search", "calculator", "read_file"]),
+
+        # Data protection — block PII leakage
+        GovernancePolicy.pii_block(["ssn", "credit_card", "email", "phone"]),
+
+        # Credential protection — block secret leakage
+        GovernancePolicy.secret_block(),
+
+        # Cost governance — hard per-session limit
+        GovernancePolicy.cost_limit(max_per_session=5.0),
+    ],
+    on_decision=lambda d: print(f"  [{d.action}] {d.tool_name} — {d.reason_codes}"),
+)
+
+agent = Agent("research_assistant", middleware=[governance])
+
+# Run the agent
+result = agent.run("Research AI governance frameworks for enterprise deployment")
+
+# Post-run analysis
+allowed = [d for d in governance.decisions if d.action == "ALLOW"]
+denied = [d for d in governance.decisions if d.action == "DENY"]
+
+print(f"\n--- Governance Summary ---")
+print(f"Total evaluations: {len(governance.decisions)}")
+print(f"Allowed: {len(allowed)}")
+print(f"Denied: {len(denied)}")
+print(f"Session cost: ${governance._state.cumulative_cost:.4f}")
+print(f"TEEC receipts: {len(governance.receipts)}")
+
+if denied:
+    print(f"\nDenied actions:")
+    for d in denied:
+        print(f"  • {d.tool_name}: {d.reason} (risk={d.risk_score})")
+```
+
+## Evaluation Order
+
+Policies are evaluated in a fixed priority order. The first DENY wins:
+
+```mermaid
+flowchart TD
+    START([Tool Call Received]) --> S1
+    S1{{"1️⃣ Kill Switch\n(risk: 1.0)"}} -->|frozen| DENY[❌ DENY]
+    S1 -->|not frozen| S2
+    S2{{"2️⃣ Factory Budget\n(risk: 0.8)"}} -->|exceeded| DENY
+    S2 -->|within budget| S3
+    S3{{"3️⃣ Policy Cost Limit\n(risk: 0.8)"}} -->|exceeded| DENY
+    S3 -->|within limit| S4
+    S4{{"4️⃣ Tool Allowlist\n(risk: 0.9)"}} -->|not allowed| DENY
+    S4 -->|allowed| S5
+    S5{{"5️⃣ PII Scan\n(risk: 0.85)"}} -->|detected| DENY
+    S5 -->|clean| S6
+    S6{{"6️⃣ Secret Scan\n(risk: 0.95)"}} -->|detected| DENY
+    S6 -->|clean| ALLOW[✅ ALLOW]
+
+    style S1 fill:#fef2f2,stroke:#fca5a5
+    style S2 fill:#fef9c3,stroke:#fde047
+    style S3 fill:#fef9c3,stroke:#fde047
+    style S4 fill:#eff6ff,stroke:#93c5fd
+    style S5 fill:#fdf4ff,stroke:#e879f9
+    style S6 fill:#fef2f2,stroke:#fca5a5
+    style DENY fill:#fef2f2,stroke:#dc2626,stroke-width:2px
+    style ALLOW fill:#f0fdf4,stroke:#16a34a,stroke-width:2px
+```
+
+If all checks pass → `ALLOW` with risk 0.0.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Factory["TealTigerMiddleware (Long-lived)"]
+        STATE["_GovernanceState\ndecisions | receipts | frozen_agents | cost"]
+        API["freeze() | unfreeze() | .decisions | .receipts"]
+    end
+
+    Factory -->|"creates per turn"| PerTurn
+
+    subgraph PerTurn["_TealTigerTurnMiddleware (Per-Turn)"]
+        TURN["on_turn()\nKill switch + mode gating"]
+        TOOL["on_tool_execution()\nPolicy evaluation + receipts"]
+    end
+
+    PerTurn -->|"writes back"| STATE
+
+    style Factory fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style PerTurn fill:#eff6ff,stroke:#3b82f6,stroke-width:2px
+```
+
+```
+ag2/extensions/tealtiger/
+├── __init__.py       # Public API: TealTigerMiddleware, GovernanceMode, GovernancePolicy
+├── types.py          # GovernancePolicy, GovernanceDecision, TEECReceipt, PII_PATTERNS, SECRET_PATTERNS
+└── middleware.py     # TealTigerMiddleware (factory) + _TealTigerTurnMiddleware (per-turn)
+```
+
+The middleware follows AG2's **MiddlewareFactory** pattern:
+- `TealTigerMiddleware` is the long-lived factory holding shared `_GovernanceState` (decisions, receipts, frozen agents, cumulative cost)
+- Each agent turn creates a `_TealTigerTurnMiddleware` instance that references the shared state
+- `on_turn` handles kill switch enforcement at the turn level
+- `on_tool_execution` handles all policy evaluation at the tool level
+- Kill switch, budget, and audit persist across turns and agents
+
+## Performance
+
+| Operation | Latency |
+|-----------|---------|
+| Kill switch check | ~0.01ms |
+| Tool allowlist (fnmatch) | ~0.05ms |
+| PII scan (4 patterns) | ~0.3ms |
+| Secret scan (5 patterns) | ~0.2ms |
+| Cost check | ~0.01ms |
+| **Full evaluation (all policies)** | **< 2ms** |
+
+No network calls, no LLM inference, no external service dependencies.
+
+## Links
+
+- [TealTiger](https://docs.tealtiger.ai/integrations/ag2) — Full integration guide with advanced capabilities
+- [GitHub](https://github.com/agentguard-ai/tealtiger) (Apache 2.0)
+- [PyPI](https://pypi.org/project/tealtiger/) — Full TealTiger governance platform
+- Maintainer: [@nagasatish007](https://github.com/nagasatish007)
