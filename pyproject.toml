@@ -143,9 +143,6 @@ test = [
     "docker>=6.0.0,<8",
     "ag2[mcp]",
     "ag2[mcp-ui]", # ag2.mcp_ui — MCP-UI resource & action builders
-    "ipykernel==7.3.0",
-    "nbconvert==7.17.1",
-    "nbformat==5.10.4",
     "pillow", # test/providers/gemini builds an image fixture; no longer implied by ag2[gemini]
     "python-dotenv", # provider smoke tests load repo-root .env
     "respx>=0.23.0,<0.24.0", # search tests
@@ -227,19 +224,14 @@ docs = [
     "mkdocs-macros-plugin==1.5.0",                      # includes with variables
     "mkdocs-glightbox==0.5.2",                          # img zoom
     "mkdocs-redirects==1.2.3",                          # required for handling redirects natively
-    "pillow",                                           # required for mkdocs-glightbo
-    "cairosvg",                                         # required for mkdocs-glightbo
     "jinja2==3.1.6",
     "pyyaml==6.0.3",
-    "termcolor==3.3.0",
-    "nbclient==0.11.0",
     "mcp>=1.11.0,<2",
 ]
 
 types = [
     "mypy==2.3.0",
     "types-PyYAML",
-    "types-requests",
     { include-group = "test" },
     "ag2[openai, a2a, ag-ui]",
 ]
@@ -373,15 +365,6 @@ ignore = [
     "C901",     # too complex
     "ASYNC109",
     "ASYNC240",
-]
-
-[tool.ruff.lint.per-file-ignores]
-"notebook/agentchat_webscraping_with_oxylabs.ipynb" = [
-    "E226",
-    "E303",
-    "F811",
-    "F821",
-    "F706",
 ]
 
 [tool.ruff.lint.mccabe]
