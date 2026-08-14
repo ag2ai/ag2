@@ -6,7 +6,7 @@
 
 Every reducer of history — the assembly policies, the limiter middleware, and the
 compaction strategies — cuts the event list at an index and replays
-``events[cut:]`` to the provider. That tail has to stand on its own, and three
+``events[cut:]`` to the provider. That tail has to stand on its own, and four
 retained events cannot:
 
 | retained event             | required companion             | if missing                      |
@@ -14,6 +14,7 @@ retained events cannot:
 | tool result                | the **call** it answers        | orphan ``function_call_output`` |
 | builtin (server-side) call | its **reasoning** item         | orphan ``web_search_call``      |
 | local call event           | the **response** announcing it | maps to nothing at all          |
+| response with tool calls   | its **provider turn item**     | tool calls vanish, silently     |
 
 The remedy differs by caller because what they own differs: a policy or limiter
 persists nothing, so it drops the offending event (:func:`replayable_span`);
@@ -26,14 +27,13 @@ from collections.abc import Sequence
 from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
-    ModelReasoning,
     ModelRequest,
     ModelResponse,
+    ProviderReplay,
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultEvent,
     ToolResultsEvent,
-    is_conversational,
 )
 
 
@@ -63,8 +63,27 @@ def _required_ids(event: BaseEvent) -> set[str]:
 
 
 def _is_anchor(event: BaseEvent) -> bool:
-    """True for a reasoning item durable enough to be replayed."""
-    return isinstance(event, ModelReasoning) and is_conversational(event)
+    """True for an item the builtin calls of its response are paired with.
+
+    ``ProviderReplay`` marks the requirement and the event's own
+    ``__replay_role__`` names which half of it applies, so neither durability nor
+    the event's base classes decide this. Durability answers a different question
+    (storage, not replay), and reading the role off ``ModelReasoning`` would
+    misfile any provider whose turn carrier happened to subclass it.
+    """
+    return isinstance(event, ProviderReplay) and event.__replay_role__ == "anchor"
+
+
+def _is_turn_item(event: BaseEvent) -> bool:
+    """True for provider-native state standing in for a whole assistant turn.
+
+    The other ``ProviderReplay`` role: some providers hand back an object that is
+    the only way to reconstruct the turn they just produced. ``XAIAssistantEvent``
+    carries the response proto, and xai-sdk offers no way to build an assistant
+    message with ``tool_calls`` from primitives. Anchors are excluded — they cover
+    a single builtin call, which is a narrower relationship than a whole turn.
+    """
+    return isinstance(event, ProviderReplay) and event.__replay_role__ == "turn"
 
 
 def _prune(events: Sequence[BaseEvent], cut: int) -> list[BaseEvent]:
@@ -84,15 +103,29 @@ def _prune(events: Sequence[BaseEvent], cut: int) -> list[BaseEvent]:
     asked for a summary (see ``ag2.config.openai.openai_responses_client``).
     """
     anchor: int | None = None
+    turn_item: int | None = None
     kept: list[BaseEvent] = []
     for index, event in enumerate(events):
+        orphaned_turn = False
         if _is_anchor(event):
             anchor = index
-        elif isinstance(event, (ModelRequest, ModelResponse)):
+        elif _is_turn_item(event):
+            turn_item = index
+        elif isinstance(event, ModelRequest):
             anchor = None
+            turn_item = None
+        elif isinstance(event, ModelResponse):
+            anchor = None
+            # The response consumes the turn item emitted just before it. Only
+            # tool calls are lost without it — the text is on the response
+            # itself — so a plain answer survives the item being cut away.
+            orphaned_turn = turn_item is not None and turn_item < cut and bool(event.tool_calls.calls)
+            turn_item = None
         if index < cut:
             continue
         if isinstance(event, BuiltinToolCallEvent) and anchor is not None and anchor < cut:
+            continue
+        if orphaned_turn:
             continue
         kept.append(event)
 
