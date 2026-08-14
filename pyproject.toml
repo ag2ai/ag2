@@ -420,6 +420,6 @@ follow_imports = "skip"
 follow_imports_for_stubs = true
 
 [tool.codespell]
-skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb,./notebook/agentchat_graph_rag_neo4j.ipynb"
+skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg"
 quiet-level = 3
-ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch,iif,COO,EHR,ALS,crasher,fulfilment"
+ignore-words-list = "ans,crasher,fulfilment,iif"
