@@ -80,16 +80,15 @@ ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=2.45.0,<3.0"]
-anthropic = ["anthropic[vertex]>=0.116.0,<1"]
+anthropic = ["anthropic>=0.116.0,<1"]
 gemini = [
-    "google-api-core",
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
     "google-genai>=1.68.0,<3.0",
-    "google-cloud-aiplatform",
+    # `google.auth.credentials` / `google.oauth2.service_account` in gemini_client.py.
+    # Vertex AI is reached through google-genai's own `vertexai=True`, so
+    # google-cloud-aiplatform is not needed.
     "google-auth",
-    "pillow",
-    "jsonschema",
 ]
 # === Voice / TTS providers (ag2.live) ===
 elevenlabs = ["elevenlabs>=1.50.0,<3"]
@@ -97,15 +96,15 @@ elevenlabs = ["elevenlabs>=1.50.0,<3"]
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
 mistral = ["mistralai>=2.8.0,<3"]
-ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
+ollama = ["ollama>=0.4.7"]
 bedrock = ["boto3>=1.34.149"]
 dashscope = ["dashscope>=1.25.13"]
 
 redis = ["redis>=5.0,<9"]
-tracing = [
-    "opentelemetry-sdk>=1.20",
-    "opentelemetry-exporter-otlp-proto-grpc>=1.20",
-]
+# SDK only: ag2 builds spans and hands them to whatever SpanProcessor the caller
+# passes in, so the exporter (console, OTLP over http/grpc, vendor SDK) is the
+# caller's choice to install.
+tracing = ["opentelemetry-sdk>=1.20"]
 metrics = ["prometheus-client>=0.20.0,<0.30.0"]
 
 # === Search tools ===
@@ -147,6 +146,7 @@ test = [
     "ipykernel==7.3.0",
     "nbconvert==7.17.1",
     "nbformat==5.10.4",
+    "pillow", # test/providers/gemini builds an image fixture; no longer implied by ag2[gemini]
     "python-dotenv", # provider smoke tests load repo-root .env
     "respx>=0.23.0,<0.24.0", # search tests
     # starlette >=1.0 drives `starlette.testclient.TestClient` with httpx2 and warns
