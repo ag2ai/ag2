@@ -43,6 +43,23 @@ ToolCallContent: TypeAlias = (
     schema.ContentToolCallContent | schema.FileEditToolCallContent | schema.TerminalToolCallContent
 )
 
+# One property of an elicitation form's requested schema, mirroring the union
+# ``ElicitationSchema.properties`` admits.
+ElicitationProperty: TypeAlias = (
+    schema.ElicitationStringPropertySchema
+    | schema.ElicitationNumberPropertySchema
+    | schema.ElicitationIntegerPropertySchema
+    | schema.ElicitationBooleanPropertySchema
+    | schema.ElicitationMultiSelectPropertySchema
+    | schema.ElicitationOtherPropertySchema
+)
+
+# What an answered property carries: the root of ``ElicitationContentValue``, which
+# the SDK exports only as a ``RootModel`` wrapper, and the set the property schemas
+# above declare their ``default`` from. ``None`` is deliberately not a member —
+# unanswered is spelled ``ElicitationValue | None`` at the sites that allow it.
+ElicitationValue: TypeAlias = str | int | float | bool | list[str]
+
 # Every MCP server shape a Client may declare in ``session/new``, mirroring
 # ``NewSessionRequest.mcp_servers``. The ``acp`` SDK parses the request; naming
 # the result here is what keeps a recorded server readable as its own model

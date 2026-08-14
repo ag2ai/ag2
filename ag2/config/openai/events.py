@@ -24,6 +24,7 @@ from ag2.events import (
     Field,
     Input,
     ModelReasoning,
+    ProviderReplay,
     TextInput,
     ToolResult,
     UrlInput,
@@ -140,7 +141,14 @@ class OpenAIServerToolResultEvent(BuiltinToolResultEvent):
         return cls(parent_id=parent_id, name=name, result=ToolResult(parts=parts, metadata=metadata))
 
 
-class OpenAIReasoningEvent(ModelReasoning):
+class OpenAIReasoningEvent(ModelReasoning, ProviderReplay):
+    """Reasoning item the Responses API pairs with a server-side tool call.
+
+    ProviderReplay anchor: the API rejects a replayed ``web_search_call`` whose
+    ``reasoning`` item is missing. Persisted, unlike ``ModelReasoning``.
+    """
+
     __transient__ = False
+    __replay_role__ = "anchor"
 
     item: ResponseReasoningItem = Field(repr=False)

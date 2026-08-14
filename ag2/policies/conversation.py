@@ -10,6 +10,7 @@ from ag2.events import (
     BaseEvent,
     ModelRequest,
     ModelResponse,
+    ProviderReplay,
     ToolCallEvent,
     ToolCallsEvent,
     ToolErrorEvent,
@@ -17,10 +18,15 @@ from ag2.events import (
     ToolResultsEvent,
 )
 
-# Event types that are always part of conversation context
+# Classes that are always part of conversation context, matched with isinstance.
+# All but one are event types; ``ProviderReplay`` is the marker mixin provider
+# packages apply to their own events (e.g. the reasoning item the Responses API
+# pairs with a server-side tool call), which is how those survive this filter
+# without the core naming a provider class.
 CONVERSATION_TYPES = (
     ModelRequest,
     ModelResponse,
+    ProviderReplay,
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultEvent,

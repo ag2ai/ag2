@@ -41,6 +41,7 @@ from ag2.events import (
 )
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent, ToolResult
 from ag2.events.types import BinaryResult, Usage
+from ag2.types import SendableMessage
 
 from .events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
 from .types import ContentBlock, SessionUpdate, ToolCallContent
@@ -130,9 +131,9 @@ def map_session_update(update: SessionUpdate) -> BaseEvent | None:
     if isinstance(update, schema.AgentPlanUpdate):
         return _plan(update.entries)
 
-    # acp 0.11 added incremental plan updates. Only the ``items`` payload carries
-    # plan entries; ``file``/``markdown`` reference a plan by URI or raw markdown
-    # and have no ACPPlan equivalent, so they fall through to the debug log below.
+    # Incremental plan updates: only the ``items`` payload carries plan entries;
+    # ``file``/``markdown`` reference a plan by URI or raw markdown and have no
+    # ACPPlan equivalent, so they fall through to the debug log below.
     if isinstance(update, schema.AgentPlanContentUpdate) and isinstance(update.plan, schema.PlanUpdateItems):
         return _plan(update.plan.entries)
 
@@ -278,7 +279,7 @@ def tool_result_text(result: ToolResult) -> str:
     return "".join(pieces)
 
 
-def _render_data(data: Any) -> str:
+def _render_data(data: SendableMessage) -> str:
     """Render a ``DataInput`` payload as text, preferring JSON for structures."""
     if isinstance(data, str):
         return data
