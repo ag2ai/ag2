@@ -49,6 +49,39 @@ def is_conversational(event: Any) -> bool:
     return not getattr(cls, "__transient__", False) and getattr(cls, "__conversational__", True)
 
 
+_REPLAY_ROLES = frozenset({"anchor", "turn"})
+
+
+class ProviderReplay:
+    """Marker: provider-native state a provider needs back to reconstruct a turn.
+
+    History shaping (``ConversationPolicy``, trimming, compaction) must keep these.
+    Dropping one costs the turn its tool calls — loudly on the OpenAI Responses API,
+    which rejects the request, and silently on xAI, which answers 200 without them.
+
+    Subclasses declare ``__replay_role__``, since the two roles need opposite
+    remedies (see :mod:`ag2._replay`): ``"anchor"`` for an item the builtin calls of
+    one response are paired with, ``"turn"`` for an object standing in for a whole
+    assistant turn. Declared rather than inferred from the bases, so a turn carrier
+    that happens to subclass ``ModelReasoning`` is not filed as an anchor.
+    """
+
+    # No ``__transient__`` here on purpose: ``ModelReasoning`` is transient and would
+    # shadow it under the natural base order, so subclasses declare their own.
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if getattr(cls, "__transient__", False):
+            raise TypeError(
+                f"{cls.__name__} is a ProviderReplay but is __transient__; "
+                "a transient event is never replayed. Set __transient__ = False."
+            )
+        if getattr(cls, "__replay_role__", None) not in _REPLAY_ROLES:
+            raise TypeError(
+                f"{cls.__name__} is a ProviderReplay but declares no valid __replay_role__; "
+                f"set one of {sorted(_REPLAY_ROLES)} — see ProviderReplay's docstring."
+            )
+
+
 class Field:
     def __init__(
         self,

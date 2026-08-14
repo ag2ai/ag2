@@ -17,12 +17,13 @@ import socket
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
+from functools import cache
 from typing import TYPE_CHECKING, Any, cast
 
 import acp
 from acp import schema
 
-from .config import ACPConfig
+from .config import ACPConfig, _dispatch_kwargs
 from .types import SessionUpdate
 
 if TYPE_CHECKING:
@@ -34,16 +35,43 @@ if TYPE_CHECKING:
 
     from .agent import ACPAgent
     from .config import ConnectHook
+    from .remote import ACPRemoteConfig
     from .session import ACPSession
 
+FAKE_SESSION_ID = "fake-session-1"
+
 __all__ = (
+    "FAKE_SESSION_ID",
     "ACPTurn",
     "FakeACPConfig",
     "RecordingClient",
+    "ScriptedElicitation",
     "connect",
     "duplex",
+    "duplex_acp_config",
     "fake_acp_config",
+    "fake_remote_acp_config",
 )
+
+
+@dataclass
+class ScriptedElicitation:
+    """One ``elicitation/create`` the scripted agent issues — the agent asking the user.
+
+    Attributes:
+        message: The human-readable message describing what input is needed.
+        mode: The requested mode — normally one of ACP's four
+            ``ElicitationMode`` models (form/url × session/request scope).
+            Anything else stands in for a mode a later protocol release adds,
+            which the client is expected to decline rather than error on.
+        complete: When ``True`` the agent follows the answer with an
+            ``elicitation/complete`` notification, as an agent may alongside a
+            ``url``-mode flow. Requires a ``mode`` carrying an ``elicitation_id``.
+    """
+
+    message: str
+    mode: Any
+    complete: bool = False
 
 
 @dataclass
@@ -58,6 +86,11 @@ class ACPTurn:
             ``stop_reason="cancelled"``) — used to exercise ``turn_timeout``.
         on_prompt: Awaited at the start of the turn, before ``updates`` replay —
             lets a test act as the CLI agent mid-turn (e.g. call the MCP gateway).
+        elicitations: Questions the agent puts to the user during the turn, issued
+            in order after ``on_prompt`` and before ``updates`` replay — so a turn
+            scripts the question *and* the reply the agent gives once answered.
+            Each response the client sends back is appended to the
+            ``elicitation_responses`` list passed to :func:`fake_acp_config`.
     """
 
     updates: Sequence[SessionUpdate] = field(default_factory=tuple)
@@ -65,6 +98,7 @@ class ACPTurn:
     usage: "schema.Usage | None" = None
     hang: bool = False
     on_prompt: "Callable[[], Awaitable[None]] | None" = None
+    elicitations: Sequence[ScriptedElicitation] = field(default_factory=tuple)
 
 
 class _FakeConnection:
@@ -82,19 +116,31 @@ class _FakeConnection:
         agent_capabilities: "schema.AgentCapabilities | None" = None,
         config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
         config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+        initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
+        initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
+        elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
     ) -> None:
         self._client = client
         self._turns = turns
         self._config_options = list(config_options or [])
         self._cancelled = asyncio.Event()
         self._agent_capabilities = agent_capabilities
+        self._initialize_elicitations = initialize_elicitations
         self.new_session_kwargs: dict[str, Any] | None = None
         self.closed = False
         self.config_option_calls: list[tuple[str, str | bool]] = (
             config_option_calls if config_option_calls is not None else []
         )
+        self.initialize_calls: list[schema.ClientCapabilities | None] = (
+            initialize_calls if initialize_calls is not None else []
+        )
+        self.elicitation_responses: list[schema.CreateElicitationResponse] = (
+            elicitation_responses if elicitation_responses is not None else []
+        )
 
     async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
+        self.initialize_calls.append(kwargs.get("client_capabilities"))
+        await self._elicit(self._initialize_elicitations)
         return schema.InitializeResponse(
             protocol_version=acp.PROTOCOL_VERSION,
             agent_capabilities=self._agent_capabilities,
@@ -103,9 +149,20 @@ class _FakeConnection:
     async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
         self.new_session_kwargs = kwargs
         return schema.NewSessionResponse(
-            session_id="fake-session-1",
+            session_id=FAKE_SESSION_ID,
             config_options=self._config_options or None,
         )
+
+    async def _elicit(self, elicitations: "Sequence[ScriptedElicitation]") -> None:
+        """Put each scripted question to the client, recording what it answered."""
+        for elicitation in elicitations:
+            response = await self._client.create_elicitation(
+                message=elicitation.message,
+                mode=elicitation.mode,
+            )
+            self.elicitation_responses.append(response)
+            if elicitation.complete:
+                await self._client.complete_elicitation(elicitation_id=elicitation.mode.elicitation_id)
 
     async def set_config_option(
         self, *, session_id: str, config_id: str, value: Any, **kwargs: Any
@@ -131,6 +188,7 @@ class _FakeConnection:
         turn = next(self._turns)
         if turn.on_prompt is not None:
             await turn.on_prompt()
+        await self._elicit(turn.elicitations)
         if turn.hang:
             await self._cancelled.wait()
             self._cancelled.clear()
@@ -140,24 +198,84 @@ class _FakeConnection:
         return schema.PromptResponse(stop_reason=turn.stop_reason, usage=turn.usage)
 
 
-@dataclass(slots=True)
-class FakeACPConfig(ACPConfig):
-    """:class:`ACPConfig` bound to the scripted in-process agent.
+class _FakeConfigViews:
+    """Public read-only views of a fake config's run-scoped state.
 
-    Adds public read-only views of the run-scoped state so tests can assert on
-    session lifecycle (leaks, teardown) without reaching into private fields.
+    Lets tests assert on session lifecycle (leaks, teardown) without reaching
+    into private fields. Mixed into the launch-based and remote fakes alike —
+    the whole point of the design is that a behavioural test cannot tell them
+    apart, so neither should the harness.
     """
+
+    __slots__ = ()
 
     @property
     def sessions(self) -> "dict[StreamId, ACPSession]":
         """Live sessions keyed by stream id (empty once ``aclose()`` ran)."""
-        return self._sessions
+        return self._sessions  # type: ignore[attr-defined]
 
     @property
     def connect(self) -> "ConnectHook":
         """The in-process connection opener, for driving ``ACPSession.ensure`` directly."""
-        assert self._connect is not None
-        return self._connect
+        connect = self._connect  # type: ignore[attr-defined]
+        assert connect is not None
+        return cast("ConnectHook", connect)
+
+
+@dataclass(slots=True, kw_only=True)
+class FakeACPConfig(_FakeConfigViews, ACPConfig):
+    """:class:`ACPConfig` bound to the scripted in-process agent."""
+
+
+@cache
+def _fake_remote_config_type() -> "type[ACPRemoteConfig]":
+    """The remote fake's class, built on first use.
+
+    Deferred so importing this module does not require
+    ``agent-client-protocol[http]``: a caller who only drives local subprocesses
+    still gets the rest of the harness.
+    """
+    from .remote import ACPRemoteConfig
+
+    @dataclass(slots=True, kw_only=True)
+    class FakeACPRemoteConfig(_FakeConfigViews, ACPRemoteConfig):
+        """:class:`ACPRemoteConfig` bound to the scripted in-process agent."""
+
+    return FakeACPRemoteConfig
+
+
+def _scripted_connect(
+    *turns: ACPTurn,
+    agent_capabilities: "schema.AgentCapabilities | None" = None,
+    config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
+    config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
+    initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
+    elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
+) -> "ConnectHook":
+    """A connection hook yielding the scripted in-process agent and no process."""
+    if agent_capabilities is None:
+        agent_capabilities = schema.AgentCapabilities(mcp_capabilities=schema.McpCapabilities(http=True, sse=True))
+    script = list(turns)
+
+    @asynccontextmanager
+    async def connect(client: acp.Client) -> "AsyncGenerator[tuple[_FakeConnection, None]]":
+        conn = _FakeConnection(
+            client,
+            iter(script),
+            agent_capabilities=agent_capabilities,
+            config_options=config_options,
+            config_option_calls=config_option_calls,
+            initialize_calls=initialize_calls,
+            initialize_elicitations=initialize_elicitations,
+            elicitation_responses=elicitation_responses,
+        )
+        try:
+            yield conn, None
+        finally:
+            conn.closed = True
+
+    return cast("ConnectHook", connect)
 
 
 def fake_acp_config(
@@ -165,6 +283,9 @@ def fake_acp_config(
     agent_capabilities: "schema.AgentCapabilities | None" = None,
     config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
     config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
+    initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
+    elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
     **overrides: Any,
 ) -> FakeACPConfig:
     """Build an :class:`ACPConfig` backed by an in-process scripted agent.
@@ -178,27 +299,116 @@ def fake_acp_config(
     agent's model picker et al.); ``session/set_config_option`` calls are
     appended to the caller-supplied ``config_option_calls`` list as
     ``(config_id, value)`` tuples.
+
+    The elicitation seam works the same way — one field for what the agent asks,
+    one list for what the client answered:
+
+    * ``ACPTurn.elicitations`` are the questions the agent puts to the user
+      mid-turn, and ``initialize_elicitations`` the ones it puts *before* any
+      session exists (a pre-session auth flow, necessarily request-scoped).
+    * every response the client sends back is appended to
+      ``elicitation_responses`` in order.
+    * the ``client_capabilities`` of each ``initialize`` is appended to
+      ``initialize_calls``, which is how a test sees what the agent was told AG2
+      supports.
+
+    See :func:`fake_remote_acp_config` for the same agent behind a remote config.
     """
-    if agent_capabilities is None:
-        agent_capabilities = schema.AgentCapabilities(mcp_capabilities=schema.McpCapabilities(http=True, sse=True))
     config = FakeACPConfig(**overrides)
-    script = list(turns)
+    config._connect = _scripted_connect(
+        *turns,
+        agent_capabilities=agent_capabilities,
+        config_options=config_options,
+        config_option_calls=config_option_calls,
+        initialize_calls=initialize_calls,
+        initialize_elicitations=initialize_elicitations,
+        elicitation_responses=elicitation_responses,
+    )
+    return config
+
+
+def fake_remote_acp_config(
+    *turns: ACPTurn,
+    url: str = "https://agent.example/acp",
+    agent_capabilities: "schema.AgentCapabilities | None" = None,
+    config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
+    config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
+    initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
+    elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
+    **overrides: Any,
+) -> "ACPRemoteConfig":
+    """:func:`fake_acp_config`, but behind an :class:`ACPRemoteConfig`.
+
+    Same scripted agent, same arguments; only the config the turns run through
+    differs. No socket is opened — ``url`` is there because a remote config must
+    have one, and to prove behaviour does not depend on it.
+    """
+    config = _fake_remote_config_type()(url=url, **overrides)
+    config._connect = _scripted_connect(
+        *turns,
+        agent_capabilities=agent_capabilities,
+        config_options=config_options,
+        config_option_calls=config_option_calls,
+        initialize_calls=initialize_calls,
+        initialize_elicitations=initialize_elicitations,
+        elicitation_responses=elicitation_responses,
+    )
+    return config
+
+
+def _duplex_connect(agent: "Callable[[acp.Client], Any] | Any") -> "ConnectHook":
+    """A connection hook that reaches ``agent`` over a real ACP connection in-process.
+
+    ``agent`` is what ``acp.run_agent`` takes: an object implementing the SDK's
+    ``Agent`` protocol, or a callable handed the connection to talk back through.
+    """
 
     @asynccontextmanager
-    async def connect(client: acp.Client) -> "AsyncGenerator[tuple[_FakeConnection, None]]":
-        conn = _FakeConnection(
-            client,
-            iter(script),
-            agent_capabilities=agent_capabilities,
-            config_options=config_options,
-            config_option_calls=config_option_calls,
+    async def connect(client: acp.Client) -> "AsyncGenerator[tuple[ClientSideConnection, None]]":
+        from acp.agent.connection import AgentSideConnection
+
+        (agent_reader, agent_writer), (client_reader, client_writer) = await duplex()
+        # `listening=False` + an explicit task: the receive loop must be owned here
+        # so it is cancelled with the connection rather than outliving the test.
+        agent_conn = AgentSideConnection(agent, agent_writer, agent_reader, listening=False)
+        serving = asyncio.ensure_future(agent_conn.listen())
+        # The same arguments the real transports pass, `_dispatch_kwargs` included:
+        # a harness that connected differently would not be exercising AG2's wiring.
+        conn = acp.connect_to_agent(
+            client, client_writer, client_reader, use_unstable_protocol=True, **_dispatch_kwargs(client)
         )
         try:
             yield conn, None
         finally:
-            conn.closed = True
+            await conn.close()
+            serving.cancel()
+            with suppress(asyncio.CancelledError):
+                await serving
+            await agent_conn.close()
+            for writer in (client_writer, agent_writer):
+                writer.close()
 
-    config._connect = connect
+    return cast("ConnectHook", connect)
+
+
+def duplex_acp_config(agent: "Callable[[acp.Client], Any] | Any", **overrides: Any) -> FakeACPConfig:
+    """An :class:`~.config.ACPConfig` reaching ``agent`` over a real ACP connection.
+
+    Unlike :func:`fake_acp_config`, which calls the client's methods directly, both
+    ends here are the genuine SDK connection classes over a socket pair — real
+    JSON-RPC framing, real receive loop, real notification queue, real routers —
+    with no subprocess to spawn and no agent program to keep on disk.
+
+    Reach for it when the transport *is* the subject: notification dispatch and the
+    ordering it implies, capability negotiation through ``initialize``, whether an
+    unstable route reaches the client at all. For everything else prefer
+    :func:`fake_acp_config` — a scripted turn says more about behaviour with less
+    machinery. What this does not cover is the launch path itself (argv, env,
+    ``cwd``, a process to terminate); a test about that needs a real subprocess.
+    """
+    config = FakeACPConfig(**overrides)
+    config._connect = _duplex_connect(agent)
     return config
 
 

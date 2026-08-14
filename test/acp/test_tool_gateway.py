@@ -18,7 +18,7 @@ from mcp.types import CallToolResult
 
 from ag2.acp.bridge import BridgeState
 from ag2.acp.config import ACPConfig
-from ag2.acp.tool_gateway import MCPCapabilityError, ToolGateway, partition_tools
+from ag2.acp.tool_gateway import GatewayAddress, MCPCapabilityError, ToolGateway, partition_tools
 from ag2.events import BinaryInput, ClientToolCallEvent, ToolErrorEvent, ToolResultEvent
 from ag2.events.tool_events import ToolResult
 from ag2.exceptions import UnsupportedToolError
@@ -114,6 +114,93 @@ async def test_gateway_serves_tools_list_over_http() -> None:
         assert tool.inputSchema["required"] == ["a", "b"]
     finally:
         await gateway.close()
+
+
+@pytest.mark.asyncio
+class TestGatewayAddress:
+    """The gateway's binding, and what it takes to widen it.
+
+    The loopback default, the DNS-rebinding protection and the host allowlist
+    are one deliberate arrangement; a caller who advertises an address for a
+    remote agent loosens all three at once, so what exactly moves — and what
+    does not — is worth pinning down.
+    """
+
+    async def test_default_binds_loopback_only(self) -> None:
+        gateway = ToolGateway(BridgeState(ACPConfig()), [_fn_add()])
+        url = await gateway.start()
+        try:
+            assert gateway.address == GatewayAddress()
+            assert url.startswith("http://127.0.0.1:")
+        finally:
+            await gateway.close()
+
+    async def test_default_rejects_a_forged_host_header(self) -> None:
+        gateway = ToolGateway(BridgeState(ACPConfig()), [_fn_add()])
+        url = await gateway.start()
+        try:
+            async with httpx.AsyncClient() as client:
+                # Trailing slash: Starlette would otherwise answer the Mount's
+                # redirect before the transport security check ever runs.
+                response = await client.post(f"{url}/", json={}, headers={"Host": "attacker.example"})
+        finally:
+            await gateway.close()
+        assert response.status_code >= 400  # DNS-rebinding protection is on
+
+    async def test_advertised_address_binds_there_and_serves_it(self, routable_host: str) -> None:
+        host = routable_host
+        gateway = ToolGateway(BridgeState(ACPConfig()), [_fn_add()], address=GatewayAddress(host=host))
+        url = await gateway.start()
+        try:
+            assert url.startswith(f"http://{host}:")
+            async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
+                await session.initialize()
+                listed = await session.list_tools()
+            assert [t.name for t in listed.tools] == ["add"]
+        finally:
+            await gateway.close()
+
+    async def test_advertised_address_still_rejects_a_forged_host_header(self, routable_host: str) -> None:
+        """Widened to match the advertised address, and no further."""
+        host = routable_host
+        gateway = ToolGateway(BridgeState(ACPConfig()), [_fn_add()], address=GatewayAddress(host=host))
+        url = await gateway.start()
+        try:
+            async with httpx.AsyncClient() as client:
+                # Trailing slash: Starlette would otherwise answer the Mount's
+                # redirect before the transport security check ever runs.
+                response = await client.post(f"{url}/", json={}, headers={"Host": "attacker.example"})
+        finally:
+            await gateway.close()
+        assert response.status_code >= 400
+
+    async def test_ipv6_loopback_serves_the_url_it_hands_out(self) -> None:
+        gateway = ToolGateway(BridgeState(ACPConfig()), [_fn_add()], address=GatewayAddress(host="::1"))
+        try:
+            url = await gateway.start()
+        except OSError:  # pragma: no cover - a host without IPv6
+            pytest.skip("no IPv6 loopback on this host")
+        try:
+            assert url.startswith("http://[::1]:")
+            async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
+                await session.initialize()
+                listed = await session.list_tools()
+            assert [t.name for t in listed.tools] == ["add"]
+        finally:
+            await gateway.close()
+
+    async def test_advertised_port_is_the_port_it_binds(self, routable_host: str) -> None:
+        host = routable_host
+        with socket.socket() as probe:
+            probe.bind((host, 0))
+            port = probe.getsockname()[1]
+
+        gateway = ToolGateway(BridgeState(ACPConfig()), [_fn_add()], address=GatewayAddress(host=host, port=port))
+        url = await gateway.start()
+        try:
+            assert url.startswith(f"http://{host}:{port}/")
+        finally:
+            await gateway.close()
 
 
 @pytest.mark.asyncio

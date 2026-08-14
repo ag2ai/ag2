@@ -104,6 +104,44 @@ def test_acp_config_is_usable_directly() -> None:
     assert cfg.permission_policy == "auto"
 
 
+def test_the_published_parameter_order_still_holds() -> None:
+    # The parameter order is API: a caller who passed these positionally wrote
+    # against it, so growing the config — a shared base for the remote one, a new
+    # policy — must leave every existing position meaning what it meant. A new
+    # field therefore goes after ``expose_tools``, never between.
+    cfg = ACPConfig(["my-agent", "--acp"], "/work", {"KEY": "v"}, "sonnet", "auto", "/root", False, ["/extra"])
+
+    assert cfg == ACPConfig(
+        command=["my-agent", "--acp"],
+        cwd="/work",
+        env={"KEY": "v"},
+        model="sonnet",
+        permission_policy="auto",
+        fs_root="/root",
+        allow_terminal=False,
+        additional_directories=["/extra"],
+    )
+
+
+def test_presets_take_a_command_positionally_too() -> None:
+    # A preset is an ACPConfig whose command has a default, and overriding that
+    # default positionally is how the docs' `npx -y ...` variants are written.
+    assert ClaudeCodeConfig(["npx", "-y", "@agentclientprotocol/claude-agent-acp"]).command[0] == "npx"
+    assert CodexConfig(["npx", "-y", "@agentclientprotocol/codex-acp"], "/work").cwd == "/work"
+    assert OpenCodeConfig(["opencode", "acp"]).cwd == "."
+    assert KiloCodeConfig(["npx", "-y", "@kilocode/cli", "acp"]).command[-1] == "acp"
+
+
+def test_elicitation_policy_defaults_to_ask_and_survives_copy() -> None:
+    # Same default as the permission policy: asking is what a caller gets for free.
+    assert ACPConfig().elicitation_policy == "ask"
+    assert ClaudeCodeConfig().elicitation_policy == "ask"
+
+    unattended = ACPConfig().copy(elicitation_policy="decline")
+    assert unattended.elicitation_policy == "decline"
+    assert ACPConfig().elicitation_policy == "ask"  # original untouched
+
+
 def test_expose_tools_defaults_on_and_survives_copy() -> None:
     cfg = ACPConfig()
     assert cfg.expose_tools is True
