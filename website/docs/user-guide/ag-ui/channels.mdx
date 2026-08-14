@@ -7,31 +7,40 @@ description: "Run the same AG2 agent that powers your in-app copilot as a bot in
 The same AG2 agent that powers your in-app copilot can also run as a bot in messaging platforms. [CopilotKit Channels](https://docs.copilotkit.ai/slack/ag2){.external-link target="_blank"} connects your AG2 agent to Slack and other messaging platforms, with threads, tool calls, and rich interactive messages handled natively in the channel.
 
 !!! note
-    Full platform setup (creating the Channel, connecting Slack) lives in the [CopilotKit Channels documentation](https://docs.copilotkit.ai/slack/ag2){.external-link target="_blank"}. This page shows how Channels fit together with an AG2 agent.
+    This page covers the AG2 side: how a channel process wires your `AGUIStream` endpoint into a platform thread. Creating the Channel and connecting Slack happen in the CopilotKit dashboard — follow [Configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence){.external-link target="_blank"} first, since the code below needs the credentials it gives you.
 
 ## How it fits together
 
-Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](/docs/user-guide/ag-ui/index#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels){.external-link target="_blank"}, connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2){.external-link target="_blank"} — a required surface for Channels, by design (a free tier is available). Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
+Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](/docs/user-guide/ag-ui/#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels){.external-link target="_blank"}, connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence){.external-link target="_blank"}. Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn over a persistent gateway connection to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
 
 ```text
 Slack  ──►  CopilotKit Intelligence  ──►  channel process (Node)  ──►  AG2 server (AGUIStream)
 ```
 
+The credential split is the point, and it is what makes this safe when your AG2 agent holds its own model keys and tools:
+
+- **You keep** the agent logic, model credentials, tools, and the channel process.
+- **CopilotKit Intelligence holds** the platform credentials, message delivery, registration, health, and reconnects.
+
 A web frontend built with the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart) and the bot are just two clients of one AG-UI endpoint.
 
-Install the Channels SDK, the CopilotKit runtime that hosts the channel, and the AG-UI client for AG2:
+## Build the channel process
+
+Install the Channels SDK, the CopilotKit runtime that hosts the channel, and the AG-UI client:
 
 ```bash
-npm install @copilotkit/channels @copilotkit/runtime @ag-ui/ag2
+npm install @copilotkit/channels @copilotkit/runtime @ag-ui/client tsx
 ```
 
-Build the agent as a per-thread factory so each conversation gets its own session, using `Ag2Agent` from [`@ag-ui/ag2`](https://www.npmjs.com/package/@ag-ui/ag2){.external-link target="_blank"} pointed at your endpoint. The channel's `name` is the ID of the Channel you created in Intelligence, whose dashboard also holds the Slack credentials — they never enter this process:
+Build the agent as a per-thread factory so each conversation gets its own session, using `HttpAgent` from [`@ag-ui/client`](https://www.npmjs.com/package/@ag-ui/client){.external-link target="_blank"} pointed at your endpoint — `AGUIStream` speaks plain AG-UI, so no AG2-specific client is needed. The channel's `name` is the **Code** of the Channel you created in Intelligence, whose dashboard also holds the Slack credentials — they never enter this process.
 
-```ts title="channel.ts"
+Name the file with an `.mts` extension: the Channels SDK ships ESM only, and `.mts` makes this an ES module without touching `package.json`.
+
+```ts title="channel.mts" linenums="1" hl_lines="13 16-20"
 import { createChannel } from "@copilotkit/channels";
 import { CopilotRuntime, CopilotKitIntelligence } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
-import { Ag2Agent } from "@ag-ui/ag2";
+import { HttpAgent } from "@ag-ui/client";
 
 const required = (name: string) => {
   const value = process.env[name];
@@ -40,11 +49,11 @@ const required = (name: string) => {
 };
 
 const channel = createChannel({
-  name: required("INTELLIGENCE_CHANNEL_ID"), // the Channel ID from Intelligence
+  name: required("CHANNEL_CODE"), // the Channel's Code from Intelligence
   identifyUser: "platform",
   // A fresh agent per conversation, pointed at your AG-UI endpoint.
   agent: (threadId) => {
-    const agent = new Ag2Agent({ url: "http://localhost:8000/chat" });
+    const agent = new HttpAgent({ url: "http://localhost:8000/chat" });
     agent.threadId = threadId;
     return agent;
   },
@@ -64,7 +73,7 @@ channel.onMessage(async ({ thread }) => {
 const runtime = new CopilotRuntime({
   agents: {}, // the channel supplies its own agent; no web-facing agents needed
   intelligence: new CopilotKitIntelligence({
-    apiKey: required("INTELLIGENCE_API_KEY"), // free tier available
+    apiKey: required("INTELLIGENCE_API_KEY"),
   }),
   channels: [channel],
 });
@@ -73,45 +82,39 @@ const listener = createCopilotNodeListener({ runtime });
 await listener.channels?.ready({ timeoutMs: 15_000 }); // fail startup loudly on a broken config
 ```
 
-Run the channel process alongside the AG-UI server from the [basic server example](/docs/user-guide/ag-ui/index#basic-server-example):
+Run the channel process alongside the AG-UI server from the [basic server example](/docs/user-guide/ag-ui/#basic-server-example). Both credentials come from the Intelligence dashboard:
 
 ```bash
-uvicorn run_ag_ui:app --port 8000   # terminal 1 — AG2 server
-npx tsx channel.ts                  # terminal 2 — channel process
+uvicorn run_ag_ui:app --reload --port 8000   # terminal 1 — AG2 server
 ```
 
-Mention the bot and it runs your agent, streaming the reply back into the platform thread; the thread stays subscribed, so follow-up messages run without another mention. The agent receives an ordinary AG-UI `RunAgentInput` and emits ordinary AG-UI events; the platform mechanics stay behind the channel, so the same AG2 agent runs unchanged across every platform. Rich messages are written as JSX and rendered to each platform's native format (Block Kit on Slack, for example), so an interactive card degrades gracefully where a platform has no equivalent.
+```bash
+export INTELLIGENCE_API_KEY="cpk-..."        # terminal 2 — channel process
+export CHANNEL_CODE="support-bot"            # the Code, matched by createChannel({ name })
+npx tsx channel.mts
+```
 
 ## Slack
 
-The Slack connection is configured in CopilotKit Intelligence, which walks you through creating the Slack app and holds its credentials. That leaves two environment variables for the channel process, both from the Intelligence dashboard:
+Invite the app to a Slack channel, then mention it. It runs your agent and streams the reply back into the thread; the thread stays subscribed, so follow-up messages run without another mention.
 
-- `INTELLIGENCE_API_KEY`: authenticates the runtime with Intelligence (free tier available).
-- `INTELLIGENCE_CHANNEL_ID`: the ID of the Channel you created in Intelligence, matched by `createChannel({ name })`.
+The agent receives an ordinary AG-UI `RunAgentInput` and emits ordinary AG-UI events — the platform mechanics stay behind the channel, so the same AG2 agent runs unchanged across every platform. Rich messages are written as JSX and rendered to each platform's native format (Block Kit on Slack, for example), so an interactive card degrades gracefully where a platform has no equivalent.
 
-The channel process holds a persistent connection to the Intelligence gateway, which delivers each turn to it. It needs a long-running host — a serverless request handler cannot own that connection.
+!!! warning "The channel process needs a long-running host"
+    It holds a persistent connection to the Intelligence gateway, which delivers each turn to it. A serverless request handler cannot own that connection.
 
-For the full walkthrough, see the [CopilotKit Slack guide for AG2](https://docs.copilotkit.ai/slack/ag2){.external-link target="_blank"}.
+For creating the Slack app, the manifest, and the tokens, see [Configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence){.external-link target="_blank"}; for the full channel-process walkthrough, see [Connect your agent](https://docs.copilotkit.ai/slack/ag2/connect){.external-link target="_blank"}.
 
 ## Other platforms
 
-Other messaging platforms connect the same way — a managed connection configured in Intelligence, with your channel code unchanged. See the [CopilotKit Channels documentation](https://docs.copilotkit.ai/slack/ag2){.external-link target="_blank"} for the current platform list and per-platform setup.
-
-## Message pipeline and architecture
-
-Channels keeps a deliberate credential split — useful when your AG2 agent holds its own model keys and tools:
-
-- **You keep** the agent logic, model credentials, tools, and the channel process.
-- **CopilotKit Intelligence holds** the platform credentials, message delivery, registration, health, and reconnects.
-
-A turn flows through five stages: a user messages the app, Intelligence receives the platform event using the credentials configured for that channel, a persistent gateway connection delivers the turn to your running channel process, your AG2 agent runs and renders a reply, and Intelligence sends it back as native platform content. Platform credentials never enter the agent process.
+Discord, Teams, Telegram, and WhatsApp connect the same way — a managed connection configured in Intelligence, with your channel code unchanged. See the [CopilotKit Channels documentation](https://docs.copilotkit.ai/slack/ag2){.external-link target="_blank"} for the current platform list and per-platform setup.
 
 !!! note
     By default, interactive actions live in memory and reset on restart. Back the channel with a durable action and state store (Redis or Postgres) so buttons and per-thread state survive restarts and span multiple instances.
 
 ## Next steps
 
-1. Build the AG-UI endpoint from the [basic server example](/docs/user-guide/ag-ui/index#basic-server-example) if you have not already.
-2. Create the Channel in CopilotKit Intelligence, connect Slack there, and export the API key and Channel ID.
-3. Start the channel process, then mention the bot in a Slack channel it has been invited to.
+1. Build the AG-UI endpoint from the [basic server example](/docs/user-guide/ag-ui/#basic-server-example) if you have not already.
+2. Create the Channel in CopilotKit Intelligence and connect Slack there, then export the API key and the Channel's Code.
+3. Start the channel process, invite the app to a Slack channel, and mention it.
 4. For a web UI on the same endpoint, follow the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart).
