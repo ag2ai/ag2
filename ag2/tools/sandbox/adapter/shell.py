@@ -6,7 +6,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from ag2.tools.sandbox.base import ExecResult, Sandbox
-from ag2.tools.sandbox.factory import SandboxFactory, SingletonFactory
+from ag2.tools.sandbox.factory import SandboxFactory, SingletonFactory, WorkdirAware
 from ag2.tools.sandbox.filter import READONLY_COMMANDS, check_ignore, contains_shell_operator, matches
 
 if TYPE_CHECKING:
@@ -66,11 +66,15 @@ class ShellAdapter:
         :class:`SingletonFactory` wrapping one) this is the real host
         :class:`~pathlib.Path` (so ``.exists()`` etc. work); for a remote /
         container backend it is the sandbox-side :class:`PurePosixPath`. A
-        not-yet-opened remote :class:`SandboxFactory` reports the
-        conventional ``/workspace`` since no sandbox is bound yet.
+        not-yet-opened remote :class:`SandboxFactory` has no sandbox bound yet,
+        so it reports what it declares as a
+        :class:`~ag2.tools.sandbox.WorkdirAware` factory, and the conventional
+        ``/workspace`` when it declares nothing.
         """
         factory = self._factory
         if not isinstance(factory, SingletonFactory):
+            if isinstance(factory, WorkdirAware):
+                return factory.workdir
             return PurePosixPath("/workspace")
         sandbox = factory.sandbox
         host = sandbox.host_workdir

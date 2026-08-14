@@ -56,12 +56,10 @@ async def test_ensure_passes_mcp_servers_to_new_session() -> None:
     session.bridge = make_bridge(cfg)
     await session.ensure(
         session.bridge,
-        cfg.command,
+        connect=cfg.connect,
         cwd=".",
-        env=None,
         protocol_version=1,
         mcp_servers=[server],
-        connect=cfg.connect,
     )
     try:
         assert session.conn.new_session_kwargs["mcp_servers"] == [server]
@@ -91,12 +89,10 @@ async def test_ensure_rejects_agent_without_http_mcp() -> None:
     with pytest.raises(MCPCapabilityError):
         await session.ensure(
             session.bridge,
-            cfg.command,
+            connect=connect,
             cwd=".",
-            env=None,
             protocol_version=1,
             mcp_servers=[server],
-            connect=connect,
         )
     assert session.started is False
     (conn,) = conns
@@ -113,7 +109,7 @@ async def test_ensure_skips_capability_check_without_servers() -> None:
 
     session = ACPSession()
     session.bridge = make_bridge(cfg)
-    await session.ensure(session.bridge, cfg.command, cwd=".", env=None, protocol_version=1, connect=cfg.connect)
+    await session.ensure(session.bridge, connect=cfg.connect, cwd=".", protocol_version=1)
     try:
         assert session.started is True
     finally:

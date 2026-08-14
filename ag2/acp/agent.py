@@ -205,7 +205,7 @@ class ACPAgent:
         self._scope = scope
         return scope
 
-    async def run_stdio(self, *, buffer_limit_bytes: int | None = None) -> None:
+    async def run_stdio(self, *, buffer_limit_bytes: int | None = None) -> None:  # pragma: no cover - real stdio pipes
         """Serve over stdin/stdout until the Client disconnects.
 
         ``buffer_limit_bytes`` caps a single incoming ACP frame. The default is

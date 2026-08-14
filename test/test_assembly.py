@@ -11,9 +11,11 @@ from ag2.assembly import AssemblerMiddleware
 from ag2.compact import CompactionSummary
 from ag2.events import (
     ModelMessage,
+    ModelReasoning,
     ModelRequest,
     ModelResponse,
     ObserverAlert,
+    ProviderReplay,
     Severity,
     TextInput,
     ToolCallEvent,
@@ -28,6 +30,13 @@ from ag2.policies import (
     WorkingMemoryPolicy,
 )
 from ag2.stream import MemoryStream
+
+
+class ProviderReasoning(ModelReasoning, ProviderReplay):
+    """Stands in for OpenAIReasoningEvent, keeping these tests provider-free."""
+
+    __transient__ = False
+    __replay_role__ = "anchor"
 
 
 class TestConversationPolicy:
@@ -45,6 +54,28 @@ class TestConversationPolicy:
         prompts, filtered = await policy.apply([], events, ctx)
         assert len(filtered) == 4
         assert all(not isinstance(e, ObserverAlert) for e in filtered)
+
+    @pytest.mark.asyncio
+    async def test_drops_streamed_thinking(self) -> None:
+        policy = ConversationPolicy()
+        request = ModelRequest([TextInput("hello")])
+        events = [ModelReasoning("thinking out loud"), request]
+        ctx = Context(stream=MemoryStream())
+        _, filtered = await policy.apply([], events, ctx)
+        assert filtered == [request]
+
+    @pytest.mark.asyncio
+    async def test_keeps_provider_replay_with_tool_call(self) -> None:
+        policy = ConversationPolicy()
+        events = [
+            ModelRequest([TextInput("hello")]),
+            ProviderReasoning("planning the search"),
+            ToolCallEvent(name="search", arguments="{}"),
+            ToolResultEvent(id="1", name="search", content="result"),
+        ]
+        ctx = Context(stream=MemoryStream())
+        _, filtered = await policy.apply([], events, ctx)
+        assert filtered == events
 
     @pytest.mark.asyncio
     async def test_includes_compaction_summary(self) -> None:

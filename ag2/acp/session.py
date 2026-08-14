@@ -3,14 +3,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """Persistent ACP session bound to one AG2 agent run.
 
-The subprocess + ACP session are created on first use and reused across turns;
+The connection + ACP session are created on first use and reused across turns;
 only the *new* human input since the last turn is sent to the live session,
 tracked by a high-water mark over the run's ``ModelRequest`` events.
+
+Transport-blind throughout: whether the agent is a local subprocess or a remote
+endpoint is settled by the connection hook the config hands in, and the process
+handle a session holds is optional for exactly that reason.
 """
 
 import logging
 from asyncio.subprocess import Process
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from contextlib import AbstractAsyncContextManager, suppress
 from difflib import get_close_matches
 from typing import TYPE_CHECKING
@@ -102,12 +106,15 @@ async def select_model(
 class ACPSession:
     """Live ACP connection + session id for one agent run.
 
-    Lazily spawns the subprocess and creates the session on first ``ensure``;
-    subsequent calls are no-ops. ``close`` tears the subprocess down.
+    Lazily opens the connection and creates the session on first ``ensure``;
+    subsequent calls are no-ops. ``close`` tears the connection down, along with
+    the subprocess behind it when there is one.
     """
 
     def __init__(self) -> None:
         self.conn: acp.core.ClientSideConnection | None = None
+        # None for a connection with no subprocess behind it — a remote agent,
+        # or the in-process double tests inject.
         self.proc: Process | None = None
         self.bridge: ACPBridge | None = None  # the bridge bound to this connection
         self.session_id: str | None = None
@@ -118,8 +125,8 @@ class ACPSession:
         self.sent_count: int = 0
         self.gateway: ToolGateway | None = None
         self.external_servers: list[acp.schema.HttpMcpServer] = []
-        # the spawn_agent_process async context manager
-        self._cm: AbstractAsyncContextManager[tuple[acp.core.ClientSideConnection, Process]] | None = None
+        # the config's connection hook, entered
+        self._cm: AbstractAsyncContextManager[tuple[acp.core.ClientSideConnection, Process | None]] | None = None
 
     @property
     def started(self) -> bool:
@@ -128,39 +135,36 @@ class ACPSession:
     async def ensure(
         self,
         client: acp.Client,
-        command: list[str],
         *,
+        connect: "ConnectHook",
         cwd: str,
-        env: Mapping[str, str] | None,
         protocol_version: int,
         client_capabilities: acp.schema.ClientCapabilities | None = None,
         additional_directories: list[str] | None = None,
         model: str | None = None,
         mcp_servers: "Sequence[acp.schema.HttpMcpServer] | None" = None,
-        connect: "ConnectHook | None" = None,
+        agent_label: str = "acp-agent",
     ) -> None:
-        """Spawn + initialize + create the session on first use; no-op afterwards.
+        """Connect + initialize + create the session on first use; no-op afterwards.
 
-        ``connect`` overrides how the connection is opened (tests inject an
-        in-process agent); when ``None`` the real subprocess is spawned.
+        ``connect`` is how the connection is opened — the config's own hook,
+        which spawns a subprocess, dials a remote agent, or (in tests) yields an
+        in-process double. This method never learns which.
 
         ``mcp_servers`` (when non-empty) requires the agent to advertise
         HTTP MCP capability in ``initialize``; otherwise
-        :class:`~ag2.acp.MCPCapabilityError` is raised and the subprocess is
-        torn down.
+        :class:`~ag2.acp.MCPCapabilityError` is raised and the connection is
+        torn down. ``agent_label`` names the agent in that error until the agent
+        introduces itself in ``initialize``.
 
         Not concurrency-safe: callers rely on model-turns within a run being
         sequential (and on the per-stream session registry in ``ACPClient``) to
-        avoid spawning two subprocesses for the same session.
+        avoid opening two connections for the same session.
         """
         if self.started:
             return
 
-        if connect is not None:
-            self._cm = connect(client)
-        else:
-            executable, *args = command
-            self._cm = acp.spawn_agent_process(client, executable, *args, env=env, cwd=cwd)
+        self._cm = connect(client)
         self.conn, self.proc = await self._cm.__aenter__()
         try:
             init = await self.conn.initialize(
@@ -170,9 +174,7 @@ class ACPSession:
             if mcp_servers:
                 caps = init.agent_capabilities.mcp_capabilities if init.agent_capabilities else None
                 if caps is None or not caps.http:
-                    agent_name = (init.agent_info.name if init.agent_info else None) or (
-                        command[0] if command else "acp-agent"
-                    )
+                    agent_name = (init.agent_info.name if init.agent_info else None) or agent_label
                     raise MCPCapabilityError(agent_name)
             session = await self.conn.new_session(
                 cwd=cwd,
@@ -183,14 +185,19 @@ class ACPSession:
                 await select_model(self.conn, session, model)
             self.model = model or current_model(session)
         except BaseException:
-            # initialize/new_session/select_model failed after the subprocess
-            # was spawned; tear it down so a retry doesn't orphan this process.
+            # initialize/new_session/select_model failed after the connection was
+            # opened; tear it down so a retry doesn't orphan a process or socket.
             await self.close()
             raise
         self.session_id = session.session_id
 
     async def close(self) -> None:
-        """Terminate the subprocess, shut down the tool gateway, reset the handle.
+        """Close the connection, shut down the tool gateway, reset the handles.
+
+        The connection hook owns whatever is behind the connection, so this is
+        the same call whether that is a subprocess to terminate or a socket to
+        close; the ``proc`` backstop below simply has nothing to do when there
+        is no process.
 
         Ordinary teardown failures are absorbed so they cannot mask the error
         that triggered the close (``ensure`` calls this from an ``except``
@@ -208,7 +215,7 @@ class ACPSession:
         self.sent_count = 0
         self.external_servers = []
         try:
-            # Subprocess first: killing it drops any in-flight tools/call HTTP
+            # Connection first: dropping it kills any in-flight tools/call HTTP
             # requests, so the gateway shutdown that follows doesn't wait on them.
             if cm is not None:
                 try:
@@ -222,7 +229,7 @@ class ACPSession:
                     # Still logged, or a genuinely wedged subprocess leaves no trace.
                     # The transport's own cleanup (wait → terminate → kill) has already
                     # run by the time it propagates here; the terminate is a backstop.
-                    logger.debug("terminating the ACP agent subprocess failed", exc_info=True)
+                    logger.debug("closing the ACP agent connection failed", exc_info=True)
                     if proc is not None and proc.returncode is None:
                         with suppress(ProcessLookupError):
                             proc.terminate()

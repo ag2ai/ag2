@@ -25,6 +25,8 @@ import secrets
 import socket
 from collections.abc import AsyncGenerator, Generator, Iterable, Sequence
 from contextlib import asynccontextmanager, contextmanager, suppress
+from dataclasses import dataclass
+from ipaddress import ip_address
 from typing import TYPE_CHECKING, Any
 
 import uvicorn
@@ -65,14 +67,103 @@ GATEWAY_PATH = "/mcp"
 
 
 class MCPCapabilityError(AG2Error):
-    """The ACP agent cannot consume HTTP MCP servers, but tools must be exposed."""
+    """AG2 cannot expose the agent's tools to it over HTTP MCP.
 
-    def __init__(self, agent: str) -> None:
+    One error type covers both ways that can be true — the agent does not speak
+    HTTP MCP, or it cannot reach the gateway that would serve the tools — so a
+    caller who asked for tool exposure and cannot have it meets a single failure
+    mode rather than two.
+    """
+
+    def __init__(self, agent: str, reason: str | None = None) -> None:
         super().__init__(
-            f"ACP agent {agent!r} does not support HTTP MCP servers "
-            "(initialize returned mcp_capabilities.http=false), so AG2 cannot expose "
-            "the agent's tools to it. Remove the tools or set expose_tools=False."
+            reason
+            or (
+                f"ACP agent {agent!r} does not support HTTP MCP servers "
+                "(initialize returned mcp_capabilities.http=false), so AG2 cannot expose "
+                "the agent's tools to it. Remove the tools or set expose_tools=False."
+            )
         )
+
+
+@dataclass(frozen=True, slots=True)
+class GatewayAddress:
+    """Where the tool gateway binds, and the address the ACP agent is handed.
+
+    The default is loopback with an OS-assigned port: the gateway is reachable
+    only from this host, which is all a locally-launched agent needs. A caller
+    driving a *remote* agent who has arranged network reachability supplies a
+    non-loopback address; that widens the bind address, the DNS-rebinding
+    allowlist and the allowed origins to match it, and no further — which is why
+    it is an explicit opt-in rather than something inferred from a remote URL.
+
+    Attributes:
+        host: The interface to bind, and the host the agent dials.
+        port: The port to bind; ``0`` lets the OS assign one, and the assigned
+            port is what the agent is told to dial.
+    """
+
+    host: str = "127.0.0.1"
+    port: int = 0
+
+    @classmethod
+    def parse(cls, address: str) -> "GatewayAddress":
+        """Parse a ``host``, ``host:port``, ``ipv6`` or ``[ipv6]:port`` address.
+
+        Strict about what it accepts, because the failure it would otherwise
+        cause — a URL pasted in, say — surfaces as a name-resolution error on
+        the first turn that carries a tool, a long way from the typo.
+
+        Raises:
+            ValueError: when the address is empty, looks like a URL, or has a
+                port that is not a number in range.
+        """
+        text = address.strip()
+        if not text:
+            raise ValueError("a tool gateway address cannot be empty")
+        if any(c in text for c in "/@ \t"):
+            raise ValueError(f"tool gateway address {address!r} must be a host or host:port, not a URL")
+        host, port = text, 0
+        if text.startswith("["):  # bracketed IPv6, optionally with a port
+            closing = text.find("]")
+            if closing == -1:
+                raise ValueError(f"unbalanced brackets in tool gateway address {address!r}")
+            host, rest = text[1:closing], text[closing + 1 :]
+            if rest and not rest.startswith(":"):
+                raise ValueError(f"trailing {rest!r} in tool gateway address {address!r}")
+            port = _parse_port(rest[1:], address) if rest else 0
+        elif text.count(":") == 1:  # host:port (a bare IPv6 literal has several colons)
+            host, _, raw_port = text.partition(":")
+            port = _parse_port(raw_port, address)
+        elif ":" in text:  # several colons: only a bare IPv6 literal can be one
+            try:
+                ip_address(text)
+            except ValueError:
+                raise ValueError(
+                    f"tool gateway address {address!r} is neither a host, a host:port, nor an IPv6 literal"
+                ) from None
+        if not host:
+            raise ValueError(f"tool gateway address {address!r} has no host")
+        return cls(host=host, port=port)
+
+    @property
+    def is_loopback(self) -> bool:
+        return self.host in ("127.0.0.1", "localhost", "::1")
+
+    @property
+    def authority(self) -> str:
+        """The host as it appears in a URL — bracketed when it is an IPv6 literal."""
+        return f"[{self.host}]" if ":" in self.host else self.host
+
+
+def _parse_port(raw: str, address: str) -> int:
+    try:
+        port = int(raw)
+    except ValueError:
+        raise ValueError(f"tool gateway address {address!r} has a non-numeric port {raw!r}") from None
+    if not 0 <= port <= 65535:
+        raise ValueError(f"tool gateway address {address!r} has an out-of-range port {port}")
+    return port
 
 
 def partition_tools(tools: "Iterable[ToolSchema]") -> tuple[list[FunctionToolSchema], list[schema.HttpMcpServer]]:
@@ -156,12 +247,14 @@ class ToolGateway:
         tools: Sequence[FunctionToolSchema],
         *,
         name: str = GATEWAY_SERVER_NAME,
+        address: "GatewayAddress | None" = None,
         startup_timeout: float = 30.0,
         close_timeout: float = 5.0,
     ) -> None:
         self.state = state
         self.tools = list(tools)
         self.name = name
+        self.address = address or GatewayAddress()
         self.url: str | None = None
         self._startup_timeout = startup_timeout
         self._close_timeout = close_timeout
@@ -177,7 +270,11 @@ class ToolGateway:
         return schema.HttpMcpServer(type="http", name=self.name, url=self.url, headers=[])
 
     async def start(self) -> str:
-        """Bind 127.0.0.1:<os-assigned port>, start serving, return the MCP URL."""
+        """Bind this gateway's address, start serving, and return the MCP URL.
+
+        Defaults to ``127.0.0.1:<os-assigned port>``; a caller-supplied
+        :class:`GatewayAddress` binds that instead so a remote agent can dial it.
+        """
         server: Server = Server(name=self.name)
         gateway = self
 
@@ -202,10 +299,16 @@ class ToolGateway:
         # Host/Origin validation stops a browser page reaching this port via DNS
         # rebinding (a page cannot forge Host). It does not stop a local process,
         # which can set any header it likes — that is what the secret path is for.
+        # The allowlist tracks the bind address: a gateway bound off-loopback for
+        # a remote agent would otherwise reject the very requests it exists for.
+        # Loopback answers to several names — and the URL it hands out is one of
+        # them — so all three stay allowed; anything else answers only to the
+        # authority the agent was actually told to dial.
+        hosts = ["127.0.0.1", "localhost", "[::1]"] if self.address.is_loopback else [self.address.authority]
         security = TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
-            allowed_hosts=["127.0.0.1:*", "localhost:*"],
-            allowed_origins=["http://127.0.0.1:*", "http://localhost:*"],
+            allowed_hosts=[f"{host}:*" for host in hosts],
+            allowed_origins=[f"http://{host}:*" for host in hosts],
         )
         manager = StreamableHTTPSessionManager(
             app=server, stateless=True, json_response=True, security_settings=security
@@ -221,9 +324,17 @@ class ToolGateway:
 
         app = Starlette(routes=[Mount(self._path, app=handle)], lifespan=lifespan)
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
+        family = socket.AF_INET6 if ":" in self.address.host else socket.AF_INET
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        try:
+            # Unlike the loopback default, a caller-supplied address can fail to
+            # bind (port taken, address not on this host); close the fd rather
+            # than leaking it on the way out.
+            sock.bind((self.address.host, self.address.port))
+            port = sock.getsockname()[1]
+        except BaseException:
+            sock.close()
+            raise
 
         config = uvicorn.Config(
             app,
@@ -259,7 +370,7 @@ class ToolGateway:
             sock.close()
             raise
 
-        self.url = f"http://127.0.0.1:{port}{self._path}"
+        self.url = f"http://{self.address.authority}:{port}{self._path}"
         return self.url
 
     async def close(self) -> None:

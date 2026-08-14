@@ -112,6 +112,9 @@ dashscope = [
 ddgs = [
     { name = "ddgs" },
 ]
+elevenlabs = [
+    { name = "elevenlabs" },
+]
 gemini = [
     { name = "google-api-core" },
     { name = "google-auth" },
@@ -196,6 +199,7 @@ dev = [
     { name = "pyyaml" },
     { name = "respx" },
     { name = "ruff" },
+    { name = "tenki" },
     { name = "termcolor" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'" },
     { name = "typer" },
@@ -227,6 +231,7 @@ docs = [
     { name = "nlip-server" },
     { name = "pillow" },
     { name = "pyyaml" },
+    { name = "tenki" },
     { name = "termcolor" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'" },
     { name = "typer" },
@@ -240,10 +245,12 @@ lint = [
 ]
 optionals = [
     { name = "a2a-sdk", extra = ["signing"] },
-    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "agent-client-protocol", extra = ["http"] },
     { name = "daytona" },
     { name = "docker" },
     { name = "exa-py" },
+    { name = "tenki" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'" },
     { name = "watchdog" },
     { name = "websockets" },
@@ -292,12 +299,13 @@ requires-dist = [
     { name = "a2a-sdk", marker = "extra == 'a2a'", specifier = ">=1.1.0,<2" },
     { name = "ag-ui-protocol", marker = "extra == 'ag-ui'", specifier = ">=0.1.15,<0.2" },
     { name = "ag2", extras = ["mcp"], marker = "extra == 'acp'" },
-    { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.11.0,<0.12" },
+    { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.12,<0.13" },
     { name = "anthropic", extras = ["vertex"], marker = "extra == 'anthropic'", specifier = ">=0.116.0,<1" },
     { name = "anyio", specifier = ">=4.0.0,<5.0.0" },
     { name = "boto3", marker = "extra == 'bedrock'", specifier = ">=1.34.149" },
     { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.25.13" },
     { name = "ddgs", marker = "extra == 'ddgs'", specifier = ">=9.0.0,<10" },
+    { name = "elevenlabs", marker = "extra == 'elevenlabs'", specifier = ">=1.50.0,<3" },
     { name = "fast-depends", extras = ["pydantic"], specifier = ">=3.0.8,<4.0.0" },
     { name = "fix-busted-json", marker = "extra == 'ollama'", specifier = ">=0.0.18" },
     { name = "google-api-core", marker = "extra == 'gemini'" },
@@ -332,7 +340,7 @@ requires-dist = [
     { name = "xai-sdk", marker = "extra == 'xai'", specifier = ">=1.12.2,<2" },
     { name = "zai-sdk", marker = "extra == 'zai'", specifier = ">=0.2.3,<1" },
 ]
-provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini", "xai", "zai", "mistral", "ollama", "bedrock", "dashscope", "redis", "tracing", "metrics", "tavily", "ddgs", "perplexity", "mcp", "mcp-ui"]
+provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini", "elevenlabs", "xai", "zai", "mistral", "ollama", "bedrock", "dashscope", "redis", "tracing", "metrics", "tavily", "ddgs", "perplexity", "mcp", "mcp-ui"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -385,6 +393,7 @@ dev = [
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "respx", specifier = ">=0.23.0,<0.24.0" },
     { name = "ruff", specifier = "==0.15.22" },
+    { name = "tenki", specifier = ">=0.5.4,<1" },
     { name = "termcolor", specifier = "==3.3.0" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
     { name = "typer", specifier = ">=0.22,<0.28" },
@@ -428,6 +437,7 @@ docs = [
     { name = "nlip-server", specifier = ">=0.1.3,<1" },
     { name = "pillow" },
     { name = "pyyaml", specifier = "==6.0.3" },
+    { name = "tenki", specifier = ">=0.5.4,<1" },
     { name = "termcolor", specifier = "==3.3.0" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
     { name = "typer", specifier = ">=0.22,<0.28" },
@@ -448,6 +458,7 @@ optionals = [
     { name = "ag2", extras = ["anthropic"] },
     { name = "ag2", extras = ["bedrock"] },
     { name = "ag2", extras = ["dashscope"] },
+    { name = "ag2", extras = ["elevenlabs"] },
     { name = "ag2", extras = ["gemini"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
@@ -460,9 +471,11 @@ optionals = [
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
     { name = "ag2", extras = ["zai"] },
+    { name = "agent-client-protocol", extras = ["http"] },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
+    { name = "tenki", specifier = ">=0.5.4,<1" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
@@ -511,14 +524,20 @@ types = [
 
 [[package]]
 name = "agent-client-protocol"
-version = "0.11.0"
+version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/93/396d02c91b387b2678f23081869ca47bd495fc6c78789022c683180cf5f1/agent_client_protocol-0.11.0.tar.gz", hash = "sha256:8920a3b27bdcc852fd7c73066f47ab53257dbfbe57b505e20a40c69f80a5391c", size = 87402, upload-time = "2026-07-05T17:07:56.803Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/50/65bfb4e3e13f350a52c368cbfc4bc36a1b3b3f34a6b3f5a2e3551e1bd63b/agent_client_protocol-0.12.0.tar.gz", hash = "sha256:4d42ac680388556b038cb6dd58dbbbd1561f9e545a334c1a352cc055f98b1c79", size = 135037, upload-time = "2026-08-01T15:58:22.35Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/48/a1367dded7765f5489f9840389949d5aeac53a73aeb1b4e6c0ab61e1617a/agent_client_protocol-0.11.0-py3-none-any.whl", hash = "sha256:2d8570cd4911f8af9fbab4808f7b05f09204a756f346c7409ecdcae3f37cdb2f", size = 68089, upload-time = "2026-07-05T17:07:55.518Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/c7/b84b8698879464bd8f869551bac31454bed14a3a22910f65d9693f3701bd/agent_client_protocol-0.12.0-py3-none-any.whl", hash = "sha256:233626748034896214de118f5cf5a319484ad2186705fd595219afee92237ccc", size = 92992, upload-time = "2026-08-01T15:58:21.216Z" },
+]
+
+[package.optional-dependencies]
+http = [
+    { name = "httpx", extra = ["http2"] },
+    { name = "websockets" },
 ]
 
 [[package]]
@@ -693,9 +712,9 @@ name = "aiologic"
 version = "0.17.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "sniffio" },
-    { name = "typing-extensions" },
-    { name = "wrapt" },
+    { name = "sniffio", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "wrapt", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/53/a7/809482759f40079f4c4328c7318bf569ae25d457f5017aad30a1b9aafedc/aiologic-0.17.0.tar.gz", hash = "sha256:65aa058e858c94cd208badb188e7f00b54dcabb3ba85b34f794db98074d108b9", size = 251625, upload-time = "2026-06-14T12:24:35.367Z" }
 wheels = [
@@ -1502,8 +1521,8 @@ name = "culsans"
 version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiologic" },
-    { name = "typing-extensions" },
+    { name = "aiologic", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d9/e3/49afa1bc180e0d28008ec6bcdf82a4072d1c7a41032b5b759b60814ca4b0/culsans-0.11.0.tar.gz", hash = "sha256:0b43d0d05dce6106293d114c86e3fb4bfc63088cfe8ff08ed3fe36891447fe33", size = 107546, upload-time = "2025-12-31T23:15:38.196Z" }
 wheels = [
@@ -1801,6 +1820,23 @@ wheels = [
 ]
 
 [[package]]
+name = "elevenlabs"
+version = "2.63.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/be/b9/81e0c61cc07bffeeba0592cd493f756b1622cb9c2f0fb5eb1278fe2851ba/elevenlabs-2.63.0.tar.gz", hash = "sha256:ad5e2beef622ee409a9c07e3951bfe1a039abfaeb04dab615bf2cc32eeabc4e2", size = 751861, upload-time = "2026-08-11T12:10:18.296Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/3f/67a8c1ba674d20b9f24fe131defb082473a3ca4a2beb95b7ecaea99bb6ab/elevenlabs-2.63.0-py3-none-any.whl", hash = "sha256:997cc8e9f641327cd7a1db840232c0e246b99bc8ef3c777770d30283c4d737c0", size = 1979963, upload-time = "2026-08-11T12:10:16.724Z" },
+]
+
+[[package]]
 name = "email-validator"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1845,7 +1881,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -2387,12 +2423,12 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "google-api-core" },
-    { name = "google-auth" },
-    { name = "google-cloud-core" },
-    { name = "google-crc32c" },
-    { name = "google-resumable-media" },
-    { name = "requests" },
+    { name = "google-api-core", marker = "python_full_version < '3.13'" },
+    { name = "google-auth", marker = "python_full_version < '3.13'" },
+    { name = "google-cloud-core", marker = "python_full_version < '3.13'" },
+    { name = "google-crc32c", marker = "python_full_version < '3.13'" },
+    { name = "google-resumable-media", marker = "python_full_version < '3.13'" },
+    { name = "requests", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/36/76/4d965702e96bb67976e755bed9828fa50306dca003dbee08b67f41dd265e/google_cloud_storage-2.19.0.tar.gz", hash = "sha256:cd05e9e7191ba6cb68934d8eb76054d9be4562aa89dbc4236feee4d7d51342b2", size = 5535488, upload-time = "2024-12-05T01:35:06.49Z" }
 wheels = [
@@ -2418,12 +2454,12 @@ resolution-markers = [
     "python_full_version == '3.13.*' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "google-api-core" },
-    { name = "google-auth" },
-    { name = "google-cloud-core" },
-    { name = "google-crc32c" },
-    { name = "google-resumable-media" },
-    { name = "requests" },
+    { name = "google-api-core", marker = "python_full_version >= '3.13'" },
+    { name = "google-auth", marker = "python_full_version >= '3.13'" },
+    { name = "google-cloud-core", marker = "python_full_version >= '3.13'" },
+    { name = "google-crc32c", marker = "python_full_version >= '3.13'" },
+    { name = "google-resumable-media", marker = "python_full_version >= '3.13'" },
+    { name = "requests", marker = "python_full_version >= '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/58/72/86f94e1639a8bcd9d33e8e01b49afcaa1c3a13bda7683c681717e0901e15/google_cloud_storage-3.12.0.tar.gz", hash = "sha256:03ae9847c6babb368f35f054126b8a08cbc0e3266efb990eb17b9926a45cf3be", size = 17338620, upload-time = "2026-06-12T18:03:29.215Z" }
 wheels = [
@@ -2553,7 +2589,7 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/06/8a/3d098f35c143a89520e568e6539cc098fcd294495910e359889ce8741c84/grpcio-1.78.0.tar.gz", hash = "sha256:7382b95189546f375c174f53a5fa873cef91c4b8005faa05cc5b3beea9c4f1c5", size = 12852416, upload-time = "2026-02-06T09:57:18.093Z" }
 wheels = [
@@ -2628,7 +2664,7 @@ resolution-markers = [
     "python_full_version == '3.13.*' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "python_full_version >= '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b0/b5/1ff353970a87eda4c98251e34d2dfd214abd4982dc89119c9252a2a482d2/grpcio-1.81.1.tar.gz", hash = "sha256:6fa10a767143a5e82e8eaab53918af0cd8909a57a27f8cb2288b80a613ac671b", size = 13026582, upload-time = "2026-06-11T12:46:51.673Z" }
 wheels = [
@@ -2706,9 +2742,9 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "googleapis-common-protos" },
-    { name = "grpcio", version = "1.78.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "protobuf" },
+    { name = "googleapis-common-protos", marker = "python_full_version < '3.13'" },
+    { name = "grpcio", version = "1.78.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
+    { name = "protobuf", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8a/cd/89ce482a931b543b92cdd9b2888805518c4620e0094409acb8c81dd4610a/grpcio_status-1.78.0.tar.gz", hash = "sha256:a34cfd28101bfea84b5aa0f936b4b423019e9213882907166af6b3bddc59e189", size = 13808, upload-time = "2026-02-06T10:01:48.034Z" }
 wheels = [
@@ -2734,9 +2770,9 @@ resolution-markers = [
     "python_full_version == '3.13.*' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "googleapis-common-protos" },
-    { name = "grpcio", version = "1.81.1", source = { registry = "https://pypi.org/simple" } },
-    { name = "protobuf" },
+    { name = "googleapis-common-protos", marker = "python_full_version >= '3.13'" },
+    { name = "grpcio", version = "1.81.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
+    { name = "protobuf", marker = "python_full_version >= '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/32/26/0aa9168c87882381fd810d140c279a2490ed6aee655f0515d6f56c5ca404/grpcio_status-1.81.1.tar.gz", hash = "sha256:9389a03e746017b10f0630c064289201458f3ce01f5d7ef4b0bebc1ef6cf82ad", size = 13923, upload-time = "2026-06-11T12:58:48.636Z" }
 wheels = [
@@ -3010,17 +3046,17 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
-    { name = "decorator" },
-    { name = "exceptiongroup" },
-    { name = "jedi" },
-    { name = "matplotlib-inline" },
-    { name = "pexpect", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
-    { name = "prompt-toolkit" },
-    { name = "pygments" },
-    { name = "stack-data" },
-    { name = "traitlets" },
-    { name = "typing-extensions" },
+    { name = "colorama", marker = "python_full_version < '3.11' and sys_platform == 'win32'" },
+    { name = "decorator", marker = "python_full_version < '3.11'" },
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "jedi", marker = "python_full_version < '3.11'" },
+    { name = "matplotlib-inline", marker = "python_full_version < '3.11'" },
+    { name = "pexpect", marker = "python_full_version < '3.11' and sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "prompt-toolkit", marker = "python_full_version < '3.11'" },
+    { name = "pygments", marker = "python_full_version < '3.11'" },
+    { name = "stack-data", marker = "python_full_version < '3.11'" },
+    { name = "traitlets", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/40/18/f8598d287006885e7136451fdea0755af4ebcbfe342836f24deefaed1164/ipython-8.39.0.tar.gz", hash = "sha256:4110ae96012c379b8b6db898a07e186c40a2a1ef5d57a7fa83166047d9da7624", size = 5513971, upload-time = "2026-03-27T10:02:13.94Z" }
 wheels = [
@@ -3056,18 +3092,18 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
-    { name = "decorator" },
-    { name = "ipython-pygments-lexers" },
-    { name = "jedi" },
-    { name = "matplotlib-inline" },
-    { name = "pexpect", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
-    { name = "prompt-toolkit" },
-    { name = "psutil", marker = "sys_platform != 'emscripten'" },
-    { name = "pygments" },
-    { name = "stack-data" },
-    { name = "traitlets" },
-    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
+    { name = "colorama", marker = "python_full_version >= '3.11' and sys_platform == 'win32'" },
+    { name = "decorator", marker = "python_full_version >= '3.11'" },
+    { name = "ipython-pygments-lexers", marker = "python_full_version >= '3.11'" },
+    { name = "jedi", marker = "python_full_version >= '3.11'" },
+    { name = "matplotlib-inline", marker = "python_full_version >= '3.11'" },
+    { name = "pexpect", marker = "python_full_version >= '3.11' and sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "prompt-toolkit", marker = "python_full_version >= '3.11'" },
+    { name = "psutil", marker = "python_full_version >= '3.11' and sys_platform != 'emscripten'" },
+    { name = "pygments", marker = "python_full_version >= '3.11'" },
+    { name = "stack-data", marker = "python_full_version >= '3.11'" },
+    { name = "traitlets", marker = "python_full_version >= '3.11'" },
+    { name = "typing-extensions", marker = "python_full_version == '3.11.*'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e2/23/3a27530575643c8bb7bfc757a28e2e7ef80092afbf59a2bc5716320b6602/ipython-9.14.1.tar.gz", hash = "sha256:f913bf74df06d458e46ced84ca506c23797590d594b236fe60b14df213291e7b", size = 4433457, upload-time = "2026-06-05T08:12:34.921Z" }
 wheels = [
@@ -3079,7 +3115,7 @@ name = "ipython-pygments-lexers"
 version = "1.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pygments" },
+    { name = "pygments", marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ef/4c/5dd1d8af08107f88c7f741ead7a40854b8ac24ddf9ae850afbcf698aa552/ipython_pygments_lexers-1.1.1.tar.gz", hash = "sha256:09c0138009e56b6854f9535736f4171d855c8c08a563a0dcd8022f78355c7e81", size = 8393, upload-time = "2025-01-17T11:24:34.505Z" }
 wheels = [
@@ -4654,7 +4690,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess" },
+    { name = "ptyprocess", marker = "sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -6469,6 +6505,21 @@ wheels = [
 ]
 
 [[package]]
+name = "tenki"
+version = "0.5.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "grpcio", version = "1.78.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
+    { name = "grpcio", version = "1.81.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
+    { name = "protobuf" },
+    { name = "websocket-client" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/30/85/9f311f784b92639de2d0aaae7c6d67c76c5ebfd60543d56739724c07683a/tenki-0.5.4.tar.gz", hash = "sha256:3d900ca3eedf98aea0ace315246a3f2bbdc19149d966a320cdb99fd406b681fa", size = 186073, upload-time = "2026-07-29T11:08:41.791Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/de/244e8d8bffe6673ae3a58423016b8c03465214ab9101a3e61234b5d4c076/tenki-0.5.4-py3-none-any.whl", hash = "sha256:d5df29fa5f7f93fc6c420d3a0b50e68e0b35fda63e17ed57c0f302a522cbf9ef", size = 158916, upload-time = "2026-07-29T11:08:40.023Z" },
+]
+
+[[package]]
 name = "termcolor"
 version = "3.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -6555,9 +6606,9 @@ name = "tinyfish"
 version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "tenacity" },
+    { name = "httpx", marker = "python_full_version >= '3.11'" },
+    { name = "pydantic", marker = "python_full_version >= '3.11'" },
+    { name = "tenacity", marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1f/0d/ce597e06fc30b80e76946abdc7a7bd56c16360bbf098108ea05988bce43c/tinyfish-0.5.0.tar.gz", hash = "sha256:1e9d97b9badb591d6839fbcbf01a503cc33a4a5d729553baa345ca4de3c522a4", size = 74916, upload-time = "2026-08-04T21:37:42.74Z" }
 wheels = [
