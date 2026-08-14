@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .alert import HaltEvent, ObserverAlert, Severity
-from .base import BaseEvent, Field, is_conversational
+from .base import BaseEvent, Field, ProviderReplay, is_conversational
 from .conditions import Condition
 from .input_events import (
     AudioInput,
@@ -65,6 +65,9 @@ from .types import (
     UsageEvent,
 )
 from .voice import (
+    AudioInterruptedEvent,
+    AudioPlaybackCompletedEvent,
+    AudioPlaybackStartedEvent,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
     TranscriptionChunkEvent,
@@ -76,6 +79,9 @@ __all__ = (
     "AggregationFailed",
     "AggregationStarted",
     "AudioInput",
+    "AudioInterruptedEvent",
+    "AudioPlaybackCompletedEvent",
+    "AudioPlaybackStartedEvent",
     "BaseEvent",
     "BinaryInput",
     "BinaryResult",
@@ -106,6 +112,7 @@ __all__ = (
     "ObserverAlert",
     "ObserverCompleted",
     "ObserverStarted",
+    "ProviderReplay",
     "RecordedAudioEvent",
     "Severity",
     "SynthesizedAudioEvent",

@@ -10,6 +10,8 @@ from ag2 import Agent, Context
 from ag2.agent import KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact, TailWindowCompact
 from ag2.events import (
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     CompactionCompleted,
     CompactionFailed,
     CompactionStarted,
@@ -28,6 +30,7 @@ from ag2.events import (
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
+from test._helpers import DurableReasoning
 
 
 class TestTailWindowCompact:
@@ -126,6 +129,41 @@ class TestTailWindowToolCycleBoundary:
         assert mr not in result and res not in result
         entries = await store.list("/log/")
         assert [e for e in entries if "dropped" in e]
+
+
+@pytest.mark.asyncio
+class TestTailWindowBuiltinToolBoundary:
+    """A builtin (server-side) call satisfies its own result and needs a reasoning
+    anchor. Reading only ``ModelResponse.tool_calls`` sees neither."""
+
+    async def test_intact_builtin_cycle_does_not_block_compaction(self) -> None:
+        # The retained window ends with a builtin result whose call is right there.
+        # A boundary check that cannot see builtin calls calls this unsafe forever,
+        # runs the cut off the end, and silently gives up on compacting at all.
+        events = [
+            ModelRequest([TextInput("u0")]),
+            ModelRequest([TextInput("u1")]),
+            DurableReasoning("plan"),
+            BuiltinToolCallEvent(id="ws_1", name="web_search", arguments="{}"),
+            BuiltinToolResultEvent(parent_id="ws_1", name="web_search", result=ToolResult("ok")),
+        ]
+
+        result = await TailWindowCompact(target=3).compact(events, Context(stream=MemoryStream()), None)
+
+        assert result == events[2:]
+
+    async def test_split_builtin_group_compacts_whole(self) -> None:
+        events = [
+            ModelRequest([TextInput("u0")]),
+            DurableReasoning("plan"),
+            BuiltinToolCallEvent(id="ws_1", name="web_search", arguments="{}"),
+            BuiltinToolResultEvent(parent_id="ws_1", name="web_search", result=ToolResult("ok")),
+            ModelRequest([TextInput("u1")]),
+        ]
+
+        result = await TailWindowCompact(target=3).compact(events, Context(stream=MemoryStream()), None)
+
+        assert result == [events[-1]]
 
 
 @pytest.mark.asyncio

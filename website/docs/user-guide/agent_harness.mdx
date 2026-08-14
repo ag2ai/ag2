@@ -202,6 +202,58 @@ reply = await parent.ask("Find out where Melbourne is.")
 
 `as_tool()` returns a `FunctionTool` named `task_{child.name}` that accepts an `objective` parameter and forwards it into the child's stream. See [Subagents](/docs/user-guide/subagents) for sub-task streams, depth limiting, and stream factories.
 
+## Reading an agent's composition
+
+An Agent reports what it is made of, so you can compare two agents, assert on composition in a test, or log it. Each constructor argument has a matching read-only property:
+
+| Property | Reports |
+|---|---|
+| `#!python name` | agent name |
+| `#!python system_prompt` | static prompt fragments, in order |
+| `#!python dynamic_prompt` | dynamic prompt hooks, in registration order |
+| `#!python tools` | attached tools |
+| `#!python middleware` | agent-level middleware, in registration order |
+| `#!python dependencies` / `#!python variables` | injected values, keyed as supplied |
+| `#!python config` / `#!python response_schema` / `#!python hitl_hook` | model config, schema, human-input hook |
+| `#!python observers` / `#!python assembly` / `#!python tasks` | observers, assembly policies, `#!python TaskConfig` |
+
+Sequences come back as tuples and mappings as read-only views, so an agent cannot be changed through them.
+
+```python linenums="1" hl_lines="6-8"
+def fingerprint(agent: Agent) -> tuple:
+    return (
+        agent.name,
+        agent.system_prompt,
+        tuple(t.name for t in agent.tools),
+        tuple(m.description for m in agent.middleware),
+        tuple(sorted(map(str, agent.dependencies))),
+    )
+
+assert fingerprint(built_one_way) == fingerprint(built_another_way)
+```
+
+### Middleware entries
+
+`#!python agent.middleware` and `#!python tool.middleware` yield entries pairing each middleware with its [description](/docs/user-guide/middleware#describing-middleware):
+
+```python linenums="1" hl_lines="2-3"
+for entry in agent.middleware:
+    entry.description   # what it is and how it was configured
+    entry.middleware    # the object itself
+```
+
+Both are needed. A description says what a middleware *is*; identity says whether two tools *share* one. A single rate limiter across ten tools and ten separate ones configured identically produce equal descriptions, so `#!python is` on `#!python entry.middleware` is the only thing that tells them apart:
+
+```python linenums="1" hl_lines="3"
+first, second = agent.tools
+
+first.middleware[0].middleware is second.middleware[0].middleware
+# True when both tools hold one instance, so they share its state
+```
+
+!!! note
+    Entries are built when you read the property, so `#!python agent.middleware[0] is agent.middleware[0]` is `#!python False`. Compare `#!python entry.middleware`, never the entry itself.
+
 ## Turn lifecycle
 
 Each `await agent.ask(...)` runs through the middleware chain in this order (outermost → innermost):

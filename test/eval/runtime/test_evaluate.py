@@ -4,6 +4,9 @@
 
 """Tests for evaluate_traces() — grading traces from a TraceSource."""
 
+import asyncio
+from collections.abc import AsyncIterator, Sequence
+
 import pytest
 
 from ag2.eval import (
@@ -45,6 +48,30 @@ def answer_is_paris(outputs: dict) -> bool:
 def free_text_content_mirrors_body(outputs: dict) -> bool:
     """For a non-JSON answer, ``content`` is the text itself (mirrors reply.content())."""
     return isinstance(outputs.get("content"), str) and outputs["content"] == outputs.get("body")
+
+
+class _FailOnLoadSource:
+    """A :class:`TraceSource` whose ``load`` raises for one ref.
+
+    Models a real backend (Tempo, a directory of span JSON) that can't
+    materialize a particular trace — a network error, a corrupt file. This is
+    the public path into ``_evaluate_ref``'s failure handling: a raising
+    *scorer* would be swallowed into ``Feedback(score=None)`` by the Scorer
+    wrapper, but a raising ``source.load`` propagates to the gather guard.
+    """
+
+    def __init__(self, traces: Sequence[tuple[TraceRef, Trace]], *, fail_trace_id: str) -> None:
+        self._inner = InMemoryTraceSource(traces)
+        self._fail_trace_id = fail_trace_id
+
+    async def list(self) -> AsyncIterator[TraceRef]:
+        async for ref in self._inner.list():
+            yield ref
+
+    async def load(self, ref: TraceRef) -> Trace:
+        if ref.trace_id == self._fail_trace_id:
+            raise RuntimeError("trace load exploded")
+        return await self._inner.load(ref)
 
 
 @pytest.mark.asyncio()
@@ -121,3 +148,49 @@ async def test_free_text_answer_content_mirrors_body(tmp_path) -> None:
     result = await evaluate_traces(source, scorers=[free_text_content_mirrors_body], store_dir=tmp_path)
 
     assert result.pass_rate("free_text_content_mirrors_body") == 1.0
+
+
+@pytest.mark.asyncio()
+async def test_evaluate_does_not_crash_whole_run_on_one_ref_failure(tmp_path) -> None:
+    """If loading one ref raises, the run still returns with the surviving ref's result present."""
+    source = _FailOnLoadSource(
+        [
+            (TraceRef("t1", task_id="task-1"), _trace("Paris")),
+            (TraceRef("t2", task_id="task-2"), _trace("London")),
+        ],
+        fail_trace_id="t1",
+    )
+    suite = Suite.from_list([
+        {"task_id": "task-1", "inputs": {"input": "capital of France?"}},
+        {"task_id": "task-2", "inputs": {"input": "capital of UK?"}},
+    ])
+
+    result = await evaluate_traces(source, scorers=[has_one_response], suite=suite, store_dir=tmp_path)
+
+    # Run must not raise — it returns a RunResult with both entries
+    assert len(result.tasks) == 2
+    # The failed ref has its exception captured on the trace
+    failed = next(tr for tr in result.tasks if tr.task.task_id == "task-1")
+    assert isinstance(failed.trace.exception, RuntimeError)
+    # The surviving ref scored correctly
+    surviving = next(tr for tr in result.tasks if tr.task.task_id == "task-2")
+    assert surviving.feedback[0].score is True
+
+
+@pytest.mark.asyncio()
+async def test_evaluate_propagates_cancellation(tmp_path) -> None:
+    """A CancelledError from scoring must propagate out (not become a partial RunResult).
+
+    CancelledError is a BaseException, so the Scorer wrapper's ``except Exception``
+    does not swallow it — it reaches the gather guard, which re-raises it.
+    """
+
+    @scorer
+    def cancels() -> bool:
+        raise asyncio.CancelledError
+
+    source = InMemoryTraceSource([(TraceRef("t1", task_id="task-1"), _trace("Paris"))])
+    suite = Suite.from_list([{"task_id": "task-1", "inputs": {"input": "capital of France?"}}])
+
+    with pytest.raises(asyncio.CancelledError):
+        await evaluate_traces(source, scorers=[cancels], suite=suite, store_dir=tmp_path)

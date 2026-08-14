@@ -55,7 +55,9 @@ class TaskCompleted(TaskEvent):
     # owners can return structured results. ``run_task`` still passes a
     # string, so existing callers are unaffected.
     result: Any = Field(None)
-    task_stream: "StreamId"  # Stream reference for inspection
+    # Stream reference for inspection. Resolves against the parent's storage
+    # only when the sub-task's stream shares it, as `stream=None` builds it to.
+    task_stream: "StreamId"
     usage: Usage = Field(default_factory=Usage)
 
 

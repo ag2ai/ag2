@@ -39,6 +39,54 @@ config = A2AConfig(
 !!! tip
     `#!python card_url` is always an HTTP URL — even when the resolved transport is gRPC. The card is served over HTTP per spec; only the actual message exchange uses the resolved binding.
 
+## gRPC TLS
+
+The default gRPC channel factory selects security from the interface URL published in the agent card. `#!python grpcs://` and `#!python grpc+tls://` create a TLS channel using the system CA roots; `#!python grpc://`, `#!python grpc+insecure://` and a bare `#!python host:port` keep the backwards-compatible insecure channel.
+
+For a server certificate issued by a public CA, the client needs no TLS-specific configuration. It fetches the card over HTTPS and follows the secure gRPC interface declared there:
+
+```python linenums="1" hl_lines="7"
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+
+remote = Agent(
+    "remote",
+    config=A2AConfig(
+        card_url="https://agents.example.com",
+        prefer="grpc",
+    ),
+)
+reply = await remote.ask("Summarize the latest report.")
+```
+
+Private CAs, self-signed certificates and mTLS need custom `#!python grpc.ChannelCredentials`. Wrap those credentials with `#!python secure_grpc_channel_factory(...)` and pass the returned callable through the existing `#!python grpc_channel_factory` escape hatch:
+
+```python linenums="1" hl_lines="7-8 11-16"
+from pathlib import Path
+
+import grpc
+
+from ag2 import Agent
+from ag2.a2a import A2AConfig, secure_grpc_channel_factory
+
+ca_certificate = Path("certs/ca.pem").read_bytes()
+credentials = grpc.ssl_channel_credentials(root_certificates=ca_certificate)
+remote = Agent(
+    "remote",
+    config=A2AConfig(
+        card_url="https://agents.internal.example",
+        prefer="grpc",
+        grpc_channel_factory=secure_grpc_channel_factory(credentials),
+    ),
+)
+reply = await remote.ask("Run the internal health check.")
+```
+
+The secure factory always creates a TLS channel, regardless of whether the card uses a secure, insecure or bare gRPC URL spelling. It also accepts gRPC channel options via `#!python options=`. For mTLS, construct the credentials with `#!python root_certificates=`, `#!python private_key=` and `#!python certificate_chain=`; AG2 passes the resulting object to gRPC unchanged.
+
+!!! warning
+    TLS protects the gRPC connection only. Card discovery is a separate HTTP request, so publish the card over HTTPS as well and keep `#!python card_url` on that HTTPS origin.
+
 ## Multi-turn — `reply.ask`
 
 A2A servers are stateless from AG2's perspective: every call ships the full conversation history as a `#!python application/vnd.ag2.history+json` `#!python DataPart` attached to the outgoing message. The continuation API is the regular `#!python reply.ask(...)`:
@@ -110,6 +158,43 @@ This composes naturally with several remotes — give each `#!python as_tool()` 
 !!! note
     Each `#!python task_<name>` call spawns a fresh sub-agent stream; history between calls is not preserved on the sub-task side. For a remote that remembers prior turns, prefer the `#!python reply.ask(...)` pattern above instead of `#!python as_tool()`.
 
+## Extensions
+
+A2A extensions are activated **per connection** by URI. List them on `#!python A2AConfig.extensions`; every URI must be advertised in the server card's `#!python capabilities.extensions`.
+
+```python linenums="1" hl_lines="6"
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+
+remote = Agent(
+    "remote",
+    config=A2AConfig(card_url="http://127.0.0.1:8000", extensions=["urn:acme:billing:v1"]),
+)
+reply = await remote.ask("invoice summary for Q3")
+```
+
+Activated URIs travel on both channels the spec allows — the `#!python Message.extensions` field and the `#!python A2A-Extensions` header (gRPC metadata on the gRPC binding) — and stay attached across continuation legs, so a tool-result or HITL round-trip does not silently deactivate them mid-task.
+
+The card and the activation list are reconciled before the first request goes out, so a mismatch surfaces as `#!python A2AExtensionNotSupportedError` at connect time instead of an opaque failure mid-task. It is raised in both directions:
+
+- a URI the card does not advertise — a client-side mistake;
+- an extension the card marks `#!python required=True` that the client did not activate — the server expects behaviour AG2 will not provide.
+
+`#!python urn:ag2:client-tools:v1` is the exception to the second rule: AG2 implements it natively, so a card may require it without the client listing it explicitly.
+
+Activation covers every request the config makes, not just `#!python ask`. The one-shot [task](/docs/user-guide/a2a/tasks) and push-notification helpers open their own connection from the same `#!python A2AConfig`, so they activate the same URIs and run the same reconciliation — a server enforcing a `#!python required=True` extension sees a consistent client on the conversational and the administrative path alike.
+
+```python linenums="1" hl_lines="5-6"
+from ag2.a2a.errors import A2AExtensionNotSupportedError
+
+try:
+    await remote.ask("invoice summary for Q3")
+except A2AExtensionNotSupportedError as err:
+    print(err.uris)  # the URIs that could not be reconciled
+```
+
+See [Declaring Extensions](/docs/user-guide/a2a/server#declaring-extensions) for the server side.
+
 ## A2AConfig Reference
 
 | Field | Type | Default | Purpose |
@@ -125,10 +210,12 @@ This composes naturally with several remotes — give each `#!python as_tool()` 
 | `input_required_timeout` | `#!python Optional[float]` | `#!python None` | Cap how long the client waits on a HITL hook |
 | `httpx_client_factory` | `#!python Optional[Callable[[], AsyncClient]]` | `#!python None` | Custom `#!python httpx.AsyncClient` (proxies, custom TLS, etc.) |
 | `interceptors` | `#!python Sequence[ClientCallInterceptor]` | `#!python ()` | A2A SDK call interceptors |
-| `grpc_channel_factory` | `#!python Optional[Callable[[str], Channel]]` | `#!python None` | Custom gRPC channel builder (defaults to insecure) |
+| `grpc_channel_factory` | `#!python Optional[Callable[[str], Channel]]` | `#!python None` | Custom gRPC channel builder. The default follows the card URL scheme: `#!python grpcs://` / `#!python grpc+tls://` use system CA roots; other gRPC URL forms stay insecure. See [gRPC TLS](/docs/user-guide/a2a/client#grpc-tls) |
 | `preset_card` | `#!python Optional[AgentCard]` | `#!python None` | Skip the discovery round-trip when the card is already known |
+| `card_signature_verifier` | `#!python Optional[Callable[[AgentCard], None]]` | `#!python None` | Verify the JWS signature on every card consumed — fetched, preset and extended (see [Card Signing](/docs/user-guide/a2a/card_signing)) |
 | `tenant` | `#!python Optional[str]` | `#!python None` | Multi-tenancy scope on a shared backend |
 | `history_length` | `#!python Optional[int]` | `#!python None` | Server-side hint to truncate echoed `#!python Task.history` |
+| `extensions` | `#!python Sequence[str]` | `#!python ()` | A2A extension URIs to activate on the connection (see [Extensions](/docs/user-guide/a2a/client#extensions)) |
 
 ### Constructing From a Pre-fetched Card
 

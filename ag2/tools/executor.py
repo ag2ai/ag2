@@ -113,8 +113,13 @@ async def _execute_call(
         | (ToolResultEvent.parent_id == call.id)
         | (ClientToolCallEvent.id == call.id)
     ) as result:
-        await context.send(call)
-        return await result
+        try:
+            await context.send(call)
+            return await result
+
+        # tool-level middleware could leads to execution exceptions
+        except Exception as e:
+            return ToolErrorEvent.from_call(call, e)
 
 
 def _tool_not_found(known_tools: Iterable[str]) -> Callable[..., Any]:

@@ -48,8 +48,9 @@ The server publishes an `#!python AgentCard` at `#!python /.well-known/agent-car
 
 1. [Server](/docs/user-guide/a2a/server) — expose an existing `#!python Agent` over A2A.
 2. [Client](/docs/user-guide/a2a/client) — connect to a remote A2A endpoint, multi-turn, client-side tools, `#!python as_tool()`.
-3. [Tasks & Push](/docs/user-guide/a2a/tasks_and_push) — inspect/cancel tasks and manage push-notification webhooks.
-4. [Advanced](/docs/user-guide/a2a/advanced) — HITL via `#!python input_required`, streaming reconnect, custom `#!python AgentExecutor`.
+3. [Card Signing](/docs/user-guide/a2a/card_signing) — sign the cards you serve and verify the cards you consume.
+4. [Tasks & Push](/docs/user-guide/a2a/tasks_and_push) — inspect/cancel tasks and manage push-notification webhooks.
+5. [Advanced](/docs/user-guide/a2a/advanced) — HITL via `#!python input_required`, streaming reconnect, custom `#!python AgentExecutor`.
 
 ## Public API
 
@@ -67,7 +68,7 @@ Sub-modules:
 | `#!python ag2.a2a.push` | `#!python A2APushConfig`, `#!python A2APushAuthentication`, CRUD helpers |
 | `#!python ag2.a2a.security` | `#!python Scheme` / `#!python Requirement` types, scheme factories (`#!python bearer_scheme`, `#!python api_key_scheme`, `#!python oauth2_scheme`, `#!python mtls_scheme`, `#!python http_auth_scheme`, `#!python open_id_connect_scheme`) and the `#!python require()` builder for `#!python AgentCard` auth declarations |
 | `#!python ag2.a2a.events` | Typed `#!python A2AEvent` wrappers surfaced into the AG2 stream — `#!python A2ATaskSnapshot`, `#!python A2ATaskStatusUpdate`, `#!python A2ATaskArtifactUpdate`, `#!python A2ATextArtifact`, `#!python A2AToolCallArtifact`, `#!python A2AMessage` |
-| `#!python ag2.a2a.errors` | Exception hierarchy — `#!python A2AError`, `#!python A2ATaskTerminalError`, `#!python A2AReconnectError`, `#!python A2AInvalidCardError`, `#!python A2AClientToolsNotSupportedError` |
+| `#!python ag2.a2a.errors` | Exception hierarchy — `#!python A2AError`, `#!python A2ATaskTerminalError`, `#!python A2AReconnectError`, `#!python A2AInvalidCardError`, `#!python A2AIncompatibleProtocolVersionError`, `#!python A2AClientToolsNotSupportedError`, `#!python A2ACardSignatureError`, `#!python A2AStaleCardSignatureError` |
 | `#!python ag2.a2a.transports` | `#!python TransportName` — `#!python Literal["jsonrpc", "rest", "grpc"]` — plus low-level `#!python build_*` builders |
 | `#!python ag2.a2a.testing` | In-process test helpers — `#!python make_test_client_factory`, `#!python make_test_rest_client_factory`, `#!python pick_free_port` |
 

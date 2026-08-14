@@ -4,6 +4,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from .base import Sandbox
@@ -39,6 +40,29 @@ class SandboxFactory(Protocol):
         ...
 
 
+@runtime_checkable
+class WorkdirAware(Protocol):
+    """A :class:`SandboxFactory` that knows its working directory up front.
+
+    Tools ask for the working directory *before* any sandbox is opened —
+    :class:`~ag2.tools.SandboxShellTool` puts it into the description the model
+    reads. A factory that does not implement this is assumed to use the
+    conventional ``/workspace``, which is wrong for any backend that works
+    elsewhere (a Tenki sandbox, for one, runs as a non-root user out of
+    ``/home/tenki`` under a read-only root).
+
+    Implement it on a backend whose workdir differs from that convention. It is
+    deliberately a protocol of its own rather than a member of
+    :class:`SandboxFactory`, so every existing factory keeps satisfying that
+    protocol unchanged.
+    """
+
+    @property
+    def workdir(self) -> PurePosixPath:
+        """Sandbox-side directory commands and relative paths resolve against."""
+        ...
+
+
 class SingletonFactory:
     """Wrap a single :class:`Sandbox` instance as a :class:`SandboxFactory`.
 
@@ -67,4 +91,4 @@ class SingletonFactory:
         yield self._sandbox
 
 
-__all__ = ("SandboxFactory", "SingletonFactory")
+__all__ = ("SandboxFactory", "SingletonFactory", "WorkdirAware")

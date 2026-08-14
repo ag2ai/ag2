@@ -39,6 +39,18 @@ from ag2.events import (
 from ag2.testing import TestConfig, TrackingConfig
 
 
+def a2a_config(agent: Agent) -> A2AConfig:
+    """The agent's ``A2AConfig``.
+
+    ``Agent.config`` is declared ``ModelConfig | None``, but the task and
+    push-notification admin helpers take an ``A2AConfig`` — narrow once here
+    instead of handing them an unchecked union at every call site.
+    """
+    config = agent.config
+    assert isinstance(config, A2AConfig), f"{agent.name} is not backed by an A2AConfig"
+    return config
+
+
 @dataclass(slots=True)
 class A2APair:
     server: A2AServer

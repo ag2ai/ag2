@@ -8,9 +8,8 @@ from typing import TYPE_CHECKING
 
 import httpx
 from a2a.client import Client, ClientCallInterceptor, ClientConfig, ClientFactory
-from a2a.client.client_factory import TransportProtocol
 from a2a.types import AgentCard, AgentInterface
-from a2a.utils.constants import PROTOCOL_VERSION_1_0
+from a2a.utils.constants import PROTOCOL_VERSION_1_0, TransportProtocol
 from packaging.version import InvalidVersion, Version
 
 from ..errors import A2AIncompatibleProtocolVersionError, A2AInvalidCardError
@@ -124,7 +123,7 @@ def make_httpx_client(
     return httpx.AsyncClient(headers=dict(headers) if headers else None, timeout=timeout)
 
 
-def make_a2a_client(
+def make_a2a_client(  # type: ignore[no-any-unimported]
     *,
     card: AgentCard,
     httpx_client: httpx.AsyncClient,

@@ -1,0 +1,524 @@
+---
+title: Driving CLI Coding Agents as an ACP Client
+sidebarTitle: Client
+---
+
+# Orchestrating CLI Coding Agents
+
+AG2 can drive external CLI coding agents — **Claude Code**, **Codex**, **OpenCode**,
+**Kilo Code**, **Gemini CLI**, and others — as first-class agents, using the
+[Agent Client Protocol](https://agentclientprotocol.com){.external-link target="_blank"} (ACP).
+
+AG2 plays the ACP **Client** role; each CLI agent runs as an ACP **Agent**
+subprocess — or, if you prefer, as a process
+[already running on another machine](#driving-an-agent-on-another-machine).
+Everything the agent does — message output, thinking, tool calls, plans, and
+permission prompts — is **externalized onto AG2's event stream**, so you can
+observe, gate, and orchestrate it like any other AG2 agent.
+
+```bash
+pip install "ag2[acp]"
+```
+
+The integration is a configuration class — a subclass of `ACPConfig` carrying the
+launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
+`OpenCodeConfig`, `KiloCodeConfig`) — and there are no changes to the `Agent` API.
+
+## Basic Usage
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+
+reply = await agent.ask("Refactor the auth module and add tests")
+print(reply.body)
+```
+
+A single `ask()`/`run()` maps to one ACP *prompt turn*: the CLI agent runs its
+own internal tool loop and AG2 streams every step as it happens.
+
+## Choosing an agent
+
+Each adapter is a preset with its own launch command and authentication:
+
+<Tabs>
+  <Tab title="Claude Code">
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+# Launches `claude-agent-acp`. Auth: pass ANTHROPIC_API_KEY in env={...}, or use
+# an existing ~/.claude login. See "Authentication & billing" below.
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+
+  <Tab title="Codex">
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import CodexConfig
+
+# Launches `codex-acp`. Auth: an existing `codex login` (stored under $HOME), or
+# pass CODEX_API_KEY / OPENAI_API_KEY in env={...}.
+# See "Authentication & billing" below.
+agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+
+  <Tab title="OpenCode">
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import OpenCodeConfig
+
+# Launches `opencode acp`. Auth: `opencode auth login` (stored under $HOME).
+# See "Authentication & billing" below.
+# model: "provider/model" as listed by `opencode models` (optional).
+agent = Agent("coder", config=OpenCodeConfig(cwd="/path/to/repo"))
+```
+  </Tab>
+
+  <Tab title="Kilo Code">
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import KiloCodeConfig
+
+# Launches `kilo acp` (install: npm install -g @kilocode/cli).
+# Auth: `kilo auth login` (stored under $HOME). See "Authentication & billing" below.
+# Always set model ("provider/model" as listed by `kilo models`) — see the note below.
+agent = Agent(
+    "coder",
+    config=KiloCodeConfig(cwd="/path/to/repo", model="kilo/anthropic/claude-haiku-4.5"),
+)
+```
+  </Tab>
+</Tabs>
+
+!!! note "Model selection"
+
+    `model` is applied at session start via ACP `session/set_config_option`
+    when the agent advertises a model picker — Claude Code, Codex, OpenCode
+    and Kilo Code all do. Use the agent's own advertised ids: for OpenCode and
+    Kilo Code that is `"provider/model"` as listed by `opencode models` /
+    `kilo models`; Claude Code and Codex advertise bare ids. A value the agent
+    does not offer raises `ValueError` before the first turn; leaving `model`
+    unset keeps the agent's default.
+
+    **For Kilo Code, always set `model` explicitly**: a fresh Kilo ACP session
+    may default to an unsuitable model (an image model, at the time of
+    writing), which ends every turn with an empty reply.
+
+!!! warning "Empty replies"
+
+    Some CLI agents swallow provider-side failures — an unauthorized model, or
+    one that cannot produce text — and end the turn with `stop_reason="end_turn"`
+    and no output at all. Nothing reaches the ACP wire, so AG2 can only hand
+    back an empty reply; it logs a warning (`ag2.acp.client`) on such a turn so
+    the emptiness is not the only clue. Run the same prompt through the agent's
+    own CLI (e.g. `kilo run --model <model> "hi"`) to see the real error, and
+    check that the credential covers the model you selected.
+
+## Authentication & billing
+
+AG2 never meters or bills a run itself — it only launches the CLI agent as a
+subprocess and streams its output. **Who is billed, and whether it's per-token API
+usage or a subscription, is decided entirely by the credential the agent
+authenticates with — not by AG2 or ACP.**
+
+### How the agent's environment is built
+
+This is the part that trips people up. AG2 does **not** hand the agent your full
+shell environment. The ACP subprocess starts from a *trimmed* environment — only
+`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, and `USER` are inherited — merged with
+whatever you pass explicitly in the config's `env` field:
+
+```text
+agent environment  =  { HOME, LOGNAME, PATH, SHELL, TERM, USER }  +  config.env
+```
+
+The practical consequence: **`export ANTHROPIC_API_KEY=...` in your shell does not
+reach the agent.** An API key takes effect only if you put it in `env`:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+agent = Agent("coder", config=ClaudeCodeConfig(
+    cwd="/repo",
+    env={"ANTHROPIC_API_KEY": "sk-ant-..."},  # a shell export would NOT be inherited
+))
+```
+
+A disk-based login is different: it lives under `$HOME` (e.g. Claude Code's
+`~/.claude`, or the credentials written by `opencode auth login`), and `HOME` *is*
+inherited — so it works without setting `env` at all.
+
+### The two paths, and how each is billed
+
+| You authenticate with… | How to set it | Billing |
+| :--- | :--- | :--- |
+| **An API key** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` / `CODEX_API_KEY`, or a provider key for OpenCode / Kilo Code) | Pass it in `config.env` — a shell `export` is **not** inherited | The provider's **API**: pay-per-token against that API account |
+| **An existing CLI login** on the host (Claude Code `~/.claude`, `codex login` → `~/.codex`, `opencode auth login`, `kilo auth login`) | Nothing to set — inherited via `$HOME` | Whatever **plan that login is on**, which may be a **subscription** |
+
+So "API or subscription" is not a property of ACP or AG2 — it follows the
+credential. By default (no `env`), the agent uses whatever login already exists on
+the host; pass an API key in `env` to bill against the provider's API instead.
+
+!!! note
+
+    Every adapter here reads a disk login under `$HOME` when no key is passed in
+    `env` — Claude Code (`~/.claude`, or a custom location via `CLAUDE_CONFIG_DIR`
+    passed in `env`), Codex (`~/.codex`, or `CODEX_HOME`), OpenCode
+    (`opencode auth login`) and Kilo Code (`kilo auth login`). For Codex that login
+    may be a ChatGPT subscription rather than an API key, in which case billing
+    follows the subscription, not per-token API pricing. Exact plan names, quotas,
+    and whether a plan permits programmatic use are set by each provider, not by
+    AG2 — check the provider's terms.
+
+## Observing the agent's work
+
+Subscribe to the run's stream to see thoughts, tool calls, and plans live:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.events import ModelMessageChunk, ModelReasoning
+from ag2.events.tool_events import BuiltinToolCallEvent
+from ag2.acp.events import ACPPlan
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+
+def observe(event):
+    if isinstance(event, ModelReasoning):
+        print("💭", event.content)
+    elif isinstance(event, ModelMessageChunk):
+        print(event.content, end="")
+    elif isinstance(event, BuiltinToolCallEvent):
+        print(f"🔧 {event.name}({event.arguments})")
+    elif isinstance(event, ACPPlan):
+        for step in event.entries:
+            print(f"  [{step.status}] {step.content}")
+
+async with agent.run("Add a healthcheck endpoint") as run:
+    run.stream.subscribe(observe)  # subscribe before driving
+    reply = await run.result()
+```
+
+| ACP update | AG2 event |
+| :--- | :--- |
+| agent message | `ModelMessageChunk` → final `ModelResponse` |
+| thinking | `ModelReasoning` |
+| tool call / result | `BuiltinToolCallEvent` / `BuiltinToolResultEvent` |
+| plan | `ACPPlan` |
+| mode change | `ACPModeChange` |
+| available commands | `ACPAvailableCommands` |
+| question for the user | `ACPElicitation` (see [Questions the agent asks you](#questions-the-agent-asks-you-elicitation)) |
+
+## Your tools inside the CLI agent
+
+If the AG2 agent has tools, they are automatically served to the CLI agent
+over MCP — no configuration needed. When the ACP session starts, AG2 runs an
+in-process MCP server on `127.0.0.1` with the run's tools and hands its URL to
+the CLI agent (`session/new` → `mcp_servers`). Tool calls execute inside your
+AG2 process, through the normal tool pipeline (middleware and events included).
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+def get_ticket(ticket_id: str) -> dict:
+    """Fetch a ticket from the internal tracker."""
+    return {"id": ticket_id, "status": "open"}
+
+async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
+    agent = Agent("dev", config=config, tools=[get_ticket])
+    # Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
+    reply = await agent.ask("Look up ticket ACME-4211.")
+```
+
+The `async with` matters once tools are exposed: the MCP server serving them
+lives until the config is closed. See [Lifecycle](#lifecycle).
+
+What reaches the CLI agent:
+
+| AG2 tool | Forwarded? | How |
+| :--- | :--- | :--- |
+| Function tools (Python callables, toolkits) | Yes | served from the in-process MCP server |
+| MCP toolkits mounted on the agent | Yes | same — they are function tools |
+| `MCPServerTool` (external MCP server) | Yes | its URL is passed straight to the CLI agent |
+| Provider server-side builtins (`WebSearchTool`, …) | No — raises `UnsupportedToolError` | these are flags inside a provider API request; the CLI agent has its own native equivalents (web search, shell, file access) |
+
+Details and knobs:
+
+- `expose_tools=False` on the config disables all of this.
+- **Behaviour change:** `tools=[...]` on an ACP-backed agent used to be ignored.
+  They are now exposed, and a provider server-side builtin in that list is a hard
+  `UnsupportedToolError` rather than a silent no-op. Set `expose_tools=False` to
+  keep the previous behaviour.
+- An `MCPServerTool` cannot use the server label `ag2` alongside function tools —
+  that name is taken by AG2's own gateway entry, and ACP has no way to
+  disambiguate two servers sharing a name.
+- The set of MCP servers is fixed when the session starts (first turn).
+  Function tools added or removed on later turns update the served list
+  automatically, but changing the `MCPServerTool` set mid-run — or introducing
+  function tools when the first turn had none — raises a `ValueError`.
+- The MCP server binds to `127.0.0.1` on a random port and lives exactly as
+  long as the ACP session. It is served under an unguessable random path, which
+  acts as its credential — only the CLI agent is given the full URL, so other
+  local processes cannot reach it by scanning ports. Requests are additionally
+  validated against `Host`/`Origin` allowlists (DNS-rebinding protection).
+- A tool result with `final=True` loses its "stop the run now" semantics over
+  ACP: the CLI agent receives it as ordinary tool output and keeps going (a
+  warning is logged).
+- The CLI agent must advertise HTTP MCP support (`mcp_capabilities.http`) —
+  Claude Code, Codex and OpenCode adapters all do; otherwise
+  `MCPCapabilityError` is raised.
+- Requires the `mcp` extra (installed automatically with `ag2[acp]`).
+
+## Permissions (Human-in-the-Loop)
+
+When the agent asks to perform a sensitive action, it sends a permission
+request. `permission_policy` controls the response:
+
+| Policy | Behavior |
+| :--- | :--- |
+| `"ask"` (default) | Route to the agent's `hitl_hook` / `context.input`; the human decides |
+| `"auto"` | Approve automatically (headless orchestration) |
+| `"deny"` | Reject automatically |
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+agent = Agent(
+    "coder",
+    config=ClaudeCodeConfig(cwd="/repo", permission_policy="auto"),  # autonomous
+)
+```
+
+## Questions the agent asks you (elicitation)
+
+A permission request asks "may I do this?". An *elicitation* asks something the
+agent cannot answer itself — "which refactoring strategy?", or "authorize access
+to your GitHub repos". It arrives on the same HITL channel, governed by
+`elicitation_policy`:
+
+| Policy | Behavior |
+| :--- | :--- |
+| `"ask"` (default) | Advertise the capability and route the question to the agent's `hitl_hook` / `context.input` |
+| `"decline"` | Do not advertise the capability at all, so a conforming agent never asks |
+
+There is deliberately no `"auto"`. A permission request has an allow option AG2
+could pick blind; an arbitrary form has no answer AG2 could invent without
+fabricating data on your behalf.
+
+```python linenums="1" hl_lines="5-7 12"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.events import HumanInputRequest
+
+def answer(event: HumanInputRequest) -> str:
+    """Show the agent's question and return the human's answer."""
+    return input(f"{event.content}\n> ")
+
+agent = Agent(
+    "coder",
+    config=ClaudeCodeConfig(cwd="/repo"),  # elicitation_policy="ask" by default
+    hitl_hook=answer,
+)
+reply = await agent.ask("Split this module up — ask me before choosing a layout.")
+```
+
+Two shapes reach you:
+
+- **A form** is rendered one prompt per requested field, in schema order, showing
+  the field's title, description, allowed values, bounds and default. An empty
+  answer takes the default; an answer the field cannot take — a word where a
+  number was asked for, a value outside the allowed set — is asked again rather
+  than passed through, so the agent only ever receives values its own schema
+  permits. Answer `!decline` at any field to refuse the whole request — a
+  half-filled form is never sent. A field that stays unanswerable after ten
+  tries declines the request too, so a programmatic hook (which cannot type
+  `!decline`) can never hang the turn.
+- **A URL** (OAuth, payment, device authorization) is shown with the agent's
+  message, and the agent resumes only once you confirm you have finished there.
+
+The question also surfaces on the Run's stream as an `ACPElicitation` event
+(see [Observing the agent's work](#observing-the-agents-work)) *before* you are
+prompted, so an observer sees it even when something other than an interactive
+human answers.
+
+!!! warning "Unattended runs should decline"
+
+    Under `"ask"` with no `hitl_hook` anywhere, there is no human to reach: the
+    request is cancelled so the turn cannot deadlock. That works, but the agent
+    spends a round trip finding out. For headless orchestration set
+    `elicitation_policy="decline"` and the agent never asks in the first place.
+
+## Orchestrating multiple agents
+
+Because each CLI agent is an `Agent`, you can compose them — including as tools
+of one another via `.as_tool()`:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+reviewer = Agent("reviewer", config=ClaudeCodeConfig(cwd="/repo"))
+manager = Agent(
+    "manager",
+    config=ClaudeCodeConfig(cwd="/repo"),
+    tools=[reviewer.as_tool(description="Review the changes for correctness")],
+)
+```
+
+!!! note
+
+    `tools=[...]` (including `.as_tool()` subagents) are served to the CLI agent
+    over MCP automatically — see
+    [Your tools inside the CLI agent](/docs/user-guide/acp/client/#your-tools-inside-the-cli-agent).
+
+## Driving an agent on another machine
+
+An agent does not have to be one AG2 launches. Point `ACPRemoteConfig` at a URL
+instead of a command and everything else works unchanged — the same `ask`/`run`,
+the same events, the same permission policy, the same model selection:
+
+```bash
+pip install "ag2[acp]" "agent-client-protocol[http]"
+```
+
+```python linenums="1"
+import os
+
+from ag2 import Agent
+from ag2.acp import ACPRemoteConfig
+
+config = ACPRemoteConfig(
+    url="https://dev-box.internal/acp",
+    # Source the token the way you would any other secret — a token written into
+    # a config literal is a token committed.
+    headers={"Authorization": f"Bearer {os.environ['ACP_TOKEN']}"},
+    cwd="/path/to/repo",
+    expose_tools=False,
+)
+
+agent = Agent("coder", config=config)
+reply = await agent.ask("Refactor the auth module and add tests")
+```
+
+The URL's scheme picks the transport — `http`/`https` use ACP's streamable HTTP
+transport, `ws`/`wss` the WebSocket one. Behind a proxy that does not follow that
+convention, `transport="http"` or `transport="websocket"` overrides it.
+
+**The workspace stays on your side.** ACP's file and terminal methods are
+requests *from* the agent *to* the client, and AG2 is the client — so what moves
+off-host is the agent's *reasoning*, not its working copy. A remote agent reads
+and writes your local files through AG2's `fs_root`-confined mediation, and the
+commands it asks to run execute where that workspace is.
+
+There is no `command` field on a remote config, and that is deliberate: a config
+that cannot launch anything should not carry launch-only fields, so an ambiguous
+config is a `TypeError` rather than a precedence rule you have to remember.
+
+A dropped connection fails the turn with an error naming the transport, rather
+than returning a blank reply you cannot distinguish from an agent that had
+nothing to say. There is no reconnect or session resume.
+
+### Exposing your tools to a remote agent
+
+Tool exposure works by running an in-process MCP server and handing the agent its
+URL. That server binds loopback only — which a remote agent cannot reach — so a
+remote config with `expose_tools` on and no reachable address **refuses at
+session start** rather than handing out a URL that silently yields no tools.
+
+Two ways forward. If the agent does not need your tools, turn exposure off
+(`expose_tools=False`, as above) and nothing else is required. If it does, tell
+AG2 what address the agent should dial:
+
+```python linenums="1"
+config = ACPRemoteConfig(
+    url="https://dev-box.internal/acp",
+    cwd="/path/to/repo",
+    gateway_address="10.0.0.5:8931",  # what the agent dials, and where AG2 binds
+)
+```
+
+!!! warning
+
+    `gateway_address` opens a local port to the network. The gateway binds that
+    address instead of loopback, its DNS-rebinding allowlist widens to match, and
+    it serves **plain HTTP** whose only credential is an unguessable path segment
+    in the URL — which proxies and gateways log by design. Anyone who can reach
+    that address and observe that URL can execute your agent's function tools in
+    your process.
+
+    That is why the address is explicit — it is never inferred from the presence
+    of a URL — and why the default stays closed. Arrange the reachability
+    yourself and keep it narrow: a private network, a VPN, or an SSH tunnel to
+    the agent's host, never a public interface. When in doubt, prefer
+    `expose_tools=False`.
+
+## Configuration reference
+
+`ACPConfig` (and its presets like `ClaudeCodeConfig`) accept:
+
+| Field | Default | Purpose |
+| :--- | :--- | :--- |
+| `command` | preset per agent | Executable + args launching the agent in ACP mode |
+| `cwd` | `"."` | Workspace root for the session |
+| `env` | `None` | Extra environment variables for the subprocess |
+| `model` | `None` | Agent model selection — applied via `session/set_config_option` when the agent advertises a model picker |
+| `permission_policy` | `"ask"` | `ask` / `auto` / `deny` |
+| `elicitation_policy` | `"ask"` | `ask` / `decline` — whether the agent may ask *you* a question |
+| `fs_root` | `cwd` | Root for mediated `fs/*` access (path-confined) |
+| `allow_terminal` | `True` | Advertise the ACP terminal capability |
+| `additional_directories` | `[]` | Extra workspace roots |
+| `startup_timeout` | `30.0` | Tool-gateway HTTP server startup timeout (s) |
+| `turn_timeout` | `None` | Per-prompt-turn timeout (s) |
+| `cancel_timeout` | `5.0` | Grace period (s) after a timed-out turn signals `session/cancel` before the subprocess is hard-stopped |
+| `expose_tools` | `True` | Serve the agent's tools to the CLI agent over MCP (default `True`) |
+
+`ACPRemoteConfig` is an `ACPConfig`, so every field above means the same thing
+for a remote agent — except the two launch-only ones, `command` and `env`, which
+it does not accept. In their place:
+
+| Field | Default | Purpose |
+| :--- | :--- | :--- |
+| `url` | *required* | Where the agent speaks ACP; the scheme picks the transport |
+| `headers` | `{}` | Sent with every request — e.g. `Authorization` |
+| `transport` | `None` | `"http"` / `"websocket"`, overriding the URL's scheme |
+| `gateway_address` | `None` | `host` or `host:port` the agent should dial to reach the tool gateway |
+
+File and terminal operations the agent requests are mediated by AG2: file access
+is confined to `fs_root`, and the agent's commands run under AG2's control.
+
+## Lifecycle
+
+The ACP subprocess is created on the first turn and reused for the run, and it
+outlives the `agent.run()` that created it — `reply.ask()` continues the same
+session. So the session's lifetime is the *conversation's*, and only you know
+when that ends.
+
+Use the config as an async context manager, and everything it started — the
+subprocess and the tool gateway — is torn down on exit:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
+    agent = Agent("dev", config=config, tools=[get_ticket])
+
+    async with agent.run("Look up ticket ACME-4211.") as run:
+        reply = await run.result()
+
+    follow_up = await reply.ask("What priority is it?")
+# subprocess and gateway are gone here, including if the block raised
+```
+
+`await config.aclose()` does the same thing explicitly. One or the other is
+required: nothing reclaims a session implicitly, so a config used across many
+runs without it accumulates live subprocesses — and, when tools are exposed,
+a listening MCP server per session.

@@ -5,7 +5,7 @@
 from .adapter import CodeAdapter, LanguageRunner
 from .base import ExecResult, Sandbox, SandboxBase
 from .environment import LocalEnvironment
-from .factory import SandboxFactory
+from .factory import SandboxFactory, WorkdirAware
 
 __all__ = (
     "CodeAdapter",
@@ -15,4 +15,5 @@ __all__ = (
     "Sandbox",
     "SandboxBase",
     "SandboxFactory",
+    "WorkdirAware",
 )

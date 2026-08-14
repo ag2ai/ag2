@@ -8,7 +8,7 @@ import pytest
 from fast_depends.use import SerializerCls
 from xai_sdk.chat import chat_pb2
 
-from ag2 import ToolResult
+from ag2 import Context, ToolResult
 from ag2.compact import CompactionSummary
 from ag2.config.xai.events import XAIAssistantEvent
 from ag2.config.xai.mappers import convert_messages
@@ -25,12 +25,15 @@ from ag2.events import (
     ModelResponse,
     TextInput,
     ToolCallEvent,
+    ToolCallsEvent,
     ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
     VideoInput,
 )
 from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
+from ag2.policies import ConversationPolicy, SlidingWindowPolicy
+from ag2.stream import MemoryStream
 
 
 def _content_texts(msg: chat_pb2.Message) -> list[str]:
@@ -242,6 +245,39 @@ class TestAssistantRoundTrip:
         assert msg.role == chat_pb2.ROLE_ASSISTANT
         assert _content_texts(msg) == ["Hi"]
         assert replays == []
+
+    @pytest.mark.asyncio
+    async def test_survives_conversation_policy(self) -> None:
+        proto = chat_pb2.GetChatCompletionResponse()
+        event = XAIAssistantEvent(proto_bytes=proto.SerializeToString())
+        events = [event, ModelResponse(message=ModelMessage("Hello"))]
+
+        _, filtered = await ConversationPolicy().apply([], events, Context(stream=MemoryStream()))
+
+        messages, replays = convert_messages([], filtered, SerializerCls)
+
+        assert messages == []  # the companion ModelResponse stays shadowed
+        assert [r.proto.SerializeToString() for r in replays] == [proto.SerializeToString()]
+
+    @pytest.mark.asyncio
+    async def test_window_trim_never_orphans_tool_results(self) -> None:
+        # Trimming the proto away but keeping the response rebuilds the turn
+        # text-only: tool_calls are lost and the tool results below reference
+        # calls the model was never told it made. The whole turn goes instead.
+        proto = chat_pb2.GetChatCompletionResponse()
+        events = [
+            XAIAssistantEvent(proto_bytes=proto.SerializeToString()),
+            ModelResponse(tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="tc_1", name="multiply")])),
+            ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="multiply", result=ToolResult("ok"))]),
+            ModelRequest([TextInput("next")]),
+        ]
+
+        _, trimmed = await SlidingWindowPolicy(max_events=3).apply([], events, Context(stream=MemoryStream()))
+
+        messages, replays = convert_messages([], trimmed, SerializerCls)
+
+        assert replays == []
+        assert [msg.role for msg in messages] == [chat_pb2.ROLE_USER]
 
 
 def test_compaction_summary_renders_as_user_turn() -> None:
