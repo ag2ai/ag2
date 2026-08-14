@@ -79,10 +79,10 @@ const runtime = new CopilotRuntime({
 });
 
 const listener = createCopilotNodeListener({ runtime });
-await listener.channels?.ready({ timeoutMs: 15_000 }); // fail startup loudly on a broken config
+await listener.channels.ready({ timeoutMs: 15_000 }); // fail startup loudly on a broken config
 ```
 
-Run the channel process alongside the AG-UI server from the [basic server example](/docs/user-guide/ag-ui/#basic-server-example). Both credentials come from the Intelligence dashboard:
+Run the channel process alongside the AG-UI server from the [basic server example](/docs/user-guide/ag-ui/#basic-server-example). Both credentials come from the Intelligence dashboard — the API key under **API Keys**, the Code on the Channel you created there:
 
 ```bash
 uvicorn run_ag_ui:app --reload --port 8000   # terminal 1 — AG2 server
@@ -90,9 +90,11 @@ uvicorn run_ag_ui:app --reload --port 8000   # terminal 1 — AG2 server
 
 ```bash
 export INTELLIGENCE_API_KEY="cpk-..."        # terminal 2 — channel process
-export CHANNEL_CODE="support-bot"            # the Code, matched by createChannel({ name })
+export CHANNEL_CODE="support-bot"            # the Channel's Code — not a Slack channel ID
 npx tsx channel.mts
 ```
+
+Until the channel process is running, the Channel reads **Waiting for runtime** in the dashboard: nothing has declared it yet. That is the state `ready()` waits to leave.
 
 ## Slack
 
@@ -103,7 +105,7 @@ The agent receives an ordinary AG-UI `RunAgentInput` and emits ordinary AG-UI ev
 !!! warning "The channel process needs a long-running host"
     It holds a persistent connection to the Intelligence gateway, which delivers each turn to it. A serverless request handler cannot own that connection.
 
-For creating the Slack app, the manifest, and the tokens, see [Configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence){.external-link target="_blank"}; for the full channel-process walkthrough, see [Connect your agent](https://docs.copilotkit.ai/slack/ag2/connect){.external-link target="_blank"}.
+The Slack app itself is created by pasting the manifest from the Intelligence wizard into Slack's web UI and handing its tokens back to Intelligence — no Slack CLI and no bot framework, since the agent already runs in your AG2 server. For that walkthrough, see [Configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence){.external-link target="_blank"}; for the full channel-process one, see [Connect your agent](https://docs.copilotkit.ai/slack/ag2/connect){.external-link target="_blank"}.
 
 ## Other platforms
 

@@ -39,10 +39,10 @@ Verified AG-UI features are supported in AG2:
 
 ## Installation
 
-Install AG2 with AG-UI support:
+Install AG2 with AG-UI support, plus the extra for the model provider your agent uses — `openai` in the examples below:
 
 ```bash
-pip install "ag2[ag-ui]"
+pip install "ag2[ag-ui,openai]"
 ```
 
 ## Basic server example
@@ -107,7 +107,8 @@ curl -N -X POST http://127.0.0.1:8000/chat \
     "messages": [{"id": "m1", "role": "user", "content": "Hello"}],
     "state": {},
     "context": [],
-    "tools": []
+    "tools": [],
+    "forwardedProps": null
   }'
 ```
 
