@@ -16,23 +16,21 @@ Make sure all tests pass, this is required for [test.yml](https://github.com/ag2
 To run tests, install the [test] option:
 
 ```bash
-pip install -e."[openai,test]"
+uv pip install --group test -e ".[openai]"
 ```
 
 Then you can run the tests from the `test` folder using the following command:
 
 ```bash
-bash scripts/test.sh test
+just test
 ```
 
-Tests for the `ag2.agentchat.contrib` module may be skipped automatically if the
-required dependencies are not installed. Please consult the documentation for
-each contrib module to see what dependencies are required.
+Tests whose optional dependencies are not installed are skipped automatically.
 
 ## Skip flags for tests
 
 - `-m`: Used to select or deselect specific groups of tests marked with pytest markers, such as tests for LLM services like OpenAI, Gemini etc. For example, you can mark tests with `@pytest.mark.openai` and then use `-m openai` to run only those tests.
-- `-m "not docker"`: Skips tests that explicitly require Docker. The `docker` Python package is an optional dependency — install with `pip install ag2[docker]` (or `pip install ag2[test]`, which already includes it) to run these tests.
+- `-m "not docker"`: Skips tests that explicitly require Docker. The `docker` Python package ships in the `test` dependency group, so `uv sync --group test` is enough to run these tests.
 - `-m "not redis"`: Skips tests that require a Redis server.
 
 
@@ -40,17 +38,17 @@ each contrib module to see what dependencies are required.
 
 To skip tests that require access to LLM services and Docker, run:
 ```bash
-bash scripts/test-core-skip-llm.sh -m "not docker"
+just test -m "not docker"
 ```
 
 To run tests for all LLM services (OpenAI, Gemini, etc.), use:
 ```bash
-bash scripts/test-core-llm.sh
+just test-llm
 ```
 
 To run tests specifically for the OpenAI LLM service, use:
 ```bash
-bash scripts/test-core-llm.sh -m "openai"
+just test-llm openai
 ```
 
 ## Coverage
@@ -58,9 +56,9 @@ bash scripts/test-core-llm.sh -m "openai"
 Any code you commit should not decrease coverage. To ensure your code maintains or increases coverage, use the following commands after installing the required test dependencies:
 
 ```bash
-pip install -e ."[openai,test]"
+uv pip install --group test -e ".[openai]"
 
-bash scripts/test.sh test --cov-report=html
+just test-cov --cov-report=html
 ```
 
 Pytest generated a code coverage report and created a htmlcov directory containing an index.html file and other related files. Open index.html in any web browser to visualize and navigate through the coverage data interactively. This interactive visualization allows you to identify uncovered lines and review coverage statistics for individual files.
