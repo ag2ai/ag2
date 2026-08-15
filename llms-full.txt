@@ -2635,7 +2635,9 @@ agent = Agent(..., middleware=[HistoryLimiter(max_events=100)])
 ```
 
 Trims the event history to a maximum number of events before the model call.
-It preserves the first `ModelRequest` when possible and avoids leaving leading orphaned tool results in the trimmed history.
+It preserves the first `ModelRequest` when possible, and drops whatever the cut orphaned so the trimmed history still replays.
+
+`max_events` is a target rather than a hard cap, for the same reason it is one on the reduction policies - see [Reduction limits are targets](advanced/assembly.md#reduction-limits-are-targets).
 
 Use it when you want a simple, deterministic cap on context length by event count.
 
@@ -2650,6 +2652,8 @@ agent = Agent(..., middleware=[TokenLimiter(max_tokens=1000)])
 
 Trims the event history to fit within an approximate token budget before the model call.
 It uses a character-based estimate controlled by `chars_per_token`.
+
+`max_tokens` is a target rather than a hard cap - see [Reduction limits are targets](advanced/assembly.md#reduction-limits-are-targets).
 
 Use it when you need lightweight context budgeting without depending on a model-specific tokenizer.
 
@@ -2714,6 +2718,69 @@ conditional = ConditionalMiddleware(
 ```
 
 `ConditionalMiddleware` wraps any `MiddlewareFactory` - including `Middleware(...)` instances, bare `BaseMiddleware` subclasses, and other `ConditionalMiddleware` wrappers.
+
+## Describing Middleware
+
+A middleware can report what it is and how it was configured, so it can be logged, compared against another instance, or asserted on in a test. Every built-in does:
+
+```python
+from ag2.middleware import TokenLimiter
+
+TokenLimiter(max_tokens=100).describe()
+# MiddlewareDescription(kind='TokenLimiter', config={'max_tokens': 100, 'chars_per_token': 4}, complete=True)
+
+TokenLimiter(max_tokens=100).describe() == TokenLimiter(max_tokens=100).describe()
+# True
+```
+
+Your own middleware opts in the same way, by implementing `describe()`:
+
+```python
+from ag2.middleware import MiddlewareDescription
+
+class RateLimit:
+    def __init__(self, per_minute: int) -> None:
+        self._per_minute = per_minute
+
+    async def __call__(self, call_next, event, context):
+        return await call_next(event, context)
+
+    def describe(self) -> MiddlewareDescription:
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"per_minute": self._per_minute},
+        )
+```
+
+Opting in is optional. Where AG2 surfaces middleware, anything that has not opted in is reported honestly rather than guessed at - `config` is empty and `complete` is `False`. AG2 never inspects `__closure__` to recover configuration, because cell names and ordering are an implementation detail of whatever function produced the closure. A `describe()` that fails or returns the wrong type degrades to that same honest unknown, so introspection cannot break the code doing the logging.
+
+Middleware that wraps other middleware reports them in `inner`, keeping `config` a flat settings mapping:
+
+```python
+from ag2.middleware import ConditionalMiddleware, TokenLimiter
+from ag2.events import ToolCallEvent
+
+ConditionalMiddleware(TokenLimiter(max_tokens=10), ToolCallEvent).describe()
+# MiddlewareDescription(
+#     kind='ConditionalMiddleware', config={'condition': 'TypeCondition'}, complete=True,
+#     inner=(MiddlewareDescription(kind='TokenLimiter', config={'max_tokens': 10, ...}),),
+# )
+```
+
+A composite is only as describable as its parts: `complete` is forced to `False` when any entry in `inner` is incomplete, so composing middleware cannot claim completeness its parts do not support. Because each description applies the rule as it is constructed, it holds at any depth without a parent walking the tree.
+
+Descriptions support equality but are deliberately **not hashable** - `config` may hold arbitrary values, so they cannot go in a `set` or be used as dict keys.
+
+To read the middleware attached to an agent or a tool, use `agent.middleware` and `tool.middleware`. Each entry pairs the middleware object with its description, so an entry always has one whether or not that middleware opted in. See [Reading an agent's composition](agent_harness.md#reading-an-agents-composition).
+
+!!! note
+    `Middleware(...)` reports the wrapped class and which options were set, but never their values, and always `complete=False`. The options are caller-supplied and the wrapper cannot know whether one is a credential. Write a `MiddlewareFactory` with its own `describe()` when you want a complete description. Its `.cls` and `.options` expose the class and the option values directly, for when you are inspecting a factory you already hold rather than producing something to log.
+
+!!! note
+    `config` is for settings only. Counters, caches, and anything else that changes during a run belong in `context.variables` or the per-turn `BaseMiddleware` instance - a description that carries a moving number produces flaky snapshots.
+
+!!! warning
+    Descriptions are meant to be logged and committed as test fixtures, so `describe()` must not expose credentials. The built-ins report live objects by name or presence - `LoggingMiddleware` reports its logger's name, and `TelemetryMiddleware` reports only the *keys* of its `span_attributes`.
 
 ## Choosing the Right Hook
 
@@ -3291,6 +3358,58 @@ reply = await parent.ask("Find out where Melbourne is.")
 
 `as_tool()` returns a `FunctionTool` named `task_{child.name}` that accepts an `objective` parameter and forwards it into the child's stream. See [Subagents](subagents.md) for sub-task streams, depth limiting, and stream factories.
 
+## Reading an agent's composition
+
+An Agent reports what it is made of, so you can compare two agents, assert on composition in a test, or log it. Each constructor argument has a matching read-only property:
+
+| Property | Reports |
+|---|---|
+| `name` | agent name |
+| `system_prompt` | static prompt fragments, in order |
+| `dynamic_prompt` | dynamic prompt hooks, in registration order |
+| `tools` | attached tools |
+| `middleware` | agent-level middleware, in registration order |
+| `dependencies` / `variables` | injected values, keyed as supplied |
+| `config` / `response_schema` / `hitl_hook` | model config, schema, human-input hook |
+| `observers` / `assembly` / `tasks` | observers, assembly policies, `TaskConfig` |
+
+Sequences come back as tuples and mappings as read-only views, so an agent cannot be changed through them.
+
+```python
+def fingerprint(agent: Agent) -> tuple:
+    return (
+        agent.name,
+        agent.system_prompt,
+        tuple(t.name for t in agent.tools),
+        tuple(m.description for m in agent.middleware),
+        tuple(sorted(map(str, agent.dependencies))),
+    )
+
+assert fingerprint(built_one_way) == fingerprint(built_another_way)
+```
+
+### Middleware entries
+
+`agent.middleware` and `tool.middleware` yield entries pairing each middleware with its [description](middleware.md#describing-middleware):
+
+```python
+for entry in agent.middleware:
+    entry.description   # what it is and how it was configured
+    entry.middleware    # the object itself
+```
+
+Both are needed. A description says what a middleware *is*; identity says whether two tools *share* one. A single rate limiter across ten tools and ten separate ones configured identically produce equal descriptions, so `is` on `entry.middleware` is the only thing that tells them apart:
+
+```python
+first, second = agent.tools
+
+first.middleware[0].middleware is second.middleware[0].middleware
+# True when both tools hold one instance, so they share its state
+```
+
+!!! note
+    Entries are built when you read the property, so `agent.middleware[0] is agent.middleware[0]` is `False`. Compare `entry.middleware`, never the entry itself.
+
 ## Turn lifecycle
 
 Each `await agent.ask(...)` runs through the middleware chain in this order (outermost -> innermost):
@@ -3739,6 +3858,15 @@ The LLM builds an `AgentSpec` on every call. It is JSON-serializable and capture
 | `tool_names` | `list[str]` | Subset of `available_tools` names to give the child |
 | `response_schema` | `ResponseSchemaSpec | None` | Optional structured output schema |
 
+Unrecognised keys are ignored, as Pydantic would anyway, but they raise an `UnknownSpecFieldWarning` naming the key and suggesting the closest valid field - so a misspelled `tool_nammes` no longer silently produces a child with no tools. To make it fatal, promote the warning:
+
+```python
+import warnings
+from ag2.spec import UnknownSpecFieldWarning
+
+warnings.simplefilter("error", UnknownSpecFieldWarning)
+```
+
 ### How the LLM discovers available tool names
 
 The pool's names and descriptions are **rendered into the `create_and_run_agent` tool description automatically** when the factory is built. The calling agent's system prompt does not need to enumerate them - the LLM discovers the valid names from the tool schema.
@@ -3822,339 +3950,6 @@ researcher.as_tool(
 
 !!! note
     `stream=` accepts exactly these three shapes - `None`, a `Stream` instance, or a factory. Anything else raises `TypeError` when the tool is built, not when it first runs. Passing the class (`stream=MemoryStream`) instead of an instance (`stream=MemoryStream()`) is rejected the same way. The same rules apply to `background_agent_tool()`.
-
----
-
-# CLI Coding Agents (ACP)
-
-Source: https://docs.ag2.ai/docs/user-guide/cli_agents/
-
-# Orchestrating CLI Coding Agents
-
-AG2 can drive external CLI coding agents - **Claude Code**, **Codex**, **OpenCode**,
-**Gemini CLI**, and others - as first-class agents, using the
-[Agent Client Protocol](https://agentclientprotocol.com) (ACP).
-
-AG2 plays the ACP **Client** role; each CLI agent runs as an ACP **Agent**
-subprocess. Everything the agent does - message output, thinking, tool calls,
-plans, and permission prompts - is **externalized onto AG2's event stream**, so
-you can observe, gate, and orchestrate it like any other AG2 agent.
-
-```bash
-pip install "ag2[acp]"
-```
-
-The integration is a configuration class - a subclass of `ACPConfig` carrying the
-launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
-`OpenCodeConfig`) - and there are no changes to the `Agent` API.
-
-## Basic Usage
-
-```python
-from ag2 import Agent
-from ag2.acp import ClaudeCodeConfig
-
-agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
-
-reply = await agent.ask("Refactor the auth module and add tests")
-print(reply.body)
-```
-
-A single `ask()`/`run()` maps to one ACP *prompt turn*: the CLI agent runs its
-own internal tool loop and AG2 streams every step as it happens.
-
-## Choosing an agent
-
-Each adapter is a preset with its own launch command and authentication:
-
-=== "Claude Code"
-    ```python linenums="1"
-    from ag2 import Agent
-    from ag2.acp import ClaudeCodeConfig
-
-    # Launches `claude-agent-acp`. Auth: pass ANTHROPIC_API_KEY in env={...}, or use
-    # an existing ~/.claude login. See "Authentication & billing" below.
-    agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
-    ```
-
-=== "Codex"
-    ```python linenums="1"
-    from ag2 import Agent
-    from ag2.acp import CodexConfig
-
-    # Launches `codex-acp`. Auth: pass CODEX_API_KEY or OPENAI_API_KEY in env={...}.
-    # See "Authentication & billing" below.
-    agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
-    ```
-
-=== "OpenCode"
-    ```python linenums="1"
-    from ag2 import Agent
-    from ag2.acp import OpenCodeConfig
-
-    # Launches `opencode acp`. Auth: `opencode auth login` (stored under $HOME).
-    # See "Authentication & billing" below.
-    # Pick the model in OpenCode's own config (opencode.json: "model": "provider/model").
-    agent = Agent("coder", config=OpenCodeConfig(cwd="/path/to/repo"))
-    ```
-
-!!! note "OpenCode model selection"
-
-    As with the Claude Code and Codex adapters, `OpenCodeConfig`'s `model` field is
-    response metadata only. OpenCode's `acp` subcommand takes no `--model` flag -
-    select the model in OpenCode's own config (`opencode.json`:
-    `"model": "provider/model"`). With nothing configured and no authenticated
-    provider, OpenCode falls back to the first model of its built-in `opencode`
-    provider (OpenCode Zen).
-
-## Authentication & billing
-
-AG2 never meters or bills a run itself - it only launches the CLI agent as a
-subprocess and streams its output. **Who is billed, and whether it's per-token API
-usage or a subscription, is decided entirely by the credential the agent
-authenticates with - not by AG2 or ACP.**
-
-### How the agent's environment is built
-
-This is the part that trips people up. AG2 does **not** hand the agent your full
-shell environment. The ACP subprocess starts from a *trimmed* environment - only
-`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, and `USER` are inherited - merged with
-whatever you pass explicitly in the config's `env` field:
-
-```text
-agent environment  =  { HOME, LOGNAME, PATH, SHELL, TERM, USER }  +  config.env
-```
-
-The practical consequence: **`export ANTHROPIC_API_KEY=...` in your shell does not
-reach the agent.** An API key takes effect only if you put it in `env`:
-
-```python
-from ag2 import Agent
-from ag2.acp import ClaudeCodeConfig
-
-agent = Agent("coder", config=ClaudeCodeConfig(
-    cwd="/repo",
-    env={"ANTHROPIC_API_KEY": "sk-ant-..."},  # a shell export would NOT be inherited
-))
-```
-
-A disk-based login is different: it lives under `$HOME` (e.g. Claude Code's
-`~/.claude`, or the credentials written by `opencode auth login`), and `HOME` *is*
-inherited - so it works without setting `env` at all.
-
-### The two paths, and how each is billed
-
-| You authenticate with... | How to set it | Billing |
-| :--- | :--- | :--- |
-| **An API key** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` / `CODEX_API_KEY`, or a provider key for OpenCode) | Pass it in `config.env` - a shell `export` is **not** inherited | The provider's **API**: pay-per-token against that API account |
-| **An existing CLI login** on the host (Claude Code `~/.claude`, `opencode auth login`) | Nothing to set - inherited via `$HOME` | Whatever **plan that login is on**, which may be a **subscription** |
-
-So "API or subscription" is not a property of ACP or AG2 - it follows the
-credential. By default (no `env`), the agent uses whatever login already exists on
-the host; pass an API key in `env` to bill against the provider's API instead.
-
-!!! note
-
-    The Codex adapter here authenticates only via `CODEX_API_KEY` / `OPENAI_API_KEY`
-    (API billing). The subscription/login path applies to the adapters that read a
-    disk login - Claude Code (`~/.claude`, or a custom location via
-    `CLAUDE_CONFIG_DIR` passed in `env`) and OpenCode (`opencode auth login`). Exact
-    plan names, quotas, and whether a plan permits programmatic use are set by each
-    provider, not by AG2 - check the provider's terms.
-
-## Observing the agent's work
-
-Subscribe to the run's stream to see thoughts, tool calls, and plans live:
-
-```python
-from ag2 import Agent
-from ag2.acp import ClaudeCodeConfig
-from ag2.events import ModelMessageChunk, ModelReasoning
-from ag2.events.tool_events import BuiltinToolCallEvent
-from ag2.acp.events import ACPPlan
-
-agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
-
-def observe(event):
-    if isinstance(event, ModelReasoning):
-        print("💭", event.content)
-    elif isinstance(event, ModelMessageChunk):
-        print(event.content, end="")
-    elif isinstance(event, BuiltinToolCallEvent):
-        print(f"🔧 {event.name}({event.arguments})")
-    elif isinstance(event, ACPPlan):
-        for step in event.entries:
-            print(f"  [{step.status}] {step.content}")
-
-async with agent.run("Add a healthcheck endpoint") as run:
-    run.stream.subscribe(observe)  # subscribe before driving
-    reply = await run.result()
-```
-
-| ACP update | AG2 event |
-| :--- | :--- |
-| agent message | `ModelMessageChunk` -> final `ModelResponse` |
-| thinking | `ModelReasoning` |
-| tool call / result | `BuiltinToolCallEvent` / `BuiltinToolResultEvent` |
-| plan | `ACPPlan` |
-| mode change | `ACPModeChange` |
-| available commands | `ACPAvailableCommands` |
-
-## Your tools inside the CLI agent
-
-If the AG2 agent has tools, they are automatically served to the CLI agent
-over MCP - no configuration needed. When the ACP session starts, AG2 runs an
-in-process MCP server on `127.0.0.1` with the run's tools and hands its URL to
-the CLI agent (`session/new` -> `mcp_servers`). Tool calls execute inside your
-AG2 process, through the normal tool pipeline (middleware and events included).
-
-```python
-from ag2 import Agent
-from ag2.acp import ClaudeCodeConfig
-
-def get_ticket(ticket_id: str) -> dict:
-    """Fetch a ticket from the internal tracker."""
-    return {"id": ticket_id, "status": "open"}
-
-async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
-    agent = Agent("dev", config=config, tools=[get_ticket])
-    # Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
-    reply = await agent.ask("Look up ticket ACME-4211.")
-```
-
-The `async with` matters once tools are exposed: the MCP server serving them
-lives until the config is closed. See [Lifecycle](#lifecycle).
-
-What reaches the CLI agent:
-
-| AG2 tool | Forwarded? | How |
-| :--- | :--- | :--- |
-| Function tools (Python callables, toolkits) | Yes | served from the in-process MCP server |
-| MCP toolkits mounted on the agent | Yes | same - they are function tools |
-| `MCPServerTool` (external MCP server) | Yes | its URL is passed straight to the CLI agent |
-| Provider server-side builtins (`WebSearchTool`, ...) | No - raises `UnsupportedToolError` | these are flags inside a provider API request; the CLI agent has its own native equivalents (web search, shell, file access) |
-
-Details and knobs:
-
-- `expose_tools=False` on the config disables all of this.
-- **Behaviour change:** `tools=[...]` on an ACP-backed agent used to be ignored.
-  They are now exposed, and a provider server-side builtin in that list is a hard
-  `UnsupportedToolError` rather than a silent no-op. Set `expose_tools=False` to
-  keep the previous behaviour.
-- An `MCPServerTool` cannot use the server label `ag2` alongside function tools -
-  that name is taken by AG2's own gateway entry, and ACP has no way to
-  disambiguate two servers sharing a name.
-- The set of MCP servers is fixed when the session starts (first turn).
-  Function tools added or removed on later turns update the served list
-  automatically, but changing the `MCPServerTool` set mid-run - or introducing
-  function tools when the first turn had none - raises a `ValueError`.
-- The MCP server binds to `127.0.0.1` on a random port and lives exactly as
-  long as the ACP session. It is served under an unguessable random path, which
-  acts as its credential - only the CLI agent is given the full URL, so other
-  local processes cannot reach it by scanning ports. Requests are additionally
-  validated against `Host`/`Origin` allowlists (DNS-rebinding protection).
-- A tool result with `final=True` loses its "stop the run now" semantics over
-  ACP: the CLI agent receives it as ordinary tool output and keeps going (a
-  warning is logged).
-- The CLI agent must advertise HTTP MCP support (`mcp_capabilities.http`) -
-  Claude Code, Codex and OpenCode adapters all do; otherwise
-  `MCPCapabilityError` is raised.
-- Requires the `mcp` extra (installed automatically with `ag2[acp]`).
-
-## Permissions (Human-in-the-Loop)
-
-When the agent asks to perform a sensitive action, it sends a permission
-request. `permission_policy` controls the response:
-
-| Policy | Behavior |
-| :--- | :--- |
-| `"ask"` (default) | Route to the agent's `hitl_hook` / `context.input`; the human decides |
-| `"auto"` | Approve automatically (headless orchestration) |
-| `"deny"` | Reject automatically |
-
-```python
-from ag2 import Agent
-from ag2.acp import ClaudeCodeConfig
-
-agent = Agent(
-    "coder",
-    config=ClaudeCodeConfig(cwd="/repo", permission_policy="auto"),  # autonomous
-)
-```
-
-## Orchestrating multiple agents
-
-Because each CLI agent is an `Agent`, you can compose them - including as tools
-of one another via `.as_tool()`:
-
-```python
-from ag2 import Agent
-from ag2.acp import ClaudeCodeConfig
-
-reviewer = Agent("reviewer", config=ClaudeCodeConfig(cwd="/repo"))
-manager = Agent(
-    "manager",
-    config=ClaudeCodeConfig(cwd="/repo"),
-    tools=[reviewer.as_tool(description="Review the changes for correctness")],
-)
-```
-
-!!! note
-
-    `tools=[...]` (including `.as_tool()` subagents) are served to the CLI agent
-    over MCP automatically - see
-    [Your tools inside the CLI agent](cli_agents.md#your-tools-inside-the-cli-agent).
-
-## Configuration reference
-
-`ACPConfig` (and its presets like `ClaudeCodeConfig`) accept:
-
-| Field | Default | Purpose |
-| :--- | :--- | :--- |
-| `command` | preset per agent | Executable + args launching the agent in ACP mode |
-| `cwd` | `"."` | Workspace root for the session |
-| `env` | `None` | Extra environment variables for the subprocess |
-| `model` | `None` | Agent model selection, when supported |
-| `permission_policy` | `"ask"` | `ask` / `auto` / `deny` |
-| `fs_root` | `cwd` | Root for mediated `fs/*` access (path-confined) |
-| `allow_terminal` | `True` | Advertise the ACP terminal capability |
-| `additional_directories` | `[]` | Extra workspace roots |
-| `startup_timeout` | `30.0` | Tool-gateway HTTP server startup timeout (s) |
-| `turn_timeout` | `None` | Per-prompt-turn timeout (s) |
-| `cancel_timeout` | `5.0` | Grace period (s) after a timed-out turn signals `session/cancel` before the subprocess is hard-stopped |
-| `expose_tools` | `True` | Serve the agent's tools to the CLI agent over MCP (default `True`) |
-
-File and terminal operations the agent requests are mediated by AG2: file access
-is confined to `fs_root`, and the agent's commands run under AG2's control.
-
-## Lifecycle
-
-The ACP subprocess is created on the first turn and reused for the run, and it
-outlives the `agent.run()` that created it - `reply.ask()` continues the same
-session. So the session's lifetime is the *conversation's*, and only you know
-when that ends.
-
-Use the config as an async context manager, and everything it started - the
-subprocess and the tool gateway - is torn down on exit:
-
-```python
-from ag2 import Agent
-from ag2.acp import ClaudeCodeConfig
-
-async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
-    agent = Agent("dev", config=config, tools=[get_ticket])
-
-    async with agent.run("Look up ticket ACME-4211.") as run:
-        reply = await run.result()
-
-    follow_up = await reply.ask("What priority is it?")
-# subprocess and gateway are gone here, including if the block raised
-```
-
-`await config.aclose()` does the same thing explicitly. One or the other is
-required: nothing reclaims a session implicitly, so a config used across many
-runs without it accumulates live subprocesses - and, when tools are exposed,
-a listening MCP server per session.
 
 ---
 
@@ -4415,8 +4210,8 @@ Gemini supports provider-specific settings via `vendor_metadata` on binary input
 
 | Key | Type | Description |
 | :--- | :--- | :--- |
-| `media_resolution` | `str` | Controls token allocation per image/video frame |
-| `video_metadata` | `dict` | Video clipping (`start_offset`, `end_offset`) and frame rate (`fps`) |
+| `media_resolution` | `str` \| `dict[str, Any]` | Controls token allocation per image/video frame |
+| `video_metadata` | `dict[str, Any]` | Video clipping (`start_offset`, `end_offset`) and frame rate (`fps`) |
 | `display_name` | `str` | Display name for the file |
 
 **Media resolution** - control quality vs cost tradeoff for images and video frames:
@@ -4433,6 +4228,22 @@ image = ImageInput(
 ```
 
 Available values: `MEDIA_RESOLUTION_LOW`, `MEDIA_RESOLUTION_MEDIUM`, `MEDIA_RESOLUTION_HIGH`, `MEDIA_RESOLUTION_ULTRA_HIGH`.
+
+A `dict` is also accepted and maps straight onto Gemini's `PartMediaResolution`, whose `level` and `num_tokens` keys are mutually exclusive - set exactly one:
+
+```python
+from ag2.events import ImageInput
+
+image = ImageInput(
+    data=raw_bytes,
+    media_type="image/jpeg",
+    vendor_metadata={"media_resolution": {"level": "MEDIA_RESOLUTION_MEDIUM"{{ "}}" }},
+)
+```
+
+!!! warning "Setting both keys is rejected"
+
+    Passing `{"level": ..., "num_tokens": ...}` together makes Gemini reject the request with `400 INVALID_ARGUMENT` (`oneof field 'value' is already set`).
 
 **Video clipping and frame rate** - process only a portion of a video or adjust the sampling rate:
 
@@ -5626,7 +5437,7 @@ tool = TavilySearchTool(
 `SandboxShellTool` gives an agent the ability to run shell commands inside an environment you choose. With no argument it uses a `LocalEnvironment` with a temporary working directory that is cleaned up on process exit. See the [Sandbox Shell page](local_shell.md) for the full guide.
 
 !!! warning
-    A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run - or a `DockerEnvironment` / `DaytonaEnvironment` for real isolation.
+    A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run - or a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment` for real isolation.
 
 ```python
 from ag2 import Agent
@@ -6464,9 +6275,9 @@ AG2 supports two ways to let an agent run code: have the LLM provider execute it
 
 | | Built-in Provider | Remote (`SandboxCodeTool`) |
 | :--- | :--- | :--- |
-| **Where it runs** | Provider's sandbox | A `CodeEnvironment` you supply (Daytona, Docker, custom) |
+| **Where it runs** | Provider's sandbox | A `CodeEnvironment` you supply (Tenki, Daytona, Docker, custom) |
 | **Setup** | Add the tool, done | Choose / configure a backend |
-| **Cost** | Bundled in provider tokens | Your sandbox bill (Daytona) or free (local Docker) |
+| **Cost** | Bundled in provider tokens | Your sandbox bill (Tenki/Daytona) or free (local Docker) |
 | **Custom packages, images** | No | Yes |
 | **State persistence** | Provider-defined | Per-environment instance |
 | **Provider support** | Only providers with native code-exec | Any provider |
@@ -6497,12 +6308,38 @@ See the [Built-in Tools page](builtin_tools.md#code-execution) for the provider 
 `SandboxCodeTool` exposes a `run_code(code, language)` function the agent can call. Because it's a regular function tool, it works on **any** model provider. Where the code actually runs is decided by the [`CodeEnvironment`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/code/environment/base.py) you hand it.
 
 !!! note "`environment` is required"
-    `SandboxCodeTool` has no default backend. Pass `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation.
+    `SandboxCodeTool` has no default backend. Pass `TenkiEnvironment().code_environment()`, `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation. Tenki needs the `code_environment()` call because its guest image ships `python3` rather than `python`.
 
 !!! note "When to use this"
     You need custom packages or images, persistent state across calls, your own infrastructure, or you're working with a provider that doesn't have a native code-execution capability.
 
-Two environments are available: **Daytona** (hosted) and **Docker** (local container). You can also implement your own - see the **Custom** tab below.
+Three environments are available: **Tenki** and **Daytona** (hosted), plus **Docker** (local container). You can also implement your own - see the **Custom** tab below.
+
+=== "Tenki"
+    [Tenki](https://tenki.cloud/) provides managed, isolated cloud sandboxes with a bounded server-side lifetime.
+
+    ```bash
+    pip install "tenki>=0.5.4,<1"
+    ```
+
+    ```python linenums="1"
+    from ag2 import Agent
+    from ag2.config import AnthropicConfig
+    from ag2.extensions.tenki import TenkiEnvironment
+    from ag2.tools import SandboxCodeTool
+
+    env = TenkiEnvironment()
+    async with env:
+        agent = Agent(
+            "analyst",
+            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            tools=[SandboxCodeTool(env.code_environment())],
+        )
+        reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
+        print(await reply.content())
+    ```
+
+    `TenkiEnvironment` reads `TENKI_API_KEY` and `TENKI_API_URL`. It auto-selects a sole visible workspace; pass `workspace_id` when the key has access to more than one. `code_environment()` supplies a `CodeAdapter` matching the guest image, whose Python interpreter is `python3`. See the [Tenki Sandbox extension guide](../extensions/tenki.md) for lifecycle and resource configuration.
 
 === "Daytona"
     [Daytona](https://www.daytona.io/) is a hosted sandbox service. Strongest isolation; pay per use.
@@ -6578,13 +6415,18 @@ Two environments are available: **Daytona** (hosted) and **Docker** (local conta
     sandbox = SandboxCodeTool(MyEnvironment())
     ```
 
-    The `context` argument is the active `ConversationContext`, forwarded so backends can resolve [`Variable`](tools.md#variables) markers from `context.variables` (e.g. per-tenant credentials). Backends with no runtime-configurable parameters can ignore it.
+    The `context` argument is the active `ConversationContext`, forwarded so backends can resolve [`Variable`](../context/variables.md) markers from `context.variables` (e.g. per-tenant credentials). Backends with no runtime-configurable parameters can ignore it.
 
 ### Lifecycle
 
 The sandbox / container is created lazily on the first `run_code` call and reused for the lifetime of the environment instance. Cleanup is registered via `atexit` so resources are released even if you forget to close the environment. For tighter scoping, use the environment as an async context manager:
 
 ```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.daytona import DaytonaEnvironment
+from ag2.tools import SandboxCodeTool
+
 async with DaytonaEnvironment(image="python:3.12") as env:
     agent = Agent(
         "analyst",
@@ -6595,11 +6437,11 @@ async with DaytonaEnvironment(image="python:3.12") as env:
 # sandbox deleted here
 ```
 
-The same pattern works with `DockerEnvironment` (container stopped + removed) and any other backend that implements `__aenter__` / `__aexit__`.
+The same pattern works with `TenkiEnvironment`, `DockerEnvironment` (container stopped + removed), and any other backend that implements `__aenter__` / `__aexit__`.
 
 ### Credentials and runtime config
 
-`DaytonaEnvironment` accepts `Variable` markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call - useful for multi-tenant setups:
+`DaytonaEnvironment` accepts [`Variable`](../context/variables.md) markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `TenkiEnvironment` accepts them for `api_key`, `api_url`, `workspace_id`, `image`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call - useful for multi-tenant setups:
 
 ```python
 from ag2 import Variable
@@ -6633,7 +6475,7 @@ Source: https://docs.ag2.ai/docs/user-guide/tools/local_shell/
 
 # Sandbox Shell Tool
 
-`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose - a local subprocess, a Docker container, a Daytona sandbox, or any custom backend. Unlike the provider-native [`ShellTool`](builtin_tools.md#shell) (which runs server-side and only on Anthropic/OpenAI), it executes client-side, so it works with **any model provider**.
+`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose - a local subprocess, a Docker container, a Daytona or Tenki sandbox, or any custom backend. Unlike the provider-native [`ShellTool`](builtin_tools.md#shell) (which runs server-side and only on Anthropic/OpenAI), it executes client-side, so it works with **any model provider**.
 
 The design has two orthogonal pieces:
 
@@ -6664,12 +6506,13 @@ With no arguments, `SandboxShellTool` uses a `LocalEnvironment` with a temporary
 
 ## Choosing an Environment
 
-The first argument is the environment. Pass a `LocalEnvironment`, `DockerEnvironment`, or `DaytonaEnvironment`:
+The first argument is the environment. Pass a `LocalEnvironment`, `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment`:
 
 ```python
 from ag2.tools import SandboxShellTool, LocalEnvironment
 from ag2.extensions.docker import DockerEnvironment
 from ag2.extensions.daytona import DaytonaEnvironment
+from ag2.extensions.tenki import TenkiEnvironment
 
 # Local subprocess in a specific directory
 sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"))
@@ -6679,6 +6522,9 @@ sh = SandboxShellTool(DockerEnvironment(image="python:3.12-slim", network_mode="
 
 # Daytona hosted sandbox
 sh = SandboxShellTool(DaytonaEnvironment(image="python:3.12"))
+
+# Tenki hosted sandbox
+sh = SandboxShellTool(TenkiEnvironment())
 ```
 
 A `LocalEnvironment` directory is created automatically if it does not exist, and is **not** deleted on exit when an explicit path is given.
@@ -6702,7 +6548,7 @@ sh = SandboxShellTool(
 
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
-| `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment`. `None` -> `LocalEnvironment()` |
+| `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment` / `TenkiEnvironment`. `None` -> `LocalEnvironment()` |
 | `allowed` | `None` | Whitelist of command prefixes. `None` -> all commands allowed |
 | `blocked` | `None` | Blacklist of command prefixes. `None` -> nothing blocked |
 | `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"` |
@@ -6769,7 +6615,7 @@ reply3 = await reply2.ask("Read the counter and tell me the value")
 ```
 
 !!! warning
-    A `LocalEnvironment` gives the agent direct access to your filesystem and the ability to run arbitrary commands. Always set `allowed`, `blocked`, or `readonly` when exposing it to untrusted prompts, or use a `DockerEnvironment` / `DaytonaEnvironment` for real isolation.
+    A `LocalEnvironment` gives the agent direct access to your filesystem and the ability to run arbitrary commands. Always set `allowed`, `blocked`, or `readonly` when exposing it to untrusted prompts, or use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment` for real isolation.
 
 ## SandboxShellTool vs ShellTool
 
@@ -6848,6 +6694,48 @@ agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
 !!! note
     Tool-scoped hooks are plain callables. They do **not** use the `Middleware(...)` factory or `BaseMiddleware`.
 
+## Making a hook describable
+
+A plain function like `add_request_id` above works, but cannot report its configuration: it has no [`describe()`](../middleware.md#describing-middleware), so AG2 reports it as `complete=False` rather than guessing, because its settings live in closure cells that AG2 does not inspect.
+
+For a describable hook, write a class with `async def __call__` and a `describe()` method. It is still a plain callable, so how you pass it does not change:
+
+```python
+from ag2 import Context, tool
+from ag2.events import ToolCallEvent
+from ag2.middleware import MiddlewareDescription, ToolExecution, ToolResultType
+
+class AddRequestId:
+    def __init__(self, default: str = "unknown") -> None:
+        self._default = default
+
+    async def __call__(
+        self,
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        context: Context,
+    ) -> ToolResultType:
+        context.variables.setdefault("request_id", self._default)
+        return await call_next(event, context)
+
+    def describe(self) -> MiddlewareDescription:
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"default": self._default},
+        )
+
+@tool(middleware=[AddRequestId()])
+def search(query: str) -> str:
+    """Runs a search."""
+    return f"results-for-{query}"
+```
+
+`approval_required()` is the built-in example: it returns an `ApprovalRequired` instance that describes its prompt, timeout, and `allow_always` settings. Keep run-time state out of the hook - `config` is for settings only.
+
+!!! note "Which carrier to use for run-time state"
+
+    `context.variables` is rebuilt for every `ask()` and is copied into a sub-task without being copied back, so state kept there is scoped to one run. For state that must outlive a single `ask()` or count work done by sub-tasks, use `context.dependencies`: values are passed by reference into every run and into sub-tasks, and are never copied or serialised.
+
 ## Adding middleware to an existing tool
 
 Use `tool.with_middleware()` to wrap a tool with additional hooks **without modifying** the original. The returned tool is an independent copy with the new middleware as the outermost layer:
@@ -6872,6 +6760,61 @@ audited_delete = delete_record.with_middleware(audit)
 
 # delete_record is unchanged; audited_delete runs audit -> delete_record
 ```
+
+## Sharing one hook across tools
+
+Attaching **one hook instance** to several tools does **not** give those tools a combined allowance. Registering a tool deep-copies it, so a class-based hook is duplicated and each tool ends up counting on its own instance. A plain function is left as-is by `deepcopy` and stays shared, which is why the same hook behaves differently depending on how it was written.
+
+Do not rely on either. Put the shared state in `context.dependencies` and keep the hook itself a settings object - then it does not matter how many copies of the hook exist:
+
+```python
+from ag2 import Agent, Context, tool
+from ag2.config import OpenAIConfig
+from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.middleware import MiddlewareDescription, ToolExecution, ToolResultType
+
+class Counter:
+    def __init__(self) -> None:
+        self.used = 0
+
+class CallBudget:
+    def __init__(self, limit: int, *, key: str = "default") -> None:
+        self._limit = limit
+        self._key = key
+
+    def describe(self) -> MiddlewareDescription:
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"limit": self._limit, "key": self._key},
+        )
+
+    async def __call__(
+        self, call_next: ToolExecution, event: ToolCallEvent, context: Context,
+    ) -> ToolResultType:
+        counter: Counter = context.dependencies[("budget", self._key)]
+        if counter.used >= self._limit:
+            return ToolResultEvent.from_call(event, result="budget exhausted")
+        counter.used += 1
+        return await call_next(event, context)
+
+def search(query: str) -> str:
+    """Searches the web."""
+    return f"results-for-{query}"
+
+def fetch(url: str) -> str:
+    """Fetches a URL."""
+    return f"body-of-{url}"
+
+budget = CallBudget(limit=3, key="web")
+agent = Agent(
+    "assistant",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[tool(search, middleware=[budget]), tool(fetch, middleware=[budget])],
+    dependencies={("budget", "web"): Counter()},
+)
+```
+
+`search` and `fetch` draw on the same three calls, and the allowance survives every `ask()` and counts calls made by sub-tasks. The hook stays describable, because the limit is a setting and only the counter lives in the context.
 
 ## Toolkit-level middleware
 
@@ -6932,6 +6875,19 @@ Typing **y** lets the tool run. Any other input denies it - the agent receives t
 
 !!! note
     `approval_required()` relies on the agent's `hitl_hook` to collect user input. If no `hitl_hook` is configured, `context.input()` will raise an error at runtime. Read more about [Human in the Loop](../context/human_in_the_loop.md) to learn how to configure a HITL hook.
+
+## Inspecting the configuration
+
+`approval_required()` returns an `ApprovalRequired` instance, also exported from `ag2.middleware`. It reports its settings, so you can log or assert on how a tool was gated:
+
+```python
+from ag2.middleware import approval_required
+
+approval_required(timeout=5, allow_always=False).describe().config
+# {'message': '...', 'denied_message': 'User denied...', 'timeout': 5, 'allow_always': False}
+```
+
+Approval state (which tools the user answered "always" for) lives in `context.variables`, not on the instance, so it never appears in the description. See [Describing middleware](../middleware.md#describing-middleware).
 
 ## Customizing the prompt
 
@@ -9036,30 +8992,41 @@ The folder now holds `v1.json`, `v2.json`, `v3.json` - a complete, comparable hi
 
 Source: https://docs.ag2.ai/docs/user-guide/live/live/
 
-`ag2.live` is the AG2 module for building voice-enabled agents. It covers two complementary patterns: a turn-by-turn **STT -> Agent -> TTS** pipeline built on top of a regular `Agent`, and a full-duplex **`LiveAgent`** that streams audio to and from a provider's realtime API.
+`ag2.live` is the AG2 module for building voice-enabled agents. It covers three patterns:
+
+1. **Turn-by-turn / Pipeline** - an `STT -> Agent -> TTS` round-trip built on top of a regular `Agent`. One utterance in, one reply out.
+
+2. **Realtime / Speech-to-Speech (S2S)** - a `LiveAgent` streaming audio to and from a provider's realtime API, which owns all three stages.
+
+3. **Cascade** - a `LiveAgent` running `CascadeConfig`: separate STT, LLM, and TTS providers wired to behave like a realtime session.
 
 ## When to use which
 
 | Pattern | Class | Latency | Use when... |
 |---|---|---|---|
-| Turn-by-turn voice | `Agent` + `OpenAITranscriber` + `TTSObserver` | ~1-3 s per turn | You already have a text agent and want to add a voice front-end; you need tool execution, middleware, structured output, or any other text-agent feature. |
+| Turn-by-turn voice | `Agent` + a transcriber + a TTS observer | ~1-3 s per turn | You already have a text agent and want to add a voice front-end; you need structured output, tasks, or any other text-agent feature. |
 | Realtime full-duplex | `LiveAgent` + `OpenAIRealTimeConfig` / `GeminiRealTimeConfig` | <500 ms | You want barge-in, interruption, semantic VAD, or a phone-call-like UX. |
+| Cascade | `LiveAgent` + `CascadeConfig` | in between | You want the continuous session, but need a specific voice, a specific model, or a provider mix no single S2S vendor sells. |
+
+Patterns 2 and 3 are interchangeable at the config line - `LiveAgent` drives both through the same `RealtimeConfig` protocol, so switching costs nothing but the config.
+
+See [Provider support](stt_tts.md) for the matrix of currently supported providers.
 
 !!! note
     Both patterns share the same audio I/O primitives - [`SoundDevicePlayer`](stt_tts.md) and [`SoundDeviceRecorder`](stt_tts.md) - and the same event stream. You can mix observers (TTS, logging, persistence) across both.
 
 ## Installation
 
-The audio I/O classes depend on `sounddevice` and `numpy`; the OpenAI and Gemini integrations need their respective SDKs.
+The audio I/O classes depend on `sounddevice` and `numpy`; the OpenAI, Gemini, and ElevenLabs integrations need their respective SDKs.
 
 ```bash
-pip install "ag2[openai,gemini] sounddevice[numpy]"
+pip install "ag2[openai,gemini,elevenlabs] sounddevice[numpy]"
 ```
 
 !!! warning
     `SoundDevicePlayer` and `SoundDeviceRecorder` require `sounddevice[numpy]` as an **additional** dependency (not optional)
 
-## The two flows at a glance
+## The flows at a glance
 
 === "Turn-by-turn (STT -> Agent -> TTS)"
     ```python linenums="1"
@@ -9126,10 +9093,47 @@ pip install "ag2[openai,gemini] sounddevice[numpy]"
         asyncio.run(main())
     ```
 
+=== "Cascade (LiveAgent)"
+    ```python linenums="1"
+    import asyncio
+
+    from ag2 import config
+    from ag2.live import (
+        CascadeConfig,
+        ElevenLabsStreamingTTSConfig,
+        LiveAgent,
+        OpenAITranscriber,
+        SoundDevicePlayer,
+        SoundDeviceRecorder,
+    )
+
+    agent = LiveAgent(
+        name="assistant",
+        prompt="You are a helpful voice assistant.",
+        config=CascadeConfig(
+            stt=OpenAITranscriber("gpt-4o-mini-transcribe"),
+            model=config.OpenAIConfig("gpt-5-mini", streaming=True),
+            tts=ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"),
+        ),
+    )
+
+    async def main() -> None:
+        async with (
+            agent.run() as context,
+            SoundDevicePlayer(context=context),
+            SoundDeviceRecorder(context=context),
+        ):
+            print("Starting...")
+            await asyncio.Future()
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+
 ## What's next
 
 - **[STT & TTS](stt_tts.md)** - wrap any `Agent` with speech input and output.
-- **[LiveAgent](live_agent.md)** - realtime, low-latency voice agents with OpenAI or Gemini.
+- **[LiveAgent](live_agent.md)** - realtime voice agents: native speech-to-speech with OpenAI or Gemini, or a `CascadeConfig` mixing providers.
 
 ---
 
@@ -9138,6 +9142,25 @@ pip install "ag2[openai,gemini] sounddevice[numpy]"
 Source: https://docs.ag2.ai/docs/user-guide/live/stt_tts/
 
 The STT -> Agent -> TTS flow turns any existing `Agent` into a voice agent without changing the agent itself. Speech-to-text is added as a **pipeline wrapper**; text-to-speech is added as an **observer** that listens to the model's streamed message chunks.
+
+## Provider support
+
+| Provider | STT | Streaming STT | TTS | Streaming TTS | Audio to Audio |
+|---|---|---|---|---|---|
+| OpenAI | ✅ | ✅ | ✅ | - | ✅ |
+| ElevenLabs | ✅ | - | ✅ | ✅ | - |
+| Gemini | - | - | - | - | ✅ |
+
+Mixing providers across the two halves is supported and often the best setup: transcribe with OpenAI for live captions, speak with ElevenLabs for low time-to-first-byte.
+
+!!! note
+    The **Audio to Audio** column means a *native* speech-to-speech endpoint. To get continuous, full-duplex audio out of providers that have none - ElevenLabs voices on any LLM, for instance - use [`CascadeConfig`](live_agent.md#cascadeconfig-a-cascade-that-looks-realtime), which presents an STT + LLM + TTS cascade to `LiveAgent` as if it were one realtime session.
+
+ElevenLabs classes need the optional dependency and `ELEVENLABS_API_KEY` in the environment:
+
+```bash
+pip install "ag2[elevenlabs] sounddevice[numpy]"
+```
 
 ## Audio I/O primitives
 
@@ -9205,6 +9228,18 @@ from ag2.live import OpenAITranslationTranscriber
 pipeline = OpenAITranslationTranscriber("whisper-1").pipe(agent)
 ```
 
+### ElevenLabs (Scribe)
+
+`ElevenLabsTranscriber` implements the same `STTConfig` protocol, so it drops into the same `.pipe(agent)` call:
+
+```python
+from ag2.live import ElevenLabsTranscriber
+
+pipeline = ElevenLabsTranscriber("scribe_v2").pipe(agent)
+```
+
+`language_code` is only sent when you set it - leave it unset and Scribe auto-detects. `diarize=True` asks for speaker labels.
+
 ## Text-to-Speech
 
 `TTSObserver` is an observer that listens to `ModelMessageChunk` events as the agent streams its response, batches them into sentence-sized chunks, calls a TTS provider, and emits `SynthesizedAudioEvent`s onto the stream. A `SoundDevicePlayer` attached to the same stream then plays them.
@@ -9236,19 +9271,102 @@ if __name__ == "__main__":
 !!! warning
     The agent's `config` must be set up for **streaming output** (e.g., `streaming=True`). `TTSObserver` works at the `ModelMessageChunk` granularity - if the model emits a single non-streaming `ModelMessage`, the observer will still synthesize it, but you lose the sentence-level pipelining that keeps latency low.
 
+!!! warning "Never attach it to something that already speaks"
+    `TTSObserver` synthesizes from the model's *text*. A `LiveAgent` running a speech-to-speech config or a `CascadeConfig` already produces its own audio **and** emits the matching transcript - so the observer would speak a second copy over it. Two voices, doubled TTS spend. See [LiveAgent](live_agent.md#keeping-the-session-swapping-the-voice) for the one realtime setup where attaching it is correct.
+
 ### Voice and speed
 
-`OpenAITTSConfig` accepts the standard OpenAI TTS parameters:
+Any config implementing the `TTSConfig` protocol works with `TTSObserver`:
+
+=== "OpenAI"
+    ```python linenums="1"
+    from ag2.live import OpenAITTSConfig
+
+    config = OpenAITTSConfig(
+        model="gpt-4o-mini-tts",
+        voice="ballad",  # alloy, ash, ballad, coral, echo, sage, shimmer, verse...
+        speed=1.1,
+    )
+    ```
+
+=== "ElevenLabs"
+    ```python linenums="1"
+    from ag2.live import ElevenLabsTTSConfig
+
+    config = ElevenLabsTTSConfig(
+        "eleven_v3",
+        voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel
+        output_format="pcm_24000",  # matches SoundDevicePlayer
+    )
+    ```
+
+`ElevenLabsTTSConfig` is the buffered mode - required by `eleven_v3`, which cannot stream. For the flash and turbo families, prefer streaming (below).
+
+!!! note
+    `output_format` defaults to `pcm_24000`, matching what `SoundDevicePlayer` and `SoundDeviceRecorder` expect. If you change it, change the player to match.
+
+## Streaming TTS
+
+With a buffered config, `TTSObserver` waits for each *sentence* to be fully synthesized before any of it plays. A streaming config removes that wait: audio chunks are forwarded as they are generated, so playback starts at time-to-first-byte.
+
+!!! note
+    **ElevenLabs is currently the only provider with a streaming TTS config.** `OpenAITTSConfig` performs a single buffered read and has no streaming equivalent.
+
+Only the config changes - `TTSObserver` detects that the config can stream and uses that path automatically:
 
 ```python
-from ag2.live import OpenAITTSConfig
+import asyncio
 
-config = OpenAITTSConfig(
-    model="gpt-4o-mini-tts",
-    voice="ballad",  # alloy, ash, ballad, coral, echo, sage, shimmer, verse...
-    speed=1.1,
+from ag2 import Agent, config
+from ag2.live import ElevenLabsStreamingTTSConfig, SoundDevicePlayer, TTSObserver
+
+tts = ElevenLabsStreamingTTSConfig("eleven_flash_v2_5", voice_id="21m00Tcm4TlvDq8ikWAM")
+
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful voice assistant. Keep answers to a few sentences.",
+    config=config.OpenAIConfig("gpt-5-mini", streaming=True),
+    observers=[TTSObserver(tts)],
 )
+
+async def main() -> None:
+    async with SoundDevicePlayer() as player:
+        await agent.ask("Hello, agent!", stream=player.stream)
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
+
+### Streaming directly to the speaker
+
+`ElevenLabsStreamingTTSConfig.stream(...)` is usable on its own, outside any agent, when you just want to speak a known string:
+
+```python
+import asyncio
+
+from ag2.live import ElevenLabsStreamingTTSConfig, SoundDevicePlayer
+
+async def main() -> None:
+    tts = ElevenLabsStreamingTTSConfig("eleven_flash_v2_5")
+    async with SoundDevicePlayer() as player:
+        async for chunk in tts.stream("Audio arrives as it is generated."):
+            await player.play(chunk)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+`player.play(...)` only enqueues - a background worker thread writes to the output device, so this loop is never blocked by playback.
+
+### Sentence batching
+
+`TTSObserver` batches streamed text before synthesizing, since a per-token request would be slow and expensive. `min_chars` (default `60`) is the smallest amount of text worth a request; below it the buffer keeps accumulating even past a sentence boundary.
+
+```python
+observers=[TTSObserver(tts, min_chars=40)]
+```
+
+Lowering it starts the first sentence sooner, at the cost of more requests and more granular sentences.
 
 ## Combining STT and TTS
 
@@ -9258,6 +9376,7 @@ The full round-trip - voice in, voice out - is just both halves wired up at once
 import asyncio
 
 from ag2 import Agent, config
+from ag2.context import ConversationContext
 from ag2.live import (
     OpenAITTSConfig,
     OpenAITranscriber,
@@ -9265,6 +9384,7 @@ from ag2.live import (
     SoundDeviceRecorder,
     TTSObserver,
 )
+from ag2.stream import MemoryStream
 
 agent = Agent(
     name="assistant",
@@ -9278,31 +9398,114 @@ agent = Agent(
 async def main():
     pipeline = OpenAITranscriber("gpt-4o-mini-transcribe").pipe(agent)
     recorder = SoundDeviceRecorder()
+    # one stream for the whole conversation, but a player per turn
+    stream = MemoryStream()
+    reply = None
 
-    async with SoundDevicePlayer() as player:
+    for _ in range(3):
         print("Say something...")
-        voice_input = recorder.record(duration=3)
-        reply = await pipeline.ask(voice_input, stream=player.stream)
-        print(reply.body)
-
-        # wait for the audio to finish playing
-        player.join()
-
-        print("Say something...")
-        voice_input = recorder.record(duration=3)
-        reply = await reply.ask(voice_input)
+        # safe to open the mic: the previous turn's player has fully drained
+        voice_input = recorder.record(duration=5)
+        # exiting this block waits for playback to finish
+        async with SoundDevicePlayer(context=ConversationContext(stream)):
+            if reply is None:
+                reply = await pipeline.ask(voice_input, stream=stream)
+            else:
+                reply = await reply.ask(voice_input)
         print(reply.body)
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-!!! tip
-    `player.join()` blocks the main task until the synthesized audio queue has drained. Use it between turns when you want the assistant to finish speaking before the next recording starts - otherwise the recorder will capture the tail of the assistant's voice.
+The player is scoped to a single turn and attached to a shared `MemoryStream`, so history carries across turns while each turn's audio is guaranteed to have finished before the microphone opens again.
+
+!!! warning "`player.join()` does not wait for playback to finish"
+    `join()` returns as soon as the *queue* is empty - but the worker thread has already dequeued the final chunk and is still writing it to the device, so audio is very much still coming out of the speaker. With streaming TTS it is worse: the queue legitimately hits zero *between* chunks arriving from the provider, so `join()` can return mid-sentence.
+
+    If you open the microphone at that point, the recorder captures the assistant's own voice, it gets transcribed as the user's next turn, and the conversation talks to itself:
+
+    ```text
+    you: "Hello, are you there?"
+    bot: Yes - I'm here and ready to help. What can I do for you?
+    you: "Yes, I'm here and ready to help. What can I do for you?"
+    ```
+
+    Use **one player per speaking phase** instead. Leaving the `async with` block calls `close()`, which pushes a sentinel, lets the worker finish every queued write, and joins the thread - that genuinely waits for the audio to finish.
+
+```python
+async def main() -> None:
+    # a player scoped to this turn - exiting drains it completely
+    async with SoundDevicePlayer() as player:
+        reply = await pipeline.ask(voice_input, stream=player.stream)
+        print(reply.body)
+
+    # only now is the speaker silent, so it is safe to record
+    voice_input = recorder.record(duration=5)
+```
+
+!!! note "This is echo suppression by turn-taking, not true echo cancellation"
+    Even with the microphone opened only after playback ends, a loud speaker plus a sensitive mic can still bleed in. There is no AEC in `ag2.live` - **use headphones** when testing a speaker-and-mic loop. For genuine overlap handling, [LiveAgent](live_agent.md) has server-side VAD and barge-in.
+
+### Mixing providers
+
+This is an example of how one can use `openai` STT and `elevenlabs` TTS together.
+
+```python
+import asyncio
+
+from ag2 import Agent, config
+from ag2.events import TranscriptionChunkEvent
+from ag2.live import (
+    ElevenLabsStreamingTTSConfig,
+    OpenAITranscriber,
+    SoundDevicePlayer,
+    SoundDeviceRecorder,
+    TTSObserver,
+)
+
+SAMPLE_RATE = 24000  # pcm_24000, what the player and recorder use
+
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful voice assistant. Keep answers to a few sentences.",
+    config=config.OpenAIConfig("gpt-5-mini", streaming=True),
+    observers=[TTSObserver(ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"))],
+)
+
+async def main() -> None:
+    pipeline = OpenAITranscriber("gpt-4o-mini-transcribe").pipe(agent)
+    recorder = SoundDeviceRecorder(sample_rate=SAMPLE_RATE)
+
+    # OpenAI streams the transcript back as deltas - print them as live captions.
+    async def on_caption(event: TranscriptionChunkEvent) -> None:
+        print(event.content, end="", flush=True)
+
+    print("Say something...")
+    voice_input = recorder.record(duration=5)
+
+    async with SoundDevicePlayer() as player:
+        player.stream.where(TranscriptionChunkEvent).subscribe(on_caption)
+        reply = await pipeline.ask(voice_input, stream=player.stream)
+        print(f"\n{reply.body}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Both halves share one stream, so `TranscriptionChunkEvent` (from the transcriber) and `SynthesizedAudioEvent` (from the observer) land in the same place - the player only subscribes to the latter, leaving the captions to your own subscriber.
+
+## Examples
+
+- `examples/stt_tts.py/stt_tts.py` - the OpenAI round-trip
+- `examples/stt_tts.py/elevenlabs_stt_tts_streaming.py` - streaming TTS, prints time-to-first-byte
+- `examples/stt_tts.py/elevenlabs_stt_tts_sync.py` - buffered TTS with `eleven_v3`
+
+Run the last two back to back to hear the difference on the first sentence.
 
 ## What's next
 
-- **[LiveAgent](live_agent.md)** - drop the turn-by-turn round-trip in favor of a streaming, full-duplex realtime session.
+- **[LiveAgent](live_agent.md)** - drop the turn-by-turn round-trip in favor of a streaming, full-duplex realtime session. `CascadeConfig` keeps the mix-and-match providers from this page while giving you continuous audio and barge-in.
 - **[Observers](../advanced/observers.md)** - `TTSObserver` is one of many observer patterns; see the harness docs for logging, persistence, and custom observers.
 
 ---
@@ -9311,7 +9514,9 @@ if __name__ == "__main__":
 
 Source: https://docs.ag2.ai/docs/user-guide/live/live_agent/
 
-`LiveAgent` is a full-duplex voice agent backed by a provider's realtime API. Unlike the [turn-by-turn STT/TTS pipeline](stt_tts.md), it opens a single bidirectional session for the entire conversation - audio flows in and out continuously, with built-in voice activity detection and barge-in.
+`LiveAgent` is a full-duplex voice agent. Unlike the [turn-by-turn STT/TTS pipeline](stt_tts.md), it opens a single session for the entire conversation - audio flows in and out continuously, with voice activity detection and barge-in.
+
+It holds a `RealtimeConfig`, which comes in two flavors: a provider's native **speech-to-speech** API (OpenAI, Gemini), or [`CascadeConfig`](#cascadeconfig-a-cascade-that-looks-realtime), which wires a separate STT, LLM, and TTS together behind the same interface. `LiveAgent` drives both identically, so the choice is one line of config.
 
 ## Quick start
 
@@ -9428,6 +9633,54 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Keeping the session, swapping the voice
+
+Because the provider is no longer speaking, you are free to synthesize the reply yourself with any TTS. Attach a [`TTSObserver`](stt_tts.md): it listens to the `ModelMessageChunk`s the session emits and turns them into `SynthesizedAudioEvent`s, which the player picks up as usual.
+
+```python
+import asyncio
+
+from ag2.live import (
+    ElevenLabsStreamingTTSConfig,
+    LiveAgent,
+    SoundDevicePlayer,
+    SoundDeviceRecorder,
+    TTSObserver,
+    openai,
+)
+
+agent = LiveAgent(
+    name="assistant",
+    prompt="You are a helpful voice assistant.",
+    config=openai.RealTimeConfig(
+        "gpt-realtime-2",
+        output=openai.TextOutput(),
+    ),
+    observers=[
+        # any TTS provider - the realtime model is not producing audio
+        TTSObserver(ElevenLabsStreamingTTSConfig("eleven_flash_v2_5")),
+    ],
+)
+
+async def main() -> None:
+    async with (
+        agent.run() as context,
+        SoundDevicePlayer(context=context),
+        SoundDeviceRecorder(context=context),
+    ):
+        await asyncio.Future()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+This buys you the realtime session's server-side turn detection while sourcing the voice elsewhere - the STT and LLM halves stay with the provider, only the TTS half moves. If you want *all three* halves to be yours, use [`CascadeConfig`](#cascadeconfig-a-cascade-that-looks-realtime) below.
+
+!!! warning "Do not attach a `TTSObserver` to a session that already speaks"
+    `TextOutput()` is what stops the provider generating audio. Without it, the session emits **both** `SynthesizedAudioEvent` (its own voice) and `ModelMessageChunk` (the transcript of that voice) - so a `TTSObserver` would synthesize a *second* voice from the transcript and the player would play both at once. Two overlapping voices, doubled TTS spend.
+
+    The same applies to `CascadeConfig`, which already speaks from inside the session. `TTSObserver` belongs with `TextOutput()`, or with a plain `Agent` - never with a config that produces audio of its own.
+
 ## Tools in a realtime session
 
 `LiveAgent` supports the same `@agent.tool` decorator as a regular `Agent`. Tool calls are routed through AG2's normal tool executor, and results are sent back to the provider's realtime session automatically.
@@ -9469,7 +9722,7 @@ if __name__ == "__main__":
 
 ## Providers
 
-`LiveAgent` is provider-neutral - it accepts any `RealtimeConfig`. AG2 ships with two implementations.
+`LiveAgent` is provider-neutral - it accepts any `RealtimeConfig`. AG2 ships with two native speech-to-speech implementations, plus [`CascadeConfig`](#cascadeconfig-a-cascade-that-looks-realtime) for mixing providers.
 
 === "OpenAI"
     ```python linenums="1"
@@ -9550,6 +9803,126 @@ if __name__ == "__main__":
         asyncio.run(main())
     ```
 
+## CascadeConfig: a cascade that looks realtime
+
+The configs above are **speech-to-speech**: one provider owns transcription, the model, and the voice behind a single socket. `CascadeConfig` is the alternative - three separate providers wired together so that, from `LiveAgent`'s point of view, they behave like one realtime session.
+
+It implements the same `RealtimeConfig` protocol, so it is a drop-in: same `agent.run()`, same events, and `SoundDevicePlayer` / `SoundDeviceRecorder` need no changes.
+
+```python
+import asyncio
+
+from ag2 import config
+from ag2.live import (
+    CascadeConfig,
+    ElevenLabsStreamingTTSConfig,
+    LiveAgent,
+    OpenAITranscriber,
+    SoundDevicePlayer,
+    SoundDeviceRecorder,
+)
+
+agent = LiveAgent(
+    "assistant",
+    prompt="You are a voice assistant. Answer in one or two short sentences.",
+    config=CascadeConfig(
+        stt=OpenAITranscriber("gpt-4o-mini-transcribe"),
+        model=config.OpenAIConfig("gpt-5-mini", streaming=True),
+        tts=ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"),
+    ),
+)
+
+async def main() -> None:
+    async with (
+        agent.run() as context,
+        SoundDevicePlayer(context=context),
+        SoundDeviceRecorder(context=context),
+    ):
+        print("Listening - say something. Ctrl+C to stop.")
+        await asyncio.Future()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Swapping to a native S2S model is a one-line change - `config=OpenAIRealTimeConfig("gpt-realtime")` - with prompt, tools, player, and recorder untouched. That substitutability is the property `CascadeConfig` exists to provide.
+
+### Why use it
+
+| | Native S2S | `CascadeConfig` |
+|---|---|---|
+| Latency | Lowest - one socket, no hops | Higher - three sequential API calls per turn |
+| Provider choice | Whatever the S2S vendor offers | Any STT × any LLM × any TTS |
+| Voice | The vendor's voices | Any TTS voice, including cloned |
+| Model | The vendor's realtime model | Any `ModelConfig` AG2 supports |
+| Turn detection | Server-side VAD | Local, energy-gated (see below) |
+
+Reach for it when the voice or the model matters more than the last few hundred milliseconds - a specific ElevenLabs voice, a model with no realtime endpoint, or a provider mix that no single vendor sells.
+
+### Turn detection
+
+An S2S provider segments the microphone stream server-side. A cascade has no server doing that, so the decision *"the user stopped talking, transcribe now"* is made locally by a `TurnDetector`.
+
+The default `SilenceTurnDetector` is energy-gated: root-mean-square amplitude against a fixed threshold, no model. That is enough for a close-talking mic in a quiet room.
+
+```python
+from ag2.live import CascadeConfig, SilenceTurnDetector
+
+config = CascadeConfig(
+    stt=...,
+    model=...,
+    tts=...,
+    turn_detector=lambda: SilenceTurnDetector(
+        threshold=500.0,     # RMS above this counts as speech
+        silence=0.7,         # seconds of quiet that close a turn
+        min_speech=0.2,      # shorter bursts are discarded, not transcribed
+        prefix_padding=0.3,  # audio kept from just before the trigger
+        max_duration=30.0,   # hard cap on a single turn
+    ),
+)
+```
+
+`turn_detector` takes any callable returning a `TurnDetector`, so a real VAD model can be substituted for noisy input.
+
+!!! tip
+    `prefix_padding` exists because the chunk that crosses the threshold is normally already a few milliseconds into the first word. Without it, turns start clipped. `min_speech` is the opposite guard - a cough or a door slam should not cost an STT round-trip.
+
+### Barge-in and echo
+
+The session is **half-duplex by default**: while the reply is playing, the microphone is ignored.
+
+That default is about echo, not simplicity. On speakers, the mic hears the reply; a cascade that listens to itself will interrupt its own sentence and then answer its own words. There is no acoustic echo cancellation in `ag2.live`.
+
+```python
+config = CascadeConfig(stt=..., model=..., tts=..., barge_in=True)
+```
+
+With `barge_in=True`, speech detected during playback cancels the in-flight turn and emits `AudioInterruptedEvent`, which drops any audio still queued in the player.
+
+!!! warning
+    **Use headphones with `barge_in=True`.** On speakers the assistant's own voice trips the detector and interrupts itself. The turn detector is energy-gated with no speaker-voice model, so it cannot tell your voice from its own.
+
+### Streaming TTS
+
+If the TTS config exposes a `stream` method - like `ElevenLabsStreamingTTSConfig` - the session detects it and forwards audio chunk by chunk, so playback starts at time-to-first-byte instead of after the last sample of the sentence. Plain configs are synthesized whole. No flag to set; it is chosen from what the config offers.
+
+Either way the reply is spoken sentence by sentence as the model produces it. `min_chars` (default `60`) sets the smallest amount of text worth a TTS request:
+
+```python
+config = CascadeConfig(stt=..., model=..., tts=..., min_chars=40)
+```
+
+Lowering it starts the first sentence sooner, at the cost of more requests and choppier prosody.
+
+### Tools
+
+Tools work exactly as they do on any other `RealtimeConfig` - declare them on the `LiveAgent` and the cascade runs the loop internally, feeding results back to the model before it speaks.
+
+A cascade turn holds the microphone, so the tool loop is capped at 10 round-trips per turn; a model stuck in a loop would otherwise hold the floor indefinitely. Exceeding the cap raises rather than hanging.
+
+!!! note
+    Raw audio is stripped from the conversation history before each model call. A live session logs every microphone and synthesized chunk - ten-plus events per second, each carrying PCM - and replaying that on every turn would make a long conversation pay for the whole recording each time. Transcripts carry the meaning; the bytes are for the recorder and the player.
+
 ## LiveAgent vs Agent
 
 `LiveAgent` mirrors `Agent`'s constructor surface - `name`, `prompt`, `tools`, `middleware`, `observers`, `dependencies`, `variables`, `plugins`, `hitl_hook` - so most agent-level concepts carry over. The differences:
@@ -9564,9 +9937,16 @@ if __name__ == "__main__":
 
 If you need both - for example, a realtime voice front-end that hands off to a tasking agent - drive the handoff through a tool on the `LiveAgent` that delegates to a separate `Agent` using `Agent.as_tool()`.
 
+## Examples
+
+- `examples/live_playground/live_to_text_and_voice.py` - native S2S, audio in and out
+- `examples/live_playground/live_to_text_only.py` - `TextOutput()`, transcript only
+- `examples/live_playground/cascade_live_agent.py` - `CascadeConfig` with a tool, and the one-line swap to S2S
+- `examples/live_playground/live_tools_execution.py` - tool calls in a realtime session
+
 ## What's next
 
-- **[STT & TTS](stt_tts.md)** - the lower-latency turn-by-turn alternative.
+- **[STT & TTS](stt_tts.md)** - the turn-by-turn alternative, and the `TTSObserver` used above.
 - **[Tools](../tools/tools.md)** - tool authoring, middleware, and approval flows that all work inside a `LiveAgent`.
 
 ---
@@ -10781,7 +11161,7 @@ All six built-ins are importable from `ag2.policies`.
 
 ### ConversationPolicy
 
-Keeps only conversation and tool events (`ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `ToolResultsEvent`, `ToolErrorEvent`, plus `CompactionSummary`). Drops alerts, lifecycle events, observer output - anything the LLM does not need to see.
+Keeps only conversation and tool events (`ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `ToolResultsEvent`, `ToolErrorEvent`, plus `CompactionSummary`), and whatever provider-native state the configured provider needs replayed with them. Drops alerts, lifecycle events, observer output - anything the LLM does not need to see.
 
 ```python
 from ag2.policies import ConversationPolicy
@@ -10789,11 +11169,11 @@ from ag2.policies import ConversationPolicy
 policy = ConversationPolicy()
 ```
 
-Takes no arguments. Effectively an allowlist - add a new event type to the stream and it is filtered out by default.
+Takes no arguments. Effectively an allowlist - add a new event type to the stream and it is filtered out by default, unless a provider marked it as state it needs back.
 
 ### SlidingWindowPolicy
 
-Keeps only the last `max_events` events. Skips leading orphaned `ToolResultsEvent` entries so the window never starts on an unmatched tool result.
+Keeps the last `max_events` events, minus whatever the cut orphaned - see [Reduction limits are targets](assembly.md#reduction-limits-are-targets).
 
 ```python
 from ag2.policies import SlidingWindowPolicy
@@ -10801,7 +11181,7 @@ from ag2.policies import SlidingWindowPolicy
 policy = SlidingWindowPolicy(max_events=50, transparent=True)
 ```
 
-Set `transparent=True` to append a prompt note like `"[sliding_window] Showing last 50 of 123 events."` - useful while tuning.
+Set `transparent=True` to append a prompt note like `"[sliding_window] Showing last 50 of 123 events."` - useful while tuning. The count in that note is the window actually sent, so it is the cheapest way to see the target being missed.
 
 ### TokenBudgetPolicy
 
@@ -10812,6 +11192,8 @@ from ag2.policies import TokenBudgetPolicy
 
 policy = TokenBudgetPolicy(max_tokens=32_000, chars_per_token=4, transparent=True)
 ```
+
+The budget is a target for the same reason the window is - see [Reduction limits are targets](assembly.md#reduction-limits-are-targets).
 
 ### AlertPolicy
 
@@ -10861,6 +11243,24 @@ policy = EpisodicMemoryPolicy(max_episodes=5, transparent=True)
 ```
 
 Also requires a `KnowledgeStore` in `context.dependencies`; a no-op otherwise.
+
+## Reduction limits are targets
+
+`max_events` and `max_tokens` are targets, not guarantees. This applies to `SlidingWindowPolicy` and `TokenBudgetPolicy` here, and equally to the [`HistoryLimiter` and `TokenLimiter`](../middleware.md) middleware, which reduce history the same way.
+
+A reduction cuts history at an index and sends everything after it, and a provider only accepts that tail if it can stand on its own. Four retained events cannot:
+
+| Retained event | Needs | If the cut dropped it |
+|---|---|---|
+| a tool result | the call it answers | orphaned `function_call_output` |
+| a builtin (server-side) call | its reasoning item | orphaned `web_search_call` |
+| a response carrying tool calls | the provider turn item recording them | the turn replays text-only, tool calls gone |
+| a bare call event | the `ModelResponse` announcing it | maps to no provider item at all |
+
+Anything left orphaned is dropped from the window, so the retained span can come out **smaller** than the limit. And if dropping the orphans would empty the span, the cut retreats until the span holds something sendable - so a limit narrower than the turn it lands in comes out **larger** than asked. Overshooting a limit is recoverable; an empty request is rejected outright.
+
+!!! note
+    This is why a reduction policy can appear to ignore its limit on turns that use builtin tools: one reasoning item anchors the whole group of server-side calls behind it, and that group only replays intact. Set `transparent=True` to see the size actually sent.
 
 ## A realistic chain
 
@@ -11018,7 +11418,9 @@ retained = await compact.compact(events, ctx, store)
 The summarization model is independent from the agent's main model - pick a smaller / cheaper one. Token usage is recorded on the strategy instance as `strategy.last_usage`.
 
 !!! note
-    Both built-ins snap the retained boundary to whole turns: a tool call and its result are never split. A tool cycle straddling the boundary is compacted as a unit, so the retained window can be slightly smaller than `target`. This keeps the retained history valid for providers that reject a tool result with no preceding call.
+    Both built-ins snap the retained boundary to whole turns, so the retained window can be slightly smaller than `target`. A partial turn straddling the boundary is compacted as a unit - and four things count as partial: a tool result without the call it answers, a builtin (server-side) call without its reasoning item, a response carrying tool calls without the provider turn item recording them, and a bare call event without the `ModelResponse` that announced it. Whatever the boundary skips over is dropped *and persisted*, so nothing is silently lost. This keeps the retained history valid - providers reject some of the four outright and quietly lose the turn's tool calls on the rest.
+
+    Reduction policies enforce the same four invariants at assembly time, but drop the offending events instead of moving the boundary - see [Reduction limits are targets](assembly.md#reduction-limits-are-targets).
 
 ## CompactionSummary
 
@@ -11972,8 +12374,9 @@ The server publishes an `AgentCard` at `/.well-known/agent-card.json`. Every bin
 
 1. [Server](server.md) - expose an existing `Agent` over A2A.
 2. [Client](client.md) - connect to a remote A2A endpoint, multi-turn, client-side tools, `as_tool()`.
-3. [Tasks & Push](tasks_and_push.md) - inspect/cancel tasks and manage push-notification webhooks.
-4. [Advanced](advanced.md) - HITL via `input_required`, streaming reconnect, custom `AgentExecutor`.
+3. [Card Signing](card_signing.md) - sign the cards you serve and verify the cards you consume.
+4. [Tasks & Push](tasks_and_push.md) - inspect/cancel tasks and manage push-notification webhooks.
+5. [Advanced](advanced.md) - HITL via `input_required`, streaming reconnect, custom `AgentExecutor`.
 
 ## Public API
 
@@ -11991,7 +12394,7 @@ Sub-modules:
 | `ag2.a2a.push` | `A2APushConfig`, `A2APushAuthentication`, CRUD helpers |
 | `ag2.a2a.security` | `Scheme` / `Requirement` types, scheme factories (`bearer_scheme`, `api_key_scheme`, `oauth2_scheme`, `mtls_scheme`, `http_auth_scheme`, `open_id_connect_scheme`) and the `require()` builder for `AgentCard` auth declarations |
 | `ag2.a2a.events` | Typed `A2AEvent` wrappers surfaced into the AG2 stream - `A2ATaskSnapshot`, `A2ATaskStatusUpdate`, `A2ATaskArtifactUpdate`, `A2ATextArtifact`, `A2AToolCallArtifact`, `A2AMessage` |
-| `ag2.a2a.errors` | Exception hierarchy - `A2AError`, `A2ATaskTerminalError`, `A2AReconnectError`, `A2AInvalidCardError`, `A2AClientToolsNotSupportedError` |
+| `ag2.a2a.errors` | Exception hierarchy - `A2AError`, `A2ATaskTerminalError`, `A2AReconnectError`, `A2AInvalidCardError`, `A2AIncompatibleProtocolVersionError`, `A2AClientToolsNotSupportedError`, `A2ACardSignatureError`, `A2AStaleCardSignatureError` |
 | `ag2.a2a.transports` | `TransportName` - `Literal["jsonrpc", "rest", "grpc"]` - plus low-level `build_*` builders |
 | `ag2.a2a.testing` | In-process test helpers - `make_test_client_factory`, `make_test_rest_client_factory`, `pick_free_port` |
 
@@ -12050,6 +12453,7 @@ After startup the agent card is reachable at `http://127.0.0.1:8000/.well-known/
 | `push_sender` | Custom delivery sender. Defaults to no-op when not set |
 | `extended_card` | Auth-aware extra metadata returned via `GetExtendedAgentCard` |
 | `card_modifier` / `extended_card_modifier` | Per-request hooks that mutate the card before it's served |
+| `card_signer` | Attaches a JWS signature to every card served, on all transports (see [Card Signing](card_signing.md)). Optional |
 | `executor` | Escape hatch - drop in a custom `AgentExecutor` (see [Advanced](advanced.md#custom-agentexecutor)) |
 
 !!! note
@@ -12124,6 +12528,35 @@ await grpc_server.wait_for_termination()
 !!! note
     A2A v1.x has no `GetAgentCard` gRPC method - the public card is always served over HTTP at `/.well-known/agent-card.json`. So even for a gRPC-only server clients fetch the card via HTTP first, then switch to gRPC for the actual exchange. Plan your card URL accordingly.
 
+#### TLS
+
+`build_grpc` binds an insecure port by default for backwards compatibility. Pass a `grpc.ServerCredentials` object as `server_credentials=` to bind a secure port, and publish the interface with a `grpcs://` or `grpc+tls://` URL:
+
+```python
+from pathlib import Path
+
+import grpc
+
+from ag2.a2a import build_card
+
+private_key = Path("certs/server-key.pem").read_bytes()
+certificate = Path("certs/server.pem").read_bytes()
+credentials = grpc.ssl_server_credentials([(private_key, certificate)])
+
+grpc_url = "grpcs://agents.example.com:50051"
+card = build_card(agent, url="https://agents.example.com", transports=("grpc",), grpc_url=grpc_url)
+grpc_server = server.build_grpc(
+    bind="0.0.0.0:50051",
+    grpc_url=grpc_url,
+    card=card,
+    server_credentials=credentials,
+)
+await grpc_server.start()
+await grpc_server.wait_for_termination()
+```
+
+AG2 does not read certificate files or alter the credentials; certificate loading, rotation and mTLS policy remain under application control. To require client certificates, create the server credentials with `root_certificates=<client CA>` and `require_client_auth=True`. See [gRPC TLS on the client](client.md#grpc-tls) for public-CA, private-CA and mTLS channels.
+
 ### One Server, Three Transports
 
 The same `A2AServer` instance can back any combination of transports. Build a single multi-transport `AgentCard` and call each `build_*` against it - they share one task store.
@@ -12165,6 +12598,7 @@ await asyncio.gather(
 | `provider` | `AgentProvider` block (organization, URL) |
 | `documentation_url` / `icon_url` | Discovery metadata |
 | `security` | Auth declarations - see below |
+| `extensions` | `Sequence[AgentExtension]` - protocol extensions to declare alongside AG2's own; see below |
 | `tenants` | `Mapping[TransportName, str]` - surface a per-transport tenant on the corresponding `AgentInterface.tenant` |
 | `rest_url` / `rest_path_prefix` / `grpc_url` | Per-transport URL overrides for multi-transport cards |
 
@@ -12251,6 +12685,34 @@ require(custom)
 !!! note
     `build_card` only **declares** auth on the card - it does not enforce it. Wire the actual check into the ASGI app (Starlette middleware, gateway, reverse proxy) or the gRPC server's interceptors.
 
+### Declaring Extensions
+
+A2A extensions let an agent advertise protocol behaviour beyond the base spec. AG2 always declares its own `urn:ag2:client-tools:v1` as `required=False`; pass `extensions=` to declare your own alongside it.
+
+```python
+from a2a.types import AgentExtension
+
+from ag2.a2a import build_card
+
+card = build_card(
+    agent,
+    url="http://127.0.0.1:8000",
+    extensions=[
+        AgentExtension(
+            uri="urn:acme:billing:v1",
+            description="Attaches a cost breakdown to every reply",
+            required=True,
+        ),
+    ],
+)
+```
+
+`required=True` declares that the exchange genuinely breaks without the extension. AG2's *client* honours the flag: it refuses to connect to a card requiring a URI it hasn't activated, rather than proceeding and misbehaving mid-task. Note this is client-side only - `build_card` declares the requirement, it does not enforce it, and a client that ignores the flag is still served. Use `required=False` to let extension-unaware clients keep working.
+
+Duplicate URIs raise `ValueError`, including redeclaring `urn:ag2:client-tools:v1` - `build_card` always declares that one itself, so a card can never ship two entries for the same extension.
+
+See [Extensions](client.md#extensions) for activating them on the client.
+
 ## Adding Cross-cutting Middleware
 
 A2A doesn't define server-side middleware. Attach CORS, auth or tracing directly to the returned transport object:
@@ -12305,6 +12767,54 @@ config = A2AConfig(
 
 !!! tip
     `card_url` is always an HTTP URL - even when the resolved transport is gRPC. The card is served over HTTP per spec; only the actual message exchange uses the resolved binding.
+
+## gRPC TLS
+
+The default gRPC channel factory selects security from the interface URL published in the agent card. `grpcs://` and `grpc+tls://` create a TLS channel using the system CA roots; `grpc://`, `grpc+insecure://` and a bare `host:port` keep the backwards-compatible insecure channel.
+
+For a server certificate issued by a public CA, the client needs no TLS-specific configuration. It fetches the card over HTTPS and follows the secure gRPC interface declared there:
+
+```python
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+
+remote = Agent(
+    "remote",
+    config=A2AConfig(
+        card_url="https://agents.example.com",
+        prefer="grpc",
+    ),
+)
+reply = await remote.ask("Summarize the latest report.")
+```
+
+Private CAs, self-signed certificates and mTLS need custom `grpc.ChannelCredentials`. Wrap those credentials with `secure_grpc_channel_factory(...)` and pass the returned callable through the existing `grpc_channel_factory` escape hatch:
+
+```python
+from pathlib import Path
+
+import grpc
+
+from ag2 import Agent
+from ag2.a2a import A2AConfig, secure_grpc_channel_factory
+
+ca_certificate = Path("certs/ca.pem").read_bytes()
+credentials = grpc.ssl_channel_credentials(root_certificates=ca_certificate)
+remote = Agent(
+    "remote",
+    config=A2AConfig(
+        card_url="https://agents.internal.example",
+        prefer="grpc",
+        grpc_channel_factory=secure_grpc_channel_factory(credentials),
+    ),
+)
+reply = await remote.ask("Run the internal health check.")
+```
+
+The secure factory always creates a TLS channel, regardless of whether the card uses a secure, insecure or bare gRPC URL spelling. It also accepts gRPC channel options via `options=`. For mTLS, construct the credentials with `root_certificates=`, `private_key=` and `certificate_chain=`; AG2 passes the resulting object to gRPC unchanged.
+
+!!! warning
+    TLS protects the gRPC connection only. Card discovery is a separate HTTP request, so publish the card over HTTPS as well and keep `card_url` on that HTTPS origin.
 
 ## Multi-turn - `reply.ask`
 
@@ -12377,6 +12887,43 @@ This composes naturally with several remotes - give each `as_tool()` a distinct 
 !!! note
     Each `task_<name>` call spawns a fresh sub-agent stream; history between calls is not preserved on the sub-task side. For a remote that remembers prior turns, prefer the `reply.ask(...)` pattern above instead of `as_tool()`.
 
+## Extensions
+
+A2A extensions are activated **per connection** by URI. List them on `A2AConfig.extensions`; every URI must be advertised in the server card's `capabilities.extensions`.
+
+```python
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+
+remote = Agent(
+    "remote",
+    config=A2AConfig(card_url="http://127.0.0.1:8000", extensions=["urn:acme:billing:v1"]),
+)
+reply = await remote.ask("invoice summary for Q3")
+```
+
+Activated URIs travel on both channels the spec allows - the `Message.extensions` field and the `A2A-Extensions` header (gRPC metadata on the gRPC binding) - and stay attached across continuation legs, so a tool-result or HITL round-trip does not silently deactivate them mid-task.
+
+The card and the activation list are reconciled before the first request goes out, so a mismatch surfaces as `A2AExtensionNotSupportedError` at connect time instead of an opaque failure mid-task. It is raised in both directions:
+
+- a URI the card does not advertise - a client-side mistake;
+- an extension the card marks `required=True` that the client did not activate - the server expects behaviour AG2 will not provide.
+
+`urn:ag2:client-tools:v1` is the exception to the second rule: AG2 implements it natively, so a card may require it without the client listing it explicitly.
+
+Activation covers every request the config makes, not just `ask`. The one-shot [task](tasks.md) and push-notification helpers open their own connection from the same `A2AConfig`, so they activate the same URIs and run the same reconciliation - a server enforcing a `required=True` extension sees a consistent client on the conversational and the administrative path alike.
+
+```python
+from ag2.a2a.errors import A2AExtensionNotSupportedError
+
+try:
+    await remote.ask("invoice summary for Q3")
+except A2AExtensionNotSupportedError as err:
+    print(err.uris)  # the URIs that could not be reconciled
+```
+
+See [Declaring Extensions](server.md#declaring-extensions) for the server side.
+
 ## A2AConfig Reference
 
 | Field | Type | Default | Purpose |
@@ -12392,10 +12939,12 @@ This composes naturally with several remotes - give each `as_tool()` a distinct 
 | `input_required_timeout` | `Optional[float]` | `None` | Cap how long the client waits on a HITL hook |
 | `httpx_client_factory` | `Optional[Callable[[], AsyncClient]]` | `None` | Custom `httpx.AsyncClient` (proxies, custom TLS, etc.) |
 | `interceptors` | `Sequence[ClientCallInterceptor]` | `()` | A2A SDK call interceptors |
-| `grpc_channel_factory` | `Optional[Callable[[str], Channel]]` | `None` | Custom gRPC channel builder (defaults to insecure) |
+| `grpc_channel_factory` | `Optional[Callable[[str], Channel]]` | `None` | Custom gRPC channel builder. The default follows the card URL scheme: `grpcs://` / `grpc+tls://` use system CA roots; other gRPC URL forms stay insecure. See [gRPC TLS](client.md#grpc-tls) |
 | `preset_card` | `Optional[AgentCard]` | `None` | Skip the discovery round-trip when the card is already known |
+| `card_signature_verifier` | `Optional[Callable[[AgentCard], None]]` | `None` | Verify the JWS signature on every card consumed - fetched, preset and extended (see [Card Signing](card_signing.md)) |
 | `tenant` | `Optional[str]` | `None` | Multi-tenancy scope on a shared backend |
 | `history_length` | `Optional[int]` | `None` | Server-side hint to truncate echoed `Task.history` |
+| `extensions` | `Sequence[str]` | `()` | A2A extension URIs to activate on the connection (see [Extensions](client.md#extensions)) |
 
 ### Constructing From a Pre-fetched Card
 
@@ -12408,6 +12957,272 @@ config = A2AConfig.from_card(card, prefer="jsonrpc", timeout=30.0)
 ```
 
 `card_url` defaults to the first interface URL on the card; pass `card_url=...` to override.
+
+---
+
+# Signing and Verifying Agent Cards
+
+Source: https://docs.ag2.ai/docs/user-guide/a2a/card_signing/
+
+A client fetches an `AgentCard` before any trust has been established, so A2A lets the server attach [JWS](https://datatracker.ietf.org/doc/html/rfc7515) signatures to the card it publishes and lets the client verify them. Both halves are opt-in and independent: `A2AServer(card_signer=...)` signs what you serve, `A2AConfig(card_signature_verifier=...)` verifies what you consume.
+
+## Why Sign a Card
+
+The card is the client's only source of truth about a remote agent - which transports it speaks, which URLs to call, which auth schemes to present, which extensions it supports. Anyone who can tamper with the card in flight, or serve a substituted one, can point calls at another host, drop an auth requirement, or advertise capabilities the real agent doesn't have. A signature binds the card's contents to a key the client already trusts, so tampering is caught before the first request goes out.
+
+This complements transport security rather than replacing it. TLS authenticates a connection; the signature travels with the card, so it still holds after the card has been cached, stored on disk, or handed through a registry.
+
+## Installing the Signing Dependency
+
+Signing and verification are implemented in the A2A SDK on top of [PyJWT](https://pyjwt.readthedocs.io/), which the SDK ships behind its own `signing` extra. Installing AG2's `a2a` extra alone does **not** pull it in:
+
+```bash
+pip install "ag2[a2a]" "a2a-sdk[signing]"
+```
+
+The examples below also use [cryptography](https://cryptography.io/) to generate a key pair. That is only needed to *make* a key - it is not required to sign or verify with a key you already have.
+
+## Creating a Signer and a Verifier
+
+AG2 does not wrap key management: it accepts the callables the SDK's factories return. A signer takes an `AgentCard` and returns it with a signature attached; a verifier takes an `AgentCard` and raises if it doesn't check out.
+
+```python
+from a2a.utils.signing import create_agent_card_signer, create_signature_verifier
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+
+private_key = ec.generate_private_key(ec.SECP256R1())
+private_pem = private_key.private_bytes(
+    serialization.Encoding.PEM,
+    serialization.PrivateFormat.PKCS8,
+    serialization.NoEncryption(),
+)
+public_pem = private_key.public_key().public_bytes(
+    serialization.Encoding.PEM,
+    serialization.PublicFormat.SubjectPublicKeyInfo,
+)
+
+signer = create_agent_card_signer(
+    private_pem,
+    {"kid": "agent-card-2026", "alg": "ES256", "jku": None, "typ": "JOSE"},
+)
+verifier = create_signature_verifier(lambda kid, jku: public_pem, ["ES256"])
+```
+
+The second argument to `create_agent_card_signer` is the JWS protected header:
+
+| Key | Purpose |
+|---|---|
+| `kid` | Key identifier published with the signature. Verifiers use it to pick the right key |
+| `alg` | Signing algorithm (`"ES256"` for the P-256 key above) |
+| `jku` | Optional URL of a JWK Set where the public key can be fetched |
+| `typ` | Token type. `"JOSE"` per JWS best practice |
+
+`create_signature_verifier` takes a key provider and an algorithm allow-list. The provider receives `(kid, jku)` and returns the key to verify against, which is the hook for per-key lookup or fetching a JWK Set. The allow-list is what prevents algorithm-confusion attacks - keep it to the algorithms you actually issue, never widen it to accept whatever the card claims.
+
+!!! note
+    Keep the signing key out of the serving process where you can - load it from a secret store, or sign through a KMS by passing a callable that delegates to it. The verifier only ever needs the public half.
+
+## Signing the Served Card
+
+Pass the signer once at construction; it covers every transport the server exposes.
+
+```python
+from ag2 import Agent
+from ag2.a2a import A2AServer
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="weather", config=AnthropicConfig(model="claude-sonnet-4-6"))
+server = A2AServer(agent, card_signer=signer)
+asgi = server.build_jsonrpc(url="http://127.0.0.1:8000")
+```
+
+JSON-RPC, REST and gRPC all sign the card they publish, and the extended card too when one is configured. Signing runs *after* AG2 derives capability flags onto the card, so `capabilities.extended_agent_card` and `capabilities.push_notifications` are inside the signed payload rather than mutations that would invalidate it.
+
+### Per-request Modifiers Are Re-signed
+
+A `card_modifier` rewrites the card per request, which would ordinarily void a signature computed at startup. AG2 re-signs whatever the modifier returns, so a modified card is served with exactly one signature and it matches the card's final contents - no extra wiring on your side.
+
+Two SDK details make that non-trivial, and AG2 absorbs both so you don't have to:
+
+- `create_agent_card_signer` **appends** to `card.signatures` rather than replacing them. AG2 signs a copy with any prior signatures dropped, so the signature computed before the modifier ran never ships alongside the fresh one.
+- The SDK hands the modifier the one long-lived card object shared by every request. AG2 hands it a scratch copy instead, so a modifier that mutates in place and returns what it was given cannot make the served card drift request over request.
+
+Both styles below are safe:
+
+```python
+from a2a.types import AgentCard
+
+async def copying_modifier(card: AgentCard) -> AgentCard:
+    out = AgentCard()
+    out.CopyFrom(card)
+    out.description = "per-request description"
+    return out
+
+async def in_place_modifier(card: AgentCard) -> AgentCard:
+    card.description = "per-request description"
+    return card
+```
+
+The same applies to `extended_card_modifier`, which receives a `ServerCallContext` alongside the card.
+
+### Bringing Your Own Signature
+
+If you sign the card yourself and pass it as `build_jsonrpc(card=...)` instead of configuring `card_signer=`, set the capability flags the server derives **before** signing. AG2 sets `capabilities.extended_agent_card` when an extended card is configured and `capabilities.push_notifications` when a push store is - flipping either after you signed would put a signature on the wire that no longer matches its payload, and with no signer configured there is no key to redo it. AG2 refuses to build in that case, raising `A2AStaleCardSignatureError`:
+
+```python
+from ag2.a2a import A2AServer, build_card
+
+extended_card = build_card(agent, url="http://127.0.0.1:8000")  # your richer card
+card = build_card(agent, url="http://127.0.0.1:8000")
+card.capabilities.extended_agent_card = True  # set it BEFORE signing
+app = A2AServer(agent, extended_card=extended_card).build_jsonrpc(
+    url="http://127.0.0.1:8000",
+    card=signer(card),
+)
+```
+
+Passing `card_signer=` avoids the issue entirely: AG2 then signs the final card itself, after the flags are on it.
+
+## Verifying on the Client
+
+```python
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+
+config = A2AConfig(
+    card_url="http://127.0.0.1:8000",
+    card_signature_verifier=verifier,
+)
+client = Agent("client", config=config)
+reply = await client.ask("ping")
+```
+
+Every card the client takes in is checked, not only the one it fetches:
+
+| Card | Verified |
+|---|---|
+| Fetched card | After the `/.well-known/agent-card.json` round-trip, before a transport is selected |
+| `preset_card` | On connect. A card supplied from a registry or an on-disk cache is not trusted implicitly |
+| Extended card | After `GetExtendedAgentCard`, before it replaces the base card |
+
+`A2AConfig.from_card(...)` accepts `card_signature_verifier=` as well, so a pre-fetched card can be verified at the point it is adopted:
+
+```python
+config = A2AConfig.from_card(
+    card,
+    card_url="http://127.0.0.1:8000",
+    card_signature_verifier=verifier,
+)
+```
+
+Verification passes when **at least one** signature on the card validates. A server can therefore publish signatures from an old and a new key during rotation, and clients trusting either key keep working. Compose the two signers to publish both:
+
+```python
+from a2a.types import AgentCard
+
+rotated_signer = create_agent_card_signer(
+    new_private_pem,  # the new key, generated exactly as above
+    {"kid": "agent-card-2027", "alg": "ES256", "jku": None, "typ": "JOSE"},
+)
+
+def rotating_signer(card: AgentCard) -> AgentCard:
+    return rotated_signer(signer(card))
+
+server = A2AServer(agent, card_signer=rotating_signer)
+```
+
+AG2's "drop prior signatures, then sign" step runs once, before your callable - signatures a composed signer adds are all computed over the same served payload, so both land on the card.
+
+!!! warning "Setting a verifier makes signatures mandatory"
+
+    The verifier rejects a card that carries **no** signatures - this is not best-effort validation. Once `card_signature_verifier=` is set, every server that config points at has to sign its card or the connection fails. That is deliberate: if an unsigned card were accepted, an attacker could defeat the check simply by stripping the signature.
+
+## Failure Modes
+
+Any failed check raises `A2ACardSignatureError` from `ag2.a2a.errors`, whatever the underlying SDK error was. It inherits from `A2AError`, so existing `except A2AError` handlers already cover it.
+
+Every rejection surfaces as the same exception type; the message tail tells the two categories apart:
+
+| Situation | Message ends with |
+|---|---|
+| Card carries no signature at all | `AgentCard has no signatures to verify.` |
+| Payload altered after signing | `No valid signature found` |
+| Signed with a key the provider doesn't resolve to | `No valid signature found` |
+| Algorithm outside the verifier's allow-list | `No valid signature found` |
+| Your key provider itself raised (unknown `kid`, JWKS fetch failed) | `<ErrorType>: <its message>` |
+
+Note that the middle three are indistinguishable by message - a wrong key, a tampered payload and a rejected algorithm all reduce to "no signature on this card validated". If you need to tell them apart while debugging, narrow the verifier's key provider and algorithm list one at a time.
+
+The last row is the case where the key provider *raises* rather than returning a wrong key. The SDK only guards its key lookup against `PyJWTError`, so a `KeyError` from a registry miss would otherwise escape past a caller catching `A2AError`. AG2 treats anything the verifier raises as a rejection and wraps it, with the original preserved on `err.__cause__`.
+
+The exception also carries *which* card failed, which matters when a server publishes both a base and an extended card:
+
+| Attribute | Value |
+|---|---|
+| `err.url` | The configured `card_url` |
+| `err.source` | `"fetched agent card"`, `"preset agent card"` or `"extended agent card"` |
+
+```python
+import logging
+
+from ag2.a2a.errors import A2ACardSignatureError
+
+logger = logging.getLogger(__name__)
+
+try:
+    reply = await client.ask("ping")
+except A2ACardSignatureError as err:
+    logger.error("card from %s failed verification (%s)", err.url, err.source)
+    raise
+```
+
+Treat this as a hard stop rather than something to retry - a card that fails verification is either misconfigured or forged, and neither improves on a second attempt.
+
+## Typing the Callables
+
+The two hooks are plain callables, so any object with the right shape works:
+
+| Hook | Signature | Alias |
+|---|---|---|
+| `card_signer` | `Callable[[AgentCard], AgentCard]` | `ag2.a2a.server.CardSigner` |
+| `card_signature_verifier` | `Callable[[AgentCard], None]` - raises on failure, returns `None` on success | `ag2.a2a.client.CardVerifier` |
+
+The aliases are exported from the module that owns the parameter - `A2AServer` takes the signer, `A2AConfig` / `A2AClient` take the verifier - and are there purely as a shorthand for your own annotations.
+
+## Testing Signed Cards
+
+Signing composes with the in-process helpers from [Advanced](advanced.md#testing-helpers) - no socket, no port binding:
+
+```python
+from ag2 import Agent
+from ag2.a2a import A2AConfig, A2AServer
+from ag2.a2a.testing import make_test_client_factory
+from ag2.testing import TestConfig
+
+server = A2AServer(Agent("remote", config=TestConfig("pong")), card_signer=signer)
+factory = make_test_client_factory(server, url="http://test")
+config = A2AConfig(
+    card_url="http://test",
+    httpx_client_factory=factory,
+    card_signature_verifier=verifier,
+)
+
+reply = await Agent("client", config=config).ask("ping")
+assert reply.body == "pong"
+```
+
+To assert the wire format directly, fetch the card through the same ASGI transport and check the `signatures` array is populated:
+
+```python
+import httpx
+
+app = server.build_jsonrpc(url="http://test")
+async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+    payload = (await http.get("/.well-known/agent-card.json")).json()
+
+assert payload["signatures"]
+```
 
 ---
 
@@ -12616,7 +13431,11 @@ All A2A errors live in `ag2.a2a.errors` and inherit from `A2AError`. Catch `A2AE
 |---|---|
 | `A2AError` | Base class - catch this for any A2A failure |
 | `A2AInvalidCardError` | The card is missing data required to connect (no `supported_interfaces`, no usable URL) |
+| `A2AIncompatibleProtocolVersionError` | The interface AG2 selected declares an A2A protocol version older than 1.0 - `err.protocol_version` and `err.transport` hold what was advertised |
 | `A2AClientToolsNotSupportedError` | Client passed `tools=` but the server card doesn't advertise the `urn:ag2:client-tools:v1` extension |
+| `A2AExtensionNotSupportedError` | Client activated an extension URI the card doesn't advertise, or the card marks one `required=True` that the client didn't activate - `err.uris` holds the unreconciled URIs (see [Extensions](client.md#extensions)) |
+| `A2ACardSignatureError` | A card failed JWS verification - `err.source` says which card (see [Card Signing](card_signing.md#failure-modes)) |
+| `A2AStaleCardSignatureError` | Server-side: a `build_*` call was handed an already-signed card whose capability flags AG2 has to flip, with no `card_signer` to re-sign it (see [Card Signing](card_signing.md#bringing-your-own-signature)) |
 | `A2AReconnectError` | Streaming reconnect attempts exhausted - `err.attempts` holds the count |
 | `A2ATaskTerminalError` | Base for the three terminal-state errors below; carries `err.task` with the final `Task` (status, history, artifacts) |
 | `A2ATaskFailedError` | Task ended in `TASK_STATE_FAILED` |
@@ -12642,9 +13461,11 @@ await remote.ask("ping")
 
 | Helper | Purpose |
 |---|---|
-| `make_test_client_factory(server, url=..., timeout=...)` | `httpx.AsyncClient` factory dispatching JSON-RPC into the server's ASGI app via `httpx.ASGITransport` |
-| `make_test_rest_client_factory(server, url=..., timeout=...)` | Same idea for REST - builds the REST app and a card declaring only the REST interface |
+| `make_test_client_factory(server, url=..., card=..., timeout=...)` | `httpx.AsyncClient` factory dispatching JSON-RPC into the server's ASGI app via `httpx.ASGITransport` |
+| `make_test_rest_client_factory(server, url=..., card=..., timeout=...)` | Same idea for REST - builds the REST app and a card declaring only the REST interface |
 | `pick_free_port(host="127.0.0.1")` | Probe a free TCP port. Used by gRPC tests since gRPC has no in-process transport equivalent |
+
+Pass `card=` when the default `build_card(agent, url=url)` can't express what the test needs - a custom `extensions` list, for instance. It defaults to `None`, which keeps the auto-built card.
 
 ```python
 from ag2.a2a.testing import pick_free_port
@@ -13234,6 +14055,888 @@ How capabilities reach the agent depends on the transport:
     The client puts the same shape on the A2A message `metadata`. The [A2A executor](a2a.md) reads it off the incoming message and folds it into the turn's system prompt automatically.
 
 Whatever the transport, the capabilities become a short prompt section listing the supported catalogs (and a summary of any inline catalogs), so the LLM steers toward what the client can render.
+
+---
+
+# Serving an Agent over ACP
+
+Source: https://docs.ag2.ai/docs/user-guide/acp/server/
+
+`ACPAgent` gives your agent a user interface you do not have to write.
+
+Wrap an existing `Agent`, serve it over the
+[Agent Client Protocol](https://agentclientprotocol.com) (ACP),
+and it becomes drivable from any ACP client - editors like Zed, JetBrains, VS Code and
+Neovim, note-taking apps, notebook kernels, chat bridges. Streamed output, tool calls shown
+as they happen, and a working cancel button all come from the client. You write the agent;
+somebody else already wrote the frontend.
+
+That is the trade this page is about: one line of code instead of a websocket server, a
+streaming protocol and a chat UI.
+
+This is the mirror of the [Client](client.md) page, which covers AG2
+*driving* an external CLI coding agent.
+
+```bash
+pip install "ag2[acp]"
+```
+
+## Two roles, and who starts whom
+
+ACP has exactly two sides: **Client** and **Agent**. They map onto your world cleanly -
+the Agent is your AG2 agent, the Client is whatever wants to talk to it.
+
+The part that surprises most people is the direction: **the Client launches the Agent**.
+You are not standing a service up and waiting for traffic. ACP's stable transport is
+stdio, so the Client starts your process and the two talk over the pipe between them. No
+ports, no URLs, nothing to deploy.
+
+!!! note
+    The class is `ACPAgent`, not `ACPServer`. AG2 names each protocol adapter
+    after that protocol's own word for the side that answers - MCP and A2A both call it a
+    *Server*, and ACP has no "server" at all. It is a wrapper around an AG2
+    `Agent`, not a subclass of one.
+
+## Minimal Server
+
+The whole integration is `ACPAgent(agent).run_stdio()`.
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.acp import ACPAgent
+from ag2.config import AnthropicConfig
+from ag2.tools import tool
+
+@tool(description="Add two integers.")
+async def calc_add(a: int, b: int) -> str:
+    return str(a + b)
+
+agent = Agent(
+    name="workie",
+    prompt="You are a concise assistant. Use tools when they help.",
+    config=AnthropicConfig(model="claude-sonnet-4-6", streaming=True),
+    tools=[calc_add],
+)
+
+async def main() -> None:
+    await ACPAgent(agent).run_stdio()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Point an ACP client at that file and it runs the agent as a subprocess:
+
+```console
+stop_reason: end_turn
+answer: 2 + 2 = 4
+```
+
+The same file, ready to run, is at
+[`examples/acp/server_stdio.py`](https://github.com/ag2ai/ag2/blob/main/examples/acp/server_stdio.py).
+
+## Pointing a Client at It
+
+Every client configures a custom agent the same way - a command, its arguments, and an
+environment. Zed's `#!json settings.json`, for example:
+
+```json
+{
+  "agent_servers": {
+    "workie": {
+      "type": "custom",
+      "command": "/abs/path/to/.venv/bin/python",
+      "args": ["/abs/path/to/examples/acp/server_stdio.py"],
+      "env": { "ANTHROPIC_API_KEY": "sk-ant-..." }
+    }
+  }
+}
+```
+
+!!! warning "Name the virtualenv's interpreter by path"
+    Your virtualenv is **not** activated for that process. A bare
+    `#!json "command": "python"` resolves against the client's own `#!bash PATH` to an
+    interpreter that does not have `#!bash ag2` installed - and the failure surfaces only
+    as the client reporting that the agent would not start. Give the interpreter and the
+    script by full path, and pass credentials through `#!json "env"`.
+
+!!! warning
+    Inside that process **stdout is the wire**. A stray `print()` corrupts the
+    protocol. Use stderr, or a logger, when you need to debug.
+
+## What Happens in One Turn
+
+| ACP method | What it does |
+|---|---|
+| `initialize` | Negotiates the protocol version and advertises exactly which optional features are implemented |
+| `session/new` | Opens an independent conversation and returns its id |
+| `session/prompt` | Runs one ordinary AG2 turn - tools and all - and returns when it ends |
+| `session/update` | Pushed *during* the turn: the answer as it is produced, every tool call, every result |
+| `session/cancel` | Stops that session's turn and anything queued behind it |
+
+A prompt is one AG2 turn through the same path `Agent.ask()` uses, so dynamic
+prompts, middleware, observers and tool events all behave exactly as they do off-protocol.
+
+!!! warning "Token-by-token output needs `streaming=True`"
+    Every AG2 model config defaults to `streaming=False`, and that default decides
+    what a client's window actually does. Without it the answer reaches the client as **one**
+    `agent_message_chunk`, sent once the turn is already over: no text appears while
+    the model works, and a `session/cancel` mid-turn leaves the user with nothing at
+    all, because nothing had been sent yet.
+
+    Turn it on in the config you hand the agent - `AnthropicConfig(model=...,
+    streaming=True)`, and the same flag on the other providers. Tool calls are reported live
+    either way; it is the *text* that waits.
+
+## Sessions
+
+Each `session/new` gets its own conversation. Two things are isolated per session:
+
+- **History.** A session never sees another session's messages.
+- **Context variables.** Seeded by value from the agent's defaults, so writes in one
+  session are invisible to the others, and survive to that session's next prompt.
+
+Concurrent prompts on **one** session queue rather than interleave, matching how
+[`MCPServer`](../tools/mcp_servers.md) already treats overlapping calls on one
+session.
+
+!!! warning "Session isolation is not tenant isolation"
+    Everything else is shared, because every session runs the *same*
+    `Agent`: its tools and whatever state they hold, its dependencies, and any
+    [`KnowledgeStore`](../advanced/knowledge_store.md) attached to it.
+
+    A tool that reads records, or a knowledge store holding one customer's documents, is
+    reachable from every session equally - and, as
+    [Authentication](#authentication) explains, nothing tells that tool which client is
+    asking.
+
+    So sessions separate *conversations*, not *tenants*. Give each tenant its own process
+    and its own `ACPAgent`.
+
+!!! warning "A CLI-agent backend keeps its own conversation state"
+    The isolation above is AG2's to enforce, and it holds for a model config. It does not
+    survive a backend that remembers on its own. Serving an `Agent` whose config is
+    a CLI-agent preset - [`ClaudeCodeConfig`](client.md) and the
+    others - nests one protocol inside the other: your `ACPAgent` answers ACP while
+    the agent behind it *speaks* ACP to a CLI subprocess.
+
+    AG2 does its part, opening a separate CLI session per `session/new`. But the
+    CLI is one process with one `cwd` - a config-level setting, not a per-session
+    one - and in practice it answers a fresh session with the previous one's context. Treat
+    every session on such a deployment as sharing one conversation, and give a caller that
+    must not see another's history its own process.
+
+## Cancelling
+
+`session/cancel` names a session, so that is exactly how far it reaches: the turn
+running there stops, anything queued behind it is dropped, and every other session carries
+on untouched.
+
+Two details worth knowing:
+
+- The prompt still **returns** - with `stop_reason="cancelled"`, not an error.
+- Whatever already reached the client stays. Stopping the work does not un-say what was
+  already said.
+
+Cancelling four seconds into a long streamed answer:
+
+```console
+stop_reason: cancelled
+updates kept: 12
+```
+
+How many updates survive depends on how much the model had streamed by then. The point is
+that it is not zero - on a `streaming=True` config. On the default it *is* zero,
+for the reason above: nothing had been sent yet.
+
+If the cancellation lands between a tool call and its result, the transcript is repaired
+before the session is released, so the next prompt still sends a valid conversation to the
+model.
+
+## Configuring the Agent
+
+```python
+from ag2 import Agent
+from ag2.acp import ACPAgent, PromptContent, SessionConfig, StaticTokenAuth
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="workie", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+
+acp_agent = ACPAgent(
+    agent,
+    name="workie",
+    version="1.0.0",
+    sessions=SessionConfig(
+        max_sessions=256,
+        ttl=3600,
+        max_queued=4,
+        max_concurrent_turns=4,
+        max_active_prompts=32,
+    ),
+    auth=StaticTokenAuth("shared-secret"),
+    prompt_content=PromptContent(image=True, audio=False, embedded_context=True),
+    stream_thoughts=False,
+)
+```
+
+| Constructor argument | Purpose |
+|---|---|
+| `agent` | The AG2 `Agent` exposed over ACP |
+| `name` / `version` / `title` | What the `initialize` handshake advertises. `name` defaults to the agent's |
+| `sessions` | Session registry bounds - see [Bounds](#bounds) |
+| `auth` | Authentication provider. `None` (the default) advertises no methods and rejects `authenticate` |
+| `prompt_content` | Which non-text prompt content to advertise - see [Multimodal content](#multimodal-content) |
+| `stream_thoughts` | Whether to forward the agent's reasoning as `agent_thought_chunk` updates. Off by default |
+
+### Bounds
+
+`SessionConfig` bounds both a single session and the connection as a whole.
+
+| Setting | Default | What it bounds |
+|---|---|---|
+| `max_sessions` | 1024 | Conversations held at once. Idle ones are evicted first; a session with work running is never evicted |
+| `ttl` | `None` | Idle expiry in seconds, measured from the last time the session was *used* |
+| `max_queued` | 8 | Prompts waiting behind the running turn **on one session** |
+| `max_concurrent_turns` | 8 | Turns running at once **across all sessions**. Prompts past this wait for a slot |
+| `max_active_prompts` | 64 | Prompts admitted at once across all sessions, running and waiting. Past this they are refused |
+
+The last two are what keep one client from opening every session and starting a paid turn
+in each. `max_concurrent_turns` bounds spend; `max_active_prompts` bounds
+how many request handlers can be parked at once.
+
+### Multimodal content
+
+`PromptContent` declares what the model behind your agent can actually take.
+
+Whether an image or an audio clip *works* depends on the provider, and AG2 has no registry
+of provider modalities to consult - the ACP mapper will happily build an
+`AudioInput` that the Anthropic mapper then rejects. So this is a declaration by
+whoever deploys the agent, not a guess. Audio is off by default because most providers do
+not accept it.
+
+## Authentication
+
+Local stdio needs none: the client already launched the process. A provider becomes
+necessary for a remote transport, or for the ACP Registry.
+
+```python
+from ag2 import Agent
+from ag2.acp import ACPAgent, StaticTokenAuth
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="workie", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+acp_agent = ACPAgent(agent, auth=StaticTokenAuth("shared-secret"))
+```
+
+With a provider attached, session methods are refused until the client authenticates:
+
+```console
+auth methods: ['token']
+unauthenticated session refused: ok
+session opened after auth: True
+```
+
+Implement `AuthProvider` to plug in your own identity system.
+
+!!! warning
+    This seam authenticates a **connection**, not a tenant. `authenticate` returns
+    nothing, so no principal reaches the turn: every authenticated client drives the same
+    agent, tools and knowledge store, and downstream code has no trusted identity to
+    authorize against.
+
+    Serve one tenant per `ACPAgent`. Multi-tenant deployments need one process and
+    one agent per tenant.
+
+## What It Refuses to Pretend
+
+During `initialize` the agent declares what it supports, and the client builds its
+interface from that answer. Claiming a feature that is not wired is worse than admitting
+its absence - the client offers users a button that cannot work.
+
+Reported as **not** supported: `session/load`, `session/resume`,
+`session/fork`, `session/list`, `session/delete`, and connecting
+to client-provided MCP servers over any transport. The client's own filesystem and terminal
+methods are never called either - those the client offers, so there is nothing to declare.
+
+These are optional parts of the protocol, not missing pieces of this one. ACP grew up
+around coding agents, and most of that list exists to serve them - a client offering its
+open buffers and its terminal to an agent whose job is editing your repository.
+
+!!! note "Your agent still reaches files - through its own tools"
+    Serving over ACP changes nothing about what an agent can do. Give it a file tool, a
+    shell tool or a database tool and they work exactly as they do in
+    `agent.ask()`. What the client's filesystem methods would add on top is
+    narrower than it sounds: the editor's *unsaved buffer* contents, and permission prompts
+    mediated by the editor rather than by your own tool.
+
+    If what you want is an agent that edits your repository from inside your editor, the
+    [Client](client.md) page is the other direction - AG2 driving Claude
+    Code or Codex, which already do that.
+
+A `cwd`, an additional directory or an MCP server named by a client is recorded as
+*context* and acted on by nothing. A path a client names is not authority to reach it;
+deciding what to honour belongs to the application embedding the agent.
+
+## Testing
+
+`ag2.acp.testing.connect` wires a real ACP client to your `ACPAgent`
+inside the test process - genuine protocol, no subprocess to manage and no port to bind.
+Pair it with `TestConfig` so no provider is called.
+
+```python
+import acp
+import pytest
+from acp import schema
+
+from ag2 import Agent
+from ag2.acp import ACPAgent
+from ag2.acp.testing import connect
+from ag2.testing import TestConfig
+
+@pytest.mark.asyncio
+async def test_the_agent_answers() -> None:
+    agent = Agent(name="workie", config=TestConfig("200"))
+
+    async with connect(ACPAgent(agent)) as (client, recorder):
+        session = await client.new_session(cwd=".")
+        response = await client.prompt(
+            session_id=session.session_id,
+            prompt=[acp.text_block("what's 100 + 100")],
+        )
+
+    assert response.stop_reason == "end_turn"
+    texts = [
+        update.content.text
+        for update in recorder.updates_for(session.session_id)
+        if isinstance(update, schema.AgentMessageChunk)
+    ]
+    assert texts == ["200"]
+```
+
+`recorder` is a `RecordingClient`: it captures every `session/update` the
+agent pushed, so you can assert on what the client actually saw and in what order.
+
+---
+
+# Driving CLI Coding Agents as an ACP Client
+
+Source: https://docs.ag2.ai/docs/user-guide/acp/client/
+
+# Orchestrating CLI Coding Agents
+
+AG2 can drive external CLI coding agents - **Claude Code**, **Codex**, **OpenCode**,
+**Kilo Code**, **Gemini CLI**, and others - as first-class agents, using the
+[Agent Client Protocol](https://agentclientprotocol.com) (ACP).
+
+AG2 plays the ACP **Client** role; each CLI agent runs as an ACP **Agent**
+subprocess - or, if you prefer, as a process
+[already running on another machine](#driving-an-agent-on-another-machine).
+Everything the agent does - message output, thinking, tool calls, plans, and
+permission prompts - is **externalized onto AG2's event stream**, so you can
+observe, gate, and orchestrate it like any other AG2 agent.
+
+```bash
+pip install "ag2[acp]"
+```
+
+The integration is a configuration class - a subclass of `ACPConfig` carrying the
+launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
+`OpenCodeConfig`, `KiloCodeConfig`) - and there are no changes to the `Agent` API.
+
+## Basic Usage
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+
+reply = await agent.ask("Refactor the auth module and add tests")
+print(reply.body)
+```
+
+A single `ask()`/`run()` maps to one ACP *prompt turn*: the CLI agent runs its
+own internal tool loop and AG2 streams every step as it happens.
+
+## Choosing an agent
+
+Each adapter is a preset with its own launch command and authentication:
+
+=== "Claude Code"
+    ```python linenums="1"
+    from ag2 import Agent
+    from ag2.acp import ClaudeCodeConfig
+
+    # Launches `claude-agent-acp`. Auth: pass ANTHROPIC_API_KEY in env={...}, or use
+    # an existing ~/.claude login. See "Authentication & billing" below.
+    agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+    ```
+
+=== "Codex"
+    ```python linenums="1"
+    from ag2 import Agent
+    from ag2.acp import CodexConfig
+
+    # Launches `codex-acp`. Auth: an existing `codex login` (stored under $HOME), or
+    # pass CODEX_API_KEY / OPENAI_API_KEY in env={...}.
+    # See "Authentication & billing" below.
+    agent = Agent("coder", config=CodexConfig(cwd="/path/to/repo"))
+    ```
+
+=== "OpenCode"
+    ```python linenums="1"
+    from ag2 import Agent
+    from ag2.acp import OpenCodeConfig
+
+    # Launches `opencode acp`. Auth: `opencode auth login` (stored under $HOME).
+    # See "Authentication & billing" below.
+    # model: "provider/model" as listed by `opencode models` (optional).
+    agent = Agent("coder", config=OpenCodeConfig(cwd="/path/to/repo"))
+    ```
+
+=== "Kilo Code"
+    ```python linenums="1"
+    from ag2 import Agent
+    from ag2.acp import KiloCodeConfig
+
+    # Launches `kilo acp` (install: npm install -g @kilocode/cli).
+    # Auth: `kilo auth login` (stored under $HOME). See "Authentication & billing" below.
+    # Always set model ("provider/model" as listed by `kilo models`) - see the note below.
+    agent = Agent(
+        "coder",
+        config=KiloCodeConfig(cwd="/path/to/repo", model="kilo/anthropic/claude-haiku-4.5"),
+    )
+    ```
+
+!!! note "Model selection"
+
+    `model` is applied at session start via ACP `session/set_config_option`
+    when the agent advertises a model picker - Claude Code, Codex, OpenCode
+    and Kilo Code all do. Use the agent's own advertised ids: for OpenCode and
+    Kilo Code that is `"provider/model"` as listed by `opencode models` /
+    `kilo models`; Claude Code and Codex advertise bare ids. A value the agent
+    does not offer raises `ValueError` before the first turn; leaving `model`
+    unset keeps the agent's default.
+
+    **For Kilo Code, always set `model` explicitly**: a fresh Kilo ACP session
+    may default to an unsuitable model (an image model, at the time of
+    writing), which ends every turn with an empty reply.
+
+!!! warning "Empty replies"
+
+    Some CLI agents swallow provider-side failures - an unauthorized model, or
+    one that cannot produce text - and end the turn with `stop_reason="end_turn"`
+    and no output at all. Nothing reaches the ACP wire, so AG2 can only hand
+    back an empty reply; it logs a warning (`ag2.acp.client`) on such a turn so
+    the emptiness is not the only clue. Run the same prompt through the agent's
+    own CLI (e.g. `kilo run --model <model> "hi"`) to see the real error, and
+    check that the credential covers the model you selected.
+
+## Authentication & billing
+
+AG2 never meters or bills a run itself - it only launches the CLI agent as a
+subprocess and streams its output. **Who is billed, and whether it's per-token API
+usage or a subscription, is decided entirely by the credential the agent
+authenticates with - not by AG2 or ACP.**
+
+### How the agent's environment is built
+
+This is the part that trips people up. AG2 does **not** hand the agent your full
+shell environment. The ACP subprocess starts from a *trimmed* environment - only
+`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, and `USER` are inherited - merged with
+whatever you pass explicitly in the config's `env` field:
+
+```text
+agent environment  =  { HOME, LOGNAME, PATH, SHELL, TERM, USER }  +  config.env
+```
+
+The practical consequence: **`export ANTHROPIC_API_KEY=...` in your shell does not
+reach the agent.** An API key takes effect only if you put it in `env`:
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+agent = Agent("coder", config=ClaudeCodeConfig(
+    cwd="/repo",
+    env={"ANTHROPIC_API_KEY": "sk-ant-..."},  # a shell export would NOT be inherited
+))
+```
+
+A disk-based login is different: it lives under `$HOME` (e.g. Claude Code's
+`~/.claude`, or the credentials written by `opencode auth login`), and `HOME` *is*
+inherited - so it works without setting `env` at all.
+
+### The two paths, and how each is billed
+
+| You authenticate with... | How to set it | Billing |
+| :--- | :--- | :--- |
+| **An API key** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` / `CODEX_API_KEY`, or a provider key for OpenCode / Kilo Code) | Pass it in `config.env` - a shell `export` is **not** inherited | The provider's **API**: pay-per-token against that API account |
+| **An existing CLI login** on the host (Claude Code `~/.claude`, `codex login` -> `~/.codex`, `opencode auth login`, `kilo auth login`) | Nothing to set - inherited via `$HOME` | Whatever **plan that login is on**, which may be a **subscription** |
+
+So "API or subscription" is not a property of ACP or AG2 - it follows the
+credential. By default (no `env`), the agent uses whatever login already exists on
+the host; pass an API key in `env` to bill against the provider's API instead.
+
+!!! note
+
+    Every adapter here reads a disk login under `$HOME` when no key is passed in
+    `env` - Claude Code (`~/.claude`, or a custom location via `CLAUDE_CONFIG_DIR`
+    passed in `env`), Codex (`~/.codex`, or `CODEX_HOME`), OpenCode
+    (`opencode auth login`) and Kilo Code (`kilo auth login`). For Codex that login
+    may be a ChatGPT subscription rather than an API key, in which case billing
+    follows the subscription, not per-token API pricing. Exact plan names, quotas,
+    and whether a plan permits programmatic use are set by each provider, not by
+    AG2 - check the provider's terms.
+
+## Observing the agent's work
+
+Subscribe to the run's stream to see thoughts, tool calls, and plans live:
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.events import ModelMessageChunk, ModelReasoning
+from ag2.events.tool_events import BuiltinToolCallEvent
+from ag2.acp.events import ACPPlan
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+
+def observe(event):
+    if isinstance(event, ModelReasoning):
+        print("💭", event.content)
+    elif isinstance(event, ModelMessageChunk):
+        print(event.content, end="")
+    elif isinstance(event, BuiltinToolCallEvent):
+        print(f"🔧 {event.name}({event.arguments})")
+    elif isinstance(event, ACPPlan):
+        for step in event.entries:
+            print(f"  [{step.status}] {step.content}")
+
+async with agent.run("Add a healthcheck endpoint") as run:
+    run.stream.subscribe(observe)  # subscribe before driving
+    reply = await run.result()
+```
+
+| ACP update | AG2 event |
+| :--- | :--- |
+| agent message | `ModelMessageChunk` -> final `ModelResponse` |
+| thinking | `ModelReasoning` |
+| tool call / result | `BuiltinToolCallEvent` / `BuiltinToolResultEvent` |
+| plan | `ACPPlan` |
+| mode change | `ACPModeChange` |
+| available commands | `ACPAvailableCommands` |
+| question for the user | `ACPElicitation` (see [Questions the agent asks you](#questions-the-agent-asks-you-elicitation)) |
+
+## Your tools inside the CLI agent
+
+If the AG2 agent has tools, they are automatically served to the CLI agent
+over MCP - no configuration needed. When the ACP session starts, AG2 runs an
+in-process MCP server on `127.0.0.1` with the run's tools and hands its URL to
+the CLI agent (`session/new` -> `mcp_servers`). Tool calls execute inside your
+AG2 process, through the normal tool pipeline (middleware and events included).
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+def get_ticket(ticket_id: str) -> dict:
+    """Fetch a ticket from the internal tracker."""
+    return {"id": ticket_id, "status": "open"}
+
+async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
+    agent = Agent("dev", config=config, tools=[get_ticket])
+    # Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
+    reply = await agent.ask("Look up ticket ACME-4211.")
+```
+
+The `async with` matters once tools are exposed: the MCP server serving them
+lives until the config is closed. See [Lifecycle](#lifecycle).
+
+What reaches the CLI agent:
+
+| AG2 tool | Forwarded? | How |
+| :--- | :--- | :--- |
+| Function tools (Python callables, toolkits) | Yes | served from the in-process MCP server |
+| MCP toolkits mounted on the agent | Yes | same - they are function tools |
+| `MCPServerTool` (external MCP server) | Yes | its URL is passed straight to the CLI agent |
+| Provider server-side builtins (`WebSearchTool`, ...) | No - raises `UnsupportedToolError` | these are flags inside a provider API request; the CLI agent has its own native equivalents (web search, shell, file access) |
+
+Details and knobs:
+
+- `expose_tools=False` on the config disables all of this.
+- **Behaviour change:** `tools=[...]` on an ACP-backed agent used to be ignored.
+  They are now exposed, and a provider server-side builtin in that list is a hard
+  `UnsupportedToolError` rather than a silent no-op. Set `expose_tools=False` to
+  keep the previous behaviour.
+- An `MCPServerTool` cannot use the server label `ag2` alongside function tools -
+  that name is taken by AG2's own gateway entry, and ACP has no way to
+  disambiguate two servers sharing a name.
+- The set of MCP servers is fixed when the session starts (first turn).
+  Function tools added or removed on later turns update the served list
+  automatically, but changing the `MCPServerTool` set mid-run - or introducing
+  function tools when the first turn had none - raises a `ValueError`.
+- The MCP server binds to `127.0.0.1` on a random port and lives exactly as
+  long as the ACP session. It is served under an unguessable random path, which
+  acts as its credential - only the CLI agent is given the full URL, so other
+  local processes cannot reach it by scanning ports. Requests are additionally
+  validated against `Host`/`Origin` allowlists (DNS-rebinding protection).
+- A tool result with `final=True` loses its "stop the run now" semantics over
+  ACP: the CLI agent receives it as ordinary tool output and keeps going (a
+  warning is logged).
+- The CLI agent must advertise HTTP MCP support (`mcp_capabilities.http`) -
+  Claude Code, Codex and OpenCode adapters all do; otherwise
+  `MCPCapabilityError` is raised.
+- Requires the `mcp` extra (installed automatically with `ag2[acp]`).
+
+## Permissions (Human-in-the-Loop)
+
+When the agent asks to perform a sensitive action, it sends a permission
+request. `permission_policy` controls the response:
+
+| Policy | Behavior |
+| :--- | :--- |
+| `"ask"` (default) | Route to the agent's `hitl_hook` / `context.input`; the human decides |
+| `"auto"` | Approve automatically (headless orchestration) |
+| `"deny"` | Reject automatically |
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+agent = Agent(
+    "coder",
+    config=ClaudeCodeConfig(cwd="/repo", permission_policy="auto"),  # autonomous
+)
+```
+
+## Questions the agent asks you (elicitation)
+
+A permission request asks "may I do this?". An *elicitation* asks something the
+agent cannot answer itself - "which refactoring strategy?", or "authorize access
+to your GitHub repos". It arrives on the same HITL channel, governed by
+`elicitation_policy`:
+
+| Policy | Behavior |
+| :--- | :--- |
+| `"ask"` (default) | Advertise the capability and route the question to the agent's `hitl_hook` / `context.input` |
+| `"decline"` | Do not advertise the capability at all, so a conforming agent never asks |
+
+There is deliberately no `"auto"`. A permission request has an allow option AG2
+could pick blind; an arbitrary form has no answer AG2 could invent without
+fabricating data on your behalf.
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.events import HumanInputRequest
+
+def answer(event: HumanInputRequest) -> str:
+    """Show the agent's question and return the human's answer."""
+    return input(f"{event.content}\n> ")
+
+agent = Agent(
+    "coder",
+    config=ClaudeCodeConfig(cwd="/repo"),  # elicitation_policy="ask" by default
+    hitl_hook=answer,
+)
+reply = await agent.ask("Split this module up - ask me before choosing a layout.")
+```
+
+Two shapes reach you:
+
+- **A form** is rendered one prompt per requested field, in schema order, showing
+  the field's title, description, allowed values, bounds and default. An empty
+  answer takes the default; an answer the field cannot take - a word where a
+  number was asked for, a value outside the allowed set - is asked again rather
+  than passed through, so the agent only ever receives values its own schema
+  permits. Answer `!decline` at any field to refuse the whole request - a
+  half-filled form is never sent. A field that stays unanswerable after ten
+  tries declines the request too, so a programmatic hook (which cannot type
+  `!decline`) can never hang the turn.
+- **A URL** (OAuth, payment, device authorization) is shown with the agent's
+  message, and the agent resumes only once you confirm you have finished there.
+
+The question also surfaces on the Run's stream as an `ACPElicitation` event
+(see [Observing the agent's work](#observing-the-agents-work)) *before* you are
+prompted, so an observer sees it even when something other than an interactive
+human answers.
+
+!!! warning "Unattended runs should decline"
+
+    Under `"ask"` with no `hitl_hook` anywhere, there is no human to reach: the
+    request is cancelled so the turn cannot deadlock. That works, but the agent
+    spends a round trip finding out. For headless orchestration set
+    `elicitation_policy="decline"` and the agent never asks in the first place.
+
+## Orchestrating multiple agents
+
+Because each CLI agent is an `Agent`, you can compose them - including as tools
+of one another via `.as_tool()`:
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+reviewer = Agent("reviewer", config=ClaudeCodeConfig(cwd="/repo"))
+manager = Agent(
+    "manager",
+    config=ClaudeCodeConfig(cwd="/repo"),
+    tools=[reviewer.as_tool(description="Review the changes for correctness")],
+)
+```
+
+!!! note
+
+    `tools=[...]` (including `.as_tool()` subagents) are served to the CLI agent
+    over MCP automatically - see
+    [Your tools inside the CLI agent](client.md#your-tools-inside-the-cli-agent).
+
+## Driving an agent on another machine
+
+An agent does not have to be one AG2 launches. Point `ACPRemoteConfig` at a URL
+instead of a command and everything else works unchanged - the same `ask`/`run`,
+the same events, the same permission policy, the same model selection:
+
+```bash
+pip install "ag2[acp]" "agent-client-protocol[http]"
+```
+
+```python
+import os
+
+from ag2 import Agent
+from ag2.acp import ACPRemoteConfig
+
+config = ACPRemoteConfig(
+    url="https://dev-box.internal/acp",
+    # Source the token the way you would any other secret - a token written into
+    # a config literal is a token committed.
+    headers={"Authorization": f"Bearer {os.environ['ACP_TOKEN']}"},
+    cwd="/path/to/repo",
+    expose_tools=False,
+)
+
+agent = Agent("coder", config=config)
+reply = await agent.ask("Refactor the auth module and add tests")
+```
+
+The URL's scheme picks the transport - `http`/`https` use ACP's streamable HTTP
+transport, `ws`/`wss` the WebSocket one. Behind a proxy that does not follow that
+convention, `transport="http"` or `transport="websocket"` overrides it.
+
+**The workspace stays on your side.** ACP's file and terminal methods are
+requests *from* the agent *to* the client, and AG2 is the client - so what moves
+off-host is the agent's *reasoning*, not its working copy. A remote agent reads
+and writes your local files through AG2's `fs_root`-confined mediation, and the
+commands it asks to run execute where that workspace is.
+
+There is no `command` field on a remote config, and that is deliberate: a config
+that cannot launch anything should not carry launch-only fields, so an ambiguous
+config is a `TypeError` rather than a precedence rule you have to remember.
+
+A dropped connection fails the turn with an error naming the transport, rather
+than returning a blank reply you cannot distinguish from an agent that had
+nothing to say. There is no reconnect or session resume.
+
+### Exposing your tools to a remote agent
+
+Tool exposure works by running an in-process MCP server and handing the agent its
+URL. That server binds loopback only - which a remote agent cannot reach - so a
+remote config with `expose_tools` on and no reachable address **refuses at
+session start** rather than handing out a URL that silently yields no tools.
+
+Two ways forward. If the agent does not need your tools, turn exposure off
+(`expose_tools=False`, as above) and nothing else is required. If it does, tell
+AG2 what address the agent should dial:
+
+```python
+config = ACPRemoteConfig(
+    url="https://dev-box.internal/acp",
+    cwd="/path/to/repo",
+    gateway_address="10.0.0.5:8931",  # what the agent dials, and where AG2 binds
+)
+```
+
+!!! warning
+
+    `gateway_address` opens a local port to the network. The gateway binds that
+    address instead of loopback, its DNS-rebinding allowlist widens to match, and
+    it serves **plain HTTP** whose only credential is an unguessable path segment
+    in the URL - which proxies and gateways log by design. Anyone who can reach
+    that address and observe that URL can execute your agent's function tools in
+    your process.
+
+    That is why the address is explicit - it is never inferred from the presence
+    of a URL - and why the default stays closed. Arrange the reachability
+    yourself and keep it narrow: a private network, a VPN, or an SSH tunnel to
+    the agent's host, never a public interface. When in doubt, prefer
+    `expose_tools=False`.
+
+## Configuration reference
+
+`ACPConfig` (and its presets like `ClaudeCodeConfig`) accept:
+
+| Field | Default | Purpose |
+| :--- | :--- | :--- |
+| `command` | preset per agent | Executable + args launching the agent in ACP mode |
+| `cwd` | `"."` | Workspace root for the session |
+| `env` | `None` | Extra environment variables for the subprocess |
+| `model` | `None` | Agent model selection - applied via `session/set_config_option` when the agent advertises a model picker |
+| `permission_policy` | `"ask"` | `ask` / `auto` / `deny` |
+| `elicitation_policy` | `"ask"` | `ask` / `decline` - whether the agent may ask *you* a question |
+| `fs_root` | `cwd` | Root for mediated `fs/*` access (path-confined) |
+| `allow_terminal` | `True` | Advertise the ACP terminal capability |
+| `additional_directories` | `[]` | Extra workspace roots |
+| `startup_timeout` | `30.0` | Tool-gateway HTTP server startup timeout (s) |
+| `turn_timeout` | `None` | Per-prompt-turn timeout (s) |
+| `cancel_timeout` | `5.0` | Grace period (s) after a timed-out turn signals `session/cancel` before the subprocess is hard-stopped |
+| `expose_tools` | `True` | Serve the agent's tools to the CLI agent over MCP (default `True`) |
+
+`ACPRemoteConfig` is an `ACPConfig`, so every field above means the same thing
+for a remote agent - except the two launch-only ones, `command` and `env`, which
+it does not accept. In their place:
+
+| Field | Default | Purpose |
+| :--- | :--- | :--- |
+| `url` | *required* | Where the agent speaks ACP; the scheme picks the transport |
+| `headers` | `{}` | Sent with every request - e.g. `Authorization` |
+| `transport` | `None` | `"http"` / `"websocket"`, overriding the URL's scheme |
+| `gateway_address` | `None` | `host` or `host:port` the agent should dial to reach the tool gateway |
+
+File and terminal operations the agent requests are mediated by AG2: file access
+is confined to `fs_root`, and the agent's commands run under AG2's control.
+
+## Lifecycle
+
+The ACP subprocess is created on the first turn and reused for the run, and it
+outlives the `agent.run()` that created it - `reply.ask()` continues the same
+session. So the session's lifetime is the *conversation's*, and only you know
+when that ends.
+
+Use the config as an async context manager, and everything it started - the
+subprocess and the tool gateway - is torn down on exit:
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
+    agent = Agent("dev", config=config, tools=[get_ticket])
+
+    async with agent.run("Look up ticket ACME-4211.") as run:
+        reply = await run.result()
+
+    follow_up = await reply.ask("What priority is it?")
+# subprocess and gateway are gone here, including if the block raised
+```
+
+`await config.aclose()` does the same thing explicitly. One or the other is
+required: nothing reclaims a session implicitly, so a config used across many
+runs without it accumulates live subprocesses - and, when tools are exposed,
+a listening MCP server per session.
 
 ---
 
@@ -21238,3 +22941,109 @@ The coordinator connects to the NLIP weather agent through `weather_agent`, a re
 ```bash
 python coordinator.py
 ```
+
+---
+
+# Tenki Sandbox Integration
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/tenki/
+
+The `ag2.extensions.tenki` module runs AG2 shell and code tools in isolated [Tenki Sandbox](https://tenki.cloud/) sessions. It implements AG2's native sandbox factory, so one environment provides persistent files across tool calls and deterministic cleanup.
+
+## Installation
+
+Install AG2, your model provider, and Tenki's Python SDK:
+
+```bash
+pip install "ag2[anthropic]" "tenki>=0.5.4,<1"
+```
+
+Create an API key in Tenki and export it:
+
+```bash
+export TENKI_API_KEY="tk_your_api_key"
+```
+
+The SDK uses `https://api.tenki.cloud` by default. Set `TENKI_API_URL` only when targeting another Tenki deployment.
+
+## Use Tenki with an agent
+
+Use the environment as an async context manager. The sandbox is reused for every shell or code call inside the scope and terminated when the scope exits.
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tenki import TenkiEnvironment
+from ag2.tools import SandboxCodeTool, SandboxShellTool
+
+async def main() -> None:
+    env = TenkiEnvironment()
+    async with env:
+        agent = Agent(
+            "developer",
+            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            tools=[SandboxShellTool(env), SandboxCodeTool(env.code_environment())],
+        )
+        reply = await agent.ask("Write hello.txt, then read it with Python.")
+        print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+`TenkiEnvironment()` discovers the sole workspace visible to the API key. If the key can access multiple workspaces, select one explicitly:
+
+```python
+from ag2.extensions.tenki import TenkiEnvironment
+
+env = TenkiEnvironment(workspace_id="your-workspace-id")
+```
+
+## Configure the sandbox
+
+The default working directory is `/home/tenki`. Inbound networking is disabled, outbound networking is enabled, and every sandbox has a 15-minute `max_duration` backstop if client cleanup cannot run.
+
+!!! note "Use `code_environment()` for `SandboxCodeTool`"
+
+    A Tenki sandbox runs as `uid=1000(tenki)` with a read-only root, so it works out of `/home/tenki` and its image ships `python3` rather than `python`.
+
+    `TenkiEnvironment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py), so `SandboxShellTool(env)` reports the real working directory to the model on its own - no extra wiring.
+
+    `SandboxCodeTool` needs one: pass `env.code_environment()` instead of `env` to get a `CodeAdapter` whose `python` runner is `python3`. It accepts `languages=` to restrict what the tool runs.
+
+```python
+from ag2.extensions.tenki import TenkiEnvironment, TenkiResources
+
+env = TenkiEnvironment(
+    workspace_id="your-workspace-id",
+    name="my-agent-sandbox",
+    image="workspace/image:tag",
+    env_vars={"APP_ENV": "sandbox"},
+    resources=TenkiResources(cpu_cores=2, memory_mb=4096, disk_size_gb=5),
+    timeout=60,
+    max_duration=900,
+)
+```
+
+| Parameter | Default | Purpose |
+| :--- | :--- | :--- |
+| `api_key` | `TENKI_API_KEY` | API authentication |
+| `api_url` | `TENKI_API_URL` or production | API endpoint |
+| `workspace_id` | Auto-detected when unique | Tenki workspace scope |
+| `name` | `ag2` | Session name for identification |
+| `image` | Tenki default image | Registry image reference |
+| `env_vars` | `{}` | Environment variables applied to the sandbox |
+| `resources` | Tenki defaults | CPU, memory, and disk overrides |
+| `timeout` | `60` seconds | Sandbox startup and command timeout |
+| `max_duration` | `900` seconds | Server-enforced session lifetime backstop |
+| `workdir` | `/home/tenki` | Working directory for commands and files |
+
+All credential and sandbox selection parameters accept [`Variable`](../context/variables.md) values for per-request resolution. Always close the environment with `async with` or `await env.aclose()`; `max_duration` is a fail-safe, not the normal cleanup path.
+
+## Testing
+
+The bundled unit tests mock the Tenki SDK and run offline, so no Tenki account is needed for the AG2 test suite. Exercising the integration against real sandboxes requires a Tenki account and a `TENKI_API_KEY`.
+
+Maintainer: [@camcalaquian](https://github.com/camcalaquian) / Tenki.
