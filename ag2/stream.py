@@ -109,10 +109,11 @@ class MemoryStream(ABCStream):
         "history",
         "pending_messages",
         "_background_tasks",
-        # Lazy per-stream asyncio.Lock used by Agent._execute to serialize
-        # concurrent turns on a shared stream. See agent.py's
-        # `_get_stream_turn_lock`. Declared here (not initialized in
-        # __init__) so __slots__ doesn't reject the attribute set.
+        # Lazy asyncio.Lock used by Agent._execute to serialize concurrent
+        # turns on this stream. Shared with every other object carrying the
+        # same `id`; cached here so the lookup is one attribute read. See
+        # agent.py's `_get_stream_turn_lock`. Declared here so __slots__
+        # doesn't reject the assignment.
         "_ag2_turn_lock",
     )
 

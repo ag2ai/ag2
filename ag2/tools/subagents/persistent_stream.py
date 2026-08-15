@@ -17,27 +17,22 @@ if TYPE_CHECKING:
 def persistent_stream() -> StreamFactory:
     """Return a StreamFactory that reuses one stream per agent and context.
 
-    The first delegation caches the MemoryStream itself (not just its id)
-    in ``context.dependencies``, so every later delegation in the same context
-    reuses the same object. Same-object reuse matters beyond shared history:
-    Agent._execute serializes concurrent turns through a per-stream lock
-    attached to the stream instance, which only works if delegations into the
-    same persistent sub-agent actually share one instance.
+    The stream *id* is cached in ``context.dependencies``; each delegation
+    rebuilds a MemoryStream from that id and the parent's storage backend. Same
+    id, same storage — so the worker reads back its own accumulated history,
+    while each delegation keeps its own subscriber set and is accounted for on
+    its own. Turns still serialize: a stream's identity is its id, not the
+    object (see ``_get_stream_turn_lock`` in ``agent.py``).
     """
 
     def stream_factory(agent: "Agent", ctx: "Context") -> MemoryStream:
         key = f"ag:{agent.name}:stream"
-        stream = ctx.dependencies.get(key)
-        if stream is None:
-            # Concurrent first delegations may race to create; setdefault makes
-            # the first object stored the one both callers get.
-            stream = ctx.dependencies.setdefault(
-                key,
-                MemoryStream(
-                    storage=ctx.stream.history.storage,
-                    id=uuid4(),
-                ),
-            )
-        return stream
+        if not (stream_id := ctx.dependencies.get(key)):
+            stream_id = ctx.dependencies[key] = uuid4()
+
+        return MemoryStream(
+            storage=ctx.stream.history.storage,
+            id=stream_id,
+        )
 
     return stream_factory

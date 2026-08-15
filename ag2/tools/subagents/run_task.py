@@ -127,10 +127,10 @@ async def run_task(
 
     # Scope the rollup to this invocation. Registered here and removed in the
     # same ``finally`` as the bridge above, so it cannot outlive the call.
-    # Sequential delegations are therefore accounted per call; concurrent
-    # delegations handed the *same* ``Stream`` instance (``persistent_stream()``
-    # or an explicit instance) still cross-capture, since the events they emit
-    # are indistinguishable on the one stream they share.
+    # Sequential calls that rebuild the stream object (``persistent_stream()``)
+    # are therefore accounted per call; concurrent delegations handed the *same*
+    # ``Stream`` instance still cross-capture, since the events they emit are
+    # indistinguishable on the one stream they share.
     incurred: list[Usage] = []
     usage_sub_id = task_stream.where(UsageEvent).subscribe(_make_usage_accumulator(incurred))
 

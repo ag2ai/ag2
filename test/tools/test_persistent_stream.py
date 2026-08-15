@@ -66,25 +66,13 @@ class TestPersistentStream:
 
         assert stream_a.id != stream_b.id
 
-    def test_caches_stream_object_in_dependencies(self, ctx: Context) -> None:
+    def test_stores_stream_id_in_dependencies(self, ctx: Context) -> None:
         factory = persistent_stream()
         agent = _make_agent("helper")
 
         stream = factory(agent, ctx)
 
-        assert ctx.dependencies["ag:helper:stream"] is stream
-
-    def test_reuses_same_stream_object_on_second_call(self, ctx: Context) -> None:
-        factory = persistent_stream()
-        agent = _make_agent()
-
-        first = factory(agent, ctx)
-        second = factory(agent, ctx)
-
-        # Same identity, not just the same id: the turn lock in
-        # ``Agent._execute`` is attached to the stream instance, so concurrent
-        # delegations only serialize if they share one object.
-        assert first is second
+        assert ctx.dependencies["ag:helper:stream"] == stream.id
 
     def test_uses_parent_storage_backend(self, ctx: Context, storage: MemoryStorage) -> None:
         factory = persistent_stream()
@@ -105,26 +93,6 @@ class TestPersistentStream:
         stream2 = factory(agent, ctx2)
 
         assert stream1.id != stream2.id
-
-
-@pytest.mark.asyncio
-class TestConcurrentPersistentDelegations:
-    """Concurrent delegations into the same persistent sub-agent must land on
-    one stream instance, or the per-stream turn lock cannot serialize them."""
-
-    async def test_concurrent_delegations_share_one_stream(self, ctx: Context) -> None:
-        worker = Agent(
-            "worker",
-            config=TestConfig(*(ModelResponse(ModelMessage("done")) for _ in range(2))),
-        )
-        factory = persistent_stream()
-
-        first, second = await asyncio.gather(
-            run_task(worker, "first", parent_context=ctx, stream=factory(worker, ctx)),
-            run_task(worker, "second", parent_context=ctx, stream=factory(worker, ctx)),
-        )
-
-        assert first.stream is second.stream
 
 
 @pytest.mark.asyncio
@@ -205,3 +173,73 @@ class TestUsageAccountingOnAReusedStream:
         report = UsageReport.from_events(await ctx.stream.history.get_events())
         assert report.total == dispatch + wrapup + dispatch
         assert report.by_kind == {"subtask": dispatch + wrapup + dispatch}
+
+
+@pytest.mark.asyncio
+class TestConcurrentDelegationsToOnePersistentWorker:
+    """Two sibling delegations into one persistent worker — the ``asyncio.gather``
+    shape ``run_task``'s docstring anticipates.
+
+    They run one after another rather than interleaving their writes into the
+    history they share, and the parent is billed for what the worker really
+    spent.
+    """
+
+    async def test_concurrent_delegations_do_not_interleave(self, ctx: Context) -> None:
+        active = 0
+        peak = 0
+
+        @tool
+        async def slow_step() -> str:
+            """Holds long enough for a racing delegation to arrive."""
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            try:
+                await asyncio.sleep(0.05)
+            finally:
+                active -= 1
+            return "ok"
+
+        call_the_tool = ModelResponse(
+            tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="slow_step", arguments="{}")])
+        )
+        wrap_up = ModelResponse(ModelMessage("done"))
+        worker = Agent(
+            "worker",
+            config=TestConfig(call_the_tool, wrap_up, call_the_tool, wrap_up),
+            tools=[slow_step],
+        )
+        factory = persistent_stream()
+
+        await asyncio.gather(
+            run_task(worker, "first", parent_context=ctx, stream=factory(worker, ctx)),
+            run_task(worker, "second", parent_context=ctx, stream=factory(worker, ctx)),
+        )
+
+        assert peak == 1, "delegations into one persistent worker must not overlap"
+
+    async def test_concurrent_delegations_do_not_inflate_the_parent_total(self, ctx: Context) -> None:
+        billed = Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110)
+        worker = Agent(
+            "worker",
+            config=TestConfig(*(ModelResponse(ModelMessage("done"), usage=billed) for _ in range(2))),
+        )
+        factory = persistent_stream()
+
+        first, second = await asyncio.gather(
+            run_task(worker, "first", parent_context=ctx, stream=factory(worker, ctx)),
+            run_task(worker, "second", parent_context=ctx, stream=factory(worker, ctx)),
+        )
+
+        # The parent is billed once per delegation — not once per delegation
+        # times every sibling whose events its accumulator could see.
+        spent = billed + billed
+        report = UsageReport.from_events(await ctx.stream.history.get_events())
+        assert report.total == spent
+        assert report.by_kind == {"subtask": spent}
+
+        # The field keeps its documented meaning: the worker's running total on
+        # its stream. Whichever delegation went second reads both.
+        readings = sorted([first.usage, second.usage], key=lambda usage: usage.total_tokens)
+        assert readings == [billed, spent]
