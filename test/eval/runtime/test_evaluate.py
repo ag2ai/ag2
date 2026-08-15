@@ -122,6 +122,33 @@ async def test_evaluate_records_budget_violation(tmp_path) -> None:
 
 
 @pytest.mark.asyncio()
+async def test_budget_violation_fires_on_accounting_only_spend(tmp_path) -> None:
+    """Delegated spend trips the budget even though no response carries it.
+
+    A sub-task's tokens reach the parent as a ``"subtask"`` rollup and nowhere
+    else — the parent's own response is cheap. A budget check still reading
+    model responses would call this task free and clear the violation flag,
+    which is the failure the 0.2 accounting exists to close.
+    """
+    delegated = Trace(
+        events=[
+            ModelResponse(message=ModelMessage("done"), usage=Usage(prompt_tokens=1, completion_tokens=1)),
+            UsageEvent(Usage(prompt_tokens=1, completion_tokens=1)),
+            UsageEvent(Usage(prompt_tokens=100, completion_tokens=100), kind="subtask", label="worker"),
+        ],
+        exception=None,
+        duration_ms=10,
+    )
+    source = InMemoryTraceSource([(TraceRef("delegating"), delegated)])
+
+    result = await evaluate_traces(
+        source, scorers=[], store_dir=tmp_path, budgets=BudgetThresholds(max_tokens_per_task=50)
+    )
+
+    assert result.aggregates.budget_violations == 1
+
+
+@pytest.mark.asyncio()
 async def test_json_object_answer_projects_structured_content(tmp_path) -> None:
     """A JSON-object final answer is parsed into outputs["content"] (mirrors reply.content())."""
     source = InMemoryTraceSource([

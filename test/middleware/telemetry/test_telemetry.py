@@ -126,9 +126,6 @@ class _UsageAfterTurn(BaseMiddleware):
         self._usage = usage
         self._kind = kind
 
-    def __class_getitem__(cls, item):  # pragma: no cover - typing convenience
-        return cls
-
     async def on_turn(self, call_next, event: BaseEvent, context: Context):
         result = await call_next(event, context)
         await context.send(UsageEvent(self._usage, kind=self._kind))
@@ -139,6 +136,12 @@ def _usage_after_turn(usage: Usage, kind: str) -> Middleware:
     return Middleware(_UsageAfterTurn, usage=usage, kind=kind)
 
 
+def _usage_spans(exporter: _InMemorySpanExporter) -> list[ReadableSpan]:
+    """The accounting spans only — every test here asserts against these."""
+    return [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+
+
+@pytest.mark.asyncio()
 class TestUsageSpans:
     """``UsageEvent`` — the accounting record — is carried onto its own span.
 
@@ -148,7 +151,6 @@ class TestUsageSpans:
     the live-session clients.
     """
 
-    @pytest.mark.asyncio()
     async def test_own_model_call_records_a_usage_span(self, otel_setup):
         exporter, provider = otel_setup
 
@@ -165,13 +167,12 @@ class TestUsageSpans:
 
         await agent.ask("Hello")
 
-        [span] = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        [span] = _usage_spans(exporter)
         assert span.attributes["ag2.usage.kind"] == "model_call"
         assert span.attributes["gen_ai.usage.input_tokens"] == 10
         assert span.attributes["gen_ai.usage.output_tokens"] == 5
         assert span.attributes["ag2.usage.total_tokens"] == 15
 
-    @pytest.mark.asyncio()
     async def test_delegated_spend_is_captured_without_instrumenting_the_worker(self, otel_setup):
         """The rollup lands on the parent's stream, so the parent's telemetry sees it.
 
@@ -198,14 +199,13 @@ class TestUsageSpans:
 
         await coordinator.ask("Tell me about X")
 
-        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        usage_spans = _usage_spans(exporter)
         by_kind = {s.attributes["ag2.usage.kind"]: s for s in usage_spans}
         assert set(by_kind) == {"model_call", "subtask"}
         assert by_kind["subtask"].attributes["ag2.usage.label"] == "worker"
         assert by_kind["subtask"].attributes["gen_ai.usage.input_tokens"] == 900
         assert by_kind["subtask"].attributes["gen_ai.usage.output_tokens"] == 90
 
-    @pytest.mark.asyncio()
     async def test_cache_counts_are_carried(self, otel_setup):
         exporter, provider = otel_setup
 
@@ -227,16 +227,15 @@ class TestUsageSpans:
 
         await agent.ask("Hello")
 
-        [span] = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        [span] = _usage_spans(exporter)
         assert span.attributes["gen_ai.usage.cache_creation_input_tokens"] == 7
         assert span.attributes["gen_ai.usage.cache_read_input_tokens"] == 3
 
-    @pytest.mark.asyncio()
-    async def test_subscription_does_not_outlive_the_turn(self, otel_setup):
-        """A leaked subscription would re-record spend on every later turn.
+    async def test_each_run_records_its_own_spend_once(self, otel_setup):
+        """A leaked subscription would re-record spend on every later run.
 
-        Two turns on one shared stream spend once each, so two usage spans. A
-        subscription surviving the first turn would catch the second turn's
+        Two runs on one shared stream spend once each, so two usage spans. A
+        subscription surviving the first run would catch the second run's
         event as well and yield three.
         """
         exporter, provider = otel_setup
@@ -251,10 +250,34 @@ class TestUsageSpans:
         await agent.ask("first", stream=stream)
         await agent.ask("second", stream=stream)
 
-        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        usage_spans = _usage_spans(exporter)
         assert [s.attributes["gen_ai.usage.input_tokens"] for s in usage_spans] == [10, 10]
 
-    @pytest.mark.asyncio()
+    async def test_uninstrumented_run_on_a_shared_stream_records_nothing(self, otel_setup):
+        """The watcher outlives its turn, but must not outlive its *run*.
+
+        An agent with no telemetry that reuses an instrumented agent's stream
+        would otherwise have its spend recorded into the earlier run's finished
+        trace — spend attributed to the wrong agent, in a trace that was already
+        complete, from an ``ask`` the caller never asked to instrument.
+        """
+        exporter, provider = otel_setup
+        stream = MemoryStream()
+        usage = Usage(prompt_tokens=10, completion_tokens=1)
+
+        instrumented = Agent(
+            "instrumented",
+            config=TestConfig(ModelResponse(ModelMessage("ok"), usage=usage)),
+            middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="instrumented")],
+        )
+        plain = Agent("plain", config=TestConfig(ModelResponse(ModelMessage("ok"), usage=usage)))
+
+        await instrumented.ask("first", stream=stream)
+        await plain.ask("second", stream=stream)
+
+        usage_spans = _usage_spans(exporter)
+        assert [s.attributes["ag2.usage.kind"] for s in usage_spans] == ["model_call"]
+
     async def test_records_usage_emitted_by_outer_middleware(self, otel_setup):
         """History compaction reports its spend *after* the turn it followed.
 
@@ -276,10 +299,9 @@ class TestUsageSpans:
 
         await agent.ask("go", middleware=[telemetry])
 
-        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        usage_spans = _usage_spans(exporter)
         assert sorted(s.attributes["ag2.usage.kind"] for s in usage_spans) == ["compaction", "model_call"]
 
-    @pytest.mark.asyncio()
     async def test_late_usage_stays_in_the_turns_trace(self, otel_setup):
         """A span recorded after the turn closed must not start a new trace.
 
@@ -301,7 +323,6 @@ class TestUsageSpans:
         trace_ids = {s.context.trace_id for s in exporter.get_finished_spans()}
         assert len(trace_ids) == 1
 
-    @pytest.mark.asyncio()
     async def test_two_instrumented_agents_on_one_stream_record_each_event_once(self, otel_setup):
         """Separate telemetry objects must not both record the same event.
 
@@ -327,10 +348,9 @@ class TestUsageSpans:
         await first.ask("one", stream=stream)
         await second.ask("two", stream=stream)
 
-        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        usage_spans = _usage_spans(exporter)
         assert sorted(s.attributes["gen_ai.usage.input_tokens"] for s in usage_spans) == [10, 20]
 
-    @pytest.mark.asyncio()
     async def test_a_fresh_telemetry_per_ask_does_not_accumulate_watchers(self, otel_setup):
         """Building the middleware per call is ordinary usage, not a leak."""
         exporter, provider = otel_setup
@@ -344,10 +364,9 @@ class TestUsageSpans:
         for _ in range(3):
             await agent.ask("go", stream=stream, middleware=[TelemetryMiddleware(tracer_provider=provider)])
 
-        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        usage_spans = _usage_spans(exporter)
         assert len(usage_spans) == 3
 
-    @pytest.mark.asyncio()
     async def test_no_telemetry_no_usage_spans(self, otel_setup):
         """Instrumentation stays opt-in — nothing subscribes when it is off."""
         exporter, _ = otel_setup

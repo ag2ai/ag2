@@ -94,6 +94,22 @@ class TestTokens:
 
         assert trace.tokens == TokenUsage(input=1000, output=100)
 
+    def test_a_failed_run_still_reports_what_it_spent(self) -> None:
+        """Tokens spent before the failure were still billed.
+
+        The accounting event is emitted as the tokens are spent, so it is on the
+        trace whether or not the run went on to produce an answer. Reporting a
+        crashed task as free would understate exactly the runs worth
+        investigating.
+        """
+        trace = _trace(
+            UsageEvent(Usage(prompt_tokens=100, completion_tokens=10)),
+            UsageEvent(Usage(prompt_tokens=900, completion_tokens=90), kind="subtask", label="worker"),
+            exception=RuntimeError("tool blew up"),
+        )
+
+        assert trace.tokens == TokenUsage(input=1000, output=100)
+
     def test_counts_maintenance_work(self) -> None:
         """Compaction and memory aggregation make real, billable calls."""
         trace = _trace(

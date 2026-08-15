@@ -82,8 +82,11 @@ Non-obvious choices, each of which looks like a bug until you know why:
 
 - **A span tree can contain the same tokens twice, and the reader has to cancel one.** When a
   sub-agent is itself instrumented, its per-call accounting flattens into the *same* trace as
-  the parent's `"subtask"` rollup. `_nested_agent_spend` drops a rollup whose usage equals the
-  spend recorded under a nested agent subtree. Matching is by **value, not by name** —
+  the parent's `"subtask"` rollup. `_nested_agent_spend` totals the spend recorded under each
+  nested agent subtree and `_drop_duplicated_rollups` cancels a matching rollup — as a pass over
+  the reconstructed events, because whether a rollup duplicates is a fact about the whole span
+  tree and threading it through the per-span readers made them stateful and single-use.
+  Matching is by **value, not by name** —
   `gen_ai.agent.name` is optional and defaults to `"unknown"`, while the rollup's label is the
   real agent name, so the two cannot be compared; the rollup is by construction the sum of
   exactly those events, which makes value equality the reliable signal. Known limit: two

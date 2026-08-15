@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 from uuid import UUID
-from weakref import WeakKeyDictionary
+from weakref import ReferenceType, WeakKeyDictionary, ref
 
 from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
@@ -74,6 +74,47 @@ def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
 # finished stream's entry go with it. Mirrors the per-stream turn-lock registry
 # in ``ag2.agent``.
 _usage_watchers: "WeakKeyDictionary[Any, UUID]" = WeakKeyDictionary()
+
+
+def _make_usage_recorder(
+    owner: "ReferenceType[_TelemetryMiddlewareInstance]",
+    stream: Any,
+) -> Callable[[UsageEvent], Awaitable[None]]:
+    """Route accounting events to the run that installed this watcher.
+
+    Holds the middleware **weakly**, which is what bounds the subscription to
+    one run. The instance lives exactly as long as the ``ask`` that built it —
+    the agent keeps its middleware instances alive for the duration of the run
+    and drops them when the run's ``ExitStack`` closes — so a strong reference
+    here would keep a finished run's recorder alive and let the *next* run on a
+    shared stream record into a trace that was already complete. Once the owner
+    is gone the watcher retires itself.
+
+    A module-level factory rather than a nested function, per the repository
+    rule against nested functions in runtime execution paths.
+    """
+
+    async def _record(event: UsageEvent) -> None:
+        middleware = owner()
+        if middleware is None:
+            _retire_usage_watcher(stream)
+            return
+        await middleware.record_usage_span(event)
+
+    return _record
+
+
+def _retire_usage_watcher(stream: Any) -> None:
+    """Drop the watcher of a run that has ended.
+
+    Safe to do unconditionally: a watcher is only ever displaced by
+    ``_subscribe_usage``, which unsubscribes it as it replaces it, so a recorder
+    that still fires is by construction the registered one. A dead recorder can
+    therefore never retire a live successor.
+    """
+    sub_id = _usage_watchers.pop(stream, None)
+    if sub_id is not None:
+        stream.unsubscribe(sub_id)
 
 
 class TelemetryMiddleware(MiddlewareFactory):
@@ -219,14 +260,21 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         one watcher per stream process-wide, re-pointed at the current turn each
         time, so neither a second turn nor a second instrumented agent on a
         shared stream can record an event twice.
+
+        It outlives the turn but *not* the run: the watcher holds this instance
+        weakly (see :func:`_make_usage_recorder`), and this instance dies with
+        the ``ask`` that built it. An uninstrumented run reusing the stream
+        afterwards therefore records nothing, instead of filing its spend under
+        the previous run's finished trace.
         """
         stream = context.stream
         previous = _usage_watchers.pop(stream, None)
         if previous is not None:
             stream.unsubscribe(previous)
-        _usage_watchers[stream] = stream.where(UsageEvent).subscribe(self._record_usage_span)
+        recorder = _make_usage_recorder(ref(self), stream)
+        _usage_watchers[stream] = stream.where(UsageEvent).subscribe(recorder)
 
-    async def _record_usage_span(self, event: UsageEvent) -> None:
+    async def record_usage_span(self, event: UsageEvent) -> None:
         """Record one accounting event as its own span.
 
         Parented at the turn rather than at the ambient context: this runs in a

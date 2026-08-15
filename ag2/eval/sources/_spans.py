@@ -193,24 +193,15 @@ class AG2GenAIConvention:
     twice. Leave it off when constructing the convention by hand unless you know
     the spans predate usage recording.
 
-    ``duplicated_rollups`` carries the spend already accounted for by sub-agents
-    that were instrumented into this same trace. A ``"subtask"`` rollup matching
-    one of those is dropped as redundant: the worker's own per-call accounting is
-    present, and counting both would report its spend twice.
-    :func:`spans_to_trace` computes it; the ordinary case — an uninstrumented
-    worker — leaves it empty, and the rollup is kept as the only record of that
-    spend. Each entry cancels at most one rollup, so two workers with identical
-    spend do not collapse into one.
+    Stateless and safe to reuse across traces — the shared
+    :data:`DEFAULT_CONVENTIONS` presents it that way. Facts that need the whole
+    span tree, such as cancelling a rollup an instrumented sub-agent already
+    accounts for, are settled by :func:`spans_to_trace` after the per-span pass
+    rather than by carrying state through it.
     """
 
-    def __init__(
-        self,
-        *,
-        synthesize_usage_from_llm_spans: bool = False,
-        duplicated_rollups: Sequence[Usage] = (),
-    ) -> None:
+    def __init__(self, *, synthesize_usage_from_llm_spans: bool = False) -> None:
         self._synthesize_usage = synthesize_usage_from_llm_spans
-        self._duplicated_rollups = list(duplicated_rollups)
 
     def to_events(self, span: SpanData) -> list[BaseEvent] | None:
         kind = span.attributes.get(ATTR_SPAN_TYPE)
@@ -230,11 +221,7 @@ class AG2GenAIConvention:
                 ]
             return [response]
         if kind == SPAN_TYPE_USAGE:
-            event = _usage_span_to_event(span)
-            if event.kind == "subtask" and event.usage in self._duplicated_rollups:
-                self._duplicated_rollups.remove(event.usage)
-                return []
-            return [event]
+            return [_usage_span_to_event(span)]
         if kind == SPAN_TYPE_TOOL:
             return _tool_span_to_events(span)
         if kind == SPAN_TYPE_HUMAN_INPUT:
@@ -260,31 +247,50 @@ DEFAULT_CONVENTIONS: tuple[SpanConvention, ...] = (AG2GenAIConvention(), OpenInf
 
 
 def _default_conventions(spans: Sequence[SpanData]) -> tuple[SpanConvention, ...]:
-    """The default readers, adapted to what this particular trace contains.
+    """The default readers, adapted to whether this trace records usage spans.
 
-    Two trace-level facts decide how the AG2 reader must count, and neither is
-    visible from a single span:
-
-    * **Does the trace record usage spans at all?** One captured before AG2
-      recorded them carries its counts on LLM spans alone, and reading only the
-      accounting event would report zero for it. Those get usage synthesized
-      from their LLM spans — and only those, since doing both would double
-      every main-loop call.
-    * **Was a sub-agent instrumented into this trace?** Then its own accounting
-      is already here and the parent's ``"subtask"`` rollup is a second reading
-      of the same tokens.
+    A trace captured before AG2 recorded them carries its token counts on LLM
+    spans alone, and reading only the accounting event would report zero for it.
+    So the AG2 reader synthesizes usage from LLM spans for exactly those traces
+    — and never for a trace that has usage spans, where doing both would double
+    every main-loop call.
     """
-    has_usage_spans = any(span.attributes.get(ATTR_SPAN_TYPE) == SPAN_TYPE_USAGE for span in spans)
-    duplicated = _nested_agent_spend(spans)
-    if has_usage_spans and not duplicated:
+    if any(span.attributes.get(ATTR_SPAN_TYPE) == SPAN_TYPE_USAGE for span in spans):
         return DEFAULT_CONVENTIONS
-    return (
-        AG2GenAIConvention(
-            synthesize_usage_from_llm_spans=not has_usage_spans,
-            duplicated_rollups=duplicated,
-        ),
-        OpenInferenceConvention(),
-    )
+    return (AG2GenAIConvention(synthesize_usage_from_llm_spans=True), OpenInferenceConvention())
+
+
+class _SpanTree:
+    """Parent/child structure of one trace's spans, for ancestry questions.
+
+    Exists so the walk below has a home and its two lookup tables stop being
+    passed around together as a pair.
+    """
+
+    def __init__(self, spans: Sequence[SpanData]) -> None:
+        self._by_id = {s.span_id: s for s in spans}
+        self._agent_ids = {s.span_id for s in spans if s.attributes.get(ATTR_SPAN_TYPE) == SPAN_TYPE_AGENT}
+
+    @property
+    def agent_count(self) -> int:
+        return len(self._agent_ids)
+
+    def nearest_agent_ancestor(self, span: SpanData) -> str | None:
+        """Span id of the closest enclosing agent span, or ``None`` at the top."""
+        seen: set[str] = set()
+        current = span.parent_id
+        while current is not None and current not in seen:
+            if current in self._agent_ids:
+                return current
+            seen.add(current)
+            parent = self._by_id.get(current)
+            current = parent.parent_id if parent is not None else None
+        return None
+
+    def is_nested_agent(self, span_id: str) -> bool:
+        """True when this agent span itself runs under another agent span."""
+        span = self._by_id.get(span_id)
+        return span is not None and self.nearest_agent_ancestor(span) is not None
 
 
 def _nested_agent_spend(spans: Sequence[SpanData]) -> list[Usage]:
@@ -300,38 +306,46 @@ def _nested_agent_spend(spans: Sequence[SpanData]) -> list[Usage]:
     so a grandchild's spend cancels the grandchild's rollup rather than the
     child's.
     """
-    by_id = {s.span_id: s for s in spans}
-    agent_ids = {s.span_id for s in spans if s.attributes.get(ATTR_SPAN_TYPE) == SPAN_TYPE_AGENT}
-    if len(agent_ids) < 2:
+    tree = _SpanTree(spans)
+    if tree.agent_count < 2:
         return []
 
     totals: dict[str, Usage] = {}
     for span in spans:
         if span.attributes.get(ATTR_SPAN_TYPE) != SPAN_TYPE_USAGE:
             continue
-        owner = _nearest_agent_ancestor(span, by_id, agent_ids)
+        owner = tree.nearest_agent_ancestor(span)
         # The outermost agent emits the rollups; only nested ones duplicate.
-        if owner is None or _nearest_agent_ancestor(by_id[owner], by_id, agent_ids) is None:
+        if owner is None or not tree.is_nested_agent(owner):
             continue
         totals[owner] = totals.get(owner, Usage()) + _usage_span_to_event(span).usage
     return [total for total in totals.values() if total]
 
 
-def _nearest_agent_ancestor(
-    span: SpanData,
-    by_id: Mapping[str, SpanData],
-    agent_ids: set[str],
-) -> str | None:
-    """Span id of the closest enclosing agent span, or ``None`` at the top."""
-    seen: set[str] = set()
-    current = span.parent_id
-    while current is not None and current not in seen:
-        if current in agent_ids:
-            return current
-        seen.add(current)
-        parent = by_id.get(current)
-        current = parent.parent_id if parent is not None else None
-    return None
+def _drop_duplicated_rollups(events: list[BaseEvent], duplicated: Sequence[Usage]) -> list[BaseEvent]:
+    """Remove ``"subtask"`` rollups an instrumented sub-agent already accounts for.
+
+    A span tree flattens every instrumented agent into one trace, so a worker's
+    own per-call accounting and the parent's rollup over it are both present;
+    counting both reports that spend twice. The ordinary case — an
+    uninstrumented worker — passes ``duplicated`` empty and the rollup is kept
+    as the only record of that spend.
+
+    Each entry cancels at most one rollup, which bounds the known limit: two
+    workers with identical spend, one instrumented and one not, could cancel the
+    wrong rollup, but never more rollups than there is duplicated spend.
+    """
+    if not duplicated:
+        return events
+
+    remaining = list(duplicated)
+    kept: list[BaseEvent] = []
+    for event in events:
+        if isinstance(event, UsageEvent) and event.kind == "subtask" and event.usage in remaining:
+            remaining.remove(event.usage)
+            continue
+        kept.append(event)
+    return kept
 
 
 def spans_to_trace(
@@ -348,6 +362,7 @@ def spans_to_trace(
     pass an explicit value to override (e.g. the producer's measured ``ask`` duration).
     """
     ordered = sorted(spans, key=lambda s: s.start_ns)
+    auto_detected = conventions is None
     active = _default_conventions(ordered) if conventions is None else conventions
 
     events: list[BaseEvent] = []
@@ -357,6 +372,14 @@ def spans_to_trace(
             if mapped is not None:
                 events.extend(mapped)
                 break
+
+    # Settled here rather than inside a convention: whether a rollup duplicates
+    # a nested agent's own accounting is a fact about the whole span tree, and
+    # threading it through the per-span pass made the reader stateful and
+    # single-use. Only for auto-detected conventions — caller-supplied ones
+    # decide for themselves what a span means.
+    if auto_detected:
+        events = _drop_duplicated_rollups(events, _nested_agent_spend(ordered))
 
     if ordered and not events:
         logger.warning(

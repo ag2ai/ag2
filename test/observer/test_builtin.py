@@ -44,8 +44,28 @@ def _flaky() -> str:
     raise RuntimeError("downstream API is down")
 
 
+def _armed_guard() -> tuple[MemoryStream, Context, TokenMonitor]:
+    """A registered guard on a fresh stream, with thresholds that never fire.
+
+    Lets a case assert on the running total alone.
+    """
+    stream = MemoryStream()
+    ctx = Context(stream=stream)
+    monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
+    monitor.register(ExitStack(), ctx)
+    return stream, ctx, monitor
+
+
 @pytest.mark.asyncio
 class TestTokenMonitor:
+    """The guard reads ``UsageEvent`` — the framework's accounting record.
+
+    The cases below that cover delegated and maintenance spend drive the
+    framework rather than hand-sending events, because each defect they cover is
+    about *which* event the framework actually produces. A hand-sent event would
+    let them pass against a guard still reading a derived one.
+    """
+
     async def test_no_signal_below_threshold(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
@@ -195,17 +215,6 @@ class TestTokenMonitor:
 
         assert len(signals) == 1
 
-
-@pytest.mark.asyncio
-class TestTokenMonitorReadsUsageEvents:
-    """The guard reads ``UsageEvent`` — the framework's accounting record.
-
-    These cases drive the framework rather than hand-sending events, because
-    each defect they cover is about *which* event the framework actually
-    produces. A hand-sent event would let them pass against a guard still
-    reading a derived one.
-    """
-
     async def test_failed_subtask_spend_reaches_the_guard(self) -> None:
         """A sub-task that bills and then dies is the scenario cost control exists for.
 
@@ -213,10 +222,7 @@ class TestTokenMonitorReadsUsageEvents:
         parent as the ``"subtask"`` rollup the sub-task runner already emits
         before the terminal event.
         """
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
-        monitor.register(ExitStack(), ctx)
+        stream, ctx, monitor = _armed_guard()
 
         worker = Agent(
             "worker",
@@ -259,10 +265,7 @@ class TestTokenMonitorReadsUsageEvents:
         Reading the snapshot made three delegations of 110 report 660. The
         rollup carries this invocation's spend, so the total is linear.
         """
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
-        monitor.register(ExitStack(), ctx)
+        stream, ctx, monitor = _armed_guard()
 
         worker = Agent(
             "worker",
@@ -280,10 +283,7 @@ class TestTokenMonitorReadsUsageEvents:
 
         This is the double-count guard: reading both sources would report 220.
         """
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
-        monitor.register(ExitStack(), ctx)
+        stream, ctx, monitor = _armed_guard()
 
         agent = Agent("solo", config=TestConfig(ModelResponse(ModelMessage("hi"), usage=_BILLED)))
         await agent.ask("hello", stream=stream)
@@ -298,10 +298,7 @@ class TestTokenMonitorReadsUsageEvents:
         accounting event onto the agent's; live clients map realtime usage
         straight to it. None produce a response event, so all were invisible.
         """
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
-        monitor.register(ExitStack(), ctx)
+        stream, ctx, monitor = _armed_guard()
 
         await ctx.send(UsageEvent(_BILLED, kind=kind))
 
@@ -335,10 +332,7 @@ class TestTokenMonitorTotalFallback:
     """
 
     async def test_counts_prompt_plus_completion_when_no_total_reported(self) -> None:
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
-        monitor.register(ExitStack(), ctx)
+        stream, ctx, monitor = _armed_guard()
 
         await ctx.send(UsageEvent(Usage(prompt_tokens=100, completion_tokens=10)))
 
@@ -346,20 +340,14 @@ class TestTokenMonitorTotalFallback:
 
     async def test_reported_total_is_used_rather_than_recomputed(self) -> None:
         """Providers whose total is not simply prompt plus completion must be believed."""
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
-        monitor.register(ExitStack(), ctx)
+        stream, ctx, monitor = _armed_guard()
 
         await ctx.send(UsageEvent(Usage(prompt_tokens=100, completion_tokens=10, total_tokens=999)))
 
         assert monitor.total_tokens == 999
 
     async def test_usage_with_neither_moves_nothing(self) -> None:
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
-        monitor.register(ExitStack(), ctx)
+        stream, ctx, monitor = _armed_guard()
 
         await ctx.send(UsageEvent(Usage(cache_read_input_tokens=50)))
 
@@ -390,10 +378,7 @@ class TestTokenMonitorTotalFallback:
         carries ``total_tokens`` for that call alone — below the prompt and
         completion counts it is supposed to cover.
         """
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
-        monitor.register(ExitStack(), ctx)
+        stream, ctx, monitor = _armed_guard()
 
         reported = Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110)
         omitted = Usage(prompt_tokens=50, completion_tokens=5)
@@ -406,10 +391,7 @@ class TestTokenMonitorTotalFallback:
 
     async def test_a_total_above_the_two_counts_is_believed(self) -> None:
         """Reasoning tokens can legitimately put the total above prompt plus completion."""
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        monitor = TokenMonitor(warn_threshold=_NO_THRESHOLD, alert_threshold=_NO_THRESHOLD)
-        monitor.register(ExitStack(), ctx)
+        stream, ctx, monitor = _armed_guard()
 
         await ctx.send(UsageEvent(Usage(prompt_tokens=100, completion_tokens=10, total_tokens=400)))
 
