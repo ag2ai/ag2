@@ -84,9 +84,12 @@ class FunctionTool(Tool):
         """Tool-scoped middleware, in execution order.
 
         Each entry pairs the middleware object with its description. Entries are
-        built on access, so compare ``entry.middleware`` rather than the entry:
-        two tools sharing one middleware instance share its state, which is what
-        distinguishes a combined budget from independent ones.
+        built on access, so compare ``entry.middleware`` rather than the entry.
+
+        Attaching one hook to several tools does not make its state shared.
+        Registering a tool deep-copies it, which duplicates a class-based hook
+        while leaving a plain function shared. State that several tools must
+        share belongs in ``context.dependencies``, not on the hook.
         """
 
         return tuple(DescribedMiddleware(hook) for hook in self._middleware)

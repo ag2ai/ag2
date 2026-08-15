@@ -89,11 +89,14 @@ class DescribedMiddleware:
     Yielded wherever AG2 exposes attached middleware, so every entry reports
     itself whether or not that middleware opted in to :class:`DescribableMiddleware`.
 
-    ``middleware`` is the object itself, not a copy. Two entries holding the
-    same instance are the same object, which is how shared state is told apart
-    from independent copies: one rate limiter across ten tools and ten separate
-    ones configured identically produce equal descriptions, so identity is the
-    only thing that distinguishes them.
+    ``middleware`` is the object itself, not a copy, because a description
+    cannot tell instances apart: one hook attached to ten tools and ten separate
+    hooks configured identically produce equal descriptions.
+
+    Identity answers "is this the same object", not "is this state shared".
+    Registering a tool deep-copies it, which duplicates a class-based hook while
+    leaving a plain function shared, so entries taken from two registered tools
+    hold different objects even when one hook was attached to both.
 
     Entries are built on access, so ``agent.middleware[0] is agent.middleware[0]``
     is ``False``. Compare :attr:`middleware` rather than the entry.
