@@ -3,12 +3,11 @@ title: TealTiger Governance
 sidebar_label: TealTiger
 description: Deterministic governance middleware for AG2 agents — tool allowlists, PII detection, secret scanning, cost budgets, kill switches, and structured audit trails with zero external dependencies.
 ---
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/agentguard-ai/tealtiger/main/.github/logo/tealtiger-logo-256.png" alt="TealTiger" width="150" />
 </p>
 
-# TealTiger Governance Middlewaare
+# TealTiger Governance Middleware
 
 `TealTigerMiddleware` adds deterministic governance guardrails to AG2 agents. It enforces tool allowlists, detects PII and secrets in tool arguments, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — all evaluated in under 2ms with no LLM in the governance path.
 
@@ -158,7 +157,7 @@ GovernancePolicy.secret_block()
 | `api_key=...` / `apikey:...` | Generic API keys (20+ chars) |
 | `password=...` / `pwd:...` | Passwords in config strings |
 | `token=...` / `bearer:...` | Auth tokens (20+ chars) |
-| `-----BEGIN PRIVATE KEY-----` | RSA, EC, DSA private keys |
+| PEM private key headers | RSA, EC, DSA private keys |
 | `AKIA...` / `ASIA...` | AWS access key IDs |
 
 Denied with reason code `SECRET_DETECTED` and risk score 0.95 (highest of all policies).
