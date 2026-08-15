@@ -10,9 +10,19 @@ import pytest
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 
-from ag2 import Agent
-from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
+from ag2 import Agent, Context
+from ag2.events import (
+    BaseEvent,
+    ModelMessage,
+    ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
+    Usage,
+    UsageEvent,
+)
+from ag2.middleware import BaseMiddleware, Middleware
 from ag2.middleware.builtin.telemetry import TelemetryMiddleware
+from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 from ag2.tools import tool
 
@@ -101,6 +111,255 @@ async def test_llm_span_with_usage(otel_setup):
     assert span.attributes["gen_ai.request.model"] == "gpt-4o-mini"
     assert span.attributes["gen_ai.usage.input_tokens"] == 10
     assert span.attributes["gen_ai.usage.output_tokens"] == 5
+
+
+class _UsageAfterTurn(BaseMiddleware):
+    """Emits a ``UsageEvent`` after its ``call_next`` — as compaction does.
+
+    History compaction and memory aggregation both do their work once the turn
+    beneath them has finished, then surface only their usage onto the stream.
+    This models that ordering without dragging a knowledge store into the test.
+    """
+
+    def __init__(self, event: BaseEvent, context: Context, *, usage: Usage, kind: str) -> None:
+        super().__init__(event, context)
+        self._usage = usage
+        self._kind = kind
+
+    def __class_getitem__(cls, item):  # pragma: no cover - typing convenience
+        return cls
+
+    async def on_turn(self, call_next, event: BaseEvent, context: Context):
+        result = await call_next(event, context)
+        await context.send(UsageEvent(self._usage, kind=self._kind))
+        return result
+
+
+def _usage_after_turn(usage: Usage, kind: str) -> Middleware:
+    return Middleware(_UsageAfterTurn, usage=usage, kind=kind)
+
+
+class TestUsageSpans:
+    """``UsageEvent`` — the accounting record — is carried onto its own span.
+
+    Spend that never produces an LLM span reaches a trace only this way: a
+    sub-task rollup (the worker is not instrumented), history compaction and
+    memory aggregation (they call the model outside the middleware hooks), and
+    the live-session clients.
+    """
+
+    @pytest.mark.asyncio()
+    async def test_own_model_call_records_a_usage_span(self, otel_setup):
+        exporter, provider = otel_setup
+
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ModelResponse(
+                    message=ModelMessage("Hi!"),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+                )
+            ),
+            middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+        )
+
+        await agent.ask("Hello")
+
+        [span] = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        assert span.attributes["ag2.usage.kind"] == "model_call"
+        assert span.attributes["gen_ai.usage.input_tokens"] == 10
+        assert span.attributes["gen_ai.usage.output_tokens"] == 5
+        assert span.attributes["ag2.usage.total_tokens"] == 15
+
+    @pytest.mark.asyncio()
+    async def test_delegated_spend_is_captured_without_instrumenting_the_worker(self, otel_setup):
+        """The rollup lands on the parent's stream, so the parent's telemetry sees it.
+
+        Instrumenting the worker as well would put both its per-call events and
+        the rollup in one trace and double-count them.
+        """
+        exporter, provider = otel_setup
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(ModelMessage("researched"), usage=Usage(prompt_tokens=900, completion_tokens=90))
+            ),
+        )
+        coordinator = Agent(
+            "coordinator",
+            config=TestConfig(
+                ToolCallEvent(name="task_worker", arguments='{"objective": "research X"}'),
+                ModelResponse(ModelMessage("done"), usage=Usage(prompt_tokens=100, completion_tokens=10)),
+            ),
+            tools=[worker.as_tool(description="Delegate research")],
+            middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="coordinator")],
+        )
+
+        await coordinator.ask("Tell me about X")
+
+        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        by_kind = {s.attributes["ag2.usage.kind"]: s for s in usage_spans}
+        assert set(by_kind) == {"model_call", "subtask"}
+        assert by_kind["subtask"].attributes["ag2.usage.label"] == "worker"
+        assert by_kind["subtask"].attributes["gen_ai.usage.input_tokens"] == 900
+        assert by_kind["subtask"].attributes["gen_ai.usage.output_tokens"] == 90
+
+    @pytest.mark.asyncio()
+    async def test_cache_counts_are_carried(self, otel_setup):
+        exporter, provider = otel_setup
+
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ModelResponse(
+                    message=ModelMessage("Hi!"),
+                    usage=Usage(
+                        prompt_tokens=10,
+                        completion_tokens=5,
+                        cache_creation_input_tokens=7,
+                        cache_read_input_tokens=3,
+                    ),
+                )
+            ),
+            middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+        )
+
+        await agent.ask("Hello")
+
+        [span] = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        assert span.attributes["gen_ai.usage.cache_creation_input_tokens"] == 7
+        assert span.attributes["gen_ai.usage.cache_read_input_tokens"] == 3
+
+    @pytest.mark.asyncio()
+    async def test_subscription_does_not_outlive_the_turn(self, otel_setup):
+        """A leaked subscription would re-record spend on every later turn.
+
+        Two turns on one shared stream spend once each, so two usage spans. A
+        subscription surviving the first turn would catch the second turn's
+        event as well and yield three.
+        """
+        exporter, provider = otel_setup
+        stream = MemoryStream()
+
+        agent = Agent(
+            "assistant",
+            config=TestConfig(ModelResponse(ModelMessage("ok"), usage=Usage(prompt_tokens=10, completion_tokens=1))),
+            middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+        )
+
+        await agent.ask("first", stream=stream)
+        await agent.ask("second", stream=stream)
+
+        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        assert [s.attributes["gen_ai.usage.input_tokens"] for s in usage_spans] == [10, 10]
+
+    @pytest.mark.asyncio()
+    async def test_records_usage_emitted_by_outer_middleware(self, otel_setup):
+        """History compaction reports its spend *after* the turn it followed.
+
+        Compaction runs as agent-level middleware, so it emits after the inner
+        middleware chain has unwound. Telemetry passed through ``ask`` sits
+        inside it — which is exactly how the eval runner installs it — so a
+        subscription torn down when the turn span closes would miss the spend
+        the 0.2 accounting promises to count.
+        """
+        exporter, provider = otel_setup
+        telemetry = TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")
+        emitter = _usage_after_turn(Usage(prompt_tokens=500, completion_tokens=50), kind="compaction")
+
+        agent = Agent(
+            "assistant",
+            config=TestConfig(ModelResponse(ModelMessage("hi"), usage=Usage(prompt_tokens=10, completion_tokens=1))),
+            middleware=[emitter],
+        )
+
+        await agent.ask("go", middleware=[telemetry])
+
+        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        assert sorted(s.attributes["ag2.usage.kind"] for s in usage_spans) == ["compaction", "model_call"]
+
+    @pytest.mark.asyncio()
+    async def test_late_usage_stays_in_the_turns_trace(self, otel_setup):
+        """A span recorded after the turn closed must not start a new trace.
+
+        Otherwise a backend that groups by trace id drops it, and the spend is
+        invisible again for exactly the ingestion paths this exists to serve.
+        """
+        exporter, provider = otel_setup
+        telemetry = TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")
+        emitter = _usage_after_turn(Usage(prompt_tokens=500, completion_tokens=50), kind="compaction")
+
+        agent = Agent(
+            "assistant",
+            config=TestConfig(ModelResponse(ModelMessage("hi"), usage=Usage(prompt_tokens=10, completion_tokens=1))),
+            middleware=[emitter],
+        )
+
+        await agent.ask("go", middleware=[telemetry])
+
+        trace_ids = {s.context.trace_id for s in exporter.get_finished_spans()}
+        assert len(trace_ids) == 1
+
+    @pytest.mark.asyncio()
+    async def test_two_instrumented_agents_on_one_stream_record_each_event_once(self, otel_setup):
+        """Separate telemetry objects must not both record the same event.
+
+        Two agents handed the same stream each install their own watcher. If
+        those accumulate, the first agent's watcher also records the second's
+        spend — into the first agent's already-closed trace, where it is both a
+        duplicate and misattributed.
+        """
+        exporter, provider = otel_setup
+        stream = MemoryStream()
+
+        first = Agent(
+            "first",
+            config=TestConfig(ModelResponse(ModelMessage("a"), usage=Usage(prompt_tokens=10, completion_tokens=1))),
+            middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="first")],
+        )
+        second = Agent(
+            "second",
+            config=TestConfig(ModelResponse(ModelMessage("b"), usage=Usage(prompt_tokens=20, completion_tokens=2))),
+            middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="second")],
+        )
+
+        await first.ask("one", stream=stream)
+        await second.ask("two", stream=stream)
+
+        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        assert sorted(s.attributes["gen_ai.usage.input_tokens"] for s in usage_spans) == [10, 20]
+
+    @pytest.mark.asyncio()
+    async def test_a_fresh_telemetry_per_ask_does_not_accumulate_watchers(self, otel_setup):
+        """Building the middleware per call is ordinary usage, not a leak."""
+        exporter, provider = otel_setup
+        stream = MemoryStream()
+
+        agent = Agent(
+            "assistant",
+            config=TestConfig(ModelResponse(ModelMessage("ok"), usage=Usage(prompt_tokens=10, completion_tokens=1))),
+        )
+
+        for _ in range(3):
+            await agent.ask("go", stream=stream, middleware=[TelemetryMiddleware(tracer_provider=provider)])
+
+        usage_spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+        assert len(usage_spans) == 3
+
+    @pytest.mark.asyncio()
+    async def test_no_telemetry_no_usage_spans(self, otel_setup):
+        """Instrumentation stays opt-in — nothing subscribes when it is off."""
+        exporter, _ = otel_setup
+
+        agent = Agent(
+            "assistant",
+            config=TestConfig(ModelResponse(ModelMessage("Hi!"), usage=Usage(prompt_tokens=10, completion_tokens=5))),
+        )
+
+        await agent.ask("Hello")
+
+        assert exporter.get_finished_spans() == []
 
 
 @pytest.mark.asyncio()

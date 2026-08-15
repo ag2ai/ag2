@@ -19,16 +19,19 @@ from ag2.eval import (
 )
 from ag2.eval.scorers import final_answer_matches, tool_called
 from ag2.eval.trace import Trace
-from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, Usage
+from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, Usage, UsageEvent
 
 
 def _trace(answer: str, *, tool_name: str | None = None, in_tok: int = 0, out_tok: int = 0) -> Trace:
     events: list = []
     if tool_name is not None:
         events.append(ToolCallEvent(tool_name, arguments="{}"))
-    events.append(
-        ModelResponse(message=ModelMessage(answer), usage=Usage(prompt_tokens=in_tok, completion_tokens=out_tok))
-    )
+    usage = Usage(prompt_tokens=in_tok, completion_tokens=out_tok)
+    events.append(ModelResponse(message=ModelMessage(answer), usage=usage))
+    # A real run emits the accounting event alongside the response; token
+    # counting reads that, so a fixture without it would score as free.
+    if usage:
+        events.append(UsageEvent(usage))
     return Trace(events=events, exception=None, duration_ms=10)
 
 

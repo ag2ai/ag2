@@ -12,6 +12,7 @@ from ag2.events import (
     ModelResponse,
     ToolCallEvent,
     Usage,
+    UsageEvent,
 )
 
 
@@ -60,34 +61,75 @@ class TestEventsOf:
 
 
 class TestTokens:
-    def test_sums_across_model_responses(self) -> None:
-        first = ModelResponse(usage=Usage(prompt_tokens=10, completion_tokens=20))
-        second = ModelResponse(usage=Usage(prompt_tokens=5, completion_tokens=8))
+    def test_sums_across_model_calls(self) -> None:
+        first = UsageEvent(Usage(prompt_tokens=10, completion_tokens=20))
+        second = UsageEvent(Usage(prompt_tokens=5, completion_tokens=8))
         trace = _trace(first, second)
 
         assert trace.tokens == TokenUsage(input=15, output=28)
 
     def test_includes_cache_token_counts(self) -> None:
-        response = ModelResponse(
-            usage=Usage(
+        event = UsageEvent(
+            Usage(
                 prompt_tokens=10,
                 completion_tokens=5,
                 cache_creation_input_tokens=3,
                 cache_read_input_tokens=7,
             )
         )
-        trace = _trace(response)
+        trace = _trace(event)
 
         assert trace.tokens == TokenUsage(input=10, output=5, cache_creation=3, cache_read=7)
 
-    def test_zero_when_no_model_responses(self) -> None:
+    def test_counts_delegated_spend(self) -> None:
+        """A delegating agent does most of its spending in workers.
+
+        Only the ``"subtask"`` rollup reaches the parent, and it is not a
+        ``ModelResponse`` — so this was the largest share of what eval missed.
+        """
+        trace = _trace(
+            UsageEvent(Usage(prompt_tokens=100, completion_tokens=10)),
+            UsageEvent(Usage(prompt_tokens=900, completion_tokens=90), kind="subtask", label="worker"),
+        )
+
+        assert trace.tokens == TokenUsage(input=1000, output=100)
+
+    def test_counts_maintenance_work(self) -> None:
+        """Compaction and memory aggregation make real, billable calls."""
+        trace = _trace(
+            UsageEvent(Usage(prompt_tokens=40, completion_tokens=4), kind="compaction"),
+            UsageEvent(Usage(prompt_tokens=20, completion_tokens=2), kind="aggregation"),
+        )
+
+        assert trace.tokens == TokenUsage(input=60, output=6)
+
+    def test_counts_a_model_call_once_when_the_response_accompanies_it(self) -> None:
+        """The main loop emits both; reading both sources would double every call."""
+        usage = Usage(prompt_tokens=10, completion_tokens=20)
+        trace = _trace(UsageEvent(usage), ModelResponse(usage=usage))
+
+        assert trace.tokens == TokenUsage(input=10, output=20)
+
+    def test_model_response_alone_reports_zero(self) -> None:
+        """Documents the deliberate change of source.
+
+        ``UsageEvent`` is the framework's accounting record; a trace carrying
+        only a response event carries no accounting.
+        """
+        trace = _trace(ModelResponse(usage=Usage(prompt_tokens=10, completion_tokens=20)))
+
+        assert trace.tokens == TokenUsage()
+
+    def test_zero_when_no_model_calls(self) -> None:
         trace = _trace(ToolCallEvent(name="x", arguments="{}"))
 
         assert trace.tokens == TokenUsage()
 
+    def test_empty_trace_reports_zero(self) -> None:
+        assert _trace().tokens == TokenUsage()
+
     def test_handles_missing_usage_fields(self) -> None:
-        response = ModelResponse(usage=Usage())
-        trace = _trace(response)
+        trace = _trace(UsageEvent(Usage()))
 
         assert trace.tokens == TokenUsage()
 
