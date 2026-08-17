@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, cast
 import acp
 from acp import schema
 
-from .config import ACPConfig, _dispatch_kwargs
+from .config import ACPConfig
 from .types import SessionUpdate
 
 if TYPE_CHECKING:
@@ -373,11 +373,9 @@ def _duplex_connect(agent: "Callable[[acp.Client], Any] | Any") -> "ConnectHook"
         # so it is cancelled with the connection rather than outliving the test.
         agent_conn = AgentSideConnection(agent, agent_writer, agent_reader, listening=False)
         serving = asyncio.ensure_future(agent_conn.listen())
-        # The same arguments the real transports pass, `_dispatch_kwargs` included:
-        # a harness that connected differently would not be exercising AG2's wiring.
-        conn = acp.connect_to_agent(
-            client, client_writer, client_reader, use_unstable_protocol=True, **_dispatch_kwargs(client)
-        )
+        # The same arguments the real transports pass: a harness that connected
+        # differently would not be exercising AG2's wiring.
+        conn = acp.connect_to_agent(client, client_writer, client_reader, use_unstable_protocol=True)
         try:
             yield conn, None
         finally:
