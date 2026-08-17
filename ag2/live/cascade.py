@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Iterable, Sequence
+from collections.abc import AsyncGenerator, Callable, Iterable, Sequence
 from contextlib import asynccontextmanager, suppress
 
 from fast_depends.library.serializer import SerializerProto
@@ -89,7 +89,7 @@ class CascadeConfig(RealtimeConfig):
         instructions: Iterable[str] = (),
         tools: Iterable[ToolSchema] = (),
         serializer: SerializerProto,
-    ) -> AsyncIterator[None]:
+    ) -> AsyncGenerator[None]:
         client: LLMClient = self._model.create()
         detector = self._turn_detector()
         schemas = list(tools)

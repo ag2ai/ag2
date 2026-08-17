@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -205,7 +205,7 @@ class _Counter:
 
 
 @asynccontextmanager
-async def _stateless_stream() -> AsyncIterator[MemoryStream]:
+async def _stateless_stream() -> AsyncGenerator[MemoryStream]:
     """A fresh per-call stream — no shared history, no cross-call lock."""
     yield MemoryStream()
 

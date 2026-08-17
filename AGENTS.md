@@ -20,6 +20,7 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 ## Code Style Guidelines
 
 - Do not use `from __future__ import annotations`.
+- With `@contextmanager` / `@asynccontextmanager`, annotate the return type as `Generator[T]` / `AsyncGenerator[T]`, never `Iterator[T]` / `AsyncIterator[T]`. The decorator needs a real generator — it calls `throw()` / `athrow()` on it — so the iterator form is an under-specification that typeshed marks deprecated. Import them from `collections.abc` (not `typing`) and omit the default send type: `AsyncGenerator[None]`, not `AsyncGenerator[None, None]`.
 - Do not use global variables or top-level side-effect function calls unless the user explicitly allows it.
 - For filesystem paths, use `pathlib.Path` internally. Public signatures should accept `str | os.PathLike[str]`.
 - Top-level imports from `ag2.*` are for common APIs that are broadly reusable across scenarios and core agent flows.
