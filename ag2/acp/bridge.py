@@ -19,7 +19,7 @@ from acp import schema
 
 from ag2.events.types import BinaryResult
 
-from .dispatch import InboundUpdates
+from .dispatch import InOrderUpdates
 from .elicitation import resolve_elicitation_response
 from .mappers import block_text, block_to_files, map_session_update
 from .permissions import resolve_permission_option_id
@@ -157,9 +157,9 @@ class BridgeState:
         self._turn_files: list[BinaryResult] = []
         self._turn_worked = False
         self.terminals = TerminalManager(config.fs_root or config.cwd)
-        # Owned here because the connection is built from this bridge and a turn
-        # is read out of this bridge: both ends of `settle()` are already here.
-        self.updates = InboundUpdates()
+        # Owned here rather than per-connection: it orders the updates of whatever
+        # connection this bridge is currently serving, and only one is ever live.
+        self.updates = InOrderUpdates()
 
     def begin_turn(self) -> None:
         self._turn_parts = []
@@ -241,7 +241,10 @@ class ACPBridge(acp.Client):
         self.state = state
 
     async def session_update(self, session_id: str, update: SessionUpdate, **kwargs: Any) -> None:
-        await self.state.handle_update(update)
+        # Serialized: the SDK spawns a task per notification, so without this the
+        # handlers can interleave and chunks land out of order (see `dispatch`).
+        async with self.state.updates.in_order():
+            await self.state.handle_update(update)
 
     async def request_permission(
         self,
