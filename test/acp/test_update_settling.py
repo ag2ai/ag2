@@ -1,17 +1,17 @@
 # Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""A turn is read out only once the updates that preceded its response are handled.
+"""A turn reads out every update that preceded its response, in the order sent.
 
-The SDK's receive loop is not order-preserving across message kinds: a response
-resolves inline, while a notification is published to a queue whose consumer
-dispatches it as a fire-and-forget task — and marks the queue entry done as soon
-as that task is *created*. So ``session/prompt`` can complete while earlier
-``session/update``s are still unhandled, and a turn read at that moment is short
-by whatever has not landed.
+Two guarantees, from two places. Completeness is the SDK's: ``session/prompt``
+does not return until the session's in-flight ``session/update`` handlers have
+returned, so a turn read after the response is not short of its tail. Order is
+AG2's: the SDK spawns a task per notification, so handlers that await — and this
+one does, it sends to the run's stream — would otherwise interleave and scramble
+the chunks (see :mod:`ag2.acp.dispatch`).
 
 This needs a real ACP connection: ``fake_acp_config`` calls the client's
-``session_update`` directly, so it never goes near the queue that causes this.
+``session_update`` directly, so it never spawns the tasks that cause this.
 ``duplex_acp_config`` gives the genuine connection without a subprocess.
 """
 
@@ -25,8 +25,8 @@ from ag2 import Agent
 from ag2.acp.testing import duplex_acp_config
 from ag2.events import ModelMessageChunk
 
-# Enough that the dispatcher cannot plausibly finish them all within the one
-# scheduling round the prompt response takes, and small enough to stay fast.
+# Enough that unserialized handlers cannot plausibly stay in order by luck, and
+# small enough to stay fast.
 CHUNKS = 200
 
 # Each chunk is one digit of its own index, so the assembled text pins order as
@@ -65,7 +65,7 @@ class ChunkingAgent:
 
 @pytest.mark.asyncio
 async def test_every_streamed_chunk_reaches_the_reply_in_order() -> None:
-    """Before the settle, this lost a slice of the tail on most runs."""
+    """Unguarded, this loses the tail (no settle) or scrambles it (no ordering)."""
     cfg = duplex_acp_config(ChunkingAgent)
 
     try:
@@ -82,12 +82,10 @@ async def test_every_streamed_chunk_reaches_the_reply_in_order() -> None:
 async def test_the_stream_and_the_reply_carry_the_same_chunks() -> None:
     """Nothing is dropped or reordered between the stream and the assembled body.
 
-    Before the settle these disagreed: every chunk reached the stream while the
-    body was short, so a caller watching events saw output the reply then lost.
-
     Order is asserted on the stream too, not just on the body: updates are handled
     one at a time in the order they were read off the wire, so a subscriber sees
-    the agent's chunks in the order the agent sent them.
+    the agent's chunks in the order the agent sent them. Drop that serialization
+    and this is the test that fails — the stream shows the interleaving directly.
     """
     chunks: list[str] = []
     cfg = duplex_acp_config(ChunkingAgent)
