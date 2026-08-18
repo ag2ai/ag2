@@ -142,6 +142,27 @@ agent_with_mcp = Agent(
 )
 ```
 
+When servers expose the same tool name, give each toolkit a local prefix. The
+prefix is visible to the model, while calls sent to the MCP server keep the
+original name:
+
+```python linenums="1" hl_lines="7-8"
+from ag2 import Agent
+from ag2.tools import MCPToolkit
+
+agent_with_mcp = Agent(
+    name="Mixed bot",
+    tools=[
+        MCPToolkit("https://github.example.com/mcp", tool_name_prefix="github_"),
+        MCPToolkit("https://docs.example.com/mcp", tool_name_prefix="docs_"),
+    ],
+)
+```
+
+For example, two remote `search` tools are exposed locally as `github_search`
+and `docs_search`. `allowed_tools` and `blocked_tools` continue to match the
+original remote names.
+
 ## Provider-side: `MCPServerTool`
 
 `MCPServerTool` does not open a connection — it ships the server URL and credentials to the LLM provider as part of the request. The provider is then responsible for connecting to the MCP server and dispatching tool calls. Because the provider only accepts a URL, this path does **not** support local stdio servers — use `MCPToolkit` with `MCPStdioServerConfig` for those.

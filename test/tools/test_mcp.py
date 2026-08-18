@@ -28,6 +28,7 @@ from ag2.events import BinaryInput, BinaryType, TextInput, ToolCallEvent, ToolRe
 from ag2.testing import TestConfig
 from ag2.tools import MCPStdioServerConfig, MCPToolkit
 from ag2.tools.toolkits.mcp_server import toolkit as _toolkit_module
+from ag2.tools.types import FunctionToolSchema
 
 MCPSessionPatch = Callable[[list[MCPTool], dict[str, CallToolResult] | None], "_FakeMCPSession"]
 
@@ -158,6 +159,36 @@ async def test_mcp_tool_result_is_returned_to_agent(
 
     assert result.body == "done"
     assert session.calls == [("echo", {})]
+
+
+@pytest.mark.asyncio
+async def test_tool_name_prefix_namespaces_local_name_but_calls_remote_name(
+    patch_mcp_session: MCPSessionPatch,
+    context: Context,
+) -> None:
+    session = patch_mcp_session(
+        [MCPTool(name="search", description="", inputSchema={"type": "object"})],
+        {
+            "search": CallToolResult(content=[TextContent(type="text", text="found")]),
+        },
+    )
+    toolkit = MCPToolkit(MCPStdioServerConfig(command="x"), tool_name_prefix="github_")
+    [schema] = list(await toolkit.schemas(context))
+    agent = Agent(
+        name="test",
+        tools=[toolkit],
+        config=TestConfig(
+            ToolCallEvent(name="github_search", arguments='{"query": "ag2"}'),
+            "done",
+        ),
+    )
+
+    result = await agent.ask("search")
+
+    assert result.body == "done"
+    assert isinstance(schema, FunctionToolSchema)
+    assert schema.function.name == "github_search"
+    assert session.calls == [("search", {"query": "ag2"})]
 
 
 @pytest.mark.asyncio

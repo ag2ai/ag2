@@ -102,17 +102,20 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
 class _MCPProxyTool(Tool):
     """A function-tool-shaped proxy that forwards calls to a remote MCP server."""
 
-    __slots__ = ("name", "schema", "_config", "_middleware")
+    __slots__ = ("name", "schema", "_config", "_middleware", "_remote_name")
 
     def __init__(
         self,
         config: AnyMCPConfig,
         raw_tool: MCPTool,
+        *,
+        name: str,
         middleware: tuple[ToolMiddleware, ...] = (),
     ) -> None:
         self._config = config
         self._middleware = middleware
-        self.name = raw_tool.name
+        self._remote_name = raw_tool.name
+        self.name = name
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
                 name=self.name,
@@ -148,7 +151,7 @@ class _MCPProxyTool(Tool):
         try:
             resolved = _resolve_config(self._config, context)
             async with _mcp_session(resolved) as session:
-                result = await session.call_tool(self.name, event.serialized_arguments)
+                result = await session.call_tool(self._remote_name, event.serialized_arguments)
 
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)
@@ -175,12 +178,13 @@ class MCPToolkit(Toolkit):
     like ordinary :class:`FunctionTool` instances.
     """
 
-    __slots__ = ("config", "_discovered", "_discover_lock")
+    __slots__ = ("config", "_discovered", "_discover_lock", "_tool_name_prefix")
 
     def __init__(
         self,
         server: str | MCPServerConfig | MCPStdioServerConfig,
         *,
+        tool_name_prefix: str = "",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         if isinstance(server, str):
@@ -188,6 +192,7 @@ class MCPToolkit(Toolkit):
         self.config: AnyMCPConfig = server
         self._discovered = False
         self._discover_lock = asyncio.Lock()
+        self._tool_name_prefix = tool_name_prefix
 
         label = server.server_label if isinstance(server.server_label, str) else ""
         super().__init__(
@@ -224,6 +229,7 @@ class MCPToolkit(Toolkit):
                 proxy = _MCPProxyTool(
                     config=self.config,
                     raw_tool=raw,
+                    name=f"{self._tool_name_prefix}{raw.name}",
                     middleware=self._middleware,
                 )
                 self._tools[proxy.name] = proxy
