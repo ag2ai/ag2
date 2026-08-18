@@ -109,7 +109,8 @@ class TaskConfig:
 
     Use ``include_tools`` (allowlist) and ``exclude_tools`` (blocklist) to
     narrow what the subtask sees, and ``extra_tools`` to add capabilities the
-    parent doesn't have.
+    parent doesn't have. ``max_concurrency`` optionally bounds the total
+    number of sub-tasks running for this Agent across both spawning tools.
     """
 
     config: ModelConfig | None = None
@@ -117,6 +118,11 @@ class TaskConfig:
     include_tools: Iterable[str] | None = None
     exclude_tools: Iterable[str] = ()
     extra_tools: Iterable[Callable[..., Any] | Tool] = ()
+    max_concurrency: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_concurrency is not None and self.max_concurrency < 1:
+            raise ValueError(f"max_concurrency must be >= 1 when set, got {self.max_concurrency}.")
 
 
 class AgentReply(Generic[TResult, TAgent]):
@@ -732,6 +738,9 @@ class Agent(PluginTarget, Generic[TResult]):
         else:
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
+        # Created on first use so construction outside an event loop does not
+        # bind a synchronization primitive to the wrong loop.
+        self._task_slots: asyncio.Semaphore | None = None
 
         # Knowledge store + compaction/aggregation strategies
         if knowledge:
@@ -1454,7 +1463,14 @@ class Agent(PluginTarget, Generic[TResult]):
         tc = self._task_config
         if tc is None:
             return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
+        if tc.max_concurrency is not None:
+            if self._task_slots is None:
+                self._task_slots = asyncio.Semaphore(tc.max_concurrency)
+            async with self._task_slots:
+                return await self._run_subtask(task, ctx, tc)
+        return await self._run_subtask(task, ctx, tc)
 
+    async def _run_subtask(self, task: str, ctx: Context, tc: TaskConfig) -> str:
         # Inherit only the parent's user-supplied tools — never the
         # auto-injected subtask toolkit or knowledge tool (excluded by
         # identity), so the child can't recurse or see parent-only tooling.

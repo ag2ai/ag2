@@ -617,6 +617,10 @@ class TestSubtaskOptOut:
 
         assert _tool_names(agent._additional_tools) == {"run_subtask", "run_subtasks"}
 
+    async def test_taskconfig_rejects_non_positive_max_concurrency(self) -> None:
+        with pytest.raises(ValueError, match="max_concurrency must be >= 1"):
+            TaskConfig(max_concurrency=0)
+
 
 @pytest.mark.asyncio
 class TestSubtaskInheritance:
@@ -814,6 +818,98 @@ class TestSubtaskNoRecursion:
 
 @pytest.mark.asyncio
 class TestParallelSubtasks:
+    async def test_max_concurrency_bounds_parallel_run_subtask_calls(self) -> None:
+        parent = Agent(
+            "parent",
+            config=TestConfig(
+                [
+                    ToolCallEvent(name="run_subtask", arguments='{"task": "do A"}'),
+                    ToolCallEvent(name="run_subtask", arguments='{"task": "do B"}'),
+                    ToolCallEvent(name="run_subtask", arguments='{"task": "do C"}'),
+                ],
+                "done",
+            ),
+            tasks=TaskConfig(
+                config=TestConfig(ModelResponse(ModelMessage("subtask done."))),
+                max_concurrency=2,
+            ),
+        )
+        stream = MemoryStream()
+        active = 0
+        peak = 0
+        two_started = asyncio.Event()
+        release = asyncio.Event()
+
+        @stream.where(TaskStarted).subscribe
+        async def hold_started(_: TaskStarted) -> None:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            if active == 2:
+                two_started.set()
+            try:
+                await release.wait()
+            finally:
+                active -= 1
+
+        turn = asyncio.create_task(parent.ask("go", stream=stream))
+        await asyncio.wait_for(two_started.wait(), timeout=1)
+
+        assert active == 2
+        assert not turn.done()
+
+        release.set()
+        reply = await asyncio.wait_for(turn, timeout=1)
+
+        assert reply.body == "done"
+        assert peak == 2
+
+    async def test_max_concurrency_bounds_run_subtasks_fan_out(self) -> None:
+        parent = Agent(
+            "parent",
+            config=TestConfig(
+                ToolCallEvent(
+                    name="run_subtasks",
+                    arguments='{"tasks": ["task X", "task Y"], "parallel": true}',
+                ),
+                "done",
+            ),
+            tasks=TaskConfig(
+                config=TestConfig(ModelResponse(ModelMessage("subtask done."))),
+                max_concurrency=1,
+            ),
+        )
+        stream = MemoryStream()
+        active = 0
+        peak = 0
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        @stream.where(TaskStarted).subscribe
+        async def hold_started(_: TaskStarted) -> None:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            started.set()
+            try:
+                await release.wait()
+            finally:
+                active -= 1
+
+        turn = asyncio.create_task(parent.ask("go", stream=stream))
+        await asyncio.wait_for(started.wait(), timeout=1)
+
+        assert active == 1
+        assert not turn.done()
+
+        release.set()
+        reply = await asyncio.wait_for(turn, timeout=1)
+        events = list(await stream.history.get_events())
+
+        assert reply.body == "done"
+        assert peak == 1
+        assert len([event for event in events if isinstance(event, TaskCompleted)]) == 2
+
     async def test_parallel_run_subtask_calls_succeed(self) -> None:
         """The LLM can emit multiple ``run_subtask`` tool_use blocks in one
         assistant message; the executor dispatches them concurrently and
