@@ -146,7 +146,7 @@ class LocalRuntime(SkillRuntime):
         resolved_script = _resolve_within(scripts_dir / script, scripts_dir)
         if script not in {s.name for s in skill.scripts} or resolved_script is None:
             raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
-        command = _script_command(resolved_script)
+        command = _script_command(resolved_script, resolved_script.relative_to(scripts_dir.resolve()))
         if args:
             command.extend(args)
         # async + await env.run(...) so the command runs in the agent's own
@@ -226,22 +226,23 @@ def _resolve_within(path: Path, base: Path) -> Path | None:
     return resolved
 
 
-def _script_command(resolved_script: Path) -> list[str]:
-    """Build the argv to run *resolved_script* from its own directory.
+def _script_command(resolved_script: Path, relative_script: Path) -> list[str]:
+    """Build the argv to run *resolved_script* from the scripts directory.
 
     A shebang takes precedence; otherwise ``.py``/``.sh`` map to their
     interpreters, and anything else is made executable and run directly.
     """
+    script_arg = f"./{relative_script.as_posix()}"
     first_line = resolved_script.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
     if first_line.startswith("#!"):
         resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        return [f"./{resolved_script.name}"]
+        return [script_arg]
     if resolved_script.suffix.lower() == ".py":
-        return ["python3", f"./{resolved_script.name}"]
+        return ["python3", script_arg]
     if resolved_script.suffix.lower() == ".sh":
-        return ["sh", f"./{resolved_script.name}"]
+        return ["sh", script_arg]
     resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    return [f"./{resolved_script.name}"]
+    return [script_arg]
 
 
 def _wrap_skill_content(name: str, body: str, skill_dir: Path, skill: Skill) -> str:
