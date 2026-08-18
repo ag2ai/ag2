@@ -83,6 +83,7 @@ Build with `ag2` only. The classic `autogen` API (`ConversableAgent`, `initiate_
 
 - [AG-UI (Agent-User Interaction) Integration](https://docs.ag2.ai/docs/user-guide/ag-ui/index/): The Agent-User Interaction (AG-UI) protocol standardizes how frontend applications communicate with agents. In AG2, ag2.ag_ui.AGUIStream bridges an Agent to AG-UI event streams.
 - [CopilotKit UI Quickstart for AG-UI](https://docs.ag2.ai/docs/user-guide/ag-ui/copilotkit-quickstart/): This quickstart shows how to connect a CopilotKit React/Next.js UI to an AG2 backend endpoint that speaks the AG-UI protocol.
+- [Channels: AG2 Agents in Slack and Other Messaging Platforms](https://docs.ag2.ai/docs/user-guide/ag-ui/channels/): The same AG2 agent that powers your in-app copilot can also run as a bot in messaging platforms. CopilotKit Channels connects your AG2 agent to Slack and other messaging platforms, with threads, tool...
 - [AG-UI backend deep dive](https://docs.ag2.ai/docs/user-guide/ag-ui/backend-deepdive/): This page expands on the backend of the AG-UI integration: how to secure your endpoint, how tool calls are represented in the protocol, and how to pass per-request context into your tools.
 
 ## A2A
@@ -157,6 +158,7 @@ Build with `ag2` only. The classic `autogen` API (`ConversableAgent`, `initiate_
 - [TinyFish Search](https://docs.ag2.ai/docs/user-guide/extensions/tools/search/tinyfish/): TinyFishSearchToolkit gives an agent two related tools powered by TinyFish: web search and browser-rendered page fetch. Use it when an agent needs current search results and then needs to read the...
 - [Xquik Tweet Search](https://docs.ag2.ai/docs/user-guide/extensions/tools/search/xquik/): XquikSearchToolkit gives an agent a tool for searching public X posts through the Xquik API. Use it when an agent needs structured tweet records and pagination metadata.
 - [NLIP Agent Integration](https://docs.ag2.ai/docs/user-guide/extensions/nlipagent/): NLIP (Natural Language Interaction Protocol) is an ECMA-430 standard for interoperable agent communication over HTTP. The ag2.extensions.nlip module lets you:
+- [TealTiger Governance](https://docs.ag2.ai/docs/user-guide/extensions/tealtiger/): The ag2.extensions.tealtiger module adds deterministic governance guardrails to AG2 agents. TealTigerMiddleware enforces tool allowlists, detects PII and secrets in tool arguments, tracks per-session...
 - [Tenki Sandbox Integration](https://docs.ag2.ai/docs/user-guide/extensions/tenki/): The ag2.extensions.tenki module runs AG2 shell and code tools in isolated Tenki Sandbox sessions. It implements AG2's native sandbox factory, so one environment provides persistent files across tool...
 
 ## Optional

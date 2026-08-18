@@ -11799,10 +11799,10 @@ Verified AG-UI features are supported in AG2:
 
 ## Installation
 
-Install AG2 with AG-UI support:
+Install AG2 with AG-UI support, plus the extra for the model provider your agent uses - `openai` in the examples below:
 
 ```bash
-pip install "ag2[ag-ui]"
+pip install "ag2[ag-ui,openai]"
 ```
 
 ## Basic server example
@@ -11867,7 +11867,8 @@ curl -N -X POST http://127.0.0.1:8000/chat \
     "messages": [{"id": "m1", "role": "user", "content": "Hello"}],
     "state": {},
     "context": [],
-    "tools": []
+    "tools": [],
+    "forwardedProps": null
   }'
 ```
 
@@ -11889,7 +11890,9 @@ For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs bec
 - Tool UI rendering hooks/components
 - Shared state patterns for interactive workflows
 
-Start from the [CopilotKit UI quickstart](./copilotkit-quickstart).
+Start from the [CopilotKit UI quickstart](./copilotkit-quickstart.md).
+
+The same endpoint can also power a bot in Slack and other messaging platforms - see [Channels](./channels.md).
 
 ## AG-UI Dojo
 
@@ -11900,8 +11903,9 @@ For protocol-level testing and event inspection, use the AG2 Dojo profile:
 ## Next steps
 
 1. Build the AG-UI endpoint from the minimal example above.
-2. Follow the [CopilotKit UI quickstart](./copilotkit-quickstart) to connect a React/Next.js client.
+2. Follow the [CopilotKit UI quickstart](./copilotkit-quickstart.md) to connect a React/Next.js client.
 3. Validate runtime behavior with the [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat).
+4. Run the same endpoint as a bot in Slack and other messaging platforms with [Channels](./channels.md).
 
 ---
 
@@ -12186,6 +12190,129 @@ Treat tool inputs and shared state as untrusted user-controlled data. Validate a
 ## Version and compatibility notes
 
 - For a complete working example (backend + React UI + HTML UI), see the starter repo referenced above.
+
+---
+
+# Channels: AG2 Agents in Slack and Other Messaging Platforms
+
+Source: https://docs.ag2.ai/docs/user-guide/ag-ui/channels/
+
+The same AG2 agent that powers your in-app copilot can also run as a bot in messaging platforms. [CopilotKit Channels](https://docs.copilotkit.ai/slack/ag2) connects your AG2 agent to Slack and other messaging platforms, with threads, tool calls, and rich interactive messages handled natively in the channel.
+
+!!! note
+    This page covers the AG2 side: how a channel process wires your `AGUIStream` endpoint into a platform thread. Creating the Channel and connecting Slack happen in the CopilotKit dashboard - follow [Configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence) first, since the code below needs the credentials it gives you.
+
+## How it fits together
+
+Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](backend-deepdive.md#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels), connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence). Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn over a persistent gateway connection to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
+
+```text
+Slack  ──►  CopilotKit Intelligence  ──►  channel process (Node)  ──►  AG2 server (AGUIStream)
+```
+
+The credential split is the point, and it is what makes this safe when your AG2 agent holds its own model keys and tools:
+
+- **You keep** the agent logic, model credentials, tools, and the channel process.
+- **CopilotKit Intelligence holds** the platform credentials, message delivery, registration, health, and reconnects.
+
+A web frontend built with the [CopilotKit UI quickstart](copilotkit-quickstart.md) and the bot are just two clients of one AG-UI endpoint.
+
+## Build the channel process
+
+Install the Channels SDK, the CopilotKit runtime that hosts the channel, and the AG-UI client:
+
+```bash
+npm install @copilotkit/channels @copilotkit/runtime @ag-ui/client tsx
+```
+
+Build the agent as a per-thread factory so each conversation gets its own session, using `HttpAgent` from [`@ag-ui/client`](https://www.npmjs.com/package/@ag-ui/client) pointed at your endpoint - `AGUIStream` speaks plain AG-UI, so no AG2-specific client is needed. The channel's `name` is the **Code** of the Channel you created in Intelligence, whose dashboard also holds the Slack credentials - they never enter this process.
+
+Name the file with an `.mts` extension: the Channels SDK ships ESM only, and `.mts` makes this an ES module without touching `package.json`.
+
+```ts
+import { createChannel } from "@copilotkit/channels";
+import { CopilotRuntime, CopilotKitIntelligence } from "@copilotkit/runtime/v2";
+import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
+import { HttpAgent } from "@ag-ui/client";
+
+const required = (name: string) => {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing ${name}`);
+  return value;
+};
+
+const channel = createChannel({
+  name: required("CHANNEL_CODE"), // the Channel's Code from Intelligence
+  identifyUser: "platform",
+  // A fresh agent per conversation, pointed at your AG-UI endpoint.
+  agent: (threadId) => {
+    const agent = new HttpAgent({ url: "http://localhost:8000/chat" });
+    agent.threadId = threadId;
+    return agent;
+  },
+});
+
+// A mention subscribes the thread and runs the agent; afterwards every message
+// in a subscribed thread runs it without needing another mention.
+channel.onMention(async ({ thread }) => {
+  await thread.subscribe();
+  await thread.runAgent();
+});
+channel.onMessage(async ({ thread }) => {
+  if (await thread.isSubscribed()) await thread.runAgent();
+});
+
+// The runtime owns the channel's lifecycle: creating the listener starts it.
+const runtime = new CopilotRuntime({
+  agents: {}, // the channel supplies its own agent; no web-facing agents needed
+  intelligence: new CopilotKitIntelligence({
+    apiKey: required("INTELLIGENCE_API_KEY"),
+  }),
+  channels: [channel],
+});
+
+const listener = createCopilotNodeListener({ runtime });
+await listener.channels.ready({ timeoutMs: 15_000 }); // fail startup loudly on a broken config
+```
+
+Run the channel process alongside the AG-UI server from the [basic server example](backend-deepdive.md#basic-server-example). Both credentials come from the Intelligence dashboard - the API key under **API Keys**, the Code on the Channel you created there:
+
+```bash
+uvicorn run_ag_ui:app --reload --port 8000   # terminal 1 - AG2 server
+```
+
+```bash
+export INTELLIGENCE_API_KEY="cpk-..."        # terminal 2 - channel process
+export CHANNEL_CODE="support-bot"            # the Channel's Code - not a Slack channel ID
+npx tsx channel.mts
+```
+
+Until the channel process is running, the Channel reads **Waiting for runtime** in the dashboard: nothing has declared it yet. That is the state `ready()` waits to leave.
+
+## Slack
+
+Invite the app to a Slack channel, then mention it. It runs your agent and streams the reply back into the thread; the thread stays subscribed, so follow-up messages run without another mention.
+
+The agent receives an ordinary AG-UI `RunAgentInput` and emits ordinary AG-UI events - the platform mechanics stay behind the channel, so the same AG2 agent runs unchanged across every platform. Rich messages are written as JSX and rendered to each platform's native format (Block Kit on Slack, for example), so an interactive card degrades gracefully where a platform has no equivalent.
+
+!!! warning "The channel process needs a long-running host"
+    It holds a persistent connection to the Intelligence gateway, which delivers each turn to it. A serverless request handler cannot own that connection.
+
+The Slack app itself is created by pasting the manifest from the Intelligence wizard into Slack's web UI and handing its tokens back to Intelligence - no Slack CLI and no bot framework, since the agent already runs in your AG2 server. For that walkthrough, see [Configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence); for the full channel-process one, see [Connect your agent](https://docs.copilotkit.ai/slack/ag2/connect).
+
+## Other platforms
+
+Discord, Teams, Telegram, and WhatsApp connect the same way - a managed connection configured in Intelligence, with your channel code unchanged. See the [CopilotKit Channels documentation](https://docs.copilotkit.ai/slack/ag2) for the current platform list and per-platform setup.
+
+!!! note
+    By default, interactive actions live in memory and reset on restart. Back the channel with a durable action and state store (Redis or Postgres) so buttons and per-thread state survive restarts and span multiple instances.
+
+## Next steps
+
+1. Build the AG-UI endpoint from the [basic server example](backend-deepdive.md#basic-server-example) if you have not already.
+2. Create the Channel in CopilotKit Intelligence and connect Slack there, then export the API key and the Channel's Code.
+3. Start the channel process, invite the app to a Slack channel, and mention it.
+4. For a web UI on the same endpoint, follow the [CopilotKit UI quickstart](copilotkit-quickstart.md).
 
 ---
 
@@ -14289,6 +14416,7 @@ acp_agent = ACPAgent(
 | `auth` | Authentication provider. `None` (the default) advertises no methods and rejects `authenticate` |
 | `prompt_content` | Which non-text prompt content to advertise - see [Multimodal content](#multimodal-content) |
 | `stream_thoughts` | Whether to forward the agent's reasoning as `agent_thought_chunk` updates. Off by default |
+| `hitl_hook` | How to answer a turn that calls `context.input()` - see [Human input](#human-input). `None` (the default) fails such a turn |
 
 ### Bounds
 
@@ -14348,6 +14476,54 @@ Implement `AuthProvider` to plug in your own identity system.
 
     Serve one tenant per `ACPAgent`. Multi-tenant deployments need one process and
     one agent per tenant.
+
+## Human Input
+
+A turn can stop and ask its user something - `context.input()` inside a tool, or an
+`approval_required()` middleware gating one. ACP has an elicitation method for
+exactly this, and this side does not implement it yet, so by default there is genuinely
+nobody to ask: the turn fails with `HumanInputUnsupportedError` rather than hanging
+on an answer that is never coming.
+
+An application hosting the agent often *can* reach the human by its own means - its own chat
+surface, an approval queue, a ticket. Pass a `hitl_hook` and its return value
+becomes what `context.input()` returns:
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.acp import ACPAgent
+from ag2.config import AnthropicConfig
+from ag2.events import HumanInputRequest
+
+agent = Agent(name="workie", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+
+# Stand-ins for however the host already reaches its user.
+questions: asyncio.Queue[str] = asyncio.Queue()
+answers: asyncio.Queue[str] = asyncio.Queue()
+
+async def ask_our_user(event: HumanInputRequest) -> str:
+    # event.content is the message the tool passed to context.input()
+    await questions.put(event.content)
+    return await answers.get()
+
+acp_agent = ACPAgent(agent, hitl_hook=ask_our_user)
+```
+
+It is an ordinary AG2 HITL hook - the same shape as
+[`Agent(hitl_hook=...)`](../context/human_in_the_loop.md), sync or async,
+with dependency injection and the session's variables available.
+
+!!! note "It replaces the served agent's own hook"
+    An agent's own `hitl_hook` is *not* used for ACP-driven turns, with or without
+    this argument. A hook written for `agent.ask()` typically reads a console - and
+    over stdio the console is the protocol. Who the human is, and how to reach them, is the
+    host's decision.
+
+Nothing about this is visible on the wire: no capability is advertised, no ACP method is
+called, and a client cannot tell that a turn paused. Client-driven approvals - the agent
+asking *through* the protocol - need ACP elicitation on this side, which is not wired yet.
 
 ## What It Refuses to Pretend
 
@@ -22941,6 +23117,524 @@ The coordinator connects to the NLIP weather agent through `weather_agent`, a re
 ```bash
 python coordinator.py
 ```
+
+---
+
+# TealTiger Governance
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/tealtiger/
+
+The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists, detects PII and secrets in tool arguments, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts - with no LLM in the governance path.
+
+## Installation
+
+!!! note
+    The extension ships with AG2. No additional Python package and no API key are required - all governance evaluation runs inline on the standard library.
+
+```bash
+pip install ag2
+```
+
+Import directly:
+
+```python
+from ag2.extensions.tealtiger import (
+    GovernanceDecision,
+    GovernanceMode,
+    GovernancePolicy,
+    TEECReceipt,
+    TealTigerMiddleware,
+)
+```
+
+## Quick Start
+
+`TealTigerMiddleware` is a [middleware factory](../middleware.md) - pass the instance straight into an agent's `middleware` list.
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTigerMiddleware
+
+governance = TealTigerMiddleware(
+    mode=GovernanceMode.ENFORCE,
+    policies=[
+        GovernancePolicy.tool_allowlist(["search", "read_*"]),
+        GovernancePolicy.pii_block(["ssn", "credit_card", "email", "phone"]),
+        GovernancePolicy.secret_detection(),
+        GovernancePolicy.cost_limit(max_per_session=5.0),
+    ],
+)
+
+async def main() -> None:
+    agent = Agent(
+        "assistant",
+        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        middleware=[governance],
+    )
+    reply = await agent.ask("Summarize the AG2 middleware guide.")
+    print(await reply.content())
+    print(governance.decisions)
+    print(f"Cost: ${governance.total_cost:.4f}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Every tool call now flows through deterministic governance evaluation before execution.
+
+## Multi-Stage Defense
+
+TealTiger governs at two stages of the AG2 agent lifecycle:
+
+```mermaid
+flowchart LR
+    A[👤 User Message] --> B{🛡️ Stage 1<br/>on_turn}
+    B -->|Kill Switch<br/>Check| C[🤖 Agent<br/>Processing]
+    C --> D[🔧 Tool Call]
+    D --> E{🛡️ Stage 2<br/>on_tool_execution}
+    E -->|"✅ ALLOW"| F[⚡ Execute Tool]
+    E -->|"❌ DENY"| G[🚫 ToolErrorEvent]
+    F --> H[📝 TEEC Receipt]
+    G --> H
+
+    style B fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style E fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style H fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style F fill:#f0fdf4,stroke:#16a34a
+    style G fill:#fef2f2,stroke:#dc2626
+```
+
+| Hook | Stage | What It Does |
+|------|-------|-------------|
+| `on_turn` | Turn defense | Kill switch enforcement - frozen agents cannot take turns |
+| `on_tool_execution` | Pre-tool defense | Tool allowlist, PII scan, secret scan, cost limit check |
+
+Both stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
+
+!!! note "Receipts come from the tool stage"
+
+    A `TEECReceipt` is emitted for every *tool* evaluation, whether the call was executed or blocked. Turn-level kill switch denials record a `GovernanceDecision` but do **not** emit a receipt.
+
+## Governance Modes
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| **ENFORCE** | Evaluates all policies. Blocks violations with `ToolErrorEvent`. | Production |
+| **MONITOR** | Evaluates all policies, records decisions, but **never blocks**. | Staging / shadow testing |
+| **OBSERVE** | Skips policy evaluation. Passes through, still tracks cost and records an `OBSERVE_PASSTHROUGH` decision. | Initial rollout / lowest overhead |
+
+`mode` accepts either a `GovernanceMode` member or its string name, and defaults to `GovernanceMode.ENFORCE`. Start with `MONITOR` in staging to see what would be blocked, then switch to `ENFORCE` in production:
+
+```python
+# Shadow mode - see what governance would deny without blocking anything
+governance = TealTigerMiddleware(
+    mode=GovernanceMode.MONITOR,
+    policies=[
+        GovernancePolicy.tool_allowlist(["search", "read_*"]),
+        GovernancePolicy.pii_block(["ssn", "credit_card"]),
+    ],
+)
+
+# After validation, promote to ENFORCE
+governance.mode = GovernanceMode.ENFORCE
+```
+
+## Policy Types
+
+### Tool Allowlist
+
+Restrict which tools the agent can call. Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`, `[seq]`) applies:
+
+```python
+GovernancePolicy.tool_allowlist(["search", "read_*", "github_*"])
+```
+
+Any tool not matching the patterns is denied with reason code `TOOL_NOT_ALLOWED` and risk score 80.
+
+### PII Detection
+
+Block tool calls containing sensitive data in their arguments:
+
+```python
+GovernancePolicy.pii_block(["ssn", "credit_card", "email", "phone"])
+```
+
+Passing no argument applies all four categories:
+
+| Category | Pattern | Example Match |
+|----------|---------|---------------|
+| `ssn` | `\b\d{3}-\d{2}-\d{4}\b` | 123-45-6789 |
+| `credit_card` | `\b(?:\d{4}[-\s]?){3}\d{4}\b` | 4111-1111-1111-1111 |
+| `email` | Standard email regex | user@example.com |
+| `phone` | US phone with optional `+1` | +1-555-123-4567 |
+
+Denied with risk score 90. One reason code is appended per matched category, in the form `PII_DETECTED:ssn`, `PII_DETECTED:email`, and so on.
+
+### Secret Detection
+
+Block tool calls containing API keys, tokens, or credentials:
+
+```python
+GovernancePolicy.secret_detection()
+```
+
+| Pattern | What It Catches |
+|---------|----------------|
+| `sk-...` (20+ chars) | OpenAI-style API keys |
+| `ghp_...` (36+ chars) | GitHub personal access tokens |
+| `AKIA...` (16 chars) | AWS access key IDs |
+| `xox[bpors]-...` | Slack tokens |
+| `api_key=...` / `apikey:...` (20+ chars) | Generic API keys |
+| PEM private key headers | RSA, EC, DSA private keys |
+
+Denied with reason code `SECRET_DETECTED` and risk score 95 - the highest of the policy checks.
+
+### Cost Limit
+
+Enforce per-session cost ceilings:
+
+```python
+GovernancePolicy.cost_limit(max_per_session=5.0)
+```
+
+Cumulative cost is tracked across all tool calls using `cost_per_call` (configurable, defaults to `0.002`). Once the limit is reached, further calls are denied with `BUDGET_EXCEEDED` and risk score 70.
+
+## Factory-Level Budget
+
+In addition to the policy-level `cost_limit`, you can set a factory-level budget that is always enforced, with no policy needed:
+
+```python
+governance = TealTigerMiddleware(
+    budget_limit=10.0,      # Hard ceiling - always enforced
+    cost_per_call=0.002,    # Estimated cost per tool call
+    policies=[
+        GovernancePolicy.tool_allowlist(["search", "read_*"]),
+    ],
+)
+```
+
+`budget_limit` defaults to infinity. It is checked before any policy runs, providing a spending cap that no policy ordering can bypass.
+
+## Kill Switch
+
+Freeze an agent immediately - this blocks its turns and all of its tool calls, regardless of policies:
+
+```python
+governance.freeze("assistant")      # Block everything for this agent
+governance.is_frozen("assistant")   # True
+governance.unfreeze("assistant")    # Restore normal governance
+```
+
+Freezing matches on the **exact** agent name. There is no wildcard - to freeze several agents, freeze each by name:
+
+```python
+for name in ("researcher", "analyst", "writer"):
+    governance.freeze(name)
+```
+
+The kill switch is enforced at both the **turn level** (`on_turn`) and the **tool level** (`on_tool_execution`):
+
+- **ENFORCE mode**: returns `ToolErrorEvent`, blocking the entire turn or tool call
+- **MONITOR mode**: records a DENY decision but allows the action through
+- **OBSERVE mode**: not evaluated (passthrough)
+
+Kill switch decisions carry reason code `AGENT_FROZEN` and risk score 100 (maximum).
+
+## Audit Trail
+
+Every governance decision produces a structured `GovernanceDecision`:
+
+```python
+for decision in governance.decisions:
+    print(
+        f"[{decision.action}] tool={decision.tool_name} "
+        f"agent={decision.agent_name} "
+        f"reason_codes={decision.reason_codes} "
+        f"risk={decision.risk_score} "
+        f"latency={decision.evaluation_time_ms:.2f}ms "
+        f"cost=${decision.cumulative_cost:.4f}"
+    )
+```
+
+### Decision Contract Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `decision_id` | `str` | UUID4 string, unique per decision, for correlation |
+| `action` | `str` | Governance verdict: `ALLOW` or `DENY` |
+| `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
+| `agent_name` | `str` | Agent that made the call, or `unknown` |
+| `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `risk_score` | `int` | 0 (safe) to 100 (critical) |
+| `evaluation_time_ms` | `float` | Governance latency for this decision |
+| `cost_tracked` | `float` | Cost attributed to this call in USD |
+| `cumulative_cost` | `float` | Running session cost in USD |
+| `timestamp_ms` | `float` | Unix timestamp in milliseconds |
+
+### TEEC Receipts
+
+Every tool evaluation - executed or blocked - produces a `TEECReceipt`:
+
+```python
+for receipt in governance.receipts:
+    print(
+        f"{receipt.execution_outcome} | {receipt.tool_name} | "
+        f"agent={receipt.agent_name} | decision={receipt.decision_id}"
+    )
+```
+
+| Field | Description |
+|-------|-------------|
+| `receipt_id` | Unique receipt UUID string |
+| `decision_id` | Links back to the governance decision |
+| `agent_name` | Agent that triggered the evaluation |
+| `tool_name` | Tool that was called |
+| `action` | `ALLOW` or `DENY` |
+| `execution_outcome` | `executed`, `blocked`, or `error` |
+| `reason_codes` | Copied from the originating decision |
+| `risk_score` | Copied from the originating decision |
+| `policy_digest` | Short SHA-256 digest of the active policy set |
+| `timestamp_ms` | Unix timestamp in milliseconds |
+
+### Factory State API
+
+The factory exposes the accumulated state directly:
+
+| Member | Description |
+|--------|-------------|
+| `decisions` | All `GovernanceDecision` records across all turns |
+| `receipts` | All `TEECReceipt` records across all turns |
+| `total_cost` | Cumulative tracked cost in USD |
+| `deny_count` | Number of decisions with `action == "DENY"` |
+| `is_frozen(name)` | Whether that agent is currently frozen |
+| `reset()` | Clear decisions, receipts, cost, and frozen agents |
+
+## Callbacks
+
+React to governance decisions in real time:
+
+```python
+def on_deny(decision):
+    if decision.action == "DENY":
+        alert_ops_team(decision.tool_name, decision.reason_codes)
+
+def on_receipt(receipt):
+    audit_log.append(receipt)
+
+governance = TealTigerMiddleware(
+    policies=[GovernancePolicy.tool_allowlist(["search"])],
+    on_decision=on_deny,       # Called for every decision (ALLOW and DENY)
+    on_receipt=on_receipt,     # Called for every TEEC receipt
+)
+```
+
+## Use Across Multiple Agents
+
+One governance instance can be attached to several agents - decisions, receipts, cost, and frozen agents are shared across all of them. Here the coordinator delegates to two [subagents](../subagents.md) via `Agent.as_tool()`, and all three run under the same policy set:
+
+```mermaid
+flowchart TB
+    GOV["🛡️ TealTigerMiddleware - Shared Instance<br/>(decisions, receipts, cost, frozen_agents)"]
+    GOV -->|evaluates| R["🔬 Researcher<br/>tools: search, read_*"]
+    GOV -->|evaluates| AN["📊 Analyst<br/>tools: calculator"]
+    GOV -->|"🧊 FROZEN"| W["✍️ Coordinator"]
+
+    style GOV fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style R fill:#eff6ff,stroke:#93c5fd
+    style AN fill:#eff6ff,stroke:#93c5fd
+    style W fill:#fef2f2,stroke:#fca5a5
+```
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTigerMiddleware
+
+# Single governance instance shared across all agents
+governance = TealTigerMiddleware(
+    mode=GovernanceMode.ENFORCE,
+    policies=[
+        GovernancePolicy.tool_allowlist(["search", "read_*", "calculator"]),
+        GovernancePolicy.pii_block(["ssn", "credit_card", "email"]),
+        GovernancePolicy.secret_detection(),
+        GovernancePolicy.cost_limit(max_per_session=10.0),
+    ],
+)
+config = AnthropicConfig(model="claude-sonnet-4-6")
+
+async def main() -> None:
+    researcher = Agent("researcher", config=config, middleware=[governance])
+    analyst = Agent("analyst", config=config, middleware=[governance])
+    coordinator = Agent(
+        "coordinator",
+        config=config,
+        middleware=[governance],
+        tools=[
+            researcher.as_tool(description="Research a topic and return findings."),
+            analyst.as_tool(description="Analyze findings and return a summary."),
+        ],
+    )
+    reply = await coordinator.ask("Research AI governance trends, then analyze them.")
+    print(await reply.content())
+    # Cost, decisions, and receipts are shared across all three agents
+    print(f"Total decisions: {len(governance.decisions)}")
+    print(f"Denied: {governance.deny_count}")
+    print(f"Total cost: ${governance.total_cost:.4f}")
+    # Freeze one agent - it can no longer take turns or call tools
+    governance.freeze("researcher")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Complete Example: Governed Research Agent
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTigerMiddleware
+
+governance = TealTigerMiddleware(
+    mode=GovernanceMode.ENFORCE,
+    budget_limit=10.0,
+    cost_per_call=0.003,
+    policies=[
+        # Tool governance - only safe tools
+        GovernancePolicy.tool_allowlist(["web_search", "calculator", "read_file"]),
+        # Data protection - block PII leakage
+        GovernancePolicy.pii_block(["ssn", "credit_card", "email", "phone"]),
+        # Credential protection - block secret leakage
+        GovernancePolicy.secret_detection(),
+        # Cost governance - hard per-session limit
+        GovernancePolicy.cost_limit(max_per_session=5.0),
+    ],
+    on_decision=lambda d: print(f"  [{d.action}] {d.tool_name} - {d.reason_codes}"),
+)
+
+async def main() -> None:
+    agent = Agent(
+        "research_assistant",
+        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        middleware=[governance],
+    )
+    reply = await agent.ask("Research AI governance frameworks for enterprise deployment.")
+    print(await reply.content())
+    # Post-run analysis
+    allowed = [d for d in governance.decisions if d.action == "ALLOW"]
+    denied = [d for d in governance.decisions if d.action == "DENY"]
+    print("\n--- Governance Summary ---")
+    print(f"Total evaluations: {len(governance.decisions)}")
+    print(f"Allowed: {len(allowed)}")
+    print(f"Denied: {len(denied)}")
+    print(f"Session cost: ${governance.total_cost:.4f}")
+    print(f"TEEC receipts: {len(governance.receipts)}")
+    for d in denied:
+        print(f"  • {d.tool_name}: {d.reason_codes} (risk={d.risk_score})")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Evaluation Order
+
+Two checks always run first, in this order. Everything after them is your policy list, walked in the order you declared it - the first DENY wins and short-circuits the rest:
+
+```mermaid
+flowchart TD
+    START([Tool Call Received]) --> S1
+    S1{{ "{{" }}"1️⃣ Kill Switch<br/>(risk: 100)"{{ "}}" }} -->|frozen| DENY[❌ DENY]
+    S1 -->|not frozen| S2
+    S2{{ "{{" }}"2️⃣ Factory Budget<br/>(risk: 70)"{{ "}}" }} -->|exceeded| DENY
+    S2 -->|within budget| S3
+    S3{{ "{{" }}"3️⃣ Your policies, in list order<br/>first DENY wins"{{ "}}" }} -->|violation| DENY
+    S3 -->|all clean| ALLOW[✅ ALLOW]
+
+    style S1 fill:#fef2f2,stroke:#fca5a5
+    style S2 fill:#fef9c3,stroke:#fde047
+    style S3 fill:#eff6ff,stroke:#93c5fd
+    style DENY fill:#fef2f2,stroke:#dc2626,stroke-width:2px
+    style ALLOW fill:#f0fdf4,stroke:#16a34a,stroke-width:2px
+```
+
+Each policy type carries its own risk score when it denies:
+
+| Policy | Reason Code | Risk Score |
+|--------|-------------|------------|
+| Kill switch | `AGENT_FROZEN` | 100 |
+| Secret detection | `SECRET_DETECTED` | 95 |
+| PII detection | `PII_DETECTED:{category}` | 90 |
+| Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
+| Cost limit / factory budget | `BUDGET_EXCEEDED` | 70 |
+
+!!! warning "Policy order is yours to choose"
+
+    Because policies are evaluated in the order you pass them, the reason code on a denial depends on that order. If a call violates two policies, only the first one in your list is reported. Put the checks you most want attributed earliest in the list.
+
+If all checks pass, the decision is `ALLOW` with reason code `POLICY_ALLOW` and risk score 0.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Factory["TealTigerMiddleware (Long-lived factory)"]
+        STATE["_decisions | _receipts<br/>_frozen_agents | _cumulative_cost"]
+        API["freeze() | unfreeze() | is_frozen()<br/>.decisions | .receipts | .total_cost"]
+    end
+
+    Factory -->|"creates per turn"| PerTurn
+
+    subgraph PerTurn["_TealTigerPerTurn (Per-turn instance)"]
+        TURN["on_turn()<br/>Kill switch + mode gating"]
+        TOOL["on_tool_execution()<br/>Policy evaluation + receipts"]
+    end
+
+    PerTurn -->|"writes back"| STATE
+
+    style Factory fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style PerTurn fill:#eff6ff,stroke:#3b82f6,stroke-width:2px
+```
+
+```text
+ag2/extensions/tealtiger/
+├── __init__.py       # Public API: TealTigerMiddleware, GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt
+├── types.py          # GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt
+└── middleware.py     # TealTigerMiddleware (factory) + _TealTigerPerTurn (per-turn) + _PII_PATTERNS / _SECRET_PATTERNS
+```
+
+The middleware follows AG2's middleware factory pattern:
+
+- `TealTigerMiddleware` is the long-lived factory holding shared state (decisions, receipts, frozen agents, cumulative cost)
+- Calling the factory creates a `_TealTigerPerTurn` instance for the turn, holding a reference back to the factory
+- `on_turn` handles kill switch enforcement at the turn level
+- `on_tool_execution` handles all policy evaluation at the tool level
+- Kill switch, budget, and audit state persist across turns and agents
+
+## Performance
+
+Governance runs entirely in-process: no network calls, no LLM inference, and no external service dependencies. Every check is a `fnmatch` glob or a precompiled `re` pattern over the serialized tool arguments, so evaluation cost scales with argument size rather than with model latency.
+
+Each decision records its own measured cost in `evaluation_time_ms`, so you can profile governance overhead against your own workload:
+
+```python
+slowest = max(governance.decisions, key=lambda d: d.evaluation_time_ms)
+print(f"{slowest.tool_name}: {slowest.evaluation_time_ms:.3f}ms")
+```
+
+## Links
+
+- [TealTiger AG2 integration guide](https://docs.tealtiger.ai/integrations/ag2) - advanced capabilities beyond the bundled extension
+- [TealTiger on GitHub](https://github.com/agentguard-ai/tealtiger) (Apache 2.0)
+- [TealTiger governance platform on PyPI](https://pypi.org/project/tealtiger/)
+
+Maintainer: [@nagasatish007](https://github.com/nagasatish007) / TealTiger.
 
 ---
 
