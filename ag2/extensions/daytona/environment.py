@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import threading
-from collections.abc import AsyncIterator, Hashable
+from collections.abc import AsyncGenerator, Hashable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -102,7 +102,7 @@ class DaytonaEnvironment:
     async def open(
         self,
         context: "ConversationContext | None" = None,
-    ) -> AsyncIterator[DaytonaSandbox]:
+    ) -> AsyncGenerator[DaytonaSandbox]:
         api_key = resolve_variable(self._api_key, context, param_name="api_key") if context else self._api_key
         api_url = resolve_variable(self._api_url, context, param_name="api_url") if context else self._api_url
         target = resolve_variable(self._target, context, param_name="target") if context else self._target

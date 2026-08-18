@@ -23,6 +23,7 @@ from ag2.agent import Agent
 from ag2.context import ConversationContext
 from ag2.events import (
     BaseEvent,
+    HumanInputRequest,
     ModelMessageChunk,
     ModelRequest,
     ModelResponse,
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from ag2.context import SubId
+    from ag2.hitl import HumanHook
     from ag2.stream import MemoryStream
 
     from .sessions import AgentSession, SessionStore
@@ -77,17 +79,20 @@ class UpdateDeliveryError(RuntimeError):
 
 
 class HumanInputUnsupportedError(RuntimeError):
-    """Raised when an agent asks for human input over a transport that has none.
+    """Raised when an agent asks for human input and no ``hitl_hook`` was given.
 
-    ACP elicitation is not wired in this version. Failing loudly beats hanging
-    forever on a prompt the Client will never be asked to answer.
+    ACP elicitation is not wired in this version, so the protocol itself has no
+    way to put the question to the Client. Failing loudly beats hanging forever
+    on a prompt nobody will be asked to answer. A host that can reach a human by
+    its own means passes ``ACPAgent(..., hitl_hook=...)`` and never sees this.
     """
 
     def __init__(self) -> None:
         super().__init__(
             "The agent requested human input, but ACPAgent does not implement ACP "
-            "elicitation yet, so there is nobody to ask. Remove the human-input step "
-            "or serve this agent over a transport that supports it."
+            "elicitation yet, so there is nobody to ask. Pass ACPAgent(..., hitl_hook=...) "
+            "to answer from the hosting application, remove the human-input step, or serve "
+            "this agent over a transport that supports it."
         )
 
 
@@ -102,11 +107,21 @@ class AgentExecutor:
     dependencies through the same path every off-protocol turn uses.
     """
 
-    __slots__ = ("_agent", "_stream_thoughts")
+    __slots__ = ("_agent", "_stream_thoughts", "_hitl_hook")
 
-    def __init__(self, agent: Agent, *, stream_thoughts: bool = False) -> None:
+    def __init__(
+        self,
+        agent: Agent,
+        *,
+        stream_thoughts: bool = False,
+        hitl_hook: "HumanHook | None" = None,
+    ) -> None:
         self._agent = agent
         self._stream_thoughts = stream_thoughts
+        # ``None`` keeps the transport honest: with nobody to ask, a turn that
+        # requests human input fails rather than hanging on an answer that is
+        # never coming. A host that *does* have a human supplies the hook.
+        self._hitl_hook: HumanHook = _reject_human_input if hitl_hook is None else hitl_hook
 
     @property
     def agent(self) -> Agent:
@@ -280,7 +295,7 @@ class AgentExecutor:
             initial_event,
             context=context,
             client=client,
-            hitl_hook=_reject_human_input,
+            hitl_hook=self._hitl_hook,
         )
 
 
@@ -395,8 +410,13 @@ async def heal_cancelled_turn(stream: "MemoryStream") -> int:
     return closed
 
 
-async def _reject_human_input(event: BaseEvent, context: Any) -> str:
-    """``hitl_hook`` that fails the turn instead of waiting forever.
+async def _reject_human_input(event: HumanInputRequest) -> str:
+    """Default ``hitl_hook``: fail the turn instead of waiting forever.
+
+    Takes the request and nothing else, because a hook is resolved the way a
+    tool is: an un-annotated second parameter is read as another *field* to fill
+    from the event, and the turn then dies of a validation error naming this
+    function instead of the error that explains the problem.
 
     Declared as returning ``str`` to satisfy the hook signature; it never
     returns. See :class:`HumanInputUnsupportedError`.

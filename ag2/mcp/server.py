@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import importlib.metadata
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -68,7 +68,7 @@ def _session_manager_lifespan(manager: StreamableHTTPSessionManager) -> "Lifespa
     """
 
     @asynccontextmanager
-    async def lifespan(_: Starlette) -> AsyncIterator[None]:
+    async def lifespan(_: Starlette) -> AsyncGenerator[None]:
         async with manager.run():
             yield
 

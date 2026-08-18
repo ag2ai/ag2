@@ -4,7 +4,7 @@
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -191,7 +191,7 @@ class RealTimeConfig(RealtimeConfig):
         instructions: Iterable[str] = (),
         tools: Iterable[ToolSchema] = (),
         serializer: SerializerProto,
-    ) -> AsyncIterator[None]:
+    ) -> AsyncGenerator[None]:
         final_config = self._build_session(instructions=instructions, tools=tools)
 
         async with self.client.aio.live.connect(model=self.model, config=final_config) as session:

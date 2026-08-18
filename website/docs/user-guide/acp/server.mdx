@@ -230,6 +230,7 @@ acp_agent = ACPAgent(
 | `#!python auth` | Authentication provider. `#!python None` (the default) advertises no methods and rejects `#!python authenticate` |
 | `#!python prompt_content` | Which non-text prompt content to advertise — see [Multimodal content](#multimodal-content) |
 | `#!python stream_thoughts` | Whether to forward the agent's reasoning as `#!python agent_thought_chunk` updates. Off by default |
+| `#!python hitl_hook` | How to answer a turn that calls `#!python context.input()` — see [Human input](#human-input). `#!python None` (the default) fails such a turn |
 
 ### Bounds
 
@@ -289,6 +290,54 @@ Implement `#!python AuthProvider` to plug in your own identity system.
 
     Serve one tenant per `#!python ACPAgent`. Multi-tenant deployments need one process and
     one agent per tenant.
+
+## Human Input
+
+A turn can stop and ask its user something — `#!python context.input()` inside a tool, or an
+`#!python approval_required()` middleware gating one. ACP has an elicitation method for
+exactly this, and this side does not implement it yet, so by default there is genuinely
+nobody to ask: the turn fails with `#!python HumanInputUnsupportedError` rather than hanging
+on an answer that is never coming.
+
+An application hosting the agent often *can* reach the human by its own means — its own chat
+surface, an approval queue, a ticket. Pass a `#!python hitl_hook` and its return value
+becomes what `#!python context.input()` returns:
+
+```python linenums="1" hl_lines="14-17 19"
+import asyncio
+
+from ag2 import Agent
+from ag2.acp import ACPAgent
+from ag2.config import AnthropicConfig
+from ag2.events import HumanInputRequest
+
+agent = Agent(name="workie", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+
+# Stand-ins for however the host already reaches its user.
+questions: asyncio.Queue[str] = asyncio.Queue()
+answers: asyncio.Queue[str] = asyncio.Queue()
+
+async def ask_our_user(event: HumanInputRequest) -> str:
+    # event.content is the message the tool passed to context.input()
+    await questions.put(event.content)
+    return await answers.get()
+
+acp_agent = ACPAgent(agent, hitl_hook=ask_our_user)
+```
+
+It is an ordinary AG2 HITL hook — the same shape as
+[`#!python Agent(hitl_hook=...)`](/docs/user-guide/context/human_in_the_loop), sync or async,
+with dependency injection and the session's variables available.
+
+!!! note "It replaces the served agent's own hook"
+    An agent's own `#!python hitl_hook` is *not* used for ACP-driven turns, with or without
+    this argument. A hook written for `#!python agent.ask()` typically reads a console — and
+    over stdio the console is the protocol. Who the human is, and how to reach them, is the
+    host's decision.
+
+Nothing about this is visible on the wire: no capability is advertised, no ACP method is
+called, and a client cannot tell that a turn paused. Client-driven approvals — the agent
+asking *through* the protocol — need ACP elicitation on this side, which is not wired yet.
 
 ## What It Refuses to Pretend
 

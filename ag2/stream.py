@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from functools import partial
 from typing import Any, overload
@@ -31,7 +31,7 @@ class ABCStream(Stream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
-    ) -> Iterator[None]:
+    ) -> Generator[None]:
         sub_id = self.subscribe(
             func,
             interrupt=interrupt,
@@ -44,7 +44,7 @@ class ABCStream(Stream):
             self.unsubscribe(sub_id)
 
     @contextmanager
-    def join(self, *, max_events: int | None = None) -> Iterator[AsyncIterator[BaseEvent]]:
+    def join(self, *, max_events: int | None = None) -> Generator[AsyncIterator[BaseEvent]]:
         queue = asyncio.Queue[BaseEvent]()
 
         async def write_events(event: BaseEvent) -> None:
@@ -77,7 +77,7 @@ class ABCStream(Stream):
     async def get(
         self,
         condition: ClassInfo | Condition,
-    ) -> AsyncIterator[asyncio.Future[BaseEvent]]:
+    ) -> AsyncGenerator[asyncio.Future[BaseEvent]]:
         result = asyncio.Future[BaseEvent]()
 
         async def wait_result(event: BaseEvent) -> None:

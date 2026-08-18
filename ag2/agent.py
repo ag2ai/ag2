@@ -20,7 +20,7 @@ import json
 import logging
 import types
 import weakref
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
@@ -1298,7 +1298,7 @@ class Agent(PluginTarget, Generic[TResult]):
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
-    ) -> "AsyncIterator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
+    ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
         """Open a turn scope and yield a ``drive`` callable that runs it once.
 
         Sets up everything a turn needs and keeps it live across the ``yield``:
@@ -1541,7 +1541,7 @@ class _KnowledgeContext:
         self.__bootstrapped = None
 
     @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncIterator[None]:
+    async def enter(self, context: "Context") -> AsyncGenerator[None]:
         store = self.config.store
 
         if not self.__bootstrapped:
@@ -1578,7 +1578,7 @@ class _KnowledgeContext:
 
 class _FakeKnowledgeContext:
     @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncIterator[None]:
+    async def enter(self, context: "Context") -> AsyncGenerator[None]:
         yield
 
 
@@ -1644,7 +1644,7 @@ async def _observer_lifecycle(
     observers: Sequence[Observer],
     stack: ExitStack,
     context: Context,
-) -> AsyncIterator[None]:
+) -> AsyncGenerator[None]:
     """Register ``observers`` on ``stack`` and bracket the turn with lifecycle events.
 
     Observers subscribe to the stream under the caller's ``ExitStack``, then an
