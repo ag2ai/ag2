@@ -33,6 +33,7 @@ from ag2.events import (
     ToolResultsEvent,
 )
 from ag2.events.tool_events import ToolResult
+from ag2.exceptions import HumanInputError
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 from .mappers import event_to_session_update, prompt_to_inputs
@@ -65,6 +66,12 @@ META_VARIABLE = "acp.meta"
 # cancelled while the tool was still running. See :func:`heal_cancelled_turn`.
 CANCELLED_TOOL_RESULT = "The turn was cancelled before this tool finished."
 
+# Put on the ``data`` of the protocol error raised when a turn died because
+# nobody could answer a human-input request. Stable across every reason the
+# channel can fail, so a Client can branch on it — unlike ``type``, which is
+# whichever Python exception happened to come out.
+HUMAN_INPUT_ERROR_CATEGORY = "human_input"
+
 
 class UpdateDeliveryError(RuntimeError):
     """Raised when a ``session/update`` could not be pushed to the Client.
@@ -78,13 +85,20 @@ class UpdateDeliveryError(RuntimeError):
         self.session_id = session_id
 
 
-class HumanInputUnsupportedError(RuntimeError):
+class HumanInputUnsupportedError(HumanInputError, RuntimeError):
     """Raised when an agent asks for human input and no ``hitl_hook`` was given.
 
     ACP elicitation is not wired in this version, so the protocol itself has no
     way to put the question to the Client. Failing loudly beats hanging forever
     on a prompt nobody will be asked to answer. A host that can reach a human by
     its own means passes ``ACPAgent(..., hitl_hook=...)`` and never sees this.
+
+    A :class:`~ag2.exceptions.HumanInputError`, which is what carries it out of
+    tool execution to the Client: caught as an ordinary exception there it
+    would become a tool result, and the Client would be told the turn
+    succeeded. The protocol error it becomes carries
+    ``data["category"] == "human_input"``. ``RuntimeError`` is kept in the
+    bases for anyone already catching it as one.
     """
 
     def __init__(self) -> None:

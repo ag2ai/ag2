@@ -23,7 +23,7 @@ from ag2.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from ag2.exceptions import ToolNotFoundError
+from ag2.exceptions import HumanInputError, ToolNotFoundError
 from ag2.middleware import BaseMiddleware
 
 from .tool import Tool
@@ -116,6 +116,12 @@ async def _execute_call(
         try:
             await context.send(call)
             return await result
+
+        # Same reasoning as in FunctionTool: a middleware that asked for human
+        # input and got nowhere has not produced a tool failure, and an approval
+        # that was never asked for must not read as one.
+        except HumanInputError:
+            raise
 
         # tool-level middleware could leads to execution exceptions
         except Exception as e:
