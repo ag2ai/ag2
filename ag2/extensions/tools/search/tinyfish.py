@@ -12,7 +12,7 @@ Docs: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/tinyfish/
 """
 
 import os
-from collections.abc import Iterable, Iterator
+from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
@@ -39,7 +39,7 @@ def _safe_url(url: str) -> bool:
 
 
 @contextmanager
-def _tinyfish_api_integration() -> Iterator[None]:
+def _tinyfish_api_integration() -> Generator[None]:
     previous = os.environ.get(_API_INTEGRATION_ENV_VAR)
     os.environ[_API_INTEGRATION_ENV_VAR] = _API_INTEGRATION
     try:
