@@ -18,7 +18,7 @@ class TestErrors:
         async with connect(server, raise_exceptions=False) as session:
             result = await session.call_tool("ask", {})
 
-        assert result.isError is True
+        assert result.is_error is True
 
     async def test_unknown_tool(self) -> None:
         server = MCPServer(Agent("greeter", config=TestConfig("hi")))
@@ -26,7 +26,7 @@ class TestErrors:
         async with connect(server, raise_exceptions=False) as session:
             result = await session.call_tool("nope", {"message": "hi"})
 
-        assert result.isError is True
+        assert result.is_error is True
 
     async def test_agent_without_config_surfaces_as_tool_error(self) -> None:
         server = MCPServer(Agent("no-config"))
@@ -34,4 +34,4 @@ class TestErrors:
         async with connect(server, raise_exceptions=False) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
-        assert result.isError is True
+        assert result.is_error is True

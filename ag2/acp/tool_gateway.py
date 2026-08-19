@@ -34,7 +34,14 @@ from acp import schema
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import CallToolResult, ImageContent, TextContent
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ImageContent,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+)
 from mcp.types import Tool as MCPTool
 from starlette.applications import Starlette
 from starlette.routing import Mount
@@ -52,10 +59,13 @@ from ag2.events import (
     UrlInput,
 )
 from ag2.exceptions import AG2Error, UnsupportedToolError
+from ag2.mcp.mappers import tool_error
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.final import FunctionToolSchema
 
 if TYPE_CHECKING:
+    from mcp.server.context import ServerRequestContext
+
     from ag2.tools.schemas import ToolSchema
 
     from .bridge import BridgeState
@@ -275,26 +285,14 @@ class ToolGateway:
         Defaults to ``127.0.0.1:<os-assigned port>``; a caller-supplied
         :class:`GatewayAddress` binds that instead so a remote agent can dial it.
         """
-        server: Server = Server(name=self.name)
-        gateway = self
-
-        @server.list_tools()  # type: ignore[no-untyped-call, misc, untyped-decorator]
-        async def _list_tools() -> list[MCPTool]:
-            return [
-                MCPTool(
-                    name=t.function.name,
-                    description=t.function.description or None,
-                    inputSchema=t.function.parameters or {"type": "object", "properties": {}},
-                )
-                for t in gateway.tools
-            ]
-
-        # validate_input=False: argument coercion is FunctionTool's job (pydantic),
-        # matching the executor path — the SDK's jsonschema check would reject
-        # values like "5" for an int that the tool itself accepts.
-        @server.call_tool(validate_input=False)  # type: ignore[no-untyped-call, misc, untyped-decorator]
-        async def _call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult | list[TextContent | ImageContent]:
-            return await gateway._execute(name, arguments or {})
+        # Handlers are constructor callbacks in mcp 2.0; argument coercion stays
+        # FunctionTool's job (pydantic), matching the executor path — and 2.0's
+        # lowlevel server validates no tool input of its own, so nothing to disable.
+        server: Server = Server(
+            name=self.name,
+            on_list_tools=self._on_list_tools,
+            on_call_tool=self._on_call_tool,
+        )
 
         # Host/Origin validation stops a browser page reaching this port via DNS
         # rebinding (a page cannot forge Host). It does not stop a local process,
@@ -372,6 +370,34 @@ class ToolGateway:
 
         self.url = f"http://{self.address.authority}:{port}{self._path}"
         return self.url
+
+    async def _on_list_tools(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        return ListToolsResult(
+            tools=[
+                MCPTool(
+                    name=t.function.name,
+                    description=t.function.description or None,
+                    inputSchema=t.function.parameters or {"type": "object", "properties": {}},
+                )
+                for t in self.tools
+            ]
+        )
+
+    async def _on_call_tool(
+        self, ctx: "ServerRequestContext[Any, Any]", params: CallToolRequestParams
+    ) -> CallToolResult:
+        # A raised exception would reach the agent as a JSON-RPC error in mcp 2.0,
+        # where 1.x's decorator turned it into a tool-level error result; keep the
+        # latter, so a CLI agent sees a failed tool rather than a failed protocol.
+        try:
+            result = await self._execute(params.name, params.arguments or {})
+        except Exception as e:
+            return tool_error(str(e))
+        if isinstance(result, CallToolResult):
+            return result
+        return CallToolResult(content=list(result))
 
     async def close(self) -> None:
         """Stop the HTTP server; idempotent and bounded by ``close_timeout``."""

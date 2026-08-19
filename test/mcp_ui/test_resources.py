@@ -3,11 +3,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+from collections.abc import Callable
 
+import pytest
 from mcp.types import BlobResourceContents, TextResourceContents
 from mcp_ui_server import UIResource
+from mcp_ui_server.exceptions import InvalidContentError, InvalidURIError
 
 from ag2 import mcp_ui
+
+# Each builder invoked with a caller-supplied ``uri`` and otherwise-valid content,
+# so a validation test can drive all three through their shared guards.
+BUILDERS_BY_URI: list[Callable[[str], UIResource]] = [
+    lambda uri: mcp_ui.raw_html(uri, "<h1>Hi</h1>"),
+    lambda uri: mcp_ui.external_url(uri, "https://docs.ag2.ai/"),
+    lambda uri: mcp_ui.remote_dom(uri, "root.appendChild(el)"),
+]
 
 
 class TestRawHtml:
@@ -81,3 +92,30 @@ def test_ui_metadata_is_prefixed_and_metadata_is_verbatim() -> None:
             },
         ),
     )
+
+
+@pytest.mark.parametrize("build", BUILDERS_BY_URI, ids=["raw_html", "external_url", "remote_dom"])
+def test_uri_without_ui_scheme_is_rejected(build: Callable[[str], UIResource]) -> None:
+    with pytest.raises(InvalidURIError, match="must start with 'ui://'"):
+        build("https://ag2.ai/greeting")
+
+
+class TestEmptyContentIsRejected:
+    """Empty content is a caller mistake, not an empty resource."""
+
+    def test_raw_html(self) -> None:
+        with pytest.raises(InvalidContentError):
+            mcp_ui.raw_html("ui://ag2/greeting", "")
+
+    def test_external_url(self) -> None:
+        with pytest.raises(InvalidContentError):
+            mcp_ui.external_url("ui://ag2/docs", "")
+
+    def test_remote_dom(self) -> None:
+        with pytest.raises(InvalidContentError):
+            mcp_ui.remote_dom("ui://ag2/dom", "")
+
+
+def test_remote_dom_rejects_unknown_framework() -> None:
+    with pytest.raises(InvalidContentError, match="react"):
+        mcp_ui.remote_dom("ui://ag2/dom", "root.appendChild(el)", framework="svelte")  # type: ignore[arg-type]

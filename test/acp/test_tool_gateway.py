@@ -105,13 +105,13 @@ async def test_gateway_serves_tools_list_over_http() -> None:
     try:
         assert url.startswith("http://127.0.0.1:") and "/mcp/" in url
         assert gateway.as_acp_server().url == url
-        async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
+        async with streamable_http_client(url) as (read, write), ClientSession(read, write) as session:
             await session.initialize()
             listed = await session.list_tools()
         (tool,) = listed.tools
         assert tool.name == "add"
         assert tool.description == "Add two integers"
-        assert tool.inputSchema["required"] == ["a", "b"]
+        assert tool.input_schema["required"] == ["a", "b"]
     finally:
         await gateway.close()
 
@@ -153,7 +153,7 @@ class TestGatewayAddress:
         url = await gateway.start()
         try:
             assert url.startswith(f"http://{host}:")
-            async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
+            async with streamable_http_client(url) as (read, write), ClientSession(read, write) as session:
                 await session.initialize()
                 listed = await session.list_tools()
             assert [t.name for t in listed.tools] == ["add"]
@@ -182,7 +182,7 @@ class TestGatewayAddress:
             pytest.skip("no IPv6 loopback on this host")
         try:
             assert url.startswith("http://[::1]:")
-            async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
+            async with streamable_http_client(url) as (read, write), ClientSession(read, write) as session:
                 await session.initialize()
                 listed = await session.list_tools()
             assert [t.name for t in listed.tools] == ["add"]
@@ -265,7 +265,7 @@ class TestCallTool:
         gateway = ToolGateway(state, [_fn_add()])
         url = await gateway.start()
         try:
-            async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
+            async with streamable_http_client(url) as (read, write), ClientSession(read, write) as session:
                 await session.initialize()
                 return await session.call_tool("add", arguments)
         finally:
@@ -277,7 +277,7 @@ class TestCallTool:
 
         result = await self._call(state, {"a": 2, "b": 3})
 
-        assert result.isError is not True
+        assert result.is_error is not True
         assert result.content[0].text == "sum is 5"
         (call,) = state.context.sent
         assert call.name == "add"
@@ -289,7 +289,7 @@ class TestCallTool:
 
         result = await self._call(state, {"a": 1, "b": 1})
 
-        assert result.isError is True
+        assert result.is_error is True
         assert "boom" in result.content[0].text
 
     async def test_without_active_run_is_error(self) -> None:
@@ -297,7 +297,7 @@ class TestCallTool:
 
         result = await self._call(state, {"a": 1, "b": 1})
 
-        assert result.isError is True  # the lowlevel server converts the raised RuntimeError
+        assert result.is_error is True  # the lowlevel server converts the raised RuntimeError
         assert "no active AG2 run" in result.content[0].text
 
     async def test_rejects_client_tool(self) -> None:
@@ -306,7 +306,7 @@ class TestCallTool:
 
         result = await self._call(state, {"a": 1, "b": 1})
 
-        assert result.isError is True
+        assert result.is_error is True
         assert "client-side execution" in result.content[0].text
 
     async def test_serializes_data_result_as_json(self) -> None:
@@ -315,7 +315,7 @@ class TestCallTool:
 
         result = await self._call(state, {"a": 2, "b": 3})
 
-        assert result.isError is not True
+        assert result.is_error is not True
         assert result.content[0].text == '{"sum": 5}'
 
     async def test_maps_image_result_to_image_content(self) -> None:
@@ -327,10 +327,10 @@ class TestCallTool:
 
         result = await self._call(state, {"a": 1, "b": 1})
 
-        assert result.isError is not True
+        assert result.is_error is not True
         (block,) = result.content
         assert block.type == "image"
-        assert block.mimeType == "image/png"
+        assert block.mime_type == "image/png"
         assert base64.b64decode(block.data) == png
 
 
@@ -415,7 +415,7 @@ async def test_close_is_bounded_with_a_stuck_call_in_flight() -> None:
     url = await gateway.start()
 
     async def stuck_call() -> None:
-        async with streamable_http_client(url) as (read, write, _), ClientSession(read, write) as session:
+        async with streamable_http_client(url) as (read, write), ClientSession(read, write) as session:
             await session.initialize()
             await session.call_tool("add", {"a": 1, "b": 1})
 
