@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import importlib.metadata
+import logging
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING, Any
@@ -34,6 +35,8 @@ from .tools import MCPFunctionTool, ToolProvider
 if TYPE_CHECKING:
     from mcp.server.context import ServerRequestContext
     from starlette.types import Lifespan, Receive, Scope, Send
+
+logger = logging.getLogger(__name__)
 
 # An MCP ``Server`` lifespan: an async context manager yielding server-scoped
 # state, reachable in every ``tools/call`` via ``request_context.lifespan_context``.
@@ -262,7 +265,11 @@ class MCPServer:
                 request_context=ctx,
             )
         except Exception as e:
-            return tool_error(str(e))
+            # The wire carries the message only, so without this the stack is lost.
+            logger.exception("MCP tools/call %r failed", params.name)
+            # ``str`` is empty for a bare ``raise SomeError``; the class name is the
+            # least a client can act on.
+            return tool_error(str(e) or type(e).__name__)
 
     def _advertised_input_schema(self, name: str) -> dict[str, Any] | None:
         """The ``inputSchema`` ``tools/list`` advertises for ``name``, if any.

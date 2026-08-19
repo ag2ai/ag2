@@ -46,6 +46,9 @@ async def _live_mcp_server(
 ) -> AsyncGenerator[str]:
     """Serve an AG2 ``MCPServer`` on a loopback port, yielding the MCP endpoint URL.
 
+    The URL carries the canonical trailing slash. ``test_a_slashless_url_still_reaches
+    _the_server`` strips it to cover the redirect a Starlette ``Mount`` issues.
+
     The served side is AG2's own public serving API rather than a hand-built
     ``mcp`` server, so this test owns no handler registration of its own and
     stays valid across changes to how handlers are registered.
@@ -62,9 +65,6 @@ async def _live_mcp_server(
     uv = uvicorn.Server(config)
     serving = asyncio.create_task(uv.serve(sockets=[sock]))
     try:
-        # The endpoint is a Starlette ``Mount``, which redirects the slashless form, and
-        # the toolkit builds its own HTTP client without redirect-following — so the
-        # canonical trailing-slash URL is what a caller has to supply.
         yield f"http://127.0.0.1:{sock.getsockname()[1]}/mcp/"
     finally:
         uv.should_exit = True
@@ -118,3 +118,14 @@ async def test_configured_headers_reach_the_server(context: Context) -> None:
     assert headers_seen, "no HTTP request reached the server"
     assert all(h.get("x-tenant") == "acme" for h in headers_seen)
     assert all(h.get("authorization") == "Bearer t0ken" for h in headers_seen)
+
+
+@pytest.mark.asyncio
+async def test_a_slashless_url_still_reaches_the_server(context: Context) -> None:
+    """A Starlette-mounted endpoint 307s the slashless form, and that form is what
+    a caller naturally writes, so the toolkit's client has to follow the redirect.
+    """
+    async with _live_mcp_server() as url:
+        schemas = list(await MCPToolkit(url.rstrip("/")).schemas(context))
+
+    assert sorted(s.function.name for s in schemas) == ["ask", "echo"]

@@ -34,6 +34,16 @@ _REMOTE_DOM_MIME = {
 }
 
 
+def _require_ui_uri(uri: str) -> None:
+    """Reject a ``uri`` outside the ``ui://`` scheme.
+
+    Called from :func:`_build`, and ahead of any builder-specific validation so
+    that the guard every builder shares is the one a caller trips first.
+    """
+    if not uri.startswith(_UI_SCHEME):
+        raise InvalidURIError(f"URI must start with '{_UI_SCHEME}' but got: {uri}")
+
+
 def _build(
     uri: str,
     content: str,
@@ -53,8 +63,7 @@ def _build(
     can go back to delegating. The dependency stays for the action helpers, the
     ``UIResource`` type and the wire constants above.
     """
-    if not uri.startswith(_UI_SCHEME):
-        raise InvalidURIError(f"URI must start with '{_UI_SCHEME}' but got: {uri}")
+    _require_ui_uri(uri)
     if not content:
         raise InvalidContentError(f"{content_name} must be provided as a non-empty string")
 
@@ -70,8 +79,12 @@ def _build(
             blob=base64.b64encode(content.encode("utf-8")).decode("ascii"),
             _meta=meta or None,
         )
-    else:
+    elif encoding == "text":
         resource = TextResourceContents(uri=uri, mimeType=mime_type, text=content, _meta=meta or None)
+    else:
+        # Unreachable for a caller who honours ``Encoding``; treating an unknown
+        # value as text would hand back a resource nobody asked for.
+        raise InvalidContentError(f"Invalid encoding type: {encoding}")
     return UIResource(resource=resource)
 
 
@@ -125,6 +138,7 @@ def remote_dom(
     metadata: UIMetadata | None = None,
 ) -> EmbeddedResource:
     """A UI resource carrying a Remote-DOM ``script`` the client mounts (``react`` or ``webcomponents``)."""
+    _require_ui_uri(uri)
     mime_type = _REMOTE_DOM_MIME.get(framework)
     if mime_type is None:
         raise InvalidContentError(f"framework must be 'react' or 'webcomponents', got: {framework}")

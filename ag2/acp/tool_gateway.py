@@ -437,29 +437,14 @@ class ToolGateway:
                 event = await pending
         except Exception as e:
             logger.exception("MCP tool gateway: executing tool %r failed", name)
-            return CallToolResult(
-                content=[TextContent(type="text", text=str(e))],
-                isError=True,
-            )
+            return tool_error(str(e))
 
         if isinstance(event, ToolErrorEvent):
-            return CallToolResult(
-                content=[TextContent(type="text", text=str(event.error))],
-                isError=True,
-            )
+            return tool_error(str(event.error))
 
         if isinstance(event, ClientToolCallEvent):
-            return CallToolResult(
-                content=[
-                    TextContent(
-                        type="text",
-                        text=(
-                            f"tool {name!r} requires client-side execution and cannot be executed "
-                            "through the ACP tool gateway."
-                        ),
-                    )
-                ],
-                isError=True,
+            return tool_error(
+                f"tool {name!r} requires client-side execution and cannot be executed through the ACP tool gateway."
             )
 
         assert isinstance(event, ToolResultEvent)  # the get() filter admits nothing else

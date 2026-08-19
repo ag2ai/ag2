@@ -33,7 +33,6 @@ if TYPE_CHECKING:
 
 # ``mcp`` 2.0's ``on_call_tool`` handler returns a complete result model, so the
 # executor builds one for every outcome — success, structured success, and error.
-CallToolReturn = CallToolResult
 
 _LOGGER_NAME = "ag2.mcp"
 
@@ -104,7 +103,7 @@ class AgentExecutor:
         message: str,
         context: str | None = None,
         request_context: "ServerRequestContext[Any, Any]",
-    ) -> CallToolReturn:
+    ) -> CallToolResult:
         if name != self._tool_name:
             return tool_error(f"Unknown tool: {name!r}.")
         if self._agent.config is None:

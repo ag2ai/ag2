@@ -91,6 +91,9 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncGenerator[ClientSession]:
                 timeout=config.connection_timeout,
                 proxy=config.proxy,
                 verify=config.verify,
+                # A Starlette-mounted endpoint 307s the slashless form, which is the
+                # form a caller naturally writes; without this the connection fails.
+                follow_redirects=True,
             ) as client,
             streamable_http_client(
                 config.server_url,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
