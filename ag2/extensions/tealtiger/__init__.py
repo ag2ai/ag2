@@ -9,6 +9,7 @@ runs inline with no LLM in the governance path.
 
 from ag2.extensions.tealtiger.middleware import TealTigerMiddleware
 from ag2.extensions.tealtiger.types import (
+    INJECTION_PATTERNS,
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
@@ -16,6 +17,7 @@ from ag2.extensions.tealtiger.types import (
 )
 
 __all__ = [
+    "INJECTION_PATTERNS",
     "GovernanceDecision",
     "GovernanceMode",
     "GovernancePolicy",

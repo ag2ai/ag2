@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
 from ag2.events import ToolErrorEvent
 from ag2.extensions.tealtiger.types import (
+    INJECTION_PATTERNS,
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
@@ -314,7 +315,17 @@ class _TealTigerPerTurn(BaseMiddleware):
         args_str = str(tool_args) if not isinstance(tool_args, str) else tool_args
 
         for policy in self._factory.policies:
-            if policy.type == "tool_allowlist":
+            if policy.type == "prompt_injection_block":
+                techniques = policy.config.get("techniques", [])
+                threshold = policy.config.get("confidence_threshold", 0.7)
+                injection_findings = self._detect_prompt_injection(args_str, techniques, threshold)
+                if injection_findings:
+                    top = injection_findings[0]
+                    action = "DENY"
+                    reason_codes.append(f"PROMPT_INJECTION:{top['technique']}/{top['pattern_name']}")
+                    risk_score = max(risk_score, 95)
+                    break
+            elif policy.type == "tool_allowlist":
                 allowed = policy.config.get("allowed", [])
                 if not any(fnmatch.fnmatch(tool_name, p) for p in allowed):
                     action = "DENY"
@@ -387,6 +398,37 @@ class _TealTigerPerTurn(BaseMiddleware):
     def _detect_secrets(text: str) -> bool:
         """Detect secret patterns in text."""
         return any(p.search(text) for p in _SECRET_PATTERNS)
+
+    @staticmethod
+    def _detect_prompt_injection(text: str, techniques: list[str], confidence_threshold: float) -> list[dict[str, Any]]:
+        """Detect prompt injection patterns in text.
+
+        Args:
+            text: The text to scan (typically serialized tool arguments).
+            techniques: Technique categories to check.
+            confidence_threshold: Minimum confidence for a finding to count.
+
+        Returns:
+            List of finding dicts sorted by confidence (highest first).
+        """
+        findings: list[dict[str, Any]] = []
+        for technique in techniques:
+            patterns = INJECTION_PATTERNS.get(technique, [])
+            for ip in patterns:
+                if ip.confidence < confidence_threshold:
+                    continue
+                for match in ip.pattern.finditer(text):
+                    findings.append({
+                        "type": "prompt_injection",
+                        "technique": ip.technique,
+                        "pattern_name": ip.name,
+                        "matched_text": match.group()[:100],
+                        "confidence": ip.confidence,
+                        "start": match.start(),
+                        "end": match.end(),
+                    })
+        findings.sort(key=lambda f: f["confidence"], reverse=True)
+        return findings
 
     def _get_agent_name(self, context: "Context") -> str | None:
         """Extract agent name from context dependencies."""
