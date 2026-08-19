@@ -28,6 +28,11 @@ def _task(task_id: str = "t-0", **kwargs: Any) -> Task:
     return Task(task_id=task_id, inputs=inputs, **kwargs)
 
 
+class AsyncCallableScorer:
+    async def __call__(self, trace: Trace) -> bool:
+        return len(trace.events) == 0
+
+
 async def _run(
     s: Scorer,
     *,
@@ -266,6 +271,12 @@ class TestAsyncScorers:
             return len(trace.events) == 0
 
         assert await _run(async_pass) == [Feedback(key="async_pass", score=True)]
+
+    @pytest.mark.asyncio
+    async def test_async_callable_object_awaited(self) -> None:
+        async_callable = Scorer(AsyncCallableScorer(), key="async_callable")
+
+        assert await _run(async_callable) == [Feedback(key="async_callable", score=True)]
 
 
 class TestScorerConstruction:

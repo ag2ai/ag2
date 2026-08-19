@@ -90,7 +90,7 @@ class Scorer:
             :class:`~ag2.eval.RunResult` use this key.
     """
 
-    __slots__ = ("_fn", "_key", "_params", "_is_async")
+    __slots__ = ("_fn", "_key", "_params")
 
     def __init__(
         self,
@@ -101,7 +101,6 @@ class Scorer:
         self._fn = fn
         self._key = key if key is not None else getattr(fn, "__name__", "scorer")
         self._params = _validate_signature(fn, self._key)
-        self._is_async = inspect.iscoroutinefunction(fn)
 
     @property
     def key(self) -> str:
@@ -134,10 +133,9 @@ class Scorer:
         call_args = {name: available[name] for name in self._params}
 
         try:
-            if self._is_async:
-                result = await self._fn(**call_args)
-            else:
-                result = self._fn(**call_args)
+            result = self._fn(**call_args)
+            if inspect.isawaitable(result):
+                result = await result
         except Exception as exc:
             logger.warning("Scorer %r raised %s: %s", self._key, type(exc).__name__, exc)
             return [
