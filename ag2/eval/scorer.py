@@ -22,8 +22,10 @@ matches LangSmith's settled shape::
             return False
         return calls[0].arguments.get("city") == reference_outputs["city"]
 
-Scorers can be sync or async — the decorator handles both. They should
-be pure functions of their inputs (no I/O, no global state).
+Scorers can be sync or async: the wrapper calls the scorer and awaits
+the *result* whenever it is awaitable, so plain functions, ``async def``
+functions, and callable objects with an ``async def __call__`` all work.
+They should be pure functions of their inputs (no I/O, no global state).
 
 Return values are normalized into one or more :class:`Feedback` records:
 
@@ -81,7 +83,8 @@ class Scorer:
     closure's function name.
 
     Args:
-        fn: The scoring function. May be sync or async. May declare any
+        fn: The scoring function. May be sync or async — anything whose
+            result is awaitable is awaited. May declare any
             subset of the injectable parameters (``inputs``, ``outputs``,
             ``reference_outputs``, ``trace``, ``task``); anything else
             raises ``TypeError`` at construction time.
@@ -98,6 +101,12 @@ class Scorer:
         *,
         key: str | None = None,
     ) -> None:
+        if isinstance(fn, Scorer):
+            raise TypeError(
+                f"scorer {(key if key is not None else fn.key)!r}: cannot wrap a Scorer; its "
+                f"feedback already carries its own key, so this one would be silently discarded — "
+                f"pass the underlying function instead"
+            )
         self._fn = fn
         self._key = key if key is not None else getattr(fn, "__name__", "scorer")
         self._params = _validate_signature(fn, self._key)
