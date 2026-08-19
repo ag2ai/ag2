@@ -132,7 +132,7 @@ pip install ag2[openai]
 pip install 'ag2[openai]'
 ```
 
-Minimal dependencies are installed by default. Install the extra that matches your model provider — `ag2[openai]`, `ag2[anthropic]`, `ag2[gemini]`, `ag2[ollama]`, and so on.
+Minimal dependencies are installed by default. Install the extra that matches your model provider — `ag2[openai]`, `ag2[anthropic]`, `ag2[gemini]`, `ag2[ollama]`, `ag2[orcarouter]`, and so on.
 
 ### Setup your API keys
 

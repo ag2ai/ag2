@@ -49,6 +49,7 @@ def test_rejects_multiple_metrics_middlewares_for_same_registry(registry: Collec
         pytest.param(ModelProvider.GEMINI, "gemini", id="gemini"),
         pytest.param(ModelProvider.OLLAMA, "ollama", id="ollama"),
         pytest.param(ModelProvider.OPENAI, "openai", id="openai"),
+        pytest.param(ModelProvider.ORCAROUTER, "orcarouter", id="orcarouter"),
         pytest.param(ModelProvider.VERTEXAI, "vertexai", id="vertexai"),
         pytest.param(ModelProvider.XAI, "xai", id="xai"),
         pytest.param(ModelProvider.ZAI, "zai", id="zai"),

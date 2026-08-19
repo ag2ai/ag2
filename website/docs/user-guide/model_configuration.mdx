@@ -24,6 +24,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[xAI](https://docs.x.ai/docs/overview)** | `XAIConfig` | `pip install "ag2[xai]"` |
 | **[Z.AI](https://docs.z.ai)** | `ZAIConfig` | `pip install "ag2[zai]"` |
 | **[Mistral](https://docs.mistral.ai)** | `MistralConfig` | `pip install "ag2[mistral]"` |
+| **[OrcaRouter](https://www.orcarouter.ai)** | `OrcaRouterConfig` | `pip install "ag2[orcarouter]"` |
 
 *(Note: `OpenAIConfig` is also available for OpenAI-compatible endpoints).*
 
@@ -422,6 +423,21 @@ The image URL is a short-lived signed link, so download it promptly if you need 
     ```bash
     pip install "mistralai>=2.8.0" "opentelemetry-api>=1.43" "opentelemetry-sdk>=1.43" "opentelemetry-semantic-conventions>=0.64b0"
     ```
+
+### OrcaRouter Configuration
+
+[OrcaRouter](https://www.orcarouter.ai){.external-link target="_blank"} is a multi-model gateway that exposes a single OpenAI-compatible `chat/completions` endpoint and routes each request to the best upstream model. `OrcaRouterConfig` connects to it through the same OpenAI-compatible transport used by `OpenAIConfig`. Install the optional dependency with `pip install "ag2[orcarouter]"`.
+
+If `api_key` is not passed explicitly, it is resolved from the `ORCAROUTER_API_KEY` environment variable; `base_url` defaults to `https://api.orcarouter.ai/v1`.
+
+```python linenums="1"
+from ag2.config import OrcaRouterConfig
+
+# Auth resolved from ORCAROUTER_API_KEY when omitted
+config = OrcaRouterConfig(model="orcarouter/auto", streaming=True)
+```
+
+OrcaRouter supports the same generation parameters as the OpenAI chat-completions API — `max_tokens`, `temperature`, `top_p`, `stop`, tool calling, and structured output — through the corresponding `OrcaRouterConfig` fields.
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
