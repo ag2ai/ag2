@@ -40,8 +40,8 @@ from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTiger
 governance = TealTigerMiddleware(
     mode=GovernanceMode.ENFORCE,
     policies=[
-        GovernancePolicy.tool_allowlist(["search", "read_*"]),
         GovernancePolicy.prompt_injection_block(),
+        GovernancePolicy.tool_allowlist(["search", "read_*"]),
         GovernancePolicy.pii_block(["ssn", "credit_card", "email", "phone"]),
         GovernancePolicy.secret_detection(),
         GovernancePolicy.cost_limit(max_per_session=5.0),
@@ -190,17 +190,23 @@ Block tool calls containing adversarial prompt injection patterns in their argum
 GovernancePolicy.prompt_injection_block()
 ```
 
-Detects 5 technique categories with 19 regex patterns:
+Detects 5 technique categories with 20 regex patterns:
 
-| Technique | What It Catches | Confidence |
-|-----------|----------------|:----------:|
-| `instruction_override` | "Ignore previous instructions", system prompt override, context resets | 0.80–0.95 |
-| `role_manipulation` | DAN jailbreak, developer mode, persona switching, "jailbreak mode" | 0.85–0.95 |
-| `context_manipulation` | Delimiter injection, XML tag injection, fake system messages | 0.80–0.90 |
-| `encoding_evasion` | Base64 payloads, hex encoding, unicode escapes, ROT13 references | 0.65–0.75 |
-| `multi_turn_assembly` | Payload splitting, continuation attacks | 0.80–0.85 |
+| Technique | Patterns | What It Catches | Confidence |
+|-----------|:--------:|----------------|:----------:|
+| `instruction_override` | 5 | "Ignore previous instructions", system prompt override, context resets | 0.80–0.95 |
+| `role_manipulation` | 5 | DAN jailbreak, developer mode, persona switching, "jailbreak mode" | 0.85–0.95 |
+| `context_manipulation` | 4 | Delimiter injection, XML/chat-template tag injection, markdown fence injection, fake system messages | 0.80–0.90 |
+| `encoding_evasion` | 4 | Base64 payloads, hex escapes, unicode escapes, ROT13 references | 0.65–0.75 |
+| `multi_turn_assembly` | 2 | Payload splitting, continuation attacks | 0.80–0.85 |
 
 Denied with reason code `PROMPT_INJECTION:{technique}/{pattern_name}` and risk score 95.
+
+Patterns match on injection *framing*, not on keywords alone — `DAN` counts only alongside
+a jailbreak cue and is matched case-sensitively, a `<system>` tag counts only when
+instruction-like content follows it. Without that, ordinary arguments (a colleague named
+Dan, `<system>` in an XML payload, "add the new rules to the linter config") would be
+denied at risk score 95.
 
 **Selective techniques** — enable only specific categories:
 
@@ -218,7 +224,19 @@ GovernancePolicy.prompt_injection_block(
 )
 ```
 
-Each pattern has an assigned confidence score (0.0–1.0). Only patterns meeting or exceeding the threshold are evaluated. Default threshold is `0.7`.
+Each pattern carries a fixed confidence score (0.0–1.0). The threshold selects **which
+patterns run** — it is not a score computed per match — and only patterns at or above it are
+evaluated. Default threshold is `0.7`, which leaves `rot13_reference` (0.65) inactive; lower
+the threshold to enable it.
+
+An unknown technique name, an empty `techniques` list, or a threshold outside 0.0–1.0 raises
+`ValueError` at policy construction, so a typo cannot silently leave the policy detecting
+nothing.
+
+!!! note "Policies are evaluated in list order"
+    Policies are evaluated in the order you pass them, and evaluation stops at the first denial.
+    Put `prompt_injection_block()` before `tool_allowlist(...)` if you want injection
+    attempts reported as `PROMPT_INJECTION:…` rather than `TOOL_NOT_ALLOWED`.
 
 ## Factory-Level Budget
 
@@ -523,8 +541,8 @@ flowchart TB
 
 ```text
 ag2/extensions/tealtiger/
-├── __init__.py       # Public API: TealTigerMiddleware, GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt, INJECTION_PATTERNS
-├── types.py          # GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt, INJECTION_PATTERNS
+├── __init__.py       # Public API: TealTigerMiddleware, GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt + injection detection types
+├── types.py          # GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt + injection detection types (InjectionPattern, InjectionFinding, INJECTION_PATTERNS, INJECTION_TECHNIQUES, DEFAULT_INJECTION_CONFIDENCE_THRESHOLD)
 └── middleware.py     # TealTigerMiddleware (factory) + _TealTigerPerTurn (per-turn) + _PII_PATTERNS / _SECRET_PATTERNS / _detect_prompt_injection
 ```
 
