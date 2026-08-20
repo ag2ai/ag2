@@ -25,7 +25,7 @@ import contextlib
 import functools
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 from websockets.asyncio.client import connect as _ws_connect
@@ -267,7 +267,7 @@ async def serve_ws(
     ssl_context: Any = None,
     ping_interval: float | None = 20.0,
     ping_timeout: float | None = 20.0,
-) -> AsyncIterator["_WsServer"]:
+) -> AsyncGenerator["_WsServer"]:
     """Run a WebSocket server bound to a hub.
 
     Each incoming connection becomes a :class:`WsLinkEndpoint`

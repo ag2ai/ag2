@@ -20,7 +20,7 @@ import asyncio
 import logging
 import time
 from collections import OrderedDict
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import Any
@@ -254,7 +254,7 @@ class AgentSession:
             task.cancel()
 
     @asynccontextmanager
-    async def recovery(self) -> AsyncIterator[None]:
+    async def recovery(self) -> AsyncGenerator[None]:
         """Hold the turn lock for post-cancellation repair.
 
         Repairing a cancelled turn is a read-modify-write over the session's
@@ -270,7 +270,7 @@ class AgentSession:
             yield
 
     @asynccontextmanager
-    async def turn(self) -> AsyncIterator[None]:
+    async def turn(self) -> AsyncGenerator[None]:
         """Hold this session's turn lock for the duration of one prompt.
 
         Concurrent prompts on one session queue rather than interleave —
@@ -410,7 +410,7 @@ class SessionStore:
         return self._active_prompts
 
     @asynccontextmanager
-    async def admit(self) -> AsyncIterator[None]:
+    async def admit(self) -> AsyncGenerator[None]:
         """Admit one prompt against the connection-wide bounds.
 
         Wraps the whole prompt, *outside* the session's own turn lock, so a
@@ -428,7 +428,7 @@ class SessionStore:
             self._active_prompts -= 1
 
     @asynccontextmanager
-    async def running_turn(self) -> AsyncIterator[None]:
+    async def running_turn(self) -> AsyncGenerator[None]:
         """Hold one of the connection's concurrent-turn slots.
 
         Taken *inside* the session's turn lock, so a prompt waiting its turn on a

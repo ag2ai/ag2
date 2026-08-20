@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -28,7 +28,7 @@ def with_tenant(config: A2AConfig, override: str | None, **kwargs: Any) -> dict[
 
 
 @asynccontextmanager
-async def open_session(config: A2AConfig) -> AsyncIterator[tuple[Client, ClientCallContext | None]]:
+async def open_session(config: A2AConfig) -> AsyncGenerator[tuple[Client, ClientCallContext | None]]:
     """Open a short-lived A2A SDK client for one-shot RPCs.
 
     Combines the httpx client, card resolution, and SDK factory into a
