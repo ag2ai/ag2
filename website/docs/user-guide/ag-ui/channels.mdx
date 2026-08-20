@@ -11,7 +11,7 @@ The same AG2 agent that powers your in-app copilot can also run as a bot in mess
 
 ## How it fits together
 
-Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](/docs/user-guide/ag-ui/#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels){.external-link target="_blank"}, connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence){.external-link target="_blank"}. Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn over a persistent gateway connection to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
+Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](/docs/user-guide/ag-ui/index#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels){.external-link target="_blank"}, connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence){.external-link target="_blank"}. Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn over a persistent gateway connection to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
 
 ```text
 Slack  ──►  CopilotKit Intelligence  ──►  channel process (Node)  ──►  AG2 server (AGUIStream)
@@ -82,7 +82,7 @@ const listener = createCopilotNodeListener({ runtime });
 await listener.channels.ready({ timeoutMs: 15_000 }); // fail startup loudly on a broken config
 ```
 
-Run the channel process alongside the AG-UI server from the [basic server example](/docs/user-guide/ag-ui/#basic-server-example). Both credentials come from the Intelligence dashboard — the API key under **API Keys**, the Code on the Channel you created there:
+Run the channel process alongside the AG-UI server from the [basic server example](/docs/user-guide/ag-ui/index#basic-server-example). Both credentials come from the Intelligence dashboard — the API key under **API Keys**, the Code on the Channel you created there:
 
 ```bash
 uvicorn run_ag_ui:app --reload --port 8000   # terminal 1 — AG2 server
@@ -116,7 +116,7 @@ Discord, Teams, Telegram, and WhatsApp connect the same way — a managed connec
 
 ## Next steps
 
-1. Build the AG-UI endpoint from the [basic server example](/docs/user-guide/ag-ui/#basic-server-example) if you have not already.
+1. Build the AG-UI endpoint from the [basic server example](/docs/user-guide/ag-ui/index#basic-server-example) if you have not already.
 2. Create the Channel in CopilotKit Intelligence and connect Slack there, then export the API key and the Channel's Code.
 3. Start the channel process, invite the app to a Slack channel, and mention it.
 4. For a web UI on the same endpoint, follow the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart).

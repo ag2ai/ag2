@@ -40,7 +40,7 @@ for the coordinator graph.
   researcher had a chance to speak, terminating the workflow prematurely.
   Making the writer the terminal speaker sidesteps this hazard entirely:
   parallel calls to `#!python delegate_researcher` and `#!python delegate_writer`
-  are safe because [first-emitted-wins](/docs/user-guide/network/workflow#first-emitted-wins)
+  are safe because [first-emitted-wins](/docs/user-guide/network/workflow#custom-graphs)
   picks researcher (the other tool runs but its `#!python Handoff` doesn't
   drive routing), and the writer step still runs in its own dedicated
   round once researcher returns.
