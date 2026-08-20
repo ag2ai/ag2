@@ -4,7 +4,7 @@
 
 import asyncio
 import base64
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import replace
 from typing import Any, get_args
@@ -61,7 +61,7 @@ AnyMCPConfig = MCPServerConfig | MCPStdioServerConfig
 
 
 @asynccontextmanager
-async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
+async def _mcp_session(config: AnyMCPConfig) -> AsyncGenerator[ClientSession]:
     """Open a short-lived MCP ``ClientSession`` for one operation.
 
     Dispatches on the config type — HTTP/streamable-http for
@@ -109,13 +109,15 @@ class _MCPProxyTool(Tool):
         config: AnyMCPConfig,
         raw_tool: MCPTool,
         *,
-        name: str,
+        tool_name_prefix: str = "",
         middleware: tuple[ToolMiddleware, ...] = (),
     ) -> None:
         self._config = config
         self._middleware = middleware
+        # Two names for one tool: the remote one the server knows, and the
+        # (possibly prefixed) local one the agent and the LLM see.
         self._remote_name = raw_tool.name
-        self.name = name
+        self.name = f"{tool_name_prefix}{raw_tool.name}"
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
                 name=self.name,
@@ -176,15 +178,20 @@ class MCPToolkit(Toolkit):
     MCP handshake, lists the server's tools, and registers a proxy for each
     one. The agent never sees that these are MCP tools — they look and behave
     like ordinary :class:`FunctionTool` instances.
+
+    Set ``tool_name_prefix`` on the config to namespace the agent-visible tool
+    names, so that two servers exposing the same generic name (``search``) do
+    not collide locally. The prefix never reaches the server: discovery
+    filters (``allowed_tools`` / ``blocked_tools``) and the outbound
+    ``call_tool`` request both use the server's original names.
     """
 
-    __slots__ = ("config", "_discovered", "_discover_lock", "_tool_name_prefix")
+    __slots__ = ("config", "_discovered", "_discover_lock")
 
     def __init__(
         self,
         server: str | MCPServerConfig | MCPStdioServerConfig,
         *,
-        tool_name_prefix: str = "",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         if isinstance(server, str):
@@ -192,7 +199,6 @@ class MCPToolkit(Toolkit):
         self.config: AnyMCPConfig = server
         self._discovered = False
         self._discover_lock = asyncio.Lock()
-        self._tool_name_prefix = tool_name_prefix
 
         label = server.server_label if isinstance(server.server_label, str) else ""
         super().__init__(
@@ -217,11 +223,13 @@ class MCPToolkit(Toolkit):
             async with _mcp_session(resolved) as session:
                 raw_tools = (await session.list_tools()).tools
 
-            # Both already resolved (Variable -> concrete) by _resolve_config above.
+            # All already resolved (Variable -> concrete) by _resolve_config above.
             allowed = resolved.allowed_tools
             blocked = set(resolved.blocked_tools or [])  # type: ignore[arg-type]
+            prefix: str = resolved.tool_name_prefix  # type: ignore[assignment]
 
             for raw in raw_tools:
+                # Filters match the server's own names, before any prefixing.
                 if allowed is not None and raw.name not in allowed:  # type: ignore[operator]
                     continue
                 if raw.name in blocked:
@@ -229,7 +237,7 @@ class MCPToolkit(Toolkit):
                 proxy = _MCPProxyTool(
                     config=self.config,
                     raw_tool=raw,
-                    name=f"{self._tool_name_prefix}{raw.name}",
+                    tool_name_prefix=prefix,
                     middleware=self._middleware,
                 )
                 self._tools[proxy.name] = proxy
@@ -334,6 +342,7 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
             description=_resolve_value(config.description, context),
             allowed_tools=_resolve_value(config.allowed_tools, context),
             blocked_tools=_resolve_value(config.blocked_tools, context),
+            tool_name_prefix=_resolve_value(config.tool_name_prefix, context) or "",
         )
 
     headers = dict(_resolve_value(config.headers, context) or {})
@@ -349,5 +358,6 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
         description=_resolve_value(config.description, context),
         allowed_tools=_resolve_value(config.allowed_tools, context),
         blocked_tools=_resolve_value(config.blocked_tools, context),
+        tool_name_prefix=_resolve_value(config.tool_name_prefix, context) or "",
         headers=headers or None,
     )
