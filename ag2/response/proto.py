@@ -18,6 +18,7 @@ class ResponseProto(ABC, Generic[T]):
     description: str | None
     json_schema: dict[str, Any] | None
     system_prompt: str | None
+    last_message_prompt: str | None = None
 
     @abstractmethod
     async def validate(

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from ag2.config.bedrock import BedrockClient
 from ag2.config.bedrock.mappers import response_proto_to_output_config
 from ag2.events import ModelRequest, TextInput
-from ag2.response import PromptedSchema, ResponseSchema
+from ag2.response import LastMessagePromptedSchema, PromptedSchema, ResponseSchema
 from test.config.bedrock._helpers import FakeBedrockRuntime, StubSession, make_call_context
 
 
@@ -62,6 +62,7 @@ def test_output_config_nested_additional_properties() -> None:
 def test_output_config_none_without_json_schema() -> None:
     assert response_proto_to_output_config(None) is None
     assert response_proto_to_output_config(PromptedSchema(Verdict)) is None
+    assert response_proto_to_output_config(LastMessagePromptedSchema(Verdict)) is None
 
 
 @pytest.mark.asyncio
