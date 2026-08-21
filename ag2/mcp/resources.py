@@ -2,21 +2,30 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import re
-from collections.abc import Awaitable, Callable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from mcp.server.lowlevel.helper_types import ReadResourceContents
+from mcp.types import (
+    BlobResourceContents,
+    ListResourceTemplatesResult,
+    ListResourcesResult,
+    PaginatedRequestParams,
+    ReadResourceRequestParams,
+    ReadResourceResult,
+    TextResourceContents,
+)
 from mcp.types import Resource as MCPResource
 from mcp.types import ResourceTemplate as MCPResourceTemplate
-from pydantic import AnyUrl
 
 from ._async import call_user_fn
 from .errors import MCPResourceNotFoundError
 
 if TYPE_CHECKING:
-    from mcp.server.lowlevel import Server
+    from mcp.server.context import ServerRequestContext
 
 # Resource bodies are either text (``str``) or binary (``bytes``); the reader may
 # be sync or async. A template reader additionally receives the variables matched
@@ -31,8 +40,8 @@ class Resource:
     """A static MCP resource exposed at a fixed ``uri``.
 
     ``read`` returns the body (``str`` → text, ``bytes`` → binary) and may be sync
-    or async. ``mime_type`` defaults per the MCP SDK (``text/plain`` for text,
-    ``application/octet-stream`` for bytes) when left ``None``.
+    or async. ``mime_type`` defaults to ``text/plain`` for text and
+    ``application/octet-stream`` for bytes when left ``None``.
     """
 
     uri: str
@@ -95,23 +104,30 @@ class ResourceProvider:
         self._by_uri = {r.uri: r for r in self._resources}
         self._compiled = [(_compile_template(t.uri_template), t) for t in self._templates]
 
-    def register(self, server: "Server") -> None:
-        provider = self
+    @property
+    def has_templates(self) -> bool:
+        """Whether to register a ``resources/templates/list`` handler at all.
 
-        # ``mcp``'s low-level decorators are untyped; ignore the resulting noise.
-        @server.list_resources()  # type: ignore[no-untyped-call, misc]
-        async def _list_resources() -> list[MCPResource]:
-            return [_to_mcp_resource(r) for r in provider._resources]
+        The capability is advertised from the registered handlers, so a server
+        with only static resources must not carry this one.
+        """
+        return bool(self._templates)
 
-        @server.read_resource()  # type: ignore[no-untyped-call, misc]
-        async def _read_resource(uri: AnyUrl) -> Iterable[ReadResourceContents]:
-            return await provider.read(str(uri))
+    async def on_list_resources(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> ListResourcesResult:
+        return ListResourcesResult(resources=[_to_mcp_resource(r) for r in self._resources])
 
-        if self._templates:
+    async def on_list_resource_templates(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> ListResourceTemplatesResult:
+        return ListResourceTemplatesResult(resourceTemplates=[_to_mcp_template(t) for t in self._templates])
 
-            @server.list_resource_templates()  # type: ignore[no-untyped-call, misc]
-            async def _list_resource_templates() -> list[MCPResourceTemplate]:
-                return [_to_mcp_template(t) for t in provider._templates]
+    async def on_read_resource(
+        self, ctx: "ServerRequestContext[Any, Any]", params: ReadResourceRequestParams
+    ) -> ReadResourceResult:
+        contents = await self.read(params.uri)
+        return ReadResourceResult(contents=[_to_wire_contents(params.uri, c) for c in contents])
 
     async def read(self, uri: str) -> list[ReadResourceContents]:
         resource = self._by_uri.get(uri)
@@ -126,9 +142,31 @@ class ResourceProvider:
         raise MCPResourceNotFoundError(uri)
 
 
+def _to_wire_contents(uri: str, contents: ReadResourceContents) -> TextResourceContents | BlobResourceContents:
+    """Map a read body onto the wire contents variant matching its type.
+
+    ``mcp`` 1.x did this inside the ``read_resource`` decorator; the 2.0 handler
+    returns a complete result, so the mapping — and its MIME-type defaults, which
+    :class:`Resource` documents — moves here.
+    """
+    if isinstance(contents.content, bytes):
+        return BlobResourceContents(
+            uri=uri,
+            mimeType=contents.mime_type or "application/octet-stream",
+            blob=base64.b64encode(contents.content).decode("ascii"),
+            _meta=contents.meta,
+        )
+    return TextResourceContents(
+        uri=uri,
+        mimeType=contents.mime_type or "text/plain",
+        text=contents.content,
+        _meta=contents.meta,
+    )
+
+
 def _to_mcp_resource(resource: Resource) -> MCPResource:
     return MCPResource(
-        uri=AnyUrl(resource.uri),
+        uri=resource.uri,
         name=resource.name,
         description=resource.description,
         mimeType=resource.mime_type,

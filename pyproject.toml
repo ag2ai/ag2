@@ -118,13 +118,15 @@ perplexity = ["perplexityai>=0.30.0,<1"]
 
 # === MCP (ag2.mcp) ===
 mcp = [
-    # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
-    "mcp>=1.11.0,<2",
+    "mcp>=2.0.0,<3",
+    # imported directly to validate tool arguments; `mcp` requires it too, so this
+    # only pins what is already installed
+    "jsonschema>=4.20.0,<5",
 ]
 # MCP-UI resources (ag2.mcp_ui) — return renderable UI blobs from tool results
 mcp-ui = [
     "mcp-ui-server>=1.0.0",
-    "mcp>=1.11.0,<2",
+    "mcp>=2.0.0,<3",
 ]
 
 [dependency-groups]
@@ -235,7 +237,7 @@ docs = [
     "pyyaml==6.0.3",
     "termcolor==3.3.0",
     "nbclient==0.11.0",
-    "mcp>=1.11.0,<2",
+    "mcp>=2.0.0,<3",
 ]
 
 types = [
