@@ -11,10 +11,14 @@ from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
     ATTR_HUMAN_INPUT_RESPONSE,
     ATTR_SPAN_TYPE,
+    ATTR_USAGE_KIND,
+    ATTR_USAGE_LABEL,
+    ATTR_USAGE_TOTAL,
     SPAN_TYPE_AGENT,
     SPAN_TYPE_HUMAN_INPUT,
     SPAN_TYPE_LLM,
     SPAN_TYPE_TOOL,
+    SPAN_TYPE_USAGE,
 )
 from ag2.eval.scorers import no_tool_errors, tool_called
 from ag2.eval.sources._spans import (
@@ -31,6 +35,8 @@ from ag2.events import (
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
+    Usage,
+    UsageEvent,
 )
 
 _MS = 1_000_000
@@ -82,6 +88,53 @@ def _tool_span(start_ns: int, *, name: str, call_id: str, args: str = "{}", resu
             "gen_ai.tool.call.arguments": args,
             "gen_ai.tool.call.result": result,
         },
+    )
+
+
+def _worker_agent_span(start_ns: int, *, agent_name: str) -> SpanData:
+    """A nested ``invoke_agent`` span — a sub-agent that is instrumented too."""
+    return SpanData(
+        name=f"invoke_agent {agent_name}",
+        span_id=f"agent-{agent_name}",
+        parent_id="root",
+        start_ns=start_ns,
+        end_ns=start_ns + 100 * _MS,
+        attributes={ATTR_SPAN_TYPE: SPAN_TYPE_AGENT, "gen_ai.agent.name": agent_name},
+    )
+
+
+def _usage_span(
+    start_ns: int,
+    *,
+    kind: str,
+    label: str | None = None,
+    parent_id: str = "root",
+    in_tok: int = 900,
+    out_tok: int = 90,
+    total: int = 990,
+    cache_create: int = 7,
+    cache_read: int = 3,
+) -> SpanData:
+    attributes: dict[str, object] = {
+        ATTR_SPAN_TYPE: SPAN_TYPE_USAGE,
+        ATTR_USAGE_KIND: kind,
+        "gen_ai.usage.input_tokens": in_tok,
+        "gen_ai.usage.output_tokens": out_tok,
+        ATTR_USAGE_TOTAL: total,
+    }
+    if label is not None:
+        attributes[ATTR_USAGE_LABEL] = label
+    if cache_create:
+        attributes["gen_ai.usage.cache_creation_input_tokens"] = cache_create
+    if cache_read:
+        attributes["gen_ai.usage.cache_read_input_tokens"] = cache_read
+    return SpanData(
+        name=f"record_usage {kind}",
+        span_id=f"usage-{start_ns}",
+        parent_id=parent_id,
+        start_ns=start_ns,
+        end_ns=start_ns,
+        attributes=attributes,
     )
 
 
@@ -148,6 +201,112 @@ class TestAG2GenAIConvention:
         assert responses[0].finish_reason == "stop"
         assert trace.tokens.input == 12
         assert trace.tokens.output == 7
+        assert trace.tokens.total == 19
+
+    def test_usage_span_reconstructs_the_accounting_event(self) -> None:
+        trace = spans_to_trace([_agent_span(), _usage_span(20 * _MS, kind="subtask", label="worker")])
+
+        [usage_event] = trace.events_of(UsageEvent)
+        assert usage_event.usage == Usage(
+            prompt_tokens=900,
+            completion_tokens=90,
+            total_tokens=990,
+            cache_creation_input_tokens=7,
+            cache_read_input_tokens=3,
+        )
+        assert usage_event.kind == "subtask"
+        assert usage_event.label == "worker"
+
+    def test_usage_span_and_the_llm_span_it_accompanies_count_once(self) -> None:
+        """A main-loop call produces both spans — exactly one accounting event."""
+        trace = spans_to_trace([
+            _agent_span(),
+            _llm_span(10 * _MS, in_tok=12, out_tok=7),
+            _usage_span(11 * _MS, kind="model_call", in_tok=12, out_tok=7, total=19, cache_create=0, cache_read=0),
+        ])
+
+        assert len(trace.events_of(UsageEvent)) == 1
+
+    def test_llm_span_does_not_synthesize_when_the_trace_records_usage(self) -> None:
+        """AG2 records usage as its own span, so synthesizing as well would double-count."""
+        trace = spans_to_trace([
+            _agent_span(),
+            _llm_span(10 * _MS, in_tok=12, out_tok=7),
+            _usage_span(11 * _MS, kind="model_call", in_tok=12, out_tok=7, total=19, cache_create=0, cache_read=0),
+            _llm_span(30 * _MS, in_tok=1, out_tok=1),
+            _usage_span(31 * _MS, kind="model_call", in_tok=1, out_tok=1, total=2, cache_create=0, cache_read=0),
+        ])
+
+        assert [int(e.usage.total_tokens or 0) for e in trace.events_of(UsageEvent)] == [19, 2]
+
+    def test_an_instrumented_worker_is_not_counted_twice(self) -> None:
+        """A rollup and the worker's own accounting are the same tokens.
+
+        ``UsageReport``'s no-double-count invariant rests on a sub-agent's
+        per-call events staying on its private stream. A span tree flattens
+        every instrumented agent into one trace, so when the worker is
+        instrumented too, both readings are present and the rollup is the
+        redundant one.
+        """
+        trace = spans_to_trace([
+            _agent_span(),
+            _usage_span(10 * _MS, kind="model_call", in_tok=100, out_tok=10, total=110, cache_create=0, cache_read=0),
+            _worker_agent_span(20 * _MS, agent_name="worker"),
+            _usage_span(
+                21 * _MS,
+                kind="model_call",
+                parent_id="agent-worker",
+                in_tok=900,
+                out_tok=90,
+                total=990,
+                cache_create=0,
+                cache_read=0,
+            ),
+            _usage_span(
+                22 * _MS,
+                kind="subtask",
+                label="worker",
+                in_tok=900,
+                out_tok=90,
+                total=990,
+                cache_create=0,
+                cache_read=0,
+            ),
+        ])
+
+        assert [e.kind for e in trace.events_of(UsageEvent)] == ["model_call", "model_call"]
+        assert trace.tokens.total == 1100
+
+    def test_a_rollup_is_kept_when_its_worker_is_not_instrumented(self) -> None:
+        """The ordinary case — the rollup is the only record of the worker's spend."""
+        trace = spans_to_trace([
+            _agent_span(),
+            _usage_span(10 * _MS, kind="model_call", in_tok=100, out_tok=10, total=110, cache_create=0, cache_read=0),
+            _usage_span(
+                20 * _MS,
+                kind="subtask",
+                label="worker",
+                in_tok=900,
+                out_tok=90,
+                total=990,
+                cache_create=0,
+                cache_read=0,
+            ),
+        ])
+
+        assert [e.kind for e in trace.events_of(UsageEvent)] == ["model_call", "subtask"]
+        assert trace.tokens.total == 1100
+
+    def test_trace_captured_before_usage_spans_still_reports_its_tokens(self) -> None:
+        """Spans exported by an older AG2 carry counts on the LLM span alone.
+
+        Reading only the accounting event would report zero for every archived
+        trace, which is a regression rather than the intended correction.
+        """
+        trace = spans_to_trace([_agent_span(), _llm_span(10 * _MS, in_tok=12, out_tok=7)])
+
+        [usage_event] = trace.events_of(UsageEvent)
+        assert usage_event.usage == Usage(prompt_tokens=12, completion_tokens=7)
         assert trace.tokens.total == 19
 
     def test_tool_span_success_reconstructs_call_and_result(self) -> None:
@@ -229,6 +388,37 @@ class TestOpenInferenceConvention:
         assert tool_called("get_weather")._fn(trace=trace) is True
         assert no_tool_errors()._fn(trace=trace) is True
 
+    def test_llm_synthesizes_an_accounting_event(self) -> None:
+        """A foreign producer emits no ``UsageEvent``, so its per-call usage is synthesized.
+
+        Without this the trace carries no accounting record at all, and it would
+        report zero tokens once ``Trace.tokens`` reads that record — a regression
+        for people running third-party instrumentors who changed nothing.
+        """
+        trace = spans_to_trace([_oi_agent(), _oi_llm(100 * _MS, in_tok=62, out_tok=14)])
+
+        [usage_event] = trace.events_of(UsageEvent)
+        assert usage_event.usage == Usage(prompt_tokens=62, completion_tokens=14)
+        assert usage_event.kind == "model_call"
+        assert usage_event.model == "gpt-4o-mini"
+        assert usage_event.provider == "OpenAI"
+
+    def test_llm_without_usage_synthesizes_nothing(self) -> None:
+        """No counts declared is not the same as a call that cost nothing."""
+        bare = SpanData(
+            name="OpenAIChat.invoke",
+            span_id="oi-llm-bare",
+            parent_id="root",
+            start_ns=100 * _MS,
+            end_ns=150 * _MS,
+            attributes={_OI_KIND: "LLM", "llm.model_name": "gpt-4o-mini"},
+        )
+
+        trace = spans_to_trace([_oi_agent(), bare])
+
+        assert trace.events_of(UsageEvent) == ()
+        assert len(trace.events_of(ModelResponse)) == 1
+
 
 class TestConventionDispatch:
     """How ``spans_to_trace`` selects a reader across dialects (auto-detect, mix, override)."""
@@ -236,7 +426,12 @@ class TestConventionDispatch:
     def test_openinference_auto_detected_by_default(self) -> None:
         """No explicit conventions → spans_to_trace still recognizes OpenInference (auto-detect)."""
         trace = spans_to_trace([_oi_agent(), _oi_tool(100 * _MS), _oi_llm(200 * _MS, content="done")])
-        assert [type(e).__name__ for e in trace.events] == ["ToolCallEvent", "ToolResultEvent", "ModelResponse"]
+        assert [type(e).__name__ for e in trace.events] == [
+            "ToolCallEvent",
+            "ToolResultEvent",
+            "ModelResponse",
+            "UsageEvent",
+        ]
 
     def test_mixed_dialect_trace_uses_both_readers(self) -> None:
         """One trace with an AG2 span and an OpenInference span → both reconstruct (multiple readers, one trace)."""
@@ -274,9 +469,12 @@ class TestTraceAssembly:
         ])
 
         kinds = [type(e).__name__ for e in trace.events]
-        # llm(100) -> tool first(200): call+result -> tool second(300): call+result
+        # llm(100), with its back-compat usage synthesized alongside (this trace
+        # records no usage spans) -> tool first(200): call+result -> tool
+        # second(300): call+result
         assert kinds == [
             "ModelResponse",
+            "UsageEvent",
             "ToolCallEvent",
             "ToolResultEvent",
             "ToolCallEvent",
