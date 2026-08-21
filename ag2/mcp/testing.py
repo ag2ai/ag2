@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import httpx
@@ -19,7 +19,7 @@ async def connect(
     *,
     raise_exceptions: bool = True,
     **session_kwargs: object,
-) -> AsyncIterator[ClientSession]:
+) -> AsyncGenerator[ClientSession]:
     """Yield an in-process, initialized MCP ``ClientSession`` talking to ``mcp_server``.
 
     Dispatches directly into the wrapped low-level server over in-memory streams
@@ -37,7 +37,7 @@ async def connect(
 
 
 @asynccontextmanager
-async def serve(server: MCPServer, *, base_url: str = "http://test") -> AsyncIterator[httpx.AsyncClient]:
+async def serve(server: MCPServer, *, base_url: str = "http://test") -> AsyncGenerator[httpx.AsyncClient]:
     """Yield an ``httpx.AsyncClient`` bound to ``server`` over the in-memory ASGI transport.
 
     Drives the ASGI ``lifespan`` protocol so the streamable-HTTP session manager

@@ -184,7 +184,7 @@ resource limit. The cap is shared by both tools on the Agent, so several
 parallel `run_subtask` calls and a concurrent `run_subtasks` call cannot
 bypass one another.
 
-For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agent-as-tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
+For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agentas_tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
 
 See [Subagents](/docs/user-guide/subagents) for the full sub-task delegation guide — context flow and custom streams for self-delegation via `as_tool()`.
 

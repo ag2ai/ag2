@@ -3,7 +3,7 @@ title: Serving A2UI over A2A
 sidebarTitle: A2A Transport
 ---
 
-A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](/docs/user-guide/a2a/) exchange instead of the built-in [REST adapter](/docs/user-guide/a2ui/server). The `#!python ag2.a2ui.a2a` submodule wraps a plain `#!python ag2.Agent` in an `#!python A2UIAgentExecutor`, plugs it into a standard `#!python A2AServer`, and carries each turn's A2UI messages as a canonical A2A `#!python DataPart`.
+A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](/docs/user-guide/a2a/overview) exchange instead of the built-in [REST adapter](/docs/user-guide/a2ui/server). The `#!python ag2.a2ui.a2a` submodule wraps a plain `#!python ag2.Agent` in an `#!python A2UIAgentExecutor`, plugs it into a standard `#!python A2AServer`, and carries each turn's A2UI messages as a canonical A2A `#!python DataPart`.
 
 !!! note
     This page assumes familiarity with the [A2A server](/docs/user-guide/a2a/server). The A2UI integration is a drop-in `#!python executor` for the same `#!python A2AServer` — everything you know about cards, transports, and tasks still applies.

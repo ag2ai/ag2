@@ -4,7 +4,7 @@
 
 import asyncio
 import base64
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import replace
 from typing import Any, get_args
@@ -61,7 +61,7 @@ AnyMCPConfig = MCPServerConfig | MCPStdioServerConfig
 
 
 @asynccontextmanager
-async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
+async def _mcp_session(config: AnyMCPConfig) -> AsyncGenerator[ClientSession]:
     """Open a short-lived MCP ``ClientSession`` for one operation.
 
     Dispatches on the config type — HTTP/streamable-http for

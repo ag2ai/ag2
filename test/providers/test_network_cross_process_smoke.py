@@ -36,7 +36,7 @@ present (loaded from ``.env`` at repo root).
 import asyncio
 import contextlib
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
@@ -113,7 +113,7 @@ def _gemini(keys: dict[str, str]) -> GeminiConfig:
 
 
 @contextlib.asynccontextmanager
-async def _network() -> AsyncIterator[tuple[Hub, str, list[HubClient]]]:
+async def _network() -> AsyncGenerator[tuple[Hub, str, list[HubClient]]]:
     """Start a hub on a loopback ``serve_ws`` port.
 
     Yields ``(hub, ws_url, clients)``. The hub object is held by the

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from functools import partial
 from typing import Any, overload
@@ -31,7 +31,7 @@ class ABCStream(Stream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
-    ) -> Iterator[None]:
+    ) -> Generator[None]:
         sub_id = self.subscribe(
             func,
             interrupt=interrupt,
@@ -44,7 +44,7 @@ class ABCStream(Stream):
             self.unsubscribe(sub_id)
 
     @contextmanager
-    def join(self, *, max_events: int | None = None) -> Iterator[AsyncIterator[BaseEvent]]:
+    def join(self, *, max_events: int | None = None) -> Generator[AsyncIterator[BaseEvent]]:
         queue = asyncio.Queue[BaseEvent]()
 
         async def write_events(event: BaseEvent) -> None:
@@ -77,7 +77,7 @@ class ABCStream(Stream):
     async def get(
         self,
         condition: ClassInfo | Condition,
-    ) -> AsyncIterator[asyncio.Future[BaseEvent]]:
+    ) -> AsyncGenerator[asyncio.Future[BaseEvent]]:
         result = asyncio.Future[BaseEvent]()
 
         async def wait_result(event: BaseEvent) -> None:
@@ -109,10 +109,11 @@ class MemoryStream(ABCStream):
         "history",
         "pending_messages",
         "_background_tasks",
-        # Lazy per-stream asyncio.Lock used by Agent._execute to serialize
-        # concurrent turns on a shared stream. See agent.py's
-        # `_get_stream_turn_lock`. Declared here (not initialized in
-        # __init__) so __slots__ doesn't reject the attribute set.
+        # Lazy asyncio.Lock used by Agent._execute to serialize concurrent
+        # turns on this stream. Shared with every other object carrying the
+        # same `id`; cached here so the lookup is one attribute read. See
+        # agent.py's `_get_stream_turn_lock`. Declared here so __slots__
+        # doesn't reject the assignment.
         "_ag2_turn_lock",
     )
 
