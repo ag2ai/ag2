@@ -48,7 +48,21 @@ class UnsupportedInputError(AG2Error):
         super().__init__(f"Unsupported input type `{input_type}` for provider `{provider}`")
 
 
-class HumanInputNotProvidedError(AG2Error):
+class HumanInputError(AG2Error):
+    """Base for a failure of the human-input channel itself.
+
+    Distinct from a tool that failed: nobody could be asked, nobody answered in
+    time, or the asking blew up — so the turn has no honest answer to continue
+    from. Everything that leaves :meth:`ag2.Context.input` unanswered leaves it
+    as one of these, and tool execution lets them propagate instead of
+    recording them as a tool result. A tool that wants to carry on without an
+    answer catches this around ``context.input`` itself, which is the
+    difference between choosing to proceed and never being told the question
+    went nowhere.
+    """
+
+
+class HumanInputNotProvidedError(HumanInputError):
     """Raised when human-in-the-loop input was requested but not provided."""
 
     def __init__(self, message: str | None = None) -> None:
@@ -59,6 +73,38 @@ class HumanInputNotProvidedError(AG2Error):
                 "Please set it for agent using `Agent(..., hitl_hook=func)` or `@agent.hitl_hook`."
             )
         )
+
+
+class HumanInputFailedError(HumanInputError):
+    """Raised when the human-input channel raised instead of answering.
+
+    A ``hitl_hook`` is the channel to the human, so its failure means the
+    question was never put — an approval queue that is down denies nothing, it
+    answers nothing. The original exception is kept on :attr:`cause` and as
+    ``__cause__``, so a host that wants to tell its own failures apart still
+    can::
+
+        except HumanInputFailedError as exc:
+            if isinstance(exc.cause, QueueUnavailable):
+                ...
+    """
+
+    def __init__(self, cause: BaseException) -> None:
+        super().__init__(f"The human-input channel failed with {type(cause).__name__}: {cause}")
+        self.cause = cause
+
+
+class HumanInputTimeoutError(HumanInputError):
+    """Raised when nobody answered a human-input request in time.
+
+    The same outcome as no hook at all — the turn has no answer — and reported
+    the same way, because a question left unanswered for the timeout is not the
+    asking tool failing.
+    """
+
+    def __init__(self, timeout: float) -> None:
+        super().__init__(f"Nobody answered the human-input request within {timeout} seconds.")
+        self.timeout = timeout
 
 
 class ConfigNotProvidedError(AG2Error):

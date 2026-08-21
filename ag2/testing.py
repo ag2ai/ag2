@@ -24,8 +24,13 @@ __all__ = (
 class TestClient(LLMClient):
     __test__ = False
 
-    def __init__(self, *events: str | ModelResponse | ToolCallEvent | Iterable[ToolCallEvent]) -> None:
+    def __init__(
+        self,
+        *events: str | ModelResponse | ToolCallEvent | Iterable[ToolCallEvent],
+        raise_tool_errors: bool = True,
+    ) -> None:
         self.events = iter(events)
+        self.raise_tool_errors = raise_tool_errors
 
     async def __call__(
         self,
@@ -33,9 +38,10 @@ class TestClient(LLMClient):
         context: Context,
         **kwargs: Any,
     ) -> ModelResponse:
-        for m in messages:
-            if isinstance(m, ToolErrorEvent):
-                raise m.error
+        if self.raise_tool_errors:
+            for m in messages:
+                if isinstance(m, ToolErrorEvent):
+                    raise m.error
 
         next_msg = next(self.events)
 
@@ -99,10 +105,21 @@ class TestConfig(ModelConfig):
         *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
         provider: ModelProvider | None = None,
         model: str | None = None,
+        raise_tool_errors: bool = True,
     ) -> None:
+        """Script one LLM turn per positional event.
+
+        ``raise_tool_errors`` (default ``True``) re-raises any ``ToolErrorEvent``
+        it finds in the history, which is the convenient way to assert that a
+        tool blew up. Set it to ``False`` to model a *real* provider, which is
+        handed a failed tool call as an ordinary result and carries on: a test
+        asserting that something **ends the turn** needs that, or it is
+        asserting this double's behaviour rather than the agent's.
+        """
         self.events = events
         self._provider = provider
         self._model = model
+        self._raise_tool_errors = raise_tool_errors
 
     @property
     def provider(self) -> ModelProvider:
@@ -120,7 +137,7 @@ class TestConfig(ModelConfig):
         return self
 
     def create(self) -> TestClient:
-        return TestClient(*self.events)
+        return TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
 
     def create_files_client(self) -> "FilesClient":
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
