@@ -26,6 +26,10 @@ class MCPServerConfig:
     connection_timeout: float = 30.0
     proxy: str | None = None
     verify: bool = True
+    # Appended rather than grouped with the tool filters above: these dataclasses
+    # are not ``kw_only``, so inserting a field would silently shift the meaning
+    # of every positional argument after it.
+    tool_name_prefix: str | Variable = ""
 
 
 @dataclass
@@ -48,3 +52,5 @@ class MCPStdioServerConfig:
     allowed_tools: list[str] | Variable | None = None
     blocked_tools: list[str] | Variable | None = None
     encoding: str = "utf-8"
+    # See the note in ``MCPServerConfig``: appended to keep positional args stable.
+    tool_name_prefix: str | Variable = ""
