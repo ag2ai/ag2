@@ -4,7 +4,7 @@
 
 import importlib.metadata
 import logging
-from collections.abc import AsyncGenerator, Callable, Sequence
+from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
 from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
+from mcp.server.caching import CacheHint, CacheableMethod
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -97,11 +98,20 @@ class MCPServer:
     serves over stdin/stdout instead. The HTTP transport parameters (``path``,
     ``stateless``, ``json_response``, ``security``) are ignored over stdio.
 
-    ``name`` / ``version`` / ``instructions`` / ``website_url`` / ``icons``
-    populate the ``initialize`` handshake's ``serverInfo`` + ``instructions``.
-    ``instructions`` is client-facing "how to use this server" guidance — it is
-    *not* derived from the agent's system prompt (which is internal); pass it
-    explicitly when you want to advertise usage hints.
+    ``name`` / ``version`` / ``title`` / ``description`` / ``instructions`` /
+    ``website_url`` / ``icons`` populate the ``initialize`` handshake's
+    ``serverInfo`` + ``instructions``. ``instructions`` is client-facing "how to
+    use this server" guidance — it is *not* derived from the agent's system
+    prompt (which is internal); pass it explicitly when you want to advertise
+    usage hints. ``title`` and ``description`` are likewise presentation-only
+    and never derived from the agent.
+
+    ``cache_hints`` fills ``ttlMs`` / ``cacheScope`` freshness hints on results
+    of the cacheable methods (SEP-2549). The served tool set is fixed at
+    construction, so ``{"tools/list": CacheHint(ttl_ms=...)}`` is always sound
+    here; the same goes for ``resources`` / ``prompts``, which cannot change
+    after init. Only protocol revision 2026-07-28 clients see the hints — older
+    revisions drop the fields at serialization.
 
     ``sessions`` controls multi-turn history. By default (``True``) each MCP
     session (keyed by the transport's ``mcp-session-id``, or a per-process key
@@ -122,9 +132,12 @@ class MCPServer:
         "_server",
         "_name",
         "_version",
+        "_title",
+        "_description",
         "_instructions",
         "_website_url",
         "_icons",
+        "_cache_hints",
         "_lifespan",
         "_session_store",
         "_resource_provider",
@@ -139,9 +152,12 @@ class MCPServer:
         *,
         name: str | None = None,
         version: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
         instructions: str | None = None,
         website_url: str | None = None,
         icons: list[Icon] | None = None,
+        cache_hints: Mapping[CacheableMethod, CacheHint] | None = None,
         tool_name: str = "ask",
         tool_description: str | None = None,
         stream_progress: bool = True,
@@ -160,9 +176,12 @@ class MCPServer:
         self._agent = agent
         self._name = name or agent.name
         self._version = version or _package_version()
+        self._title = title
+        self._description = description
         self._instructions = instructions
         self._website_url = website_url
         self._icons = icons
+        self._cache_hints = cache_hints
         self._lifespan = lifespan
         self._session_store = _build_session_store(sessions)
         self._resource_provider = (
@@ -223,9 +242,12 @@ class MCPServer:
         return Server(
             name=self._name,
             version=self._version,
+            title=self._title,
+            description=self._description,
             instructions=self._instructions,
             website_url=self._website_url,
             icons=self._icons,
+            cache_hints=self._cache_hints,
             on_list_tools=self._on_list_tools,
             on_call_tool=self._on_call_tool,
             **kwargs,
