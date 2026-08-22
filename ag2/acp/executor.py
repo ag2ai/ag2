@@ -33,6 +33,7 @@ from ag2.events import (
     ToolResultsEvent,
 )
 from ag2.events.tool_events import ToolResult
+from ag2.exceptions import ToolExecutionAbortError
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 from .mappers import event_to_session_update, prompt_to_inputs
@@ -78,7 +79,7 @@ class UpdateDeliveryError(RuntimeError):
         self.session_id = session_id
 
 
-class HumanInputUnsupportedError(RuntimeError):
+class HumanInputUnsupportedError(ToolExecutionAbortError):
     """Raised when an agent asks for human input and no ``hitl_hook`` was given.
 
     ACP elicitation is not wired in this version, so the protocol itself has no

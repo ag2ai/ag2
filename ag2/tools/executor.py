@@ -23,7 +23,7 @@ from ag2.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from ag2.exceptions import ToolNotFoundError
+from ag2.exceptions import ToolExecutionAbortError, ToolNotFoundError
 from ag2.middleware import BaseMiddleware
 
 from .tool import Tool
@@ -118,6 +118,8 @@ async def _execute_call(
             return await result
 
         # tool-level middleware could leads to execution exceptions
+        except ToolExecutionAbortError:
+            raise
         except Exception as e:
             return ToolErrorEvent.from_call(call, e)
 

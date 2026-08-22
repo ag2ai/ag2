@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Answering a served agent's ``context.input()`` from the hosting application."""
 
+from collections.abc import Sequence
 from typing import Any
 
 import acp
@@ -13,28 +14,69 @@ from dirty_equals import IsPartialDict
 from ag2 import Agent, Context
 from ag2.acp import ACPAgent
 from ag2.acp.testing import connect
-from ag2.events import HumanInputRequest, HumanMessage, ToolCallEvent
+from ag2.config import ModelConfig
+from ag2.events import (
+    BaseEvent,
+    HumanInputRequest,
+    HumanMessage,
+    ModelMessage,
+    ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
+)
 from ag2.hitl import HumanHook
+from ag2.middleware import ToolMiddleware, approval_required
 from ag2.testing import TestConfig
 
 QUESTION = "which colour?"
 
 
+class LenientClient:
+    def __init__(self, tool_call: ToolCallEvent) -> None:
+        self.tool_call = tool_call
+
+    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+        if any(type(message).__name__.startswith(("ToolResult", "ToolError")) for message in messages):
+            return ModelResponse(ModelMessage("wrapping up"))
+        return ModelResponse(tool_calls=ToolCallsEvent([self.tool_call]))
+
+
+class LenientConfig(ModelConfig):
+    def __init__(self, tool_name: str = "ask_human") -> None:
+        self.client = LenientClient(ToolCallEvent(name=tool_name, arguments="{}"))
+
+    @property
+    def provider(self) -> str:
+        return "test"
+
+    @property
+    def model(self) -> str:
+        return "test"
+
+    def copy(self) -> "LenientConfig":
+        return self
+
+    def create(self) -> LenientClient:
+        return self.client
+
+
 def _asking_agent(
     *,
     hitl_hook: HumanHook | None = None,
+    config: ModelConfig | None = None,
+    middleware: ToolMiddleware | None = None,
     variables: dict[Any, Any] | None = None,
 ) -> tuple[Agent, list[str]]:
     """An agent whose one tool stops to ask the human, and the answers it got."""
     agent = Agent(
         "workie",
-        config=TestConfig(ToolCallEvent(name="ask_human", arguments="{}"), "done"),
+        config=config or TestConfig(ToolCallEvent(name="ask_human", arguments="{}"), "done"),
         hitl_hook=hitl_hook,
         variables=variables,
     )
     answers: list[str] = []
 
-    @agent.tool
+    @agent.tool(middleware=[middleware] if middleware is not None else [])
     async def ask_human(context: Context) -> str:
         """Put a question to the human and report the answer."""
         answer = await context.input(QUESTION)
@@ -69,6 +111,42 @@ class TestWithoutAHook:
                 await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
 
         assert "hitl_hook" in caught.value.data["reason"]  # type: ignore[index]
+
+    async def test_the_failure_is_not_returned_to_the_model_as_a_tool_error(self) -> None:
+        agent, _ = _asking_agent(config=LenientConfig())
+
+        async with connect(ACPAgent(agent)) as (conn, _):
+            session = await conn.new_session(cwd="/tmp")
+            with pytest.raises(RequestError) as caught:
+                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+
+        assert caught.value.data == IsPartialDict({"type": "HumanInputUnsupportedError"})
+
+    async def test_middleware_human_input_failure_reaches_the_client(self) -> None:
+        agent, _ = _asking_agent(
+            config=LenientConfig(),
+            middleware=approval_required(allow_always=False),
+        )
+
+        async with connect(ACPAgent(agent)) as (conn, _):
+            session = await conn.new_session(cwd="/tmp")
+            with pytest.raises(RequestError) as caught:
+                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+
+        assert caught.value.data == IsPartialDict({"type": "HumanInputUnsupportedError"})
+
+    async def test_regular_tool_errors_remain_tool_results(self) -> None:
+        agent = Agent("workie", config=LenientConfig(tool_name="fails"))
+
+        @agent.tool
+        async def fails() -> str:
+            raise ValueError("expected tool failure")
+
+        async with connect(ACPAgent(agent)) as (conn, _):
+            session = await conn.new_session(cwd="/tmp")
+            response = await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+
+        assert response.stop_reason == "end_turn"
 
     async def test_the_served_agents_own_hook_is_not_used(self) -> None:
         """An agent's own hook may read a console — which is the ACP transport.
