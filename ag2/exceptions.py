@@ -27,6 +27,10 @@ class ToolExecutionError(AG2Error):
     """Base exception for tool-related errors."""
 
 
+class ToolExecutionAbortError(ToolExecutionError):
+    """Raised when a tool execution must abort the current agent turn."""
+
+
 class ToolNotFoundError(ToolExecutionError):
     """Raised when a requested tool cannot be found."""
 
