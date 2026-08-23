@@ -27,7 +27,7 @@ __all__ = [
 logger = getLogger(__name__)
 
 
-_MODULE_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+_MODULE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
 
 
 @dataclass
@@ -56,9 +56,6 @@ class ModuleInfo:
 
         return None
 
-    def __repr__(self) -> str:
-        return self.name
-
     @classmethod
     def from_str(cls, module_info: str) -> "ModuleInfo":
         """Parse a module name string to create a ModuleInfo object.
@@ -72,7 +69,7 @@ class ModuleInfo:
         Raises:
             ValueError: If the module information is invalid
         """
-        # ponytail: names only — no version constraints. Nothing in the tree ever
+        # Importable names only — no version constraints. Nothing in the tree ever
         # passed one, and honouring them meant depending on `packaging` for a
         # PEP 440 parser. Reintroduce both together if a guard ever needs a bound.
         name = module_info.strip()

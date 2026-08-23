@@ -27,29 +27,25 @@ just test
 
 Tests whose optional dependencies are not installed are skipped automatically.
 
-## Skip flags for tests
+## Selecting tests
 
-- `-m`: Used to select or deselect specific groups of tests marked with pytest markers, such as tests for LLM services like OpenAI, Gemini etc. For example, you can mark tests with `@pytest.mark.openai` and then use `-m openai` to run only those tests.
-- `-m "not docker"`: Skips tests that explicitly require Docker. The `docker` Python package ships in the `test` dependency group, so `uv sync --group test` is enough to run these tests.
-- `-m "not redis"`: Skips tests that require a Redis server.
+Tests are grouped by pytest marker, and each recipe carries its own `-m`
+filter. Pick the recipe rather than passing `-m` yourself: pytest's `-m` is
+single-valued, so a second one would *replace* the recipe's filter instead of
+narrowing it.
 
+- `just test` — everything except the LLM-service markers. Needs no API key, no
+  network and no external service: the Docker and Redis suites drive mocks, and
+  a test whose optional package is absent skips itself.
+- `just test-llm` — every LLM service, or one of them with
+  `just test-llm openai`. These call the real API and need the provider's key
+  in the environment.
+- `just test-all -m "<expression>"` — bakes no filter of its own, so an
+  arbitrary marker expression works here, e.g.
+  `just test-all -m "not redis"`.
 
-**Examples:**
-
-To skip tests that require access to LLM services and Docker, run:
-```bash
-just test -m "not docker"
-```
-
-To run tests for all LLM services (OpenAI, Gemini, etc.), use:
-```bash
-just test-llm
-```
-
-To run tests specifically for the OpenAI LLM service, use:
-```bash
-just test-llm openai
-```
+To mark a new group, add `@pytest.mark.<name>` to the tests and declare
+`<name>` under `markers` in `pyproject.toml`.
 
 ## Coverage
 

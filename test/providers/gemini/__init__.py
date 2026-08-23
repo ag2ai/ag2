@@ -5,5 +5,3 @@
 import pytest
 
 pytest.importorskip("google.genai")
-# Pillow is a test-only fixture dependency, not part of ag2[gemini].
-pytest.importorskip("PIL")
