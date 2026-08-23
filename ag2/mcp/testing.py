@@ -37,6 +37,10 @@ async def connect(
     """
     async with (
         create_client_server_memory_streams() as (client_streams, server_streams),
+        # The same background state the ASGI lifespan and ``run_stdio`` enter:
+        # subscription delivery lives there, so a session without it would be
+        # served by a server that is only half-running.
+        mcp_server._serving(),
         anyio.create_task_group() as tg,
     ):
         tg.start_soon(_run_server, mcp_server.server, server_streams, raise_exceptions)

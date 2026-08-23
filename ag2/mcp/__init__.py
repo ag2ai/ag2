@@ -11,6 +11,7 @@ try:
     from .resources import Resource, ResourceTemplate
     from .server import MCPServer
     from .sessions import SessionConfig
+    from .subscriptions import ResourceNotifier
     from .tools import MCPFunctionTool, mcp_tool
 except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is absent
     MCPServer = missing_optional_dependency("MCPServer", "mcp", e)  # type: ignore[misc]
@@ -18,6 +19,7 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
     AskContext = missing_optional_dependency("AskContext", "mcp", e)  # type: ignore[misc]
     ContextProvider = missing_optional_dependency("ContextProvider", "mcp", e)  # type: ignore[misc]
     SessionConfig = missing_optional_dependency("SessionConfig", "mcp", e)  # type: ignore[misc]
+    ResourceNotifier = missing_optional_dependency("ResourceNotifier", "mcp", e)  # type: ignore[misc]
     Resource = missing_optional_dependency("Resource", "mcp", e)  # type: ignore[misc]
     ResourceTemplate = missing_optional_dependency("ResourceTemplate", "mcp", e)  # type: ignore[misc]
     Prompt = missing_optional_dependency("Prompt", "mcp", e)  # type: ignore[misc]
@@ -35,6 +37,7 @@ __all__ = (
     "PromptArgument",
     "PromptMessage",
     "Resource",
+    "ResourceNotifier",
     "ResourceTemplate",
     "SessionConfig",
     "build_ask_tool",

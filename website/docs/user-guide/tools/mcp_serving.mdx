@@ -1,0 +1,128 @@
+---
+title: "Serving Resources over MCP"
+sidebarTitle: "MCP Resources"
+---
+
+# Serving Resources over MCP
+
+An MCP server can expose **resources** — addressable, readable blobs a client fetches by URI — alongside its tools. `ag2.mcp.MCPServer` serves them from a fixed set you pass at construction, and can tell subscribed clients when a resource's contents go stale.
+
+!!! note "This is the serving side of MCP"
+    `ag2.mcp.MCPServer` exposes an agent **as** an MCP server. This is the inverse of consuming an MCP server as tools with `MCPToolkit` / `MCPServerTool` — see [MCP Servers](/docs/user-guide/tools/mcp_servers) for that.
+
+## Static resources
+
+A `Resource` is a fixed URI plus a `read` callable returning the body. Return `str` for text and `bytes` for binary; the MIME type defaults to `text/plain` and `application/octet-stream` respectively.
+
+```python linenums="1"
+import asyncio
+from pathlib import Path
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, Resource
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+server = MCPServer(
+    agent,
+    resources=[
+        Resource(
+            uri="config://app",
+            name="app-config",
+            description="The running configuration.",
+            mime_type="application/json",
+            read=lambda: Path("config.json").read_text(),
+        )
+    ],
+)
+
+if __name__ == "__main__":
+    asyncio.run(server.run_stdio())
+```
+
+The `read` callable may be sync or async, and runs on every `resources/read` — so a resource is a *view* of whatever it reads from, not a snapshot taken at construction.
+
+## Resource templates
+
+A `ResourceTemplate` serves a family of URIs described by an RFC 6570 template. Two expansion forms are supported: `{var}` matches a single path segment, and `{+var}` matches across `/`. The matched variables arrive as a dict.
+
+```python linenums="1"
+from ag2.mcp import ResourceTemplate
+
+templates = [
+    # weather://London  ->  {"city": "London"}
+    ResourceTemplate("weather://{city}", "weather", lambda v: forecast(v["city"])),
+    # file:///a/b/c.txt ->  {"path": "a/b/c.txt"}
+    ResourceTemplate("file:///{+path}", "file", lambda v: Path(v["path"]).read_text()),
+]
+```
+
+Pass them as `resource_templates=`. A URI that matches a static `Resource` exactly always wins over a template that would also match it.
+
+## Notifying clients that a resource changed
+
+By default a client has no way to learn that a resource's body changed — it must re-read on a guess. `subscriptions=` turns on MCP's subscription capability so the server can say so.
+
+Build a `ResourceNotifier` **before** the server, so any tool that changes a resource can close over it:
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, Resource, ResourceNotifier, mcp_tool
+
+counter = {"n": 0}
+notifier = ResourceNotifier()
+
+@mcp_tool
+async def bump() -> str:
+    """Increment the counter."""
+    counter["n"] += 1
+    await notifier.notify_resource_updated("mem://counter")
+    return f"counter is now {counter['n']}"
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+server = MCPServer(
+    agent,
+    resources=[Resource(uri="mem://counter", name="counter", read=lambda: str(counter["n"]))],
+    tools=[bump],
+    subscriptions=notifier,
+)
+
+if __name__ == "__main__":
+    asyncio.run(server.run_stdio())
+```
+
+Outside a tool, `#!python await server.notify_resource_updated(uri)` does the same thing.
+
+The URI must name something the server actually serves — a static `Resource` or a URI a `ResourceTemplate` matches — otherwise the call raises `MCPResourceNotFoundError`. This is deliberately stricter than the subscribing side, where a client may subscribe to any URI and simply never hear about it: a typo in *your* code would otherwise surface only as notifications that never arrive.
+
+!!! note "What can change, and what cannot"
+    The set of resources is fixed when the server is constructed, so only a resource's **contents** can change. There is no list-changed notification to send, and none is advertised.
+
+### Both protocol eras are served
+
+Which mechanism a client gets depends on the protocol revision it speaks, and `MCPServer` serves both:
+
+| Client's protocol revision | Mechanism |
+| --- | --- |
+| 2026-07-28 | `subscriptions/listen` — one long-lived stream carrying every change event the client filtered for |
+| ≤ 2025-11-25 | `resources/subscribe` per URI, with `notifications/resources/updated` pushed down the session |
+
+A single `notify_resource_updated` call reaches both.
+
+!!! warning "`stateless=True` serves only the 2026-07-28 half"
+    Handshake-era delivery pushes into a session opened by an earlier request, and a stateless HTTP transport keeps no session. Rather than accept subscriptions it could never fulfil, a stateless server does not advertise `resources.subscribe` to handshake-era clients, which tells them to poll instead of waiting forever. `subscriptions/listen` is unaffected — it streams even in stateless, JSON-response mode.
+
+### Several replicas
+
+`ResourceNotifier()` fans events out in-process. Behind a load balancer, a change published on one replica has to reach subscribers connected to another, so pass a cross-process bus — any implementation of `mcp.server.subscriptions.SubscriptionBus`:
+
+```python linenums="1"
+notifier = ResourceNotifier(bus=RedisSubscriptionBus(...))
+```
+
+Both eras deliver through the bus, so one bus covers both.
+
+`max_subscribers` bounds concurrent subscribers per era (default 1024). Past the bound a further subscription is refused rather than accepted and quietly dropped — a dead connection is only discovered when a send to it fails, so the server cannot tell an idle subscriber from a departed one.

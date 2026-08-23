@@ -15,7 +15,17 @@ from mcp.server.auth.routes import build_resource_metadata_url, create_protected
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import CallToolRequestParams, CallToolResult, Icon, ListToolsResult, PaginatedRequestParams
+from mcp.server.subscriptions import ListenHandler
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    EmptyResult,
+    Icon,
+    ListToolsResult,
+    PaginatedRequestParams,
+    SubscribeRequestParams,
+    UnsubscribeRequestParams,
+)
 from starlette.applications import Starlette
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.routing import BaseRoute, Mount, Route
@@ -30,6 +40,7 @@ from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
+from .subscriptions import ResourceNotifier, _HandshakeDelivery, connection_key
 from .tools import MCPFunctionTool, ToolProvider
 
 if TYPE_CHECKING:
@@ -63,17 +74,21 @@ def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | Non
     )
 
 
-def _session_manager_lifespan(manager: StreamableHTTPSessionManager) -> "Lifespan[Any]":
+def _session_manager_lifespan(
+    manager: StreamableHTTPSessionManager, serving: "Callable[[], AbstractAsyncContextManager[None]]"
+) -> "Lifespan[Any]":
     """An ASGI lifespan that runs the streamable-HTTP session manager.
 
     ``StreamableHTTPSessionManager`` must be entered via ``manager.run()`` before
     it can serve requests; this wires that into the app's lifespan so a standalone
-    ``uvicorn`` run (which drives lifespan automatically) just works.
+    ``uvicorn`` run (which drives lifespan automatically) just works. ``serving``
+    contributes the server's own background state (subscription delivery), which
+    is transport-independent and so is entered by ``run_stdio`` as well.
     """
 
     @asynccontextmanager
     async def lifespan(_: Starlette) -> AsyncGenerator[None]:
-        async with manager.run():
+        async with manager.run(), serving():
             yield
 
     return lifespan
@@ -95,7 +110,9 @@ class MCPServer:
 
     For local clients (Claude Desktop, Cursor, the MCP Inspector), :meth:`run_stdio`
     serves over stdin/stdout instead. The HTTP transport parameters (``path``,
-    ``stateless``, ``json_response``, ``security``) are ignored over stdio.
+    ``json_response``, ``security``) are ignored over stdio, and so is
+    ``stateless`` except for the one capability it decides at construction —
+    see ``subscriptions`` below.
 
     ``name`` / ``version`` / ``instructions`` / ``website_url`` / ``icons``
     populate the ``initialize`` handshake's ``serverInfo`` + ``instructions``.
@@ -114,6 +131,14 @@ class MCPServer:
     ``resources`` / ``resource_templates`` / ``prompts`` expose MCP resources and
     prompts alongside the conversational tool; the corresponding capability is
     advertised only when a non-empty collection is supplied.
+
+    ``subscriptions`` takes a :class:`~ag2.mcp.subscriptions.ResourceNotifier` and
+    turns on resource-change notifications for the resources served here; call
+    :meth:`notify_resource_updated` (or the notifier's own method, which a served
+    tool can close over) when a resource's body changes. Both protocol eras are
+    served — ``subscriptions/listen`` at 2026-07-28, ``resources/subscribe`` on
+    the handshake era — except that ``stateless=True`` suppresses the handshake
+    half, whose delivery needs a session that a stateless transport never keeps.
     """
 
     __slots__ = (
@@ -130,6 +155,9 @@ class MCPServer:
         "_resource_provider",
         "_prompt_provider",
         "_tool_provider",
+        "_subscriptions",
+        "_handshake",
+        "_listen",
         "_http",
     )
 
@@ -152,6 +180,7 @@ class MCPServer:
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
         tools: "Sequence[MCPFunctionTool]" = (),
+        subscriptions: ResourceNotifier | None = None,
         path: str = "/mcp",
         stateless: bool = False,
         json_response: bool = False,
@@ -186,11 +215,37 @@ class MCPServer:
             context_provider=context_provider,
             session_store=self._session_store,
         )
+        self._adopt_notifier(subscriptions, stateless=stateless)
         self._server = self._build_server()
         routes, manager = self._streamable_routes(
             path=path, stateless=stateless, json_response=json_response, security=security
         )
-        self._http: Starlette = Starlette(routes=routes, lifespan=_session_manager_lifespan(manager))
+        self._http: Starlette = Starlette(routes=routes, lifespan=_session_manager_lifespan(manager, self._serving))
+
+    def _adopt_notifier(self, subscriptions: ResourceNotifier | None, *, stateless: bool) -> None:
+        """Take ownership of ``subscriptions`` and build the two eras' delivery.
+
+        Runs last in ``__init__``: adoption is a one-shot mutation of the
+        caller's notifier, so failing any earlier check afterwards would leave
+        that notifier unusable for the corrected retry.
+
+        ``resources/subscribe`` is deliberately left unregistered on a stateless
+        transport. The handshake era pushes into a session opened by an earlier
+        request, and a stateless transport keeps none — the subscription would be
+        accepted and then never fire. Advertising ``subscribe: false`` there tells
+        a handshake-era client to poll instead of waiting forever.
+        """
+        self._subscriptions = subscriptions
+        self._handshake: _HandshakeDelivery | None = None
+        self._listen: ListenHandler | None = None
+        if subscriptions is None:
+            return
+        if self._resource_provider is None:
+            raise ValueError("MCPServer(subscriptions=...) needs `resources=` / `resource_templates=` to notify about.")
+        subscriptions._adopt(self._resource_provider.resolves)
+        self._listen = ListenHandler(subscriptions.bus, max_subscriptions=subscriptions.max_subscribers)
+        if not stateless:
+            self._handshake = _HandshakeDelivery(subscriptions.bus, max_subscribers=subscriptions.max_subscribers)
 
     @property
     def agent(self) -> Agent:
@@ -217,6 +272,11 @@ class MCPServer:
             kwargs["on_read_resource"] = self._resource_provider.on_read_resource
             if self._resource_provider.has_templates:
                 kwargs["on_list_resource_templates"] = self._resource_provider.on_list_resource_templates
+        if self._listen is not None:
+            kwargs["on_subscriptions_listen"] = self._listen
+        if self._handshake is not None:
+            kwargs["on_subscribe_resource"] = self._on_subscribe_resource
+            kwargs["on_unsubscribe_resource"] = self._on_unsubscribe_resource
         if self._prompt_provider is not None:
             kwargs["on_list_prompts"] = self._prompt_provider.on_list_prompts
             kwargs["on_get_prompt"] = self._prompt_provider.on_get_prompt
@@ -230,6 +290,58 @@ class MCPServer:
             on_call_tool=self._on_call_tool,
             **kwargs,
         )
+
+    @property
+    def subscriptions(self) -> ResourceNotifier | None:
+        """The :class:`~ag2.mcp.subscriptions.ResourceNotifier` this server publishes through, if any."""
+        return self._subscriptions
+
+    async def notify_resource_updated(self, uri: str) -> None:
+        """Tell subscribers the resource at ``uri`` is stale and worth re-reading.
+
+        Reaches both eras' subscribers. Requires ``subscriptions=``; a server
+        without it advertises no subscription capability, so there is nobody to
+        tell and a silent no-op would only hide the missing wiring.
+        """
+        if self._subscriptions is None:
+            raise ValueError("This MCPServer serves no subscriptions; pass `subscriptions=ResourceNotifier()`.")
+        await self._subscriptions.notify_resource_updated(uri)
+
+    async def _on_subscribe_resource(
+        self, ctx: "ServerRequestContext[Any, Any]", params: SubscribeRequestParams
+    ) -> EmptyResult:
+        assert self._handshake is not None  # registered only when it exists
+        self._handshake.subscribe(connection_key(ctx), ctx.session, params.uri)
+        return EmptyResult()
+
+    async def _on_unsubscribe_resource(
+        self, ctx: "ServerRequestContext[Any, Any]", params: UnsubscribeRequestParams
+    ) -> EmptyResult:
+        assert self._handshake is not None  # registered only when it exists
+        self._handshake.unsubscribe(connection_key(ctx), params.uri)
+        return EmptyResult()
+
+    @asynccontextmanager
+    async def _serving(self) -> AsyncGenerator[None]:
+        """Run the server's transport-independent background state.
+
+        Held open for as long as the server serves, by the ASGI lifespan over
+        HTTP and by :meth:`run_stdio` over stdio. Without ``subscriptions=``
+        there is none, and this is an empty wrapper.
+        """
+        if self._handshake is None:
+            try:
+                yield
+            finally:
+                if self._listen is not None:
+                    self._listen.close()
+            return
+        async with self._handshake.running():
+            try:
+                yield
+            finally:
+                assert self._listen is not None  # both are built together
+                self._listen.close()
 
     async def _on_list_tools(
         self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
@@ -357,7 +469,7 @@ class MCPServer:
 
     async def run_stdio(self) -> None:  # pragma: no cover - needs real stdio pipes
         """Serve the agent over stdio until the client disconnects."""
-        async with stdio_server() as (read_stream, write_stream):
+        async with stdio_server() as (read_stream, write_stream), self._serving():
             await self._server.run(
                 read_stream,
                 write_stream,
