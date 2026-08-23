@@ -176,7 +176,7 @@ When you opt in via `tasks=TaskConfig(...)`, the Agent exposes two tools to the 
 
 The LLM is told (via the tool descriptions) that it can call `run_subtask` multiple times in parallel within a single response, and that `run_subtasks` is the deliberate fan-out form. Each child gets a fresh `MemoryStream` and the parent's tools (filtered by `TaskConfig`).
 
-For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agent-as-tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
+For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agentas_tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
 
 See [Subagents](/docs/user-guide/subagents) for the full sub-task delegation guide — context flow and custom streams for self-delegation via `as_tool()`.
 

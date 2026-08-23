@@ -5,7 +5,7 @@
 import asyncio
 import time
 from collections import OrderedDict
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from uuid import UUID, uuid4
@@ -85,7 +85,7 @@ class SessionStore:
         self._clock = clock
 
     @asynccontextmanager
-    async def session(self, session_id: str) -> AsyncIterator[MemoryStream]:
+    async def session(self, session_id: str) -> AsyncGenerator[MemoryStream]:
         """Yield ``session_id``'s stream while holding its per-session turn lock.
 
         Holding the lock for the duration of the turn serializes concurrent calls

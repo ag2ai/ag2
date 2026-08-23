@@ -43,6 +43,8 @@ from .sessions import (
 )
 
 if TYPE_CHECKING:
+    from ag2.hitl import HumanHook
+
     from .types import ContentBlock, McpServer
 
 logger = logging.getLogger(__name__)
@@ -137,6 +139,18 @@ class ACPAgent:
         prompt_content: Which non-text prompt content to advertise as supported.
             See :class:`PromptContent` — it depends on the model behind the
             agent, so it is declared rather than guessed.
+        hitl_hook: How to answer a turn that calls ``context.input()``. ``None``
+            (the default) fails the turn with
+            :class:`~ag2.acp.executor.HumanInputUnsupportedError`, because ACP
+            elicitation is not wired on this side and there is genuinely nobody
+            to ask. An application that *can* reach a human by its own means —
+            its own chat surface, a queue, an approval UI — passes a hook here
+            and its return value becomes the answer. Same shape as
+            ``Agent(hitl_hook=...)``, dependency injection included; it replaces
+            the served agent's own hook for ACP-driven turns, so bind it per
+            connection (see :meth:`bind`) if the human differs per Client. This
+            is deliberately invisible on the wire: no capability is advertised
+            and no ACP method is called.
     """
 
     __slots__ = (
@@ -163,6 +177,7 @@ class ACPAgent:
         auth: AuthProvider | None = None,
         stream_thoughts: bool = False,
         prompt_content: PromptContent | None = None,
+        hitl_hook: "HumanHook | None" = None,
     ) -> None:
         self._agent = agent
         self._name = name or agent.name
@@ -172,7 +187,7 @@ class ACPAgent:
         self._stream_thoughts = stream_thoughts
         self._prompt_content = prompt_content or PromptContent()
         config = sessions if isinstance(sessions, SessionConfig) else SessionConfig()
-        self._executor = AgentExecutor(agent, stream_thoughts=stream_thoughts)
+        self._executor = AgentExecutor(agent, stream_thoughts=stream_thoughts, hitl_hook=hitl_hook)
         self._session_config = config
         # The most recently opened connection, so ``sessions`` has something to
         # point at. Authorization and sessions live on the scope, never here.
