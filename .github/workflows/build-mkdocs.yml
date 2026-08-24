@@ -33,9 +33,6 @@ jobs:
         with:
           python-version: ${{ github.event.inputs.python-version }}
 
-      - name: Install quarto
-        uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
-
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
       - name: Build MkDocs documentation
         run: |

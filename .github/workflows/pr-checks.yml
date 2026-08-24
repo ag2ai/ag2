@@ -84,7 +84,7 @@ jobs:
               - "pyproject.toml"
               - ".muffet-excluded-links.txt"
             scripts:
-              - "scripts/mkdocs-check-broken-links.sh"
+              - "scripts/broken-links-check.sh"
               - "scripts/docs_build_mkdocs.sh"
               - "scripts/docs_serve_mkdocs.sh"
 

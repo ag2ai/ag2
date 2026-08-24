@@ -1,40 +1,12 @@
 [files]
-extend-exclude = ["notebook/", "website/"]
+extend-exclude = ["website/"]
 
 [default.extend-words]
-# VertexAI import aliases (gemini)
-vai = "vai"
-
 # Rajan Chari's name
 chari = "chari"
 
-# Chia-Tung Ho's name
-tung = "tung"
-
-# ThinGenious company name
-genious = "genious"
-
-# Pydantic config attributes
-ser = "ser"
-
 # .iif file extension (Intuit Interchange Format)
 iif = "iif"
-
-# Medical term (Advanced Life Support)
-ALS = "ALS"
-
-# Chief Marketing Officer
-CMO = "CMO"
-cmo = "cmo"
-
-# Counter variable name
-criticals = "criticals"
-
-# Electronic Health Record
-EHR = "EHR"
-
-# Hyphenated word break in parsed academic text (segmen-tation)
-segmen = "segmen"
 
 # JWS protected-header parameter (RFC 7515 §4.1.9) — not a misspelt "typo"
 typ = "typ"
