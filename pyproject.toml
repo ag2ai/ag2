@@ -218,7 +218,7 @@ docs = [
     "mkdocs-literate-nav==0.6.3",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
-    "mkdocs-git-revision-date-localized-plugin==1.5.3",
+    "mkdocs-git-revision-date-localized-plugin==1.5.4",
     "typer>=0.22,<0.28",
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.5.0",                      # includes with variables
@@ -230,20 +230,20 @@ docs = [
 ]
 
 types = [
-    "mypy==2.3.0",
+    "mypy==2.3.1",
     "types-PyYAML",
     { include-group = "test" },
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.15.22", "codespell==2.4.3", "zizmor==1.26.1"]
+lint = ["ruff==0.16.4", "codespell==2.4.3", "zizmor==1.29.0"]
 
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
-    "prek==0.4.10",
+    "prek==0.4.14",
 ]
 
 [tool.pytest.ini_options]
