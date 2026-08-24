@@ -4,13 +4,15 @@
 
 import pytest
 from mcp.server.lowlevel import NotificationOptions
-from mcp.types import ListResourceTemplatesRequest
 
 from ag2 import Agent
 from ag2.mcp import MCPServer, Resource, ResourceTemplate
 from ag2.mcp.errors import MCPResourceNotFoundError
 from ag2.mcp.resources import ResourceProvider
 from ag2.testing import TestConfig
+
+# ``mcp`` 2.0 keys request handlers by method string rather than by request type.
+_TEMPLATES_LIST = "resources/templates/list"
 
 
 @pytest.mark.asyncio
@@ -90,5 +92,5 @@ class TestResourceCapability:
         static_only = MCPServer(agent, resources=[Resource(uri="config://app", name="app", read=lambda: "hi")]).server
         with_tpl = MCPServer(agent, resource_templates=[ResourceTemplate("x://{v}", "x", lambda v: v["v"])]).server
 
-        assert ListResourceTemplatesRequest not in static_only.request_handlers
-        assert ListResourceTemplatesRequest in with_tpl.request_handlers
+        assert static_only.get_request_handler(_TEMPLATES_LIST) is None
+        assert with_tpl.get_request_handler(_TEMPLATES_LIST) is not None

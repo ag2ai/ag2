@@ -6,15 +6,17 @@ import base64
 from dataclasses import asdict, is_dataclass
 from typing import TYPE_CHECKING, Any
 
+import jsonschema
 from mcp.types import (
     AudioContent,
     BlobResourceContents,
+    CallToolResult,
     ContentBlock,
     EmbeddedResource,
     ImageContent,
     TextContent,
 )
-from pydantic import AnyUrl, BaseModel
+from pydantic import BaseModel
 
 from ag2.events import BinaryResult
 
@@ -26,6 +28,37 @@ if TYPE_CHECKING:
 # images, so an image default keeps the common path lossless.
 _MEDIA_TYPE_KEYS = ("media_type", "mime_type", "mimeType")
 _DEFAULT_MEDIA_TYPE = "image/png"
+
+
+def tool_error(message: str) -> CallToolResult:
+    """The ``tools/call`` error result carrying ``message``.
+
+    ``mcp`` 1.x's ``@server.call_tool()`` decorator caught whatever a handler
+    raised and returned this shape; 2.0's ``on_call_tool`` lets the exception
+    propagate as a JSON-RPC error instead. Callers that promised a tool-level
+    error therefore convert it themselves, here.
+    """
+    return CallToolResult(content=[TextContent(type="text", text=message)], isError=True)
+
+
+def input_validation_error(arguments: dict[str, Any], schema: dict[str, Any]) -> str | None:
+    """The message for ``arguments`` failing ``schema``, or ``None`` when they pass.
+
+    ``mcp`` 1.x's ``@server.call_tool()`` validated arguments against the tool's
+    advertised ``inputSchema`` (its ``validate_input`` defaulted to ``True``) and
+    returned the failure as a tool-level error. 2.0 dropped the mechanism, so a
+    caller that promised that validation performs it here. ``jsonschema`` is a
+    hard dependency of ``mcp`` itself, so this adds nothing to install.
+
+    A malformed *schema* raises ``jsonschema.SchemaError`` rather than returning a
+    message; 1.x validated from inside the decorator that converted anything raised
+    into a tool-level error, so callers keep this inside that same guard.
+    """
+    try:
+        jsonschema.validate(arguments, schema)
+    except jsonschema.ValidationError as e:
+        return f"Input validation error: {e.message}"
+    return None
 
 
 def reply_to_content(reply: "AgentReply[Any, Any]") -> list[ContentBlock]:
@@ -58,7 +91,7 @@ def _file_to_content(file: BinaryResult) -> ContentBlock:
     return EmbeddedResource(
         type="resource",
         resource=BlobResourceContents(
-            uri=AnyUrl(f"resource://{file.name}"),
+            uri=f"resource://{file.name}",
             blob=encoded,
             mimeType=media_type,
         ),
