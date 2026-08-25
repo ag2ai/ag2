@@ -22,6 +22,7 @@ from ag2._telemetry_consts import (
 )
 from ag2.eval.scorers import no_tool_errors, tool_called
 from ag2.eval.sources._spans import (
+    DEFAULT_CONVENTIONS,
     AG2GenAIConvention,
     OpenInferenceConvention,
     SpanData,
@@ -44,6 +45,13 @@ _OI_KIND = "openinference.span.kind"
 
 
 # AG2 gen_ai dialect span builders (ATTR_SPAN_TYPE + gen_ai.*).
+class _NullConvention:
+    """A caller's own reader that recognizes none of these spans."""
+
+    def to_events(self, span: SpanData) -> list | None:
+        return None
+
+
 def _agent_span(start_ns: int = 0, end_ns: int = 500 * _MS) -> SpanData:
     return SpanData(
         name="invoke_agent test",
@@ -296,6 +304,129 @@ class TestAG2GenAIConvention:
 
         assert [e.kind for e in trace.events_of(UsageEvent)] == ["model_call", "subtask"]
         assert trace.tokens.total == 1100
+
+    def test_supplying_the_default_conventions_reads_the_same_as_omitting_them(self) -> None:
+        """``conventions=DEFAULT_CONVENTIONS`` reads as a no-op and must behave as one.
+
+        Choosing a reader says what a *span* means; it does not make the same
+        delegation bill twice. Gating rollup dedupe on ``conventions is None``
+        double-counted every instrumented sub-agent for anyone who spelled the
+        defaults out — or who added a reader of their own alongside them.
+        """
+        spans = [
+            _agent_span(),
+            _usage_span(10 * _MS, kind="model_call", in_tok=100, out_tok=10, total=110, cache_create=0, cache_read=0),
+            _worker_agent_span(20 * _MS, agent_name="worker"),
+            _usage_span(
+                21 * _MS,
+                kind="model_call",
+                parent_id="agent-worker",
+                in_tok=900,
+                out_tok=90,
+                total=990,
+                cache_create=0,
+                cache_read=0,
+            ),
+            _usage_span(
+                22 * _MS,
+                kind="subtask",
+                label="worker",
+                in_tok=900,
+                out_tok=90,
+                total=990,
+                cache_create=0,
+                cache_read=0,
+            ),
+        ]
+
+        assert spans_to_trace(spans, conventions=DEFAULT_CONVENTIONS).tokens == spans_to_trace(spans).tokens
+        assert spans_to_trace(spans, conventions=DEFAULT_CONVENTIONS).tokens.total == 1100
+
+    def test_supplying_the_default_conventions_keeps_back_compat_synthesis(self) -> None:
+        """Whether counts live on LLM spans is a fact about the trace, not a caller preference.
+
+        ``DEFAULT_CONVENTIONS`` holds an ``AG2GenAIConvention`` built with
+        synthesis off, so passing it — the natural way to extend the readers —
+        reported **zero** for every archived trace.
+        """
+        spans = [_agent_span(), _llm_span(10 * _MS, in_tok=12, out_tok=7)]
+
+        assert spans_to_trace(spans, conventions=DEFAULT_CONVENTIONS).tokens.total == 19
+        assert spans_to_trace(spans, conventions=(*DEFAULT_CONVENTIONS, _NullConvention())).tokens.total == 19
+
+    def test_a_nested_agent_that_produced_no_rollup_cancels_nothing(self) -> None:
+        """An instrumented agent reached by a plain ``ask`` has no rollup of its own.
+
+        ``as_tool``/``run_task`` roll a sub-agent's spend up onto the parent;
+        ``await other.ask(...)`` from inside a tool does not. Matching a rollup
+        on value alone let that agent's spend cancel an *unrelated*
+        uninstrumented worker's rollup of the same size, losing those tokens.
+        The rollup's label and the agent span's name identify who is whose.
+        """
+        trace = spans_to_trace([
+            _agent_span(),
+            _usage_span(10 * _MS, kind="model_call", in_tok=10, out_tok=1, total=11, cache_create=0, cache_read=0),
+            # instrumented, invoked by plain ask() -> usage spans, no rollup
+            _worker_agent_span(20 * _MS, agent_name="sidecar"),
+            _usage_span(
+                21 * _MS,
+                kind="model_call",
+                parent_id="agent-sidecar",
+                in_tok=100,
+                out_tok=10,
+                total=110,
+                cache_create=0,
+                cache_read=0,
+            ),
+            # uninstrumented, delegated -> a rollup of exactly the same size
+            _usage_span(
+                30 * _MS,
+                kind="subtask",
+                label="blind",
+                in_tok=100,
+                out_tok=10,
+                total=110,
+                cache_create=0,
+                cache_read=0,
+            ),
+        ])
+
+        assert [e.kind for e in trace.events_of(UsageEvent)] == ["model_call", "model_call", "subtask"]
+        assert trace.tokens.total == 231
+
+    def test_an_unnamed_nested_agent_still_cancels_its_rollup_by_value(self) -> None:
+        """``agent_name`` is optional; the span then says ``"unknown"``.
+
+        That names nobody, so value-only matching remains the best available
+        signal and the rollup is still recognized as the redundant reading.
+        """
+        trace = spans_to_trace([
+            _agent_span(),
+            _worker_agent_span(20 * _MS, agent_name="unknown"),
+            _usage_span(
+                21 * _MS,
+                kind="model_call",
+                parent_id="agent-unknown",
+                in_tok=900,
+                out_tok=90,
+                total=990,
+                cache_create=0,
+                cache_read=0,
+            ),
+            _usage_span(
+                22 * _MS,
+                kind="subtask",
+                label="worker",
+                in_tok=900,
+                out_tok=90,
+                total=990,
+                cache_create=0,
+                cache_read=0,
+            ),
+        ])
+
+        assert [e.kind for e in trace.events_of(UsageEvent)] == ["model_call"]
+        assert trace.tokens.total == 990
 
     def test_trace_captured_before_usage_spans_still_reports_its_tokens(self) -> None:
         """Spans exported by an older AG2 carry counts on the LLM span alone.

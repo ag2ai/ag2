@@ -28,6 +28,13 @@ def _billable_tokens(usage: Usage) -> int:
     a partial total from understating the budget, while still believing a
     provider whose total legitimately exceeds the two counts (reasoning tokens,
     for instance).
+
+    Cache tokens are left out, as they were before this read ``UsageEvent``.
+    That understates a prompt-cached turn on any provider whose prompt count
+    excludes them, and changing it would move every cached workload's threshold
+    — a behaviour change that belongs on its own, not folded into a change of
+    accounting *source*. See :class:`TokenMonitor` for what the guard's total
+    does and does not cover.
     """
     counted = int(usage.prompt_tokens or 0) + int(usage.completion_tokens or 0)
     if usage.total_tokens is None:
@@ -41,8 +48,16 @@ class TokenMonitor(BaseObserver):
     Observes ``UsageEvent`` — the framework's accounting record, emitted at the
     point tokens are spent by every unit of billable work: the main agent loop,
     each sub-task rollup, history compaction, memory aggregation and the live
-    session clients. It is the same source ``UsageReport`` reads, so the guard's
-    total and the user's bill agree.
+    session clients — the same source ``UsageReport`` reads, so the guard sees
+    every unit of work the report does.
+
+    It does not count the same *tokens*: :func:`_billable_tokens` reads the
+    prompt and completion counts and ignores the cache fields, which
+    ``UsageReport.total`` keeps. On a provider whose reported prompt count
+    excludes cached tokens — Anthropic's ``input_tokens`` does — a heavily
+    prompt-cached turn moves this guard by a fraction of what it bills. Treat
+    the threshold as a bound on uncached spend, and read ``UsageReport`` for the
+    bill.
 
     Deliberately *not* ``ModelResponse`` or ``TaskCompleted``. Those are derived
     events and reading them made the guard wrong three ways: a sub-task that

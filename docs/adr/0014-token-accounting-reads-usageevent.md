@@ -86,12 +86,26 @@ Non-obvious choices, each of which looks like a bug until you know why:
   nested agent subtree and `_drop_duplicated_rollups` cancels a matching rollup — as a pass over
   the reconstructed events, because whether a rollup duplicates is a fact about the whole span
   tree and threading it through the per-span readers made them stateful and single-use.
-  Matching is by **value, not by name** —
-  `gen_ai.agent.name` is optional and defaults to `"unknown"`, while the rollup's label is the
-  real agent name, so the two cannot be compared; the rollup is by construction the sum of
-  exactly those events, which makes value equality the reliable signal. Known limit: two
-  workers with identical spend, one instrumented and one not, could cancel the wrong rollup.
-  Each entry cancels at most one rollup, so the error is bounded.
+  Matching is by **value *and* name**. Value alone assumed every nested instrumented agent is
+  also covered by a rollup on its parent — true of `run_task`/`as_tool`, but not of a plain
+  `await other.ask(...)` from inside a tool, which produces usage spans and no rollup at all.
+  That agent's spend then had no rollup of its own to cancel and cancelled an unrelated
+  worker's of equal value, losing those tokens outright. The name is read off the sub-agent's
+  own `invoke_agent` span, where `TelemetryMiddleware` always writes `gen_ai.agent.name`, and
+  compared against the rollup's `ag2.usage.label`. Spend whose agent span says `"unknown"`
+  (the caller named no agent) identifies nobody and falls back to value-only matching. Each
+  entry cancels at most one rollup, so the residual ambiguity is bounded: two *unnamed*
+  workers with identical spend, one instrumented and one not, can still cancel the wrong one —
+  but the total stays correct and only the label is misattributed.
+- **The reader adapts to the trace, not to who asked.** Both trace-level adjustments — rollup
+  dedupe, and synthesizing usage for a trace captured before AG2 recorded usage spans — apply
+  whoever supplied the conventions. Choosing a reader says what a *span* means; it does not
+  make the same delegation bill twice, nor move where an archived trace keeps its counts.
+  Gating them on `conventions is None` meant `conventions=DEFAULT_CONVENTIONS` — which reads
+  as a no-op, and is the natural way to spell "the defaults plus mine" — double-counted every
+  instrumented sub-agent and reported zero for every archived trace. A caller-supplied
+  `AG2GenAIConvention` is therefore re-created with the synthesis setting the trace calls for;
+  a subclass or a foreign reader is passed through untouched.
 - **`0.1` and `0.2` token counts are not comparable.** A baseline recorded before this change
   understates delegated and maintenance spend. The version is carried through `load_run`
   rather than restamped so that a regression against an old baseline is legible as a schema
