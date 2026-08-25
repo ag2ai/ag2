@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import anyio
 import httpx
 from mcp import ClientSession
-from mcp.shared.memory import create_connected_server_and_client_session
+from mcp.server.lowlevel import Server
+from mcp.shared.memory import MessageStream, create_client_server_memory_streams
 
 from .server import MCPServer
 
@@ -19,7 +21,7 @@ async def connect(
     *,
     raise_exceptions: bool = True,
     **session_kwargs: object,
-) -> AsyncIterator[ClientSession]:
+) -> AsyncGenerator[ClientSession]:
     """Yield an in-process, initialized MCP ``ClientSession`` talking to ``mcp_server``.
 
     Dispatches directly into the wrapped low-level server over in-memory streams
@@ -27,17 +29,32 @@ async def connect(
     test factory. Extra keyword arguments (e.g. ``logging_callback`` /
     ``message_handler``) are forwarded to the underlying client session, which is
     how tests observe progress / log notifications.
+
+    Built on the memory-stream primitive rather than on ``mcp``'s own
+    connected-server helper, which 2.0 removed in favour of a differently-shaped
+    client object. A testing helper exists to absorb that kind of churn, so the
+    contract here — an initialized ``ClientSession`` — is held steady across it.
     """
-    async with create_connected_server_and_client_session(
-        mcp_server.server,
-        raise_exceptions=raise_exceptions,
-        **session_kwargs,  # type: ignore[arg-type]
-    ) as session:
-        yield session
+    async with (
+        create_client_server_memory_streams() as (client_streams, server_streams),
+        anyio.create_task_group() as tg,
+    ):
+        tg.start_soon(_run_server, mcp_server.server, server_streams, raise_exceptions)
+        async with ClientSession(*client_streams, **session_kwargs) as session:  # type: ignore[arg-type]
+            await session.initialize()
+            yield session
+        # The server task runs until cancelled; the client is done, so end it here
+        # rather than leaving the task group waiting on it.
+        tg.cancel_scope.cancel()
+
+
+async def _run_server(server: Server, streams: MessageStream, raise_exceptions: bool) -> None:
+    """Serve the low-level server over ``streams`` until the task group is cancelled."""
+    await server.run(*streams, server.create_initialization_options(), raise_exceptions=raise_exceptions)
 
 
 @asynccontextmanager
-async def serve(server: MCPServer, *, base_url: str = "http://test") -> AsyncIterator[httpx.AsyncClient]:
+async def serve(server: MCPServer, *, base_url: str = "http://test") -> AsyncGenerator[httpx.AsyncClient]:
     """Yield an ``httpx.AsyncClient`` bound to ``server`` over the in-memory ASGI transport.
 
     Drives the ASGI ``lifespan`` protocol so the streamable-HTTP session manager

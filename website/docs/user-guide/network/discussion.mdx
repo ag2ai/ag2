@@ -147,7 +147,7 @@ Today only `#!python ORDERING_ROUND_ROBIN` ships. The knob is `#!python knobs={"
 `#!python discussion` never auto-closes. The example below caps at 6 turns and calls `#!python channel.close()`, but four other patterns work for `#!python discussion` too:
 
 * **App-side cap** — count turns and call `#!python channel.close()` (canonical, simplest).
-* **Agent-side tool** — any participant calls a tool that closes the channel. See [Closing Channels → Agent-side tool](/docs/user-guide/network/termination#pattern-2--agent-side-tool).
+* **Agent-side tool** — any participant calls a tool that closes the channel. See [Closing Channels → Agent-side tool](/docs/user-guide/network/termination#pattern-2-agent-side-tool).
 * **Custom adapter** — subclass `#!python DiscussionAdapter` to fold `#!python turn_count` and emit `#!python CLOSING` at a cap (or switch to `#!python workflow` with `#!python TransitionGraph.round_robin(max_turns=N)`).
 * **TTL / expectations** — safety nets only.
 

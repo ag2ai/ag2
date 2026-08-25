@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import importlib.metadata
-from collections.abc import AsyncIterator, Callable, Sequence
+import logging
+from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -14,8 +15,7 @@ from mcp.server.auth.routes import build_resource_metadata_url, create_protected
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import CallToolResult, ContentBlock, Icon
-from mcp.types import Tool as MCPTool
+from mcp.types import CallToolRequestParams, CallToolResult, Icon, ListToolsResult, PaginatedRequestParams
 from starlette.applications import Starlette
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.routing import BaseRoute, Mount, Route
@@ -25,6 +25,7 @@ from ag2.history import MemoryStorage
 
 from .errors import MCPToolNameConflictError
 from .executor import AgentExecutor, ContextProvider
+from .mappers import input_validation_error, tool_error
 from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
@@ -32,7 +33,10 @@ from .sessions import SessionConfig, SessionStore
 from .tools import MCPFunctionTool, ToolProvider
 
 if TYPE_CHECKING:
+    from mcp.server.context import ServerRequestContext
     from starlette.types import Lifespan, Receive, Scope, Send
+
+logger = logging.getLogger(__name__)
 
 # An MCP ``Server`` lifespan: an async context manager yielding server-scoped
 # state, reachable in every ``tools/call`` via ``request_context.lifespan_context``.
@@ -68,7 +72,7 @@ def _session_manager_lifespan(manager: StreamableHTTPSessionManager) -> "Lifespa
     """
 
     @asynccontextmanager
-    async def lifespan(_: Starlette) -> AsyncIterator[None]:
+    async def lifespan(_: Starlette) -> AsyncGenerator[None]:
         async with manager.run():
             yield
 
@@ -198,50 +202,87 @@ class MCPServer:
         return self._server
 
     def _build_server(self) -> Server:
+        """Build the low-level server, wiring every handler as a constructor callback.
+
+        ``mcp`` 2.0 removed the decorator registration API; handlers now take a
+        request context plus typed params and return a complete result model. A
+        capability is advertised from the handlers actually registered, so the
+        optional providers contribute their callbacks only when present.
+        """
         kwargs: dict[str, Any] = {}
         if self._lifespan is not None:
             kwargs["lifespan"] = self._lifespan
-        server: Server = Server(
+        if self._resource_provider is not None:
+            kwargs["on_list_resources"] = self._resource_provider.on_list_resources
+            kwargs["on_read_resource"] = self._resource_provider.on_read_resource
+            if self._resource_provider.has_templates:
+                kwargs["on_list_resource_templates"] = self._resource_provider.on_list_resource_templates
+        if self._prompt_provider is not None:
+            kwargs["on_list_prompts"] = self._prompt_provider.on_list_prompts
+            kwargs["on_get_prompt"] = self._prompt_provider.on_get_prompt
+        return Server(
             name=self._name,
             version=self._version,
             instructions=self._instructions,
             website_url=self._website_url,
             icons=self._icons,
+            on_list_tools=self._on_list_tools,
+            on_call_tool=self._on_call_tool,
             **kwargs,
         )
-        executor = self._executor
-        tool_provider = self._tool_provider
 
-        # ``mcp``'s low-level decorators are untyped; ignore the resulting noise.
-        @server.list_tools()  # type: ignore[no-untyped-call, misc]
-        async def _list_tools() -> list[MCPTool]:
-            tools = executor.list_tools()
-            if tool_provider is not None:
-                tools += tool_provider.list_mcp_tools()
-            return tools
+    async def _on_list_tools(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        tools = self._executor.list_tools()
+        if self._tool_provider is not None:
+            tools += self._tool_provider.list_mcp_tools()
+        return ListToolsResult(tools=tools)
 
-        @server.call_tool()  # type: ignore[no-untyped-call, misc]
-        async def _call_tool(
-            name: str, arguments: dict[str, Any]
-        ) -> list[ContentBlock] | tuple[list[ContentBlock], dict[str, Any]] | CallToolResult:
-            arguments = arguments or {}
+    async def _on_call_tool(
+        self, ctx: "ServerRequestContext[Any, Any]", params: CallToolRequestParams
+    ) -> CallToolResult:
+        arguments = params.arguments or {}
+        # A handler that raises would surface as a JSON-RPC error in mcp 2.0, where
+        # 1.x's decorator turned it into a tool-level error result; keep the latter.
+        # Validation sits inside that guard for the same reason: 1.x validated from
+        # within the decorator, so even a malformed schema stayed a *tool* error.
+        try:
+            # 1.x's decorator validated arguments against the advertised schema
+            # before dispatching; 2.0 validates nothing, so an unchecked argument
+            # would reach the handler and surface as whatever it happened to raise.
+            schema = self._advertised_input_schema(params.name)
+            if schema is not None and (invalid := input_validation_error(arguments, schema)) is not None:
+                return tool_error(invalid)
             # Custom tools run their handler directly; everything else is the
             # agent's conversational tool (name collisions are rejected at init).
-            if tool_provider is not None and tool_provider.has(name):
-                return await tool_provider.call(name, arguments, server.request_context)
-            return await executor.call(
-                name,
+            if self._tool_provider is not None and self._tool_provider.has(params.name):
+                return CallToolResult(content=await self._tool_provider.call(params.name, arguments, ctx))
+            return await self._executor.call(
+                params.name,
                 message=arguments.get("message", ""),
                 context=arguments.get("context"),
-                request_context=server.request_context,
+                request_context=ctx,
             )
+        except Exception as e:
+            # The wire carries the message only, so without this the stack is lost.
+            logger.exception("MCP tools/call %r failed", params.name)
+            # ``str`` is empty for a bare ``raise SomeError``; the class name is the
+            # least a client can act on.
+            return tool_error(str(e) or type(e).__name__)
 
-        if self._resource_provider is not None:
-            self._resource_provider.register(server)
-        if self._prompt_provider is not None:
-            self._prompt_provider.register(server)
+    def _advertised_input_schema(self, name: str) -> dict[str, Any] | None:
+        """The ``inputSchema`` ``tools/list`` advertises for ``name``, if any.
 
-        return server
+        ``None`` for a name nobody advertises, leaving the unknown-tool error to
+        the dispatcher that already words it.
+        """
+        if self._tool_provider is not None and self._tool_provider.has(name):
+            return self._tool_provider.input_schema(name)
+        for tool in self._executor.list_tools():
+            if tool.name == name:
+                return tool.input_schema
+        return None
 
     async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
         """ASGI3 entrypoint serving MCP over streamable HTTP.

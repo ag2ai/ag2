@@ -2,14 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken
-from mcp.types import CallToolResult, ContentBlock, TextContent
+from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 from pydantic import ValidationError
 
@@ -25,17 +25,14 @@ from ag2.stream import MemoryStream
 
 from .errors import MCPAgentConfigError
 from .info import build_ask_tool, object_output_schema
-from .mappers import reply_to_content, to_structured_dict
+from .mappers import reply_to_content, to_structured_dict, tool_error
 from .sessions import STDIO_SESSION, SessionStore
 
 if TYPE_CHECKING:
-    from mcp.server.session import ServerSession
-    from mcp.shared.context import RequestContext
+    from mcp.server.context import ServerRequestContext
 
-# Return contract accepted by ``mcp``'s ``@server.call_tool()`` handler: bare
-# content (unstructured), a ``(content, structured)`` tuple, or a fully-formed
-# ``CallToolResult`` (used for error short-circuits, bypassing output validation).
-CallToolReturn = list[ContentBlock] | tuple[list[ContentBlock], dict[str, Any]] | CallToolResult
+# ``mcp`` 2.0's ``on_call_tool`` handler returns a complete result model, so the
+# executor builds one for every outcome — success, structured success, and error.
 
 _LOGGER_NAME = "ag2.mcp"
 
@@ -105,14 +102,14 @@ class AgentExecutor:
         *,
         message: str,
         context: str | None = None,
-        request_context: "RequestContext[ServerSession, Any, Any]",
-    ) -> CallToolReturn:
+        request_context: "ServerRequestContext[Any, Any]",
+    ) -> CallToolResult:
         if name != self._tool_name:
-            return _error(f"Unknown tool: {name!r}.")
+            return tool_error(f"Unknown tool: {name!r}.")
         if self._agent.config is None:
             raise MCPAgentConfigError(self._agent.name)
         if not message:
-            return _error("Missing required 'message' argument.")
+            return tool_error("Missing required 'message' argument.")
 
         # The stream is held for the whole turn: for a keyed session that means
         # holding its turn lock, serializing concurrent same-session calls.
@@ -137,7 +134,7 @@ class AgentExecutor:
             content = reply_to_content(reply)
 
             if not self._has_object_output():
-                return content
+                return CallToolResult(content=content)
 
             try:
                 validated = await reply.content()
@@ -152,10 +149,10 @@ class AgentExecutor:
                     content=content,
                     isError=True,
                 )
-            return content, structured
+            return CallToolResult(content=content, structuredContent=structured)
 
     def _stream_cm(
-        self, request_context: "RequestContext[ServerSession, Any, Any]"
+        self, request_context: "ServerRequestContext[Any, Any]"
     ) -> AbstractAsyncContextManager[MemoryStream]:
         """The stream context for this call: a keyed session (continuing history,
         turn-locked) or a fresh stateless stream."""
@@ -172,9 +169,10 @@ class AgentExecutor:
     def _wire_progress(
         self,
         stream: MemoryStream,
-        request_context: "RequestContext[ServerSession, Any, Any]",
+        request_context: "ServerRequestContext[Any, Any]",
     ) -> None:
-        token = request_context.meta.progressToken if request_context.meta else None
+        # ``_meta`` is an open mapping in ``mcp`` 2.0, not a model.
+        token = request_context.meta.get("progress_token") if request_context.meta else None
         session = request_context.session
         progress = _Counter()
 
@@ -205,12 +203,12 @@ class _Counter:
 
 
 @asynccontextmanager
-async def _stateless_stream() -> AsyncIterator[MemoryStream]:
+async def _stateless_stream() -> AsyncGenerator[MemoryStream]:
     """A fresh per-call stream — no shared history, no cross-call lock."""
     yield MemoryStream()
 
 
-def _session_id(request_context: "RequestContext[ServerSession, Any, Any]") -> str | None:
+def _session_id(request_context: "ServerRequestContext[Any, Any]") -> str | None:
     """Extract the session key for this call.
 
     Over streamable HTTP the transport's ``Request`` carries an ``mcp-session-id``
@@ -230,7 +228,3 @@ def _build_inputs(message: str, context: str | None) -> list[TextInput]:
         inputs.append(TextInput(f"Context:\n{context}"))
     inputs.append(TextInput(message))
     return inputs
-
-
-def _error(text: str) -> CallToolResult:
-    return CallToolResult(content=[TextContent(type="text", text=text)], isError=True)
