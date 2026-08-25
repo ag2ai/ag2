@@ -57,8 +57,8 @@ class TestAskTool:
         tool = build_ask_tool(agent)
 
         assert tool.name == "ask"
-        assert tool.inputSchema["required"] == ["message"]
-        assert set(tool.inputSchema["properties"]) == {"message", "context"}
+        assert tool.input_schema["required"] == ["message"]
+        assert set(tool.input_schema["properties"]) == {"message", "context"}
 
     def test_custom_tool_name_and_description(self) -> None:
         agent = Agent("greeter", config=TestConfig("hi"))
@@ -73,13 +73,13 @@ class TestAskTool:
 
         tool = build_ask_tool(agent, response_schema=agent._response_schema)
 
-        assert tool.outputSchema is None
+        assert tool.output_schema is None
 
     def test_output_schema_from_response_schema(self) -> None:
         agent = Agent("weather", config=TestConfig("hi"), response_schema=Weather)
 
         tool = build_ask_tool(agent, response_schema=agent._response_schema)
 
-        assert tool.outputSchema is not None
-        assert tool.outputSchema["type"] == "object"
-        assert set(tool.outputSchema["properties"]) == {"city", "temp_c"}
+        assert tool.output_schema is not None
+        assert tool.output_schema["type"] == "object"
+        assert set(tool.output_schema["properties"]) == {"city", "temp_c"}

@@ -486,7 +486,7 @@ async def test_function_tools_are_exposed_and_callable_over_mcp() -> None:
         assert session.gateway is not None and session.gateway.url is not None
         observed["mcp_servers"] = session.conn.new_session_kwargs["mcp_servers"]
         async with (
-            streamable_http_client(session.gateway.url) as (read, write, _),
+            streamable_http_client(session.gateway.url) as (read, write),
             ClientSession(read, write) as mcp_session,
         ):
             await mcp_session.initialize()
@@ -494,7 +494,7 @@ async def test_function_tools_are_exposed_and_callable_over_mcp() -> None:
             observed["tool_names"] = [t.name for t in listed.tools]
             result = await mcp_session.call_tool("add", {"a": 2, "b": 3})
             observed["call_text"] = result.content[0].text
-            observed["call_is_error"] = result.isError
+            observed["call_is_error"] = result.is_error
 
     cfg = fake_acp_config(
         ACPTurn(updates=[_text_update("done")], on_prompt=drive_mcp),
@@ -565,7 +565,7 @@ async def test_concurrent_tool_calls_are_correlated() -> None:
     async def drive_mcp() -> None:
         session = next(iter(cfg.sessions.values()))
         async with (
-            streamable_http_client(session.gateway.url) as (read, write, _),
+            streamable_http_client(session.gateway.url) as (read, write),
             ClientSession(read, write) as mcp_session,
         ):
             await mcp_session.initialize()
@@ -598,12 +598,12 @@ async def test_unknown_tool_name_returns_error_not_hang() -> None:
     async def drive_mcp() -> None:
         session = next(iter(cfg.sessions.values()))
         async with (
-            streamable_http_client(session.gateway.url) as (read, write, _),
+            streamable_http_client(session.gateway.url) as (read, write),
             ClientSession(read, write) as mcp_session,
         ):
             await mcp_session.initialize()
             result = await asyncio.wait_for(mcp_session.call_tool("nope", {}), timeout=5)
-            observed["is_error"] = result.isError
+            observed["is_error"] = result.is_error
             observed["text"] = result.content[0].text
 
     cfg = fake_acp_config(ACPTurn(updates=[_text_update("done")], on_prompt=drive_mcp), permission_policy="auto")
@@ -656,7 +656,7 @@ async def test_second_turn_hot_updates_gateway_tools() -> None:
         async def probe() -> None:
             session = next(iter(cfg.sessions.values()))
             async with (
-                streamable_http_client(session.gateway.url) as (read, write, _),
+                streamable_http_client(session.gateway.url) as (read, write),
                 ClientSession(read, write) as mcp_session,
             ):
                 await mcp_session.initialize()
