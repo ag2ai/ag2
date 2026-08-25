@@ -4,12 +4,12 @@
 
 import asyncio
 import base64
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import replace
 from typing import Any, get_args
 
-import httpx
+import httpx2
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
@@ -61,7 +61,7 @@ AnyMCPConfig = MCPServerConfig | MCPStdioServerConfig
 
 
 @asynccontextmanager
-async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
+async def _mcp_session(config: AnyMCPConfig) -> AsyncGenerator[ClientSession]:
     """Open a short-lived MCP ``ClientSession`` for one operation.
 
     Dispatches on the config type — HTTP/streamable-http for
@@ -82,17 +82,23 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
             await session.initialize()
             yield session
     else:
+        # ``httpx2``, not ``httpx``: that is the client type mcp 2.0's streamable-HTTP
+        # transport takes. AG2 core stays on ``httpx`` — separate distributions with
+        # separate module names, so the two coexist in one environment.
         async with (
-            httpx.AsyncClient(
+            httpx2.AsyncClient(
                 headers=config.headers,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 timeout=config.connection_timeout,
                 proxy=config.proxy,
                 verify=config.verify,
+                # A Starlette-mounted endpoint 307s the slashless form, which is the
+                # form a caller naturally writes; without this the connection fails.
+                follow_redirects=True,
             ) as client,
             streamable_http_client(
                 config.server_url,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 http_client=client,
-            ) as (read_stream, write_stream, _),
+            ) as (read_stream, write_stream),
             ClientSession(read_stream, write_stream) as session,
         ):
             await session.initialize()
@@ -117,7 +123,7 @@ class _MCPProxyTool(Tool):
             function=FunctionDefinition(
                 name=self.name,
                 description=raw_tool.description or "",
-                parameters=dict(raw_tool.inputSchema or {}),
+                parameters=dict(raw_tool.input_schema or {}),
             )
         )
 
@@ -153,7 +159,7 @@ class _MCPProxyTool(Tool):
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)
 
-        if result.isError:
+        if result.is_error:
             return ToolErrorEvent.from_call(event, error=RuntimeError(str(result)))
 
         return ToolResultEvent.from_call(event, result=_extract_content(result))
@@ -257,7 +263,7 @@ def _extract_content(result: CallToolResult) -> ToolResult:
             inputs.append(
                 BinaryInput(
                     data=base64.b64decode(p.data),
-                    media_type=p.mimeType,
+                    media_type=p.mime_type,
                     kind=BinaryType.IMAGE,
                 )
             )
@@ -265,12 +271,12 @@ def _extract_content(result: CallToolResult) -> ToolResult:
             inputs.append(
                 BinaryInput(
                     data=base64.b64decode(p.data),
-                    media_type=p.mimeType,
+                    media_type=p.mime_type,
                     kind=BinaryType.AUDIO,
                 )
             )
         elif isinstance(p, ResourceLink):
-            inputs.append(UrlInput(url=str(p.uri), kind=_kind_from_mime(p.mimeType)))
+            inputs.append(UrlInput(url=str(p.uri), kind=_kind_from_mime(p.mime_type)))
         elif isinstance(p, EmbeddedResource):
             resource = p.resource
             if isinstance(resource, TextResourceContents):
@@ -279,8 +285,8 @@ def _extract_content(result: CallToolResult) -> ToolResult:
                 inputs.append(
                     BinaryInput(
                         data=base64.b64decode(resource.blob),
-                        media_type=resource.mimeType or "application/octet-stream",
-                        kind=_kind_from_mime(resource.mimeType),
+                        media_type=resource.mime_type or "application/octet-stream",
+                        kind=_kind_from_mime(resource.mime_type),
                     )
                 )
         else:

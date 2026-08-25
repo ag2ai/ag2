@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path, PurePosixPath
@@ -298,7 +298,7 @@ class _RemoteFactory:
         self.sandbox = _FakeRemoteSandbox()
 
     @asynccontextmanager
-    async def open(self, context: object = None) -> AsyncIterator[Sandbox]:
+    async def open(self, context: object = None) -> AsyncGenerator[Sandbox]:
         yield self.sandbox
 
 

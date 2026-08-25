@@ -50,6 +50,7 @@ SPAN_TYPE_AGENT = "agent"  # invoke_agent — middleware
 SPAN_TYPE_LLM = "llm"  # chat — middleware
 SPAN_TYPE_TOOL = "tool"  # execute_tool — middleware
 SPAN_TYPE_HUMAN_INPUT = "human_input"  # await_human_input — middleware
+SPAN_TYPE_USAGE = "usage"  # record_usage — middleware
 SPAN_TYPE_ENVELOPE = "envelope"  # network.envelope — hub
 SPAN_TYPE_CHANNEL = "channel"  # network.channel — hub
 SPAN_TYPE_TASK = "task"  # network.task — hub
@@ -104,6 +105,19 @@ ATTR_EXPECTATION_ON_VIOLATION = "ag2.expectation.on_violation"
 ATTR_EXPECTATION_VIOLATORS = "ag2.expectation.violators"
 ATTR_INBOX_PENDING = "ag2.inbox.pending"
 ATTR_INBOX_CAP = "ag2.inbox.cap"
+
+# ── Usage capture (``ag2.usage.*``) ──────────────────────────────────────────
+# ``UsageEvent`` — the framework's accounting record — carried onto its own
+# span by ``TelemetryMiddleware`` and read back by the eval reconstructor. The
+# token counts themselves reuse the OTel ``gen_ai.usage.*`` keys; only the
+# attribution that has no gen_ai equivalent lives under ``ag2.usage.*``.
+#
+# This span is the only route by which spend that never becomes an LLM span —
+# a sub-task rollup, history compaction, memory aggregation, a live session —
+# reaches a trace.
+ATTR_USAGE_KIND = "ag2.usage.kind"  # "model_call" / "subtask" / "compaction" / "aggregation"
+ATTR_USAGE_LABEL = "ag2.usage.label"  # attribution, e.g. the worker's name on a subtask rollup
+ATTR_USAGE_TOTAL = "ag2.usage.total_tokens"  # provider-reported total; gen_ai semconv has no key for it
 
 # ── Human-input capture ─────────────────────────────────────────────────────
 # Prompt/response text captured on ``human_input`` spans, read back by the

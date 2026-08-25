@@ -54,7 +54,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
 [Tenki](https://tenki.cloud/){.external-link target="_blank"} provides managed, isolated cloud sandboxes with a bounded server-side lifetime.
 
 ```bash
-pip install "tenki>=0.5.4,<1"
+pip install "ag2[anthropic]" "tenki>=0.5.4,<1"
 ```
 
 ```python linenums="1"
@@ -81,7 +81,7 @@ async with env:
 [Daytona](https://www.daytona.io/){.external-link target="_blank"} is a hosted sandbox service. Strongest isolation; pay per use.
 
 ```bash
-pip install "daytona>=0.171.0,<1"
+pip install "ag2[anthropic]" "daytona>=0.171.0,<1"
 ```
 
 ```python linenums="1"
@@ -107,7 +107,7 @@ print(await reply.content())
 A local container managed via the Docker daemon. Free, cross-platform (Mac/Linux/Win via Docker Desktop), real container isolation.
 
 ```bash
-pip install "ag2[docker]"
+pip install "ag2[anthropic]" "docker>=6.0.0,<8"
 ```
 
 ```python linenums="1"
