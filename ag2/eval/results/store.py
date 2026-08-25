@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Run-store serialization — schema version ``"0.1"``.
+"""Run-store serialization — schema version ``"0.2"``.
 
 This is the wire format a future hosted dashboard reads. Field names and
 shapes are forward-compatible: new fields land at the end of an object,
@@ -35,7 +35,7 @@ __all__ = (
 
 
 def to_dict(result: "RunResult") -> dict[str, Any]:
-    """Serialize a :class:`RunResult` to a schema-0.1 JSON-safe dict.
+    """Serialize a :class:`RunResult` to a schema-0.2 JSON-safe dict.
 
     The result is composed of plain JSON types (dict, list, str, int,
     float, bool, None). Pass it through :mod:`json` for the wire form.
@@ -232,6 +232,9 @@ def load_run(path: str | os.PathLike[str]) -> "RunResult":
         created_at=doc.get("created_at", ""),
         label=doc.get("label"),
         store_dir=None,
+        # Kept as written, not restamped: a "0.1" run's token counts predate
+        # accounting reading ``UsageEvent`` and are not comparable with "0.2".
+        schema_version=doc.get("schema_version", "0.1"),
     )
 
 

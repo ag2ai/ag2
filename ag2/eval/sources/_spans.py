@@ -28,6 +28,15 @@ span wins) — so a trace from any producer, or a mix, grades identically:
   instrumentors, including ``openinference-instrumentation-agno``):
   ``openinference.span.kind`` + ``llm.*`` / ``tool.*``.
 
+**Token accounting is asymmetric between the two, on purpose.** ``Trace.tokens``
+reads :class:`UsageEvent`, so every dialect must produce one. AG2 records usage
+as its *own* span (``TelemetryMiddleware`` subscribes to the event), which is the
+only way spend that never becomes an LLM span — a sub-task rollup, history
+compaction, memory aggregation, a live session — reaches a trace at all. A
+foreign producer has none of that, so its per-call usage is synthesized from the
+LLM span instead. AG2's LLM spans must therefore *not* be synthesized from, or
+every main-loop call would be counted twice.
+
 A span recognized by no convention is skipped; if a whole trace reconstructs to
 **zero** events, :func:`spans_to_trace` logs a warning (a likely unrecognized
 dialect) rather than silently grading an empty trace.
@@ -51,10 +60,14 @@ from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
     ATTR_HUMAN_INPUT_RESPONSE,
     ATTR_SPAN_TYPE,
+    ATTR_USAGE_KIND,
+    ATTR_USAGE_LABEL,
+    ATTR_USAGE_TOTAL,
     SPAN_TYPE_AGENT,
     SPAN_TYPE_HUMAN_INPUT,
     SPAN_TYPE_LLM,
     SPAN_TYPE_TOOL,
+    SPAN_TYPE_USAGE,
 )
 from ag2.events import (
     BaseEvent,
@@ -66,6 +79,7 @@ from ag2.events import (
     ToolErrorEvent,
     ToolResultEvent,
     Usage,
+    UsageEvent,
 )
 
 from ..trace import Trace
@@ -101,6 +115,10 @@ _ATTR_TOOL_NAME = "gen_ai.tool.name"
 _ATTR_TOOL_CALL_ID = "gen_ai.tool.call.id"
 _ATTR_TOOL_ARGS = "gen_ai.tool.call.arguments"
 _ATTR_TOOL_RESULT = "gen_ai.tool.call.result"
+_ATTR_AGENT_NAME = "gen_ai.agent.name"
+# ``TelemetryMiddleware`` writes this when the caller named no agent, so it
+# identifies nobody and must not be matched against a rollup label.
+_AGENT_NAME_UNSET = "unknown"
 
 # OpenInference semantic-convention keys (Arize/Phoenix instrumentors). Span kind
 # lives on ``openinference.span.kind``; message content is index-flattened.
@@ -169,14 +187,46 @@ class SpanConvention(Protocol):
 
 
 class AG2GenAIConvention:
-    """AG2's own dialect: ``ag2.span.type`` + OTel ``gen_ai.*`` (emitted by ``TelemetryMiddleware``)."""
+    """AG2's own dialect: ``ag2.span.type`` + OTel ``gen_ai.*`` (emitted by ``TelemetryMiddleware``).
+
+    ``synthesize_usage_from_llm_spans`` is the back-compatibility switch for
+    traces captured before AG2 recorded usage spans: those carry token counts on
+    their LLM spans only, and would otherwise report zero once ``Trace.tokens``
+    reads the accounting event. Whether a trace needs it is a fact about the
+    trace, so :func:`spans_to_trace` decides it — turning it on exactly when a
+    trace contains no usage span, and re-creating an instance handed to its
+    ``conventions=`` argument with that answer. Whatever this is constructed
+    with therefore only matters when :meth:`to_events` is driven directly.
+
+    Stateless and safe to reuse across traces — the shared
+    :data:`DEFAULT_CONVENTIONS` presents it that way. Facts that need the whole
+    span tree, such as cancelling a rollup an instrumented sub-agent already
+    accounts for, are settled by :func:`spans_to_trace` after the per-span pass
+    rather than by carrying state through it.
+    """
+
+    def __init__(self, *, synthesize_usage_from_llm_spans: bool = False) -> None:
+        self._synthesize_usage = synthesize_usage_from_llm_spans
 
     def to_events(self, span: SpanData) -> list[BaseEvent] | None:
         kind = span.attributes.get(ATTR_SPAN_TYPE)
         if kind == SPAN_TYPE_AGENT:
             return []
         if kind == SPAN_TYPE_LLM:
-            return [_llm_span_to_response(span)]
+            response = _llm_span_to_response(span)
+            if self._synthesize_usage and response.usage:
+                return [
+                    response,
+                    UsageEvent(
+                        response.usage,
+                        kind="model_call",
+                        model=response.model,
+                        provider=response.provider,
+                    ),
+                ]
+            return [response]
+        if kind == SPAN_TYPE_USAGE:
+            return [_usage_span_to_event(span)]
         if kind == SPAN_TYPE_TOOL:
             return _tool_span_to_events(span)
         if kind == SPAN_TYPE_HUMAN_INPUT:
@@ -192,13 +242,195 @@ class OpenInferenceConvention:
         if kind == _OI_KIND_AGENT:
             return []
         if kind == _OI_KIND_LLM:
-            return [_oi_llm_to_response(span)]
+            return _oi_llm_to_events(span)
         if kind == _OI_KIND_TOOL:
             return _oi_tool_to_events(span)
         return None
 
 
 DEFAULT_CONVENTIONS: tuple[SpanConvention, ...] = (AG2GenAIConvention(), OpenInferenceConvention())
+
+
+def _needs_synthesized_usage(spans: Sequence[SpanData]) -> bool:
+    """Whether this trace's AG2 spans carry their token counts on LLM spans alone.
+
+    A trace captured before AG2 recorded usage spans does, and reading only the
+    accounting event would report zero for it. A trace that *has* usage spans
+    does not, and synthesizing as well would double every main-loop call.
+
+    A property of the trace, not a preference of the caller — which is why
+    :func:`_adapt_convention` hands the same answer to a caller-supplied AG2
+    reader rather than leaving it on whatever its constructor was given.
+    """
+    return not any(span.attributes.get(ATTR_SPAN_TYPE) == SPAN_TYPE_USAGE for span in spans)
+
+
+def _default_conventions(spans: Sequence[SpanData]) -> tuple[SpanConvention, ...]:
+    """The default readers, adapted to whether this trace records usage spans."""
+    if not _needs_synthesized_usage(spans):
+        return DEFAULT_CONVENTIONS
+    return (AG2GenAIConvention(synthesize_usage_from_llm_spans=True), OpenInferenceConvention())
+
+
+def _adapt_convention(convention: SpanConvention, spans: Sequence[SpanData]) -> SpanConvention:
+    """Give a caller-supplied AG2 reader this trace's synthesis setting.
+
+    ``conventions=DEFAULT_CONVENTIONS`` and ``conventions=(*DEFAULT_CONVENTIONS,
+    mine)`` are the obvious ways to spell "the defaults" and "the defaults plus
+    mine". Both hand over an :class:`AG2GenAIConvention` built with synthesis
+    off, so without this an archived trace read through either would report
+    **zero** — the exact failure the switch exists to prevent, reached by the
+    one line a caller would naturally write.
+
+    Only the exact class is re-created: a subclass may read spans differently,
+    so its instance is passed through untouched, as is any foreign reader.
+    """
+    if type(convention) is AG2GenAIConvention:
+        return AG2GenAIConvention(synthesize_usage_from_llm_spans=_needs_synthesized_usage(spans))
+    return convention
+
+
+class _SpanTree:
+    """Parent/child structure of one trace's spans, for ancestry questions.
+
+    Exists so the walk below has a home and its two lookup tables stop being
+    passed around together as a pair.
+    """
+
+    def __init__(self, spans: Sequence[SpanData]) -> None:
+        self._by_id = {s.span_id: s for s in spans}
+        self._agent_ids = {s.span_id for s in spans if s.attributes.get(ATTR_SPAN_TYPE) == SPAN_TYPE_AGENT}
+
+    @property
+    def agent_count(self) -> int:
+        return len(self._agent_ids)
+
+    def nearest_agent_ancestor(self, span: SpanData) -> str | None:
+        """Span id of the closest enclosing agent span, or ``None`` at the top."""
+        seen: set[str] = set()
+        current = span.parent_id
+        while current is not None and current not in seen:
+            if current in self._agent_ids:
+                return current
+            seen.add(current)
+            parent = self._by_id.get(current)
+            current = parent.parent_id if parent is not None else None
+        return None
+
+    def is_nested_agent(self, span_id: str) -> bool:
+        """True when this agent span itself runs under another agent span."""
+        span = self._by_id.get(span_id)
+        return span is not None and self.nearest_agent_ancestor(span) is not None
+
+    def agent_name(self, span_id: str) -> str | None:
+        """Name on an agent span, or ``None`` when the producer named nobody.
+
+        ``TelemetryMiddleware`` writes ``"unknown"`` rather than omitting the
+        attribute when the caller passed no ``agent_name``; that is a placeholder,
+        not an identity, so it is reported as unnamed.
+        """
+        span = self._by_id.get(span_id)
+        name = span.attributes.get(_ATTR_AGENT_NAME) if span is not None else None
+        if not isinstance(name, str) or name == _AGENT_NAME_UNSET:
+            return None
+        return name
+
+
+@dataclass(frozen=True, slots=True)
+class _NestedSpend:
+    """Spend recorded under one nested agent, and that agent's name if it has one."""
+
+    name: str | None
+    usage: Usage
+
+
+def _matching_spend(candidates: Sequence[_NestedSpend], rollup: UsageEvent) -> _NestedSpend | None:
+    """The nested spend a rollup duplicates, or ``None`` if it duplicates none.
+
+    Named spend must agree with the rollup's label; unnamed spend falls back to
+    value equality. Named candidates are tried first so an unnamed one cannot
+    consume a rollup that its rightful owner would have claimed.
+    """
+    for named in (True, False):
+        for candidate in candidates:
+            if (candidate.name is not None) != named or candidate.usage != rollup.usage:
+                continue
+            if candidate.name is None or candidate.name == rollup.label:
+                return candidate
+    return None
+
+
+def _nested_agent_spend(spans: Sequence[SpanData]) -> list["_NestedSpend"]:
+    """What each sub-agent that ran instrumented in this trace spent, and who it was.
+
+    Carries the agent's name alongside the total because value alone does not
+    identify whose spend it is. Matching on value alone assumed every nested
+    instrumented agent is *also* covered by a rollup on its parent — true of
+    ``run_task``/``as_tool``, but not of a plain ``await other.ask(...)`` from
+    inside a tool, which produces usage spans and no rollup at all. Its spend
+    then had no rollup of its own to cancel and cancelled an unrelated worker's
+    of equal value, losing those tokens outright. The name is read off the
+    *agent* span, where ``TelemetryMiddleware`` always writes it — not off the
+    usage span, which carries no agent name.
+
+    Usage under a nested agent is attributed to the *nearest* enclosing agent,
+    so a grandchild's spend cancels the grandchild's rollup rather than the
+    child's.
+    """
+    tree = _SpanTree(spans)
+    if tree.agent_count < 2:
+        return []
+
+    totals: dict[str, Usage] = {}
+    for span in spans:
+        if span.attributes.get(ATTR_SPAN_TYPE) != SPAN_TYPE_USAGE:
+            continue
+        owner = tree.nearest_agent_ancestor(span)
+        # The outermost agent emits the rollups; only nested ones duplicate.
+        if owner is None or not tree.is_nested_agent(owner):
+            continue
+        totals[owner] = totals.get(owner, Usage()) + _usage_span_to_event(span).usage
+    return [_NestedSpend(name=tree.agent_name(owner), usage=total) for owner, total in totals.items() if total]
+
+
+def _drop_duplicated_rollups(events: list[BaseEvent], duplicated: Sequence["_NestedSpend"]) -> list[BaseEvent]:
+    """Remove ``"subtask"`` rollups an instrumented sub-agent already accounts for.
+
+    A span tree flattens every instrumented agent into one trace, so a worker's
+    own per-call accounting and the parent's rollup over it are both present;
+    counting both reports that spend twice. The ordinary case — an
+    uninstrumented worker — passes ``duplicated`` empty and the rollup is kept
+    as the only record of that spend.
+
+    A rollup is cancelled only by spend that both **matches its value** and
+    **names the same agent**: the rollup's label is the sub-agent's name and the
+    nested spend's name comes off that agent's own span. Value alone let an
+    instrumented agent that produces no rollup cancel someone else's.
+
+    Named spend that finds no rollup cancels nothing — it is simply an agent the
+    parent never rolled up. Spend whose agent span was left unnamed (the caller
+    passed no ``agent_name``, so the span says ``"unknown"``) identifies nobody
+    and falls back to value-only matching, which is the best available and what
+    this did for every case before.
+
+    Each entry cancels at most one rollup, so the residual ambiguity is bounded:
+    two *unnamed* workers with identical spend, one instrumented and one not,
+    can still cancel the wrong one — but the total stays correct, only the label
+    is misattributed.
+    """
+    if not duplicated:
+        return events
+
+    remaining = list(duplicated)
+    kept: list[BaseEvent] = []
+    for event in events:
+        if isinstance(event, UsageEvent) and event.kind == "subtask":
+            match = _matching_spend(remaining, event)
+            if match is not None:
+                remaining.remove(match)
+                continue
+        kept.append(event)
+    return kept
 
 
 def spans_to_trace(
@@ -215,7 +447,11 @@ def spans_to_trace(
     pass an explicit value to override (e.g. the producer's measured ``ask`` duration).
     """
     ordered = sorted(spans, key=lambda s: s.start_ns)
-    active = DEFAULT_CONVENTIONS if conventions is None else conventions
+    active = (
+        _default_conventions(ordered)
+        if conventions is None
+        else tuple(_adapt_convention(c, ordered) for c in conventions)
+    )
 
     events: list[BaseEvent] = []
     for span in ordered:
@@ -224,6 +460,18 @@ def spans_to_trace(
             if mapped is not None:
                 events.extend(mapped)
                 break
+
+    # Settled here rather than inside a convention: whether a rollup duplicates
+    # a nested agent's own accounting is a fact about the whole span tree, and
+    # threading it through the per-span pass made the reader stateful and
+    # single-use.
+    #
+    # Applied whoever supplied the readers. Choosing a reader says what a *span*
+    # means; it does not make the same delegation bill twice. Gating this on
+    # ``conventions is None`` meant ``conventions=DEFAULT_CONVENTIONS`` — which
+    # reads as a no-op — double-counted every instrumented sub-agent. It is a
+    # no-op for a trace with no rollups, which is every foreign dialect.
+    events = _drop_duplicated_rollups(events, _nested_agent_spend(ordered))
 
     if ordered and not events:
         logger.warning(
@@ -253,6 +501,32 @@ def _llm_span_to_response(span: SpanData) -> ModelResponse:
         model=a.get(_ATTR_RESPONSE_MODEL) or a.get(_ATTR_REQUEST_MODEL),
         provider=a.get(_ATTR_PROVIDER),
         finish_reason=_first_finish_reason(a.get(_ATTR_FINISH_REASONS)),
+    )
+
+
+def _usage_span_to_event(span: SpanData) -> UsageEvent:
+    """Rebuild the accounting event ``TelemetryMiddleware`` recorded.
+
+    Its LLM-span counterpart is *not* also read as usage: a main-loop call
+    produces both spans, so counting each would double every direct model call.
+    """
+    a = span.attributes
+    usage = Usage(
+        prompt_tokens=a.get(_ATTR_USAGE_INPUT),
+        completion_tokens=a.get(_ATTR_USAGE_OUTPUT),
+        total_tokens=a.get(ATTR_USAGE_TOTAL),
+        cache_creation_input_tokens=a.get(_ATTR_USAGE_CACHE_CREATE),
+        cache_read_input_tokens=a.get(_ATTR_USAGE_CACHE_READ),
+        thinking_tokens=a.get(_ATTR_USAGE_THINKING),
+    )
+    return UsageEvent(
+        usage,
+        kind=a.get(ATTR_USAGE_KIND, "model_call"),
+        # ``None``, not ``""`` — the live event documents ``None`` for anything
+        # that is not a sub-task rollup, and callers test it with ``is None``.
+        label=a.get(ATTR_USAGE_LABEL),
+        model=a.get(_ATTR_RESPONSE_MODEL),
+        provider=a.get(_ATTR_PROVIDER),
     )
 
 
@@ -308,16 +582,33 @@ def _human_span_to_events(span: SpanData) -> list[BaseEvent]:
 
 
 # ── OpenInference dialect readers (openinference.span.kind + llm.*/tool.*) ──
-def _oi_llm_to_response(span: SpanData) -> ModelResponse:
+def _oi_llm_to_events(span: SpanData) -> list[BaseEvent]:
+    """One LLM span → the response, plus a synthesized ``UsageEvent``.
+
+    A foreign producer has no ``UsageEvent`` of its own to record, so its
+    per-call usage is the best accounting available and is synthesized here.
+    The AG2 convention deliberately does *not* do this: AG2 records usage as its
+    own span, and synthesizing from the LLM span as well would count every
+    main-loop call twice.
+    """
     a = span.attributes
     content = a.get(_OI_OUTPUT_CONTENT)
-    return ModelResponse(
-        message=ModelMessage(content) if isinstance(content, str) else None,
-        usage=Usage(prompt_tokens=a.get(_OI_TOKENS_PROMPT), completion_tokens=a.get(_OI_TOKENS_COMPLETION)),
-        model=a.get(_OI_MODEL),
-        provider=a.get(_OI_PROVIDER),
-        finish_reason=None,
-    )
+    usage = Usage(prompt_tokens=a.get(_OI_TOKENS_PROMPT), completion_tokens=a.get(_OI_TOKENS_COMPLETION))
+    model = a.get(_OI_MODEL)
+    provider = a.get(_OI_PROVIDER)
+    events: list[BaseEvent] = [
+        ModelResponse(
+            message=ModelMessage(content) if isinstance(content, str) else None,
+            usage=usage,
+            model=model,
+            provider=provider,
+            finish_reason=None,
+        )
+    ]
+    # Declaring no counts is not the same as a call that cost nothing.
+    if usage:
+        events.append(UsageEvent(usage, kind="model_call", model=model, provider=provider))
+    return events
 
 
 def _oi_tool_to_events(span: SpanData) -> list[BaseEvent]:
