@@ -50,13 +50,39 @@ def get_weather_tool() -> Tool:
     )
 
 
-async def collect_events(stream: AGUIStream, run_input: RunAgentInput, **kwargs: Any) -> list[dict[str, Any]]:
-    events = []
+async def collect_events(
+    stream: AGUIStream,
+    run_input: RunAgentInput,
+    *,
+    into: list[dict[str, Any]] | None = None,
+    **kwargs: Any,
+) -> list[dict[str, Any]]:
+    """Decode the events ``dispatch`` yields for one run.
+
+    Pass ``into`` when the run is expected to fail: a failing run emits ``RUN_ERROR``
+    and then re-raises, so the return value never arrives. Events are appended to
+    ``into`` as they are decoded, leaving them available to assert on after the
+    exception has been caught.
+    """
+    events = into if into is not None else []
     async for event in stream.dispatch(run_input, **kwargs):
         event_str = event.removeprefix("data: ").strip()
         if event_str:
             events.append(json.loads(event_str))
     return events
+
+
+def leaf_exceptions(exc: BaseException) -> list[BaseException]:
+    """Flatten anyio's exception groups down to the errors that actually happened.
+
+    ``dispatch`` runs the agent in a task group, so a failure surfaces wrapped in an
+    exception group. The nesting is unwrapped by duck-typing ``exceptions`` rather
+    than naming the group class, which is a builtin only from Python 3.11.
+    """
+    nested = getattr(exc, "exceptions", None)
+    if nested is None:
+        return [exc]
+    return [leaf for inner in nested for leaf in leaf_exceptions(inner)]
 
 
 def assert_event_type(events: list[dict[str, Any]], event_type: str) -> dict[str, Any]:

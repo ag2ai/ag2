@@ -6,6 +6,7 @@ from base64 import b64decode
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from math import isfinite
 from typing import Any
 from uuid import uuid4
 
@@ -35,6 +36,7 @@ from ag_ui.core import (
     TextMessageContentEvent,
     TextMessageEndEvent,
     TextMessageStartEvent,
+    TokenUsage,
     ToolCallArgsEvent,
     ToolCallChunkEvent,
     ToolCallEndEvent,
@@ -50,12 +52,13 @@ from pydantic_core import to_jsonable_python
 
 from ag2 import Agent, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig
-from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput
+from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, Usage
 from ag2.hitl import HumanHook
 from ag2.middleware.base import MiddlewareFactory
 from ag2.observers import Observer
 from ag2.tools.final import ClientTool
 from ag2.tools.tool import Tool
+from ag2.usage import UsageReport
 
 from .events import AGUIEvent
 
@@ -357,6 +360,7 @@ async def run_stream(
                 RunErrorEvent(
                     message=repr(e),
                     timestamp=_get_timestamp(),
+                    usage=await _run_token_usage(stream),
                 )
             )
             raise e
@@ -367,8 +371,55 @@ async def run_stream(
                     thread_id=command.incoming.thread_id,
                     run_id=command.incoming.run_id,
                     timestamp=_get_timestamp(),
+                    usage=await _run_token_usage(stream),
                 )
             )
+
+
+async def _run_token_usage(stream: MemoryStream) -> list[TokenUsage] | None:
+    """Token usage for this run, as AG-UI's per-(provider, model) list.
+
+    Grouped from ``UsageReport.records``, not its ``by_model``/``by_provider``: those are
+    independent maps, so the pair is unrecoverable, and each drops what the other side
+    didn't label — where a delegated sub-agent's spend lives. Pairs aren't folded together
+    either, since absent counts add as zero: merging a provider that reports reasoning
+    tokens with one that doesn't would read as a complete measurement.
+
+    Nothing is derived, and ``cache_creation_input_tokens`` is dropped rather than folded
+    into a neighbour — providers disagree on whether cached tokens already sit in the
+    prompt count. Safe on the failure path: the stream awaits its subscribers on send, so
+    persistence has already seen the events.
+    """
+    grouped: dict[tuple[str | None, str | None], Usage] = {}
+    for record in UsageReport.from_events(await stream.history.get_events()).records:
+        key = (record.provider, record.model)
+        grouped[key] = grouped.get(key, Usage()) + record.usage
+
+    entries = [
+        TokenUsage(
+            provider=provider,
+            model=model,
+            input_tokens=_token_count(usage.prompt_tokens),
+            output_tokens=_token_count(usage.completion_tokens),
+            total_tokens=_token_count(usage.total_tokens),
+            reasoning_tokens=_token_count(usage.thinking_tokens),
+            cached_input_tokens=_token_count(usage.cache_read_input_tokens),
+        )
+        for (provider, model), usage in grouped.items()
+    ]
+    return entries or None
+
+
+def _token_count(value: float | None) -> int | None:
+    """Narrow an internal token count to what AG-UI accepts, or to absence.
+
+    The wire type admits only non-negative integers, and this also runs on the failure
+    path *before* the run's own exception is re-raised — so a value the wire type would
+    reject is omitted here rather than left to raise in place of the real cause.
+    """
+    if value is None or not isfinite(value) or value < 0:
+        return None
+    return int(value)
 
 
 def map_agui_content_to_input(content: InputContent) -> events.Input:
