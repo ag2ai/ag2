@@ -3,18 +3,25 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from typing import Any
+from uuid import UUID
+from weakref import ReferenceType, WeakKeyDictionary, ref
 
 from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
     ATTR_HUMAN_INPUT_RESPONSE,
     ATTR_SPAN_TYPE,
+    ATTR_USAGE_KIND,
+    ATTR_USAGE_LABEL,
+    ATTR_USAGE_TOTAL,
     OTEL_INSTRUMENTING_MODULE,
     OTEL_SCHEMA_URL,
     SPAN_TYPE_AGENT,
     SPAN_TYPE_HUMAN_INPUT,
     SPAN_TYPE_LLM,
     SPAN_TYPE_TOOL,
+    SPAN_TYPE_USAGE,
     TRACEPARENT_DEP_KEY,
 )
 from ag2.annotations import Context
@@ -28,6 +35,7 @@ from ag2.events import (
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
+    UsageEvent,
 )
 from ag2.middleware.base import (
     AgentTurn,
@@ -54,6 +62,59 @@ except ImportError as _err:
 def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
     provider = tracer_provider or trace.get_tracer_provider()
     return provider.get_tracer(OTEL_INSTRUMENTING_MODULE, schema_url=OTEL_SCHEMA_URL)
+
+
+# At most one usage watcher per stream, process-wide. Keyed by the stream rather
+# than held by a middleware instance or factory: the watcher must outlive the
+# turn (see ``_subscribe_usage``), and two agents sharing a stream — or a fresh
+# ``TelemetryMiddleware`` per ``ask`` — would otherwise each add their own and
+# record the same event several times, into whichever trace happened to install
+# it first. Turns on a shared stream are serialised by the agent's per-stream
+# lock, so the current holder is always the turn now running. Weak keys let a
+# finished stream's entry go with it. Mirrors the per-stream turn-lock registry
+# in ``ag2.agent``.
+_usage_watchers: "WeakKeyDictionary[Any, UUID]" = WeakKeyDictionary()
+
+
+def _make_usage_recorder(
+    owner: "ReferenceType[_TelemetryMiddlewareInstance]",
+    stream: Any,
+) -> Callable[[UsageEvent], Awaitable[None]]:
+    """Route accounting events to the run that installed this watcher.
+
+    Holds the middleware **weakly**, which is what bounds the subscription to
+    one run. The instance lives exactly as long as the ``ask`` that built it —
+    the agent keeps its middleware instances alive for the duration of the run
+    and drops them when the run's ``ExitStack`` closes — so a strong reference
+    here would keep a finished run's recorder alive and let the *next* run on a
+    shared stream record into a trace that was already complete. Once the owner
+    is gone the watcher retires itself.
+
+    A module-level factory rather than a nested function, per the repository
+    rule against nested functions in runtime execution paths.
+    """
+
+    async def _record(event: UsageEvent) -> None:
+        middleware = owner()
+        if middleware is None:
+            _retire_usage_watcher(stream)
+            return
+        await middleware.record_usage_span(event)
+
+    return _record
+
+
+def _retire_usage_watcher(stream: Any) -> None:
+    """Drop the watcher of a run that has ended.
+
+    Safe to do unconditionally: a watcher is only ever displaced by
+    ``_subscribe_usage``, which unsubscribes it as it replaces it, so a recorder
+    that still fires is by construction the registered one. A dead recorder can
+    therefore never retire a live successor.
+    """
+    sub_id = _usage_watchers.pop(stream, None)
+    if sub_id is not None:
+        stream.unsubscribe(sub_id)
 
 
 class TelemetryMiddleware(MiddlewareFactory):
@@ -127,6 +188,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         span_attributes: dict[str, str],
     ) -> None:
         super().__init__(event, context)
+        self._turn_context: Any = None
         self._tracer = tracer
         self._capture_content = capture_content
         self._agent_name = agent_name
@@ -164,6 +226,11 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if self._model_name:
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
+            # Parent late-arriving usage explicitly at this turn, since the
+            # ambient context is gone once the span below closes.
+            self._turn_context = trace.set_span_in_context(span)
+            self._subscribe_usage(context)
+
             try:
                 response = await call_next(event, context)
             except Exception as exc:
@@ -172,6 +239,82 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 raise
 
             return response
+
+    def _subscribe_usage(self, context: Context) -> None:
+        """Watch the stream for accounting events, replacing this stream's previous watcher.
+
+        ``UsageEvent`` is the framework's accounting record and the only route by
+        which spend that never becomes an LLM span reaches a trace: a sub-task
+        rollup (the worker is not instrumented), history compaction and memory
+        aggregation (they call the model outside these hooks), and the
+        live-session clients.
+
+        The subscription deliberately outlives the turn. Middleware that reports
+        usage does so *after* its own ``call_next`` returns — compaction
+        summarises what the finished turn produced — and agent-level middleware
+        wraps middleware passed to ``ask``, which is how the eval runner
+        installs telemetry. Unsubscribing when the turn span closed therefore
+        dropped exactly the maintenance spend this is here to capture.
+
+        Exactly-once is kept by replacing rather than adding: the registry holds
+        one watcher per stream process-wide, re-pointed at the current turn each
+        time, so neither a second turn nor a second instrumented agent on a
+        shared stream can record an event twice.
+
+        It outlives the turn but *not* the run: the watcher holds this instance
+        weakly (see :func:`_make_usage_recorder`), and this instance dies with
+        the ``ask`` that built it. An uninstrumented run reusing the stream
+        afterwards therefore records nothing, instead of filing its spend under
+        the previous run's finished trace.
+        """
+        stream = context.stream
+        previous = _usage_watchers.pop(stream, None)
+        if previous is not None:
+            stream.unsubscribe(previous)
+        recorder = _make_usage_recorder(ref(self), stream)
+        _usage_watchers[stream] = stream.where(UsageEvent).subscribe(recorder)
+
+    async def record_usage_span(self, event: UsageEvent) -> None:
+        """Record one accounting event as its own span.
+
+        Parented at the turn rather than at the ambient context: this runs in a
+        stream callback that may fire after the turn span closed, where the
+        ambient context would start a *new trace* and a backend grouping by
+        trace id would lose the spend. Not made current either — rebinding the
+        ambient context inside a callback would reparent whatever runs next.
+        """
+        span = self._tracer.start_span(
+            f"record_usage {event.kind}",
+            kind=SpanKind.INTERNAL,
+            context=self._turn_context,
+        )
+        try:
+            for k, v in self._span_attributes.items():
+                span.set_attribute(k, v)
+            span.set_attribute(ATTR_SPAN_TYPE, SPAN_TYPE_USAGE)
+            span.set_attribute(ATTR_USAGE_KIND, event.kind)
+            if event.label:
+                span.set_attribute(ATTR_USAGE_LABEL, event.label)
+            if event.model:
+                span.set_attribute("gen_ai.response.model", event.model)
+            if event.provider:
+                span.set_attribute("gen_ai.provider.name", event.provider)
+
+            usage = event.usage
+            if usage.prompt_tokens:
+                span.set_attribute("gen_ai.usage.input_tokens", int(usage.prompt_tokens))
+            if usage.completion_tokens:
+                span.set_attribute("gen_ai.usage.output_tokens", int(usage.completion_tokens))
+            if usage.cache_creation_input_tokens:
+                span.set_attribute("gen_ai.usage.cache_creation_input_tokens", int(usage.cache_creation_input_tokens))
+            if usage.cache_read_input_tokens:
+                span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage.cache_read_input_tokens))
+            if usage.thinking_tokens:
+                span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
+            if usage.total_tokens:
+                span.set_attribute(ATTR_USAGE_TOTAL, int(usage.total_tokens))
+        finally:
+            span.end()
 
     async def on_llm_call(
         self,
