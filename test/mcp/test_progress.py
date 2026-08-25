@@ -27,7 +27,7 @@ class TestProgress:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"}, progress_callback=on_progress)
 
-        assert result.isError is False
+        assert result.is_error is False
         # One progress notification per streamed chunk, monotonically increasing.
         assert [m for _, _, m in updates] == ["Hello, ", "world!"]
         assert [p for p, _, _ in updates] == [1.0, 2.0]
@@ -42,7 +42,7 @@ class TestProgress:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
-        assert result.isError is False
+        assert result.is_error is False
 
     async def test_progress_disabled(self) -> None:
         agent = make_agent(config=ChunkConfig("a", "b"))
@@ -56,7 +56,7 @@ class TestProgress:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"}, progress_callback=on_progress)
 
-        assert result.isError is False
+        assert result.is_error is False
         assert updates == []
 
     async def test_tool_events_are_logged(self) -> None:
@@ -71,5 +71,5 @@ class TestProgress:
         async with connect(MCPServer(agent)) as session:
             result = await session.call_tool("ask", {"message": "go"})
 
-        assert result.isError is False
+        assert result.is_error is False
         assert [c.text for c in result.content if c.type == "text"] == ["done"]

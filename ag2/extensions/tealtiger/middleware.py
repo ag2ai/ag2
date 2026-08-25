@@ -24,16 +24,18 @@ if TYPE_CHECKING:
 
 from ag2.events import ToolErrorEvent
 from ag2.extensions.tealtiger.types import (
+    DEFAULT_INJECTION_CONFIDENCE_THRESHOLD,
+    INJECTION_PATTERNS,
+    INJECTION_TECHNIQUES,
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
+    InjectionFinding,
     TEECReceipt,
 )
 from ag2.middleware import BaseMiddleware
 from ag2.middleware.base import ToolResultType
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
-
-# ── PII and secret patterns ──────────────────────────────────────────────────
 
 _PII_PATTERNS: dict[str, re.Pattern[str]] = {
     "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
@@ -50,6 +52,9 @@ _SECRET_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"(?i)(?:api[_-]?key|apikey)\s*[:=]\s*['\"]?[a-zA-Z0-9_\-]{20,}"),
     re.compile(r"-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----"),
 ]
+
+# Injection findings keep a snippet of the match as evidence, not the whole argument.
+_MAX_MATCHED_TEXT_CHARS = 100
 
 
 class TealTigerMiddleware:
@@ -278,8 +283,6 @@ class _TealTigerPerTurn(BaseMiddleware):
 
         return result
 
-    # ─── Inline policy evaluation (no external deps) ─────────────────────
-
     def _evaluate(self, tool_name: str, tool_args: Any) -> GovernanceDecision:
         """Evaluate governance policies deterministically."""
         action = "ALLOW"
@@ -287,7 +290,6 @@ class _TealTigerPerTurn(BaseMiddleware):
         risk_score = 0
         agent_name = self._agent_name or "unknown"
 
-        # 1. Kill switch
         if agent_name != "unknown" and self._factory.is_frozen(agent_name):
             return GovernanceDecision(
                 action="DENY",
@@ -298,7 +300,6 @@ class _TealTigerPerTurn(BaseMiddleware):
                 risk_score=100,
             )
 
-        # 2. Budget limit (factory-level, always enforced)
         if self._factory._cumulative_cost >= self._factory.budget_limit:
             return GovernanceDecision(
                 action="DENY",
@@ -310,11 +311,20 @@ class _TealTigerPerTurn(BaseMiddleware):
                 cumulative_cost=self._factory._cumulative_cost,
             )
 
-        # 3. Policy evaluation
         args_str = str(tool_args) if not isinstance(tool_args, str) else tool_args
 
         for policy in self._factory.policies:
-            if policy.type == "tool_allowlist":
+            if policy.type == "prompt_injection_block":
+                techniques = policy.config.get("techniques", list(INJECTION_TECHNIQUES))
+                threshold = policy.config.get("confidence_threshold", DEFAULT_INJECTION_CONFIDENCE_THRESHOLD)
+                injection_findings = self._detect_prompt_injection(args_str, techniques, threshold)
+                if injection_findings:
+                    top = injection_findings[0]
+                    action = "DENY"
+                    reason_codes.append(f"PROMPT_INJECTION:{top.technique}/{top.pattern_name}")
+                    risk_score = max(risk_score, 95)
+                    break
+            elif policy.type == "tool_allowlist":
                 allowed = policy.config.get("allowed", [])
                 if not any(fnmatch.fnmatch(tool_name, p) for p in allowed):
                     action = "DENY"
@@ -355,8 +365,6 @@ class _TealTigerPerTurn(BaseMiddleware):
             cumulative_cost=self._factory._cumulative_cost,
         )
 
-    # ─── Helpers ─────────────────────────────────────────────────────────
-
     def _emit_receipt(self, decision: GovernanceDecision, execution_outcome: str) -> None:
         """Emit a TEEC receipt for the governance decision."""
         receipt = TEECReceipt(
@@ -387,6 +395,43 @@ class _TealTigerPerTurn(BaseMiddleware):
     def _detect_secrets(text: str) -> bool:
         """Detect secret patterns in text."""
         return any(p.search(text) for p in _SECRET_PATTERNS)
+
+    @staticmethod
+    def _detect_prompt_injection(
+        text: str, techniques: list[str], confidence_threshold: float
+    ) -> list[InjectionFinding]:
+        """Detect prompt injection patterns in text.
+
+        Args:
+            text: The text to scan (typically serialized tool arguments).
+            techniques: Technique categories to check.
+            confidence_threshold: Minimum pattern confidence for a pattern to be evaluated.
+
+        Returns:
+            At most one finding per matching pattern, sorted by confidence (highest first).
+        """
+        findings: list[InjectionFinding] = []
+        for technique in techniques:
+            for injection_pattern in INJECTION_PATTERNS.get(technique, []):
+                if injection_pattern.confidence < confidence_threshold:
+                    continue
+                # The first match is enough — the decision only needs the top finding, so
+                # scanning every occurrence of every pattern would be wasted work.
+                match = injection_pattern.pattern.search(text)
+                if match is None:
+                    continue
+                findings.append(
+                    InjectionFinding(
+                        technique=injection_pattern.technique,
+                        pattern_name=injection_pattern.name,
+                        matched_text=match.group()[:_MAX_MATCHED_TEXT_CHARS],
+                        confidence=injection_pattern.confidence,
+                        start=match.start(),
+                        end=match.end(),
+                    )
+                )
+        findings.sort(key=lambda finding: finding.confidence, reverse=True)
+        return findings
 
     def _get_agent_name(self, context: "Context") -> str | None:
         """Extract agent name from context dependencies."""
