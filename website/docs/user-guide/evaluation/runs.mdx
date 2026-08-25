@@ -182,7 +182,7 @@ result = await run_agent(...)
 # Run-level metadata
 result.run_id              # str (UUID4 hex unless you set it) — unique per run
 result.label               # str | None — user-defined; groups runs of the same eval over time
-result.schema_version      # "0.1"
+result.schema_version      # "0.2"
 result.created_at          # ISO-8601 UTC
 result.duration_ms         # int
 result.suite               # the Suite that was executed
