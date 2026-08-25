@@ -11,36 +11,16 @@ the encoder is unbuffered, so the send blocks until the consumer takes it and on
 then does the re-raise run.
 """
 
-from typing import Any
-
 import pytest
 from ag_ui.core import EventType, RunErrorEvent, RunFinishedEvent, RunStartedEvent, UserMessage
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream
-from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent
 from ag2.testing import TestConfig
-from ag2.tools import tool
 
-from .utils import collect_events, create_run_input, leaf_exceptions
+from .utils import collect_events, create_run_input, exploding_agent, frames_of_failing_run, leaf_exceptions
 
 pytestmark = pytest.mark.asyncio
-
-
-@tool
-def explode() -> str:
-    """A downstream call that always fails."""
-    raise RuntimeError("downstream is down")
-
-
-def _failing_agent() -> Agent:
-    return Agent(
-        "test_agent",
-        config=TestConfig(
-            ModelResponse(tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="explode", arguments="{}")])),
-        ),
-        tools=[explode],
-    )
 
 
 class TestRunError:
@@ -48,9 +28,7 @@ class TestRunError:
         """The event names what went wrong and is stamped."""
         run_input = create_run_input(UserMessage(id="msg_1", content="go"))
 
-        frames: list[dict[str, Any]] = []
-        with pytest.raises(Exception):
-            await collect_events(AGUIStream(_failing_agent()), run_input, into=frames)
+        frames = await frames_of_failing_run(exploding_agent(), run_input)
 
         error = RunErrorEvent.model_validate(frames[-1])
         assert "downstream is down" in error.message
@@ -71,9 +49,7 @@ class TestRunError:
         """
         run_input = create_run_input(UserMessage(id="msg_1", content="go"))
 
-        frames: list[dict[str, Any]] = []
-        with pytest.raises(Exception):
-            await collect_events(AGUIStream(_failing_agent()), run_input, into=frames)
+        frames = await frames_of_failing_run(exploding_agent(), run_input)
 
         started = RunStartedEvent.model_validate(frames[0])
         assert (started.thread_id, started.run_id) == (run_input.thread_id, run_input.run_id)
@@ -89,7 +65,7 @@ class TestRunError:
         run_input = create_run_input(UserMessage(id="msg_1", content="go"))
 
         with pytest.raises(Exception) as exc_info:
-            await collect_events(AGUIStream(_failing_agent()), run_input)
+            await collect_events(AGUIStream(exploding_agent()), run_input)
 
         leaves = leaf_exceptions(exc_info.value)
         assert [type(e) for e in leaves] == [RuntimeError]
@@ -99,9 +75,7 @@ class TestRunError:
         """Everything sent before the re-raise is still available to assert on."""
         run_input = create_run_input(UserMessage(id="msg_1", content="go"))
 
-        frames: list[dict[str, Any]] = []
-        with pytest.raises(Exception):
-            await collect_events(AGUIStream(_failing_agent()), run_input, into=frames)
+        frames = await frames_of_failing_run(exploding_agent(), run_input)
 
         RunStartedEvent.model_validate(frames[0])
         RunErrorEvent.model_validate(frames[-1])

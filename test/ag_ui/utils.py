@@ -6,9 +6,14 @@ import json
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from ag_ui.core import Message, RunAgentInput, Tool
 
+from ag2 import Agent
 from ag2.ag_ui import AGUIStream
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
+from ag2.testing import TestConfig
+from ag2.tools import tool
 
 
 def uuid_str() -> str:
@@ -70,6 +75,36 @@ async def collect_events(
         if event_str:
             events.append(json.loads(event_str))
     return events
+
+
+async def frames_of_failing_run(agent: Agent, run_input: RunAgentInput) -> list[dict[str, Any]]:
+    """The frames a run expected to fail emits before ``dispatch`` re-raises.
+
+    The re-raise is swallowed here because these are the callers asserting on the events;
+    the ones asserting on the exception itself use ``pytest.raises`` directly so they can
+    reach it through ``leaf_exceptions``.
+    """
+    frames: list[dict[str, Any]] = []
+    with pytest.raises(Exception):
+        await collect_events(AGUIStream(agent), run_input, into=frames)
+    return frames
+
+
+def exploding_agent(usage: Usage | None = None) -> Agent:
+    """An agent whose only tool always fails, optionally having spent ``usage`` first."""
+
+    @tool
+    def explode() -> str:
+        """A downstream call that always fails."""
+        raise RuntimeError("downstream is down")
+
+    calls = ToolCallsEvent(calls=[ToolCallEvent(name="explode", arguments="{}")])
+    response = (
+        ModelResponse(tool_calls=calls, usage=usage, model="claude-sonnet-4", provider="anthropic")
+        if usage
+        else ModelResponse(tool_calls=calls)
+    )
+    return Agent("test_agent", config=TestConfig(response), tools=[explode])
 
 
 def leaf_exceptions(exc: BaseException) -> list[BaseException]:
