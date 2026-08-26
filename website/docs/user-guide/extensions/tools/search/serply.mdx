@@ -1,0 +1,86 @@
+---
+title: Serply Search
+sidebarTitle: Serply Search
+---
+
+`SerplySearchToolkit` gives an agent three related tools powered by [Serply](https://serply.io){.external-link target="_blank"}: Google web search, Google News search, and Google Scholar search. Use it when an agent needs current web results, recent news coverage, or academic articles with citation counts from a single API key.
+
+!!! note
+    Requires a Serply API key. No extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import SerplySearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SerplySearchToolkit(api_key=os.environ["SERPLY_API_KEY"])],
+)
+```
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `serply_web_search` | Search Google web results and return ranked results with position, title, snippet, and URL |
+| `serply_news_search` | Search Google News and return recent articles with title, source, publish date, summary, and URL |
+| `serply_scholar_search` | Search Google Scholar and return articles with title, authors, citation count, and URL |
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default tools:
+
+```python linenums="1"
+toolkit = SerplySearchToolkit(
+    api_key=...,
+    num=5,     # number of results for serply_web_search and serply_scholar_search
+    gl="us",   # Google country code for all three tools
+    hl="en",   # Google interface language for all three tools
+)
+```
+
+`num` is not applied to `serply_news_search`: Google News returns its own feed size.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.web()`, `toolkit.news()`, `toolkit.scholar()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = SerplySearchToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.web(num=5), toolkit.scholar(num=10)],
+)
+```
+
+Every factory method also accepts `name` and `description` overrides for the registered tool. All configurable defaults on `SerplySearchToolkit` and its factory methods accept a `Variable` for deferred context resolution.
+
+## Result
+
+`serply_web_search` returns a `SerplyWebSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SerplyWebResult` (`title`, `link`, `description`, `position`) |
+
+`serply_news_search` returns a `SerplyNewsSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SerplyNewsResult` (`title`, `link`, `published`, `source`, `summary`); the summary is returned as plain text |
+
+`serply_scholar_search` returns a `SerplyScholarSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SerplyScholarResult` (`title`, `link`, `authors`, `description`, `citations`) |
+
+Request parameters and response fields are documented in the [Serply API docs](https://serply.io/docs){.external-link target="_blank"}.
