@@ -11,8 +11,6 @@ Maintainer: googio
 Docs: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/serply/
 """
 
-import html
-import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
@@ -33,7 +31,12 @@ ProxyLocation: TypeAlias = Literal["EU", "CA", "US", "IE", "GB", "FR", "DE", "SE
 # User-Agent. Unrelated to Serply's own ``X-User-Agent`` header, which Serply
 # documents as a desktop/mobile switch but does not currently act on.
 _USER_AGENT = "ag2-serply-extension"
-_TAG_RE = re.compile(r"<[^>]+>")
+
+# Google News ignores `num` server-side — it answers with its whole feed, seen at
+# 49-105 entries whose links are ~284-character opaque redirects. Left uncapped a
+# single news call lands ~15k tokens in the model's context, so the cap is applied
+# here instead.
+_NEWS_MAX_RESULTS = 10
 
 
 @dataclass(slots=True)
@@ -56,7 +59,6 @@ class SerplyNewsResult:
     link: str
     published: str = ""
     source: str = ""
-    summary: str = ""
 
 
 @dataclass(slots=True)
@@ -70,7 +72,7 @@ class SerplyScholarResult:
     title: str
     link: str
     authors: str = ""
-    description: str = ""
+    pdf_link: str = ""
     citations: int | None = None
 
 
@@ -106,15 +108,6 @@ def _nested(raw: Any, *keys: str) -> Any:
             return None
         raw = raw.get(key)
     return raw
-
-
-def _plain_text(fragment: str) -> str:
-    """Flatten the HTML fragment Google News uses for entry summaries.
-
-    Tags are stripped *before* entities are decoded, so escaped angle brackets in
-    the summary text survive rather than being decoded into markup and dropped.
-    """
-    return " ".join(html.unescape(_TAG_RE.sub(" ", fragment)).split())
 
 
 async def _get(
@@ -195,8 +188,9 @@ class SerplySearchToolkit(Toolkit):
             timeout: Per-request timeout in seconds.
             proxy: Proxy URL for the outgoing HTTP connection.
             verify: Whether to verify the server's TLS certificate.
-            num: Default number of results. Applies to web and scholar search;
-                Google News returns its own feed size.
+            num: Default number of results. Web and scholar send it to the API;
+                news truncates the feed client-side, because Google News ignores
+                the parameter and answers with its whole feed.
             gl: Default Google country code, forwarded as a query parameter.
             hl: Default Google interface language, forwarded as a query parameter.
             proxy_location: Default region Serply searches from, sent as the
@@ -218,7 +212,7 @@ class SerplySearchToolkit(Toolkit):
 
         super().__init__(
             self.web(num=num, gl=gl, hl=hl, proxy_location=proxy_location),
-            self.news(gl=gl, hl=hl, proxy_location=proxy_location),
+            self.news(num=num, gl=gl, hl=hl, proxy_location=proxy_location),
             self.scholar(num=num, gl=gl, hl=hl, proxy_location=proxy_location),
             name="serply_search_toolkit",
             middleware=middleware,
@@ -290,6 +284,7 @@ class SerplySearchToolkit(Toolkit):
     def news(
         self,
         *,
+        num: int | Variable | None = None,
         gl: str | Variable | None = None,
         hl: str | Variable | None = None,
         proxy_location: ProxyLocation | Variable | None = None,
@@ -302,6 +297,9 @@ class SerplySearchToolkit(Toolkit):
         """Build the Google News search tool.
 
         Args:
+            num: Maximum number of articles to return. Google News ignores this
+                server-side, so the feed is truncated client-side. Defaults to
+                ``_NEWS_MAX_RESULTS``.
             gl: Google country code, forwarded as a query parameter.
             hl: Google interface language, forwarded as a query parameter.
             proxy_location: Region to search from (``X-Proxy-Location`` header).
@@ -320,6 +318,7 @@ class SerplySearchToolkit(Toolkit):
             ctx: Context,
         ) -> ToolResult:
             """Search Google News through Serply."""
+            limit = _int(resolve_variable(num, ctx, param_name="num"))
             raw = await _get(
                 client_kwargs,
                 "/v1/news/",
@@ -339,9 +338,8 @@ class SerplySearchToolkit(Toolkit):
                             link=_text(item, "link"),
                             published=_text(item, "published"),
                             source=_text(item.get("source"), "title"),
-                            summary=_plain_text(_text(item, "summary")),
                         )
-                        for item in _items(raw, "entries")
+                        for item in _items(raw, "entries")[: limit if limit and limit > 0 else _NEWS_MAX_RESULTS]
                     ],
                 )
             )
@@ -403,7 +401,7 @@ class SerplySearchToolkit(Toolkit):
                             title=_text(item, "title"),
                             link=_text(item, "link"),
                             authors=_text(item.get("author"), "names"),
-                            description=_text(item, "description"),
+                            pdf_link=_text(item.get("doc"), "link"),
                             citations=_int(_nested(item, "extras", "citations", "count")),
                         )
                         for item in _items(raw, "articles")

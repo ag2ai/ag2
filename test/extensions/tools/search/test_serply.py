@@ -178,13 +178,12 @@ class TestNewsSearch:
                             "link": "https://news.example.com/ag2",
                             "published": "Wed, 26 Aug 2026 12:00:00 GMT",
                             "source": {"href": "https://news.example.com", "title": "Example News"},
-                            "summary": '<a href="https://news.example.com/ag2">AG2 1.0 &amp; more</a>&nbsp;<b>Example</b>',
                         }
                     ]
                 },
             )
         )
-        toolkit = SerplySearchToolkit(api_key="test", num=5, gl="us")
+        toolkit = SerplySearchToolkit(api_key="test", gl="us")
         config = TrackingConfig(_tool_call_config({"query": "AG2"}, tool_name="serply_news_search"))
         agent = Agent("a", config=config, tools=[toolkit])
 
@@ -200,12 +199,77 @@ class TestNewsSearch:
                         link="https://news.example.com/ag2",
                         published="Wed, 26 Aug 2026 12:00:00 GMT",
                         source="Example News",
-                        summary="AG2 1.0 & more Example",
                     )
                 ],
             )
         )
         assert dict(route.calls.last.request.url.params) == {"q": "AG2", "gl": "us"}
+
+
+@pytest.mark.asyncio
+class TestNewsResultCap:
+    @staticmethod
+    def _feed(count: int) -> dict[str, object]:
+        return {"entries": [{"title": f"Article {i}", "link": f"https://news.example.com/{i}"} for i in range(count)]}
+
+    @respx.mock
+    async def test_caps_the_feed_when_num_is_unset(self) -> None:
+        respx.get(f"{SERPLY_BASE_URL}/v1/news/").mock(return_value=httpx.Response(200, json=self._feed(60)))
+        toolkit = SerplySearchToolkit(api_key="test")
+        config = TrackingConfig(_tool_call_config({"query": "AG2"}, tool_name="serply_news_search"))
+        agent = Agent("a", config=config, tools=[toolkit])
+
+        await agent.ask("search")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SerplyNewsSearchResponse(
+                query="AG2",
+                results=[
+                    SerplyNewsResult(title=f"Article {i}", link=f"https://news.example.com/{i}") for i in range(10)
+                ],
+            )
+        )
+
+    @respx.mock
+    async def test_num_truncates_the_feed_client_side(self) -> None:
+        route = respx.get(f"{SERPLY_BASE_URL}/v1/news/").mock(return_value=httpx.Response(200, json=self._feed(60)))
+        toolkit = SerplySearchToolkit(api_key="test", num=3)
+        config = TrackingConfig(_tool_call_config({"query": "AG2"}, tool_name="serply_news_search"))
+        agent = Agent("a", config=config, tools=[toolkit])
+
+        await agent.ask("search")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SerplyNewsSearchResponse(
+                query="AG2",
+                results=[
+                    SerplyNewsResult(title=f"Article {i}", link=f"https://news.example.com/{i}") for i in range(3)
+                ],
+            )
+        )
+        # Google News ignores `num` server-side, so it must not be sent.
+        assert dict(route.calls.last.request.url.params) == {"q": "AG2"}
+
+    @respx.mock
+    async def test_num_resolves_from_a_variable(self) -> None:
+        respx.get(f"{SERPLY_BASE_URL}/v1/news/").mock(return_value=httpx.Response(200, json=self._feed(60)))
+        toolkit = SerplySearchToolkit(api_key="test")
+        config = TrackingConfig(_tool_call_config({"query": "AG2"}, tool_name="serply_news_search"))
+        agent = Agent("a", config=config, tools=[toolkit.news(num=Variable("cap"))], variables={"cap": 2})
+
+        await agent.ask("search")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SerplyNewsSearchResponse(
+                query="AG2",
+                results=[
+                    SerplyNewsResult(title=f"Article {i}", link=f"https://news.example.com/{i}") for i in range(2)
+                ],
+            )
+        )
 
 
 @pytest.mark.asyncio
@@ -225,6 +289,7 @@ class TestScholarSearch:
                                 "authors": [{"name": "F. Bellifemine", "link": "https://openalex.org/A1"}],
                             },
                             "description": "F. Bellifemine, A. Poggi, G. Rimassa - 1999",
+                            "doc": {"link": "https://example.org/jade-oa.pdf", "type": "PDF"},
                             "extras": {"citations": {"count": 986, "link": "https://example.org/cites"}},
                         },
                         {"title": "Untracked paper", "link": "https://example.org/paper"},
@@ -247,7 +312,7 @@ class TestScholarSearch:
                         title="JADE - A FIPA-compliant agent framework",
                         link="https://example.org/jade.pdf",
                         authors="F. Bellifemine, A. Poggi, G. Rimassa - 1999",
-                        description="F. Bellifemine, A. Poggi, G. Rimassa - 1999",
+                        pdf_link="https://example.org/jade-oa.pdf",
                         citations=986,
                     ),
                     SerplyScholarResult(title="Untracked paper", link="https://example.org/paper"),
@@ -288,42 +353,6 @@ class TestVariables:
 
 @pytest.mark.asyncio
 class TestPayloadHandling:
-    @respx.mock
-    async def test_escaped_angle_brackets_survive_summary_flattening(self) -> None:
-        respx.get(f"{SERPLY_BASE_URL}/v1/news/").mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "entries": [
-                        {
-                            "title": "Market cap &lt; $1T",
-                            "link": "https://news.example.com/cap",
-                            "summary": "<b>Prices</b>: 5 &lt; 10 &gt; 3",
-                        }
-                    ]
-                },
-            )
-        )
-        toolkit = SerplySearchToolkit(api_key="test")
-        config = TrackingConfig(_tool_call_config({"query": "market"}, tool_name="serply_news_search"))
-        agent = Agent("a", config=config, tools=[toolkit])
-
-        await agent.ask("search")
-
-        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].result.parts[0] == DataInput(
-            SerplyNewsSearchResponse(
-                query="market",
-                results=[
-                    SerplyNewsResult(
-                        title="Market cap &lt; $1T",
-                        link="https://news.example.com/cap",
-                        summary="Prices : 5 < 10 > 3",
-                    )
-                ],
-            )
-        )
-
     @respx.mock
     async def test_boolean_citation_count_is_dropped(self) -> None:
         respx.get(f"{SERPLY_BASE_URL}/v1/scholar/").mock(

@@ -26,8 +26,8 @@ agent = Agent(
 | Tool | Description |
 | :--- | :--- |
 | `serply_web_search` | Search Google web results and return ranked results with position, title, snippet, and URL |
-| `serply_news_search` | Search Google News and return recent articles with title, source, publish date, summary, and URL |
-| `serply_scholar_search` | Search Google Scholar and return articles with title, authors, citation count, and URL |
+| `serply_news_search` | Search Google News and return recent articles with title, source, publish date, and URL |
+| `serply_scholar_search` | Search Google Scholar and return articles with title, authors, citation count, URL, and an open-access PDF link when one exists |
 
 ## Shared defaults
 
@@ -36,14 +36,14 @@ Constructor defaults are applied to the toolkit's default tools:
 ```python linenums="1"
 toolkit = SerplySearchToolkit(
     api_key=...,
-    num=5,                # number of results for serply_web_search and serply_scholar_search
+    num=5,                # number of results, for all three tools
     gl="us",              # Google country code, forwarded as a query parameter
     hl="en",              # Google interface language, forwarded as a query parameter
     proxy_location="US",  # region Serply searches from (X-Proxy-Location header)
 )
 ```
 
-`num` is not applied to `serply_news_search`: Google News returns its own feed size.
+`num` reaches Serply as a query parameter for web and scholar search. Google News ignores it and answers with its whole feed — 49 to 105 articles in practice, whose links are ~284-character Google redirects — so `serply_news_search` truncates the feed itself. When `num` is unset it returns the 10 most recent articles; left uncapped, one news call would put roughly 15k tokens into the model's context.
 
 `proxy_location` is Serply's documented way to target results geographically, and it is best-effort: Serply answers from a proxy pool, so the region it actually used (returned as `device_region` in the raw payload) may be a nearby one rather than the one requested. `gl` and `hl` are separate — they are passed straight through to Google as query parameters and change the result set on their own. Use `proxy_location` for where the search originates and `gl`/`hl` for Google's own country and language selection.
 
@@ -93,13 +93,17 @@ A non-2xx response raises `httpx.HTTPStatusError`. A response body that is not a
 | Field | Description |
 | :--- | :--- |
 | `query` | The search query the agent executed |
-| `results` | List of `SerplyNewsResult` (`title`, `link`, `published`, `source`, `summary`); the summary is returned as plain text |
+| `results` | List of `SerplyNewsResult` (`title`, `link`, `published`, `source`); `link` is a Google News redirect, not the publisher's own URL |
 
 `serply_scholar_search` returns a `SerplyScholarSearchResponse`:
 
 | Field | Description |
 | :--- | :--- |
 | `query` | The search query the agent executed |
-| `results` | List of `SerplyScholarResult` (`title`, `link`, `authors`, `description`, `citations`) |
+| `results` | List of `SerplyScholarResult` (`title`, `link`, `authors`, `pdf_link`, `citations`) |
+
+`pdf_link` is Serply's open-access link for the article and is empty when it has none. `citations` is sourced from OpenAlex rather than Google Scholar's own count; treat it as an indication of impact rather than an exact figure.
+
+For queries that trigger a Google local pack, `serply_web_search` may return a top-ranked result whose `link` points back into `google.com` instead of the business's own site.
 
 Request parameters and response fields are documented in the [Serply API docs](https://serply.io/docs){.external-link target="_blank"}.
