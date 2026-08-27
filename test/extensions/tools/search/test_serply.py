@@ -284,3 +284,152 @@ class TestVariables:
 
         with pytest.raises(KeyError):
             await agent.ask("search")
+
+
+@pytest.mark.asyncio
+class TestPayloadHandling:
+    @respx.mock
+    async def test_escaped_angle_brackets_survive_summary_flattening(self) -> None:
+        respx.get(f"{SERPLY_BASE_URL}/v1/news/").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "entries": [
+                        {
+                            "title": "Market cap &lt; $1T",
+                            "link": "https://news.example.com/cap",
+                            "summary": "<b>Prices</b>: 5 &lt; 10 &gt; 3",
+                        }
+                    ]
+                },
+            )
+        )
+        toolkit = SerplySearchToolkit(api_key="test")
+        config = TrackingConfig(_tool_call_config({"query": "market"}, tool_name="serply_news_search"))
+        agent = Agent("a", config=config, tools=[toolkit])
+
+        await agent.ask("search")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SerplyNewsSearchResponse(
+                query="market",
+                results=[
+                    SerplyNewsResult(
+                        title="Market cap &lt; $1T",
+                        link="https://news.example.com/cap",
+                        summary="Prices : 5 < 10 > 3",
+                    )
+                ],
+            )
+        )
+
+    @respx.mock
+    async def test_boolean_citation_count_is_dropped(self) -> None:
+        respx.get(f"{SERPLY_BASE_URL}/v1/scholar/").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "articles": [
+                        {
+                            "title": "A paper",
+                            "link": "https://example.org/paper",
+                            "extras": {"citations": {"count": True}},
+                        }
+                    ]
+                },
+            )
+        )
+        toolkit = SerplySearchToolkit(api_key="test")
+        config = TrackingConfig(_tool_call_config({"query": "papers"}, tool_name="serply_scholar_search"))
+        agent = Agent("a", config=config, tools=[toolkit])
+
+        await agent.ask("search")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SerplyScholarSearchResponse(
+                query="papers",
+                results=[SerplyScholarResult(title="A paper", link="https://example.org/paper")],
+            )
+        )
+
+    @respx.mock
+    async def test_non_object_payload_yields_no_results(self) -> None:
+        respx.get(f"{SERPLY_BASE_URL}/v1/search/").mock(return_value=httpx.Response(200, json=["unexpected"]))
+        toolkit = SerplySearchToolkit(api_key="test")
+        config = TrackingConfig(_tool_call_config({"query": "AG2"}))
+        agent = Agent("a", config=config, tools=[toolkit])
+
+        await agent.ask("search")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SerplyWebSearchResponse(query="AG2", results=[])
+        )
+
+
+@pytest.mark.asyncio
+class TestConnection:
+    @respx.mock
+    async def test_duplicate_trailing_slashes_are_stripped_from_base_url(self) -> None:
+        route = respx.get("https://proxy.example.com/serply/v1/search/").mock(
+            return_value=httpx.Response(200, json={"results": []})
+        )
+        toolkit = SerplySearchToolkit(api_key="test", base_url="https://proxy.example.com/serply//")
+        agent = Agent("a", config=_tool_call_config({"query": "AG2"}), tools=[toolkit])
+
+        await agent.ask("search")
+
+        assert route.called
+
+    @respx.mock
+    async def test_accepts_proxy_and_tls_verify_settings(self) -> None:
+        route = respx.get(f"{SERPLY_BASE_URL}/v1/search/").mock(return_value=httpx.Response(200, json={"results": []}))
+        toolkit = SerplySearchToolkit(api_key="test", proxy="http://proxy.example.com:3128", verify=False)
+        agent = Agent("a", config=_tool_call_config({"query": "AG2"}), tools=[toolkit])
+
+        await agent.ask("search")
+
+        assert route.called
+
+    @respx.mock
+    async def test_forwards_proxy_location_header(self) -> None:
+        route = respx.get(f"{SERPLY_BASE_URL}/v1/news/").mock(return_value=httpx.Response(200, json={"entries": []}))
+        toolkit = SerplySearchToolkit(api_key="test", proxy_location="US")
+        agent = Agent(
+            "a",
+            config=_tool_call_config({"query": "AG2"}, tool_name="serply_news_search"),
+            tools=[toolkit],
+        )
+
+        await agent.ask("search")
+
+        assert route.calls.last.request.headers["X-Proxy-Location"] == "US"
+
+    @respx.mock
+    async def test_omits_unset_proxy_location_header(self) -> None:
+        route = respx.get(f"{SERPLY_BASE_URL}/v1/search/").mock(return_value=httpx.Response(200, json={"results": []}))
+        toolkit = SerplySearchToolkit(api_key="test")
+        agent = Agent("a", config=_tool_call_config({"query": "AG2"}), tools=[toolkit])
+
+        await agent.ask("search")
+
+        assert "X-Proxy-Location" not in route.calls.last.request.headers
+
+    @respx.mock
+    async def test_resolves_header_variable(self) -> None:
+        route = respx.get(f"{SERPLY_BASE_URL}/v1/scholar/").mock(
+            return_value=httpx.Response(200, json={"articles": []})
+        )
+        toolkit = SerplySearchToolkit(api_key="test")
+        agent = Agent(
+            "a",
+            config=_tool_call_config({"query": "AG2"}, tool_name="serply_scholar_search"),
+            tools=[toolkit.scholar(proxy_location=Variable("region"))],
+            variables={"region": "DE"},
+        )
+
+        await agent.ask("search")
+
+        assert route.calls.last.request.headers["X-Proxy-Location"] == "DE"
