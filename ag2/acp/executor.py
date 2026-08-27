@@ -28,12 +28,9 @@ from ag2.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
-    ToolCallsEvent,
-    ToolResultEvent,
-    ToolResultsEvent,
 )
-from ag2.events.tool_events import ToolResult
 from ag2.exceptions import HumanInputError
+from ag2.history import close_unanswered_tool_calls
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 from .mappers import event_to_session_update, prompt_to_inputs
@@ -313,36 +310,6 @@ class AgentExecutor:
         )
 
 
-def _tool_call_batches(events: "Sequence[BaseEvent]") -> "list[ToolCallsEvent]":
-    """Every batch of tool calls in ``events``, from either place they appear.
-
-    A turn persists the model's :class:`ModelResponse` — which already carries
-    ``tool_calls`` — *before* the agent emits the matching
-    :class:`ToolCallsEvent`. Cancelling in that window leaves history holding
-    calls that no ``ToolCallsEvent`` describes, so reading only the latter would
-    find nothing to repair and leave the transcript with an unanswered call.
-
-    Batches are deduplicated by call id, because the usual case is both records
-    present and describing the same calls.
-    """
-    batches: list[ToolCallsEvent] = []
-    seen: set[str] = set()
-    for event in events:
-        calls = (
-            event.tool_calls.calls
-            if isinstance(event, ModelResponse) and event.tool_calls
-            else event.calls
-            if isinstance(event, ToolCallsEvent)
-            else []
-        )
-        fresh = [call for call in calls if call.id not in seen]
-        if not fresh:
-            continue
-        seen.update(call.id for call in fresh)
-        batches.append(ToolCallsEvent(fresh))
-    return batches
-
-
 def isolate_variables(defaults: dict[Any, Any]) -> dict[Any, Any]:
     """Seed one session's variables from the agent's defaults, by value.
 
@@ -374,54 +341,18 @@ def isolate_variables(defaults: dict[Any, Any]) -> dict[Any, Any]:
 async def heal_cancelled_turn(stream: "MemoryStream") -> int:
     """Close off tool calls a cancelled turn left unanswered. Returns how many.
 
-    Cancelling stops the turn wherever it happened to be, which can be *between*
-    a tool call and its result. That leaves history holding an assistant
-    tool-call with nothing answering it — and providers reject that shape, so the
-    session would fail on its next prompt even though cancelling is supposed to
-    be a normal, recoverable thing to do.
+    The repair itself lives in :func:`ag2.history.close_unanswered_tool_calls`,
+    because every surface needs it and not only ACP; what this adds is the
+    reason ACP has for asking, which is the text the model reads next turn.
 
-    Appending a synthetic result per unanswered call keeps the transcript valid
-    and tells the model plainly what happened, rather than rewriting history to
-    pretend the call was never made.
+    Still called on the failure path, where it covers the ways a turn can die
+    that the turn boundary does not repair itself — a ``session/update`` that
+    could not be delivered, a storage error. A human-input failure has already
+    been closed off by then, with its own reason, so this finds nothing left to
+    do and the transcript is not mislabelled as cancelled. The repair is
+    idempotent, which is what makes calling it twice harmless.
     """
-    events = list(await stream.history.get_events())
-
-    # A batch counts as settled only once a ``ToolResultsEvent`` covers it —
-    # that wrapper is what providers serialize. A loose ``ToolResultEvent`` left
-    # behind by a tool that *did* finish is not enough on its own: a partially
-    # completed batch would otherwise be rebuilt with the finished call missing,
-    # and the transcript would carry more tool calls than tool results.
-    settled = {r.parent_id for e in events if isinstance(e, ToolResultsEvent) for r in e.results}
-    completed = {e.parent_id: e for e in events if isinstance(e, ToolResultEvent) and e.parent_id not in settled}
-
-    repaired: list[ToolResultsEvent] = []
-    closed = 0
-    for event in _tool_call_batches(events):
-        pending = [call for call in event.calls if call.id not in settled]
-        if not pending:
-            continue
-        # Rebuild the *whole* outstanding batch: results that did land, plus a
-        # stand-in for each call the cancellation cut short.
-        results = []
-        for call in pending:
-            done = completed.get(call.id)
-            results.append(
-                done
-                if done is not None
-                else ToolResultEvent(
-                    parent_id=call.id,
-                    name=call.name,
-                    result=ToolResult(CANCELLED_TOOL_RESULT),
-                )
-            )
-            closed += int(done is None)
-        repaired.append(ToolResultsEvent(results))
-
-    if not repaired:
-        return 0
-
-    await stream.history.replace([*events, *repaired])
-    return closed
+    return await close_unanswered_tool_calls(stream.history, result=CANCELLED_TOOL_RESULT)
 
 
 async def _reject_human_input(event: HumanInputRequest) -> str:

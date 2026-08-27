@@ -168,4 +168,42 @@ except HumanInputFailedError as exc:
 !!! note "`timeout=` covers the asking, not just the waiting"
     The hook runs inline while the request is being sent, so `timeout=` bounds the whole
     exchange — a hook that never returns raises `HumanInputTimeoutError` rather than
-    hanging the turn.
+    hanging the turn. `#!python context.input()` and `#!python approval_required()` both
+    default to no timeout at all: waiting is what a question for a human is for, so the
+    deadline is the caller's to set.
+
+### The conversation stays usable
+
+The failure escapes between a tool call and its result, which would otherwise leave the
+history holding an assistant tool call that nothing answers — a shape providers reject. The
+turn closes that call off with a stand-in result before the exception reaches you, so a
+stream you reuse (a `#!python stream=` passed to a second `#!python ask()`, an ACP or MCP
+session, a `#!python persistent_stream()`) still works on its next turn:
+
+```python linenums="1" hl_lines="6 9"
+from ag2.exceptions import HumanInputError
+from ag2.stream import MemoryStream
+
+stream = MemoryStream()
+try:
+    await agent.ask("Delete the stale accounts.", stream=stream)
+except HumanInputError:
+    pass  # nobody could approve it
+reply = await agent.ask("What did you manage to do?", stream=stream)
+```
+
+The model reads the stand-in on the next turn, so it is told the call was abandoned rather
+than left to guess from a gap in the transcript.
+
+### The rest of the batch
+
+A model can ask for several tools at once, and the others in that batch are stopped as the
+turn ends — none of them gets to write a result into a conversation the caller has already
+been told about.
+
+!!! warning "A sync tool already running cannot be stopped"
+    Sync tools run in a worker thread, and a thread cannot be cancelled. Nothing such a tool
+    returns is used — its result reaches neither the transcript nor the model — but a side
+    effect already under way still happens. Where that matters, make the tool `#!python async`
+    so cancellation can reach it, or ask for approval before the side effect rather than
+    alongside it.

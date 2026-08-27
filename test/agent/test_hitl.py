@@ -3,14 +3,32 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import copy
+import pickle
+import time
+from collections.abc import Awaitable, Callable
 from unittest.mock import MagicMock
 
 import pytest
 
-from ag2 import Agent, Context
-from ag2.events import HumanInputRequest, HumanMessage, ToolCallEvent
-from ag2.exceptions import HumanInputFailedError, HumanInputNotProvidedError, HumanInputTimeoutError
+from ag2 import Agent, Context, TaskConfig
+from ag2.events import (
+    HumanInputRequest,
+    HumanMessage,
+    TaskFailed,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolResultsEvent,
+)
+from ag2.exceptions import (
+    HumanInputError,
+    HumanInputFailedError,
+    HumanInputNotProvidedError,
+    HumanInputTimeoutError,
+)
+from ag2.history import HUMAN_INPUT_ABANDONED_TOOL_RESULT
 from ag2.middleware import approval_required
+from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 from ag2.tools import tool
 from ag2.tools.subagents import subagent_tool
@@ -357,35 +375,235 @@ class TestChannelFailureEndsTheTurn:
         handled.assert_called_once()
 
 
+def _asking_tool() -> "tuple[Callable[[Context], Awaitable[str]], MagicMock]":
+    """A tool that asks a human, and a spy on whether it ever got past the asking."""
+    executed = MagicMock()
+
+    async def ask_human(ctx: Context) -> str:
+        answer = await ctx.input("Say smth", timeout=1.0)
+        executed()
+        return answer
+
+    return ask_human, executed
+
+
 @pytest.mark.asyncio()
-class TestChannelFailureCrossesTheSubtaskBoundary:
+async def test_a_delegated_question_nobody_can_answer_ends_the_parent_turn() -> None:
     """A sub-agent's unanswerable question is the same failure one level down.
 
     Delegation turns a child's exception into the delegating tool's output, so
     without this the parent's model reads "the subtask failed" and is invited to
     find another way to the same effect.
     """
+    ask_human, executed = _asking_tool()
+    child = Agent("child", config=_lenient("ask_human"), tools=[ask_human])
+    parent = Agent(
+        "parent",
+        config=_lenient("delegate", '{"objective": "ask the human"}'),
+        tools=[subagent_tool(child, name="delegate", description="delegate to the child")],
+    )
 
-    def _parent_with_asking_child(self) -> tuple[Agent, MagicMock]:
-        executed = MagicMock()
+    with pytest.raises(HumanInputNotProvidedError):
+        await parent.ask("Hi!")
+
+    executed.assert_not_called()
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize("parallel", [True, False], ids=["parallel", "sequential"])
+async def test_an_unanswerable_subtask_ends_the_parent_turn(parallel: bool) -> None:
+    """``run_subtasks`` fans out; the fan-out must not swallow the failure.
+
+    ``subagent_tool`` and ``run_subtasks`` reach ``run_task`` by different
+    routes: the parallel branch collects exceptions with
+    ``return_exceptions=True`` and the sequential one catches them per task, and
+    both used to render whatever came back as text. Either way the parent's
+    model would read an unaskable question as a subtask that merely failed.
+    """
+    ask_human, executed = _asking_tool()
+    parent = Agent(
+        "parent",
+        config=_lenient(
+            "run_subtasks",
+            f'{{"tasks": ["a", "b"], "parallel": {str(parallel).lower()}}}',
+        ),
+        tools=[ask_human],
+        tasks=TaskConfig(config=_lenient("ask_human")),
+    )
+    stream = MemoryStream()
+
+    with pytest.raises(HumanInputNotProvidedError):
+        await parent.ask("Hi!", stream=stream)
+
+    executed.assert_not_called()
+    assert any(isinstance(event, TaskFailed) for event in await stream.history.get_events())
+
+
+@pytest.mark.asyncio()
+async def test_the_unanswered_call_is_closed_and_the_next_turn_works() -> None:
+    """Ending the turn must not poison the conversation it ended.
+
+    The failure escapes between a tool call and its result, so history is left
+    holding an assistant tool-call nothing answers — a shape providers reject.
+    Anything that reuses a stream (a ``stream=`` passed twice, an ACP or MCP
+    session) would then fail on its *next* turn for a reason unrelated to the
+    one it was told about.
+    """
+    asked = MagicMock()
+
+    async def ask_human(ctx: Context) -> str:
+        asked()
+        return await ctx.input("Say smth", timeout=1.0)
+
+    agent = Agent("", config=_lenient("ask_human"), tools=[ask_human])
+    stream = MemoryStream()
+
+    with pytest.raises(HumanInputNotProvidedError):
+        await agent.ask("Hi!", stream=stream)
+
+    events = list(await stream.history.get_events())
+    called = {call.id for event in events if isinstance(event, ToolCallsEvent) for call in event.calls}
+    answered = {result.parent_id for event in events if isinstance(event, ToolResultsEvent) for result in event.results}
+    assert called and called == answered
+
+    # The stand-in says what happened rather than pretending the call never
+    # ran — the model reads it on the next turn.
+    stand_in = next(
+        result
+        for event in events
+        if isinstance(event, ToolResultsEvent)
+        for result in event.results
+        if result.parent_id in called
+    )
+    assert stand_in.result.parts[0].content == HUMAN_INPUT_ABANDONED_TOOL_RESULT
+
+    # A second turn on the same history is served an answered transcript, so
+    # it runs to completion instead of dying on the wreckage of the first.
+    agent.config = TestConfig("recovered", raise_tool_errors=False)
+    assert (await agent.ask("Still there?", stream=stream)).body == "recovered"
+    asked.assert_called_once()
+
+
+@pytest.mark.asyncio()
+class TestSiblingToolsStopWithTheTurn:
+    """The other calls in the batch do not outlive the turn they were part of.
+
+    ``asyncio.gather`` propagates the first exception but leaves its siblings
+    running detached. Nothing was watching them any more, so a side effect would
+    land after the caller had already been told the turn failed — and its result
+    would be written into a history that had already been repaired.
+
+    A sync tool runs in a thread and cannot be cancelled, so the guarantee has a
+    seam; the second test says exactly where it is and what survives it.
+    """
+
+    async def test_a_sibling_does_not_run_on_after_the_caller_is_told(self) -> None:
+        side_effects: list[str] = []
 
         async def ask_human(ctx: Context) -> str:
-            answer = await ctx.input("Say smth", timeout=1.0)
-            executed()
-            return answer
+            return await ctx.input("Say smth", timeout=1.0)
 
-        child = Agent("child", config=_lenient("ask_human"), tools=[ask_human])
-        parent = Agent(
-            "parent",
-            config=_lenient("delegate", '{"objective": "ask the human"}'),
-            tools=[subagent_tool(child, name="delegate", description="delegate to the child")],
+        async def slow_side_effect() -> str:
+            await asyncio.sleep(0.2)
+            side_effects.append("ran")
+            return "done"
+
+        agent = Agent(
+            "",
+            config=TestConfig(
+                [ToolCallEvent(name="ask_human"), ToolCallEvent(name="slow_side_effect")],
+                "done",
+                raise_tool_errors=False,
+            ),
+            tools=[ask_human, slow_side_effect],
         )
-        return parent, executed
-
-    async def test_a_delegated_question_nobody_can_answer_ends_the_parent_turn(self) -> None:
-        parent, executed = self._parent_with_asking_child()
 
         with pytest.raises(HumanInputNotProvidedError):
-            await parent.ask("Hi!")
+            await agent.ask("Hi!")
 
-        executed.assert_not_called()
+        # Long enough that the sibling would have finished had it been left to
+        # run; the assertion is that it was stopped, not that it was slow.
+        await asyncio.sleep(0.3)
+        assert side_effects == []
+
+    async def test_a_sync_sibling_is_still_never_owed_a_result(self) -> None:
+        """The one case the cancellation cannot reach, pinned to what it does promise.
+
+        A sync tool runs in a worker thread, and a thread cannot be cancelled:
+        the side effect below lands after the caller has been told. What the turn
+        does guarantee is that nothing the thread produces is ever used — its
+        result reaches neither the stream nor the repaired history, so the model
+        never reads an answer to a turn that had already failed.
+        """
+        finished: list[str] = []
+
+        async def ask_human(ctx: Context) -> str:
+            return await ctx.input("Say smth", timeout=1.0)
+
+        def slow_side_effect() -> str:
+            """A plain sync tool, so it runs off the event loop."""
+            time.sleep(0.2)
+            finished.append("ran")
+            return "done"
+
+        agent = Agent(
+            "",
+            config=TestConfig(
+                [ToolCallEvent(name="ask_human"), ToolCallEvent(name="slow_side_effect")],
+                "done",
+                raise_tool_errors=False,
+            ),
+            tools=[ask_human, slow_side_effect],
+        )
+        stream = MemoryStream()
+
+        with pytest.raises(HumanInputNotProvidedError):
+            await agent.ask("Hi!", stream=stream)
+
+        await asyncio.sleep(0.4)
+        assert finished == ["ran"], "a thread cannot be cancelled; this documents that, it does not bless it"
+
+        # ... and yet the transcript carries the stand-in, not what the thread
+        # went on to return.
+        events = list(await stream.history.get_events())
+        stand_ins = [
+            result.result.parts[0].content
+            for event in events
+            if isinstance(event, ToolResultsEvent)
+            for result in event.results
+        ]
+        assert stand_ins == [HUMAN_INPUT_ABANDONED_TOOL_RESULT] * 2
+        assert "done" not in stand_ins
+
+
+@pytest.mark.parametrize(
+    ("error", "attribute", "expected"),
+    [
+        (HumanInputFailedError(ApprovalQueueDownError("queue down")), "cause", ApprovalQueueDownError),
+        (HumanInputTimeoutError(1.5), "timeout", 1.5),
+    ],
+    ids=["failed", "timeout"],
+)
+@pytest.mark.parametrize(
+    "roundtrip",
+    [copy.copy, copy.deepcopy, lambda e: pickle.loads(pickle.dumps(e))],
+    ids=["copy", "deepcopy", "pickle"],
+)
+def test_a_channel_failure_survives_a_round_trip(
+    error: HumanInputError,
+    attribute: str,
+    expected: object,
+    roundtrip: "Callable[[HumanInputError], HumanInputError]",
+) -> None:
+    """These reach a caller on a ``TaskFailed`` event, so they get copied.
+
+    The formatted message is what lands in ``args``, so the default
+    reconstruction feeds it back in where the cause or the deadline goes — the
+    sentence restated around itself, and the attribute that made the wrapper
+    worth having replaced by a string.
+    """
+    restored = roundtrip(error)
+
+    assert str(restored) == str(error)
+    value = getattr(restored, attribute)
+    assert isinstance(value, expected) if isinstance(expected, type) else value == expected

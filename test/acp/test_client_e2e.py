@@ -11,12 +11,14 @@ from acp import schema
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from ag2 import Agent
+from ag2 import Agent, Context
 from ag2.acp import MCPCapabilityError
 from ag2.acp.testing import ACPTurn, fake_acp_config
-from ag2.events import BaseEvent, ModelReasoning, ModelResponse
+from ag2.events import BaseEvent, ModelReasoning, ModelResponse, ToolCallEvent, ToolResultEvent
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
-from ag2.exceptions import UnsupportedToolError
+from ag2.exceptions import HumanInputNotProvidedError, UnsupportedToolError
+from ag2.history import HUMAN_INPUT_ABANDONED_TOOL_RESULT
+from ag2.stream import MemoryStream
 from ag2.tools.builtin.mcp_server import MCPServerTool
 from ag2.tools.builtin.web_search import WebSearchTool
 from ag2.tools.final.function_tool import FunctionTool
@@ -129,6 +131,31 @@ async def test_turn_timeout_surfaces_timeout() -> None:
     assert result.body == ""
     [response] = [e for e in seen if isinstance(e, ModelResponse)]
     assert response.finish_reason == "timeout"
+
+
+@pytest.mark.asyncio
+async def test_cancelling_the_caller_stops_the_turn_it_started() -> None:
+    """A cancelled ``ask()`` takes the prompt with it, on the default no-deadline path.
+
+    The turn runs on a task of its own so a dead human-input channel can stop it,
+    and ``asyncio.wait`` does not cancel what it waits on. Left alone the prompt
+    would outlive the call that started it — the agent still working, the session
+    never torn down — which is the very thing the channel-failure path exists to
+    prevent.
+    """
+    cfg = fake_acp_config(ACPTurn(hang=True), permission_policy="auto")  # turn_timeout defaults to None
+    agent = Agent("acp", config=cfg)
+
+    turn = asyncio.ensure_future(agent.ask("hang"))
+    await asyncio.sleep(0.2)  # let the prompt reach the agent and hang there
+    turn.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await turn
+
+    # The scripted turn returns only once it is stopped, and stopping it is what
+    # tears the session down — so a session still open is a prompt still running.
+    assert not any(session.started for session in cfg.sessions.values())
+    await cfg.aclose()
 
 
 @pytest.mark.asyncio
@@ -740,3 +767,105 @@ async def test_gateway_shuts_down_with_session() -> None:
     assert gateway is not None and gateway.url is not None
     await cfg.aclose()
     assert gateway.url is None  # closed together with the session
+
+
+@pytest.mark.asyncio
+class TestAnUnanswerableQuestionEndsTheACPBackedTurn:
+    """The CLI agent drives the loop, but the question was AG2's to answer.
+
+    A tool served over the gateway runs in this process, so a dead human-input
+    channel is this side's failure — and the agent's own words are not a
+    substitute for the answer it never got. Reported as the same exception every
+    surface where AG2 runs the loop reports.
+    """
+
+    def _asking_agent(self, *, turn: ACPTurn) -> tuple[Agent, Any]:
+        async def ask_human(ctx: Context) -> str:
+            """Ask the operator for the passphrase."""
+            return await ctx.input("What is the passphrase?")
+
+        cfg = fake_acp_config(turn, permission_policy="auto", turn_timeout=5.0)
+        return Agent("acp", config=cfg, tools=[ask_human]), cfg
+
+    @staticmethod
+    def _call_the_gateway(cfg_holder: dict[str, Any]) -> Any:
+        async def drive_mcp() -> None:
+            # Runs inside the fake agent's prompt turn — exactly when a real CLI
+            # agent would call the gateway.
+            session = next(iter(cfg_holder["cfg"].sessions.values()))
+            assert session.gateway is not None and session.gateway.url is not None
+            async with (
+                streamable_http_client(session.gateway.url) as (read, write),
+                ClientSession(read, write) as mcp_session,
+            ):
+                await mcp_session.initialize()
+                result = await mcp_session.call_tool("ask_human", {})
+                cfg_holder["tool_text"] = result.content[0].text
+
+        return drive_mcp
+
+    async def test_the_turn_fails_instead_of_reporting_the_agents_answer(self) -> None:
+        holder: dict[str, Any] = {}
+        # ``hang=True``: the agent keeps working after the tool call, and only
+        # returns once it is cancelled. A turn that waited this out would report
+        # success, which is the behaviour being excluded.
+        agent, cfg = self._asking_agent(
+            turn=ACPTurn(hang=True, on_prompt=self._call_the_gateway(holder), updates=[_text_update("all done")])
+        )
+        holder["cfg"] = cfg
+
+        try:
+            with pytest.raises(HumanInputNotProvidedError):
+                await agent.ask("get the passphrase")
+        finally:
+            await cfg.aclose()
+
+        # The agent was answered — an unanswered tools/call would hang it — but
+        # not with AG2's own wiring advice.
+        assert "hitl_hook" not in holder["tool_text"]
+
+    async def test_the_agent_is_stopped_rather_than_waited_out(self) -> None:
+        """The prompt only returns on cancel, so finishing at all proves it was sent.
+
+        ``turn_timeout`` is 5s and the scripted turn hangs until cancelled: if
+        the failure did not cancel, this would take the full timeout instead of
+        ending as soon as the channel died.
+        """
+        holder: dict[str, Any] = {}
+        agent, cfg = self._asking_agent(turn=ACPTurn(hang=True, on_prompt=self._call_the_gateway(holder)))
+        holder["cfg"] = cfg
+
+        started = asyncio.get_running_loop().time()
+        try:
+            with pytest.raises(HumanInputNotProvidedError):
+                await agent.ask("get the passphrase")
+        finally:
+            await cfg.aclose()
+
+        assert asyncio.get_running_loop().time() - started < 4.0
+
+    async def test_the_abandoned_call_is_closed_off_in_history(self) -> None:
+        """The same promise the AG2-driven surfaces make, on the surface that drives itself.
+
+        The gateway sends its ``ToolCallEvent`` alone, so the repair at the turn
+        boundary has no batch to find it in: an unanswered call would sit in the
+        transcript of every stream reused after this failure.
+        """
+        holder: dict[str, Any] = {}
+        agent, cfg = self._asking_agent(turn=ACPTurn(hang=True, on_prompt=self._call_the_gateway(holder)))
+        holder["cfg"] = cfg
+        stream = MemoryStream()
+
+        try:
+            with pytest.raises(HumanInputNotProvidedError):
+                await agent.ask("get the passphrase", stream=stream)
+        finally:
+            await cfg.aclose()
+
+        events = list(await stream.history.get_events())
+        called = {event.id for event in events if isinstance(event, ToolCallEvent)}
+        answered = {event.parent_id for event in events if isinstance(event, ToolResultEvent)}
+        assert called and called == answered
+
+        stand_ins = [result.result.parts[0].content for result in events if isinstance(result, ToolResultEvent)]
+        assert stand_ins == [HUMAN_INPUT_ABANDONED_TOOL_RESULT]

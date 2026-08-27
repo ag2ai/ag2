@@ -93,6 +93,14 @@ class HumanInputFailedError(HumanInputError):
         super().__init__(f"The human-input channel failed with {type(cause).__name__}: {cause}")
         self.cause = cause
 
+    def __reduce__(self) -> "tuple[type[HumanInputFailedError], tuple[BaseException]]":
+        # ``args`` holds the formatted message, so the default reconstruction
+        # would feed it back in as the cause — restating the sentence around
+        # itself and leaving ``.cause`` a string. This exception travels: it can
+        # reach a caller on a ``TaskFailed`` event, and ``.cause`` is the whole
+        # reason it is a wrapper rather than a re-type.
+        return type(self), (self.cause,)
+
 
 class HumanInputTimeoutError(HumanInputError):
     """Raised when nobody answered a human-input request in time.
@@ -105,6 +113,11 @@ class HumanInputTimeoutError(HumanInputError):
     def __init__(self, timeout: float) -> None:
         super().__init__(f"Nobody answered the human-input request within {timeout} seconds.")
         self.timeout = timeout
+
+    def __reduce__(self) -> "tuple[type[HumanInputTimeoutError], tuple[float]]":
+        # See :meth:`HumanInputFailedError.__reduce__`: reconstructing from
+        # ``args`` would put the message where the number goes.
+        return type(self), (self.timeout,)
 
 
 class ConfigNotProvidedError(AG2Error):

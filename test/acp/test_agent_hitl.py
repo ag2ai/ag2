@@ -12,7 +12,7 @@ from dirty_equals import IsPartialDict
 
 from ag2 import Agent, Context
 from ag2.acp import ACPAgent
-from ag2.acp.executor import HUMAN_INPUT_ERROR_CATEGORY
+from ag2.acp.executor import CANCELLED_TOOL_RESULT, HUMAN_INPUT_ERROR_CATEGORY
 from ag2.acp.testing import connect
 from ag2.events import (
     HumanInputRequest,
@@ -21,6 +21,7 @@ from ag2.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
+from ag2.history import HUMAN_INPUT_ABANDONED_TOOL_RESULT
 from ag2.hitl import HumanHook
 from ag2.middleware import approval_required
 from ag2.testing import TestConfig
@@ -304,6 +305,14 @@ class TestAnUnanswerableQuestionReachesTheClient:
             history = list(await acp_agent.sessions.stream(stored).history.get_events())
 
         calls = [event for event in history if isinstance(event, ToolCallEvent)]
-        answered = {result.parent_id for result in _results(history)}
+        results = _results(history)
+        answered = {result.parent_id for result in results}
         assert calls, "the turn should have reached a tool call"
         assert all(call.id in answered for call in calls)
+
+        # Repaired at the turn boundary, where the reason is still known, so the
+        # transcript says the question went unanswered rather than claiming a
+        # cancellation the Client never asked for.
+        stand_ins = [result.result.parts[0].content for result in results]
+        assert stand_ins == [HUMAN_INPUT_ABANDONED_TOOL_RESULT]
+        assert CANCELLED_TOOL_RESULT not in stand_ins
