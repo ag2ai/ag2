@@ -14,7 +14,10 @@ import pytest
 from acp import schema
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from mcp.server.streamable_http import CONTENT_TYPE_JSON, CONTENT_TYPE_SSE, MCP_SESSION_ID_HEADER
+from mcp.shared.inbound import MCP_PROTOCOL_VERSION_HEADER
 from mcp.types import CallToolResult
+from mcp_types.version import LATEST_HANDSHAKE_VERSION
 
 from ag2.acp.bridge import BridgeState
 from ag2.acp.config import ACPConfig
@@ -83,6 +86,25 @@ def test_capability_error_message_names_agent() -> None:
     assert "expose_tools" in str(err)
 
 
+_MCP_HEADERS = {"Accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}", "Content-Type": CONTENT_TYPE_JSON}
+_INITIALIZE = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": LATEST_HANDSHAKE_VERSION,
+        "capabilities": {},
+        "clientInfo": {"name": "t", "version": "1"},
+    },
+}
+_CALL_ADD = {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {"name": "add", "arguments": {"a": 2, "b": 3}},
+}
+
+
 def _fn_add() -> FunctionToolSchema:
     return FunctionToolSchema(
         function=FunctionDefinition(
@@ -114,6 +136,37 @@ async def test_gateway_serves_tools_list_over_http() -> None:
         assert tool.input_schema["required"] == ["a", "b"]
     finally:
         await gateway.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_issues_no_session_and_still_serves_a_call() -> None:
+    """The gateway is per-turn and per-request, so it hands out no MCP session.
+
+    A session would be pure overhead on a server created for one turn: nothing
+    outlives a request, so there is no cross-call state for a session id to name.
+    The tool call in the same test keeps the header assertion honest — a server
+    that answered nothing would issue no session id either.
+    """
+    state = BridgeState(ACPConfig())
+    state.context = _FakeContext(lambda call: ToolResultEvent.from_call(call, "sum is 5"))
+    gateway = ToolGateway(state, [_fn_add()])
+    url = await gateway.start()
+    try:
+        async with httpx.AsyncClient() as client:
+            initialize = await client.post(f"{url}/", headers=_MCP_HEADERS, json=_INITIALIZE)
+            called = await client.post(
+                f"{url}/",
+                headers={**_MCP_HEADERS, MCP_PROTOCOL_VERSION_HEADER: LATEST_HANDSHAKE_VERSION},
+                json=_CALL_ADD,
+            )
+    finally:
+        await gateway.close()
+
+    assert initialize.status_code == 200
+    assert MCP_SESSION_ID_HEADER not in initialize.headers
+    assert called.status_code == 200
+    assert MCP_SESSION_ID_HEADER not in called.headers
+    assert called.json()["result"]["content"] == [{"type": "text", "text": "sum is 5"}]
 
 
 @pytest.mark.asyncio
