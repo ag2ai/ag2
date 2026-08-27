@@ -129,6 +129,16 @@ class AgentExecutor:
         if not message:
             return tool_error("Missing required 'message' argument.")
 
+        # A blank handle names no conversation, so it is read as no conversation
+        # rather than as an unknown one. The caller this matters for is the model:
+        # the handle is put in readable content precisely because the model drives
+        # the argument, and a model given an optional string argument routinely
+        # sends "" instead of leaving the key out — which would make its every
+        # first call an error and leave it unable to start a conversation at all.
+        # Nothing is lost: no minted handle is blank.
+        if conversation is not None and not conversation.strip():
+            conversation = None
+
         # The conversation is held for the whole turn: for a keyed one that means
         # holding its turn lock, serializing concurrent same-conversation calls.
         try:

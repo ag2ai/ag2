@@ -93,6 +93,8 @@ A caller names the conversation it wants to continue. The tool takes an optional
 - **Omit it** and the call starts a new conversation. The server mints a handle and returns it.
 - **Pass a handle back** and that conversation continues.
 
+A blank handle — `""`, or whitespace — counts as omitting it, because it names nothing. That matters for the reader this channel is built for: a model asked for an optional string argument routinely sends an empty one instead of leaving the key out, and read as an unknown handle that would leave it unable to start a conversation at all. No minted handle is blank, so nothing that could name a conversation is affected.
+
 The handle comes back twice, for two different readers:
 
 - in a **text content block**, so the model driving the tool can read it and carry it into its next call without any help from the host;

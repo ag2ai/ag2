@@ -320,6 +320,53 @@ class TestConversationHandle:
 
 
 @pytest.mark.asyncio
+class TestBlankHandle:
+    """A blank handle names no conversation, so it reads as none being named.
+
+    The reader of the handle channel is the model, and a model given an optional
+    string argument routinely sends ``""`` rather than omitting the key. Read as
+    an unknown handle, that would make its every first call an error and leave it
+    unable to start a conversation at all.
+    """
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\n"])
+    async def test_starts_a_new_conversation_in_the_modern_era(self, blank: str) -> None:
+        config = RecordingConfig(TestConfig("ok"))
+        server = MCPServer(_agent(config))
+
+        async with connect_modern(server) as session:
+            result = await session.call_tool("ask", {"message": "first", "conversation": blank})
+
+        assert result.is_error is False
+        # A handle comes back, so the caller that could not omit the key can still
+        # continue what it just started.
+        assert UUID(_handle(result)).version == 4
+        assert config.prompts == [["first"]]
+
+    async def test_the_conversation_it_started_continues_by_its_handle(self) -> None:
+        config = RecordingConfig(TestConfig("ok", "ok"))
+        server = MCPServer(_agent(config))
+
+        async with connect_modern(server) as session:
+            first = await session.call_tool("ask", {"message": "first", "conversation": ""})
+            await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
+
+        assert config.prompts == [["first"], ["first", "second"]]
+
+    async def test_falls_back_to_the_transport_session_in_the_handshake_era(self) -> None:
+        config = RecordingConfig(TestConfig("ok", "ok"))
+        server = MCPServer(_agent(config))
+
+        # Naming nothing is what a blank handle means, so the handshake era keys on
+        # the session it has — as it does for a call that omits the argument.
+        async with connect(server) as session:
+            await session.call_tool("ask", {"message": "first", "conversation": ""})
+            await session.call_tool("ask", {"message": "second", "conversation": ""})
+
+        assert config.prompts == [["first"], ["first", "second"]]
+
+
+@pytest.mark.asyncio
 class TestUnknownHandle:
     """A handle the registry does not know is an error, never a fall-through.
 
