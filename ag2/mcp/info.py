@@ -75,9 +75,10 @@ def build_ask_tool(
 
 def _lifetime_sentence(bounds: ConversationBounds) -> str:
     """How long a conversation lives, in a sentence a client can read."""
-    bound = f"a conversation is dropped once it is not among the {bounds.max_conversations} most recently used"
+    # A fragment rather than a clause, so it reads as the tail of either branch.
+    bound = f"once it is not among the {bounds.max_conversations} most recently used"
     if bounds.ttl is None:
-        return f"Lifetime: {bound}."
+        return f"Lifetime: a conversation is dropped {bound}."
     return f"Lifetime: a conversation is dropped after {bounds.ttl:g} seconds idle, or {bound}."
 
 
