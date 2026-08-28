@@ -1782,7 +1782,7 @@ Source: https://docs.ag2.ai/docs/user-guide/depends/
 
 The `Depends` mechanism allows you to calculate and inject dependencies dynamically at execution time.
 
-The key difference with [Dependency Injection](../context/inject){.internal-link} is their execution model. `Inject` is used to retrieve static objects or configurations that have already been created (like an existing database connection or API key). `Depends`, on the other hand, executes a callable function *during* the tool's invocation to resolve the dependency.
+The key difference with [Dependency Injection](context/inject.md){.internal-link} is their execution model. `Inject` is used to retrieve static objects or configurations that have already been created (like an existing database connection or API key). `Depends`, on the other hand, executes a callable function *during* the tool's invocation to resolve the dependency.
 
 Under the hood, `Depends` uses the exact same mechanism and design philosophy as [FastAPI's dependency injection system](https://fastapi.tiangolo.com/tutorial/dependencies/).
 
@@ -2792,7 +2792,7 @@ If you are unsure where a behavior belongs, use this rule of thumb:
     - Use **tool-scoped** `middleware=[...]` on `@tool` / `Agent.tool` / `Toolkit.tool` when the behavior applies only to that tool's definition; see [Tool middleware](tools/tool_middleware.md){.internal-link}.
 - Use `on_human_input()` when the behavior is about intercepting, logging, or transforming human-in-the-loop requests and responses.
 
-For related runtime customization patterns, see [Tools](tools/tools.md), [Tool middleware](tools/tool_middleware.md), [Prompt Management](../system_prompts), and [Events Streaming](../advanced/stream).
+For related runtime customization patterns, see [Tools](tools/tools.md), [Tool middleware](tools/tool_middleware.md), [Prompt Management](system_prompts.md), and [Events Streaming](advanced/stream.md).
 
 ---
 
@@ -3332,7 +3332,7 @@ When you opt in via `tasks=TaskConfig(...)`, the Agent exposes two tools to the 
 
 The LLM is told (via the tool descriptions) that it can call `run_subtask` multiple times in parallel within a single response, and that `run_subtasks` is the deliberate fan-out form. Each child gets a fresh `MemoryStream` and the parent's tools (filtered by `TaskConfig`).
 
-For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agent-as-tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
+For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agentas_tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
 
 See [Subagents](subagents.md) for the full sub-task delegation guide - context flow and custom streams for self-delegation via `as_tool()`.
 
@@ -5487,6 +5487,9 @@ It can be thought of as a superset of regular [Tools](tools.md), created to solv
 1. Each LLM provider had its own tool schema and types, making tools non-portable across providers.
 2. There was no standard way to give an LLM a scoped, context-optimized surface to invoke APIs, RPCs, and similar remote capabilities.
 
+!!! note "Serving, not consuming"
+    This page is about wiring an existing MCP server into an agent. For the inverse - exposing an AG2 `Agent` **as** an MCP server other clients connect to - see [Serving an Agent as an MCP Server](serving_mcp.md).
+
 ## Two ways to connect an MCP server
 
 Autogen supports both ways MCP servers are typically wired into an agent:
@@ -5645,6 +5648,255 @@ agent_with_mcp = Agent(
 
 ---
 
+# Serving an Agent as an MCP Server
+
+Source: https://docs.ag2.ai/docs/user-guide/tools/serving_mcp/
+
+# Serving an Agent as an MCP Server
+
+`ag2.mcp.MCPServer` exposes an AG2 `Agent` **as** an MCP server: any MCP client - Claude Desktop, Cursor, the MCP Inspector, another agent framework - can list its tools and talk to your agent. This is the inverse of [consuming an MCP server as tools](mcp_servers.md) with `MCPToolkit` / `MCPServerTool`.
+
+## Installation
+
+```bash
+pip install "ag2[mcp]"
+```
+
+## Serving over HTTP
+
+An `MCPServer` **is** an ASGI3 application. It serves MCP over streamable HTTP and manages its own lifespan, so a standalone `uvicorn` run just works:
+
+```python
+import uvicorn
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+agent = Agent(
+    name="assistant",
+    prompt="You are a helpful assistant.",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+)
+app = MCPServer(agent, path="/mcp")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+The server is also mountable into a host Starlette/FastAPI app, since it is an ordinary ASGI app.
+
+## Serving over stdio
+
+For a locally-launched client, serve over stdin/stdout instead. The HTTP parameters (`path`, `stateless`, `json_response`, `security`) are ignored on this transport:
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+server = MCPServer(agent)
+
+if __name__ == "__main__":
+    asyncio.run(server.run_stdio())
+```
+
+## The conversational tool
+
+The agent is exposed as a single tool - `ask` by default - that runs `Agent.ask()` and returns the reply. It takes a required `message` and an optional `context` string that is prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`.
+
+If the agent has a `response_schema`, that schema is advertised verbatim as the tool's `outputSchema` and validated replies come back as `structuredContent`.
+
+```python
+from pydantic import BaseModel
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+class Weather(BaseModel):
+    city: str
+    temp_c: float
+
+agent = Agent(
+    name="weather",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+    response_schema=Weather,
+)
+app = MCPServer(agent, tool_name="forecast")
+```
+
+Presentation metadata (`name`, `version`, `title`, `description`, `instructions`, `website_url`, `icons`) is never derived from the agent - `instructions` in particular is client-facing "how to use this server" guidance, not the agent's system prompt. Pass it explicitly when you want it.
+
+## Conversations
+
+By default (`sessions=True`) the server keeps **conversation sessions**: a history that accumulates across `tools/call` invocations, so a caller can hold a multi-turn exchange instead of a series of unrelated questions.
+
+### Starting and continuing one
+
+A caller names the conversation it wants to continue. The tool takes an optional `conversation` argument holding an opaque **conversation handle**:
+
+- **Omit it** and the call starts a new conversation. The server mints a handle and returns it.
+- **Pass a handle back** and that conversation continues.
+
+A blank handle - `""`, or whitespace - counts as omitting it, because it names nothing. That matters for the reader this channel is built for: a model asked for an optional string argument routinely sends an empty one instead of leaving the key out, and read as an unknown handle that would leave it unable to start a conversation at all. No minted handle is blank, so nothing that could name a conversation is affected.
+
+The handle comes back twice, for two different readers:
+
+- in a **text content block**, so the model driving the tool can read it and carry it into its next call without any help from the host;
+- in the result's **`_meta`**, under the key `ai.ag2/conversation`, for clients threading it programmatically.
+
+`structuredContent` is deliberately left alone: on this tool it is the agent's response schema and is advertised verbatim as `outputSchema`, which MCP requires structured content to conform to.
+
+!!! note "The handle comes back on every reply"
+    Both readers get the handle whether or not the caller ever names a conversation, and in both protocol eras - so a handshake-era client that never touches the `conversation` argument still sees the extra content block and `_meta` key. A client that asserts on the exact shape of a reply will notice; one that reads the first text block, or `structuredContent`, will not.
+
+Threading a handle from the caller's side - here with the `mcp` SDK's own client against the HTTP server above:
+
+```python
+import asyncio
+
+from mcp.client import Client
+
+async def main() -> None:
+    async with Client("http://127.0.0.1:8000/mcp") as client:
+        first = await client.call_tool("ask", {"message": "My name is Ada."})
+        handle = first.meta["ai.ag2/conversation"]
+        second = await client.call_tool(
+            "ask",
+            {"message": "What is my name?", "conversation": handle},
+        )
+        print(second.content[0].text)
+
+asyncio.run(main())
+```
+
+Handles are minted by the server and are version-4 UUIDs - opaque and unguessable. A caller-chosen string is never adopted as a new conversation name; that would let any caller push other callers' conversations out of the bounded registry.
+
+### When a handle is not recognised
+
+A handle the server does not know - expired, evicted, or never minted - comes back as a **tool execution error**: a result flagged `isError`, not a JSON-RPC protocol error. The protocol draws that line so the model can recover by starting a new conversation instead of failing the turn. It is never treated as a fresh conversation, and never falls back to the MCP session.
+
+### What differs between the two protocol eras
+
+MCP has two eras, and each sanctions a different continuity mechanism:
+
+| a `conversation` passed? | handshake era (up to 2025-11-25) | modern era (2026-07-28) |
+|---|---|---|
+| yes | that conversation | that conversation |
+| no  | the caller's **MCP session** keeps its own history (one per process over stdio) | a fresh conversation each call |
+
+A **handshake-era** client negotiates an `initialize` handshake that opens an **MCP session** - the transport's own notion of a connected client - so it gets implicit continuity without passing anything, exactly as before. It may still opt into explicit handles: the handle returned on its first call names the same conversation its MCP session does, so it can migrate ahead of changing protocol revision.
+
+A **modern-era** client has no MCP session. The revision states that connections do not represent conversations, that clients may interleave unrelated requests on one transport, and that servers must not use connection or process identity to establish context - so the handle is the only continuity mechanism available there, on every transport.
+
+### Turning conversations off
+
+`sessions=False` makes every call stateless, and the `conversation` argument disappears from the advertised tool - a client is never offered an argument that cannot work. A client that passes one anyway gets a tool error saying the server keeps no conversations, rather than a reply that quietly forgets: this server mints no handles, so continuity is not something omitting the argument would restore either.
+
+### Tuning the registry
+
+`SessionConfig` bounds the registry so a long-lived server cannot leak memory:
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, SessionConfig
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(
+    agent,
+    sessions=SessionConfig(max_sessions=256, ttl=3600.0),
+)
+```
+
+- `max_sessions` - LRU cap; the least-recently-used conversation's history is dropped once the cap is exceeded.
+- `ttl` - idle expiry in seconds; a conversation untouched for longer has its history dropped (`None`, the default, means no expiry).
+- `storage` - the history backend (see below).
+
+Both bounds are quoted in the `conversation` argument's own description, so a client can judge whether an old handle is still worth presenting.
+
+!!! note "Every unnamed call with no session to fall back on creates a conversation"
+    A call that omits `conversation` and has no MCP session to key on gets a fresh conversation - and a handle for it - on every call. That is every modern-era call, and every handshake-era call on a `stateless=True` transport, so one-shot traffic occupies registry slots too. Size `max_sessions` for your call rate, and set a `ttl` so abandoned one-shot conversations expire instead of pushing real ones out.
+
+## What `stateless` governs
+
+`stateless=True` stops the **HTTP transport** issuing an `mcp-session-id`. That is a *handshake-era* switch: modern-era requests are self-contained single exchanges that never carry a session id in the first place, so the flag does not reach them.
+
+Pairing `stateless=True` with `sessions=True` is a valid configuration, not a contradiction - no transport session, conversations named by handle:
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(agent, stateless=True)
+```
+
+## Where conversations live
+
+A conversation's history is written through the configured `Storage`; the registry that maps a conversation's *name* - a handle, or an MCP session id - to that history is held **in the serving process**.
+
+So a conversation lives in the replica that created it. A handle minted on one replica is unknown on another, and an MCP session id resolves to a different, empty history there. Behind a load balancer, route a caller's calls back to the replica that answered the first one, or run a single replica.
+
+Passing a shared backend keeps the history itself out of process memory, which is what makes a large `max_sessions` affordable:
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, SessionConfig
+from ag2.streams import RedisStorage
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(
+    agent,
+    sessions=SessionConfig(storage=RedisStorage("redis://localhost:6379")),
+)
+```
+
+!!! warning "A shared backend does not make a handle portable"
+    The registry is per-process, so a shared `Storage` shares the stored history but not the mapping from a name to it. Cross-replica continuity still needs the caller pinned to one replica.
+
+## Authentication and who owns a conversation
+
+`security=` makes the server an OAuth 2.1 Resource Server: it advertises RFC 9728 Protected Resource Metadata at `/.well-known/oauth-protected-resource`, answers a missing or invalid token with `401` (pointing at that metadata) and an insufficient scope with `403`.
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+from ag2.mcp.security import oauth2_scheme, require
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(
+    agent,
+    path="/mcp",
+    security=require(
+        oauth2_scheme(url="https://auth.example.com"),
+        resource_url="https://agent.example.com/mcp",
+        verifier=my_token_verifier,  # your TokenVerifier implementation
+        required_scopes=["mcp.read"],
+    ),
+)
+```
+
+With authentication configured, a conversation records the principal that created it - the access token's subject, falling back to its client id - and revalidates that on **every** call, not only at creation. A handle presented under a different principal gets the same error as an unknown one, so the error does not disclose that the handle exists.
+
+!!! warning "Without `security`, the handle is the only credential"
+    With no authentication there is no principal to bind to, so anyone holding a handle can continue the conversation it names. The handle travels through readable content - the model's context, client logs, tracing in between - so decide whether that is acceptable for your deployment before serving unauthenticated.
+
+## Beyond the conversational tool
+
+- **Custom tools** run a handler of yours directly instead of invoking the agent - see [MCP-UI Resources](mcp_ui.md) for `@mcp_tool` and returning renderable UI. Their state is their own; conversation handles apply only to the conversational tool.
+- **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`; the matching capability is advertised only when a non-empty collection is supplied.
+- **Progress and logs** - while the agent runs, its stream events are forwarded to the client as progress notifications and log messages. Turn this off with `stream_progress=False`.
+
+---
+
 # MCP-UI Resources
 
 Source: https://docs.ag2.ai/docs/user-guide/tools/mcp_ui/
@@ -5656,7 +5908,7 @@ Source: https://docs.ag2.ai/docs/user-guide/tools/mcp_ui/
 AG2 builds these resources and the interactive callbacks (**UI Actions**) in `ag2.mcp_ui`. They are returned from the serving side of `ag2.mcp` - an AG2 `Agent` exposed as an MCP server - so this page starts with the minimum you need to serve one, then focuses on the UI helpers.
 
 !!! note "This is the serving side of MCP"
-    `ag2.mcp.MCPServer` exposes an agent **as** an MCP server. This is the inverse of consuming an MCP server as tools with `MCPToolkit` / `MCPServerTool` - see [MCP Servers](mcp_servers.md) for that.
+    `ag2.mcp.MCPServer` exposes an agent **as** an MCP server - see [Serving an Agent as an MCP Server](serving_mcp.md) for transports, conversations and security. This is the inverse of consuming an MCP server as tools with `MCPToolkit` / `MCPServerTool` - see [MCP Servers](mcp_servers.md) for that.
 
 ## Installation
 
@@ -6319,7 +6571,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
     [Tenki](https://tenki.cloud/) provides managed, isolated cloud sandboxes with a bounded server-side lifetime.
 
     ```bash
-    pip install "tenki>=0.5.4,<1"
+    pip install "ag2[anthropic]" "tenki>=0.5.4,<1"
     ```
 
     ```python linenums="1"
@@ -6345,7 +6597,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
     [Daytona](https://www.daytona.io/) is a hosted sandbox service. Strongest isolation; pay per use.
 
     ```bash
-    pip install "daytona>=0.171.0,<1"
+    pip install "ag2[anthropic]" "daytona>=0.171.0,<1"
     ```
 
     ```python linenums="1"
@@ -6370,7 +6622,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
     A local container managed via the Docker daemon. Free, cross-platform (Mac/Linux/Win via Docker Desktop), real container isolation.
 
     ```bash
-    pip install "ag2[docker]"
+    pip install "ag2[anthropic]" "docker>=6.0.0,<8"
     ```
 
     ```python linenums="1"
@@ -6874,7 +7126,25 @@ Y/N?
 Typing **y** lets the tool run. Any other input denies it - the agent receives the denied message and can adjust.
 
 !!! note
-    `approval_required()` relies on the agent's `hitl_hook` to collect user input. If no `hitl_hook` is configured, `context.input()` will raise an error at runtime. Read more about [Human in the Loop](../context/human_in_the_loop.md) to learn how to configure a HITL hook.
+    `approval_required()` relies on the agent's `hitl_hook` to collect user input. With no `hitl_hook` configured there is nobody to ask, so `context.input()` raises `HumanInputNotProvidedError` and **the turn ends** - the gated tool does not run, and the model is not handed a tool failure it could route around. Read more about [Human in the Loop](../context/human_in_the_loop.md) to learn how to configure a HITL hook.
+
+## Waiting for the answer
+
+By default `approval_required()` waits as long as the human takes. An approval is a question for a person, so the deadline is yours to set:
+
+```python
+@tool(
+    middleware=[approval_required(timeout=120)],
+)
+def delete_account(user_id: str) -> str:
+    """Deletes a user account by ID permanently."""
+    return f"Account {user_id} deleted."
+```
+
+When the timeout expires the turn ends with `HumanInputTimeoutError` and the gated tool does not run - an unanswered approval is not an approval. A late answer arriving after the deadline does not release it either.
+
+!!! warning "`timeout` used to be `30` and used to do nothing"
+    Before AG2 fixed the human-input channel, `timeout` never fired: the hook ran inline, so the clock only started once it had already returned. It now binds, and the default changed from `30` to `None` (wait indefinitely) so that turning the parameter on does not silently start failing turns whenever a human takes over half a minute to read a prompt.
 
 ## Inspecting the configuration
 
@@ -7085,7 +7355,7 @@ Dependency Injection (DI) is a design pattern used to pass complex objects or se
 
 ## Dependencies
 
-The key difference between [Variables](../variables){.internal-link} and Dependencies is their intended use case. Variables are designed to pass lightweight, serializable state (like strings, flags, or configuration IDs) between the LLM, tools, and agents. Dependencies, on the other hand, are meant for complex objects that have specific behaviors and lifecycle management, such as database connections, HTTP sessions, or clients for external APIs.
+The key difference between [Variables](variables.md){.internal-link} and Dependencies is their intended use case. Variables are designed to pass lightweight, serializable state (like strings, flags, or configuration IDs) between the LLM, tools, and agents. Dependencies, on the other hand, are meant for complex objects that have specific behaviors and lifecycle management, such as database connections, HTTP sessions, or clients for external APIs.
 
 ### Agent Dependencies
 
@@ -7272,7 +7542,7 @@ agent = Agent(
 ```
 
 !!! warning
-    If the required human input is not provided (for example, if a HITL hook is not registered on the agent), the framework raises a `HumanInputNotProvidedError`.
+    If the required human input is not provided (for example, if a HITL hook is not registered on the agent), the framework raises a `HumanInputNotProvidedError`. Unless the tool catches it, that ends the turn - see [When nobody can answer](#when-nobody-can-answer).
 
 ## HITL Registration
 
@@ -7329,6 +7599,104 @@ async def async_hitl_hook(event: HumanInputRequest) -> HumanMessage:
 
 !!! warning "Overriding Hooks"
     If a HITL hook is already set (for instance, via the constructor argument) and you apply the `@my_agent.hitl_hook` decorator, the decorator will override the existing one.
+
+## When Nobody Can Answer
+
+A tool that raises is recorded as a failed tool call and the turn carries on: the model reads the error and decides what to do next. A *human-input* failure is not treated that way. Every way `context.input()` can end without an answer ends the turn instead:
+
+| What happened | What `context.input()` raises |
+|---|---|
+| No hook is registered | `HumanInputNotProvidedError` |
+| The hook raised | `HumanInputFailedError` (original on `.cause`) |
+| Nobody answered within `timeout=` | `HumanInputTimeoutError` |
+
+All three are `HumanInputError`, which is the type tool execution refuses to record as a tool result. The same holds one level down: a sub-agent whose question nobody could answer fails the delegating turn rather than reporting a failed sub-task.
+
+The difference matters most under `approval_required()`. An approval that could never be requested is not the same as a tool that broke - reported as a tool failure, it invites the model to look for another route to the same effect, which is the opposite of what the middleware is for. The gated tool does not run in any of the three cases, including the timeout.
+
+Two ways to carry on regardless:
+
+**Catch it at the call site**, when the tool has something sensible to do without an answer:
+
+```python
+from ag2 import Context
+from ag2.exceptions import HumanInputError
+
+async def execute_query(query: str, context: Context) -> str:
+    try:
+        await context.input(f"Approve this query?\n{query}", timeout=60)
+    except HumanInputError:
+        return "Skipped: nobody was available to approve the query."
+
+    return "Query executed successfully."
+```
+
+Catch `HumanInputError` to cover all three; catch one subclass to handle only that case.
+
+**Answer inside the hook**, when the application wants a policy rather than a failure. For `approval_required()`, a reply other than `y`/`yes`/`1`/`always` is a denial:
+
+```python
+async def ask_our_user(event: HumanInputRequest) -> str:
+    try:
+        return await my_approval_queue.ask(event.content)
+    except QueueUnavailable:
+        return "n"
+```
+
+A hook that raises is wrapped rather than re-typed, so the original stays reachable for an application that wants to tell its own failures apart:
+
+```python
+from ag2.exceptions import HumanInputFailedError
+
+try:
+    await agent.ask("...")
+except HumanInputFailedError as exc:
+    if isinstance(exc.cause, QueueUnavailable):
+        ...
+```
+
+!!! note "`timeout=` covers the asking, not just the waiting"
+    The hook runs inline while the request is being sent, so `timeout=` bounds the whole
+    exchange - a hook that never returns raises `HumanInputTimeoutError` rather than
+    hanging the turn. `context.input()` and `approval_required()` both
+    default to no timeout at all: waiting is what a question for a human is for, so the
+    deadline is the caller's to set.
+
+### The conversation stays usable
+
+The failure escapes between a tool call and its result, which would otherwise leave the
+history holding an assistant tool call that nothing answers - a shape providers reject. The
+turn closes that call off with a stand-in result before the exception reaches you, so a
+stream you reuse (a `stream=` passed to a second `ask()`, an ACP or MCP
+session, a `persistent_stream()`) still works on its next turn:
+
+```python
+from ag2.exceptions import HumanInputError
+from ag2.stream import MemoryStream
+
+stream = MemoryStream()
+try:
+    await agent.ask("Delete the stale accounts.", stream=stream)
+except HumanInputError:
+    pass  # nobody could approve it
+reply = await agent.ask("What did you manage to do?", stream=stream)
+```
+
+The model reads the stand-in on the next turn, so it is told the call was abandoned rather
+than left to guess from a gap in the transcript.
+
+### The rest of the batch
+
+A model can ask for several tools at once, and the others in that batch are stopped as the
+turn ends - none of them gets to write a result into a conversation the caller has already
+been told about.
+
+!!! warning "A sync tool already running cannot be stopped"
+    Sync tools run in a worker thread, and a thread cannot be cancelled. Nothing such a tool
+    returns is used - its result reaches neither the transcript nor the model - but a side
+    effect already under way still happens. Where that matters, make the tool `async`
+    so cancellation can reach it, or ask for approval before the side effect rather than
+    alongside it.
 
 ---
 
@@ -8295,7 +8663,7 @@ This is by design - one broken scorer should never kill an eval over 100 tasks. 
 
 ## Sync vs async
 
-Either works. The framework detects async with `inspect.iscoroutinefunction` and awaits accordingly:
+Either works. The framework calls the scorer and then awaits the *result* if it is awaitable - so a plain `async def` works, and so does any other callable whose return value is a coroutine (a class with an `async def __call__`, or a sync wrapper that hands back an awaitable):
 
 ```python
 @scorer
@@ -8510,7 +8878,7 @@ result = await run_agent(...)
 # Run-level metadata
 result.run_id              # str (UUID4 hex unless you set it) - unique per run
 result.label               # str | None - user-defined; groups runs of the same eval over time
-result.schema_version      # "0.1"
+result.schema_version      # "0.2"
 result.created_at          # ISO-8601 UTC
 result.duration_ms         # int
 result.suite               # the Suite that was executed
@@ -8845,13 +9213,13 @@ Source: https://docs.ag2.ai/docs/user-guide/evaluation/persistence/
 
 Every run is saved to disk. That's what turns "run an eval once" into "track an agent over its lifetime" - comparing each version against its past selves to confirm improvements and catch regressions before they ship.
 
-## The schema-0.1 JSON
+## The schema-0.2 JSON
 
 Every `run_agent()` writes a JSON file to `store_dir/<run_id>.json` before returning. The file is the run's permanent record - comparable across days, releases, and pull requests. Shape:
 
 ```json
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "run_id": "01J7Z3M4QF8X9Y0K1V2N3P4Q5R",
   "label": "weather-eval",
   "created_at": "2026-05-11T14:23:00+00:00",
@@ -8891,6 +9259,16 @@ Every `run_agent()` writes a JSON file to `store_dir/<run_id>.json` before retur
 ```
 
 The per-task `trace_ref` is the real OpenTelemetry trace id of that task's spans (see [External telemetry](runs.md#external-telemetry-exporting-spans-to-your-own-backend)) - a stored row deep-links to the trace in your backend. The schema is forward-compatible: future versions add fields at the end of objects; existing fields don't change name or type. **Don't rely on this shape for in-tree code** - use the `RunResult` Python API. The JSON is for cross-process / cross-time persistence: a future dashboard, a CI artifact, a diff between two releases.
+
+!!! warning "Schema 0.2 - reported token counts go up"
+
+    Token accounting now reads `UsageEvent`, the framework's accounting record, instead of summing `ModelResponse`. Work that spends tokens without producing a model response was previously invisible and is now counted:
+
+    - **Delegated sub-tasks.** A worker's spend reaches the parent as a `"subtask"` rollup. For a delegating agent this is often most of the bill.
+    - **History compaction** and **memory aggregation** - real, billable maintenance calls.
+    - **Live sessions**, whose realtime usage maps straight to the accounting record.
+
+    The same run therefore serialises larger numbers than it did under 0.1, and a per-task budget that silently passed may now correctly report a violation. **Archived 0.1 runs are not comparable to 0.2 runs** and are not migrated - the events needed to recompute them are not in the results file. A stored run keeps the `schema_version` it was written with, so you can tell which accounting produced it; `diff` a 0.1 baseline against a 0.2 run only on scores, not on tokens.
 
 ## Comparing two runs
 
@@ -10553,7 +10931,7 @@ agent = Agent(
 
 #### TokenMonitor
 
-Tracks cumulative token usage across `ModelResponse` and `TaskCompleted` events. Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
+Tracks cumulative token usage across `UsageEvent` - the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, sub-task rollups (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
 
 ```python
 from ag2 import Agent
@@ -12204,7 +12582,7 @@ The same AG2 agent that powers your in-app copilot can also run as a bot in mess
 
 ## How it fits together
 
-Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](backend-deepdive.md#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels), connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence). Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn over a persistent gateway connection to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
+Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](index.md#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels), connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence). Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn over a persistent gateway connection to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
 
 ```text
 Slack  ──►  CopilotKit Intelligence  ──►  channel process (Node)  ──►  AG2 server (AGUIStream)
@@ -12275,7 +12653,7 @@ const listener = createCopilotNodeListener({ runtime });
 await listener.channels.ready({ timeoutMs: 15_000 }); // fail startup loudly on a broken config
 ```
 
-Run the channel process alongside the AG-UI server from the [basic server example](backend-deepdive.md#basic-server-example). Both credentials come from the Intelligence dashboard - the API key under **API Keys**, the Code on the Channel you created there:
+Run the channel process alongside the AG-UI server from the [basic server example](index.md#basic-server-example). Both credentials come from the Intelligence dashboard - the API key under **API Keys**, the Code on the Channel you created there:
 
 ```bash
 uvicorn run_ag_ui:app --reload --port 8000   # terminal 1 - AG2 server
@@ -12309,7 +12687,7 @@ Discord, Teams, Telegram, and WhatsApp connect the same way - a managed connecti
 
 ## Next steps
 
-1. Build the AG-UI endpoint from the [basic server example](backend-deepdive.md#basic-server-example) if you have not already.
+1. Build the AG-UI endpoint from the [basic server example](index.md#basic-server-example) if you have not already.
 2. Create the Channel in CopilotKit Intelligence and connect Slack there, then export the API key and the Channel's Code.
 3. Start the channel process, invite the app to a Slack channel, and mention it.
 4. For a web UI on the same endpoint, follow the [CopilotKit UI quickstart](copilotkit-quickstart.md).
@@ -12322,7 +12700,7 @@ Source: https://docs.ag2.ai/docs/user-guide/ag-ui/backend-deepdive/
 
 This page expands on the backend of the AG-UI integration: how to secure your endpoint, how tool calls are represented in the protocol, and how to pass per-request context into your tools.
 
-If you haven't set up an AG-UI endpoint yet, start with the [AG-UI overview](../){.internal-link}.
+If you haven't set up an AG-UI endpoint yet, start with the [AG-UI overview](index.md){.internal-link}.
 
 ## Authentication
 
@@ -12439,7 +12817,7 @@ In this setup:
 - The **agent** can call those tools during the run.
 - The **frontend** executes/handles the tool and renders the UI.
 
-For a production-ready React/Next.js client that supports frontend tools, backend tools, streaming, and shared state, see the [CopilotKit UI quickstart](../copilotkit-quickstart){.internal-link} and CopilotKit's docs on:
+For a production-ready React/Next.js client that supports frontend tools, backend tools, streaming, and shared state, see the [CopilotKit UI quickstart](copilotkit-quickstart.md){.internal-link} and CopilotKit's docs on:
 
 - [Backend tools](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools)
 - [Frontend tools](https://docs.copilotkit.ai/ag2/generative-ui/frontend-tools)
@@ -12447,8 +12825,8 @@ For a production-ready React/Next.js client that supports frontend tools, backen
 
 ## See also
 
-- [AG-UI overview](../){.internal-link}
-- [CopilotKit quickstart](../copilotkit-quickstart){.internal-link}
+- [AG-UI overview](index.md){.internal-link}
+- [CopilotKit quickstart](copilotkit-quickstart.md){.internal-link}
 
 ---
 
@@ -13038,7 +13416,7 @@ The card and the activation list are reconciled before the first request goes ou
 
 `urn:ag2:client-tools:v1` is the exception to the second rule: AG2 implements it natively, so a card may require it without the client listing it explicitly.
 
-Activation covers every request the config makes, not just `ask`. The one-shot [task](tasks.md) and push-notification helpers open their own connection from the same `A2AConfig`, so they activate the same URIs and run the same reconciliation - a server enforcing a `required=True` extension sees a consistent client on the conversational and the administrative path alike.
+Activation covers every request the config makes, not just `ask`. The one-shot [task](tasks_and_push.md) and push-notification helpers open their own connection from the same `A2AConfig`, so they activate the same URIs and run the same reconciliation - a server enforcing a `required=True` extension sees a consistent client on the conversational and the administrative path alike.
 
 ```python
 from ag2.a2a.errors import A2AExtensionNotSupportedError
@@ -13889,7 +14267,7 @@ The turn is served at `POST /` by default (pass `AgUiTransport(path="/agent")` t
 
 Source: https://docs.ag2.ai/docs/user-guide/a2ui/a2a/
 
-A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](../a2a/advanced.md) exchange instead of the built-in [REST adapter](server.md). The `ag2.a2ui.a2a` submodule wraps a plain `ag2.Agent` in an `A2UIAgentExecutor`, plugs it into a standard `A2AServer`, and carries each turn's A2UI messages as a canonical A2A `DataPart`.
+A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride an [A2A](../a2a/overview.md) exchange instead of the built-in [REST adapter](server.md). The `ag2.a2ui.a2a` submodule wraps a plain `ag2.Agent` in an `A2UIAgentExecutor`, plugs it into a standard `A2AServer`, and carries each turn's A2UI messages as a canonical A2A `DataPart`.
 
 !!! note
     This page assumes familiarity with the [A2A server](../a2a/server.md). The A2UI integration is a drop-in `executor` for the same `A2AServer` - everything you know about cards, transports, and tasks still applies.
@@ -13919,14 +14297,13 @@ from ag2.a2ui.a2a import (
 
 ## Minimal Server
 
-Wrap a plain `Agent` in `A2UIAgentExecutor` (with the same flat A2UI kwargs as `A2UIServer`, including `actions=` for clickable buttons), pass it to `A2AServer` via `executor=`, and advertise A2UI support on the card with a `card_modifier` that appends the extension:
+Wrap a plain `Agent` in `A2UIAgentExecutor` (with the same flat A2UI kwargs as `A2UIServer`, including `actions=` for clickable buttons), pass it to `A2AServer` via `executor=`, and advertise A2UI support on the card by passing the extension to `build_card(extensions=...)`. With a [`card_signer`](../a2a/card_signing.md) the pre-built card is signed once when the app is built, whereas a `card_modifier` runs per request and its output is re-signed on every fetch:
 
 ```python
 import uvicorn
-from a2a.types import AgentCard
 
 from ag2 import Agent
-from ag2.a2a import A2AServer
+from ag2.a2a import A2AServer, build_card
 from ag2.a2ui import a2ui_action
 from ag2.a2ui.a2a import A2UIAgentExecutor, get_a2ui_agent_extension
 from ag2.config import AnthropicConfig
@@ -13940,13 +14317,16 @@ def build_app():
     # Buttons are declared on the executor via actions=, just like A2UIServer -
     # the agent stays plain.
     executor = A2UIAgentExecutor(agent, actions=[book_table], protocol_version="v0.9")
-
-    async def advertise_a2ui(card: AgentCard) -> AgentCard:
-        card.capabilities.extensions.append(get_a2ui_agent_extension(version=executor.protocol_version))
-        return card
-
-    server = A2AServer(agent, executor=executor, card_modifier=advertise_a2ui)
-    return server.build_jsonrpc(url="http://127.0.0.1:8000")
+    # Advertise A2UI directly on the card via build_card(extensions=...). The
+    # extension is signed once when the app is built - a card_modifier would
+    # run per request and be re-signed on every fetch.
+    card = build_card(
+        agent,
+        url="http://127.0.0.1:8000",
+        extensions=[get_a2ui_agent_extension(version=executor.protocol_version)],
+    )
+    server = A2AServer(agent, executor=executor)
+    return server.build_jsonrpc(url="http://127.0.0.1:8000", card=card)
 
 app = build_app()
 
@@ -14524,6 +14904,28 @@ with dependency injection and the session's variables available.
 Nothing about this is visible on the wire: no capability is advertised, no ACP method is
 called, and a client cannot tell that a turn paused. Client-driven approvals - the agent
 asking *through* the protocol - need ACP elicitation on this side, which is not wired yet.
+
+!!! warning "A hook that cannot answer ends the turn"
+    If the hook fails - the approval queue is unreachable, the ticket system is down - or
+    simply never answers in time, the turn fails and the client is told so. It is not
+    reported to the model as the tool having failed: nobody was asked, so an approval that
+    was never requested must not read like a tool that broke, or the model is free to look
+    for another way to do the same thing. The gated tool does not run.
+
+    The protocol error carries `data["category"] == "human_input"`, which is what
+    to branch on: `data["type"]` is the Python exception name and varies with what
+    broke. The hook's own exception is reachable as `exc.cause` in-process.
+
+    To carry on regardless, handle the failure inside the hook and return an answer - a
+    denial is usually the right one:
+
+    ```python
+    async def ask_our_user(event: HumanInputRequest) -> str:
+        try:
+            return await my_approval_queue.ask(event.content)
+        except QueueUnavailable:
+            return "n"  # what approval_required() reads as a denial
+    ```
 
 ## What It Refuses to Pretend
 
@@ -16663,7 +17065,7 @@ Today only `ORDERING_ROUND_ROBIN` ships. The knob is `knobs={"ordering": "round_
 `discussion` never auto-closes. The example below caps at 6 turns and calls `channel.close()`, but four other patterns work for `discussion` too:
 
 * **App-side cap** - count turns and call `channel.close()` (canonical, simplest).
-* **Agent-side tool** - any participant calls a tool that closes the channel. See [Closing Channels -> Agent-side tool](termination.md#pattern-2--agent-side-tool).
+* **Agent-side tool** - any participant calls a tool that closes the channel. See [Closing Channels -> Agent-side tool](termination.md#pattern-2-agent-side-tool).
 * **Custom adapter** - subclass `DiscussionAdapter` to fold `turn_count` and emit `CLOSING` at a cap (or switch to `workflow` with `TransitionGraph.round_robin(max_turns=N)`).
 * **TTL / expectations** - safety nets only.
 
@@ -17810,6 +18212,21 @@ AG2 `WorkflowAdapter`. Each pattern lists the classic primitives
 it used, an AG2 translation, the full runnable source, and any gaps
 that don't yet have a clean equivalent.
 
+## Running these examples
+
+Each page's source is runnable as written. Install ag2 with the extra for the
+provider the snippet configures - `anthropic` for most of them, `openai` or
+`gemini` for the rest - plus `python-dotenv`, which the snippets use to read
+the provider's API key out of a local `.env` file:
+
+```bash
+pip install "ag2[anthropic]" python-dotenv
+```
+
+`python-dotenv` is not a dependency of ag2 itself; drop the
+`load_dotenv()` call if the key is already exported in the
+environment.
+
 ## Status Legend
 
 | Status | Meaning |
@@ -18212,7 +18629,7 @@ for the coordinator graph.
   researcher had a chance to speak, terminating the workflow prematurely.
   Making the writer the terminal speaker sidesteps this hazard entirely:
   parallel calls to `delegate_researcher` and `delegate_writer`
-  are safe because [first-emitted-wins](../workflow.md#first-emitted-wins)
+  are safe because [first-emitted-wins](../workflow.md#custom-graphs)
   picks researcher (the other tool runs but its `Handoff` doesn't
   drive routing), and the writer step still runs in its own dedicated
   round once researcher returns.
@@ -22603,6 +23020,117 @@ All runtime parameters accept `Variable` for deferred context resolution.
 
 ---
 
+# Serply Search
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/serply/
+
+`SerplySearchToolkit` gives an agent three related tools powered by [Serply](https://serply.io): Google web search, Google News search, and Google Scholar search. Use it when an agent needs current web results, recent news coverage, or academic articles with citation counts from a single API key.
+
+!!! note
+    Requires a Serply API key. No extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on.
+
+```python
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import SerplySearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SerplySearchToolkit(api_key=os.environ["SERPLY_API_KEY"])],
+)
+```
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `serply_web_search` | Search Google web results and return ranked results with position, title, snippet, and URL |
+| `serply_news_search` | Search Google News and return recent articles with title, source, publish date, and URL |
+| `serply_scholar_search` | Search Google Scholar and return articles with title, authors, citation count, URL, and an open-access PDF link when one exists |
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default tools:
+
+```python
+toolkit = SerplySearchToolkit(
+    api_key=...,
+    num=5,                # number of results, for all three tools
+    gl="us",              # Google country code, forwarded as a query parameter
+    hl="en",              # Google interface language, forwarded as a query parameter
+    proxy_location="US",  # region Serply searches from (X-Proxy-Location header)
+)
+```
+
+`num` reaches Serply as a query parameter for web and scholar search. Google News ignores it and answers with its whole feed - 49 to 105 articles in practice, whose links are ~284-character Google redirects - so `serply_news_search` truncates the feed itself. When `num` is unset it returns the 10 most recent articles; left uncapped, one news call would put roughly 15k tokens into the model's context.
+
+`proxy_location` is Serply's documented way to target results geographically, and it is best-effort: Serply answers from a proxy pool, so the region it actually used (returned as `device_region` in the raw payload) may be a nearby one rather than the one requested. `gl` and `hl` are separate - they are passed straight through to Google as query parameters and change the result set on their own. Use `proxy_location` for where the search originates and `gl`/`hl` for Google's own country and language selection.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.web()`, `toolkit.news()`, `toolkit.scholar()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python
+toolkit = SerplySearchToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.web(num=5), toolkit.scholar(num=10)],
+)
+```
+
+Every factory method also accepts `name` and `description` overrides for the registered tool, plus the same `num` / `gl` / `hl` / `proxy_location` defaults as the constructor. All of those accept a `Variable` for deferred context resolution.
+
+## Connection settings
+
+The toolkit opens one `httpx.AsyncClient` per request. Override how that client connects:
+
+```python
+toolkit = SerplySearchToolkit(
+    api_key=...,
+    base_url="https://api.serply.io",  # override to route through your own gateway
+    timeout=60.0,                      # per-request timeout in seconds
+    proxy="http://proxy.internal:3128",
+    verify=True,                       # set False only to skip TLS verification
+)
+```
+
+A non-2xx response raises `httpx.HTTPStatusError`. A response body that is not a JSON object, or an individual result that does not match the expected shape, is skipped rather than raised on, so a partial payload still yields the results it does contain.
+
+## Result
+
+`serply_web_search` returns a `SerplyWebSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SerplyWebResult` (`title`, `link`, `description`, `position`) |
+
+`serply_news_search` returns a `SerplyNewsSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SerplyNewsResult` (`title`, `link`, `published`, `source`); `link` is a Google News redirect, not the publisher's own URL |
+
+`serply_scholar_search` returns a `SerplyScholarSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SerplyScholarResult` (`title`, `link`, `authors`, `pdf_link`, `citations`) |
+
+`pdf_link` is Serply's open-access link for the article and is empty when it has none. `citations` is sourced from OpenAlex rather than Google Scholar's own count; treat it as an indication of impact rather than an exact figure.
+
+For queries that trigger a Google local pack, `serply_web_search` may return a top-ranked result whose `link` points back into `google.com` instead of the business's own site.
+
+Request parameters and response fields are documented in the [Serply API docs](https://serply.io/docs).
+
+---
+
 # TinyFish Search
 
 Source: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/tinyfish/
@@ -23124,7 +23652,7 @@ python coordinator.py
 
 Source: https://docs.ag2.ai/docs/user-guide/extensions/tealtiger/
 
-The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists, detects PII and secrets in tool arguments, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts - with no LLM in the governance path.
+The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts - with no LLM in the governance path.
 
 ## Installation
 
@@ -23161,6 +23689,7 @@ from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTiger
 governance = TealTigerMiddleware(
     mode=GovernanceMode.ENFORCE,
     policies=[
+        GovernancePolicy.prompt_injection_block(),
         GovernancePolicy.tool_allowlist(["search", "read_*"]),
         GovernancePolicy.pii_block(["ssn", "credit_card", "email", "phone"]),
         GovernancePolicy.secret_detection(),
@@ -23302,6 +23831,62 @@ GovernancePolicy.cost_limit(max_per_session=5.0)
 
 Cumulative cost is tracked across all tool calls using `cost_per_call` (configurable, defaults to `0.002`). Once the limit is reached, further calls are denied with `BUDGET_EXCEEDED` and risk score 70.
 
+### Prompt Injection Detection
+
+Block tool calls containing adversarial prompt injection patterns in their arguments:
+
+```python
+GovernancePolicy.prompt_injection_block()
+```
+
+Detects 5 technique categories with 20 regex patterns:
+
+| Technique | Patterns | What It Catches | Confidence |
+|-----------|:--------:|----------------|:----------:|
+| `instruction_override` | 5 | "Ignore previous instructions", system prompt override, context resets | 0.80-0.95 |
+| `role_manipulation` | 5 | DAN jailbreak, developer mode, persona switching, "jailbreak mode" | 0.85-0.95 |
+| `context_manipulation` | 4 | Delimiter injection, XML/chat-template tag injection, markdown fence injection, fake system messages | 0.80-0.90 |
+| `encoding_evasion` | 4 | Base64 payloads, hex escapes, unicode escapes, ROT13 references | 0.65-0.75 |
+| `multi_turn_assembly` | 2 | Payload splitting, continuation attacks | 0.80-0.85 |
+
+Denied with reason code `PROMPT_INJECTION:{technique}/{pattern_name}` and risk score 95.
+
+Patterns match on injection *framing*, not on keywords alone - `DAN` counts only alongside
+a jailbreak cue and is matched case-sensitively, a `<system>` tag counts only when
+instruction-like content follows it. Without that, ordinary arguments (a colleague named
+Dan, `<system>` in an XML payload, "add the new rules to the linter config") would be
+denied at risk score 95.
+
+**Selective techniques** - enable only specific categories:
+
+```python
+GovernancePolicy.prompt_injection_block(
+    techniques=["instruction_override", "role_manipulation"],
+)
+```
+
+**Confidence threshold** - tune sensitivity to reduce false positives:
+
+```python
+GovernancePolicy.prompt_injection_block(
+    confidence_threshold=0.85,  # Skip lower-confidence patterns
+)
+```
+
+Each pattern carries a fixed confidence score (0.0-1.0). The threshold selects **which
+patterns run** - it is not a score computed per match - and only patterns at or above it are
+evaluated. Default threshold is `0.7`, which leaves `rot13_reference` (0.65) inactive; lower
+the threshold to enable it.
+
+An unknown technique name, an empty `techniques` list, or a threshold outside 0.0-1.0 raises
+`ValueError` at policy construction, so a typo cannot silently leave the policy detecting
+nothing.
+
+!!! note "Policies are evaluated in list order"
+    Policies are evaluated in the order you pass them, and evaluation stops at the first denial.
+    Put `prompt_injection_block()` before `tool_allowlist(...)` if you want injection
+    attempts reported as `PROMPT_INJECTION:...` rather than `TOOL_NOT_ALLOWED`.
+
 ## Factory-Level Budget
 
 In addition to the policy-level `cost_limit`, you can set a factory-level budget that is always enforced, with no policy needed:
@@ -23368,7 +23953,7 @@ for decision in governance.decisions:
 | `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
 | `agent_name` | `str` | Agent that made the call, or `unknown` |
 | `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
-| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
 | `risk_score` | `int` | 0 (safe) to 100 (critical) |
 | `evaluation_time_ms` | `float` | Governance latency for this decision |
 | `cost_tracked` | `float` | Cost attributed to this call in USD |
@@ -23569,6 +24154,7 @@ Each policy type carries its own risk score when it denies:
 | Policy | Reason Code | Risk Score |
 |--------|-------------|------------|
 | Kill switch | `AGENT_FROZEN` | 100 |
+| Prompt injection | `PROMPT_INJECTION:{technique}/{pattern}` | 95 |
 | Secret detection | `SECRET_DETECTED` | 95 |
 | PII detection | `PII_DETECTED:{category}` | 90 |
 | Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
@@ -23604,9 +24190,9 @@ flowchart TB
 
 ```text
 ag2/extensions/tealtiger/
-├── __init__.py       # Public API: TealTigerMiddleware, GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt
-├── types.py          # GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt
-└── middleware.py     # TealTigerMiddleware (factory) + _TealTigerPerTurn (per-turn) + _PII_PATTERNS / _SECRET_PATTERNS
+├── __init__.py       # Public API: TealTigerMiddleware, GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt + injection detection types
+├── types.py          # GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt + injection detection types (InjectionPattern, InjectionFinding, INJECTION_PATTERNS, INJECTION_TECHNIQUES, DEFAULT_INJECTION_CONFIDENCE_THRESHOLD)
+└── middleware.py     # TealTigerMiddleware (factory) + _TealTigerPerTurn (per-turn) + _PII_PATTERNS / _SECRET_PATTERNS / _detect_prompt_injection
 ```
 
 The middleware follows AG2's middleware factory pattern:
