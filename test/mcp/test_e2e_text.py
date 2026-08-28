@@ -27,7 +27,7 @@ class TestE2EText:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
-        assert result.isError is False
+        assert result.is_error is False
         assert [c.text for c in result.content if c.type == "text"] == ["hello there!"]
 
     async def test_context_is_prepended(self) -> None:
@@ -37,7 +37,7 @@ class TestE2EText:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "do it", "context": "be brief"})
 
-        assert result.isError is False
+        assert result.is_error is False
         # The model receives the context input prepended before the message input.
         tracking.mock.assert_called_with(ModelRequest([TextInput("Context:\nbe brief"), TextInput("do it")]))
 

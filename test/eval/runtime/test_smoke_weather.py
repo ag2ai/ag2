@@ -11,7 +11,7 @@ ones, and asserts:
 * 100% pass rate on every boolean scorer
 * score_stats / value_counts populated for the numeric and categorical
   custom scorers
-* persisted JSON matches the schema-0.1 shape
+* persisted JSON matches the schema-0.2 shape
 
 The target factory and tool live inline — they're tiny.
 """
@@ -155,19 +155,19 @@ async def test_smoke_weather_end_to_end(tmp_path: Path) -> None:
     assert expected_path.exists()
 
     data = json.loads(expected_path.read_text(encoding="utf-8"))
-    _assert_schema_0_1(data)
+    _assert_schema_0_2(data)
     assert data["suite"]["size"] == 5
     assert len(data["tasks"]) == 5
     assert data["aggregates"]["pass_rate"]["tool_called[get_weather]"] == 1.0
 
 
-def _assert_schema_0_1(data: dict) -> None:
-    """Verify the schema-0.1 top-level shape by key presence + types.
+def _assert_schema_0_2(data: dict) -> None:
+    """Verify the schema-0.2 top-level shape by key presence + types.
 
     Programmatic JSON-schema validation is deferred; for now we check
     every documented field is present and roughly the right type.
     """
-    assert data["schema_version"] == "0.1"
+    assert data["schema_version"] == "0.2"
     for key in (
         "run_id",
         "label",
