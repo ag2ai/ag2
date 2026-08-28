@@ -18,6 +18,7 @@ import acp
 from acp import schema
 
 from ag2.events.types import BinaryResult
+from ag2.exceptions import HumanInputError
 
 from .dispatch import InOrderUpdates
 from .elicitation import resolve_elicitation_response
@@ -156,6 +157,12 @@ class BridgeState:
         self._turn_parts: list[str] = []
         self._turn_files: list[BinaryResult] = []
         self._turn_worked = False
+        # Set when a tool served over the gateway asked a human and could not
+        # reach one. The gateway runs each ``tools/call`` on the HTTP server's
+        # own task, so it cannot raise into the task awaiting ``session/prompt``;
+        # this is how the failure crosses over. See :meth:`fail_channel`.
+        self.channel_failure: HumanInputError | None = None
+        self.channel_failed = asyncio.Event()
         self.terminals = TerminalManager(config.fs_root or config.cwd)
         # Owned here rather than per-connection: it orders the updates of whatever
         # connection this bridge is currently serving, and only one is ever live.
@@ -165,6 +172,21 @@ class BridgeState:
         self._turn_parts = []
         self._turn_files = []
         self._turn_worked = False
+        self.channel_failure = None
+        self.channel_failed.clear()
+
+    def fail_channel(self, error: "HumanInputError") -> None:
+        """Record that this turn's human-input channel failed, and stop the turn.
+
+        First one wins: a batch of tools can each hit a dead channel, and the
+        first is the one that describes what happened — the ones after it are
+        being cancelled, not diagnosing anything. Setting the event is what lets
+        the client stop the agent instead of waiting out a prompt whose answer
+        is already known to be worthless.
+        """
+        if self.channel_failure is None:
+            self.channel_failure = error
+        self.channel_failed.set()
 
     @property
     def turn_text(self) -> str:

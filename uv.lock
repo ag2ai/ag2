@@ -74,6 +74,7 @@ acp = [
     { name = "agent-client-protocol" },
     { name = "jsonschema" },
     { name = "mcp" },
+    { name = "mcp-types" },
     { name = "starlette" },
     { name = "uvicorn" },
 ]
@@ -102,6 +103,7 @@ gemini = [
 mcp = [
     { name = "jsonschema" },
     { name = "mcp" },
+    { name = "mcp-types" },
 ]
 mcp-ui = [
     { name = "mcp" },
@@ -275,6 +277,7 @@ requires-dist = [
     { name = "jsonschema", marker = "extra == 'mcp'", specifier = ">=4.20.0,<5" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.0.0,<3" },
     { name = "mcp", marker = "extra == 'mcp-ui'", specifier = ">=2.0.0,<3" },
+    { name = "mcp-types", marker = "extra == 'mcp'", specifier = ">=2.0.0,<3" },
     { name = "mcp-ui-server", marker = "extra == 'mcp-ui'", specifier = ">=1.0.0" },
     { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=2.8.0,<3" },
     { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.4.7" },

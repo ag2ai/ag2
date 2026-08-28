@@ -113,13 +113,40 @@ class MCPServer:
     after init. Only protocol revision 2026-07-28 clients see the hints — older
     revisions drop the fields at serialization.
 
-    ``sessions`` controls multi-turn history. By default (``True``) each MCP
-    session (keyed by the transport's ``mcp-session-id``, or a per-process key
-    over stdio) keeps its own conversation history that accumulates across calls;
-    pass a :class:`~ag2.mcp.sessions.SessionConfig` to tune the bound /
-    TTL / backend, or ``False`` to make every call stateless. A stateless HTTP
-    transport (``stateless=True``) issues no session id, so it stays stateless
-    regardless of this setting.
+    ``sessions`` controls multi-turn history. By default (``True``) a
+    conversation history accumulates across ``tools/call`` invocations; pass a
+    :class:`~ag2.mcp.sessions.SessionConfig` to tune the bound / TTL / backend,
+    or ``False`` to make every call stateless. Which conversation a call lands in
+    is decided by the protocol era, since each era sanctions a different
+    mechanism:
+
+    | a conversation named? | handshake era (up to 2025-11-25)                     | modern era (2026-07-28) |
+    |-----------------------|------------------------------------------------------|-------------------------|
+    | yes                   | that conversation                                    | that conversation       |
+    | no                    | the MCP session's own history (per-process on stdio)  | a fresh conversation    |
+
+    The modern era has no MCP session and forbids deriving context from
+    connection or process identity, so a caller there continues a conversation
+    only by naming it. The name is an opaque handle the server mints and returns
+    — in a text content block and in the result's ``_meta`` under
+    ``ai.ag2/conversation`` — and never one the caller chooses. A handle the
+    server does not recognise is a tool-level error, not a fresh conversation;
+    under ``sessions=False`` — where the argument is not advertised and no handle
+    is ever minted — presenting one is likewise refused rather than dropped.
+
+    A conversation is bound to the principal that created it (the access token's
+    subject, falling back to its client id) and that binding is revalidated on
+    every call, so a leaked handle does not expose one caller's history to
+    another. **With no** ``security`` **configured there is no principal to bind
+    to, and the handle is then the only credential for the conversation it
+    names** — it travels through readable content, so treat it as one.
+
+    ``stateless`` governs the *handshake* era only: it stops the HTTP transport
+    issuing an ``mcp-session-id``, so handshake-era calls have no session to key
+    on and start fresh. Modern-era requests are single exchanges that never carry
+    a session id in the first place, so the flag does not reach them. Pairing
+    ``stateless=True`` with ``sessions=True`` is a valid configuration — no
+    transport session, conversations named explicitly.
 
     ``resources`` / ``resource_templates`` / ``prompts`` expose MCP resources and
     prompts alongside the conversational tool; the corresponding capability is
@@ -284,6 +311,7 @@ class MCPServer:
                 params.name,
                 message=arguments.get("message", ""),
                 context=arguments.get("context"),
+                conversation=arguments.get("conversation"),
                 request_context=ctx,
             )
         except Exception as e:

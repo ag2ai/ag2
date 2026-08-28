@@ -14,14 +14,23 @@ import pytest
 from acp import schema
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from mcp.server.streamable_http import CONTENT_TYPE_JSON, CONTENT_TYPE_SSE, MCP_SESSION_ID_HEADER
+from mcp.shared.inbound import MCP_PROTOCOL_VERSION_HEADER
 from mcp.types import CallToolResult
+from mcp_types.version import LATEST_HANDSHAKE_VERSION
 
 from ag2.acp.bridge import BridgeState
 from ag2.acp.config import ACPConfig
-from ag2.acp.tool_gateway import GatewayAddress, MCPCapabilityError, ToolGateway, partition_tools
+from ag2.acp.tool_gateway import (
+    HUMAN_INPUT_GATEWAY_TOOL_ERROR,
+    GatewayAddress,
+    MCPCapabilityError,
+    ToolGateway,
+    partition_tools,
+)
 from ag2.events import BinaryInput, ClientToolCallEvent, ToolErrorEvent, ToolResultEvent
 from ag2.events.tool_events import ToolResult
-from ag2.exceptions import UnsupportedToolError
+from ag2.exceptions import HumanInputFailedError, HumanInputNotProvidedError, UnsupportedToolError
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
@@ -83,6 +92,25 @@ def test_capability_error_message_names_agent() -> None:
     assert "expose_tools" in str(err)
 
 
+_MCP_HEADERS = {"Accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}", "Content-Type": CONTENT_TYPE_JSON}
+_INITIALIZE = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": LATEST_HANDSHAKE_VERSION,
+        "capabilities": {},
+        "clientInfo": {"name": "t", "version": "1"},
+    },
+}
+_CALL_ADD = {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {"name": "add", "arguments": {"a": 2, "b": 3}},
+}
+
+
 def _fn_add() -> FunctionToolSchema:
     return FunctionToolSchema(
         function=FunctionDefinition(
@@ -114,6 +142,37 @@ async def test_gateway_serves_tools_list_over_http() -> None:
         assert tool.input_schema["required"] == ["a", "b"]
     finally:
         await gateway.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_issues_no_session_and_still_serves_a_call() -> None:
+    """The gateway is per-turn and per-request, so it hands out no MCP session.
+
+    A session would be pure overhead on a server created for one turn: nothing
+    outlives a request, so there is no cross-call state for a session id to name.
+    The tool call in the same test keeps the header assertion honest — a server
+    that answered nothing would issue no session id either.
+    """
+    state = BridgeState(ACPConfig())
+    state.context = _FakeContext(lambda call: ToolResultEvent.from_call(call, "sum is 5"))
+    gateway = ToolGateway(state, [_fn_add()])
+    url = await gateway.start()
+    try:
+        async with httpx.AsyncClient() as client:
+            initialize = await client.post(f"{url}/", headers=_MCP_HEADERS, json=_INITIALIZE)
+            called = await client.post(
+                f"{url}/",
+                headers={**_MCP_HEADERS, MCP_PROTOCOL_VERSION_HEADER: LATEST_HANDSHAKE_VERSION},
+                json=_CALL_ADD,
+            )
+    finally:
+        await gateway.close()
+
+    assert initialize.status_code == 200
+    assert MCP_SESSION_ID_HEADER not in initialize.headers
+    assert called.status_code == 200
+    assert MCP_SESSION_ID_HEADER not in called.headers
+    assert called.json()["result"]["content"] == [{"type": "text", "text": "sum is 5"}]
 
 
 @pytest.mark.asyncio
@@ -252,7 +311,10 @@ class _FakeContext:
     async def send(self, event) -> None:
         self.sent.append(event)
         self.first_send.set()
-        assert self.stream.pending is not None
+        # A turn that failed sends once more on its way out, to close the call
+        # off in history; by then nothing is waiting on the stream any more.
+        if self.stream.pending is None or self.stream.pending.done():
+            return
         if self._respond is not None:
             self.stream.pending.set_result(self._respond(event))
 
@@ -429,3 +491,88 @@ async def test_close_is_bounded_with_a_stuck_call_in_flight() -> None:
     task.cancel()
     with suppress(BaseException):
         await task
+
+
+def _raise(error: BaseException):
+    """A ``_FakeContext`` responder that fails instead of answering.
+
+    ``send`` calls the responder, so raising here is what a tool raising out of
+    the stream looks like from the gateway's side.
+    """
+
+    def respond(_call):
+        raise error
+
+    return respond
+
+
+@pytest.mark.asyncio
+class TestAHumanInputFailureIsNotToolOutput:
+    """A tool that asked a person and got nowhere has not produced a tool result.
+
+    Caught as an ordinary exception here it becomes the CLI agent's tool output,
+    and the agent — told only that a tool broke — is free to look for another way
+    to do what an approval refused it. The gateway cannot raise into the task
+    awaiting ``session/prompt``, so it records the failure on the run's state
+    instead; the client raises it from there.
+    """
+
+    async def _call(self, state: BridgeState) -> CallToolResult:
+        gateway = ToolGateway(state, [_fn_add()])
+        url = await gateway.start()
+        try:
+            async with streamable_http_client(url) as (read, write), ClientSession(read, write) as session:
+                await session.initialize()
+                return await session.call_tool("add", {"a": 1, "b": 1})
+        finally:
+            await gateway.close()
+
+    async def test_the_failure_is_recorded_and_the_turn_is_stopped(self) -> None:
+        state = BridgeState(ACPConfig())
+        error = HumanInputNotProvidedError()
+        state.context = _FakeContext(_raise(error))
+
+        result = await self._call(state)
+
+        assert state.channel_failure is error
+        assert state.channel_failed.is_set()
+        assert result.is_error is True
+
+    async def test_ag2s_own_advice_does_not_become_the_agents_tool_output(self) -> None:
+        """The request still has to be answered, but not with the host's internals.
+
+        ``HumanInputNotProvidedError`` reads "pass hitl_hook=..." — advice for
+        whoever wired this agent up, landing in someone else's conversation as
+        though the tool had said it.
+        """
+        state = BridgeState(ACPConfig())
+        state.context = _FakeContext(_raise(HumanInputNotProvidedError()))
+
+        result = await self._call(state)
+
+        text = result.content[0].text
+        assert text == HUMAN_INPUT_GATEWAY_TOOL_ERROR
+        assert "hitl_hook" not in text
+
+    async def test_the_first_failure_is_the_one_reported(self) -> None:
+        """Later calls in the same turn are being cancelled, not diagnosing anything."""
+        state = BridgeState(ACPConfig())
+        first = HumanInputNotProvidedError()
+        state.context = _FakeContext(_raise(first))
+        await self._call(state)
+
+        state.context = _FakeContext(_raise(HumanInputFailedError(RuntimeError("queue down"))))
+        await self._call(state)
+
+        assert state.channel_failure is first
+
+    async def test_an_ordinary_tool_failure_still_reads_as_one(self) -> None:
+        state = BridgeState(ACPConfig())
+        state.context = _FakeContext(_raise(RuntimeError("boom")))
+
+        result = await self._call(state)
+
+        assert result.is_error is True
+        assert "boom" in result.content[0].text
+        assert state.channel_failure is None
+        assert not state.channel_failed.is_set()
