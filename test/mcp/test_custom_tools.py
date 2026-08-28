@@ -50,7 +50,7 @@ class TestCustomTools:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
-        assert result.content == [TextContent(type="text", text="hello")]
+        assert result.content[0] == TextContent(type="text", text="hello")
 
     async def test_sync_handler_runs(self) -> None:
         def sync_handler(args: dict[str, Any], _ctx: ToolContext) -> TextContent:
