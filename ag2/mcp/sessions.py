@@ -21,6 +21,14 @@ from .errors import UnknownConversationError
 # forbids establishing context from connection or process identity.
 STDIO_SESSION = "stdio"
 
+# Where a conversation handle travels back in a result's ``_meta``, for clients
+# threading it programmatically. Reverse-DNS from the project's domain, as the
+# ``_meta`` key rules require; prefixes whose second label is ``mcp`` or
+# ``modelcontextprotocol`` are reserved and are not used here. It lives beside
+# the conversation it names rather than in the executor so that reading it needs
+# no ``ag2[mcp]`` install.
+CONVERSATION_META_KEY = "ai.ag2/conversation"
+
 
 @dataclass(frozen=True, slots=True)
 class SessionConfig:
@@ -182,12 +190,18 @@ class SessionStore:
         async with self._held(entry) as conversation:
             yield conversation
 
-    async def acquire(self, session_id: str) -> MemoryStream:
+    async def acquire(self, session_id: str, *, principal: str | None = None) -> MemoryStream:
         """Return a stream carrying ``session_id``'s accumulated conversation.
 
         Does not hold the turn lock — prefer :meth:`session` on the serving path.
+
+        ``principal`` is recorded when this call is what creates the conversation,
+        exactly as :meth:`session` records it, so the handle minted alongside it
+        stays reachable through :meth:`by_handle` by the same caller. Defaulting
+        it to ``None`` and ignoring the argument would mint a conversation no
+        authenticated caller could ever name.
         """
-        entry = await self._entry(session_id, principal=None)
+        entry = await self._entry(session_id, principal=principal)
         return MemoryStream(storage=self._storage, id=entry.stream_id)
 
     @asynccontextmanager
@@ -249,6 +263,7 @@ class SessionStore:
 
 
 __all__ = (
+    "CONVERSATION_META_KEY",
     "STDIO_SESSION",
     "Conversation",
     "ConversationBounds",

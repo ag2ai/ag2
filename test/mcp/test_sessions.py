@@ -220,6 +220,26 @@ class TestHandleNamedConversations:
             async with store.by_handle(handle, principal="bob"):
                 pass
 
+    async def test_acquire_records_the_principal_of_the_handle_it_mints(self) -> None:
+        """A conversation first created through ``acquire`` is reachable by its creator.
+
+        ``acquire`` mints a handle like every other entry point does; recording
+        no principal for it would leave that handle nameable by nobody at all
+        once authentication is configured.
+        """
+        store = SessionStore()
+
+        await store.acquire("s", principal="alice")
+        async with store.session("s", principal="alice") as conversation:
+            handle = conversation.handle
+        assert handle is not None
+
+        async with store.by_handle(handle, principal="alice") as continued:
+            assert continued.handle == handle
+        with pytest.raises(UnknownConversationError):
+            async with store.by_handle(handle, principal="bob"):
+                pass
+
 
 def test_session_store_rejects_bad_config() -> None:
     with pytest.raises(ValueError):

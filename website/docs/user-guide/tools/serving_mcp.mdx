@@ -146,7 +146,7 @@ A **modern-era** client has no MCP session. The revision states that connections
 
 ### Turning conversations off
 
-`sessions=False` makes every call stateless, and the `conversation` argument disappears from the advertised tool — a client is never offered an argument that cannot work.
+`sessions=False` makes every call stateless, and the `conversation` argument disappears from the advertised tool — a client is never offered an argument that cannot work. A client that passes one anyway gets a tool error saying the server keeps no conversations, rather than a reply that quietly forgets: this server mints no handles, so continuity is not something omitting the argument would restore either.
 
 ### Tuning the registry
 

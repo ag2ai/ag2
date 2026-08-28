@@ -27,7 +27,7 @@ from ag2.stream import MemoryStream
 from .errors import MCPAgentConfigError, UnknownConversationError
 from .info import build_ask_tool, object_output_schema
 from .mappers import reply_to_content, to_structured_dict, tool_error
-from .sessions import STDIO_SESSION, Conversation, SessionStore
+from .sessions import CONVERSATION_META_KEY, STDIO_SESSION, Conversation, SessionStore
 
 if TYPE_CHECKING:
     from mcp.server.context import ServerRequestContext
@@ -36,12 +36,6 @@ if TYPE_CHECKING:
 # executor builds one for every outcome — success, structured success, and error.
 
 _LOGGER_NAME = "ag2.mcp"
-
-# Where a conversation handle travels back in a result's ``_meta``, for clients
-# threading it programmatically. Reverse-DNS from the project's domain, as the
-# ``_meta`` key rules require; prefixes whose second label is ``mcp`` or
-# ``modelcontextprotocol`` are reserved and are not used here.
-CONVERSATION_META_KEY = "ai.ag2/conversation"
 
 
 @dataclass(slots=True)
@@ -69,15 +63,11 @@ class AgentExecutor:
     :class:`MemoryStream` is created per invocation (mirroring the A2A executor)
     so any server replica can handle any request.
 
-    With a ``session_store`` the conversation a call lands in depends on the
-    protocol era, because each era sanctions a different mechanism:
-
-    * **Handshake era** (revisions up to 2025-11-25) — history is keyed by the
-      MCP session the ``initialize`` handshake opened, or by a per-process
-      sentinel over stdio, and accumulates across calls.
-    * **Modern era** (2026-07-28) — there is no MCP session, and the revision
-      forbids deriving context from connection or process identity, so an
-      unnamed call starts a fresh conversation.
+    With a ``session_store`` the conversation a call lands in depends on whether
+    the caller named one and on the protocol era, because each era sanctions a
+    different mechanism. :class:`~ag2.mcp.MCPServer` carries that table — the one
+    a user reads — and :meth:`_conversation_cm` below is where it is decided;
+    restating it here would give it a second copy to drift from.
 
     While the agent runs, its stream events are forwarded to the MCP client as
     progress / log notifications when ``stream_progress`` is enabled.
@@ -138,6 +128,19 @@ class AgentExecutor:
         # Nothing is lost: no minted handle is blank.
         if conversation is not None and not conversation.strip():
             conversation = None
+
+        # Conversations are off, so a presented handle names nothing here and
+        # never could: this server mints none. Saying so is the whole point —
+        # accepting the argument and dropping it would hand the caller the
+        # unannounced loss of continuity this argument exists to remove. It is
+        # deliberately not ``UnknownConversationError``: that error's remedy is
+        # to retry without the argument, which here would not restore continuity
+        # either, and the handle is not unknown so much as unsupported.
+        if conversation is not None and self._session_store is None:
+            return tool_error(
+                "This server does not maintain conversations, so the 'conversation' argument is "
+                "not supported; omit it. Each call is independent."
+            )
 
         # The conversation is held for the whole turn: for a keyed one that means
         # holding its turn lock, serializing concurrent same-conversation calls.

@@ -13,9 +13,11 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from dirty_equals import IsPartialDict, IsStr
 from mcp.server.streamable_http import CONTENT_TYPE_JSON, CONTENT_TYPE_SSE, MCP_SESSION_ID_HEADER
 from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, MCP_PROTOCOL_VERSION_HEADER
 from mcp.types import CallToolResult, TextContent
+from mcp.types import Tool as MCPTool
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from mcp_types.version import LATEST_HANDSHAKE_VERSION, LATEST_MODERN_VERSION
 from pydantic import BaseModel
@@ -25,8 +27,8 @@ from ag2.context import StreamId
 from ag2.events import BaseEvent, ModelRequest, TextInput
 from ag2.history import MemoryStorage
 from ag2.mcp import MCPFunctionTool, MCPServer, SessionConfig
-from ag2.mcp.executor import CONVERSATION_META_KEY
 from ag2.mcp.security import AccessToken, oauth2_scheme, require
+from ag2.mcp.sessions import CONVERSATION_META_KEY
 from ag2.mcp.testing import connect, connect_modern, serve
 from ag2.mcp.tools import ToolContext
 from ag2.testing import TestConfig
@@ -251,6 +253,11 @@ def _handle(result: CallToolResult) -> str:
     return result.meta[CONVERSATION_META_KEY]
 
 
+def _modern_handle(result: dict[str, Any]) -> str:
+    """:func:`_handle` for the raw JSON a modern-era POST returns."""
+    return str(result["_meta"][CONVERSATION_META_KEY])
+
+
 @pytest.mark.asyncio
 class TestConversationHandle:
     """Continuity the caller names, which is the only kind the modern era has."""
@@ -410,6 +417,11 @@ class TestUnknownHandle:
         assert config.prompts == [["first"]]
 
 
+def _conversation_argument(tool: MCPTool) -> dict[str, Any]:
+    """The advertised ``conversation`` argument, or ``{}`` when it is not offered."""
+    return tool.input_schema["properties"].get("conversation", {})
+
+
 @pytest.mark.asyncio
 class TestAdvertisedConversationArgument:
     async def test_present_when_conversations_are_enabled(self) -> None:
@@ -418,7 +430,7 @@ class TestAdvertisedConversationArgument:
         async with connect(server) as session:
             (tool,) = (await session.list_tools()).tools
 
-        assert "conversation" in tool.input_schema["properties"]
+        assert _conversation_argument(tool) == IsPartialDict({"type": "string"})
         assert tool.input_schema["required"] == ["message"]
 
     async def test_absent_when_conversations_are_disabled(self) -> None:
@@ -427,7 +439,7 @@ class TestAdvertisedConversationArgument:
         async with connect(server) as session:
             (tool,) = (await session.list_tools()).tools
 
-        assert "conversation" not in tool.input_schema["properties"]
+        assert _conversation_argument(tool) == {}
 
     async def test_description_states_the_configured_lifetime(self) -> None:
         server = MCPServer(
@@ -438,9 +450,33 @@ class TestAdvertisedConversationArgument:
         async with connect(server) as session:
             (tool,) = (await session.list_tools()).tools
 
-        description = tool.input_schema["properties"]["conversation"]["description"]
-        assert "900" in description
-        assert "64" in description
+        assert _conversation_argument(tool) == IsPartialDict({"description": IsStr(regex=r".*\b900\b.*\b64\b.*")})
+
+    async def test_presenting_one_anyway_is_refused_not_dropped(self) -> None:
+        """With conversations off, a handle is answered, not quietly discarded.
+
+        The server mints no handles, so omitting the argument would not restore
+        continuity either — which is why this is refused as unsupported rather
+        than reported as an unknown handle.
+        """
+        config = RecordingConfig(TestConfig("ok"))
+        server = MCPServer(_agent(config), sessions=False)
+
+        async with connect(server) as session:
+            result = await session.call_tool("ask", {"message": "first", "conversation": str(uuid4())})
+
+        assert result.is_error is True
+        assert result.content == [
+            TextContent(
+                type="text",
+                text=(
+                    "This server does not maintain conversations, so the 'conversation' argument is "
+                    "not supported; omit it. Each call is independent."
+                ),
+            )
+        ]
+        # Refused before the agent ran: a rejected call is not half a turn.
+        assert config.prompts == []
 
 
 @pytest.mark.asyncio
@@ -484,7 +520,7 @@ async def test_stateless_transport_serves_conversations_by_handle() -> None:
         first, response = await _modern_call_with_response(client, "first", request_id=1)
         # The one assertion that is genuinely about HTTP: no session comes back.
         assert MCP_SESSION_ID_HEADER not in response.headers
-        handle = first["_meta"][CONVERSATION_META_KEY]
+        handle = _modern_handle(first)
         await _modern_call(client, "second", request_id=2, conversation=handle)
 
     assert config.prompts == [["first"], ["first", "second"]]
@@ -580,7 +616,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
-            handle = first["_meta"][CONVERSATION_META_KEY]
+            handle = _modern_handle(first)
             await _modern_call(client, "second", request_id=2, conversation=handle, token="alice")
 
         assert config.prompts == [["first"], ["first", "second"]]
@@ -590,7 +626,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
-            handle = first["_meta"][CONVERSATION_META_KEY]
+            handle = _modern_handle(first)
             stolen = await _modern_call(client, "second", request_id=2, conversation=handle, token="bob")
             unknown = await _modern_call(client, "second", request_id=3, conversation=str(uuid4()), token="bob")
 
@@ -605,7 +641,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
-            handle = first["_meta"][CONVERSATION_META_KEY]
+            handle = _modern_handle(first)
             continued = await _modern_call(client, "second", request_id=2, conversation=handle, token="alice")
             swapped = await _modern_call(client, "third", request_id=3, conversation=handle, token="bob")
 
@@ -648,7 +684,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="kiosk")
-            handle = first["_meta"][CONVERSATION_META_KEY]
+            handle = _modern_handle(first)
             same = await _modern_call(client, "second", request_id=2, conversation=handle, token="kiosk")
             other = await _modern_call(client, "third", request_id=3, conversation=handle, token="other-kiosk")
 

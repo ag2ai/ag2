@@ -130,7 +130,9 @@ class MCPServer:
     only by naming it. The name is an opaque handle the server mints and returns
     — in a text content block and in the result's ``_meta`` under
     ``ai.ag2/conversation`` — and never one the caller chooses. A handle the
-    server does not recognise is a tool-level error, not a fresh conversation.
+    server does not recognise is a tool-level error, not a fresh conversation;
+    under ``sessions=False`` — where the argument is not advertised and no handle
+    is ever minted — presenting one is likewise refused rather than dropped.
 
     A conversation is bound to the principal that created it (the access token's
     subject, falling back to its client id) and that binding is revalidated on

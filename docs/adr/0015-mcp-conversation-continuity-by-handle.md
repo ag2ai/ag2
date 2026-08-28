@@ -48,6 +48,12 @@ Continuity stops riding on the transport and becomes something the caller names.
    one. The protocol draws that line so the model can start a new conversation
    rather than fail the turn. It is never a fall-through to the transport
    session, which would reintroduce the silent degradation this exists to remove.
+   With conversations off altogether there is no registry to consult and no
+   handle this server could have minted, so a presented one is refused as
+   *unsupported* rather than accepted and dropped — the same reason, a different
+   remedy: retrying without the argument would not restore continuity there, so
+   the caller is told continuity is unavailable instead of inferring it from a
+   reply that quietly forgot.
 5. **A conversation records its principal and revalidates on every call.** The
    access token's subject, falling back to its client id. A mismatch yields the
    same error as an unknown handle, so it does not disclose that the handle
