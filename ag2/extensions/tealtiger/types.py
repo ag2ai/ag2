@@ -43,6 +43,31 @@ class GovernancePolicy:
         return cls(type="tool_allowlist", config={"allowed": allowed})
 
     @classmethod
+    def tool_blocklist(cls, blocked: list[str]) -> "GovernancePolicy":
+        """Deny tools matching these patterns (supports glob-style '*' suffix).
+
+        The complement of `tool_allowlist`: everything is allowed except the
+        tools named here. Use this when you want to permit most tools but block
+        a known-dangerous few (e.g. `delete_*`, `shell`), rather than
+        enumerating every safe tool.
+
+        A tool is denied if its name matches any pattern via `fnmatch`, so both
+        exact names (`"shell"`) and globs (`"delete_*"`) are supported. When
+        combined with `tool_allowlist`, either policy denying the call results
+        in a DENY.
+
+        Args:
+            blocked: List of tool name patterns to deny. Use '*' for glob matching.
+
+        Raises:
+            ValueError: If `blocked` is empty, which would otherwise create a
+                policy that blocks nothing and silently does nothing.
+        """
+        if not blocked:
+            raise ValueError("`blocked` must not be empty; a tool_blocklist with no patterns blocks nothing.")
+        return cls(type="tool_blocklist", config={"blocked": list(blocked)})
+
+    @classmethod
     def pii_block(cls, categories: list[str] | None = None) -> "GovernancePolicy":
         """Block tool calls containing PII in arguments.
 
