@@ -252,7 +252,7 @@ class TestModelSelection:
         """Agents can offer hundreds of ids, so the error points at near misses."""
         cfg = fake_acp_config(
             _hi_turn(),
-            config_options=[_model_option("a/default", "a/default", "a/claude-haiku-4.5", "a/claude-sonnet-4")],
+            config_options=[_model_option("a/default", "a/default", "a/claude-haiku-4.5", "a/claude-sonnet-5")],
             permission_policy="auto",
             model="a/claude-haiku-4-5",  # dashes instead of the dot
         )
