@@ -168,6 +168,19 @@ def tool_to_api(t: ToolSchema) -> chat_pb2.Tool:
         return xai_tools.code_execution()
 
     if isinstance(t, MCPServerToolSchema):
+        if t.blocked_tools is not None:
+            # `blocked_tools` is an Anthropic-connector capability: its MCP tool
+            # config enables and disables a server's tools by name. `xai_sdk`'s
+            # `tools.mcp` takes `allowed_tool_names` and nothing else, so there is
+            # no honest translation — ag2 refuses instead of quietly sending a
+            # request that permits what the caller asked to block.
+            raise ValueError(
+                "MCPServerTool blocked_tools cannot be enforced on xAI "
+                f"(server {t.server_label!r}): its MCP tool takes an allow-list only. "
+                "Pass allowed_tools naming the tools you do want, or connect the server as an "
+                "MCP toolkit so AG2 executes and filters its tools."
+            )
+
         kwargs = {"server_url": t.server_url}
         if t.server_label is not None:
             kwargs["server_label"] = t.server_label

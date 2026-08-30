@@ -79,7 +79,7 @@ acp = [
 ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
-openai = ["openai>=2.45.0,<3.0"]
+openai = ["openai>=3.4.0,<4"]
 anthropic = ["anthropic>=0.116.0,<1"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility

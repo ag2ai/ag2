@@ -47,3 +47,42 @@ async def test_allowed_tools(context: Context) -> None:
     api = tool_to_api(schema)
 
     assert list(api.mcp.allowed_tool_names) == ["search", "fetch"]
+
+
+@pytest.mark.asyncio
+async def test_blocked_tools_alone_is_refused(context: Context) -> None:
+    """Never silently: dropping the filter lets the model call what was blocked.
+
+    `xai_sdk.tools.mcp` takes `allowed_tool_names` and nothing else, so there is
+    no request that expresses the block.
+    """
+    tool = MCPServerTool(
+        server_url="https://mcp.example.com/sse",
+        server_label="ex",
+        blocked_tools=["delete"],
+    )
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(ValueError, match="blocked_tools"):
+        tool_to_api(schema)
+
+
+@pytest.mark.asyncio
+async def test_blocked_tools_beside_an_allow_list_is_refused_too(context: Context) -> None:
+    """Refused whole, not rewritten.
+
+    Narrowing `allowed_tools` by the blocked names would happen to be equivalent,
+    but it answers a request the caller did not write.
+    """
+    tool = MCPServerTool(
+        server_url="https://mcp.example.com/sse",
+        server_label="ex",
+        allowed_tools=["search", "fetch", "delete"],
+        blocked_tools=["delete"],
+    )
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(ValueError, match="blocked_tools"):
+        tool_to_api(schema)

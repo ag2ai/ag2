@@ -8,10 +8,14 @@ from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
-from openai.types.responses import ResponseUsage, SkillReferenceParam
+from openai.types.responses import ResponseFunctionShellToolCall, ResponseUsage, SkillReferenceParam
 
 from ag2.compact import CompactionSummary
-from ag2.config.openai.events import OpenAIReasoningEvent, OpenAIServerToolCallEvent
+from ag2.config.openai.events import (
+    OpenAIReasoningEvent,
+    OpenAIServerToolCallEvent,
+    OpenAIServerToolResultEvent,
+)
 from ag2.events import (
     BaseEvent,
     BinaryInput,
@@ -120,6 +124,7 @@ def events_to_responses_input(
     """Convert a sequence of events to Responses API input items."""
     result: list[dict[str, Any]] = []
     seen_reasoning_ids: set[str] = set()
+    answered_shell_calls = _answered_shell_calls(messages)
 
     for message in messages:
         if isinstance(message, ModelResponse):
@@ -200,10 +205,25 @@ def events_to_responses_input(
                 result.append(message.item.model_dump(exclude_none=True, mode="json"))
 
         elif isinstance(message, OpenAIServerToolCallEvent):
+            # A `shell_call` is the one hosted item the API will not accept
+            # alone: its outcome lives in a separate `shell_call_output`. A turn
+            # that ended between the two — an `incomplete` response, say — leaves
+            # the call unanswered, and replaying it would 400 the next request.
+            if (
+                isinstance(message.item, ResponseFunctionShellToolCall)
+                and message.item.call_id not in answered_shell_calls
+            ):
+                continue
+
             # warnings=False: openai SDK pins ActionSearchSource.type to
             # Literal["url"] but the API returns other values (e.g. "api"),
             # which makes pydantic warn on every round-trip serialization.
             result.append(message.item.model_dump(exclude_none=True, mode="json", warnings=False))
+
+        elif isinstance(message, OpenAIServerToolResultEvent) and message.item is not None:
+            # Only a hosted shell call carries one: its output is a separate
+            # item, so the call replays incomplete without it.
+            result.append(message.item.model_dump(exclude_none=True, mode="json"))
 
         elif isinstance(message, ModelRequest):
             for inp in message.parts:
@@ -496,6 +516,21 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         }
         if t.description is not None:
             result["server_description"] = t.description
+
+        if t.blocked_tools is not None:
+            # `blocked_tools` is an Anthropic-connector capability: its MCP tool
+            # config enables and disables a server's tools by name. The OpenAI
+            # `mcp` param carries an allow-list and nothing else, so there is no
+            # honest translation — ag2 refuses instead of quietly sending a
+            # request that permits what the caller asked to block, the same way
+            # `acp.tool_gateway.partition_tools` refuses rather than widen access.
+            raise ValueError(
+                "MCPServerTool blocked_tools cannot be enforced on the OpenAI Responses API "
+                f"(server {t.server_label!r}): its remote-MCP tool takes an allow-list only. "
+                "Pass allowed_tools naming the tools you do want, or connect the server as an "
+                "MCP toolkit so AG2 executes and filters its tools."
+            )
+
         if t.allowed_tools is not None:
             result["allowed_tools"] = t.allowed_tools
         if t.headers is not None:
@@ -604,3 +639,12 @@ _MIME_TO_AUDIO_FORMAT: dict[str, str] = {
     "audio/aiff": "aiff",
     "audio/aac": "aac",
 }
+
+
+def _answered_shell_calls(messages: Sequence[BaseEvent]) -> set[str]:
+    """The `call_id`s of hosted shell calls whose output is present in `messages`."""
+    return {
+        message.item.call_id
+        for message in messages
+        if isinstance(message, OpenAIServerToolResultEvent) and message.item is not None
+    }

@@ -53,6 +53,45 @@ class TestResponsesApi:
         }
 
     @pytest.mark.asyncio
+    async def test_blocked_tools_alone_is_refused(self, context: Context) -> None:
+        """Never silently: dropping the filter lets the model call what was blocked.
+
+        The OpenAI remote-MCP tool takes an allow-list and nothing else, so there
+        is no request that expresses the block.
+        """
+        tool = MCPServerTool(
+            server_url="https://mcp.example.com/sse",
+            server_label="example-mcp",
+            blocked_tools=["delete"],
+        )
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(ValueError, match="blocked_tools"):
+            tool_to_responses_api(schema)
+
+    @pytest.mark.asyncio
+    async def test_blocked_tools_beside_an_allow_list_is_refused_too(self, context: Context) -> None:
+        """Refused whole, not rewritten.
+
+        Narrowing `allowed_tools` by the blocked names would happen to be
+        equivalent, but it answers a request the caller did not write. One rule —
+        the provider cannot express a block, so ag2 says so — beats a special case
+        that silently turns one field into another.
+        """
+        tool = MCPServerTool(
+            server_url="https://mcp.example.com/sse",
+            server_label="example-mcp",
+            allowed_tools=["search", "create", "delete"],
+            blocked_tools=["delete"],
+        )
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(ValueError, match="blocked_tools"):
+            tool_to_responses_api(schema)
+
+    @pytest.mark.asyncio
     async def test_with_headers(self, context: Context) -> None:
         tool = MCPServerTool(
             server_url="https://mcp.example.com/sse",
