@@ -35,29 +35,37 @@ class GovernancePolicy:
 
     @classmethod
     def tool_allowlist(cls, allowed: list[str]) -> "GovernancePolicy":
-        """Only allow tools matching these patterns (supports glob-style '*' suffix).
+        """Only allow tools whose name matches one of these patterns.
+
+        Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`, `[seq]`)
+        applies. Matching follows the host's filename case rules: case-sensitive on
+        Linux/macOS, case-insensitive on Windows.
 
         Args:
-            allowed: List of tool name patterns. Use '*' suffix for prefix matching.
+            allowed: List of tool name patterns, e.g. `["search", "read_*"]`.
         """
-        return cls(type="tool_allowlist", config={"allowed": allowed})
+        return cls(type="tool_allowlist", config={"allowed": list(allowed)})
 
     @classmethod
     def tool_blocklist(cls, blocked: list[str]) -> "GovernancePolicy":
-        """Deny tools matching these patterns (supports glob-style '*' suffix).
+        """Deny tools whose name matches one of these patterns.
 
         The complement of `tool_allowlist`: everything is allowed except the
         tools named here. Use this when you want to permit most tools but block
         a known-dangerous few (e.g. `delete_*`, `shell`), rather than
         enumerating every safe tool.
 
-        A tool is denied if its name matches any pattern via `fnmatch`, so both
-        exact names (`"shell"`) and globs (`"delete_*"`) are supported. When
-        combined with `tool_allowlist`, either policy denying the call results
-        in a DENY.
+        Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`,
+        `[seq]`) applies and exact names (`"shell"`) work too. When combined with
+        `tool_allowlist`, either policy denying the call results in a DENY.
+
+        Matching follows the host's filename case rules — case-sensitive on
+        Linux/macOS, case-insensitive on Windows — so `["shell"]` does not block
+        a tool registered as `Shell` on Linux/macOS. List the casings you need to
+        deny explicitly if tool names are not under your control.
 
         Args:
-            blocked: List of tool name patterns to deny. Use '*' for glob matching.
+            blocked: List of tool name patterns to deny, e.g. `["delete_*", "shell"]`.
 
         Raises:
             ValueError: If `blocked` is empty, which would otherwise create a

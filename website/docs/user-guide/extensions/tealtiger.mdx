@@ -146,14 +146,28 @@ Any tool matching a pattern is denied with reason code `TOOL_BLOCKED` and risk s
 
 An empty blocklist raises `ValueError` at policy construction, so a policy that blocks nothing cannot be created by mistake.
 
-You can combine an allowlist with a blocklist — for example, permit everything under `read_*` but still deny `read_secrets`. When both are configured, either policy denying the call results in a `DENY` (the first one in your list is the one reported):
+You can combine an allowlist with a blocklist — for example, permit everything under `read_*` but still deny `read_secrets`. When both are configured, every policy is evaluated until one denies, so either one denying results in a `DENY`; the policy that denies is the one reported, whatever its position in the list:
 
 ```python linenums="1"
-policies=[
-    GovernancePolicy.tool_allowlist(["read_*"]),
-    GovernancePolicy.tool_blocklist(["read_secrets"]),
-]
+from ag2.extensions.tealtiger import GovernancePolicy, TealTigerMiddleware
+
+governance = TealTigerMiddleware(
+    policies=[
+        GovernancePolicy.tool_allowlist(["read_*"]),
+        GovernancePolicy.tool_blocklist(["read_secrets"]),
+    ],
+)
 ```
+
+Here `read_file` passes both policies, while `read_secrets` clears the allowlist and is denied by the blocklist — so the reason code is `TOOL_BLOCKED`, from the *second* entry.
+
+!!! warning "Pattern matching is case-sensitive on Linux and macOS"
+
+    `fnmatch` normalizes case the way the host filesystem does, so `["shell"]` blocks `shell`
+    but **not** `Shell` on Linux/macOS, while on Windows it blocks both. For an allowlist that
+    asymmetry denies too much; for a blocklist it lets a call through. If your tool names are
+    not under your control, list the casings you need to block explicitly, or normalize tool
+    names before registering them.
 
 ### PII Detection
 
