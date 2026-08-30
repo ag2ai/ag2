@@ -332,6 +332,14 @@ class _TealTigerPerTurn(BaseMiddleware):
                     risk_score = max(risk_score, 80)
                     break
 
+            elif policy.type == "tool_blocklist":
+                blocked = policy.config.get("blocked", [])
+                if any(fnmatch.fnmatch(tool_name, p) for p in blocked):
+                    action = "DENY"
+                    reason_codes.append("TOOL_BLOCKED")
+                    risk_score = max(risk_score, 80)
+                    break
+
             elif policy.type == "pii_block":
                 categories = policy.config.get("categories", [])
                 pii_found = self._detect_pii(args_str, categories)
