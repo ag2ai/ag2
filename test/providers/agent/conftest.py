@@ -46,13 +46,10 @@ def openai_config() -> OpenAIConfig:
 
 @pytest.fixture()
 def anthropic_config() -> AnthropicConfig:
-    # `temperature` is deprecated on `AnthropicConfig` (the 1.x Messages API dropped
-    # it from the signature), so the determinism these tests rely on is asked for
-    # through the extra body instead. Claude Haiku 4.5 still honours it.
     return AnthropicConfig(
         model="claude-haiku-4-5",
         api_key=_require("ANTHROPIC_API_KEY"),
-        extra_body={"temperature": 0},
+        temperature=0,
     )
 
 
@@ -110,7 +107,7 @@ def streaming_config(request):
         return AnthropicConfig(
             model="claude-haiku-4-5",
             api_key=_require("ANTHROPIC_API_KEY"),
-            extra_body={"temperature": 0},
+            temperature=0,
             streaming=True,
         )
     if request.param == "zai":

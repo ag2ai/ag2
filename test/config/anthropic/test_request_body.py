@@ -87,6 +87,24 @@ async def test_sampling_fields_still_reach_the_api() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_zero_sampling_field_is_sent_not_dropped() -> None:
+    """Zero is the value determinism is asked for with, and it is falsy."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        temperature=0,
+        top_p=0,
+        top_k=0,
+        http_client=_capturing_client(captured),
+    )
+
+    await _ask(config)
+
+    assert captured["body"] == IsPartialDict({"temperature": 0, "top_p": 0, "top_k": 0})
+
+
+@pytest.mark.asyncio
 async def test_sampling_fields_reach_the_api_when_streaming() -> None:
     captured: dict[str, object] = {}
     config = AnthropicConfig(
@@ -116,6 +134,26 @@ async def test_user_extra_body_wins_over_a_sampling_field() -> None:
     await _ask(config)
 
     assert captured["body"] == IsPartialDict({"temperature": 0.9})
+
+
+@pytest.mark.asyncio
+async def test_sampling_fields_join_the_mcp_servers_in_the_extra_body(context: Context) -> None:
+    """Both are folded into the one ``extra_body`` the client sends; neither displaces the other."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        temperature=0.2,
+        http_client=_capturing_client(captured),
+    )
+    schemas = await MCPServerTool(server_url="https://mcp.example.com/x", server_label="x").schemas(context)
+
+    await _ask(config, tools=schemas)
+
+    assert captured["body"] == IsPartialDict({
+        "temperature": 0.2,
+        "mcp_servers": [{"type": "url", "url": "https://mcp.example.com/x", "name": "x"}],
+    })
 
 
 @pytest.mark.asyncio
@@ -225,6 +263,28 @@ async def test_a_direct_client_caller_gets_the_extra_body_route_not_a_type_error
     await _ask_client(client)
 
     assert captured["body"] == IsPartialDict({"temperature": 0.2})
+
+
+@pytest.mark.asyncio
+async def test_a_direct_caller_may_still_spell_a_sampling_field_none() -> None:
+    """The pre-1.x ``CreateOptions`` typed these ``float | None``.
+
+    A key left behind because its value happened to be ``None`` would reach
+    ``messages.create()`` all the same, and the argument is what 1.x removed.
+    """
+    captured: dict[str, object] = {}
+    client = AnthropicClient(
+        api_key="test",
+        prompt_caching=False,
+        http_client=_capturing_client(captured),
+        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "temperature": None},  # type: ignore[typeddict-unknown-key]
+    )
+
+    await _ask_client(client)
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert "temperature" not in body
 
 
 @pytest.mark.asyncio
