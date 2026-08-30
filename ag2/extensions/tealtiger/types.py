@@ -35,12 +35,45 @@ class GovernancePolicy:
 
     @classmethod
     def tool_allowlist(cls, allowed: list[str]) -> "GovernancePolicy":
-        """Only allow tools matching these patterns (supports glob-style '*' suffix).
+        """Only allow tools whose name matches one of these patterns.
+
+        Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`, `[seq]`)
+        applies. Matching follows the host's filename case rules: case-sensitive on
+        Linux/macOS, case-insensitive on Windows.
 
         Args:
-            allowed: List of tool name patterns. Use '*' suffix for prefix matching.
+            allowed: List of tool name patterns, e.g. `["search", "read_*"]`.
         """
-        return cls(type="tool_allowlist", config={"allowed": allowed})
+        return cls(type="tool_allowlist", config={"allowed": list(allowed)})
+
+    @classmethod
+    def tool_blocklist(cls, blocked: list[str]) -> "GovernancePolicy":
+        """Deny tools whose name matches one of these patterns.
+
+        The complement of `tool_allowlist`: everything is allowed except the
+        tools named here. Use this when you want to permit most tools but block
+        a known-dangerous few (e.g. `delete_*`, `shell`), rather than
+        enumerating every safe tool.
+
+        Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`,
+        `[seq]`) applies and exact names (`"shell"`) work too. When combined with
+        `tool_allowlist`, either policy denying the call results in a DENY.
+
+        Matching follows the host's filename case rules — case-sensitive on
+        Linux/macOS, case-insensitive on Windows — so `["shell"]` does not block
+        a tool registered as `Shell` on Linux/macOS. List the casings you need to
+        deny explicitly if tool names are not under your control.
+
+        Args:
+            blocked: List of tool name patterns to deny, e.g. `["delete_*", "shell"]`.
+
+        Raises:
+            ValueError: If `blocked` is empty, which would otherwise create a
+                policy that blocks nothing and silently does nothing.
+        """
+        if not blocked:
+            raise ValueError("`blocked` must not be empty; a tool_blocklist with no patterns blocks nothing.")
+        return cls(type="tool_blocklist", config={"blocked": list(blocked)})
 
     @classmethod
     def pii_block(cls, categories: list[str] | None = None) -> "GovernancePolicy":

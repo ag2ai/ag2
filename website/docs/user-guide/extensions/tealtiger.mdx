@@ -3,7 +3,7 @@ title: TealTiger Governance
 sidebarTitle: TealTiger
 ---
 
-The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — with no LLM in the governance path.
+The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists and blocklists, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — with no LLM in the governance path.
 
 ## Installation
 
@@ -90,7 +90,7 @@ flowchart LR
 | Hook | Stage | What It Does |
 |------|-------|-------------|
 | `on_turn` | Turn defense | Kill switch enforcement — frozen agents cannot take turns |
-| `on_tool_execution` | Pre-tool defense | Tool allowlist, PII scan, secret scan, cost limit check |
+| `on_tool_execution` | Pre-tool defense | Tool allowlist/blocklist, PII scan, secret scan, cost limit check |
 
 Both stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
 
@@ -133,6 +133,41 @@ GovernancePolicy.tool_allowlist(["search", "read_*", "github_*"])
 ```
 
 Any tool not matching the patterns is denied with reason code `TOOL_NOT_ALLOWED` and risk score 80.
+
+### Tool Blocklist
+
+The complement of the allowlist: allow every tool *except* the ones you name. Reach for this when an agent has many safe tools and only a few dangerous ones, so enumerating every safe tool would be tedious. Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`, `[seq]`) applies:
+
+```python linenums="1"
+GovernancePolicy.tool_blocklist(["delete_*", "shell", "drop_table"])
+```
+
+Any tool matching a pattern is denied with reason code `TOOL_BLOCKED` and risk score 80.
+
+An empty blocklist raises `ValueError` at policy construction, so a policy that blocks nothing cannot be created by mistake.
+
+You can combine an allowlist with a blocklist — for example, permit everything under `read_*` but still deny `read_secrets`. When both are configured, every policy is evaluated until one denies, so either one denying results in a `DENY`; the policy that denies is the one reported, whatever its position in the list:
+
+```python linenums="1"
+from ag2.extensions.tealtiger import GovernancePolicy, TealTigerMiddleware
+
+governance = TealTigerMiddleware(
+    policies=[
+        GovernancePolicy.tool_allowlist(["read_*"]),
+        GovernancePolicy.tool_blocklist(["read_secrets"]),
+    ],
+)
+```
+
+Here `read_file` passes both policies, while `read_secrets` clears the allowlist and is denied by the blocklist — so the reason code is `TOOL_BLOCKED`, from the *second* entry.
+
+!!! warning "Pattern matching is case-sensitive on Linux and macOS"
+
+    `fnmatch` normalizes case the way the host filesystem does, so `["shell"]` blocks `shell`
+    but **not** `Shell` on Linux/macOS, while on Windows it blocks both. For an allowlist that
+    asymmetry denies too much; for a blocklist it lets a call through. If your tool names are
+    not under your control, list the casings you need to block explicitly, or normalize tool
+    names before registering them.
 
 ### PII Detection
 
@@ -304,7 +339,7 @@ for decision in governance.decisions:
 | `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
 | `agent_name` | `str` | Agent that made the call, or `unknown` |
 | `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
-| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
 | `risk_score` | `int` | 0 (safe) to 100 (critical) |
 | `evaluation_time_ms` | `float` | Governance latency for this decision |
 | `cost_tracked` | `float` | Cost attributed to this call in USD |
@@ -509,6 +544,7 @@ Each policy type carries its own risk score when it denies:
 | Secret detection | `SECRET_DETECTED` | 95 |
 | PII detection | `PII_DETECTED:{category}` | 90 |
 | Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
+| Tool blocklist | `TOOL_BLOCKED` | 80 |
 | Cost limit / factory budget | `BUDGET_EXCEEDED` | 70 |
 
 !!! warning "Policy order is yours to choose"
