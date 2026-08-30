@@ -364,6 +364,18 @@ By default it retries any `Exception`, but you can narrow that with `retry_on=..
 
 Use it for transient failures such as provider timeouts or flaky network issues.
 
+An attempt that already published output stops being retryable.
+Streaming clients emit `ModelMessageChunk` and `ModelReasoning` while the response
+is still arriving, and publish server-side tool calls and results as they walk it —
+subscribers have those the moment they are sent, and a retry cannot take them back.
+Retrying anyway would leave every live consumer holding the failed attempt's output
+concatenated with the retry's, while the final reply carries only the retry's.
+So if a call fails after publishing anything, `RetryMiddleware` propagates the
+exception instead of starting another attempt. A call that fails before publishing —
+a connection error, a rate limit, a `5xx` — retries as usual, which covers most
+transient failures. Non-streaming calls publish nothing until they return and are
+therefore unaffected.
+
 ### `HistoryLimiter`
 
 ```python linenums="1"
