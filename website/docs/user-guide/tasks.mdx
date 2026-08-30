@@ -24,7 +24,7 @@ For lightweight LLM-driven sub-agent delegation see [Subagents](/docs/user-guide
 from ag2 import Agent
 from ag2.config import AnthropicConfig
 
-agent = Agent("indexer", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent("indexer", config=AnthropicConfig(model="claude-sonnet-5"))
 
 async with agent.task("index documents") as task:
     await task.progress({"stage": "discover", "files": 12})

@@ -51,7 +51,7 @@ governance = TealTigerMiddleware(
 async def main() -> None:
     agent = Agent(
         "assistant",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         middleware=[governance],
     )
     reply = await agent.ask("Summarize the AG2 middleware guide.")
@@ -402,7 +402,7 @@ governance = TealTigerMiddleware(
         GovernancePolicy.cost_limit(max_per_session=10.0),
     ],
 )
-config = AnthropicConfig(model="claude-sonnet-4-6")
+config = AnthropicConfig(model="claude-sonnet-5")
 
 async def main() -> None:
     researcher = Agent("researcher", config=config, middleware=[governance])
@@ -458,7 +458,7 @@ governance = TealTigerMiddleware(
 async def main() -> None:
     agent = Agent(
         "research_assistant",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         middleware=[governance],
     )
     reply = await agent.ask("Research AI governance frameworks for enterprise deployment.")

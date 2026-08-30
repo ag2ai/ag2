@@ -36,7 +36,7 @@ async def add_to_cart(good_id: str) -> Any:
 agent = Agent(
     name="claude",
     prompt="You are a concise assistant.",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
 )
 
 server = MCPServer(agent, tools=[show_greeting, show_docs, add_to_cart])
