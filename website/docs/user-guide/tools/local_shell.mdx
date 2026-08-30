@@ -24,7 +24,7 @@ from ag2.tools import SandboxShellTool
 agent = Agent(
     "coder",
     "You write and run Python code.",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SandboxShellTool()],
 )
 
@@ -137,7 +137,7 @@ from ag2.config import AnthropicConfig
 from ag2.tools import SandboxShellTool, LocalEnvironment
 
 sh = SandboxShellTool(LocalEnvironment("/tmp/counter_demo"))
-agent = Agent("coder", "You manage files.", config=AnthropicConfig(model="claude-sonnet-4-6"), tools=[sh])
+agent = Agent("coder", "You manage files.", config=AnthropicConfig(model="claude-sonnet-5"), tools=[sh])
 
 reply1 = await agent.ask("Create counter.txt with value 0")
 reply2 = await reply1.ask("Increment the counter by 1")

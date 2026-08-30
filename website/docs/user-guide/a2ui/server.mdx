@@ -28,7 +28,7 @@ from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import RestTransport
 from ag2.config import AnthropicConfig
 
-agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
 
 app = A2UIServer(
     agent,
@@ -151,7 +151,7 @@ from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import AgUiTransport
 from ag2.config import AnthropicConfig
 
-agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
 
 app = A2UIServer(agent, transport=AgUiTransport())  # POST /  →  AG-UI SSE events
 

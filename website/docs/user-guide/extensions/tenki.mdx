@@ -38,7 +38,7 @@ async def main() -> None:
     async with env:
         agent = Agent(
             "developer",
-            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            config=AnthropicConfig(model="claude-sonnet-5"),
             tools=[SandboxShellTool(env), SandboxCodeTool(env.code_environment())],
         )
         reply = await agent.ask("Write hello.txt, then read it with Python.")

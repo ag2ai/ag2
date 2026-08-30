@@ -96,7 +96,7 @@ from ag2.config import BedrockConfig
 
 # Configure an Amazon Bedrock model (Converse API)
 config = BedrockConfig(
-    model="anthropic.claude-sonnet-4-5-20250929-v1:0",
+    model="global.anthropic.claude-sonnet-5",
     region_name="us-east-1",
     streaming=True
 )
@@ -259,7 +259,7 @@ export AWS_DEFAULT_REGION=us-east-1
 from ag2.config import BedrockConfig
 
 # Auth from AWS_BEARER_TOKEN_BEDROCK, region from AWS_DEFAULT_REGION
-config = BedrockConfig(model="anthropic.claude-sonnet-4-5-20250929-v1:0")
+config = BedrockConfig(model="global.anthropic.claude-sonnet-5")
 ```
 
 A region is always required — pass `region_name=` or set `AWS_DEFAULT_REGION`. Notes on API keys:

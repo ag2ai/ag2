@@ -16,7 +16,7 @@ from ag2.extensions.tools.search import SerplySearchToolkit
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SerplySearchToolkit(api_key=os.environ["SERPLY_API_KEY"])],
 )
 ```

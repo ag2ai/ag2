@@ -68,7 +68,7 @@ class TestOpenCodeConfig:
     def test_model_does_not_alter_command(self) -> None:
         # `model` is applied via ACP session/set_config_option after the handshake,
         # never via CLI flags — the launch command must stay untouched.
-        cfg = OpenCodeConfig(model="anthropic/claude-sonnet-4")
+        cfg = OpenCodeConfig(model="anthropic/claude-sonnet-5")
         assert cfg.command == ["opencode", "acp"]
 
 
