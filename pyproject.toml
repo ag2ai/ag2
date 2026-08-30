@@ -242,7 +242,7 @@ types = [
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.16.4", "codespell==2.4.3", "zizmor==1.29.0"]
+lint = ["ruff==0.16.4", "codespell==2.4.3", "zizmor==1.30.0"]
 
 dev = [
     { include-group = "lint" },
