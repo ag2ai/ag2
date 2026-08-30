@@ -37,35 +37,6 @@ class RetryMiddleware(MiddlewareFactory):
         )
 
 
-class _RetryAttempt:
-    """Records whether one attempt has already put an event on the stream.
-
-    No event type is named here on purpose. An ``on_llm_call`` scope bottoms out
-    at the provider client, and the agent loop publishes its own events —
-    ``ModelRequest``, ``ToolCallsEvent``, ``UsageEvent`` — outside the middleware
-    chain. So everything reaching this hook is the client's own output: streamed
-    chunks and reasoning, the message, server-side tool calls and results, provider
-    replay carriers. All of it is equally unrecallable once sent, and a list of
-    types would only be a copy of the clients' send sites, going stale the first
-    time one of them learns a new event.
-
-    Registered as an *interrupter* rather than a plain subscriber, because
-    interrupters run first in ``Stream.send`` and may drop an event: whatever an
-    earlier interrupter filtered out never reaches a subscriber, so it must not
-    count as published here either. Returning the event unchanged is what hands it
-    on — returning ``None`` would swallow it for every consumer.
-    """
-
-    __slots__ = ("published",)
-
-    def __init__(self) -> None:
-        self.published = False
-
-    def on_published(self, event: BaseEvent) -> BaseEvent:
-        self.published = True
-        return event
-
-
 class _RetryMiddleware(BaseMiddleware):
     """Retry LLM calls on transient failures."""
 
@@ -88,12 +59,12 @@ class _RetryMiddleware(BaseMiddleware):
         context: Context,
     ) -> ModelResponse:
         for _ in range(self._max_retries):
-            attempt = _RetryAttempt()
-            with context.stream.sub_scope(
-                attempt.on_published,
-                interrupt=True,
-                sync_to_thread=False,
-            ):
+            # Watch for *any* event: an ``on_llm_call`` scope bottoms out at the
+            # provider client, and the agent loop publishes its own events —
+            # ``ModelRequest``, ``ToolCallsEvent``, ``UsageEvent`` — outside the
+            # middleware chain, so whatever lands here is the client's own output:
+            # streamed chunks and reasoning, the message, server-side tool calls.
+            async with context.stream.get(BaseEvent) as published:
                 try:
                     return await call_next(events, context)
                 except self._retry_on:
@@ -101,7 +72,7 @@ class _RetryMiddleware(BaseMiddleware):
                     # so it is safely repeatable. One that published is not: the
                     # retry's output would be concatenated onto it by every live
                     # consumer, while the reply carries only the retry's.
-                    if attempt.published:
+                    if published.done():
                         raise
         # Final attempt — let the original exception propagate.
         return await call_next(events, context)

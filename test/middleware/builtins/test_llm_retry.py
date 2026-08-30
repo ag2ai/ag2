@@ -35,14 +35,15 @@ class PermanentError(Exception):
 
 @pytest.mark.asyncio()
 async def test_llm_retry_calls_next_once_when_successful(mock: MagicMock) -> None:
+    context = Context(stream=MemoryStream())
     retry_middleware = RetryMiddleware(max_retries=3)
 
     async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(events)
         return ModelResponse(ModelMessage("result"))
 
-    middleware = retry_middleware(TextInput("Hi!"), mock)
-    response = await middleware.on_llm_call(llm_call, [TextInput("Hi!")], mock)
+    middleware = retry_middleware(TextInput("Hi!"), context)
+    response = await middleware.on_llm_call(llm_call, [TextInput("Hi!")], context)
 
     assert response == ModelResponse(ModelMessage("result"))
     mock.llm_call.assert_called_once_with([TextInput("Hi!")])
@@ -50,6 +51,7 @@ async def test_llm_retry_calls_next_once_when_successful(mock: MagicMock) -> Non
 
 @pytest.mark.asyncio()
 async def test_llm_retry_retries_matching_errors_until_success(mock: MagicMock) -> None:
+    context = Context(stream=MemoryStream())
     retry_middleware = RetryMiddleware(max_retries=2, retry_on=(TransientError,))
     attempts = 0
 
@@ -61,8 +63,8 @@ async def test_llm_retry_retries_matching_errors_until_success(mock: MagicMock) 
             raise TransientError(f"transient failure {attempts}")
         return ModelResponse(ModelMessage("result"))
 
-    middleware = retry_middleware(TextInput("Hi!"), mock)
-    response = await middleware.on_llm_call(llm_call, [TextInput("Hi!")], mock)
+    middleware = retry_middleware(TextInput("Hi!"), context)
+    response = await middleware.on_llm_call(llm_call, [TextInput("Hi!")], context)
 
     assert response == ModelResponse(ModelMessage("result"))
     assert mock.llm_call.call_count == attempts == 3
@@ -70,30 +72,32 @@ async def test_llm_retry_retries_matching_errors_until_success(mock: MagicMock) 
 
 @pytest.mark.asyncio()
 async def test_llm_retry_raises_after_exhausting_retries(mock: MagicMock) -> None:
+    context = Context(stream=MemoryStream())
     retry_middleware = RetryMiddleware(max_retries=2, retry_on=(TransientError,))
 
     async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(events)
         raise TransientError("still failing")
 
-    middleware = retry_middleware(TextInput("Hi!"), mock)
+    middleware = retry_middleware(TextInput("Hi!"), context)
     with pytest.raises(TransientError, match="still failing"):
-        await middleware.on_llm_call(llm_call, [TextInput("Hi!")], mock)
+        await middleware.on_llm_call(llm_call, [TextInput("Hi!")], context)
 
     assert mock.llm_call.call_count == 3
 
 
 @pytest.mark.asyncio()
 async def test_llm_retry_does_not_retry_non_matching_errors(mock: MagicMock) -> None:
+    context = Context(stream=MemoryStream())
     retry_middleware = RetryMiddleware(max_retries=3, retry_on=(TransientError,))
-    middleware = retry_middleware(TextInput("Hi!"), mock)
+    middleware = retry_middleware(TextInput("Hi!"), context)
 
     async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(events)
         raise PermanentError("do not retry")
 
     with pytest.raises(PermanentError, match="do not retry"):
-        await middleware.on_llm_call(llm_call, [TextInput("Hi!")], mock)
+        await middleware.on_llm_call(llm_call, [TextInput("Hi!")], context)
 
     mock.llm_call.assert_called_once_with([TextInput("Hi!")])
 
@@ -138,36 +142,10 @@ async def test_llm_retry_stops_once_the_attempt_published_output(published: Base
         await middleware.on_llm_call(llm_call, [TextInput("Hi!")], context)
 
     assert attempts == 1
-    # The middleware observes through an interrupter, which is allowed to drop or
-    # replace an event — this one must do neither.
+    # Watching must not disturb delivery: the subscriber downstream still gets the
+    # one event, unchanged.
     assert seen == [published]
     assert seen[0] is published
-
-
-@pytest.mark.asyncio()
-async def test_llm_retry_retries_on_a_real_stream_when_nothing_was_published() -> None:
-    """The control for the test above: the guard must not disarm retries wholesale.
-
-    The other retry tests pass a ``MagicMock`` context, which makes the stream
-    subscription a no-op — only a real stream exercises the guard's False branch.
-    """
-    stream = MemoryStream()
-    context = Context(stream=stream)
-    middleware = RetryMiddleware(max_retries=2, retry_on=(TransientError,))(TextInput("Hi!"), context)
-    attempts = 0
-
-    async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
-        nonlocal attempts
-        attempts += 1
-        if attempts < 3:
-            raise TransientError(f"transient failure {attempts}")
-        await ctx.send(ModelMessageChunk("complete"))
-        return ModelResponse(ModelMessage("complete"))
-
-    response = await middleware.on_llm_call(llm_call, [TextInput("Hi!")], context)
-
-    assert response == ModelResponse(ModelMessage("complete"))
-    assert attempts == 3
 
 
 @pytest.mark.asyncio()
