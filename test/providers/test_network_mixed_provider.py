@@ -118,7 +118,7 @@ async def test_consulting_anthropic_initiator_openai_specialist() -> None:
             "prompt=<question>) to ask them. Reply to the user with the "
             "specialist's answer verbatim."
         ),
-        config=AnthropicConfig(model="claude-haiku-4-5", api_key=anth_key, temperature=0),
+        config=AnthropicConfig(model="claude-haiku-4-5", api_key=anth_key, extra_body={"temperature": 0}),
     )
     bob = Agent(
         name="bob",
@@ -158,7 +158,7 @@ async def test_3way_discussion_one_per_provider() -> None:
     )
 
     configs = {
-        "alice": AnthropicConfig(model="claude-haiku-4-5", api_key=anth_key, temperature=0),
+        "alice": AnthropicConfig(model="claude-haiku-4-5", api_key=anth_key, extra_body={"temperature": 0}),
         "bob": OpenAIConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
         "carol": GeminiConfig(model="gemini-3-flash-preview", api_key=gemini_key, temperature=0),
     }
@@ -257,7 +257,7 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
             "engineering question, call the transfer_to_eng tool with a "
             "one-line reason. Do not try to answer it yourself."
         ),
-        config=AnthropicConfig(model="claude-haiku-4-5", api_key=anth_key, temperature=0),
+        config=AnthropicConfig(model="claude-haiku-4-5", api_key=anth_key, extra_body={"temperature": 0}),
     )
     eng_agent = Agent(
         name="eng",

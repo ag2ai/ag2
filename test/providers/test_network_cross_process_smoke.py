@@ -101,7 +101,7 @@ def _require(*names: str) -> dict[str, str]:
 
 
 def _anthropic(keys: dict[str, str]) -> AnthropicConfig:
-    return AnthropicConfig(model=ANTHROPIC_MODEL, api_key=keys["ANTHROPIC_API_KEY"], temperature=0)
+    return AnthropicConfig(model=ANTHROPIC_MODEL, api_key=keys["ANTHROPIC_API_KEY"], extra_body={"temperature": 0})
 
 
 def _openai(keys: dict[str, str]) -> OpenAIConfig:

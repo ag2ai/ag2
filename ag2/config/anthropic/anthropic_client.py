@@ -7,7 +7,7 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
-import httpx
+import httpx2
 from anthropic import NOT_GIVEN, AsyncAnthropic
 from anthropic.types import (
     Message,
@@ -40,18 +40,21 @@ from .mappers import (
     extract_mcp_servers,
     extract_skills_for_container,
     has_file_id_references,
+    merge_sampling_into_extra_body,
     normalize_usage,
     response_proto_to_output_config,
+    take_sampling_fields,
     tool_to_api,
 )
 
 
 class CreateOptions(TypedDict, total=False):
+    # `temperature`, `top_p` and `top_k` are absent on purpose: `anthropic` 1.x
+    # removed them from the Messages API signature, so passing one here is a
+    # `TypeError`. `AnthropicConfig` forwards them in the request's extra body
+    # instead — see `AnthropicConfig._request_extra_body`.
     model: str
     max_tokens: int
-    temperature: float | None
-    top_p: float | None
-    top_k: int | None
     stop_sequences: list[str] | None
     stream: bool
     metadata: dict[str, str] | None
@@ -66,7 +69,7 @@ class AnthropicClient(LLMClient):
         timeout: float | None = None,
         max_retries: int = 2,
         default_headers: dict[str, str] | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: httpx2.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
         prompt_caching: bool = True,
         extra_body: dict[str, Any] | None = None,
@@ -83,7 +86,14 @@ class AnthropicClient(LLMClient):
         self._create_options = {k: v for k, v in (create_options or {}).items() if k != "stream"}
         self._streaming = (create_options or {}).get("stream", False)
         self._prompt_caching = prompt_caching
-        self._extra_body = extra_body
+
+        # A caller reaching this class directly (rather than through
+        # `AnthropicConfig`) may still be passing the sampling parameters 1.x
+        # removed from the method signature. Route them the same way, instead of
+        # letting them reach the SDK as a bare `TypeError` at request time.
+        self._extra_body = merge_sampling_into_extra_body(take_sampling_fields(self._create_options), extra_body)
+
+        self._default_betas = _default_betas(default_headers)
 
     async def __call__(
         self,
@@ -132,27 +142,26 @@ class AnthropicClient(LLMClient):
             "tools": tools_list if tools_list else NOT_GIVEN,
         }
 
+        betas: set[str] = set()
+
         if mcp_servers:
-            create_kwargs["extra_headers"] = {"anthropic-beta": "mcp-client-2025-11-20"}
+            betas.add("mcp-client-2025-11-20")
             create_kwargs["extra_body"] = {"mcp_servers": mcp_servers}
 
         if anthropic_skills:
             create_kwargs["container"] = {"skills": anthropic_skills}
-            # Merge beta headers: skills require both code-execution and skills betas
-            existing_betas: set[str] = set(
-                (create_kwargs.get("extra_headers") or {}).get("anthropic-beta", "").split(",")
-            )
-            existing_betas.discard("")
-            existing_betas.update(["code-execution-2025-08-25", "skills-2025-10-02"])
-            create_kwargs.setdefault("extra_headers", {})
-            create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
+            # Skills require both the code-execution and the skills beta.
+            betas.update(("code-execution-2025-08-25", "skills-2025-10-02"))
 
         if has_file_id_references(messages):
-            existing_betas = set((create_kwargs.get("extra_headers") or {}).get("anthropic-beta", "").split(","))
-            existing_betas.discard("")
-            existing_betas.add("files-api-2025-04-14")
-            create_kwargs.setdefault("extra_headers", {})
-            create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
+            betas.add("files-api-2025-04-14")
+
+        if betas:
+            # `anthropic` 1.x matches header names case-insensitively, so this
+            # per-request header *replaces* a same-named default rather than being
+            # sent alongside it. Fold in the betas the user set as defaults, or
+            # asking for one of ours would silently drop theirs.
+            create_kwargs["extra_headers"] = {"anthropic-beta": ",".join(sorted(betas | self._default_betas))}
 
         # User keys win over framework-set keys (e.g. mcp_servers) on collision.
         if self._extra_body:
@@ -337,3 +346,18 @@ class AnthropicClient(LLMClient):
             provider="anthropic",
             finish_reason=final_message.stop_reason,
         )
+
+
+def _default_betas(default_headers: dict[str, str] | None) -> frozenset[str]:
+    """The ``anthropic-beta`` values a caller set as client defaults.
+
+    Matched case-insensitively, and last-one-wins between two spellings of the
+    same name, because that is what the SDK's own header merge does with them.
+    """
+    if not default_headers:
+        return frozenset()
+    value = ""
+    for name, header in default_headers.items():
+        if name.lower() == "anthropic-beta":
+            value = header
+    return frozenset(part.strip() for part in value.split(",") if part.strip())
