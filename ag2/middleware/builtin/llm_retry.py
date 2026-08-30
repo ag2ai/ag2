@@ -5,7 +5,7 @@
 from collections.abc import Sequence
 
 from ag2.annotations import Context
-from ag2.events import BaseEvent, ModelResponse
+from ag2.events import BaseEvent, ModelMessageChunk, ModelResponse
 from ag2.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 from ag2.middleware.describe import MiddlewareDescription
 
@@ -59,9 +59,25 @@ class _RetryMiddleware(BaseMiddleware):
         context: Context,
     ) -> ModelResponse:
         for _ in range(self._max_retries):
-            try:
-                return await call_next(events, context)
-            except self._retry_on:
-                pass
+            attempt = _RetryAttempt()
+            with context.stream.where(ModelMessageChunk).sub_scope(
+                attempt.on_message_chunk,
+                interrupt=True,
+                sync_to_thread=False,
+            ):
+                try:
+                    return await call_next(events, context)
+                except self._retry_on:
+                    if attempt.message_chunk_emitted:
+                        raise
         # Final attempt — let the original exception propagate.
         return await call_next(events, context)
+
+
+class _RetryAttempt:
+    def __init__(self) -> None:
+        self.message_chunk_emitted = False
+
+    def on_message_chunk(self, event: ModelMessageChunk) -> ModelMessageChunk:
+        self.message_chunk_emitted = True
+        return event

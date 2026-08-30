@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ag2 import Context
-from ag2.events import BaseEvent, ModelMessage, ModelResponse, TextInput
+from ag2 import Context, MemoryStream
+from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse, TextInput
 from ag2.middleware import RetryMiddleware
 
 
@@ -82,3 +82,30 @@ async def test_llm_retry_does_not_retry_non_matching_errors(mock: MagicMock) -> 
         await middleware.on_llm_call(llm_call, [TextInput("Hi!")], mock)
 
     mock.llm_call.assert_called_once_with([TextInput("Hi!")])
+
+
+@pytest.mark.asyncio()
+async def test_llm_retry_does_not_retry_after_streaming_a_message_chunk() -> None:
+    stream = MemoryStream()
+    context = Context(stream=stream)
+    retry_middleware = RetryMiddleware(max_retries=2, retry_on=(TransientError,))
+    middleware = retry_middleware(TextInput("Hi!"), context)
+    attempts = 0
+    chunks: list[str] = []
+
+    async def collect(event: ModelMessageChunk) -> None:
+        chunks.append(event.content)
+
+    async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
+        nonlocal attempts
+        attempts += 1
+        await ctx.send(ModelMessageChunk("partial"))
+        raise TransientError("stream disconnected")
+
+    stream.where(ModelMessageChunk).subscribe(collect, sync_to_thread=False)
+
+    with pytest.raises(TransientError, match="stream disconnected"):
+        await middleware.on_llm_call(llm_call, [TextInput("Hi!")], context)
+
+    assert attempts == 1
+    assert chunks == ["partial"]
