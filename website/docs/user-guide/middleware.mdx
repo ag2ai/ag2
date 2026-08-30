@@ -364,11 +364,11 @@ By default it retries any `Exception`, but you can narrow that with `retry_on=..
 
 Use it for transient failures such as provider timeouts or flaky network issues.
 
-A call that already streamed part of its response is not retried: the exception
-propagates instead, because a retry would leave live consumers holding both attempts'
-output while the reply carries only the second.
-Failures arriving before anything is streamed — connection errors, rate limits, `5xx` —
-retry as usual, as do non-streaming calls.
+A call that already published something to the stream — a chunk, reasoning, or a
+server-side tool call — is not retried; the exception propagates instead.
+Retrying would leave anyone watching the stream with both attempts' output, while the
+reply carries only the second.
+Failures that arrive before anything is published — connection errors, rate limits, `5xx` — retry as usual.
 
 ### `HistoryLimiter`
 
