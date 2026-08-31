@@ -1,0 +1,247 @@
+---
+title: "Serving an Agent as an MCP Server"
+sidebarTitle: "Serving MCP"
+---
+
+# Serving an Agent as an MCP Server
+
+`ag2.mcp.MCPServer` exposes an AG2 `Agent` **as** an MCP server: any MCP client — Claude Desktop, Cursor, the MCP Inspector, another agent framework — can list its tools and talk to your agent. This is the inverse of [consuming an MCP server as tools](/docs/user-guide/tools/mcp_servers) with `MCPToolkit` / `MCPServerTool`.
+
+## Installation
+
+```bash
+pip install "ag2[mcp]"
+```
+
+## Serving over HTTP
+
+An `MCPServer` **is** an ASGI3 application. It serves MCP over streamable HTTP and manages its own lifespan, so a standalone `uvicorn` run just works:
+
+```python linenums="1"
+import uvicorn
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+agent = Agent(
+    name="assistant",
+    prompt="You are a helpful assistant.",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+)
+app = MCPServer(agent, path="/mcp")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+The server is also mountable into a host Starlette/FastAPI app, since it is an ordinary ASGI app.
+
+## Serving over stdio
+
+For a locally-launched client, serve over stdin/stdout instead. The HTTP parameters (`path`, `stateless`, `json_response`, `security`) are ignored on this transport:
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+server = MCPServer(agent)
+
+if __name__ == "__main__":
+    asyncio.run(server.run_stdio())
+```
+
+## The conversational tool
+
+The agent is exposed as a single tool — `ask` by default — that runs `Agent.ask()` and returns the reply. It takes a required `message` and an optional `context` string that is prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`.
+
+If the agent has a `response_schema`, that schema is advertised verbatim as the tool's `outputSchema` and validated replies come back as `structuredContent`.
+
+```python linenums="1"
+from pydantic import BaseModel
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+class Weather(BaseModel):
+    city: str
+    temp_c: float
+
+agent = Agent(
+    name="weather",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+    response_schema=Weather,
+)
+app = MCPServer(agent, tool_name="forecast")
+```
+
+Presentation metadata (`name`, `version`, `title`, `description`, `instructions`, `website_url`, `icons`) is never derived from the agent — `instructions` in particular is client-facing "how to use this server" guidance, not the agent's system prompt. Pass it explicitly when you want it.
+
+## Conversations
+
+By default (`sessions=True`) the server keeps **conversation sessions**: a history that accumulates across `tools/call` invocations, so a caller can hold a multi-turn exchange instead of a series of unrelated questions.
+
+### Starting and continuing one
+
+A caller names the conversation it wants to continue. The tool takes an optional `conversation` argument holding an opaque **conversation handle**:
+
+- **Omit it** and the call starts a new conversation. The server mints a handle and returns it.
+- **Pass a handle back** and that conversation continues.
+
+A blank handle — `""`, or whitespace — counts as omitting it, because it names nothing. That matters for the reader this channel is built for: a model asked for an optional string argument routinely sends an empty one instead of leaving the key out, and read as an unknown handle that would leave it unable to start a conversation at all. No minted handle is blank, so nothing that could name a conversation is affected.
+
+The handle comes back twice, for two different readers:
+
+- in a **text content block**, so the model driving the tool can read it and carry it into its next call without any help from the host;
+- in the result's **`_meta`**, under the key `ai.ag2/conversation`, for clients threading it programmatically.
+
+`structuredContent` is deliberately left alone: on this tool it is the agent's response schema and is advertised verbatim as `outputSchema`, which MCP requires structured content to conform to.
+
+!!! note "The handle comes back on every reply"
+    Both readers get the handle whether or not the caller ever names a conversation, and in both protocol eras — so a handshake-era client that never touches the `conversation` argument still sees the extra content block and `_meta` key. A client that asserts on the exact shape of a reply will notice; one that reads the first text block, or `structuredContent`, will not.
+
+Threading a handle from the caller's side — here with the `mcp` SDK's own client against the HTTP server above:
+
+```python linenums="1"
+import asyncio
+
+from mcp.client import Client
+
+async def main() -> None:
+    async with Client("http://127.0.0.1:8000/mcp") as client:
+        first = await client.call_tool("ask", {"message": "My name is Ada."})
+        handle = first.meta["ai.ag2/conversation"]
+        second = await client.call_tool(
+            "ask",
+            {"message": "What is my name?", "conversation": handle},
+        )
+        print(second.content[0].text)
+
+asyncio.run(main())
+```
+
+Handles are minted by the server and are version-4 UUIDs — opaque and unguessable. A caller-chosen string is never adopted as a new conversation name; that would let any caller push other callers' conversations out of the bounded registry.
+
+### When a handle is not recognised
+
+A handle the server does not know — expired, evicted, or never minted — comes back as a **tool execution error**: a result flagged `isError`, not a JSON-RPC protocol error. The protocol draws that line so the model can recover by starting a new conversation instead of failing the turn. It is never treated as a fresh conversation, and never falls back to the MCP session.
+
+### What differs between the two protocol eras
+
+MCP has two eras, and each sanctions a different continuity mechanism:
+
+| a `conversation` passed? | handshake era (up to 2025-11-25) | modern era (2026-07-28) |
+|---|---|---|
+| yes | that conversation | that conversation |
+| no  | the caller's **MCP session** keeps its own history (one per process over stdio) | a fresh conversation each call |
+
+A **handshake-era** client negotiates an `initialize` handshake that opens an **MCP session** — the transport's own notion of a connected client — so it gets implicit continuity without passing anything, exactly as before. It may still opt into explicit handles: the handle returned on its first call names the same conversation its MCP session does, so it can migrate ahead of changing protocol revision.
+
+A **modern-era** client has no MCP session. The revision states that connections do not represent conversations, that clients may interleave unrelated requests on one transport, and that servers must not use connection or process identity to establish context — so the handle is the only continuity mechanism available there, on every transport.
+
+### Turning conversations off
+
+`sessions=False` makes every call stateless, and the `conversation` argument disappears from the advertised tool — a client is never offered an argument that cannot work. A client that passes one anyway gets a tool error saying the server keeps no conversations, rather than a reply that quietly forgets: this server mints no handles, so continuity is not something omitting the argument would restore either.
+
+### Tuning the registry
+
+`SessionConfig` bounds the registry so a long-lived server cannot leak memory:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, SessionConfig
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(
+    agent,
+    sessions=SessionConfig(max_sessions=256, ttl=3600.0),
+)
+```
+
+- `max_sessions` — LRU cap; the least-recently-used conversation's history is dropped once the cap is exceeded.
+- `ttl` — idle expiry in seconds; a conversation untouched for longer has its history dropped (`None`, the default, means no expiry).
+- `storage` — the history backend (see below).
+
+Both bounds are quoted in the `conversation` argument's own description, so a client can judge whether an old handle is still worth presenting.
+
+!!! note "Every unnamed call with no session to fall back on creates a conversation"
+    A call that omits `conversation` and has no MCP session to key on gets a fresh conversation — and a handle for it — on every call. That is every modern-era call, and every handshake-era call on a `stateless=True` transport, so one-shot traffic occupies registry slots too. Size `max_sessions` for your call rate, and set a `ttl` so abandoned one-shot conversations expire instead of pushing real ones out.
+
+## What `stateless` governs
+
+`stateless=True` stops the **HTTP transport** issuing an `mcp-session-id`. That is a *handshake-era* switch: modern-era requests are self-contained single exchanges that never carry a session id in the first place, so the flag does not reach them.
+
+Pairing `stateless=True` with `sessions=True` is a valid configuration, not a contradiction — no transport session, conversations named by handle:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(agent, stateless=True)
+```
+
+## Where conversations live
+
+A conversation's history is written through the configured `Storage`; the registry that maps a conversation's *name* — a handle, or an MCP session id — to that history is held **in the serving process**.
+
+So a conversation lives in the replica that created it. A handle minted on one replica is unknown on another, and an MCP session id resolves to a different, empty history there. Behind a load balancer, route a caller's calls back to the replica that answered the first one, or run a single replica.
+
+Passing a shared backend keeps the history itself out of process memory, which is what makes a large `max_sessions` affordable:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, SessionConfig
+from ag2.streams import RedisStorage
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(
+    agent,
+    sessions=SessionConfig(storage=RedisStorage("redis://localhost:6379")),
+)
+```
+
+!!! warning "A shared backend does not make a handle portable"
+    The registry is per-process, so a shared `Storage` shares the stored history but not the mapping from a name to it. Cross-replica continuity still needs the caller pinned to one replica.
+
+## Authentication and who owns a conversation
+
+`security=` makes the server an OAuth 2.1 Resource Server: it advertises RFC 9728 Protected Resource Metadata at `/.well-known/oauth-protected-resource`, answers a missing or invalid token with `401` (pointing at that metadata) and an insufficient scope with `403`.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+from ag2.mcp.security import oauth2_scheme, require
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(
+    agent,
+    path="/mcp",
+    security=require(
+        oauth2_scheme(url="https://auth.example.com"),
+        resource_url="https://agent.example.com/mcp",
+        verifier=my_token_verifier,  # your TokenVerifier implementation
+        required_scopes=["mcp.read"],
+    ),
+)
+```
+
+With authentication configured, a conversation records the principal that created it — the access token's subject, falling back to its client id — and revalidates that on **every** call, not only at creation. A handle presented under a different principal gets the same error as an unknown one, so the error does not disclose that the handle exists.
+
+!!! warning "Without `security`, the handle is the only credential"
+    With no authentication there is no principal to bind to, so anyone holding a handle can continue the conversation it names. The handle travels through readable content — the model's context, client logs, tracing in between — so decide whether that is acceptable for your deployment before serving unauthenticated.
+
+## Beyond the conversational tool
+
+- **Custom tools** run a handler of yours directly instead of invoking the agent — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for `@mcp_tool` and returning renderable UI. Their state is their own; conversation handles apply only to the conversational tool.
+- **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`; the matching capability is advertised only when a non-empty collection is supplied.
+- **Progress and logs** — while the agent runs, its stream events are forwarded to the client as progress notifications and log messages. Turn this off with `stream_progress=False`.

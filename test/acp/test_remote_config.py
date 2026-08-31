@@ -57,13 +57,13 @@ class TestConstruction:
         cfg = ACPRemoteConfig(
             url="https://box.internal/acp",
             cwd="/repo",
-            model="claude-sonnet-4",
+            model="claude-sonnet-5",
             permission_policy="auto",
             elicitation_policy="decline",
             turn_timeout=30.0,
             expose_tools=False,
         )
-        assert (cfg.cwd, cfg.model, cfg.permission_policy) == ("/repo", "claude-sonnet-4", "auto")
+        assert (cfg.cwd, cfg.model, cfg.permission_policy) == ("/repo", "claude-sonnet-5", "auto")
         assert (cfg.elicitation_policy, cfg.turn_timeout, cfg.expose_tools) == ("decline", 30.0, False)
 
     def test_copy_preserves_type_and_url(self) -> None:

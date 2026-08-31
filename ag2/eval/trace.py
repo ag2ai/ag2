@@ -21,7 +21,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TypeVar
 
-from ag2.events import BaseEvent, ModelResponse
+from ag2.events import BaseEvent
+from ag2.usage import UsageReport
 
 __all__ = (
     "TokenUsage",
@@ -95,24 +96,25 @@ class Trace:
 
     @property
     def tokens(self) -> TokenUsage:
-        """Token counts summed across every :class:`ModelResponse` in this run."""
-        input_total = 0
-        output_total = 0
-        cache_creation = 0
-        cache_read = 0
-        for event in self._events:
-            if not isinstance(event, ModelResponse):
-                continue
-            usage = event.usage
-            input_total += int(usage.prompt_tokens or 0)
-            output_total += int(usage.completion_tokens or 0)
-            cache_creation += int(usage.cache_creation_input_tokens or 0)
-            cache_read += int(usage.cache_read_input_tokens or 0)
+        """Token counts summed across every :class:`UsageEvent` in this run.
+
+        ``UsageEvent`` is the framework's accounting record, emitted wherever
+        tokens are spent, and :class:`~ag2.UsageReport` — the same aggregation
+        the framework reports as your bill — is reused here rather than
+        maintaining a parallel summation.
+
+        Deliberately *not* :class:`ModelResponse`. Most spend never produces
+        one: a delegating agent's workers report through a ``"subtask"`` rollup,
+        history compaction and memory aggregation report usage alone, and live
+        sessions map realtime usage straight to the accounting event. Counting
+        responses *as well* would double every main-loop call, which emits both.
+        """
+        total = UsageReport.from_events(self._events).total
         return TokenUsage(
-            input=input_total,
-            output=output_total,
-            cache_creation=cache_creation,
-            cache_read=cache_read,
+            input=int(total.prompt_tokens or 0),
+            output=int(total.completion_tokens or 0),
+            cache_creation=int(total.cache_creation_input_tokens or 0),
+            cache_read=int(total.cache_read_input_tokens or 0),
         )
 
     def events_of(

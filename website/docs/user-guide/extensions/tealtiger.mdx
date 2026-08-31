@@ -3,7 +3,7 @@ title: TealTiger Governance
 sidebarTitle: TealTiger
 ---
 
-The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists, detects PII and secrets in tool arguments, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — with no LLM in the governance path.
+The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists and blocklists, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — with no LLM in the governance path.
 
 ## Installation
 
@@ -40,6 +40,7 @@ from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTiger
 governance = TealTigerMiddleware(
     mode=GovernanceMode.ENFORCE,
     policies=[
+        GovernancePolicy.prompt_injection_block(),
         GovernancePolicy.tool_allowlist(["search", "read_*"]),
         GovernancePolicy.pii_block(["ssn", "credit_card", "email", "phone"]),
         GovernancePolicy.secret_detection(),
@@ -50,7 +51,7 @@ governance = TealTigerMiddleware(
 async def main() -> None:
     agent = Agent(
         "assistant",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         middleware=[governance],
     )
     reply = await agent.ask("Summarize the AG2 middleware guide.")
@@ -89,7 +90,7 @@ flowchart LR
 | Hook | Stage | What It Does |
 |------|-------|-------------|
 | `on_turn` | Turn defense | Kill switch enforcement — frozen agents cannot take turns |
-| `on_tool_execution` | Pre-tool defense | Tool allowlist, PII scan, secret scan, cost limit check |
+| `on_tool_execution` | Pre-tool defense | Tool allowlist/blocklist, PII scan, secret scan, cost limit check |
 
 Both stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
 
@@ -132,6 +133,41 @@ GovernancePolicy.tool_allowlist(["search", "read_*", "github_*"])
 ```
 
 Any tool not matching the patterns is denied with reason code `TOOL_NOT_ALLOWED` and risk score 80.
+
+### Tool Blocklist
+
+The complement of the allowlist: allow every tool *except* the ones you name. Reach for this when an agent has many safe tools and only a few dangerous ones, so enumerating every safe tool would be tedious. Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`, `[seq]`) applies:
+
+```python linenums="1"
+GovernancePolicy.tool_blocklist(["delete_*", "shell", "drop_table"])
+```
+
+Any tool matching a pattern is denied with reason code `TOOL_BLOCKED` and risk score 80.
+
+An empty blocklist raises `ValueError` at policy construction, so a policy that blocks nothing cannot be created by mistake.
+
+You can combine an allowlist with a blocklist — for example, permit everything under `read_*` but still deny `read_secrets`. When both are configured, every policy is evaluated until one denies, so either one denying results in a `DENY`; the policy that denies is the one reported, whatever its position in the list:
+
+```python linenums="1"
+from ag2.extensions.tealtiger import GovernancePolicy, TealTigerMiddleware
+
+governance = TealTigerMiddleware(
+    policies=[
+        GovernancePolicy.tool_allowlist(["read_*"]),
+        GovernancePolicy.tool_blocklist(["read_secrets"]),
+    ],
+)
+```
+
+Here `read_file` passes both policies, while `read_secrets` clears the allowlist and is denied by the blocklist — so the reason code is `TOOL_BLOCKED`, from the *second* entry.
+
+!!! warning "Pattern matching is case-sensitive on Linux and macOS"
+
+    `fnmatch` normalizes case the way the host filesystem does, so `["shell"]` blocks `shell`
+    but **not** `Shell` on Linux/macOS, while on Windows it blocks both. For an allowlist that
+    asymmetry denies too much; for a blocklist it lets a call through. If your tool names are
+    not under your control, list the casings you need to block explicitly, or normalize tool
+    names before registering them.
 
 ### PII Detection
 
@@ -180,6 +216,62 @@ GovernancePolicy.cost_limit(max_per_session=5.0)
 ```
 
 Cumulative cost is tracked across all tool calls using `cost_per_call` (configurable, defaults to `0.002`). Once the limit is reached, further calls are denied with `BUDGET_EXCEEDED` and risk score 70.
+
+### Prompt Injection Detection
+
+Block tool calls containing adversarial prompt injection patterns in their arguments:
+
+```python linenums="1"
+GovernancePolicy.prompt_injection_block()
+```
+
+Detects 5 technique categories with 20 regex patterns:
+
+| Technique | Patterns | What It Catches | Confidence |
+|-----------|:--------:|----------------|:----------:|
+| `instruction_override` | 5 | "Ignore previous instructions", system prompt override, context resets | 0.80–0.95 |
+| `role_manipulation` | 5 | DAN jailbreak, developer mode, persona switching, "jailbreak mode" | 0.85–0.95 |
+| `context_manipulation` | 4 | Delimiter injection, XML/chat-template tag injection, markdown fence injection, fake system messages | 0.80–0.90 |
+| `encoding_evasion` | 4 | Base64 payloads, hex escapes, unicode escapes, ROT13 references | 0.65–0.75 |
+| `multi_turn_assembly` | 2 | Payload splitting, continuation attacks | 0.80–0.85 |
+
+Denied with reason code `PROMPT_INJECTION:{technique}/{pattern_name}` and risk score 95.
+
+Patterns match on injection *framing*, not on keywords alone — `DAN` counts only alongside
+a jailbreak cue and is matched case-sensitively, a `<system>` tag counts only when
+instruction-like content follows it. Without that, ordinary arguments (a colleague named
+Dan, `<system>` in an XML payload, "add the new rules to the linter config") would be
+denied at risk score 95.
+
+**Selective techniques** — enable only specific categories:
+
+```python linenums="1"
+GovernancePolicy.prompt_injection_block(
+    techniques=["instruction_override", "role_manipulation"],
+)
+```
+
+**Confidence threshold** — tune sensitivity to reduce false positives:
+
+```python linenums="1"
+GovernancePolicy.prompt_injection_block(
+    confidence_threshold=0.85,  # Skip lower-confidence patterns
+)
+```
+
+Each pattern carries a fixed confidence score (0.0–1.0). The threshold selects **which
+patterns run** — it is not a score computed per match — and only patterns at or above it are
+evaluated. Default threshold is `0.7`, which leaves `rot13_reference` (0.65) inactive; lower
+the threshold to enable it.
+
+An unknown technique name, an empty `techniques` list, or a threshold outside 0.0–1.0 raises
+`ValueError` at policy construction, so a typo cannot silently leave the policy detecting
+nothing.
+
+!!! note "Policies are evaluated in list order"
+    Policies are evaluated in the order you pass them, and evaluation stops at the first denial.
+    Put `prompt_injection_block()` before `tool_allowlist(...)` if you want injection
+    attempts reported as `PROMPT_INJECTION:…` rather than `TOOL_NOT_ALLOWED`.
 
 ## Factory-Level Budget
 
@@ -247,7 +339,7 @@ for decision in governance.decisions:
 | `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
 | `agent_name` | `str` | Agent that made the call, or `unknown` |
 | `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
-| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
 | `risk_score` | `int` | 0 (safe) to 100 (critical) |
 | `evaluation_time_ms` | `float` | Governance latency for this decision |
 | `cost_tracked` | `float` | Cost attributed to this call in USD |
@@ -345,7 +437,7 @@ governance = TealTigerMiddleware(
         GovernancePolicy.cost_limit(max_per_session=10.0),
     ],
 )
-config = AnthropicConfig(model="claude-sonnet-4-6")
+config = AnthropicConfig(model="claude-sonnet-5")
 
 async def main() -> None:
     researcher = Agent("researcher", config=config, middleware=[governance])
@@ -401,7 +493,7 @@ governance = TealTigerMiddleware(
 async def main() -> None:
     agent = Agent(
         "research_assistant",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         middleware=[governance],
     )
     reply = await agent.ask("Research AI governance frameworks for enterprise deployment.")
@@ -448,9 +540,11 @@ Each policy type carries its own risk score when it denies:
 | Policy | Reason Code | Risk Score |
 |--------|-------------|------------|
 | Kill switch | `AGENT_FROZEN` | 100 |
+| Prompt injection | `PROMPT_INJECTION:{technique}/{pattern}` | 95 |
 | Secret detection | `SECRET_DETECTED` | 95 |
 | PII detection | `PII_DETECTED:{category}` | 90 |
 | Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
+| Tool blocklist | `TOOL_BLOCKED` | 80 |
 | Cost limit / factory budget | `BUDGET_EXCEEDED` | 70 |
 
 !!! warning "Policy order is yours to choose"
@@ -483,9 +577,9 @@ flowchart TB
 
 ```text
 ag2/extensions/tealtiger/
-├── __init__.py       # Public API: TealTigerMiddleware, GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt
-├── types.py          # GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt
-└── middleware.py     # TealTigerMiddleware (factory) + _TealTigerPerTurn (per-turn) + _PII_PATTERNS / _SECRET_PATTERNS
+├── __init__.py       # Public API: TealTigerMiddleware, GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt + injection detection types
+├── types.py          # GovernanceMode, GovernancePolicy, GovernanceDecision, TEECReceipt + injection detection types (InjectionPattern, InjectionFinding, INJECTION_PATTERNS, INJECTION_TECHNIQUES, DEFAULT_INJECTION_CONFIDENCE_THRESHOLD)
+└── middleware.py     # TealTigerMiddleware (factory) + _TealTigerPerTurn (per-turn) + _PII_PATTERNS / _SECRET_PATTERNS / _detect_prompt_injection
 ```
 
 The middleware follows AG2's middleware factory pattern:

@@ -27,7 +27,7 @@ from ag2.tools import CodeExecutionTool
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[CodeExecutionTool()],
 )
 ```
@@ -54,7 +54,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
 [Tenki](https://tenki.cloud/){.external-link target="_blank"} provides managed, isolated cloud sandboxes with a bounded server-side lifetime.
 
 ```bash
-pip install "tenki>=0.5.4,<1"
+pip install "ag2[anthropic]" "tenki>=0.5.4,<1"
 ```
 
 ```python linenums="1"
@@ -67,7 +67,7 @@ env = TenkiEnvironment()
 async with env:
     agent = Agent(
         "analyst",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[SandboxCodeTool(env.code_environment())],
     )
     reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
@@ -81,7 +81,7 @@ async with env:
 [Daytona](https://www.daytona.io/){.external-link target="_blank"} is a hosted sandbox service. Strongest isolation; pay per use.
 
 ```bash
-pip install "daytona>=0.171.0,<1"
+pip install "ag2[anthropic]" "daytona>=0.171.0,<1"
 ```
 
 ```python linenums="1"
@@ -92,7 +92,7 @@ from ag2.extensions.daytona import DaytonaEnvironment
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SandboxCodeTool(DaytonaEnvironment())],
 )
 
@@ -107,7 +107,7 @@ print(await reply.content())
 A local container managed via the Docker daemon. Free, cross-platform (Mac/Linux/Win via Docker Desktop), real container isolation.
 
 ```bash
-pip install "ag2[docker]"
+pip install "ag2[anthropic]" "docker>=6.0.0,<8"
 ```
 
 ```python linenums="1"
@@ -118,7 +118,7 @@ from ag2.extensions.docker import DockerEnvironment
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SandboxCodeTool(DockerEnvironment(image="python:3.12-slim"))],
 )
 ```
@@ -170,7 +170,7 @@ from ag2.tools import SandboxCodeTool
 async with DaytonaEnvironment(image="python:3.12") as env:
     agent = Agent(
         "analyst",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[SandboxCodeTool(env)],
     )
     await agent.ask("...")

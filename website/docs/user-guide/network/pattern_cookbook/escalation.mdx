@@ -149,7 +149,7 @@ async def resolve(answer: str, channel: ChannelInject) -> str:
     return "resolved"
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
