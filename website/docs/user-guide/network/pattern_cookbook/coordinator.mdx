@@ -136,7 +136,7 @@ sequenceDiagram
 ## Code
 
 !!! tip
-    Every LLM-driven agent uses `#!python AnthropicConfig(model="claude-sonnet-4-6")` — set `#!python ANTHROPIC_API_KEY` in your environment (the script calls `#!python load_dotenv()`), or swap in `#!python OpenAIConfig` / `#!python GeminiConfig` to run on another provider. The `#!python user` agent uses `#!python TestConfig()` because it only opens the channel and sends the kickoff — it never takes an LLM turn. All agents register with `#!python attach_plugin=False`: none of them need the `#!python NetworkPlugin` tools (`#!python say` / `#!python delegate` / `#!python peers` / …), and leaving those off keeps the coordinator's tool surface to just `#!python handoff` and `#!python finish`.
+    Every LLM-driven agent uses `#!python AnthropicConfig(model="claude-sonnet-5")` — set `#!python ANTHROPIC_API_KEY` in your environment (the script calls `#!python load_dotenv()`), or swap in `#!python OpenAIConfig` / `#!python GeminiConfig` to run on another provider. The `#!python user` agent uses `#!python TestConfig()` because it only opens the channel and sends the kickoff — it never takes an LLM turn. All agents register with `#!python attach_plugin=False`: none of them need the `#!python NetworkPlugin` tools (`#!python say` / `#!python delegate` / `#!python peers` / …), and leaving those off keeps the coordinator's tool surface to just `#!python handoff` and `#!python finish`.
 
 ```python linenums="1"
 """Cookbook — Coordinator (manager + specialists) pattern.
@@ -184,7 +184,7 @@ async def finish(summary: str = "") -> ToolResult:
 
 async def main() -> None:
     config = AnthropicConfig(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         extra_body={"tool_choice": {"type": "auto", "disable_parallel_tool_use": True}},
     )
 
@@ -353,7 +353,7 @@ if __name__ == "__main__":
 
 ## Output
 
-A real `#!python claude-sonnet-4-6` run. The coordinator's turn-by-turn
+A real `#!python claude-sonnet-5` run. The coordinator's turn-by-turn
 selection is LLM-driven, so wording varies between runs; the specialist
 replies and the final summary below are abridged for length.
 

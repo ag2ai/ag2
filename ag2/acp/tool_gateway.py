@@ -58,7 +58,8 @@ from ag2.events import (
     ToolResultEvent,
     UrlInput,
 )
-from ag2.exceptions import AG2Error, UnsupportedToolError
+from ag2.exceptions import AG2Error, HumanInputError, UnsupportedToolError
+from ag2.history import HUMAN_INPUT_ABANDONED_TOOL_RESULT
 from ag2.mcp.mappers import tool_error
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.final import FunctionToolSchema
@@ -74,6 +75,18 @@ logger = logging.getLogger(__name__)
 
 GATEWAY_SERVER_NAME = "ag2"
 GATEWAY_PATH = "/mcp"
+
+# Answers the CLI agent's ``tools/call`` when the tool asked a human and the
+# channel to them was dead. The request has to be answered — an unanswered one
+# just hangs the agent — but AG2's own exception message must not be what it
+# says: that text is advice for whoever wired the agent up ("pass hitl_hook="),
+# and it would land in someone else's conversation as if it were the tool's
+# output. The turn is cancelled the moment this is sent, so in practice the
+# agent stops rather than acting on it.
+HUMAN_INPUT_GATEWAY_TOOL_ERROR = (
+    "This tool had to ask a person, and there is no way to reach one. The turn is ending; "
+    "this is not a tool that failed, so do not look for another way to do the same thing."
+)
 
 
 class MCPCapabilityError(AG2Error):
@@ -393,6 +406,12 @@ class ToolGateway:
         # latter, so a CLI agent sees a failed tool rather than a failed protocol.
         try:
             result = await self._execute(params.name, params.arguments or {})
+        except HumanInputError as e:
+            # Not this turn's to finish. Record it so the client driving the
+            # prompt fails the turn with it, and answer the request with
+            # something that does not read as an ordinary tool failure.
+            self.state.fail_channel(e)
+            return tool_error(HUMAN_INPUT_GATEWAY_TOOL_ERROR)
         except Exception as e:
             return tool_error(str(e))
         if isinstance(result, CallToolResult):
@@ -435,6 +454,31 @@ class ToolGateway:
             ) as pending:
                 await context.send(call)
                 event = await pending
+
+        # Same reasoning as in FunctionTool and the tool executor: a tool that
+        # asked a human and got nowhere has not produced a tool failure. Caught
+        # here it would become this agent's tool output — and the CLI agent, told
+        # only that a tool broke, is free to route around an approval nobody was
+        # actually asked for. ``_on_call_tool`` turns it into the end of the turn.
+        except HumanInputError:
+            # The call is closed off here rather than at the turn boundary: this
+            # one was never part of a ``ToolCallsEvent`` — the gateway sends it
+            # alone — so the repair there has no batch to find it in, and
+            # widening that repair to loose calls would sweep up the provider's
+            # own builtin calls, which answer themselves. Same stand-in text as
+            # the turn boundary writes, and the same shape this path already
+            # leaves behind when a tool succeeds: a bare ``ToolResultEvent``.
+            #
+            # Best-effort, and deliberately so: this runs on the way out of a
+            # failure whose whole point is that it must reach the caller. A
+            # transcript left one result short is worth less than the exception
+            # that says why, so nothing raised here is allowed to replace it.
+            try:
+                await context.send(ToolResultEvent.from_call(call, result=HUMAN_INPUT_ABANDONED_TOOL_RESULT))
+            except Exception:
+                logger.debug("MCP tool gateway: closing off the abandoned call %r failed", name, exc_info=True)
+            raise
+
         except Exception as e:
             logger.exception("MCP tool gateway: executing tool %r failed", name)
             return tool_error(str(e))

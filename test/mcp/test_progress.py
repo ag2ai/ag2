@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from mcp.types import TextContent
 
 from ag2 import Agent
 from ag2.events import ToolCallEvent
@@ -32,7 +33,8 @@ class TestProgress:
         assert [m for _, _, m in updates] == ["Hello, ", "world!"]
         assert [p for p, _, _ in updates] == [1.0, 2.0]
         # Final body is still returned in full.
-        assert [c.text for c in result.content if c.type == "text"] == ["Hello, world!"]
+        reply, _trailer = result.content
+        assert reply == TextContent(type="text", text="Hello, world!")
 
     async def test_no_progress_without_token(self) -> None:
         agent = make_agent(config=ChunkConfig("a", "b"))
@@ -72,4 +74,5 @@ class TestProgress:
             result = await session.call_tool("ask", {"message": "go"})
 
         assert result.is_error is False
-        assert [c.text for c in result.content if c.type == "text"] == ["done"]
+        reply, _trailer = result.content
+        assert reply == TextContent(type="text", text="done")

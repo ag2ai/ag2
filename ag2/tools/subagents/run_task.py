@@ -16,6 +16,7 @@ from ag2.events import (
     Usage,
     UsageEvent,
 )
+from ag2.exceptions import HumanInputError
 from ag2.stream import MemoryStream, Stream
 from ag2.usage import UsageReport
 
@@ -199,6 +200,15 @@ async def run_task(
                     error=e,
                 )
             )
+
+        # A sub-task killed by the human-input channel is the same failure one
+        # level down: reported as a TaskResult it becomes the delegating tool's
+        # output, and the parent's model is told the delegation failed and is
+        # free to try another route to the same effect. The accounting and the
+        # TaskFailed event above still happen — only the swallowing does not.
+        if isinstance(e, HumanInputError):
+            raise
+
         return TaskResult(
             task_id=task_id,
             objective=objective,

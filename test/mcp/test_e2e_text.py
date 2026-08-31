@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from mcp.types import TextContent
 
 from ag2 import Agent
 from ag2.events import ModelRequest, TextInput
@@ -28,7 +29,9 @@ class TestE2EText:
             result = await session.call_tool("ask", {"message": "hi"})
 
         assert result.is_error is False
-        assert [c.text for c in result.content if c.type == "text"] == ["hello there!"]
+        # The reply leads; the conversation handle rides in the block after it.
+        reply, _trailer = result.content
+        assert reply == TextContent(type="text", text="hello there!")
 
     async def test_context_is_prepended(self) -> None:
         tracking = TrackingConfig(TestConfig("ok"))
@@ -49,4 +52,5 @@ class TestE2EText:
             result = await session.call_tool("chat", {"message": "hi"})
 
         assert [t.name for t in tools.tools] == ["chat"]
-        assert [c.text for c in result.content if c.type == "text"] == ["yo"]
+        reply, _trailer = result.content
+        assert reply == TextContent(type="text", text="yo")

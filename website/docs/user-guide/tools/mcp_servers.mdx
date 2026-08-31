@@ -11,6 +11,9 @@ It can be thought of as a superset of regular [Tools](/docs/user-guide/tools/too
 1. Each LLM provider had its own tool schema and types, making tools non-portable across providers.
 2. There was no standard way to give an LLM a scoped, context-optimized surface to invoke APIs, RPCs, and similar remote capabilities.
 
+!!! note "Serving, not consuming"
+    This page is about wiring an existing MCP server into an agent. For the inverse — exposing an AG2 `Agent` **as** an MCP server other clients connect to — see [Serving an Agent as an MCP Server](/docs/user-guide/tools/serving_mcp).
+
 ## Two ways to connect an MCP server
 
 Autogen supports both ways MCP servers are typically wired into an agent:
