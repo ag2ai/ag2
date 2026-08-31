@@ -16,9 +16,12 @@ from typing import Any
 import pytest
 from ag_ui.core import RunErrorEvent, RunFinishedEvent, TokenUsage, UserMessage
 
-from ag2 import Agent
+from ag2 import Agent, KnowledgeConfig
 from ag2.ag_ui import AGUIStream
+from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
+from ag2.compact import CompactTrigger, SummarizeCompact
 from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
+from ag2.knowledge import MemoryKnowledgeStore
 from ag2.testing import TestConfig
 from ag2.tools import tool
 
@@ -31,6 +34,12 @@ from .utils import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+@tool
+def lookup() -> str:
+    """Look something up."""
+    return "42"
 
 
 async def _frames(agent: Agent) -> list[dict[str, Any]]:
@@ -79,11 +88,6 @@ class TestCompletedRun:
         ]
 
     async def test_sums_every_model_call_not_just_the_last(self) -> None:
-        @tool
-        def lookup() -> str:
-            """Look something up."""
-            return "42"
-
         agent = Agent(
             "test_agent",
             config=TestConfig(
@@ -116,11 +120,6 @@ class TestCompletedRun:
         absence really does mean zero, are still reported in full.
         """
 
-        @tool
-        def lookup() -> str:
-            """Look something up."""
-            return "42"
-
         agent = Agent(
             "test_agent",
             config=TestConfig(
@@ -151,11 +150,6 @@ class TestCompletedRun:
         one provider/model pair an absent additive count means zero and summing it is the
         measurement. Only the total gets the all-or-nothing treatment.
         """
-
-        @tool
-        def lookup() -> str:
-            """Look something up."""
-            return "42"
 
         agent = Agent(
             "test_agent",
@@ -405,12 +399,12 @@ class TestCompletedRun:
 
         assert (await _finished(agent)).usage is None
 
-    async def test_includes_spend_from_a_delegated_subagent(self) -> None:
-        """The sub-agent's spend is included, arriving as its own unlabelled entry.
+    async def test_a_single_pair_delegation_keeps_its_labels(self) -> None:
+        """A sub-agent that used one configuration is attributed to it.
 
-        The rollup carries no provider or model yet — the delegation discards them on the
-        way up — so the entry is honest about what it does not know rather than being
-        attributed to the parent's model. Labelling it is tracked separately.
+        The spend arrives as one rollup, still — that invariant is unchanged — but the
+        rollup now carries the pair behind it, so per-model attribution survives
+        delegation instead of collapsing into an unlabelled row.
         """
         worker = Agent(
             "worker",
@@ -446,7 +440,154 @@ class TestCompletedRun:
 
         assert (await _finished(parent)).usage == [
             TokenUsage(provider="openai", model="gpt-5", input_tokens=30, output_tokens=13, total_tokens=43),
+            TokenUsage(
+                provider="anthropic",
+                model="claude-haiku-4",
+                input_tokens=200,
+                output_tokens=60,
+                total_tokens=260,
+            ),
+        ]
+
+    async def test_a_mixed_pair_delegation_reports_unlabelled_rather_than_mislabelled(self) -> None:
+        """A sub-agent that spanned two configurations has no honest label.
+
+        Naming either one — or the parent's — would show an attribution that is not true
+        and that a client cannot detect. Absence says "real spend, unattributable", which
+        it can render. The tokens are still counted in full.
+        """
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="lookup", arguments="{}")]),
+                    usage=Usage(prompt_tokens=100, completion_tokens=20, total_tokens=120),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("researched"),
+                    usage=Usage(prompt_tokens=100, completion_tokens=40, total_tokens=140),
+                    model="gpt-5-mini",
+                    provider="openai",
+                ),
+            ),
+            tools=[lookup],
+        )
+        parent = Agent(
+            "test_agent",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(
+                        calls=[ToolCallEvent(name="task_worker", arguments='{"objective": "go"}')]
+                    ),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+                    model="gpt-5",
+                    provider="openai",
+                ),
+                ModelResponse(
+                    ModelMessage("summarised"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8, total_tokens=28),
+                    model="gpt-5",
+                    provider="openai",
+                ),
+            ),
+            tools=[worker.as_tool(description="Delegate research to the worker.")],
+        )
+
+        assert (await _finished(parent)).usage == [
+            TokenUsage(provider="openai", model="gpt-5", input_tokens=30, output_tokens=13, total_tokens=43),
             TokenUsage(provider=None, model=None, input_tokens=200, output_tokens=60, total_tokens=260),
+        ]
+
+
+class TestInternalMaintenanceSpend:
+    """Compaction and memory aggregation cost tokens too, and a client must see them.
+
+    Both run on the agent's own machinery rather than in the turn's model loop, and
+    both would be invisible to a client that only saw ``"model_call"`` records — so
+    each is asserted here at the seam, on the frame the client receives, and not
+    only on ``UsageReport`` inside the process.
+    """
+
+    async def test_a_compacted_run_reports_what_the_summarization_cost(self) -> None:
+        # Compaction rewrites history, which is where this transport reads spend
+        # from, so this pins the whole path: the summarization call's record is
+        # emitted while the rewrite is in flight and must still reach the wire.
+        summarizer = TestConfig(
+            ModelResponse(
+                ModelMessage("summary"),
+                usage=Usage(prompt_tokens=500, completion_tokens=25, total_tokens=525),
+                model="stub-summarizer",
+                provider="stub",
+            )
+        )
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="lookup", arguments="{}")]),
+                    usage=Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),
+                    model="stub-main",
+                    provider="stub",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=40, completion_tokens=4, total_tokens=44),
+                    model="stub-main",
+                    provider="stub",
+                ),
+            ),
+            tools=[lookup],
+            knowledge=KnowledgeConfig(
+                store=MemoryKnowledgeStore(),
+                compact=SummarizeCompact(target=6, config=summarizer),
+                compact_trigger=CompactTrigger(max_events=2),
+                expose_tool=False,
+                write_event_log=False,
+            ),
+        )
+
+        assert (await _finished(agent)).usage == [
+            TokenUsage(provider="stub", model="stub-main", input_tokens=140, output_tokens=14, total_tokens=154),
+            TokenUsage(provider="stub", model="stub-summarizer", input_tokens=500, output_tokens=25, total_tokens=525),
+        ]
+
+    async def test_an_aggregated_run_reports_what_the_aggregation_cost(self) -> None:
+        # The aggregation call runs on a throwaway stream of its own, so its
+        # record reaches history only because ``_emit_aggregation_usage`` sends
+        # it onto the real one. That hop is what this asserts.
+        aggregator = TestConfig(
+            ModelResponse(
+                ModelMessage("conversation summary"),
+                usage=Usage(prompt_tokens=80, completion_tokens=12, total_tokens=92),
+                model="stub-aggregator",
+                provider="stub",
+            )
+        )
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=30, completion_tokens=6, total_tokens=36),
+                    model="stub-main",
+                    provider="stub",
+                ),
+            ),
+            knowledge=KnowledgeConfig(
+                store=MemoryKnowledgeStore(),
+                aggregate=ConversationSummaryAggregate(config=aggregator),
+                aggregate_trigger=AggregateTrigger(on_end=True),
+                expose_tool=False,
+                write_event_log=False,
+            ),
+        )
+
+        assert (await _finished(agent)).usage == [
+            TokenUsage(provider="stub", model="stub-main", input_tokens=30, output_tokens=6, total_tokens=36),
+            TokenUsage(provider="stub", model="stub-aggregator", input_tokens=80, output_tokens=12, total_tokens=92),
         ]
 
 

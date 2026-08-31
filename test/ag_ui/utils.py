@@ -83,10 +83,16 @@ async def frames_of_failing_run(agent: Agent, run_input: RunAgentInput) -> list[
     The re-raise is swallowed here because these are the callers asserting on the events;
     the ones asserting on the exception itself use ``pytest.raises`` directly so they can
     reach it through ``leaf_exceptions``.
+
+    Swallowing is narrowed to the failure these callers stage — ``exploding_agent``'s
+    ``RuntimeError``. A run that died for some unrelated reason would otherwise still
+    hand back frames, and every caller would still pass while asserting on a run that
+    failed for a reason nobody wrote down.
     """
     frames: list[dict[str, Any]] = []
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as exc_info:
         await collect_events(AGUIStream(agent), run_input, into=frames)
+    assert [type(e) for e in leaf_exceptions(exc_info.value)] == [RuntimeError]
     return frames
 
 

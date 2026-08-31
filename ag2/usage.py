@@ -15,7 +15,7 @@ summing the parent's ``UsageEvent`` events yields the correct grand total with
 no double counting.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 
 from .events import BaseEvent, Usage, UsageEvent
@@ -23,7 +23,31 @@ from .events import BaseEvent, Usage, UsageEvent
 __all__ = (
     "UsageRecord",
     "UsageReport",
+    "collect_usage_events",
 )
+
+
+def collect_usage_events(into: list[UsageEvent]) -> Callable[[UsageEvent], Awaitable[None]]:
+    """A stream subscriber that appends every ``UsageEvent`` it sees to ``into``.
+
+    For the places that need what was spent *while* something ran, rather than
+    what history holds afterwards: a sub-task's own invocation, a compaction's
+    summarization call, a turn whose stream the caller never sees. Collecting on
+    send is also what leaves the failure path with something to report, since the
+    records are in hand before the exception unwinds.
+
+    ``into`` must be a fresh list per scope — it defines what "this one" means,
+    and a reused list would fold a previous scope's spend into this one.
+
+    Subscribe it under ``stream.where(UsageEvent)``; written as a factory rather
+    than a nested closure at each call site because the stream calls subscribers
+    with keyword arguments, so ``into.append`` cannot be subscribed directly.
+    """
+
+    async def _collect(event: UsageEvent) -> None:
+        into.append(event)
+
+    return _collect
 
 
 @dataclass(frozen=True, slots=True)

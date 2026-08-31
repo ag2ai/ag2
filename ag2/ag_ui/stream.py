@@ -58,7 +58,7 @@ from ag2.middleware.base import MiddlewareFactory
 from ag2.observers import Observer
 from ag2.tools.final import ClientTool
 from ag2.tools.tool import Tool
-from ag2.usage import UsageReport
+from ag2.usage import UsageRecord, UsageReport
 
 from .events import AGUIEvent
 
@@ -377,13 +377,35 @@ async def run_stream(
 
 
 async def _run_token_usage(stream: MemoryStream) -> list[TokenUsage] | None:
-    """Token usage for this run, as AG-UI's per-(provider, model) list.
+    """Token usage for this run, read off its event log.
 
-    Grouped from ``UsageReport.records``, not its ``by_model``/``by_provider``: those are
-    independent maps, so the pair is unrecoverable, and each drops what the other side
-    didn't label — where a delegated sub-agent's spend lives. Pairs aren't folded together
-    either, since absent counts add as zero: merging a provider that reports reasoning
-    tokens with one that doesn't would read as a complete measurement.
+    Safe on the failure path: the stream awaits its subscribers on send, so persistence
+    has already seen every usage event emitted before the exception.
+    """
+    return map_usage_events_to_ag_ui(await stream.history.get_events())
+
+
+def map_usage_events_to_ag_ui(usage_events: Iterable[events.BaseEvent]) -> list[TokenUsage] | None:
+    """Attributed spend for a set of events, as AG-UI's per-(provider, model) list.
+
+    The whole path from events to wire entries, not just the mapping: attribution is
+    ``UsageReport``'s and the grouping is :func:`map_usage_records_to_ag_ui`'s, and a
+    transport that composed the two itself could compose them differently. Both AG-UI
+    transports call this, differing only in where their events come from — this module's
+    reads them back off the run's history, while ``ag2/a2ui/`` collects them live because
+    its turn core owns the stream and the transport never sees it.
+    """
+    return map_usage_records_to_ag_ui(UsageReport.from_events(usage_events).records)
+
+
+def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsage] | None:
+    """Attributed spend, as AG-UI's per-(provider, model) list.
+
+    Takes ``UsageReport.records`` rather than the report's ``by_model`` / ``by_provider``:
+    those are independent maps, so the pair is unrecoverable from them, and each drops what
+    the other side didn't label — where a delegated sub-agent's spend lives. Pairs aren't
+    folded together either, since absent counts add as zero: merging a provider that
+    reports reasoning tokens with one that doesn't would read as a complete measurement.
 
     Within a pair the calls *are* summed, because there an absent additive count means the
     provider had nothing to report for that call — it omits ``thinking_tokens`` on a call
@@ -392,11 +414,16 @@ async def _run_token_usage(stream: MemoryStream) -> list[TokenUsage] | None:
 
     Nothing is derived, and ``cache_creation_input_tokens`` is dropped rather than folded
     into a neighbour — providers disagree on whether cached tokens already sit in the
-    prompt count. Safe on the failure path: the stream awaits its subscribers on send, so
-    persistence has already seen the events.
+    prompt count.
+
+    The rule behind all of this: a transport copies a count or omits it, and never
+    derives, zero-fills or folds one into another. A client can tell absence from zero
+    and decide what to do about it; it cannot tell a measured figure from one this
+    layer invented. That binds any transport that grows a usage field, not just this
+    one — which is why the mapping lives here to be shared rather than restated.
     """
     grouped: dict[tuple[str | None, str | None], list[Usage]] = {}
-    for record in UsageReport.from_events(await stream.history.get_events()).records:
+    for record in records:
         grouped.setdefault((record.provider, record.model), []).append(record.usage)
 
     entries = []

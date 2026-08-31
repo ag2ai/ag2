@@ -37,8 +37,8 @@ from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
 from starlette.routing import Route
 
-from ag2.ag_ui.stream import AGStreamInput, map_agui_messages_to_events
-from ag2.events import TextInput
+from ag2.ag_ui.stream import AGStreamInput, map_agui_messages_to_events, map_usage_events_to_ag_ui
+from ag2.events import TextInput, UsageEvent
 
 from .._types import JsonObject, ServerToClientMessage
 from ..dispatch import A2UIMessageFrame, A2UIProseFrame
@@ -151,14 +151,21 @@ async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, encoder: 
     ``ActivitySnapshot`` carrying all A2UI operations, if any) → ``RunFinished``.
     A mid-turn failure surfaces as a ``RunError`` event (the run has already
     started 200 OK on the wire).
+
+    Both terminating events carry the turn's token usage, so what a client can
+    report does not depend on which AG-UI endpoint it connected to. The records
+    are collected live rather than read back from history, because the turn core
+    owns the stream and this transport never sees it — and collecting live is
+    also what leaves the failure path with something to report.
     """
     request = _request_from_agui(core, incoming)
     text_message_id = uuid4().hex
     operations: list[ServerToClientMessage] = []
+    usage_records: list[UsageEvent] = []
 
     yield encoder.encode(RunStartedEvent(thread_id=incoming.thread_id, run_id=incoming.run_id))
     try:
-        async for frame in core.run_turn(request):
+        async for frame in core.run_turn(request, usage_records=usage_records):
             if isinstance(frame, A2UIProseFrame):
                 if frame.text:
                     yield encoder.encode(
@@ -179,10 +186,16 @@ async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, encoder: 
             )
     except Exception as e:  # noqa: BLE001 - report as a RunError frame, don't tear down the stream silently
         logger.exception("A2UI AG-UI turn failed")
-        yield encoder.encode(RunErrorEvent(message=repr(e)))
+        yield encoder.encode(RunErrorEvent(message=repr(e), usage=map_usage_events_to_ag_ui(usage_records)))
         return
 
-    yield encoder.encode(RunFinishedEvent(thread_id=incoming.thread_id, run_id=incoming.run_id))
+    yield encoder.encode(
+        RunFinishedEvent(
+            thread_id=incoming.thread_id,
+            run_id=incoming.run_id,
+            usage=map_usage_events_to_ag_ui(usage_records),
+        )
+    )
 
 
 __all__ = ("AgUiTransport",)

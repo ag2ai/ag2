@@ -972,6 +972,93 @@ class TestSubtaskUsageRollup:
         assert report.total == Usage(prompt_tokens=20, completion_tokens=8)
         assert report.by_kind == {"subtask": Usage(prompt_tokens=20, completion_tokens=8)}
 
+    async def test_rollup_carries_the_pair_of_a_single_configuration_delegation(self) -> None:
+        """One configuration behind the spend means the rollup can name it.
+
+        Still one rollup — that invariant is asserted above and unchanged — but a
+        consumer breaking spend down per provider and model now sees this
+        delegation under the configuration that actually billed it instead of
+        under an unlabelled row.
+        """
+
+        @tool
+        def noop() -> str:
+            """A tool that does nothing."""
+            return "ok"
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert len(usage_events) == 1
+        assert usage_events[0].provider == "anthropic"
+        assert usage_events[0].model == "claude-haiku-4"
+        assert UsageReport.from_events(events).by_model == {
+            "claude-haiku-4": Usage(prompt_tokens=30, completion_tokens=13)
+        }
+
+    async def test_rollup_leaves_the_pair_unset_when_the_delegation_spanned_several(self) -> None:
+        """Two configurations behind the spend leave the rollup unlabelled.
+
+        Naming either — or the parent's — would attribute tokens to a model that
+        did not spend them, and a consumer cannot tell a wrong label from a right
+        one. The tokens themselves are still rolled up in full.
+        """
+
+        @tool
+        def noop() -> str:
+            """A tool that does nothing."""
+            return "ok"
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8),
+                    model="gpt-5-mini",
+                    provider="openai",
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert len(usage_events) == 1
+        assert usage_events[0].provider is None
+        assert usage_events[0].model is None
+        assert usage_events[0].usage == Usage(prompt_tokens=30, completion_tokens=13)
+
     async def test_rollup_reports_usage_incurred_before_a_failure(self) -> None:
         """A sub-task that bills a model call and *then* dies still reports that
         spend — on ``TaskResult.usage`` and as a rollup on the parent.
