@@ -511,13 +511,13 @@ config = OpenAIConfig(
     ```
 
 !!! note "`http_client` is an `httpx2` client"
-    From `openai>=3` the OpenAI SDK uses [`httpx2`](https://pypi.org/project/httpx2/), which
+    From `openai>=3` the OpenAI SDK uses [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, which
     `ag2[openai]` installs for you. `OpenAIConfig` and `OpenAIResponsesConfig` annotate
     `http_client` accordingly, and ag2 forwards whatever you pass to the SDK untouched.
 
     A legacy `httpx.AsyncClient` still works at runtime: the SDK keeps a compatibility path
     for it, though it fails static type checking and the SDK's
-    [migration guide](https://github.com/openai/openai-python/blob/main/httpx2.md) calls that
+    [migration guide](https://github.com/openai/openai-python/blob/main/httpx2.md){.external-link target="_blank"} calls that
     path a migration aid that may be discontinued. Build the client with `httpx2.AsyncClient`
     to be done with it.
 
