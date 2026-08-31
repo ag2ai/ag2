@@ -38,14 +38,14 @@ from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 from .mappers import event_to_session_update, prompt_to_inputs
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
 
     from ag2.context import SubId
     from ag2.hitl import HumanHook
     from ag2.stream import MemoryStream
 
     from .sessions import AgentSession, SessionStore
-    from .types import ContentBlock
+    from .types import ContentBlock, SessionUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +231,17 @@ class AgentExecutor:
             return
         await self._deliver(acp.update_agent_message_text(final), client=client, session_id=session_id)
 
+    async def deliver(self, updates: "Iterable[SessionUpdate]", *, client: acp.Client, session_id: str) -> None:
+        """Push ``updates`` to the Client in order, stopping at the first that fails.
+
+        The ``session/load`` replay path. Sequential on purpose: ACP lets the
+        Client rebuild its view from the order notifications arrive in, and a
+        replay whose tool result overtook its tool call would be a different
+        conversation.
+        """
+        for update in updates:
+            await self._deliver(update, client=client, session_id=session_id)
+
     async def _deliver(self, update: Any, *, client: acp.Client, session_id: str) -> None:
         """Push one ``session/update``, letting a delivery failure fail the turn.
 
@@ -355,6 +366,23 @@ def isolate_variables(defaults: dict[Any, Any]) -> dict[Any, Any]:
             )
             isolated[key] = value
     return isolated
+
+
+def unanswered_tool_calls(events: "Sequence[BaseEvent]") -> set[str]:
+    """Ids of the tool calls in ``events`` that no result answers, loose or wrapped.
+
+    The gate in front of :func:`heal_cancelled_turn` when a session is loaded
+    from storage. ``heal`` treats a batch as settled only once a
+    ``ToolResultsEvent`` wraps it — the right rule after a cancel, but a turn
+    that ended cleanly through a ``final=True`` tool never gets that wrapper: it
+    sends its forced ``ModelResponse`` and stops. Running ``heal`` on such a
+    history would append a fresh wrapper on every load, rewriting a transcript
+    that was already valid. So loading asks the narrower question first: is any
+    call actually missing an answer? Only then is there something to repair.
+    """
+    answered = {e.parent_id for e in events if isinstance(e, ToolResultEvent)}
+    answered.update(r.parent_id for e in events if isinstance(e, ToolResultsEvent) for r in e.results)
+    return {call.id for batch in _tool_call_batches(events) for call in batch.calls if call.id not in answered}
 
 
 async def heal_cancelled_turn(stream: "MemoryStream") -> int:

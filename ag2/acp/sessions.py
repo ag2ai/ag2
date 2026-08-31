@@ -12,6 +12,12 @@ keyed by its own stream id, plus the run-scoped state a turn needs: the task
 currently executing (what ``session/cancel`` kills) and the queue of prompts
 waiting behind it.
 
+The session id *is* that stream id, in hex. Nothing else about a session is
+durable — its context and variables live here, in memory — so an id on its own
+has to be enough to find the conversation again. That is what lets
+``session/load`` rehydrate a session written by another connection, or another
+process, from the storage alone: see :meth:`SessionStore.get_or_adopt`.
+
 Not to be confused with the *client*-side :class:`~ag2.acp.session.ACPSession`,
 which owns a subprocess connection to an external CLI agent.
 """
@@ -141,6 +147,16 @@ class SessionConfig:
     * ``max_active_prompts`` — how many prompts may be admitted at once across
       all sessions, running and waiting together. Past this, prompts are refused,
       so an unbounded queue of parked request handlers cannot build up.
+
+    One setting is about what outlives the registry rather than what bounds it:
+
+    * ``retain_history`` — keep a session's history in ``storage`` when the
+      session is evicted, expires, or its connection closes, so a Client can
+      ``session/load`` it later — from another connection, or after this process
+      is gone. Off by default, because the default storage is in-memory:
+      retaining there keeps every conversation the process ever saw until it
+      exits. Turn it on together with a durable ``storage``. An explicit
+      :meth:`SessionStore.close` deletes regardless; that is the deliberate act.
     """
 
     max_sessions: int = 1024
@@ -149,6 +165,15 @@ class SessionConfig:
     max_queued: int = 8
     max_concurrent_turns: int = 8
     max_active_prompts: int = 64
+    retain_history: bool = False
+
+    def __post_init__(self) -> None:
+        if self.retain_history and self.storage is None:
+            logger.warning(
+                "SessionConfig(retain_history=True) with the default in-memory storage keeps "
+                "every session's history until the process exits. Pass a durable storage= "
+                "for retention to mean anything across a restart."
+            )
 
 
 @dataclass(slots=True)
@@ -224,13 +249,16 @@ class AgentSession:
 
     @property
     def is_idle(self) -> bool:
-        """Whether this session has no work running or waiting.
+        """Whether this session has no work running, waiting, or repairing.
 
-        Only an idle session may be evicted; see
-        :meth:`SessionStore._evict_overflow`.
+        Only an idle session may be evicted; see :meth:`SessionStore._make_room`.
+        Holding the turn lock counts as work even with no prompt in flight:
+        :meth:`recovery` and a ``session/load`` replay both read-modify-write the
+        history under it, and evicting part-way through would drop a session the
+        Client is about to use — with its history, unless retained.
         """
         task = self.turn_task
-        return self._inflight == 0 and (task is None or task.done())
+        return self._inflight == 0 and (task is None or task.done()) and not self._turn_lock.locked()
 
     @property
     def cancelled(self) -> bool:
@@ -333,10 +361,11 @@ async def _stop_background(session: AgentSession) -> None:
 class SessionStore:
     """Bounded LRU registry of :class:`AgentSession`, keyed by ACP session id.
 
-    Adapted from :class:`ag2.mcp.sessions.SessionStore`: same LRU-plus-TTL
-    bounding and the same "fresh :class:`MemoryStream` per turn over a stable
-    stream id" arrangement, with the id minted here (ACP's ``session/new``
-    returns it) instead of arriving from the transport.
+    Adapted from :class:`ag2.mcp.sessions.SessionStore`: the same LRU-plus-TTL
+    bounding over a stable stream id per session, with the id minted here
+    (ACP's ``session/new`` returns it) instead of arriving from the transport.
+    Where MCP builds a fresh :class:`MemoryStream` per turn, this keeps one per
+    session — see :meth:`stream` for why.
     """
 
     __slots__ = (
@@ -350,6 +379,7 @@ class SessionStore:
         "_turn_slots",
         "_max_active_prompts",
         "_active_prompts",
+        "_retain",
     )
 
     def __init__(
@@ -361,6 +391,7 @@ class SessionStore:
         max_queued: int = 8,
         max_concurrent_turns: int = 8,
         max_active_prompts: int = 64,
+        retain_history: bool = False,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if max_sessions < 1:
@@ -388,9 +419,11 @@ class SessionStore:
         self._turn_slots = asyncio.Semaphore(max_concurrent_turns)
         self._max_active_prompts = max_active_prompts
         self._active_prompts = 0
+        self._retain = retain_history
 
     @classmethod
-    def from_config(cls, config: SessionConfig) -> "SessionStore":
+    def from_config(cls, config: SessionConfig, *, clock: Callable[[], float] | None = None) -> "SessionStore":
+        """Build a store from its config. ``clock`` is a test seam for driving expiry."""
         return cls(
             max_sessions=config.max_sessions,
             ttl=config.ttl,
@@ -398,7 +431,14 @@ class SessionStore:
             max_queued=config.max_queued,
             max_concurrent_turns=config.max_concurrent_turns,
             max_active_prompts=config.max_active_prompts,
+            retain_history=config.retain_history,
+            clock=clock or time.monotonic,
         )
+
+    @property
+    def retains_history(self) -> bool:
+        """Whether evicted, expired and disconnected sessions keep their history."""
+        return self._retain
 
     @property
     def max_queued(self) -> int:
@@ -447,6 +487,11 @@ class SessionStore:
     async def create(self, **context: Any) -> AgentSession:
         """Mint a new session id and register it. ``context`` seeds ``AgentSession``.
 
+        The id is a fresh ``uuid4`` used for both the session and its stream, so
+        the id a Client is handed is exactly the key its history is stored under.
+        That is what makes the id sufficient to :meth:`get_or_adopt` the session
+        later, with nothing else persisted.
+
         Raises :class:`SessionLimitError` when the registry is full and every
         session in it is busy — see that class for why admission is refused
         rather than the cap being stretched.
@@ -455,16 +500,50 @@ class SessionStore:
             now = self._clock()
             await self._evict_expired(now)
             await self._make_room()
-            session = AgentSession(
-                session_id=uuid4().hex,
-                stream_id=uuid4(),
-                max_queued=self._max_queued,
-                clock=self._clock,
-                last_active=now,
-                **context,
-            )
-            self._sessions[session.session_id] = session
-            return session
+            return self._register(uuid4(), now, **context)
+
+    async def get_or_adopt(self, stream_id: UUID, **context: Any) -> tuple[AgentSession, bool]:
+        """The live session for ``stream_id``, or a new one registered over its history.
+
+        The ``session/load`` seam. A session id is its stream id (see
+        :meth:`create`), so an id this store has never issued may still name
+        history in :class:`~ag2.history.Storage` written by another connection or
+        another process. Adopting builds an :class:`AgentSession` over that same
+        stream id — so :meth:`stream` finds the history — and registers it here
+        like any other session.
+
+        ``context`` seeds an *adopted* session only; one already live keeps what
+        it has. The second element says which happened: ``True`` for adopted,
+        ``False`` for already here.
+
+        One step under the store lock, so two loads of the same id cannot both
+        adopt and leave the loser's session — and its stream — orphaned. The
+        caller checks that the history exists; this never reads storage.
+        Admission matches :meth:`create`: expired sessions are swept first and,
+        at the cap, an idle one is evicted or :class:`SessionLimitError` raised.
+        """
+        async with self._lock:
+            now = self._clock()
+            await self._evict_expired(now)
+            session = self._sessions.get(stream_id.hex)
+            if session is not None:
+                session.last_active = now
+                self._sessions.move_to_end(session.session_id)
+                return session, False
+            await self._make_room()
+            return self._register(stream_id, now, **context), True
+
+    def _register(self, stream_id: UUID, now: float, **context: Any) -> AgentSession:
+        session = AgentSession(
+            session_id=stream_id.hex,
+            stream_id=stream_id,
+            max_queued=self._max_queued,
+            clock=self._clock,
+            last_active=now,
+            **context,
+        )
+        self._sessions[session.session_id] = session
+        return session
 
     async def get(self, session_id: str) -> AgentSession:
         """Return a live session, refreshing its LRU position.
@@ -502,26 +581,46 @@ class SessionStore:
     async def close(self, session_id: str) -> None:
         """Cancel a session's live work and drop it, deleting its history.
 
-        Explicit teardown, so unlike eviction it *does* stop work in progress.
-        Durable state belongs to an injected :class:`Storage`; the default
-        in-memory one has none to keep.
+        Explicit teardown, so unlike eviction it *does* stop work in progress —
+        and unlike eviction it deletes even when ``retain_history`` is on. This
+        is the one path that means "this conversation is over", the shape a
+        future ``session/delete`` would take; retention is for sessions that were
+        let go, not sessions that were closed.
         """
         async with self._lock:
             session = self._sessions.pop(session_id, None)
         if session is None:
             raise UnknownSessionError(session_id)
-        await self._discard(session)
+        await self._discard(session, drop=True)
+
+    async def forget(self, session_id: str) -> None:
+        """Unregister an idle session, touching neither its work nor its history.
+
+        Undoes an adoption that was refused after the fact — the host's
+        ``on_session`` said no, or the replay could not start. The session had to
+        be registered for the refusal to be asked about it, but the conversation
+        it names is not this connection's to delete: a refused load must leave
+        things exactly as it found them. An unknown id is nothing to undo.
+        """
+        async with self._lock:
+            self._sessions.pop(session_id, None)
 
     async def aclose(self) -> None:
-        """Cancel and drop every session — the shutdown path."""
+        """Cancel and drop every session — the shutdown path.
+
+        A connection closing is not a Client saying its conversations are over;
+        over stdio it is the Client going away, which may be the process being
+        recycled between turns. So with ``retain_history`` the histories stay,
+        for a later connection to :meth:`get_or_adopt`.
+        """
         async with self._lock:
             sessions = list(self._sessions.values())
             self._sessions.clear()
         for session in sessions:
-            await self._discard(session)
+            await self._discard(session, drop=not self._retain)
 
-    async def _discard(self, session: AgentSession) -> None:
-        """Stop a session's work, wait for it to unwind, then delete its history.
+    async def _discard(self, session: AgentSession, *, drop: bool) -> None:
+        """Stop a session's work, wait for it to unwind, then delete its history if ``drop``.
 
         Awaiting the cancelled task matters: dropping history while the turn is
         still winding down races the agent's own last writes, which would leave
@@ -538,7 +637,17 @@ class SessionStore:
             with suppress(asyncio.CancelledError, Exception):
                 await task
         await _stop_background(session)
-        await self._storage.drop_history(session.stream_id)
+        if drop:
+            await self._storage.drop_history(session.stream_id)
+
+    async def _release(self, session: AgentSession) -> None:
+        """Let go of an idle session the registry no longer holds.
+
+        Eviction and expiry only ever take idle sessions, so there is no work to
+        stop; the only question is the history, and ``retain_history`` answers it.
+        """
+        if not self._retain:
+            await self._storage.drop_history(session.stream_id)
 
     async def _evict_expired(self, now: float) -> None:
         """Drop idle sessions past the TTL.
@@ -553,8 +662,7 @@ class SessionStore:
             sid for sid, session in self._sessions.items() if session.is_idle and now - session.last_active > self._ttl
         ]
         for sid in expired:
-            session = self._sessions.pop(sid)
-            await self._storage.drop_history(session.stream_id)
+            await self._release(self._sessions.pop(sid))
 
     async def _make_room(self) -> None:
         """Free a slot for one new session, or refuse to admit it.
@@ -573,5 +681,4 @@ class SessionStore:
             victim = next((sid for sid, session in self._sessions.items() if session.is_idle), None)
             if victim is None:
                 raise SessionLimitError(self._max)
-            session = self._sessions.pop(victim)
-            await self._storage.drop_history(session.stream_id)
+            await self._release(self._sessions.pop(victim))

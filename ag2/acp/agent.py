@@ -17,21 +17,25 @@ ACP calls it an *Agent*, so this is ``ACPAgent``. It is a wrapper around an AG2
 
 import asyncio
 import importlib.metadata
+import inspect
 import logging
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
+from uuid import UUID
 
 import acp
 from acp import schema
 from acp.core import DEFAULT_STDIO_BUFFER_LIMIT_BYTES
 from acp.stdio import stdio_streams
 
-from ag2.agent import Agent
+from ag2.agent import Agent, _get_stream_turn_lock
 
 from .auth import AuthProvider
-from .executor import STOP_CANCELLED, AgentExecutor, heal_cancelled_turn, isolate_variables
+from .executor import STOP_CANCELLED, AgentExecutor, heal_cancelled_turn, isolate_variables, unanswered_tool_calls
 from .guard import serve
+from .mappers import history_to_session_updates
 from .sessions import (
     AgentSession,
     ConnectionOverloadedError,
@@ -50,6 +54,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _DEFAULT_VERSION = "0.0.0"
+
+SessionOrigin = Literal["created", "loaded"]
+"""How a session came to be on a connection: minted by ``session/new``, or
+reattached by ``session/load`` — whether from this connection's own registry or
+rehydrated from storage."""
+
+SessionObserver = Callable[[AgentSession, SessionOrigin], Awaitable[None] | None]
+"""A host's hook into session lifetimes; see ``ACPAgent(on_session=...)``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +130,13 @@ class ACPAgent:
     *and* everything queued behind it, leaving other sessions untouched. Events
     already streamed stay in the session's history.
 
+    ``session/load`` reattaches a Client to a session by id and replays its
+    history. The id is enough on its own — it is the key the history is stored
+    under — so a session can be loaded from a later connection, or a later
+    process, as long as its history is still in the ``sessions.storage``.
+    Pair ``SessionConfig(retain_history=True)`` with a durable storage for that;
+    by default a session's history goes when its connection does.
+
     Args:
         agent: The AG2 agent to expose.
         name: Advertised agent name (defaults to ``agent.name``).
@@ -151,6 +170,16 @@ class ACPAgent:
             connection (see :meth:`bind`) if the human differs per Client. This
             is deliberately invisible on the wire: no capability is advertised
             and no ACP method is called.
+        on_session: Called with ``(session, origin)`` each time a session comes
+            to exist on a connection — ``"created"`` after ``session/new``,
+            ``"loaded"`` after ``session/load`` (before the replay). The seam
+            for a host that keeps its own record per conversation and needs to
+            tie an ACP session id to it, both when the id is minted and when a
+            Client comes back with one. Sync or async. An exception fails the
+            request rather than being swallowed, and leaves no session behind:
+            a refused load is as if it never happened, with the conversation
+            untouched in storage. A host that could not correlate a session —
+            or will not hand it to this caller — is never left serving it.
     """
 
     __slots__ = (
@@ -163,6 +192,7 @@ class ACPAgent:
         "_stream_thoughts",
         "_prompt_content",
         "_session_config",
+        "_on_session",
         "_scope",
     )
 
@@ -178,6 +208,7 @@ class ACPAgent:
         stream_thoughts: bool = False,
         prompt_content: PromptContent | None = None,
         hitl_hook: "HumanHook | None" = None,
+        on_session: SessionObserver | None = None,
     ) -> None:
         self._agent = agent
         self._name = name or agent.name
@@ -189,6 +220,7 @@ class ACPAgent:
         config = sessions if isinstance(sessions, SessionConfig) else SessionConfig()
         self._executor = AgentExecutor(agent, stream_thoughts=stream_thoughts, hitl_hook=hitl_hook)
         self._session_config = config
+        self._on_session = on_session
         # The most recently opened connection, so ``sessions`` has something to
         # point at. Authorization and sessions live on the scope, never here.
         self._scope: _ConnectionScope | None = None
@@ -196,6 +228,14 @@ class ACPAgent:
     @property
     def agent(self) -> Agent:
         return self._agent
+
+    async def _observe(self, session: AgentSession, origin: SessionOrigin) -> None:
+        """Tell the host's ``on_session`` a session exists on a connection now."""
+        if self._on_session is None:
+            return
+        result = self._on_session(session, origin)
+        if inspect.isawaitable(result):
+            await result
 
     @property
     def sessions(self) -> SessionStore:
@@ -300,8 +340,11 @@ class _ConnectionScope:
 
     def _capabilities(self) -> schema.AgentCapabilities:
         return schema.AgentCapabilities(
-            # session/load is not implemented, so it must not be advertised.
-            load_session=False,
+            # ``session/load`` is wired (see :meth:`load_session`). Advertised
+            # unconditionally: an id whose history is gone gets a clean
+            # ``resource_not_found``, which is what Clients expect from an Agent
+            # that supports loading but no longer has that conversation.
+            load_session=True,
             prompt_capabilities=schema.PromptCapabilities(
                 image=self._owner._prompt_content.image,
                 audio=self._owner._prompt_content.audio,
@@ -311,10 +354,11 @@ class _ConnectionScope:
             # every transport stays off.
             mcp_capabilities=schema.McpCapabilities(http=False, sse=False, acp=False),
             # Session operations are advertised by *presence*: an absent field
-            # means unsupported. Everything past new / prompt / cancel —
-            # list, delete, fork, resume, close — is unimplemented. (``session/close``
-            # is also still an unstable ACP method, so a stable v1 Client could not
-            # call it even if it were wired.)
+            # means unsupported. Everything past new / load / prompt / cancel —
+            # list, delete, fork, resume, close — is unimplemented. (``resume``,
+            # ``fork`` and ``close`` are also gated behind the SDK's unstable
+            # protocol flag, so a stable v1 Client could not call them even if
+            # they were wired.)
             session_capabilities=schema.SessionCapabilities(),
         )
 
@@ -356,7 +400,139 @@ class _ConnectionScope:
             )
         except SessionLimitError as exc:
             raise acp.RequestError.invalid_request({"reason": str(exc)}) from exc
+        try:
+            await self._owner._observe(session, "created")
+        except BaseException:
+            # The Client never learns this id, but a registry entry the host
+            # refused to account for must not outlive the refusal either.
+            await self._sessions.forget(session.session_id)
+            raise
         return schema.NewSessionResponse(session_id=session.session_id)
+
+    async def load_session(
+        self,
+        cwd: str,
+        session_id: str,
+        mcp_servers: "list[McpServer] | None" = None,
+        additional_directories: "list[str] | None" = None,
+        **kwargs: Any,
+    ) -> None:
+        """Reattach to a session by id and replay its history to the Client.
+
+        The id names the session's history directly (it is the stream id, in
+        hex), so a session can be loaded that this connection never issued: one
+        from an earlier connection, or an earlier process, whose history is
+        still in storage. What is *not* in storage — ``cwd`` and the rest of the
+        request context — the request supplies again, and context variables are
+        re-seeded from the agent's defaults. A session still live on this
+        connection is reused as it is, variables and all; only the request
+        context is refreshed.
+
+        Per ACP, every stored entry is replayed as a ``session/update`` before
+        this returns — user turns as ``user_message_chunk``, replies as
+        ``agent_message_chunk``, tool calls and their results — and nothing is
+        sent after. A Client may therefore treat the response as the line
+        between history and whatever comes next.
+
+        A session whose last turn was cut short (the process died mid-tool)
+        has its transcript repaired first, so the next prompt sends a valid
+        conversation to the provider. A session with a turn in progress is
+        refused rather than replayed underneath it.
+
+        Any authenticated connection may load any id it holds. The id is the
+        credential: a ``uuid4``, unguessable, and never more than that. A host
+        that needs to bind sessions to a principal does so at its transport,
+        or in ``on_session``.
+        """
+        self._require_session_scope()
+        client = self._require_client()
+        stream_id = self._parse_session_id(session_id)
+        session_id = stream_id.hex  # the canonical form, whatever the Client sent
+
+        context: dict[str, Any] = {
+            "cwd": cwd,
+            "additional_directories": list(additional_directories or []),
+            "mcp_servers": list(mcp_servers or []),
+        }
+        meta = _request_meta(kwargs)
+
+        # Not live here? Then only storage can vouch for the id. An id with no
+        # history is indistinguishable from one never issued, and is answered
+        # the same way — including a session opened and dropped before its
+        # first prompt, which has nothing to resume anyway.
+        try:
+            await self._sessions.get(session_id)
+        except UnknownSessionError:
+            if not list(await self._sessions.storage.get_history(stream_id)):
+                raise acp.RequestError.resource_not_found(f"acp-session:{session_id}") from None
+
+        try:
+            session, adopted = await self._sessions.get_or_adopt(
+                stream_id,
+                **context,
+                meta=meta,
+                variables=isolate_variables(self._owner._agent._agent_variables),
+            )
+        except SessionLimitError as exc:
+            raise acp.RequestError.invalid_request({"reason": str(exc)}) from exc
+
+        # Everything from here on can still refuse the load — the host's hook,
+        # a busy check, a replay that cannot be delivered. An *adopted* session
+        # was registered only so those questions could be asked about it; if
+        # the answer is no, it must be unregistered again, or the refusal is
+        # cosmetic: ``session/prompt`` would find the session and run.
+        loaded = False
+        try:
+            if not adopted:
+                # Refresh what the request carries; leave what it does not. The
+                # variables are this conversation's own state and a load is not
+                # a reason to lose them, and ``_meta`` absent means "unchanged",
+                # not "none".
+                session.cwd = cwd
+                session.additional_directories = context["additional_directories"]
+                session.mcp_servers = context["mcp_servers"]
+                if meta:
+                    session.meta = meta
+            if not session.is_idle:
+                raise acp.RequestError.invalid_request({
+                    "reason": f"ACP session {session_id!r} has a turn in progress; load it once that finishes.",
+                })
+
+            await self._owner._observe(session, "loaded")
+
+            stream = self._sessions.stream(session)
+            # The session lock keeps the next prompt out; the stream lock keeps
+            # out a turn driving the *same stream id* from another object —
+            # a second load of this id on another connection in this process.
+            # Same order as the prompt path (session, then stream), so the two
+            # cannot deadlock against each other.
+            async with session.recovery():
+                turn_lock = _get_stream_turn_lock(stream)
+                if turn_lock.locked():
+                    raise acp.RequestError.invalid_request({
+                        "reason": f"ACP session {session_id!r} is in use by another connection.",
+                    })
+                async with turn_lock:
+                    events = list(await stream.history.get_events())
+                    if unanswered_tool_calls(events):
+                        closed = await heal_cancelled_turn(stream)
+                        logger.debug("closed %d unanswered tool call(s) while loading %s", closed, session_id)
+                        events = list(await stream.history.get_events())
+                    updates = history_to_session_updates(events, session_id=session_id)
+                    await self._owner._executor.deliver(updates, client=client, session_id=session_id)
+            loaded = True
+        except acp.RequestError:
+            raise
+        except Exception as exc:
+            logger.exception("ACP session/load failed for session %s", session_id)
+            raise acp.RequestError.internal_error({
+                "reason": str(exc) or exc.__class__.__name__,
+                "type": exc.__class__.__name__,
+            }) from exc
+        finally:
+            if adopted and not loaded:
+                await self._sessions.forget(session_id)
+        return None
 
     async def prompt(
         self,
@@ -486,6 +662,19 @@ class _ConnectionScope:
             return await self._sessions.get(session_id)
         except UnknownSessionError as exc:
             raise acp.RequestError.resource_not_found(f"acp-session:{session_id}") from exc
+
+    @staticmethod
+    def _parse_session_id(session_id: str) -> UUID:
+        """The stream id a session id names, or ``resource_not_found`` if it names none.
+
+        A malformed id is not a malformed *request* — the Client sent a
+        well-formed ``session/load`` for a session that does not exist, which
+        is the same answer an unknown id gets.
+        """
+        try:
+            return UUID(session_id)
+        except ValueError:
+            raise acp.RequestError.resource_not_found(f"acp-session:{session_id}") from None
 
     def _require_client(self) -> acp.Client:
         if self._client is None:  # pragma: no cover - set by the SDK before any request
