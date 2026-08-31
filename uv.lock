@@ -283,7 +283,7 @@ requires-dist = [
     { name = "mcp-ui-server", marker = "extra == 'mcp-ui'", specifier = ">=1.0.0" },
     { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=2.8.0,<3" },
     { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.4.7" },
-    { name = "openai", marker = "extra == 'openai'", specifier = ">=2.45.0,<4.0" },
+    { name = "openai", marker = "extra == 'openai'", specifier = ">=2.45.0,<3.0" },
     { name = "opentelemetry-sdk", marker = "extra == 'tracing'", specifier = ">=1.20" },
     { name = "perplexityai", marker = "extra == 'perplexity'", specifier = ">=0.30.0,<1" },
     { name = "prometheus-client", marker = "extra == 'metrics'", specifier = ">=0.20.0,<0.30.0" },
@@ -3734,19 +3734,21 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "3.3.1"
+version = "2.54.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
-    { name = "httpx2" },
+    { name = "distro" },
+    { name = "httpx" },
     { name = "jiter" },
     { name = "pydantic" },
     { name = "sniffio" },
+    { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7d/9c/ba0c292b4032ede74c249ca314ad64eb1bb5a03a843f6e01facb02f80cd8/openai-3.3.1.tar.gz", hash = "sha256:6f22807de1a976c932cecda620e8172a8c3fdbaeed29c7f21564e0c2410edf56", size = 1282113, upload-time = "2026-08-19T16:31:35.006Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/50/9a/8c75e8c8a5b407a0586faeb2afac91674ff955c191ecc1d6d3b6669f6788/openai-2.54.0.tar.gz", hash = "sha256:e3e6f8bc1ba30ddf381ace1a14340eed381cb984a1a59bd0f34b5be3b5d49cfa", size = 1100285, upload-time = "2026-08-11T18:46:59.035Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6a/db/2b7a1b3de659bb82aef979116c74e809982b13e42c057759767552b5155f/openai-3.3.1-py3-none-any.whl", hash = "sha256:9652df7fdf8ee6f5bd58e0a12f2b1d414a18e0f06bb7a9a57c8643a5f5469bd3", size = 1690337, upload-time = "2026-08-19T16:31:32.812Z" },
+    { url = "https://files.pythonhosted.org/packages/64/a8/bb76c7356de8ad57f59d5ff993d434df0607f07f08bcc9c9a5c275e399c0/openai-2.54.0-py3-none-any.whl", hash = "sha256:89089789197ccdb87f173a03145ed1598d00795220c93e96cf712b1cbf5e5f2b", size = 1660351, upload-time = "2026-08-11T18:46:56.684Z" },
 ]
 
 [[package]]
@@ -5772,6 +5774,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/12/64/da524626d3b9cc40c168a13da8335fe1c51be12c0a63685cc6db7308daae/tomli-2.4.1-cp314-cp314t-win_amd64.whl", hash = "sha256:2c1c351919aca02858f740c6d33adea0c5deea37f9ecca1cc1ef9e884a619d26", size = 121196, upload-time = "2026-03-25T20:22:01.169Z" },
     { url = "https://files.pythonhosted.org/packages/5a/cd/e80b62269fc78fc36c9af5a6b89c835baa8af28ff5ad28c7028d60860320/tomli-2.4.1-cp314-cp314t-win_arm64.whl", hash = "sha256:eab21f45c7f66c13f2a9e0e1535309cee140182a9cdae1e041d02e47291e8396", size = 100393, upload-time = "2026-03-25T20:22:02.137Z" },
     { url = "https://files.pythonhosted.org/packages/7b/61/cceae43728b7de99d9b847560c262873a1f6c98202171fd5ed62640b494b/tomli-2.4.1-py3-none-any.whl", hash = "sha256:0d85819802132122da43cb86656f8d1f8c6587d54ae7dcaf30e90533028b49fe", size = 14583, upload-time = "2026-03-25T20:22:03.012Z" },
+]
+
+[[package]]
+name = "tqdm"
+version = "4.70.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/21/3b/6c24bec5be5e743ffd99576daa5cc077722fc7d5bbc00bd133fa0c698dc6/tqdm-4.70.0.tar.gz", hash = "sha256:55b0b0dbd97462d06ebee91e4dac24ed4d4702be82b24f07e6c1d27e08cea220", size = 795438, upload-time = "2026-07-27T11:33:15.271Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f9/1c/01bfd571a64e7f270e6bab5e33777debe0edc56759233ce84f27dec92d14/tqdm-4.70.0-py3-none-any.whl", hash = "sha256:7f585706bfddbdebf89daac705b2dfcc16890130727d3197ca62c732b4310953", size = 80184, upload-time = "2026-07-27T11:33:13.167Z" },
 ]
 
 [[package]]
