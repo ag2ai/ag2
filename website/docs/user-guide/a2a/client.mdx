@@ -146,7 +146,7 @@ researcher = Agent(
 writer = Agent(
     "writer",
     prompt="Use the researcher tool to gather facts before writing a draft.",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[researcher.as_tool(description="Delegate research questions to the remote researcher.")],
 )
 

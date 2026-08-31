@@ -69,7 +69,7 @@ repos:
         name: zizmor
         entry: zizmor --config .github/zizmor.yml .
         language: python
-        additional_dependencies: ['zizmor']
+        additional_dependencies: ['zizmor==1.30.0']
         files: '^\.github/workflows/'
         pass_filenames: false
 

@@ -25,7 +25,7 @@ jobs:
         with:
           lfs: true
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "latest"
       - name: setup python
@@ -34,6 +34,8 @@ jobs:
           python-version: ${{ github.event.inputs.python-version }}
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: "1.58.0"
       - name: Build MkDocs documentation
         run: |
           uv venv

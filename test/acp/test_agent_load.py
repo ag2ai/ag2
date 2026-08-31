@@ -22,7 +22,7 @@ from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.acp import ACPAgent, SessionConfig, StaticTokenAuth
-from ag2.acp.executor import CANCELLED_TOOL_RESULT, unanswered_tool_calls
+from ag2.acp.executor import CANCELLED_TOOL_RESULT
 from ag2.acp.testing import RecordingClient, connect
 from ag2.config import LLMClient, ModelConfig
 from ag2.events import (
@@ -37,7 +37,7 @@ from ag2.events import (
 )
 from ag2.events.tool_events import ToolResult
 from ag2.events.types import ModelMessage
-from ag2.history import MemoryStorage
+from ag2.history import MemoryStorage, unanswered_tool_calls
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 

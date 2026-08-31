@@ -242,7 +242,7 @@ class TestSave:
         assert written.exists()
         data = json.loads(written.read_text(encoding="utf-8"))
         assert data["run_id"] == "my-run-id"
-        assert data["schema_version"] == "0.1"
+        assert data["schema_version"] == "0.2"
 
     def test_save_to_explicit_json_path(self, tmp_path: Path) -> None:
         result = _result(_task_result("t1", (Feedback(key="ok", score=True),)))
@@ -282,7 +282,7 @@ class TestRunResultProperties:
     def test_run_id_and_schema(self) -> None:
         result = _result(_task_result("t1", ()), run_id="r1")
         assert result.run_id == "r1"
-        assert result.schema_version == "0.1"
+        assert result.schema_version == "0.2"
 
     def test_tasks_round_trip(self) -> None:
         tr = _task_result("t1", (Feedback(key="ok", score=True),))

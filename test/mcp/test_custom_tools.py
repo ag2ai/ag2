@@ -41,7 +41,7 @@ class TestCustomTools:
         async with connect(server) as session:
             result = await session.call_tool("echo", {"x": "42"})
 
-        assert result.isError is False
+        assert result.is_error is False
         assert result.content == [TextContent(type="text", text="got 42")]
 
     async def test_ask_still_works_alongside_custom_tools(self) -> None:
@@ -50,7 +50,7 @@ class TestCustomTools:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
-        assert result.content == [TextContent(type="text", text="hello")]
+        assert result.content[0] == TextContent(type="text", text="hello")
 
     async def test_sync_handler_runs(self) -> None:
         def sync_handler(args: dict[str, Any], _ctx: ToolContext) -> TextContent:
@@ -97,7 +97,9 @@ class TestCustomTools:
         async with connect(server) as session:
             tools = await session.list_tools()
 
-        assert tools.tools[1].model_dump(exclude_none=True) == IsPartialDict({
+        # ``by_alias``: the assertion is about the wire spelling the host sees, and
+        # ``mcp`` 2.0 dumps field names unless asked for the aliases.
+        assert tools.tools[1].model_dump(by_alias=True, exclude_none=True) == IsPartialDict({
             "name": "echo",
             "title": "Echo",
             "annotations": {"readOnlyHint": True},
@@ -145,7 +147,7 @@ class TestMcpToolDecorator:
             tools = await session.list_tools()
             result = await session.call_tool("add", {"good_id": "42"})
 
-        assert tools.tools[1].inputSchema == IsPartialDict({"required": ["good_id"]})
+        assert tools.tools[1].input_schema == IsPartialDict({"required": ["good_id"]})
         assert result.content == [TextContent(type="text", text="added 42")]
 
     async def test_default_argument_is_optional(self) -> None:

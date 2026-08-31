@@ -33,14 +33,13 @@ from ag2.a2ui.a2a import (
 
 ## Minimal Server
 
-Wrap a plain `#!python Agent` in `#!python A2UIAgentExecutor` (with the same flat A2UI kwargs as `#!python A2UIServer`, including `#!python actions=` for clickable buttons), pass it to `#!python A2AServer` via `#!python executor=`, and advertise A2UI support on the card with a `#!python card_modifier` that appends the extension:
+Wrap a plain `#!python Agent` in `#!python A2UIAgentExecutor` (with the same flat A2UI kwargs as `#!python A2UIServer`, including `#!python actions=` for clickable buttons), pass it to `#!python A2AServer` via `#!python executor=`, and advertise A2UI support on the card by passing the extension to `#!python build_card(extensions=...)`. With a [`#!python card_signer`](/docs/user-guide/a2a/card_signing) the pre-built card is signed once when the app is built, whereas a `#!python card_modifier` runs per request and its output is re-signed on every fetch:
 
-```python linenums="1" hl_lines="10-12 18"
+```python linenums="1" hl_lines="18-25 27"
 import uvicorn
-from a2a.types import AgentCard
 
 from ag2 import Agent
-from ag2.a2a import A2AServer
+from ag2.a2a import A2AServer, build_card
 from ag2.a2ui import a2ui_action
 from ag2.a2ui.a2a import A2UIAgentExecutor, get_a2ui_agent_extension
 from ag2.config import AnthropicConfig
@@ -50,17 +49,20 @@ def book_table(time: str) -> str:
     return f"booked a table for {time}"
 
 def build_app():
-    agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+    agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
     # Buttons are declared on the executor via actions=, just like A2UIServer —
     # the agent stays plain.
     executor = A2UIAgentExecutor(agent, actions=[book_table], protocol_version="v0.9")
-
-    async def advertise_a2ui(card: AgentCard) -> AgentCard:
-        card.capabilities.extensions.append(get_a2ui_agent_extension(version=executor.protocol_version))
-        return card
-
-    server = A2AServer(agent, executor=executor, card_modifier=advertise_a2ui)
-    return server.build_jsonrpc(url="http://127.0.0.1:8000")
+    # Advertise A2UI directly on the card via build_card(extensions=...). The
+    # extension is signed once when the app is built — a card_modifier would
+    # run per request and be re-signed on every fetch.
+    card = build_card(
+        agent,
+        url="http://127.0.0.1:8000",
+        extensions=[get_a2ui_agent_extension(version=executor.protocol_version)],
+    )
+    server = A2AServer(agent, executor=executor)
+    return server.build_jsonrpc(url="http://127.0.0.1:8000", card=card)
 
 app = build_app()
 

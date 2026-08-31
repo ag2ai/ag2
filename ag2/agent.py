@@ -63,8 +63,8 @@ from .events.lifecycle import (
     ObserverCompleted,
     ObserverStarted,
 )
-from .exceptions import ConfigNotProvidedError
-from .history import History
+from .exceptions import ConfigNotProvidedError, HumanInputError
+from .history import HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore
 from .knowledge.config import KnowledgeConfig
@@ -92,7 +92,6 @@ from .usage import UsageReport
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 logger = logging.getLogger(__name__)
-
 
 TResult = TypeVar313("TResult", default=str)
 TAgent = TypeVar313("TAgent", default=str)
@@ -1441,7 +1440,14 @@ class Agent(PluginTarget, Generic[TResult]):
                 ):
 
                     async def drive() -> "AgentReply[Any, Any]":
-                        message = await agent_turn(event, context)
+                        try:
+                            message = await agent_turn(event, context)
+                        except HumanInputError:
+                            await close_unanswered_tool_calls(
+                                context.stream.history,
+                                result=HUMAN_INPUT_ABANDONED_TOOL_RESULT,
+                            )
+                            raise
                         return AgentReply(
                             message,
                             context=context,
@@ -1705,12 +1711,20 @@ def _build_subtask_toolkit(agent: "Agent[Any]") -> Toolkit:
                 *(agent._spawn_subtask(t, ctx) for t in tasks),
                 return_exceptions=True,
             )
+            # One sub-task that could not reach a human sinks the whole call:
+            # rendering it as text would make it the tool's output, and the
+            # model would read an unaskable approval as a subtask that failed.
+            for r in raw:
+                if isinstance(r, HumanInputError):
+                    raise r
             results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
         else:
             results = []
             for t in tasks:
                 try:
                     results.append(await agent._spawn_subtask(t, ctx))
+                except HumanInputError:
+                    raise
                 except Exception as e:
                     results.append(f"Error: {e}")
 

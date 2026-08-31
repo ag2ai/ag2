@@ -26,7 +26,7 @@ class ApprovalRequired:
         message: str | None = None,
         denied_message: str = "User denied the tool call request",
         *,
-        timeout: int = 30,
+        timeout: float | None = None,
         allow_always: bool = True,
     ) -> None:
         self._prompt = (
@@ -81,7 +81,7 @@ def approval_required(
     message: str | None = None,
     denied_message: str = "User denied the tool call request",
     *,
-    timeout: int = 30,
+    timeout: float | None = None,
     allow_always: bool = True,
 ) -> ToolMiddleware:
     """Tool middleware that requests human approval before executing a tool call.
@@ -91,7 +91,13 @@ def approval_required(
             ``{tool_arguments}`` placeholders. Defaults to a built-in prompt
             that includes "Always" when *allow_always* is enabled.
         denied_message: Message shown to the LLM after the tool call is denied.
-        timeout: Seconds to wait for user input before timing out.
+        timeout: Seconds to wait for the human's answer before giving up, or
+            ``None`` (the default) to wait as long as it takes. An approval is a
+            question for a person, so a deadline is the caller's decision to
+            make — same as :meth:`ag2.Context.input`. When one is set and it
+            expires, the turn ends with
+            :class:`~ag2.exceptions.HumanInputTimeoutError` and the gated tool
+            does not run.
         allow_always: When ``True``, the user can respond with ``always`` to
             approve the current and all subsequent calls of the same tool in the
             same context.

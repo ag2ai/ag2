@@ -24,7 +24,7 @@ async def calc_add(a: int, b: int) -> str:
 async def main() -> None:
     agent = Agent(
         name="claude",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[calc_add],
     )
     server = A2AServer(agent)
@@ -68,7 +68,7 @@ from ag2.tools.builtin import WebSearchTool
 
 agent = Agent(
     name="claude",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[
         WebSearchTool(),  # built-in provider tool — runs on Anthropic's side
         calc_add,         # @tool — runs on this server

@@ -16,7 +16,7 @@ from ag2.extensions.tools.search import XquikSearchToolkit
 
 agent = Agent(
     "social-researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[XquikSearchToolkit(api_key=os.environ["XQUIK_API_KEY"])],
 )
 ```
@@ -50,7 +50,7 @@ search_tool = toolkit.search(
 
 agent = Agent(
     "social-researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[search_tool],
 )
 ```

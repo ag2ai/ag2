@@ -31,9 +31,17 @@ from acp.core import DEFAULT_STDIO_BUFFER_LIMIT_BYTES
 from acp.stdio import stdio_streams
 
 from ag2.agent import Agent, _get_stream_turn_lock
+from ag2.exceptions import HumanInputError
+from ag2.history import unanswered_tool_calls
 
 from .auth import AuthProvider
-from .executor import STOP_CANCELLED, AgentExecutor, heal_cancelled_turn, isolate_variables, unanswered_tool_calls
+from .executor import (
+    HUMAN_INPUT_ERROR_CATEGORY,
+    STOP_CANCELLED,
+    AgentExecutor,
+    heal_cancelled_turn,
+    isolate_variables,
+)
 from .guard import serve
 from .mappers import history_to_session_updates
 from .sessions import (
@@ -605,10 +613,23 @@ class _ConnectionScope:
             raise  # already a protocol error with its own payload
         except Exception as exc:
             logger.exception("ACP prompt turn failed for session %s", session_id)
-            raise acp.RequestError.internal_error({
+            # Same repair a cancel gets, for the same reason: a turn can die
+            # between a tool call and its result — a human-input request with
+            # nobody to answer it dies exactly there — and the Client is free to
+            # prompt this session again once it has read the error.
+            await self._heal(session)
+            data: dict[str, Any] = {
                 "reason": str(exc) or exc.__class__.__name__,
                 "type": exc.__class__.__name__,
-            }) from exc
+            }
+            if isinstance(exc, HumanInputError):
+                # ``type`` is a Python class name and varies with what broke —
+                # the missing hook, the application's queue, the clock. A Client
+                # deciding whether to put the question to its own human needs
+                # one stable thing to branch on, not a list of class names to
+                # keep in step with ours.
+                data["category"] = HUMAN_INPUT_ERROR_CATEGORY
+            raise acp.RequestError.internal_error(data) from exc
 
         return schema.PromptResponse(stop_reason=stop_reason)
 
@@ -636,26 +657,31 @@ class _ConnectionScope:
         await session.cancel()
 
     async def _heal(self, session: AgentSession) -> None:
-        """Make a cancelled session's history valid to send to a provider again.
+        """Make a session's history valid to send to a provider again.
+
+        Called for both ways a turn can stop mid-flight — cancelled, or failed —
+        because the damage is the same either way: a tool call left without a
+        result, which the next prompt would send to a provider that rejects it.
+        The session outlives the turn in both cases, so it has to be left usable.
 
         Runs under the session's turn lock so the next prompt cannot start
         mid-repair — the repair rewrites the whole transcript, and a turn racing
         it would either read an unanswered tool call or have its own events
-        overwritten by a stale snapshot. Several cancelled prompts may each land
+        overwritten by a stale snapshot. Several stopped prompts may each land
         here; the lock serializes them and the repair is idempotent, so the ones
         after the first find nothing left to close.
 
-        Best-effort: if it fails the session is still cancelled, and reporting
-        that matters more than the repair.
+        Best-effort: if it fails the turn has still stopped, and reporting that
+        matters more than the repair.
         """
         try:
             async with session.recovery():
                 closed = await heal_cancelled_turn(self._sessions.stream(session))
         except Exception:  # pragma: no cover - defensive; storage failures only
-            logger.warning("could not repair history for cancelled session %s", session.session_id, exc_info=True)
+            logger.warning("could not repair history for session %s", session.session_id, exc_info=True)
             return
         if closed:
-            logger.debug("closed %d unanswered tool call(s) after cancelling %s", closed, session.session_id)
+            logger.debug("closed %d unanswered tool call(s) in session %s", closed, session.session_id)
 
     async def _get_session(self, session_id: str) -> AgentSession:
         try:

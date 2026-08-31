@@ -61,11 +61,11 @@ print(await store.list("/"))  # ['artifacts/']
 from ag2 import SqliteKnowledgeStore
 
 store = SqliteKnowledgeStore("/var/agents/alice/knowledge.db")
-await store.write("/config/model.txt", "claude-opus-4-7")
+await store.write("/config/model.txt", "claude-opus-5")
 
 # In a later run, the same DB:
 store2 = SqliteKnowledgeStore("/var/agents/alice/knowledge.db")
-print(await store2.read("/config/model.txt"))  # "claude-opus-4-7"
+print(await store2.read("/config/model.txt"))  # "claude-opus-5"
 ```
 
 ### Disk store — files on the filesystem
