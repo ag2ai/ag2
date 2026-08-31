@@ -2,12 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Responses API scaffolding shared by the hosted-tool tests.
-
-One place to build a crafted Responses payload and drive the real
-`OpenAIResponsesConfig` over it, so the tests that read the resulting events say
-only what they are about.
-"""
+"""Responses API scaffolding shared by the hosted-tool tests."""
 
 import json
 from typing import Any

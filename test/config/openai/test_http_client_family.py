@@ -4,18 +4,9 @@
 
 """`http_client` reaches the SDK untouched, whichever HTTP package built it.
 
-ag2 forwards the client and adds no policy of its own. The public parameter is
-typed `httpx2.AsyncClient` because that is how `openai>=3` types it, and the type
-is the whole of ag2's opinion: a static checker rejects a legacy client here for
-the same reason it rejects one at `AsyncOpenAI(...)`.
-
-What happens at runtime is the SDK's call, not ours. `openai>=3` depends on
-`httpx2` alone but still accepts a legacy `httpx` client — it detects one through
-`sys.modules` and normalizes the URL, timeout, and response types around it — and
-documents that path as a migration aid that may be discontinued. So a legacy
-client works today, and the day it stops working the SDK will say so. The legacy
-cases below are the guard on ag2 staying out of that: they fail if ag2 ever
-starts rejecting or warning about a client the SDK itself would have accepted.
+The parameter is typed `httpx2.AsyncClient` because `openai>=3` types it that way, but the
+SDK still accepts a legacy `httpx` client. The legacy cases guard against ag2 rejecting or
+warning about a client the SDK itself would have taken.
 """
 
 import json

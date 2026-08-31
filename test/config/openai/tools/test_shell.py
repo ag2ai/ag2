@@ -66,16 +66,8 @@ async def test_container_reference(context: Context) -> None:
 
 @pytest.mark.asyncio
 async def test_a_shell_with_no_environment_is_refused(context: Context) -> None:
-    """Omitting `environment` leaves the API's client-executed shell.
-
-    The model returns a `shell_call` for the application to run and AG2 has no
-    executor for it, so the turn used to end with a call, no result and no reply.
-    An error naming the remedy beats that silence.
-
-    Driven through the client because that is where a caller meets it: the
-    mapping itself stays legitimate (`test_no_environment` above), since the
-    skills path maps a bare `shell` and is given `container_auto` afterwards.
-    """
+    # Driven through the client, not the mapper: mapping a bare `shell` stays legitimate
+    # (`test_no_environment` above), since the skills path is given `container_auto` after.
     [schema] = await ShellTool().schemas(context)
 
     with pytest.raises(ClientExecutedShellUnsupportedError, match="ContainerAutoEnvironment"):
@@ -84,7 +76,7 @@ async def test_a_shell_with_no_environment_is_refused(context: Context) -> None:
 
 @pytest.mark.asyncio
 async def test_a_hosted_shell_reaches_the_request(context: Context) -> None:
-    """The negative control: naming an environment is all the refusal asks for."""
+    # Negative control: naming an environment is all the refusal asks for.
     [schema] = await ShellTool(environment=ContainerAutoEnvironment()).schemas(context)
 
     await ask(config(response()), stream=MemoryStream(), tools=[schema])

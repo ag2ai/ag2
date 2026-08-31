@@ -2,13 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""A failed hosted MCP call reports *how* it failed.
-
-The Responses API answers a failed `mcp_call` with one of three arms, each
-carrying different fields. A caller branches on the discriminator rather than
-matching on prose, so these tests assert the discriminator survives into the
-result event's metadata alongside that arm's own fields.
-"""
+"""A failed hosted MCP call reports *how* it failed: the error's discriminator and its arm's own fields."""
 
 from typing import Any
 

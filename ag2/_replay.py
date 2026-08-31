@@ -21,13 +21,9 @@ persists nothing, so it drops the offending event (:func:`replayable_span`);
 compaction persists everything it drops, so it moves the cut (:func:`snap`) —
 filtering there would leave an event neither retained nor persisted.
 
-One invariant runs the other way and is deliberately **not** here. A hosted
-OpenAI ``shell_call`` needs the ``shell_call_output`` answering it, so a *call*
-can be orphaned by what is missing after it rather than before it. A cut cannot
-produce that — it only ever removes a prefix — but an unfinished turn can, so it
-is enforced where it arises, in ``ag2.config.openai.mappers``. The ordinary
-direction, a shell result whose call was cut away, is already the first row: the
-result is a ``ToolResultEvent`` whose ``parent_id`` is the call event's id.
+A hosted OpenAI ``shell_call`` needs the ``shell_call_output`` *after* it, which a
+prefix cut cannot remove — only an unfinished turn can, so that one is enforced in
+``ag2.config.openai.mappers`` instead.
 """
 
 from collections.abc import Sequence

@@ -52,11 +52,8 @@ async def test_allowed_tools(context: Context) -> None:
 
 @pytest.mark.asyncio
 async def test_blocked_tools_alone_is_refused(context: Context) -> None:
-    """Never silently: dropping the filter lets the model call what was blocked.
-
-    `xai_sdk.tools.mcp` takes `allowed_tool_names` and nothing else, so there is
-    no request that expresses the block.
-    """
+    # `xai_sdk.tools.mcp` takes `allowed_tool_names` only, so dropping the filter
+    # silently would let the model call what was blocked.
     tool = MCPServerTool(
         server_url="https://mcp.example.com/sse",
         server_label="ex",
@@ -71,11 +68,8 @@ async def test_blocked_tools_alone_is_refused(context: Context) -> None:
 
 @pytest.mark.asyncio
 async def test_blocked_tools_beside_an_allow_list_is_refused_too(context: Context) -> None:
-    """Refused whole, not rewritten.
-
-    Narrowing `allowed_tools` by the blocked names would happen to be equivalent,
-    but it answers a request the caller did not write.
-    """
+    # Refused whole, not rewritten: narrowing `allowed_tools` by the blocked names
+    # would answer a request the caller did not write.
     tool = MCPServerTool(
         server_url="https://mcp.example.com/sse",
         server_label="ex",

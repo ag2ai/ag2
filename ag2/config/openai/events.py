@@ -116,13 +116,7 @@ class OpenAIServerToolCallEvent(BuiltinToolCallEvent):
 
 class OpenAIServerToolResultEvent(BuiltinToolResultEvent):
     item: ResponseFunctionShellToolCallOutput | None = Field(default=None, repr=False)
-    """The output item a hosted shell call's result was built from.
-
-    Every other hosted tool carries its outcome on the call item itself, which the
-    call event already replays. A shell call does not: the container's output is a
-    separate ``shell_call_output`` item, and replaying the call without it sends
-    the API a command with no outcome. So this result carries it.
-    """
+    """Set for a hosted shell call, whose outcome is a separate ``shell_call_output`` item to replay."""
 
     @classmethod
     def from_item(cls, item: object, *, parent_id: str) -> "OpenAIServerToolResultEvent | None":
@@ -254,13 +248,8 @@ class OpenAIServerToolResultEvent(BuiltinToolResultEvent):
 class ShellCallTracker:
     """Pairs a hosted ``shell_call`` with the ``shell_call_output`` answering it.
 
-    The Responses API delivers a hosted shell call as two output items linked by
-    ``call_id``: the command the model composed, then the container's output. ag2
-    reports the pair as one call event and one result event, so the result has to
-    reach back for the command that produced it — which nothing in the output item
-    itself carries.
-
-    A call with no output yet still produces its call event; only the result waits.
+    The two arrive as separate output items linked by ``call_id``, and the result event
+    needs the commands, which only the call item carries.
     """
 
     __slots__ = ("_open",)
@@ -284,39 +273,27 @@ class ShellCallTracker:
 class OpenAIShellCommandChunk(BaseEvent):
     """A slice of the shell command the model is composing.
 
-    Transient: superseded by the finished ``shell_call``, whose
-    :class:`OpenAIServerToolCallEvent` carries every command in full.
-
-    Kept apart from :class:`~ag2.events.ModelMessageChunk` deliberately — that
-    chunk is the assistant's reply to the user, and mixing a command into it
-    corrupts the reply for anyone concatenating chunks into an answer.
+    Transient: superseded by the finished ``shell_call``. Kept out of
+    :class:`~ag2.events.ModelMessageChunk` so a command never lands in the assistant's reply.
     """
 
     __transient__ = True
 
     content: str = Field(kw_only=False)
     command_index: int
-    """Which command in the call this slice belongs to."""
-
     output_index: int
 
 
 class OpenAIShellOutputChunk(BaseEvent):
     """A slice of the output a container produced running a shell command.
 
-    Separate from :class:`OpenAIShellCommandChunk` rather than one type with a
-    discriminator: this half carries standard output and standard error, and a
-    single type would have to make both optional to accommodate the other half,
-    leaving callers to branch on emptiness.
-
-    Transient, for the same reason as the command chunk.
+    Transient. Separate from :class:`OpenAIShellCommandChunk` so neither type has to make
+    the other half's fields optional.
     """
 
     __transient__ = True
 
     command_index: int
-    """Which command in the call produced this output."""
-
     output_index: int
     item_id: str
     stdout: str | None = None

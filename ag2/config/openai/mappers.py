@@ -55,12 +55,8 @@ from ag2.tools.schemas import ToolSchema
 _OUTPUT_ONLY_FIELDS = {"created_by"}
 """Fields the API puts on a hosted output item but rejects on the way back in.
 
-A hosted item replays by dumping the SDK model whole, which is only safe while
-the output shape is a subset of the input shape. ``created_by`` is where the two
-part company: it is absent from the ``shell_call`` / ``shell_call_output`` input
-params and answered with ``Unknown parameter: input[N].created_by``. Today the
-API leaves it unset, so ``exclude_none`` already drops it — this is the guard for
-the day it does not.
+``created_by`` is answered with ``Unknown parameter: input[N].created_by``. The API leaves
+it unset today, so ``exclude_none`` already drops it; this is the guard for when it does not.
 """
 
 
@@ -610,15 +606,8 @@ def merge_skills_into_shell_tools(
 def reject_client_executed_shell(openai_tools: list[dict[str, Any]]) -> None:
     """Refuse a finalized ``shell`` entry the API would run client-side.
 
-    Omitting ``environment`` leaves the API's *local* environment, which asks the
-    application to run the command and return a ``shell_call_output``. ag2 has no
-    executor for that, so the turn ends with a call, no result and no reply —
-    silence rather than an error.
-
-    Checked on the finished array rather than in :func:`tool_to_responses_api`
-    because the skills path legitimately maps a bare ``shell`` and
-    :func:`merge_skills_into_shell_tools` gives it ``container_auto`` afterwards.
-    Per-tool, the entry is not yet wrong; once the array is final, it is.
+    Checked on the finished array, not in :func:`tool_to_responses_api`: the skills path maps
+    a bare ``shell`` and :func:`merge_skills_into_shell_tools` gives it ``container_auto`` after.
     """
     for tool_dict in openai_tools:
         if tool_dict.get("type") != "shell":

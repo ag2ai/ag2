@@ -2,13 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""A streamed hosted shell call shows both halves as they happen.
-
-The model composes a command, then a container runs it. Until it finishes there
-is nothing to show, and a shell call is the slowest hosted tool ag2 supports —
-so both halves arrive as increments, and neither is allowed to contaminate the
-assistant's reply stream.
-"""
+"""A streamed hosted shell call shows both halves — command and output — as increments."""
 
 import json
 from typing import Any
@@ -108,12 +102,7 @@ STREAM_EVENTS: list[dict[str, Any]] = [
 
 
 async def _streamed_events() -> list[BaseEvent]:
-    """Every event the run puts on the stream, transient ones included.
-
-    Increments are transient by design, so history never holds them — a
-    subscriber is the only place they are observable, and the only place a user
-    would watch them either.
-    """
+    """Every event the run puts on the stream, transient ones included (history holds none)."""
     stream = MemoryStream()
     captured: list[BaseEvent] = []
 

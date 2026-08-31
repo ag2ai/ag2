@@ -42,22 +42,9 @@ class UnsupportedToolError(ToolExecutionError):
 
 
 class BlockedToolsUnsupportedError(ToolExecutionError):
-    """Raised when a provider's remote-MCP tool cannot express ``blocked_tools``.
-
-    Not an :class:`UnsupportedToolError`: the tool maps fine and the request
-    would succeed — it would just permit what the caller asked to block.
-    ``blocked_tools`` is an Anthropic-connector capability, whose MCP tool config
-    enables and disables a server's tools by name; a provider carrying an
-    allow-list and nothing else has no honest translation, so ag2 refuses rather
-    than quietly widen access, the same way ``acp.tool_gateway.partition_tools``
-    does.
-
-    One class rather than a message per provider: the remedy is ag2's, not the
-    provider's, so it reads the same wherever it is raised.
-    """
+    """Raised when a provider's remote-MCP tool takes an allow-list only, so a block cannot be enforced."""
 
     def __init__(self, provider: str, server_label: str | None):
-        """`provider` names the provider as the message reads it, e.g. ``"xAI"``."""
         super().__init__(
             f"MCPServerTool blocked_tools cannot be enforced on {provider} "
             f"(server {server_label!r}): its remote-MCP tool takes an allow-list only. "
@@ -69,15 +56,7 @@ class BlockedToolsUnsupportedError(ToolExecutionError):
 class ClientExecutedShellUnsupportedError(ToolExecutionError):
     """Raised when a hosted shell would be executed by the client instead of the provider.
 
-    The Responses ``shell`` tool takes a *local* environment when none is given:
-    the model composes a command and the application is expected to run it and
-    send back a ``shell_call_output``. ag2 has no client-side executor for that —
-    the same gap that makes Anthropic's bash tool an :class:`UnsupportedToolError`
-    — so the turn ends with a call, no result and no reply.
-
-    Refused rather than defaulted to a container: provisioning one runs
-    model-written commands on the provider's machine, which is the caller's
-    decision to make, not a default to infer from an omitted argument.
+    ag2 has no client-side executor, so such a turn would end with a call, no result and no reply.
     """
 
     def __init__(self) -> None:

@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Hosted MCP and shell calls reach the stream as tool call/result events.
-
-Everything here drives the real `OpenAIResponsesConfig` over a mock HTTP
-transport, so what is asserted is what a user observes on their own stream.
-"""
+"""Hosted MCP and shell calls reach the stream as tool call/result events."""
 
 import json
 from typing import Any
@@ -190,12 +186,7 @@ async def _replayed(*output: dict[str, Any]) -> list[dict[str, Any]]:
 
 @pytest.mark.asyncio
 class TestReplayingAHostedCall:
-    """A hosted item ag2 now reports has to survive the next turn's request.
-
-    `shell_call` is the only hosted item whose result lives in a *second* output
-    item, so replaying the call alone would send the API a command with no
-    outcome.
-    """
+    """A hosted item ag2 reports has to survive the next turn's request."""
 
     async def test_shell_call_replays_with_its_output(self) -> None:
         replayed = await _replayed(SHELL_CALL, SHELL_OUTPUT)
@@ -213,26 +204,15 @@ class TestReplayingAHostedCall:
         ]
 
     async def test_an_unanswered_shell_call_is_not_replayed(self) -> None:
-        """A `shell_call` with no `shell_call_output` is not a legal input item.
-
-        A turn that ends between the command and the container's output — an
-        `incomplete` response, say — leaves the call unanswered. Replaying it
-        alone sends the API a command with no outcome, and the next request 400s.
-        """
+        # A `shell_call` with no `shell_call_output` is not a legal input item, so an
+        # `incomplete` turn that leaves one unanswered must not replay it.
         replayed = await _replayed(SHELL_CALL)
 
         assert [item for item in replayed if item.get("type", "").startswith("shell_call")] == []
 
     async def test_no_replayed_item_carries_an_output_only_field(self) -> None:
-        """`created_by` rides on a hosted item's way out and is rejected on the way in.
-
-        The API answers it with `Unknown parameter: input[N].created_by`, so a
-        dump of the SDK model whole has to leave it behind.
-
-        The field has to be *set* on both items for this to test anything: it is
-        optional and the API leaves it unset today, so against the plain fixtures
-        `exclude_none` drops it on its own and the guard is never exercised.
-        """
+        # `created_by` has to be set on both fixtures for this to test anything: the API
+        # leaves it unset today, so otherwise `exclude_none` drops it and the guard never runs.
         replayed = await _replayed(
             {**SHELL_CALL, "created_by": "assistant"},
             {**SHELL_OUTPUT, "created_by": "assistant"},
