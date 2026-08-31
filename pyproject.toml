@@ -79,7 +79,7 @@ acp = [
 ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
-openai = ["openai>=2.45.0,<4.0"]
+openai = ["openai>=2.45.0,<3.0"]
 anthropic = [
     "anthropic>=1.2.0,<2",
     "httpx2>=2.0,<3",
