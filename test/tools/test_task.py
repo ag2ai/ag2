@@ -998,6 +998,53 @@ def test_run_subtask_description_advertises_parallel_invocation() -> None:
     assert "parallel" in run_subtasks.schema.function.description.lower()
 
 
+def test_max_concurrency_agent_is_reusable_across_event_loops() -> None:
+    """A capped Agent survives being driven from more than one event loop.
+
+    ``asyncio.Semaphore`` binds to the first loop that awaits it *while
+    contended*, so a semaphore cached on the Agent for its whole lifetime would
+    raise ``RuntimeError`` on the second loop. This is deliberately sync (one
+    ``asyncio.run`` per turn) and uses a cap smaller than the fan-out so the
+    semaphore is guaranteed to block.
+    """
+    parent = Agent(
+        "parent",
+        config=TestConfig(
+            [
+                ToolCallEvent(name="run_subtask", arguments='{"task": "do A"}'),
+                ToolCallEvent(name="run_subtask", arguments='{"task": "do B"}'),
+                ToolCallEvent(name="run_subtask", arguments='{"task": "do C"}'),
+            ],
+            "done",
+        ),
+        tasks=TaskConfig(
+            config=TestConfig(ModelResponse(ModelMessage("subtask done."))),
+            max_concurrency=1,
+        ),
+    )
+
+    async def turn() -> tuple[str | None, int]:
+        stream = MemoryStream()
+        active = 0
+        peak = 0
+
+        @stream.where(TaskStarted).subscribe
+        async def track(_: TaskStarted) -> None:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            await asyncio.sleep(0)
+            active -= 1
+
+        reply = await parent.ask("go", stream=stream)
+        return reply.body, peak
+
+    for _ in range(3):
+        body, peak = asyncio.run(turn())
+        assert body == "done"
+        assert peak == 1
+
+
 @pytest.mark.asyncio
 class TestSubtaskUsageRollup:
     async def test_rollup_sums_all_model_calls(self) -> None:

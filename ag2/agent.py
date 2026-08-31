@@ -751,9 +751,12 @@ class Agent(PluginTarget, Generic[TResult]):
         else:
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
-        # Created on first use so construction outside an event loop does not
-        # bind a synchronization primitive to the wrong loop.
+        # Created on first use, and re-created whenever the running loop
+        # changes: an asyncio.Semaphore binds to the first loop that awaits on
+        # it while contended, so a cached one would raise on a later loop (the
+        # same hazard called out in ag2/extensions/docker/sandbox.py).
         self._task_slots: asyncio.Semaphore | None = None
+        self._task_slots_loop: asyncio.AbstractEventLoop | None = None
 
         # Knowledge store + compaction/aggregation strategies
         if knowledge:
@@ -1484,8 +1487,10 @@ class Agent(PluginTarget, Generic[TResult]):
         if tc is None:
             return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
         if tc.max_concurrency is not None:
-            if self._task_slots is None:
+            loop = asyncio.get_running_loop()
+            if self._task_slots is None or self._task_slots_loop is not loop:
                 self._task_slots = asyncio.Semaphore(tc.max_concurrency)
+                self._task_slots_loop = loop
             async with self._task_slots:
                 return await self._run_subtask(task, ctx, tc)
         return await self._run_subtask(task, ctx, tc)
