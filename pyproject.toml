@@ -80,7 +80,7 @@ ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=3.4.0,<4"]
-anthropic = ["anthropic>=0.116.0,<1"]
+anthropic = ["anthropic>=1.2.0,<2"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
@@ -239,7 +239,7 @@ types = [
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.16.4", "codespell==2.4.3", "zizmor==1.29.0"]
+lint = ["ruff==0.16.4", "codespell==2.4.3", "zizmor==1.30.0"]
 
 dev = [
     { include-group = "lint" },

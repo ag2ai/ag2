@@ -225,6 +225,24 @@ def extract_skills_for_container(tools: Iterable[ToolSchema]) -> list[dict[str, 
     return skills
 
 
+# `anthropic` 1.x dropped these from the Messages API signature; the API still reads them from the request body.
+SAMPLING_FIELDS = ("temperature", "top_p", "top_k")
+
+
+def take_sampling_fields(values: dict[str, Any]) -> dict[str, Any]:
+    """Pop every sampling key from ``values``, an explicit ``None`` included, returning the ones that were set."""
+    return {name: value for name in SAMPLING_FIELDS if (value := values.pop(name, None)) is not None}
+
+
+def merge_sampling_into_extra_body(
+    sampling: dict[str, Any], extra_body: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """Fold the sampling values under an explicit ``extra_body``, which wins on collision — as with ``mcp_servers``."""
+    if not sampling:
+        return extra_body
+    return {**sampling, **(extra_body or {})}
+
+
 _IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp"})
 
 # Anthropic content block keys that are safe to pass through from vendor_metadata.

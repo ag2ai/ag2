@@ -33,7 +33,7 @@ from ag2.tools import WebSearchTool, UserLocation
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[
         WebSearchTool(
             max_uses=5,
@@ -69,7 +69,7 @@ from ag2.tools import WebFetchTool
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[
         WebFetchTool(
             max_uses=3,
@@ -172,7 +172,7 @@ from ag2.tools import CodeExecutionTool
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[CodeExecutionTool()],
 )
 ```
@@ -196,7 +196,7 @@ from ag2.tools import MemoryTool
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[MemoryTool()],
 )
 ```
@@ -215,7 +215,7 @@ from ag2.tools import ShellTool
 
 agent = Agent(
     "devops",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[ShellTool()],
 )
 ```
@@ -265,7 +265,7 @@ from ag2.tools import Skill, SkillsTool
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SkillsTool("pptx", Skill("xlsx", version="latest"))],
 )
 ```
@@ -304,7 +304,7 @@ from ag2.tools import MCPServerTool
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[
         MCPServerTool(
             server_url="https://mcp.example.com/sse",

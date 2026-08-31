@@ -74,6 +74,8 @@ config = AnthropicConfig(
     streaming=True
 )
 ```
+
+`ag2[anthropic]` requires `anthropic>=1.2.0,<2`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and the sampling parameters (`temperature`, `top_p`, `top_k`).
   </Tab>
 
   <Tab title="Gemini">
@@ -94,7 +96,7 @@ from ag2.config import BedrockConfig
 
 # Configure an Amazon Bedrock model (Converse API)
 config = BedrockConfig(
-    model="anthropic.claude-sonnet-4-5-20250929-v1:0",
+    model="global.anthropic.claude-sonnet-5",
     region_name="us-east-1",
     streaming=True
 )
@@ -186,6 +188,60 @@ from ag2.config import OpenAIConfig
 config = OpenAIConfig(model="gpt-5")
 ```
 
+### Anthropic Configuration
+
+`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview){.external-link target="_blank"} through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.2.0,<2`.
+
+If `api_key` is not passed explicitly, it is resolved from the `ANTHROPIC_API_KEY` environment variable.
+
+```python linenums="1"
+from ag2.config import AnthropicConfig
+
+# Auth resolved from ANTHROPIC_API_KEY when omitted
+config = AnthropicConfig(model="claude-haiku-4-5-20251001", streaming=True)
+```
+
+#### Custom HTTP Client
+
+`anthropic>=1` is built on [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, so `http_client` takes an `#!python httpx2.AsyncClient`:
+
+```python linenums="1" hl_lines="7"
+import httpx2
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(
+    model="claude-haiku-4-5-20251001",
+    api_key="sk-ant-...",
+    http_client=httpx2.AsyncClient(proxy="http://proxy.example.com:8080"),
+)
+```
+
+!!! warning "An `httpx` client is rejected"
+
+    The `anthropic` SDK keeps no compatibility path for a legacy `#!python httpx.AsyncClient` — it raises `#!python TypeError` as soon as the client is built, where the OpenAI SDK would still accept one. Rebuild yours against `httpx2`; the two packages share an API, so this is usually just the import line.
+
+#### Sampling Parameters
+
+`temperature`, `top_p` and `top_k` are ordinary fields on `AnthropicConfig`. The 1.x Messages API dropped them from its method signature, so AG2 sends them in the request body, where the API still reads them:
+
+```python linenums="1" hl_lines="6"
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(
+    model="claude-haiku-4-5-20251001",
+    api_key="sk-ant-...",
+    temperature=0.2,
+)
+```
+
+!!! warning "Recent Claude models reject sampling parameters"
+
+    Claude Fable 5, Opus 5, Opus 4.8, Opus 4.7 and Sonnet 5 removed `temperature`, `top_p` and `top_k` from the Messages API — a request carrying any of them is answered with HTTP 400. Leave all three unset (the default) on those models. Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 and earlier still accept them.
+
+!!! note "`extra_body` precedence"
+
+    Pass `extra_body` to forward provider-specific keys that have no dedicated field. A key you write there wins over the same key AG2 derived from a field — an `#!python extra_body={"temperature": 0.9}` overrides `#!python temperature=0.2` — while unrelated keys are merged through untouched.
+
 ### Amazon Bedrock Authentication
 
 `BedrockConfig` authenticates in either of two ways, both resolved by the underlying AWS SDK:
@@ -203,7 +259,7 @@ export AWS_DEFAULT_REGION=us-east-1
 from ag2.config import BedrockConfig
 
 # Auth from AWS_BEARER_TOKEN_BEDROCK, region from AWS_DEFAULT_REGION
-config = BedrockConfig(model="anthropic.claude-sonnet-4-5-20250929-v1:0")
+config = BedrockConfig(model="global.anthropic.claude-sonnet-5")
 ```
 
 A region is always required — pass `region_name=` or set `AWS_DEFAULT_REGION`. Notes on API keys:

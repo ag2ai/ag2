@@ -49,7 +49,7 @@ def book_table(time: str) -> str:
     return f"booked a table for {time}"
 
 def build_app():
-    agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+    agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
     # Buttons are declared on the executor via actions=, just like A2UIServer —
     # the agent stays plain.
     executor = A2UIAgentExecutor(agent, actions=[book_table], protocol_version="v0.9")
