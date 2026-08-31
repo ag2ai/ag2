@@ -27,7 +27,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-version = "1.0.2"
+version = "1.0.3"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -80,7 +80,10 @@ ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=2.45.0,<3.0"]
-anthropic = ["anthropic>=0.116.0,<1"]
+anthropic = [
+    "anthropic>=1.2.0,<2",
+    "httpx2>=2.0,<3",
+]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
@@ -114,13 +117,16 @@ perplexity = ["perplexityai>=0.30.0,<1"]
 
 # === MCP (ag2.mcp) ===
 mcp = [
-    # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
-    "mcp>=1.11.0,<2",
+    "mcp>=2.0.0,<3",
+    "mcp-types>=2.0.0,<3",
+    # imported directly to validate tool arguments; `mcp` requires it too, so this
+    # only pins what is already installed
+    "jsonschema>=4.20.0,<5",
 ]
 # MCP-UI resources (ag2.mcp_ui) — return renderable UI blobs from tool results
 mcp-ui = [
     "mcp-ui-server>=1.0.0",
-    "mcp>=1.11.0,<2",
+    "mcp>=2.0.0,<3",
 ]
 
 [dependency-groups]
@@ -218,7 +224,7 @@ docs = [
     "mkdocs-literate-nav==0.6.3",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
-    "mkdocs-git-revision-date-localized-plugin==1.5.3",
+    "mkdocs-git-revision-date-localized-plugin==1.5.4",
     "typer>=0.22,<0.28",
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.5.0",                      # includes with variables
@@ -226,24 +232,24 @@ docs = [
     "mkdocs-redirects==1.2.3",                          # required for handling redirects natively
     "jinja2==3.1.6",
     "pyyaml==6.0.3",
-    "mcp>=1.11.0,<2",
+    "mcp>=2.0.0,<3",
 ]
 
 types = [
-    "mypy==2.3.0",
+    "mypy==2.3.1",
     "types-PyYAML",
     { include-group = "test" },
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.15.22", "codespell==2.4.3", "zizmor==1.26.1"]
+lint = ["ruff==0.16.4", "codespell==2.4.3", "zizmor==1.30.0"]
 
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
-    "prek==0.4.10",
+    "prek==0.4.14",
 ]
 
 [tool.pytest.ini_options]

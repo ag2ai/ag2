@@ -16,7 +16,7 @@ from ag2.extensions.tools.search import TinyFishSearchToolkit
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[TinyFishSearchToolkit(api_key=os.environ["TINYFISH_API_KEY"])],
 )
 ```

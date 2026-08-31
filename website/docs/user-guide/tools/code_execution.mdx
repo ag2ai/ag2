@@ -27,7 +27,7 @@ from ag2.tools import CodeExecutionTool
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[CodeExecutionTool()],
 )
 ```
@@ -67,7 +67,7 @@ env = TenkiEnvironment()
 async with env:
     agent = Agent(
         "analyst",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[SandboxCodeTool(env.code_environment())],
     )
     reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
@@ -92,7 +92,7 @@ from ag2.extensions.daytona import DaytonaEnvironment
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SandboxCodeTool(DaytonaEnvironment())],
 )
 
@@ -118,7 +118,7 @@ from ag2.extensions.docker import DockerEnvironment
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SandboxCodeTool(DockerEnvironment(image="python:3.12-slim"))],
 )
 ```
@@ -170,7 +170,7 @@ from ag2.tools import SandboxCodeTool
 async with DaytonaEnvironment(image="python:3.12") as env:
     agent = Agent(
         "analyst",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[SandboxCodeTool(env)],
     )
     await agent.ask("...")

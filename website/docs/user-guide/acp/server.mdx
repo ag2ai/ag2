@@ -57,7 +57,7 @@ async def calc_add(a: int, b: int) -> str:
 agent = Agent(
     name="workie",
     prompt="You are a concise assistant. Use tools when they help.",
-    config=AnthropicConfig(model="claude-sonnet-4-6", streaming=True),
+    config=AnthropicConfig(model="claude-sonnet-5", streaming=True),
     tools=[calc_add],
 )
 
@@ -338,6 +338,28 @@ with dependency injection and the session's variables available.
 Nothing about this is visible on the wire: no capability is advertised, no ACP method is
 called, and a client cannot tell that a turn paused. Client-driven approvals — the agent
 asking *through* the protocol — need ACP elicitation on this side, which is not wired yet.
+
+!!! warning "A hook that cannot answer ends the turn"
+    If the hook fails — the approval queue is unreachable, the ticket system is down — or
+    simply never answers in time, the turn fails and the client is told so. It is not
+    reported to the model as the tool having failed: nobody was asked, so an approval that
+    was never requested must not read like a tool that broke, or the model is free to look
+    for another way to do the same thing. The gated tool does not run.
+
+    The protocol error carries `#!python data["category"] == "human_input"`, which is what
+    to branch on: `#!python data["type"]` is the Python exception name and varies with what
+    broke. The hook's own exception is reachable as `#!python exc.cause` in-process.
+
+    To carry on regardless, handle the failure inside the hook and return an answer — a
+    denial is usually the right one:
+
+    ```python
+    async def ask_our_user(event: HumanInputRequest) -> str:
+        try:
+            return await my_approval_queue.ask(event.content)
+        except QueueUnavailable:
+            return "n"  # what approval_required() reads as a denial
+    ```
 
 ## What It Refuses to Pretend
 

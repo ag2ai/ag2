@@ -13,6 +13,7 @@ from fast_depends.pydantic.schema import get_schema
 
 from ag2.annotations import Context
 from ag2.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
+from ag2.exceptions import HumanInputError
 from ag2.middleware import (
     BaseMiddleware,
     DescribedMiddleware,
@@ -140,6 +141,12 @@ class FunctionTool(Tool):
                 )
 
             return ToolResultEvent.from_call(event, result=result)
+
+        # The human-input channel failing is not this tool failing: recording it
+        # as a tool result would hand the model a question that was never put,
+        # dressed as a tool that broke. Let it end the turn.
+        except HumanInputError:
+            raise
 
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)
