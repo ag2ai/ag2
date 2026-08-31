@@ -29,7 +29,12 @@ from ag2.events import (
     UrlInput,
     Usage,
 )
-from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.exceptions import (
+    BlockedToolsUnsupportedError,
+    ClientExecutedShellUnsupportedError,
+    UnsupportedInputError,
+    UnsupportedToolError,
+)
 from ag2.files.types import FileProvider
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
@@ -46,6 +51,17 @@ from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
+
+_OUTPUT_ONLY_FIELDS = {"created_by"}
+"""Fields the API puts on a hosted output item but rejects on the way back in.
+
+A hosted item replays by dumping the SDK model whole, which is only safe while
+the output shape is a subset of the input shape. ``created_by`` is where the two
+part company: it is absent from the ``shell_call`` / ``shell_call_output`` input
+params and answered with ``Unknown parameter: input[N].created_by``. Today the
+API leaves it unset, so ``exclude_none`` already drops it — this is the guard for
+the day it does not.
+"""
 
 
 def _kind_label(kind: BinaryType | str) -> str:
@@ -218,12 +234,14 @@ def events_to_responses_input(
             # warnings=False: openai SDK pins ActionSearchSource.type to
             # Literal["url"] but the API returns other values (e.g. "api"),
             # which makes pydantic warn on every round-trip serialization.
-            result.append(message.item.model_dump(exclude_none=True, mode="json", warnings=False))
+            result.append(
+                message.item.model_dump(exclude_none=True, mode="json", warnings=False, exclude=_OUTPUT_ONLY_FIELDS)
+            )
 
         elif isinstance(message, OpenAIServerToolResultEvent) and message.item is not None:
             # Only a hosted shell call carries one: its output is a separate
             # item, so the call replays incomplete without it.
-            result.append(message.item.model_dump(exclude_none=True, mode="json"))
+            result.append(message.item.model_dump(exclude_none=True, mode="json", exclude=_OUTPUT_ONLY_FIELDS))
 
         elif isinstance(message, ModelRequest):
             for inp in message.parts:
@@ -507,6 +525,9 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         return result
 
     elif isinstance(t, MCPServerToolSchema):
+        if t.blocked_tools is not None:
+            raise BlockedToolsUnsupportedError("the OpenAI Responses API", t.server_label)
+
         # https://platform.openai.com/docs/guides/tools-remote-mcp
         result = {
             "type": "mcp",
@@ -516,20 +537,6 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         }
         if t.description is not None:
             result["server_description"] = t.description
-
-        if t.blocked_tools is not None:
-            # `blocked_tools` is an Anthropic-connector capability: its MCP tool
-            # config enables and disables a server's tools by name. The OpenAI
-            # `mcp` param carries an allow-list and nothing else, so there is no
-            # honest translation — ag2 refuses instead of quietly sending a
-            # request that permits what the caller asked to block, the same way
-            # `acp.tool_gateway.partition_tools` refuses rather than widen access.
-            raise ValueError(
-                "MCPServerTool blocked_tools cannot be enforced on the OpenAI Responses API "
-                f"(server {t.server_label!r}): its remote-MCP tool takes an allow-list only. "
-                "Pass allowed_tools naming the tools you do want, or connect the server as an "
-                "MCP toolkit so AG2 executes and filters its tools."
-            )
 
         if t.allowed_tools is not None:
             result["allowed_tools"] = t.allowed_tools
@@ -598,6 +605,27 @@ def merge_skills_into_shell_tools(
             return openai_tools
     openai_tools.append({"type": "shell", "environment": {"type": "container_auto", "skills": skills}})
     return openai_tools
+
+
+def reject_client_executed_shell(openai_tools: list[dict[str, Any]]) -> None:
+    """Refuse a finalized ``shell`` entry the API would run client-side.
+
+    Omitting ``environment`` leaves the API's *local* environment, which asks the
+    application to run the command and return a ``shell_call_output``. ag2 has no
+    executor for that, so the turn ends with a call, no result and no reply —
+    silence rather than an error.
+
+    Checked on the finished array rather than in :func:`tool_to_responses_api`
+    because the skills path legitimately maps a bare ``shell`` and
+    :func:`merge_skills_into_shell_tools` gives it ``container_auto`` afterwards.
+    Per-tool, the entry is not yet wrong; once the array is final, it is.
+    """
+    for tool_dict in openai_tools:
+        if tool_dict.get("type") != "shell":
+            continue
+        environment = tool_dict.get("environment")
+        if environment is None or environment.get("type") == "local":
+            raise ClientExecutedShellUnsupportedError()
 
 
 def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:

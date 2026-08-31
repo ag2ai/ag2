@@ -6,6 +6,7 @@ import pytest
 
 from ag2 import Context
 from ag2.config.xai.mappers import tool_to_api
+from ag2.exceptions import BlockedToolsUnsupportedError
 from ag2.tools.builtin.mcp_server import MCPServerTool
 
 
@@ -64,7 +65,7 @@ async def test_blocked_tools_alone_is_refused(context: Context) -> None:
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(ValueError, match="blocked_tools"):
+    with pytest.raises(BlockedToolsUnsupportedError, match="blocked_tools"):
         tool_to_api(schema)
 
 
@@ -84,5 +85,5 @@ async def test_blocked_tools_beside_an_allow_list_is_refused_too(context: Contex
 
     [schema] = await tool.schemas(context)
 
-    with pytest.raises(ValueError, match="blocked_tools"):
+    with pytest.raises(BlockedToolsUnsupportedError, match="blocked_tools"):
         tool_to_api(schema)

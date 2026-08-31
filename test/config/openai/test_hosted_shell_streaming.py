@@ -13,38 +13,21 @@ assistant's reply stream.
 import json
 from typing import Any
 
-import httpx2
 import pytest
-from fast_depends.use import SerializerCls
 
-from ag2 import Context, MemoryStream
-from ag2.config import OpenAIResponsesConfig
+from ag2 import MemoryStream
 from ag2.config.openai.events import OpenAIShellCommandChunk, OpenAIShellOutputChunk
 from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
     ModelMessageChunk,
-    ModelRequest,
     TextInput,
     is_conversational,
 )
 from ag2.tools.builtin.shell import SHELL_TOOL_NAME
 
-from .test_hosted_mcp_and_shell_events import SHELL_CALL, SHELL_OUTPUT, _USAGE
-
-_RESPONSE_SHELL: dict[str, Any] = {
-    "id": "resp_1",
-    "object": "response",
-    "created_at": 0,
-    "model": "gpt-5",
-    "status": "completed",
-    "parallel_tool_calls": True,
-    "tool_choice": "auto",
-    "tools": [],
-    "output": [SHELL_CALL, SHELL_OUTPUT],
-    "usage": _USAGE,
-}
+from ._helpers import SHELL_CALL, SHELL_OUTPUT, ask, response, streaming_config
 
 STREAM_EVENTS: list[dict[str, Any]] = [
     {
@@ -99,41 +82,38 @@ STREAM_EVENTS: list[dict[str, Any]] = [
         "item_id": "sho_1",
         "delta": {"stdout": None, "stderr": "warning\n"},
     },
-    {"type": "response.output_item.done", "sequence_number": 9, "output_index": 1, "item": SHELL_OUTPUT},
+    {
+        # Both streams in one delta, which is what the API was observed to send
+        # for a command writing to each: the two fields are independent, not an
+        # either/or the reader may assume.
+        "type": "response.shell_call_output_content.delta",
+        "sequence_number": 9,
+        "output_index": 0,
+        "command_index": 1,
+        "item_id": "sho_1",
+        "delta": {"stdout": "both\n", "stderr": "at once\n"},
+    },
+    {"type": "response.output_item.done", "sequence_number": 10, "output_index": 1, "item": SHELL_OUTPUT},
     {
         "type": "response.output_text.delta",
-        "sequence_number": 10,
+        "sequence_number": 11,
         "output_index": 2,
         "item_id": "msg_1",
         "content_index": 0,
         "delta": "all done",
         "logprobs": [],
     },
-    {"type": "response.completed", "sequence_number": 11, "response": _RESPONSE_SHELL},
+    {"type": "response.completed", "sequence_number": 12, "response": response(SHELL_CALL, SHELL_OUTPUT)},
 ]
 
 
-def _sse(events: list[dict[str, Any]]) -> bytes:
-    return "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
-
-
-async def _streamed_events(events: list[dict[str, Any]] = STREAM_EVENTS) -> list[BaseEvent]:
+async def _streamed_events() -> list[BaseEvent]:
     """Every event the run puts on the stream, transient ones included.
 
     Increments are transient by design, so history never holds them — a
     subscriber is the only place they are observable, and the only place a user
     would watch them either.
     """
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, content=_sse(events), headers={"content-type": "text/event-stream"})
-
-    config = OpenAIResponsesConfig(
-        model="gpt-5",
-        api_key="test",
-        streaming=True,
-        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
-    )
     stream = MemoryStream()
     captured: list[BaseEvent] = []
 
@@ -141,14 +121,7 @@ async def _streamed_events(events: list[dict[str, Any]] = STREAM_EVENTS) -> list
         captured.append(event)
 
     stream.subscribe(capture)
-
-    await config.create()(
-        messages=[ModelRequest([TextInput("run it")])],
-        context=Context(stream=stream),
-        tools=[],
-        response_schema=None,
-        serializer=SerializerCls,
-    )
+    await ask(streaming_config(STREAM_EVENTS), stream=stream)
 
     return captured
 
@@ -171,17 +144,21 @@ class TestOutputIncrements:
     async def test_output_is_emitted_as_the_container_produces_it(self) -> None:
         chunks = [e for e in await _streamed_events() if isinstance(e, OpenAIShellOutputChunk)]
 
-        assert len(chunks) == 2
+        assert len(chunks) == 3
 
     async def test_stdout_and_stderr_are_distinguishable(self) -> None:
         chunks = [e for e in await _streamed_events() if isinstance(e, OpenAIShellOutputChunk)]
 
-        assert [(c.stdout, c.stderr) for c in chunks] == [("hi\n", None), (None, "warning\n")]
+        assert [(c.stdout, c.stderr) for c in chunks] == [
+            ("hi\n", None),
+            (None, "warning\n"),
+            ("both\n", "at once\n"),
+        ]
 
     async def test_an_increment_identifies_its_command(self) -> None:
         chunks = [e for e in await _streamed_events() if isinstance(e, OpenAIShellOutputChunk)]
 
-        assert [c.command_index for c in chunks] == [0, 1]
+        assert [c.command_index for c in chunks] == [0, 1, 1]
 
 
 @pytest.mark.asyncio

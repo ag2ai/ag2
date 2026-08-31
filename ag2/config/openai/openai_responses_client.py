@@ -57,6 +57,7 @@ from .mappers import (
     extract_skills_for_shell,
     merge_skills_into_shell_tools,
     normalize_responses_usage,
+    reject_client_executed_shell,
     response_proto_to_text_config,
     responses_api_includes,
     tool_to_responses_api,
@@ -136,6 +137,7 @@ class OpenAIResponsesClient(LLMClient):
             [tool_to_responses_api(t) for t in tools_list],
             openai_skills,
         )
+        reject_client_executed_shell(openai_tools)
 
         kwargs: dict[str, Any] = {}
         if r := response_proto_to_text_config(response_schema):

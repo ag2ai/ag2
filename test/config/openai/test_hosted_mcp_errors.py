@@ -18,7 +18,7 @@ from dirty_equals import IsPartialDict
 from ag2.events import BuiltinToolResultEvent
 from ag2.tools.builtin.mcp_server import MCP_SERVER_TOOL_NAME
 
-from .test_hosted_mcp_and_shell_events import MCP_CALL, _events_of, _results
+from ._helpers import MCP_CALL, events_of, results
 
 
 def _failed_call(error: dict[str, Any]) -> dict[str, Any]:
@@ -34,7 +34,7 @@ def _failed_call(error: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _error_metadata(error: dict[str, Any]) -> Any:
-    [result] = _results(await _events_of(_failed_call(error)))
+    [result] = results(await events_of(_failed_call(error)))
     return result.result.metadata["error"]
 
 
@@ -88,12 +88,12 @@ class TestTheThreeAreDistinguishable:
 @pytest.mark.asyncio
 class TestTicket12sContractIsUnchanged:
     async def test_a_successful_call_carries_no_error(self) -> None:
-        [result] = _results(await _events_of(MCP_CALL))
+        [result] = results(await events_of(MCP_CALL))
 
         assert "error" not in result.result.metadata
 
     async def test_a_failed_call_keeps_its_event_name_and_shape(self) -> None:
-        [result] = _results(await _events_of(_failed_call({"type": "http_error", "code": 503, "message": "m"})))
+        [result] = results(await events_of(_failed_call({"type": "http_error", "code": 503, "message": "m"})))
 
         assert isinstance(result, BuiltinToolResultEvent)
         assert (result.parent_id, result.name) == ("mcp_err", MCP_SERVER_TOOL_NAME)

@@ -196,7 +196,12 @@ class OpenAIServerToolResultEvent(BuiltinToolResultEvent):
             name = MCP_SERVER_TOOL_NAME
             metadata = {"server_label": item.server_label, "tools": [t.name for t in item.tools]}
             if item.error is not None:
-                metadata["error"] = item.error
+                # Shaped like `mcp_call`'s error rather than left as the bare
+                # string the SDK types here, so one `metadata["error"]["type"]`
+                # tells a caller what failed whichever item carried it. The
+                # listing has no discriminated union of its own, so the arm is
+                # ag2's — and named for the item, not for a guess at the cause.
+                metadata["error"] = {"type": "mcp_list_tools_error", "message": item.error}
 
         elif isinstance(item, ResponseFunctionShellToolCallOutput):
             # Paired with its `shell_call` by `ShellCallTracker`, which supplies
