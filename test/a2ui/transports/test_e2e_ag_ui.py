@@ -251,90 +251,95 @@ class _ExplodeAfterTheTurn(BaseMiddleware):
 
 
 @pytest.mark.asyncio
-async def test_run_finished_reports_what_the_turn_cost() -> None:
-    """A client must not have to know which AG-UI endpoint it reached.
+class TestTokenUsage:
+    """What this transport reports a turn cost, on both terminating events."""
 
-    ``ag2.ag_ui`` fills ``usage`` on both terminating events; this transport is
-    the second AG-UI surface and has to agree, or reported spend becomes a
-    property of the URL rather than of the run.
-    """
-    server = A2UIServer(
-        Agent(
-            name="ui",
-            config=TestConfig(
-                ModelResponse(
-                    ModelMessage("Just text."),
-                    usage=Usage(prompt_tokens=120, completion_tokens=30, total_tokens=150),
-                    model="gpt-5",
-                    provider="openai",
+    async def test_run_finished_reports_what_the_turn_cost(self) -> None:
+        """A client must not have to know which AG-UI endpoint it reached.
+
+        ``ag2.ag_ui`` fills ``usage`` on both terminating events; this transport is
+        the second AG-UI surface and has to agree, or reported spend becomes a
+        property of the URL rather than of the run.
+        """
+        server = A2UIServer(
+            Agent(
+                name="ui",
+                config=TestConfig(
+                    ModelResponse(
+                        ModelMessage("Just text."),
+                        usage=Usage(prompt_tokens=120, completion_tokens=30, total_tokens=150),
+                        model="gpt-5",
+                        provider="openai",
+                    ),
                 ),
             ),
-        ),
-        transport=AgUiTransport(),
-        validate_responses=False,
-    )
+            transport=AgUiTransport(),
+            validate_responses=False,
+        )
 
-    events = await _dispatch_events(server, _run_input("hi"))
+        events = await _dispatch_events(server, _run_input("hi"))
 
-    [finished] = [e for e in events if e["type"] == "RUN_FINISHED"]
-    assert finished["usage"] == [
-        {
-            "provider": "openai",
-            "model": "gpt-5",
-            "inputTokens": 120,
-            "outputTokens": 30,
-            "totalTokens": 150,
-        }
-    ]
+        [finished] = [e for e in events if e["type"] == "RUN_FINISHED"]
+        assert finished["usage"] == [
+            {
+                "provider": "openai",
+                "model": "gpt-5",
+                "inputTokens": 120,
+                "outputTokens": 30,
+                "totalTokens": 150,
+            }
+        ]
 
+    async def test_run_error_reports_the_spend_that_preceded_it(self) -> None:
+        """The turn core owns the stream, so the records have to be collected live.
 
-@pytest.mark.asyncio
-async def test_run_error_reports_the_spend_that_preceded_it() -> None:
-    """The turn core owns the stream, so the records have to be collected live.
-
-    Reading them back after the fact is not available here, and a failed turn is
-    exactly the one whose cost an operator wants explained.
-    """
-    server = A2UIServer(
-        Agent(
-            name="ui",
-            config=TestConfig(
-                ModelResponse(
-                    ModelMessage("Just text."),
-                    usage=Usage(prompt_tokens=120, completion_tokens=30, total_tokens=150),
-                    model="gpt-5",
-                    provider="openai",
+        Reading them back after the fact is not available here, and a failed turn is
+        exactly the one whose cost an operator wants explained.
+        """
+        server = A2UIServer(
+            Agent(
+                name="ui",
+                config=TestConfig(
+                    ModelResponse(
+                        ModelMessage("Just text."),
+                        usage=Usage(prompt_tokens=120, completion_tokens=30, total_tokens=150),
+                        model="gpt-5",
+                        provider="openai",
+                    ),
                 ),
+                # Fails after the model call has already billed, which is the only
+                # ordering that makes a partial spend observable at all.
+                middleware=[_ExplodeAfterTheTurn],
             ),
-            # Fails after the model call has already billed, which is the only
-            # ordering that makes a partial spend observable at all.
-            middleware=[_ExplodeAfterTheTurn],
-        ),
-        transport=AgUiTransport(),
-        validate_responses=False,
-    )
+            transport=AgUiTransport(),
+            validate_responses=False,
+        )
 
-    events = await _dispatch_events(server, _run_input("hi"))
+        events = await _dispatch_events(server, _run_input("hi"))
 
-    types = [e["type"] for e in events]
-    assert types[-1] == "RUN_ERROR"
-    [error] = [e for e in events if e["type"] == "RUN_ERROR"]
-    assert error["usage"] == [
-        IsPartialDict({"provider": "openai", "model": "gpt-5", "inputTokens": 120, "outputTokens": 30}),
-    ]
+        types = [e["type"] for e in events]
+        assert types[-1] == "RUN_ERROR"
+        [error] = [e for e in events if e["type"] == "RUN_ERROR"]
+        assert error["usage"] == [
+            {
+                "provider": "openai",
+                "model": "gpt-5",
+                "inputTokens": 120,
+                "outputTokens": 30,
+                "totalTokens": 150,
+            }
+        ]
 
+    async def test_a_turn_that_spent_nothing_omits_usage(self) -> None:
+        """Absence means "nothing measured"; an empty list would mean "measured, and
+        it was nothing" — the same distinction the counts themselves keep."""
+        server = A2UIServer(
+            Agent(name="ui", config=TestConfig("Just text.")),
+            transport=AgUiTransport(),
+            validate_responses=False,
+        )
 
-@pytest.mark.asyncio
-async def test_a_turn_that_spent_nothing_omits_usage() -> None:
-    """Absence means "nothing measured"; an empty list would mean "measured, and
-    it was nothing" — the same distinction the counts themselves keep."""
-    server = A2UIServer(
-        Agent(name="ui", config=TestConfig("Just text.")),
-        transport=AgUiTransport(),
-        validate_responses=False,
-    )
+        events = await _dispatch_events(server, _run_input("hi"))
 
-    events = await _dispatch_events(server, _run_input("hi"))
-
-    [finished] = [e for e in events if e["type"] == "RUN_FINISHED"]
-    assert "usage" not in finished
+        [finished] = [e for e in events if e["type"] == "RUN_FINISHED"]
+        assert "usage" not in finished

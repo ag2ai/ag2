@@ -141,14 +141,23 @@ sub-agents, history compaction and memory aggregation — and agree with
 `AgentReply.usage()` for the same run, because both read the same accounting
 events.
 
-Two properties are worth knowing before you sum these entries:
+An entry carries `inputTokens`, `outputTokens`, `totalTokens`, `reasoningTokens`
+and `cachedInputTokens`. Any of them may be missing — three properties are worth
+knowing before you sum them:
 
 - **A count the provider did not report is absent, not `0`.** `cachedInputTokens`
   absent means "never measured"; `0` means the provider measured no cache hit.
+  The same holds for `reasoningTokens`, which most non-reasoning calls omit.
 - **`totalTokens` is never derived.** It appears only when every call behind an
   entry supplied one, so a client is never handed a computed figure dressed up
   as a measurement. Sum `inputTokens` and `outputTokens` yourself if you need a
   figure regardless.
+- **Cache *writes* are not reported at all.** `cachedInputTokens` counts a cache
+  *read*. Tokens spent creating a cache entry have no field in the protocol, and
+  they are omitted rather than folded into a neighbouring count, because
+  providers disagree on whether cached tokens already sit in the prompt figure.
+  A cost model built on these entries alone under-counts a run that primed a
+  cache; read `AgentReply.usage()` server-side if you need that number.
 
 One entry is emitted per distinct provider/model pair, in order of first
 appearance in the run. A delegated sub-agent that used a single configuration is

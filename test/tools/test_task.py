@@ -963,10 +963,11 @@ class TestSubtaskUsageRollup:
 
         events = list(await parent_ctx.stream.history.get_events())
         usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert usage_events == [
-            UsageEvent(Usage(prompt_tokens=20, completion_tokens=8), kind="subtask"),
+        # ``label`` is ``compare=False`` on the event, so comparing whole
+        # ``UsageEvent``s would not check it — the fields go in a tuple instead.
+        assert [(e.usage, e.kind, e.label) for e in usage_events] == [
+            (Usage(prompt_tokens=20, completion_tokens=8), "subtask", "worker")
         ]
-        assert usage_events[0].label == "worker"
 
         report = UsageReport.from_events(events)
         assert report.total == Usage(prompt_tokens=20, completion_tokens=8)
@@ -1010,9 +1011,7 @@ class TestSubtaskUsageRollup:
 
         events = list(await parent_ctx.stream.history.get_events())
         usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert len(usage_events) == 1
-        assert usage_events[0].provider == "anthropic"
-        assert usage_events[0].model == "claude-haiku-4"
+        assert [(e.provider, e.model) for e in usage_events] == [("anthropic", "claude-haiku-4")]
         assert UsageReport.from_events(events).by_model == {
             "claude-haiku-4": Usage(prompt_tokens=30, completion_tokens=13)
         }
@@ -1054,10 +1053,9 @@ class TestSubtaskUsageRollup:
 
         events = list(await parent_ctx.stream.history.get_events())
         usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert len(usage_events) == 1
-        assert usage_events[0].provider is None
-        assert usage_events[0].model is None
-        assert usage_events[0].usage == Usage(prompt_tokens=30, completion_tokens=13)
+        assert [(e.provider, e.model, e.usage) for e in usage_events] == [
+            (None, None, Usage(prompt_tokens=30, completion_tokens=13))
+        ]
 
     async def test_rollup_reports_usage_incurred_before_a_failure(self) -> None:
         """A sub-task that bills a model call and *then* dies still reports that
