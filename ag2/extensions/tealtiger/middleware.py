@@ -56,6 +56,16 @@ _SECRET_PATTERNS: list[re.Pattern[str]] = [
 # Injection findings keep a snippet of the match as evidence, not the whole argument.
 _MAX_MATCHED_TEXT_CHARS = 100
 
+# Maps arg_validation `type` names to the Python types they check against.
+_TYPE_NAMES: dict[str, type] = {
+    "str": str,
+    "int": int,
+    "float": float,
+    "bool": bool,
+    "list": list,
+    "dict": dict,
+}
+
 
 class TealTigerMiddleware:
     """Deterministic governance middleware factory for AG2.
@@ -340,6 +350,15 @@ class _TealTigerPerTurn(BaseMiddleware):
                     risk_score = max(risk_score, 80)
                     break
 
+            elif policy.type == "arg_validation":
+                if fnmatch.fnmatch(tool_name, policy.config.get("tool", "")):
+                    violation = self._validate_args(tool_args, policy.config.get("constraints", {}))
+                    if violation is not None:
+                        action = "DENY"
+                        reason_codes.append(f"ARG_VALIDATION:{violation}")
+                        risk_score = max(risk_score, 85)
+                        break
+
             elif policy.type == "pii_block":
                 categories = policy.config.get("categories", [])
                 pii_found = self._detect_pii(args_str, categories)
@@ -403,6 +422,62 @@ class _TealTigerPerTurn(BaseMiddleware):
     def _detect_secrets(text: str) -> bool:
         """Detect secret patterns in text."""
         return any(p.search(text) for p in _SECRET_PATTERNS)
+
+    @staticmethod
+    def _validate_args(tool_args: Any, constraints: dict[str, dict[str, Any]]) -> str | None:
+        """Check a tool's arguments against per-argument constraints.
+
+        Returns ``"{arg}:{check}"`` for the first violated constraint (e.g.
+        ``"query:max_length"``), or ``None`` if every constrained argument
+        passes. Arguments not named in ``constraints`` are ignored, and a
+        constrained argument that is absent from the call is skipped.
+
+        When ``tool_args`` is not a mapping (already serialized to a string, or
+        positional), per-name checks cannot be applied, so only the
+        whole-value string checks (``blocked_terms``, ``blocked_patterns``) run
+        against the serialized form under each constrained name.
+        """
+        is_mapping = isinstance(tool_args, dict)
+        serialized = tool_args if isinstance(tool_args, str) else str(tool_args)
+
+        for arg_name, spec in constraints.items():
+            if is_mapping:
+                if arg_name not in tool_args:
+                    continue
+                value = tool_args[arg_name]
+                value_present = True
+            else:
+                # No named access — fall back to substring/regex over the serialized args.
+                value = serialized
+                value_present = False
+
+            text = value if isinstance(value, str) else str(value)
+
+            if value_present and "type" in spec:
+                expected = _TYPE_NAMES.get(spec["type"])
+                # bool is a subclass of int, so reject a bool where "int" is required.
+                type_ok = isinstance(value, expected) and not (expected is int and isinstance(value, bool))
+                if not type_ok:
+                    return f"{arg_name}:type"
+
+            if value_present and "allowed_values" in spec and value not in spec["allowed_values"]:
+                return f"{arg_name}:allowed_values"
+
+            if value_present and "max_length" in spec and len(text) > spec["max_length"]:
+                return f"{arg_name}:max_length"
+
+            if value_present and "min_length" in spec and len(text) < spec["min_length"]:
+                return f"{arg_name}:min_length"
+
+            if "blocked_terms" in spec:
+                lowered = text.lower()
+                if any(term.lower() in lowered for term in spec["blocked_terms"]):
+                    return f"{arg_name}:blocked_terms"
+
+            if "blocked_patterns" in spec and any(re.search(pattern, text) for pattern in spec["blocked_patterns"]):
+                return f"{arg_name}:blocked_patterns"
+
+        return None
 
     @staticmethod
     def _detect_prompt_injection(

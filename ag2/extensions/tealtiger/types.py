@@ -76,6 +76,80 @@ class GovernancePolicy:
         return cls(type="tool_blocklist", config={"blocked": list(blocked)})
 
     @classmethod
+    def arg_validation(cls, tool: str, constraints: dict[str, dict[str, Any]]) -> "GovernancePolicy":
+        """Constrain the arguments a specific tool (or tool pattern) may receive.
+
+        Where `tool_allowlist`/`tool_blocklist` govern *which* tools run, this
+        governs *what* those tools are called with — a defence against dangerous
+        argument values such as SQL injection, path traversal, or oversized
+        payloads.
+
+        The policy applies to any tool whose name matches `tool` via `fnmatch`
+        (so `"sql_*"` covers `sql_query`, `sql_exec`, ...). `constraints` maps an
+        argument name to the checks that argument must satisfy:
+
+        | Check | Meaning |
+        |-------|---------|
+        | `max_length` | Reject if `len(str(value))` exceeds this. |
+        | `min_length` | Reject if `len(str(value))` is below this. |
+        | `type` | Reject if the value is not of this type. One of `"str"`, `"int"`, `"float"`, `"bool"`, `"list"`, `"dict"`. |
+        | `blocked_terms` | Reject if any term appears in `str(value)` (case-insensitive substring). |
+        | `blocked_patterns` | Reject if any regex matches `str(value)`. |
+        | `allowed_values` | Reject if the value is not one of these. |
+
+        Only the arguments named in `constraints` are checked; any others pass
+        through. An argument named in `constraints` but absent from the call is
+        skipped (use a `tool_args`-style required check upstream if presence
+        matters).
+
+        Example — block SQL injection and path traversal::
+
+            GovernancePolicy.arg_validation(
+                "sql_query",
+                {"query": {"max_length": 500, "blocked_terms": ["DROP", "DELETE", ";--"]}},
+            )
+            GovernancePolicy.arg_validation(
+                "read_file",
+                {"path": {"blocked_patterns": [r"\\.\\.[\\\\/]"]}},  # reject ../ and ..\\
+            )
+
+        Args:
+            tool: Tool name or `fnmatch` pattern the constraints apply to.
+            constraints: Mapping of argument name -> constraint spec.
+
+        Raises:
+            ValueError: If `tool` is empty, `constraints` is empty, or a
+                constraint spec is malformed (unknown check, non-mapping spec,
+                or an unsupported `type` name) — any of which would otherwise
+                silently validate nothing.
+        """
+        if not tool:
+            raise ValueError("`tool` must not be empty.")
+        if not constraints:
+            raise ValueError("`constraints` must not be empty; a policy with no constraints validates nothing.")
+
+        valid_checks = {"max_length", "min_length", "type", "blocked_terms", "blocked_patterns", "allowed_values"}
+        valid_types = {"str", "int", "float", "bool", "list", "dict"}
+        for arg_name, spec in constraints.items():
+            if not isinstance(spec, dict):
+                raise ValueError(
+                    f"Constraint spec for argument '{arg_name}' must be a dict, got {type(spec).__name__}."
+                )
+            unknown = set(spec) - valid_checks
+            if unknown:
+                raise ValueError(
+                    f"Unknown constraint(s) for argument '{arg_name}': {', '.join(sorted(unknown))}. "
+                    f"Valid checks: {', '.join(sorted(valid_checks))}."
+                )
+            if "type" in spec and spec["type"] not in valid_types:
+                raise ValueError(
+                    f"Unsupported type '{spec['type']}' for argument '{arg_name}'. "
+                    f"Valid types: {', '.join(sorted(valid_types))}."
+                )
+
+        return cls(type="arg_validation", config={"tool": tool, "constraints": constraints})
+
+    @classmethod
     def pii_block(cls, categories: list[str] | None = None) -> "GovernancePolicy":
         """Block tool calls containing PII in arguments.
 
