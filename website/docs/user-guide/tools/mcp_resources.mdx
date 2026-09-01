@@ -1,0 +1,182 @@
+---
+title: "Serving Resources over MCP"
+sidebarTitle: "MCP Resources"
+---
+
+# Serving Resources over MCP
+
+An MCP server can expose **resources** — addressable, readable blobs a client fetches by URI — alongside its tools. `ag2.mcp.MCPServer` serves them from a fixed set you pass at construction, and can tell subscribed clients when a resource's contents go stale.
+
+!!! note "This is the serving side of MCP"
+    `ag2.mcp.MCPServer` exposes an agent **as** an MCP server. This is the inverse of consuming an MCP server as tools with `MCPToolkit` / `MCPServerTool` — see [MCP Servers](/docs/user-guide/tools/mcp_servers) for that.
+
+## Static resources
+
+A `Resource` is a fixed URI plus a `read` callable returning the body. Return `str` for text and `bytes` for binary; the MIME type defaults to `text/plain` and `application/octet-stream` respectively.
+
+```python linenums="1"
+import asyncio
+from pathlib import Path
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, Resource
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+server = MCPServer(
+    agent,
+    resources=[
+        Resource(
+            uri="config://app",
+            name="app-config",
+            description="The running configuration.",
+            mime_type="application/json",
+            read=lambda: Path("config.json").read_text(),
+        )
+    ],
+)
+
+if __name__ == "__main__":
+    asyncio.run(server.run_stdio())
+```
+
+The `read` callable may be sync or async, and runs on every `resources/read` — so a resource is a *view* of whatever it reads from, not a snapshot taken at construction.
+
+## Resource templates
+
+A `ResourceTemplate` serves a family of URIs described by an RFC 6570 template. Two expansion forms are supported: `{var}` matches a single path segment, and `{+var}` matches across `/`. The matched variables arrive as a dict.
+
+```python linenums="1"
+from pathlib import Path
+
+from ag2.mcp import ResourceTemplate
+
+def forecast(city: str) -> str:
+    """The current forecast for one city."""
+    return f"sunny in {city}"
+
+templates = [
+    # weather://London  ->  {"city": "London"}
+    ResourceTemplate("weather://{city}", "weather", lambda v: forecast(v["city"])),
+    # file:///a/b/c.txt ->  {"path": "a/b/c.txt"}
+    ResourceTemplate("file:///{+path}", "file", lambda v: Path(v["path"]).read_text()),
+]
+```
+
+Pass them as `resource_templates=`. A URI that matches a static `Resource` exactly always wins over a template that would also match it.
+
+## Notifying clients that a resource changed
+
+By default a client has no way to learn that a resource's body changed — it must re-read on a guess. `subscriptions=` turns on MCP's subscription capability so the server can say so.
+
+Build a `ResourceNotifier` **before** the server, so any tool that changes a resource can close over it:
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, Resource, ResourceNotifier, mcp_tool
+
+counter = {"n": 0}
+notifier = ResourceNotifier()
+
+@mcp_tool
+async def bump() -> str:
+    """Increment the counter."""
+    counter["n"] += 1
+    await notifier.notify_resource_updated("mem://counter")
+    return f"counter is now {counter['n']}"
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+server = MCPServer(
+    agent,
+    resources=[Resource(uri="mem://counter", name="counter", read=lambda: str(counter["n"]))],
+    tools=[bump],
+    subscriptions=notifier,
+)
+
+if __name__ == "__main__":
+    asyncio.run(server.run_stdio())
+```
+
+Outside a tool, `#!python await server.notify_resource_updated(uri)` does the same thing.
+
+The URI must name something the server actually serves — a static `Resource` or a URI a `ResourceTemplate` matches — otherwise the call raises `MCPResourceNotFoundError`. This is deliberately stricter than the subscribing side, where a client may subscribe to any URI and simply never hear about it: a typo in *your* code would otherwise surface only as notifications that never arrive. For the same reason, announcing through a notifier no `MCPServer` has taken yet raises `ValueError`: there is no resource set to check the URI against and nobody subscribed to hear it.
+
+!!! note "What can change, and what cannot"
+    The set of resources — like the set of tools and prompts — is fixed when the server is constructed, so only a resource's **contents** can change. There is no list-changed notification to send, and none ever fires.
+
+    What is *advertised* differs by protocol era, though, and the modern era overstates it. Handshake-era clients see all three `listChanged` flags as `false`, which is the truth. At 2026-07-28 every change notification rides the one `subscriptions/listen` stream, so the SDK derives `resources.subscribe` **and** `resources.listChanged`, `tools.listChanged` and `prompts.listChanged` together, from the single fact that the listen handler is registered — wiring up `subscriptions=` therefore advertises all four as `true` there. The three `listChanged` flags promise events this server will never send. AG2 accepts that rather than correcting it: overriding the derivation would mean subclassing the SDK's server to change a flag that changes no behaviour. Serving dynamic resource, tool or prompt sets — which would make the flags accurate — is a separate feature.
+
+### Both protocol eras are served
+
+Which mechanism a client gets depends on the protocol revision it speaks, and `MCPServer` serves both:
+
+| Client's protocol revision | Mechanism |
+| --- | --- |
+| 2026-07-28 | `subscriptions/listen` — one long-lived stream carrying every change event the client filtered for |
+| ≤ 2025-11-25 | `resources/subscribe` per URI, with `notifications/resources/updated` pushed down the session |
+
+A single `notify_resource_updated` call reaches both.
+
+!!! warning "`stateless=True` serves only the 2026-07-28 half"
+    Handshake-era delivery pushes into a session opened by an earlier request, and a stateless HTTP transport keeps no session. Rather than accept subscriptions it could never fulfil, a stateless server does not advertise `resources.subscribe` to handshake-era clients, which tells them to poll instead of waiting forever. `subscriptions/listen` is unaffected — it streams even in stateless, JSON-response mode.
+
+    The capability is decided at construction, before a transport is chosen, so `run_stdio` inherits the suppression too even though stdio holds a connection. Drop `stateless=True` if the same server may be served over stdio.
+
+    You do not have to find this out from this page: passing `subscriptions=` together with `stateless=True` emits a `RuntimeWarning` at construction naming what is disabled, for whom and why. The combination stays legal, because a stateless deployment serving modern-era clients has full subscription support and may well be what you want, so the warning informs rather than blocks. Silence it the standard way once the trade-off is deliberate:
+
+    ```python linenums="1"
+    import warnings
+
+    warnings.filterwarnings("ignore", category=RuntimeWarning, message="MCPServer\\(subscriptions=")
+    ```
+
+    The warning is attributed to your own `MCPServer(...)` line rather than to a frame inside `ag2`, so `-W error::RuntimeWarning` points at the construction you wrote.
+
+### Several replicas
+
+`ResourceNotifier()` fans events out in-process. Behind a load balancer, a change published on one replica has to reach subscribers connected to another, so pass a cross-process bus. The MCP SDK ships only the in-process `InMemorySubscriptionBus`, so a multi-replica deployment implements the `SubscriptionBus` protocol over its own backend — `publish` forwards the event to Redis, NATS or similar, and each replica invokes its local listeners for events arriving back from it:
+
+```python linenums="1"
+from collections.abc import Callable
+
+from mcp.server.subscriptions import SubscriptionBus
+from mcp.shared.subscriptions import ServerEvent
+
+from ag2.mcp import ResourceNotifier
+
+class RedisSubscriptionBus(SubscriptionBus):
+    """Fans events across replicas through a Redis pub/sub channel."""
+
+    async def publish(self, event: ServerEvent) -> None:
+        """Forward `event` to the backend; every replica's listeners then see it."""
+        ...
+
+    def subscribe(self, listener: Callable[[ServerEvent], None]) -> Callable[[], None]:
+        """Register `listener` locally and return an idempotent unsubscribe callable."""
+        ...
+
+notifier = ResourceNotifier(bus=RedisSubscriptionBus())
+```
+
+Listeners are synchronous, must not raise, and are invoked on the server's event loop. Both eras deliver through the bus, so one bus covers both.
+
+### Bounding the registry
+
+`max_subscribers` (default 1024) is one number bounding two things:
+
+- **how many subscribers** the server admits at once — in **each era separately**, since modern-era listen streams and handshake-era connections cost different things, so a server will admit up to twice the number you pass; and
+- **how many URIs any one handshake-era subscriber may hold.**
+
+The second bound exists because the first is not the whole cost. A client may subscribe to a URI the server does not serve, and that is deliberate: it may know about one the server will start serving later. So a single handshake-era connection could otherwise invent URIs without end and grow the registry unboundedly while never spending more than its one subscriber slot. Making the URI bound *per subscriber* rather than a total shared across them means a client subscribing to many URIs exhausts its own quota instead of locking every other client out of subscribing. The modern era has no equivalent gap — a listen stream's filter arrives whole in one request, and the number of streams is already bounded.
+
+`max_buffered_events` (default 1024, matching the SDK's own listen-stream buffer) bounds a third thing: how many announcements one handshake-era subscriber may fall behind by. Past it that subscriber is dropped rather than the event, so one client that stopped reading costs neither the publisher nor its fellow subscribers.
+
+Past either subscriber bound a further subscription is **refused**, with an error the client can see; it is never accepted and quietly dropped, and nothing already held is evicted to make room. A dead connection is only discovered when a send to it fails, so the server cannot tell an idle subscriber from a departed one — and evicting a live one would leave that client believing it still holds a working subscription it will never hear from again. That is the same silent failure the `stateless=True` warning exists to prevent. (The conversation-session registry, keyed by the same connection identity, evicts LRU instead: losing history costs a caller context it can rebuild, which is a different trade.)
+
+!!! warning "Size the bound for churn, not for concurrency"
+    Over streamable HTTP a send to a departed client does **not** fail: the transport drops a notification whose stream is gone and logs it at debug. A handshake-era client that disconnects without terminating its MCP session therefore leaves its entry in place, and because the policy refuses rather than evicts, a long-lived server can sit at `max_subscribers` holding entries for clients that are long gone — refusing ones that are still here.
+
+    Reclaiming those needs a transport-teardown hook the MCP SDK does not currently expose to a server handler, so until it does: set `max_subscribers` well above your expected concurrent subscriber count, and prefer clients that send `DELETE` on the MCP endpoint when they are finished. A subscriber whose *backlog* overflows — one that stopped reading but held its connection open — is dropped, since the protocol offers no replay and there is nothing left worth keeping for it.

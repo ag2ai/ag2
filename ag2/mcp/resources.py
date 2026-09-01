@@ -129,6 +129,17 @@ class ResourceProvider:
         contents = await self.read(params.uri)
         return ReadResourceResult(contents=[_to_wire_contents(params.uri, c) for c in contents])
 
+    def resolves(self, uri: str) -> bool:
+        """Whether ``uri`` names something this provider serves.
+
+        Same matching order as :meth:`read`, without running the reader — it
+        answers "is this URI ours" for callers that must not fetch the body,
+        such as validating a resource-update announcement.
+        """
+        if uri in self._by_uri:
+            return True
+        return any(pattern.match(uri) is not None for pattern, _ in self._compiled)
+
     async def read(self, uri: str) -> list[ReadResourceContents]:
         resource = self._by_uri.get(uri)
         if resource is not None:

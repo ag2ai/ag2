@@ -177,6 +177,8 @@ Both bounds are quoted in the `conversation` argument's own description, so a cl
 
 `stateless=True` stops the **HTTP transport** issuing an `mcp-session-id`. That is a *handshake-era* switch: modern-era requests are self-contained single exchanges that never carry a session id in the first place, so the flag does not reach them.
 
+It has one further consequence, decided at construction rather than per transport: handshake-era resource subscriptions are pushed into a session an earlier request opened, so a stateless server does not advertise `resources.subscribe` to those clients and warns you at construction. Because the capability is settled before a transport is chosen, `run_stdio` inherits the same suppression even though stdio holds a connection — drop `stateless=True` if the same server may be served over stdio. See [Serving Resources over MCP](/docs/user-guide/tools/mcp_resources).
+
 Pairing `stateless=True` with `sessions=True` is a valid configuration, not a contradiction — no transport session, conversations named by handle:
 
 ```python linenums="1"
@@ -243,5 +245,5 @@ With authentication configured, a conversation records the principal that create
 ## Beyond the conversational tool
 
 - **Custom tools** run a handler of yours directly instead of invoking the agent — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for `@mcp_tool` and returning renderable UI. Their state is their own; conversation handles apply only to the conversational tool.
-- **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`; the matching capability is advertised only when a non-empty collection is supplied.
+- **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`; the matching capability is advertised only when a non-empty collection is supplied. See [Serving Resources over MCP](/docs/user-guide/tools/mcp_resources) for templates and for telling clients a resource's contents went stale.
 - **Progress and logs** — while the agent runs, its stream events are forwarded to the client as progress notifications and log messages. Turn this off with `stream_progress=False`.

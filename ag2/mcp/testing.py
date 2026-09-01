@@ -39,7 +39,7 @@ async def connect(
     contract here — an initialized ``ClientSession`` — is held steady across it.
     """
     async with (
-        _served_streams(mcp_server.server, raise_exceptions) as streams,
+        _served_streams(mcp_server, raise_exceptions) as streams,
         ClientSession(*streams, **session_kwargs) as session,  # type: ignore[arg-type]
     ):
         await session.initialize()
@@ -69,7 +69,7 @@ async def connect_modern(
     is what this module is for.
     """
     async with Client(
-        _MemoryTransport(mcp_server.server, raise_exceptions=raise_exceptions),
+        _MemoryTransport(mcp_server, raise_exceptions=raise_exceptions),
         mode=LATEST_MODERN_VERSION,
         raise_exceptions=raise_exceptions,
         **client_kwargs,  # type: ignore[arg-type]
@@ -78,22 +78,22 @@ async def connect_modern(
 
 
 class _MemoryTransport:
-    """An ``mcp.client.Transport`` serving a low-level server over memory streams.
+    """An ``mcp.client.Transport`` serving an :class:`MCPServer` over memory streams.
 
     The stream pair :func:`connect` builds inline, repackaged as the transport
     object ``Client`` takes — the SDK's own in-memory transport is private, and
     this keeps :func:`connect` and :func:`connect_modern` on one wire shape.
     """
 
-    __slots__ = ("_server", "_raise_exceptions", "_stack")
+    __slots__ = ("_mcp_server", "_raise_exceptions", "_stack")
 
-    def __init__(self, server: Server, *, raise_exceptions: bool) -> None:
-        self._server = server
+    def __init__(self, mcp_server: MCPServer, *, raise_exceptions: bool) -> None:
+        self._mcp_server = mcp_server
         self._raise_exceptions = raise_exceptions
         self._stack = AsyncExitStack()
 
     async def __aenter__(self) -> MessageStream:
-        return await self._stack.enter_async_context(_served_streams(self._server, self._raise_exceptions))
+        return await self._stack.enter_async_context(_served_streams(self._mcp_server, self._raise_exceptions))
 
     async def __aexit__(
         self,
@@ -105,13 +105,17 @@ class _MemoryTransport:
 
 
 @asynccontextmanager
-async def _served_streams(server: Server, raise_exceptions: bool) -> AsyncGenerator[MessageStream]:
+async def _served_streams(mcp_server: MCPServer, raise_exceptions: bool) -> AsyncGenerator[MessageStream]:
     """Yield the client half of a memory stream pair whose server half is being served."""
     async with (
         create_client_server_memory_streams() as (client_streams, server_streams),
+        # The same background state the ASGI lifespan and ``run_stdio`` enter:
+        # subscription delivery lives there, so a session without it would be
+        # served by a server that is only half-running.
+        mcp_server._serving(),
         anyio.create_task_group() as tg,
     ):
-        tg.start_soon(_run_server, server, server_streams, raise_exceptions)
+        tg.start_soon(_run_server, mcp_server.server, server_streams, raise_exceptions)
         yield client_streams
         # As in ``connect``: the server task runs until cancelled, and the client
         # is done, so end it here rather than leaving the task group waiting.

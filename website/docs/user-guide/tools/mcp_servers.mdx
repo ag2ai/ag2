@@ -34,6 +34,9 @@ Autogen supports both ways MCP servers are typically wired into an agent:
 !!! tip
     Pick `MCPToolkit` when you want provider-agnostic behavior, local control over tool execution, when you need to run a local stdio MCP server, or when your MCP credentials must stay inside your infrastructure. Pick `MCPServerTool` when you're only targeting a provider that supports it and you'd rather let the provider manage the MCP lifecycle for you.
 
+!!! note "Going the other way"
+    Both options above *consume* an MCP server. To expose an AG2 agent **as** one, see [Serving an Agent as an MCP Server](/docs/user-guide/tools/serving_mcp) — then [Serving Resources over MCP](/docs/user-guide/tools/mcp_resources) for its resources and change notifications, and [MCP-UI](/docs/user-guide/tools/mcp_ui) for renderable UI results.
+
 ## Client-side: `MCPToolkit`
 
 `MCPToolkit` is a [Toolkit](/docs/user-guide/tools/toolkits) — it discovers the server's tools lazily and exposes each one as a regular function tool to the agent. It accepts either a remote URL/`MCPServerConfig` or an `MCPStdioServerConfig` for a locally-launched subprocess; the rest of the agent doesn't care which transport is in use.
