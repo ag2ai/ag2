@@ -36,14 +36,14 @@ from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 from .mappers import event_to_session_update, prompt_to_inputs
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
 
     from ag2.context import SubId
     from ag2.hitl import HumanHook
     from ag2.stream import MemoryStream
 
     from .sessions import AgentSession, SessionStore
-    from .types import ContentBlock
+    from .types import ContentBlock, SessionUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +241,17 @@ class AgentExecutor:
         if not final or final == "".join(delivered):
             return
         await self._deliver(acp.update_agent_message_text(final), client=client, session_id=session_id)
+
+    async def deliver(self, updates: "Iterable[SessionUpdate]", *, client: acp.Client, session_id: str) -> None:
+        """Push ``updates`` to the Client in order, stopping at the first that fails.
+
+        The ``session/load`` replay path. Sequential on purpose: ACP lets the
+        Client rebuild its view from the order notifications arrive in, and a
+        replay whose tool result overtook its tool call would be a different
+        conversation.
+        """
+        for update in updates:
+            await self._deliver(update, client=client, session_id=session_id)
 
     async def _deliver(self, update: Any, *, client: acp.Client, session_id: str) -> None:
         """Push one ``session/update``, letting a delivery failure fail the turn.
