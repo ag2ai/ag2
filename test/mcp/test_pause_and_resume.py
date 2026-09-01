@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 from mcp.client.session import ClientRequestContext
+from mcp.server.request_state import RequestStateBoundary, RequestStateSecurity, authenticated_principal
 from mcp.types import ElicitRequest, ElicitRequestParams, ElicitResult, InputRequiredResult, TextContent
 
 from ag2 import Agent, Context
@@ -175,3 +176,36 @@ class TestModernEraPause:
         first = result.content[0]
         assert isinstance(first, TextContent)
         assert "Human input was requested but not provided" in first.text
+
+
+class TestTheStateIsBoundToItsCaller:
+    """A retry presenting state minted for another caller must not resume this run.
+
+    The check itself is the ``RequestStateBoundary``'s, and it is fail-closed:
+    the envelope carries a claim over the bound principal and refuses a mismatch
+    before any handler runs. What is *ours* is installing that boundary, and
+    leaving its principal binding and audience alone — a server that passed
+    ``bind_principal=None`` would still work in every other test here while
+    quietly making one caller's state usable by another. So this asserts the
+    seam, which is the part that can regress in this repository.
+    """
+
+    def test_the_boundary_is_installed_with_its_principal_binding_intact(self) -> None:
+        server = MCPServer(asking_agent(), name="pauser")
+
+        boundaries = [m for m in server.server.middleware if isinstance(m, RequestStateBoundary)]
+
+        assert len(boundaries) == 1, "the lowlevel tier installs none by default; this server must install one"
+        (boundary,) = boundaries
+        security = boundary._security
+        assert security.bind_principal is authenticated_principal, "state would not be bound to its caller"
+        assert boundary._audience == "pauser", "state minted by another service sharing these keys would be accepted"
+
+    def test_a_supplied_policy_is_the_one_installed(self) -> None:
+        """An operator sharing a key across replicas must actually get their policy."""
+        policy = RequestStateSecurity(keys=[b"k" * 32], ttl=45.0)
+
+        server = MCPServer(asking_agent(), request_state_security=policy)
+
+        (boundary,) = [m for m in server.server.middleware if isinstance(m, RequestStateBoundary)]
+        assert boundary._security is policy

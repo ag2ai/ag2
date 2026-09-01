@@ -28,10 +28,19 @@ pytest.importorskip("uvicorn")
 import uvicorn
 
 from ag2 import Agent, Context
-from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
+from ag2.events import (
+    HumanInputRequest,
+    HumanMessage,
+    TextInput,
+    ToolCallEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
+)
 from ag2.mcp import MCPServer, mcp_tool
+from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
-from ag2.tools import MCPServerConfig, MCPToolkit
+from ag2.tools import AnswerPolicy, MCPServerConfig, MCPToolkit
+from ag2.tools.toolkits.mcp_server import toolkit as _toolkit_module
 
 
 @mcp_tool
@@ -58,6 +67,13 @@ async def _live_mcp_server(
     """
     served = MCPServer(Agent("live", config=TestConfig("unused")), tools=[echo], path="/mcp")
     app = served if headers_seen is None else _recording(served, headers_seen)
+    async with _serving(app) as url:
+        yield url
+
+
+@asynccontextmanager
+async def _serving(app: Any) -> AsyncGenerator[str]:
+    """Run ``app`` under ``uvicorn`` on a loopback port, yielding the MCP endpoint URL."""
     config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
     # Bound here rather than inside `serve()`: the socket is already listening, so
     # the port is known and a connection can be made without waiting for start-up.
@@ -129,3 +145,167 @@ async def test_a_slashless_url_still_reaches_the_server(context: Context) -> Non
         schemas = list(await MCPToolkit(url.rstrip("/")).schemas(context))
 
     assert sorted(s.function.name for s in schemas) == ["ask", "echo"]
+
+
+# --------------------------------------------------------------------------- #
+# An AG2 agent asks, and another AG2 agent answers.
+#
+# Everything else tests one side against a double. This is the only place the
+# two halves meet, so it is the only place a wire-level disagreement between
+# them shows up — a state token round-tripped wrongly, an answer keyed to the
+# wrong question, a capability advertised in one shape and read in another all
+# survive both suites and fail only here.
+# --------------------------------------------------------------------------- #
+
+
+def _asking_agent(runs: list[str], answers: list[str] | None = None) -> Agent:
+    """A served agent whose one tool asks its caller a question.
+
+    ``runs`` records once per tool invocation: on the modern era the call is
+    answered across two ``tools/call`` round trips, and a served run that
+    *restarted* rather than resumed would run the body — and its LLM call —
+    a second time. ``answers`` records what the tool was told, which is the
+    calling agent's human's reply having crossed the wire.
+    """
+
+    async def ask_colour(ctx: Context) -> str:
+        runs.append("ran")
+        answer = await ctx.input("What colour?")
+        if answers is not None:
+            answers.append(answer)
+        return "human said: " + answer
+
+    return Agent(
+        "asker",
+        config=TestConfig(ToolCallEvent(name="ask_colour"), "done", raise_tool_errors=False),
+        tools=[ask_colour],
+    )
+
+
+class _Human:
+    """The calling agent's own human-input channel, answering with a fixed reply.
+
+    Registered as a stream interrupter, which is where an agent's human lives:
+    the toolkit's answerer reaches it through ``context.input()`` without
+    knowing anything about MCP.
+    """
+
+    __slots__ = ("_answer", "asked")
+
+    def __init__(self, answer: str) -> None:
+        self._answer = answer
+        self.asked: list[str] = []
+
+    async def __call__(self, event: HumanInputRequest, context: Context) -> None:
+        self.asked.append(event.content)
+        await context.send(HumanMessage.ensure_message(self._answer, parent_id=event.id))
+        return None
+
+
+def _counting_retries(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Count the toolkit's answered retries, which is what a *pause* costs.
+
+    The handshake era answers inline over a standalone request and retries
+    nothing; the modern era has no standalone request and must come back. Both
+    complete, so the retry count is what tells the two paths apart from outside.
+    """
+    retries: list[str] = []
+    original = _toolkit_module._retry_call
+
+    async def counting(session: Any, name: str, arguments: str, responses: Any, state: Any) -> Any:
+        retries.append(name)
+        return await original(session, name, arguments, responses, state)
+
+    monkeypatch.setattr(_toolkit_module, "_retry_call", counting)
+    return retries
+
+
+async def _ask_through_toolkit(url: str, human: "_Human | None", answering: AnswerPolicy) -> Any:
+    """Call the served agent's conversational tool through the toolkit, as an agent would."""
+    calling = Context(stream=MemoryStream())
+    toolkit = MCPToolkit(
+        MCPServerConfig(server_url=url, protocol_mode="auto"),
+        answering=answering,
+    )
+    await toolkit.schemas(calling)
+    proxy = next(t for t in toolkit.tools if t.name == "ask")
+    call = ToolCallEvent(name="ask", arguments='{"message": "pick one"}')
+    if human is None:
+        return await proxy(call, calling)
+    with calling.stream.where(HumanInputRequest).sub_scope(human, interrupt=True):
+        return await proxy(call, calling)
+
+
+def _text(result: ToolResultEvent) -> str:
+    return "".join(p.content for p in result.result.parts if isinstance(p, TextInput))
+
+
+@pytest.mark.asyncio
+async def test_a_served_question_is_answered_by_the_calling_agents_human(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The whole feature, end to end, over a real socket and a real handshake."""
+    runs: list[str] = []
+    answers: list[str] = []
+    human = _Human("blue")
+    retries = _counting_retries(monkeypatch)
+
+    async with _serving(MCPServer(_asking_agent(runs, answers), path="/mcp")) as url:
+        result = await _ask_through_toolkit(url, human, AnswerPolicy(elicitation="ask"))
+
+    assert human.asked == ["What colour?"], "the served agent's question never reached the calling human"
+    assert answers == ["blue"], "the human's answer never reached the served tool"
+    assert isinstance(result, ToolResultEvent), f"the call did not complete: {result}"
+    assert "done" in _text(result)
+    assert retries == ["ask"], "the modern era must answer by retrying the call"
+    assert runs == ["ran"], "the served run restarted rather than resumed"
+
+
+@pytest.mark.asyncio
+async def test_the_handshake_era_answers_inline_with_no_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same scenario one revision back: a standalone request, nothing paused."""
+    runs: list[str] = []
+    answers: list[str] = []
+    human = _Human("green")
+    retries = _counting_retries(monkeypatch)
+
+    async with _serving(MCPServer(_asking_agent(runs, answers), path="/mcp")) as url:
+        calling = Context(stream=MemoryStream())
+        # ``legacy`` is the default; named here because it is the subject.
+        toolkit = MCPToolkit(
+            MCPServerConfig(server_url=url, protocol_mode="legacy"),
+            answering=AnswerPolicy(elicitation="ask"),
+        )
+        await toolkit.schemas(calling)
+        proxy = next(t for t in toolkit.tools if t.name == "ask")
+        with calling.stream.where(HumanInputRequest).sub_scope(human, interrupt=True):
+            result = await proxy(ToolCallEvent(name="ask", arguments='{"message": "pick one"}'), calling)
+
+    assert human.asked == ["What colour?"]
+    assert answers == ["green"], "the human's answer never reached the served tool"
+    assert isinstance(result, ToolResultEvent), f"the call did not complete: {result}"
+    assert "done" in _text(result)
+    assert retries == [], "the handshake era has a back-channel and must not pause"
+    assert runs == ["ran"]
+
+
+@pytest.mark.asyncio
+async def test_a_calling_agent_that_will_not_answer_ends_the_served_turn_deliberately() -> None:
+    """A refusal is a refusal, not a hang and not a broken connection.
+
+    The calling operator enabled nothing, so the toolkit advertises no ability
+    to answer and this server — which asks only clients that said they could —
+    never puts the question. The served turn then ends through the fallback
+    chain's last link, and the calling agent gets that failure as its tool
+    result, with the connection intact.
+    """
+    runs: list[str] = []
+
+    async with _serving(MCPServer(_asking_agent(runs), path="/mcp")) as url:
+        result = await _ask_through_toolkit(url, None, AnswerPolicy())
+
+    assert isinstance(result, ToolErrorEvent), f"expected a deliberate failure, got {result}"
+    assert "Human input was requested but not provided" in str(result.error)
+    assert runs == ["ran"], "the served tool never ran, so the turn failed before the question"

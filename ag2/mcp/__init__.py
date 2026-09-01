@@ -9,6 +9,7 @@ try:
     from .info import build_ask_tool
     from .prompts import Prompt, PromptArgument, PromptMessage
     from .resources import Resource, ResourceTemplate
+    from .sampling import ClientModel
     from .server import MCPServer
     from .sessions import SessionConfig
     from .tools import MCPFunctionTool, mcp_tool
@@ -18,6 +19,7 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
     AskContext = missing_optional_dependency("AskContext", "mcp", e)  # type: ignore[misc]
     ContextProvider = missing_optional_dependency("ContextProvider", "mcp", e)  # type: ignore[misc]
     SessionConfig = missing_optional_dependency("SessionConfig", "mcp", e)  # type: ignore[misc]
+    ClientModel = missing_optional_dependency("ClientModel", "mcp", e)  # type: ignore[misc]
     Resource = missing_optional_dependency("Resource", "mcp", e)  # type: ignore[misc]
     ResourceTemplate = missing_optional_dependency("ResourceTemplate", "mcp", e)  # type: ignore[misc]
     Prompt = missing_optional_dependency("Prompt", "mcp", e)  # type: ignore[misc]
@@ -28,6 +30,7 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
 
 __all__ = (
     "AskContext",
+    "ClientModel",
     "ContextProvider",
     "MCPFunctionTool",
     "MCPServer",

@@ -23,6 +23,7 @@ from mcp.types import (
     CallToolResult,
     Icon,
     InputRequiredResult,
+    InputResponseRequestParams,
     ListToolsResult,
     PaginatedRequestParams,
 )
@@ -40,6 +41,7 @@ from .mappers import input_validation_error, tool_error
 from .pause import PausedRuns
 from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
+from .sampling import ClientModel
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
 from .tools import MCPFunctionTool, ToolProvider
@@ -178,6 +180,19 @@ class MCPServer:
     :class:`~ag2.exceptions.HumanInputNotProvidedError` and its instructional
     message. That loud failure is deliberate: silently returning a degraded
     result would hide from the caller that the question went nowhere.
+
+    ``client_model`` runs the agent's own reasoning on the *calling client's*
+    model, so a deployment with no model credentials can still serve an agent
+    that needs one. It is ``None`` — off — unless a
+    :class:`~ag2.mcp.sampling.ClientModel` is passed, and a server that has not
+    enabled it never sends a sampling request and never needs the capability of
+    its clients. Enabling it moves the cost of every turn to the caller, makes
+    the answering model theirs rather than yours, and leaves a trace that cannot
+    be re-run against a known model; :mod:`ag2.mcp.sampling` states each of those
+    in full. A client that advertised no sampling capability is never asked: the
+    turn fails with :class:`~ag2.mcp.errors.MCPSamplingUnavailableError`, or
+    falls back to the agent's own configured model under
+    ``ClientModel(fallback=True)``.
     """
 
     __slots__ = (
@@ -220,6 +235,7 @@ class MCPServer:
         lifespan: "ServerLifespan | None" = None,
         sessions: "bool | SessionConfig" = True,
         elicitation_policy: ElicitationPolicy = "ask",
+        client_model: "ClientModel | None" = None,
         request_state_security: RequestStateSecurity | None = None,
         resources: "Sequence[Resource]" = (),
         resource_templates: "Sequence[ResourceTemplate]" = (),
@@ -269,6 +285,7 @@ class MCPServer:
             context_provider=context_provider,
             session_store=self._session_store,
             elicitation_policy=elicitation_policy,
+            client_model=client_model,
             paused_runs=self._paused_runs,
         )
         if self._session_store is not None:
@@ -353,7 +370,22 @@ class MCPServer:
             # Custom tools run their handler directly; everything else is the
             # agent's conversational tool (name collisions are rejected at init).
             if self._tool_provider is not None and self._tool_provider.has(params.name):
-                return CallToolResult(content=await self._tool_provider.call(params.name, arguments, ctx))
+                # A deterministic tool that asks the client for something drives
+                # its own round trip through the SDK's resolvers, so this round's
+                # answers and state go to it rather than to the paused-run
+                # registry — the two never share a call.
+                outcome = await self._tool_provider.call(
+                    params.name,
+                    arguments,
+                    ctx,
+                    input_round=InputResponseRequestParams(
+                        inputResponses=params.input_responses,
+                        requestState=params.request_state,
+                    ),
+                )
+                if isinstance(outcome, InputRequiredResult):
+                    return outcome
+                return CallToolResult(content=outcome)
             return await self._executor.call(
                 params.name,
                 message=arguments.get("message", ""),

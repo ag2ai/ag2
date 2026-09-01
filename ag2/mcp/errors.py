@@ -77,3 +77,37 @@ class MCPElicitationDeclinedError(HumanInputNotProvidedError):
             "so there is no answer to continue from."
         )
         self.action = action
+
+
+class MCPSamplingError(MCPServerError):
+    """Base error for a served agent whose model is the calling client's."""
+
+
+class MCPSamplingUnavailableError(MCPSamplingError):
+    """Raised when the caller cannot lend the model this server was told to borrow.
+
+    The turn fails rather than quietly answering some other way: a deployment
+    configured to run on its caller's model has said it has no model of its own,
+    and inventing one — or returning a degraded answer — would hide from the
+    caller that the agent never reasoned at all. Pass ``ClientModel(fallback=
+    True)`` to use the agent's own configured model instead.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This server runs the agent on the calling client's model, and this client advertised no "
+            "sampling capability. Connect with sampling enabled, or ask the operator to configure a model "
+            "for the agent to fall back to."
+        )
+
+
+class MCPSamplingRefusedError(MCPSamplingError):
+    """Raised when a turn needs more of a model than a borrowed one can give.
+
+    Tools and structured output both need something ``sampling/createMessage``
+    does not carry here, and an agent that lost either without being told would
+    answer as though it had never had them.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Cannot run this turn on the calling MCP client's model: {reason}.")

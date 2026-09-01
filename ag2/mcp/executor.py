@@ -14,7 +14,6 @@ from mcp.types import (
     INVALID_PARAMS,
     CallToolResult,
     ContentBlock,
-    ElicitResult,
     InputRequiredResult,
     InputResponses,
     TextContent,
@@ -36,10 +35,11 @@ from ag2.hitl import ElicitationPolicy
 from ag2.stream import MemoryStream
 
 from .elicitation import ClientElicitor
-from .errors import MCPAgentConfigError, UnknownConversationError
+from .errors import MCPAgentConfigError, MCPSamplingUnavailableError, UnknownConversationError
 from .info import build_ask_tool, object_output_schema
 from .mappers import reply_to_content, to_structured_dict, tool_error
 from .pause import PauseState, PausedRuns, SuspendedTurn, question_digest
+from .sampling import ClientModel, ClientModelConfig, client_can_sample
 from .sessions import CONVERSATION_META_KEY, STDIO_SESSION, Conversation, SessionStore
 
 if TYPE_CHECKING:
@@ -94,6 +94,7 @@ class AgentExecutor:
         "_context_provider",
         "_session_store",
         "_elicitation_policy",
+        "_client_model",
         "_paused",
     )
 
@@ -107,6 +108,7 @@ class AgentExecutor:
         context_provider: "ContextProvider | None" = None,
         session_store: SessionStore | None = None,
         elicitation_policy: ElicitationPolicy = "ask",
+        client_model: ClientModel | None = None,
         paused_runs: PausedRuns | None = None,
     ) -> None:
         self._agent = agent
@@ -116,6 +118,10 @@ class AgentExecutor:
         self._context_provider = context_provider
         self._session_store = session_store
         self._elicitation_policy = elicitation_policy
+        # Off unless the operator passed one: borrowing the caller's model moves
+        # cost, capability and reproducibility to them, so it is never on because
+        # the transport allows it.
+        self._client_model = client_model
         # Where a modern-era turn waits between rounds. ``None`` leaves the
         # modern era without the pause transport, which is what a caller
         # constructing this executor directly (no ``requestState`` protection
@@ -155,7 +161,10 @@ class AgentExecutor:
         if request_state is not None:
             return await self._resume(request_state, input_responses, request_context)
 
-        if self._agent.config is None:
+        # A deployment running on its callers' models is allowed to hold no model
+        # of its own — that is the case this exists for. A caller that cannot
+        # lend one is then a different failure, reported where that is known.
+        if self._agent.config is None and self._client_model is None:
             raise MCPAgentConfigError(self._agent.name)
         if not message:
             return tool_error("Missing required 'message' argument.")
@@ -253,10 +262,11 @@ class AgentExecutor:
                 data={"reason": "invalid_request_state"},
             )
         answer = (input_responses or {}).get(state.question)
-        if isinstance(answer, ElicitResult):
+        if answer is not None:
             # ``False`` means the answer was not for the question the run is
             # actually waiting on; nothing is consumed and the current question
-            # is asked again below.
+            # is asked again below. Whether it is the *kind* of answer the run
+            # asked for is the asker's to judge, not this frame's.
             turn.answer(state.question, state.digest, answer)
         return await self._advance(turn, turn.stream, request_context)
 
@@ -339,6 +349,10 @@ class AgentExecutor:
             if ctx.prompt is not None:
                 ask_kwargs["prompt"] = ctx.prompt
 
+        model = self._client_model_config(request_context, suspended)
+        if model is not None:
+            ask_kwargs["config"] = model
+
         # Scoped to this turn, and registered *before* ``ask`` so it runs ahead
         # of whatever the agent registers for itself: the calling client's human
         # is asked first, and a client that cannot answer falls through to the
@@ -409,6 +423,33 @@ class AgentExecutor:
     ) -> ClientElicitor:
         """The hook that puts this turn's questions to the calling client."""
         return ClientElicitor(request_context, policy=self._elicitation_policy, suspended=suspended)
+
+    def _client_model_config(
+        self,
+        request_context: "ServerRequestContext[Any, Any]",
+        suspended: SuspendedTurn | None,
+    ) -> ClientModelConfig | None:
+        """The peer-backed model for this turn, or ``None`` to use the agent's own.
+
+        Raises:
+            MCPSamplingUnavailableError: The server was configured to run on its
+                caller's model, this caller advertised none, and no fallback was
+                allowed. Failing here — before the turn starts — is what stops a
+                caller being handed an answer from a model they did not lend.
+        """
+        if self._client_model is None:
+            return None
+        if not client_can_sample(request_context.session):
+            # Falling back needs something to fall back *to*; a server with
+            # neither is misconfigured, and says the same thing either way.
+            if self._client_model.fallback and self._agent.config is not None:
+                return None
+            raise MCPSamplingUnavailableError()
+        return ClientModelConfig(
+            request_context,
+            suspended=suspended,
+            max_tokens=self._client_model.max_tokens,
+        )
 
     def _has_object_output(self) -> bool:
         return object_output_schema(self._agent._response_schema) is not None

@@ -157,7 +157,7 @@ async def _dispatch_input_request(
 async def _retry_call(
     session: ClientSession,
     name: str,
-    arguments: str,
+    arguments: dict[str, Any],
     responses: "InputResponses | None",
     state: str | None,
 ) -> "CallToolResult | InputRequiredResult":
@@ -227,7 +227,7 @@ class _MCPProxyTool(Tool):
                 result = await self._call(session, event, answerer)
 
         except Exception as e:
-            return ToolErrorEvent.from_call(event, error=e)
+            return ToolErrorEvent.from_call(event, error=_unwrap(e))
 
         if result.is_error:
             return ToolErrorEvent.from_call(event, error=RuntimeError(str(result)))
@@ -344,6 +344,27 @@ class MCPToolkit(Toolkit):
                 self._tools[proxy.name] = proxy
 
             self._discovered = True
+
+
+def _unwrap(error: Exception) -> Exception:
+    """Peel task-group wrappers off a lone failure.
+
+    A ``ClientSession`` runs its receive loop inside a task group, so anything
+    raised while the session is open — the round bound being reached, a server
+    refusing an input request — arrives here inside one ``ExceptionGroup`` per
+    nesting level. The group's own message names nothing ("unhandled errors in a
+    TaskGroup"), and that message is what the agent would otherwise be told the
+    call failed for. A group carrying more than one failure is left alone:
+    picking one of several would hide the rest.
+    """
+    while True:
+        # Recognised by what it carries rather than by ``BaseExceptionGroup``,
+        # which is a 3.11 builtin: on 3.10 the group is the ``exceptiongroup``
+        # backport's class instead, and the name is not there to test against.
+        members = getattr(error, "exceptions", None)
+        if not isinstance(members, tuple) or len(members) != 1 or not isinstance(members[0], Exception):
+            return error
+        error = members[0]
 
 
 def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":

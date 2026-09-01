@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
-from mcp.types import CallToolResult, ElicitRequest, ElicitResult
+from mcp.types import CallToolResult, InputRequest, InputResponse
 
 from ag2.stream import MemoryStream
 
@@ -115,7 +115,7 @@ class PauseState:
             return None
 
 
-def question_digest(request: ElicitRequest) -> str:
+def question_digest(request: InputRequest) -> str:
     """Pin an answer to the exact question it was written for.
 
     The digest travels in the state and is re-checked against the question the
@@ -134,10 +134,13 @@ def question_digest(request: ElicitRequest) -> str:
 class SuspendedTurn:
     """One served agent turn, held open in this process across client round trips.
 
-    Two halves talk to each other through it. Inside the turn, the elicitor calls
-    :meth:`ask` and blocks. Outside, the serving path calls :meth:`advance` to run
-    the turn until it either finishes or asks something, and :meth:`answer` to
-    hand an answer in before advancing again.
+    Two halves talk to each other through it. Inside the turn, whatever needs
+    something from the client — the elicitor with a question, the peer-backed
+    model with a completion to run — calls :meth:`ask` and blocks. Outside, the
+    serving path calls :meth:`advance` to run the turn until it either finishes
+    or asks something, and :meth:`answer` to hand an answer in before advancing
+    again. What kind of request it is never matters here: this holds the run,
+    and the asker decides what to make of the response it gets back.
     """
 
     __slots__ = ("id", "conversation", "stream", "created", "_task", "_outstanding", "_answer", "_raised")
@@ -151,8 +154,8 @@ class SuspendedTurn:
         self.stream = stream
         self.created = created
         self._task: asyncio.Task[CallToolResult] | None = None
-        self._outstanding: tuple[str, ElicitRequest] | None = None
-        self._answer: asyncio.Future[ElicitResult] | None = None
+        self._outstanding: tuple[str, InputRequest] | None = None
+        self._answer: asyncio.Future[InputResponse] | None = None
         self._raised = asyncio.Event()
 
     def start(self, run: Coroutine[Any, Any, CallToolResult]) -> None:
@@ -167,7 +170,7 @@ class SuspendedTurn:
         task.add_done_callback(_consume_exception)
         self._task = task
 
-    async def ask(self, request: ElicitRequest) -> ElicitResult:
+    async def ask(self, request: InputRequest) -> InputResponse:
         """Put a question to the client and suspend until the retry answers it.
 
         Called from inside the turn. The ``context.input(timeout=)`` the caller
@@ -176,7 +179,7 @@ class SuspendedTurn:
         human-input timeout when it elapses first.
         """
         key = uuid4().hex
-        answer: asyncio.Future[ElicitResult] = asyncio.get_running_loop().create_future()
+        answer: asyncio.Future[InputResponse] = asyncio.get_running_loop().create_future()
         self._outstanding = (key, request)
         self._answer = answer
         self._raised.set()
@@ -190,11 +193,11 @@ class SuspendedTurn:
                 self._answer = None
 
     @property
-    def outstanding(self) -> "tuple[str, ElicitRequest] | None":
+    def outstanding(self) -> "tuple[str, InputRequest] | None":
         """The question this run is waiting on, if it is waiting on one."""
         return self._outstanding
 
-    async def advance(self) -> "CallToolResult | tuple[str, ElicitRequest]":
+    async def advance(self) -> "CallToolResult | tuple[str, InputRequest]":
         """Run until the turn produces a result or asks the client something.
 
         Returns the finished :class:`CallToolResult`, or the outstanding
@@ -226,7 +229,7 @@ class SuspendedTurn:
         assert self._outstanding is not None
         return self._outstanding
 
-    def answer(self, key: str, digest: str, result: ElicitResult) -> bool:
+    def answer(self, key: str, digest: str, result: InputResponse) -> bool:
         """Hand an answer to the outstanding question.
 
         ``False`` when it is not an answer to *this* question — a stale key, or a

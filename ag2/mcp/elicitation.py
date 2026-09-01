@@ -159,7 +159,14 @@ class ClientElicitor:
         if not can_answer(session, self._policy):
             return event
         if self._suspended is not None:
-            result = await self._suspended.ask(input_request(event.content))
+            answered = await self._suspended.ask(input_request(event.content))
+            if not isinstance(answered, ElicitResult):
+                # A client that answered a question with something that is not an
+                # answer. The channel is not usable, so this falls through to the
+                # agent's own hook rather than inventing a reply.
+                logger.warning("MCP client answered an elicitation with %s", type(answered).__name__)
+                return event
+            result = answered
         else:
             # ``can_send_request`` gates only this branch: it asks whether *this
             # channel* can carry a server-initiated request, which is a question
