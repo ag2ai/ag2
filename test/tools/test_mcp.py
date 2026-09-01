@@ -43,7 +43,7 @@ def patch_mcp_session(monkeypatch: pytest.MonkeyPatch) -> MCPSessionPatch:
         session = _FakeMCPSession(tools, call_results)
 
         @asynccontextmanager
-        async def fake(_):
+        async def fake(_config, **_session_kwargs):
             yield session
 
         monkeypatch.setattr(_toolkit_module, "_mcp_session", fake)
@@ -245,7 +245,9 @@ class _FakeMCPSession:
     async def list_tools(self) -> ListToolsResult:
         return ListToolsResult(tools=self._tools)
 
-    async def call_tool(self, name: str, arguments: dict) -> CallToolResult:
+    async def call_tool(self, name: str, arguments: dict, **kwargs: object) -> CallToolResult:
+        """The toolkit now passes ``allow_input_required=True`` and, on a retry,
+        the answers and echoed state; absorbed here since this double never asks."""
         self.calls.append((name, arguments))
         return self._call_results.get(
             name,

@@ -14,19 +14,30 @@ from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAut
 from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
 from mcp.server.caching import CacheHint, CacheableMethod
 from mcp.server.lowlevel import Server
+from mcp.server.request_state import RequestStateBoundary, RequestStateSecurity
 from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import CallToolRequestParams, CallToolResult, Icon, ListToolsResult, PaginatedRequestParams
+from mcp.shared.exceptions import MCPError
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    Icon,
+    InputRequiredResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+)
 from starlette.applications import Starlette
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.routing import BaseRoute, Mount, Route
 
 from ag2.agent import Agent
 from ag2.history import MemoryStorage
+from ag2.hitl import ElicitationPolicy
 
 from .errors import MCPToolNameConflictError
 from .executor import AgentExecutor, ContextProvider
 from .mappers import input_validation_error, tool_error
+from .pause import PausedRuns
 from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
@@ -151,6 +162,22 @@ class MCPServer:
     ``resources`` / ``resource_templates`` / ``prompts`` expose MCP resources and
     prompts alongside the conversational tool; the corresponding capability is
     advertised only when a non-empty collection is supplied.
+
+    ``elicitation_policy`` governs whether the served agent may put a question to
+    the human behind the *calling client* — a tool inside it calling
+    ``context.input()``. ``"ask"`` (the default) routes the question out to the
+    client as an MCP elicitation; ``"decline"`` never asks a client at all. It is
+    the same word, with the same two values and the same reasoning, as
+    :attr:`ag2.acp.ACPConfig.elicitation_policy`: there is deliberately no
+    ``"auto"``, because an arbitrary elicitation form has no answer AG2 could
+    invent without fabricating data on the user's behalf.
+
+    Only a client that advertised it can answer is ever asked. A client that
+    cannot — or a policy of ``"decline"`` — falls through to the agent's own
+    ``hitl_hook``, and with none configured the turn fails with the existing
+    :class:`~ag2.exceptions.HumanInputNotProvidedError` and its instructional
+    message. That loud failure is deliberate: silently returning a degraded
+    result would hide from the caller that the question went nowhere.
     """
 
     __slots__ = (
@@ -167,6 +194,7 @@ class MCPServer:
         "_cache_hints",
         "_lifespan",
         "_session_store",
+        "_paused_runs",
         "_resource_provider",
         "_prompt_provider",
         "_tool_provider",
@@ -191,6 +219,8 @@ class MCPServer:
         context_provider: "ContextProvider | None" = None,
         lifespan: "ServerLifespan | None" = None,
         sessions: "bool | SessionConfig" = True,
+        elicitation_policy: ElicitationPolicy = "ask",
+        request_state_security: RequestStateSecurity | None = None,
         resources: "Sequence[Resource]" = (),
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
@@ -211,6 +241,13 @@ class MCPServer:
         self._cache_hints = cache_hints
         self._lifespan = lifespan
         self._session_store = _build_session_store(sessions)
+        # One lifetime, taken from the state token: once the state naming a
+        # paused run has expired no client can resume it, so the run is
+        # unreclaimable and is reclaimed. Two numbers here could disagree.
+        state_security = (
+            request_state_security if request_state_security is not None else RequestStateSecurity.ephemeral()
+        )
+        self._paused_runs = PausedRuns(ttl=state_security.ttl)
         self._resource_provider = (
             ResourceProvider(resources, resource_templates) if (resources or resource_templates) else None
         )
@@ -231,8 +268,18 @@ class MCPServer:
             stream_progress=stream_progress,
             context_provider=context_provider,
             session_store=self._session_store,
+            elicitation_policy=elicitation_policy,
+            paused_runs=self._paused_runs,
         )
+        if self._session_store is not None:
+            # A run abandoned without either bound elapsing still goes when the
+            # conversation registry evicts the handle that names it.
+            self._session_store.on_evict = self._paused_runs.discard_conversation
         self._server = self._build_server()
+        # Not installed automatically at this tier: the high-level server ships a
+        # default policy, the lowlevel one does not. So it is installed here,
+        # explicitly, and state never leaves this process unsealed.
+        self._server.middleware.append(RequestStateBoundary(state_security, default_audience=self._name))
         routes, manager = self._streamable_routes(
             path=path, stateless=stateless, json_response=json_response, security=security
         )
@@ -290,7 +337,7 @@ class MCPServer:
 
     async def _on_call_tool(
         self, ctx: "ServerRequestContext[Any, Any]", params: CallToolRequestParams
-    ) -> CallToolResult:
+    ) -> "CallToolResult | InputRequiredResult":
         arguments = params.arguments or {}
         # A handler that raises would surface as a JSON-RPC error in mcp 2.0, where
         # 1.x's decorator turned it into a tool-level error result; keep the latter.
@@ -312,8 +359,15 @@ class MCPServer:
                 message=arguments.get("message", ""),
                 context=arguments.get("context"),
                 conversation=arguments.get("conversation"),
+                input_responses=params.input_responses,
+                request_state=params.request_state,
                 request_context=ctx,
             )
+        except MCPError:
+            # A protocol-level refusal — an invalid or expired ``requestState`` —
+            # which the model cannot recover from by rewording, so it must not be
+            # flattened into a tool result the way a tool failure is.
+            raise
         except Exception as e:
             # The wire carries the message only, so without this the stack is lost.
             logger.exception("MCP tools/call %r failed", params.name)

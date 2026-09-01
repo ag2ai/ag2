@@ -3,13 +3,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from contextlib import AbstractAsyncContextManager, AbstractContextManager, ExitStack, asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken
-from mcp.types import CallToolResult, ContentBlock, TextContent
+from mcp.shared.exceptions import MCPError
+from mcp.types import (
+    INVALID_PARAMS,
+    CallToolResult,
+    ContentBlock,
+    ElicitResult,
+    InputRequiredResult,
+    InputResponses,
+    TextContent,
+)
 from mcp.types import Tool as MCPTool
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 from pydantic import ValidationError
@@ -17,16 +26,20 @@ from pydantic import ValidationError
 from ag2.agent import Agent
 from ag2.events import (
     BaseEvent,
+    HumanInputRequest,
     ModelMessageChunk,
     TextInput,
     ToolCallEvent,
     ToolResultEvent,
 )
+from ag2.hitl import ElicitationPolicy
 from ag2.stream import MemoryStream
 
+from .elicitation import ClientElicitor
 from .errors import MCPAgentConfigError, UnknownConversationError
 from .info import build_ask_tool, object_output_schema
 from .mappers import reply_to_content, to_structured_dict, tool_error
+from .pause import PauseState, PausedRuns, SuspendedTurn, question_digest
 from .sessions import CONVERSATION_META_KEY, STDIO_SESSION, Conversation, SessionStore
 
 if TYPE_CHECKING:
@@ -73,7 +86,16 @@ class AgentExecutor:
     progress / log notifications when ``stream_progress`` is enabled.
     """
 
-    __slots__ = ("_agent", "_tool_name", "_tool_description", "_stream_progress", "_context_provider", "_session_store")
+    __slots__ = (
+        "_agent",
+        "_tool_name",
+        "_tool_description",
+        "_stream_progress",
+        "_context_provider",
+        "_session_store",
+        "_elicitation_policy",
+        "_paused",
+    )
 
     def __init__(
         self,
@@ -84,6 +106,8 @@ class AgentExecutor:
         stream_progress: bool = True,
         context_provider: "ContextProvider | None" = None,
         session_store: SessionStore | None = None,
+        elicitation_policy: ElicitationPolicy = "ask",
+        paused_runs: PausedRuns | None = None,
     ) -> None:
         self._agent = agent
         self._tool_name = tool_name
@@ -91,6 +115,12 @@ class AgentExecutor:
         self._stream_progress = stream_progress
         self._context_provider = context_provider
         self._session_store = session_store
+        self._elicitation_policy = elicitation_policy
+        # Where a modern-era turn waits between rounds. ``None`` leaves the
+        # modern era without the pause transport, which is what a caller
+        # constructing this executor directly (no ``requestState`` protection
+        # installed) gets: there would be nowhere safe to put the state.
+        self._paused = paused_runs
 
     def list_tools(self) -> list[MCPTool]:
         return [
@@ -110,10 +140,21 @@ class AgentExecutor:
         message: str,
         context: str | None = None,
         conversation: str | None = None,
+        input_responses: "InputResponses | None" = None,
+        request_state: str | None = None,
         request_context: "ServerRequestContext[Any, Any]",
-    ) -> CallToolResult:
+    ) -> "CallToolResult | InputRequiredResult":
         if name != self._tool_name:
             return tool_error(f"Unknown tool: {name!r}.")
+
+        # A retry answering a question this server asked. It resumes the run
+        # already held for it, so nothing about the original arguments is read
+        # again — and nothing needs to be: the state boundary has already bound
+        # this token to the same tool, the same arguments and the same principal,
+        # and refused it otherwise.
+        if request_state is not None:
+            return await self._resume(request_state, input_responses, request_context)
+
         if self._agent.config is None:
             raise MCPAgentConfigError(self._agent.name)
         if not message:
@@ -144,14 +185,112 @@ class AgentExecutor:
 
         # The conversation is held for the whole turn: for a keyed one that means
         # holding its turn lock, serializing concurrent same-conversation calls.
+        # A modern-era turn that pauses releases that lock while it waits — a
+        # paused run is not a running one, and holding the lock would block the
+        # very retry that resumes it.
         try:
             async with self._conversation_cm(request_context, conversation) as convo:
-                return await self._turn(convo, message, context, request_context)
+                if self._paused is None or not _is_modern(request_context):
+                    return await self._turn(convo, message, context, request_context)
+                return await self._start_suspendable(convo, message, context, request_context)
         except UnknownConversationError as e:
             # A tool-level error, never a JSON-RPC one: the protocol draws that
             # line so the model can start a new conversation rather than fail the
             # turn. Only resolving the conversation raises this.
             return tool_error(str(e))
+
+    async def _start_suspendable(
+        self,
+        convo: Conversation,
+        message: str,
+        context: str | None,
+        request_context: "ServerRequestContext[Any, Any]",
+    ) -> "CallToolResult | InputRequiredResult":
+        """Begin a modern-era turn that may come back as a question.
+
+        The turn is launched as a task rather than awaited, so that when a tool
+        inside it asks the client something this call can return the question
+        while the run stays suspended, exactly where it was.
+        """
+        assert self._paused is not None
+        turn = SuspendedTurn(conversation=convo.handle, stream=convo.stream, created=self._paused.now())
+        turn.start(
+            self._turn(
+                convo,
+                message,
+                context,
+                request_context,
+                suspended=turn,
+                progress=False,
+            )
+        )
+        return await self._advance(turn, convo.stream, request_context)
+
+    async def _resume(
+        self,
+        request_state: str,
+        input_responses: "InputResponses | None",
+        request_context: "ServerRequestContext[Any, Any]",
+    ) -> "CallToolResult | InputRequiredResult":
+        """Continue the run this state names, from exactly where it stopped.
+
+        The state arrives boundary-verified — expiry, request binding, audience
+        and principal all checked, fail-closed — so what is left to establish is
+        only whether the run it names is still here.
+        """
+        if self._paused is None:
+            # No modern-era transport was configured, so this server has never
+            # minted state and cannot have paused a run.
+            return tool_error("This server does not pause calls, so there is no state to resume.")
+        state = PauseState.decode(request_state)
+        turn = self._paused.take(state.pause) if state is not None else None
+        if state is None or turn is None:
+            # A protocol error, not a tool error: the caller's remedy is to start
+            # the call again, and the model cannot recover from it by rewording.
+            raise MCPError(
+                code=INVALID_PARAMS,
+                message="Invalid or expired requestState",
+                data={"reason": "invalid_request_state"},
+            )
+        answer = (input_responses or {}).get(state.question)
+        if isinstance(answer, ElicitResult):
+            # ``False`` means the answer was not for the question the run is
+            # actually waiting on; nothing is consumed and the current question
+            # is asked again below.
+            turn.answer(state.question, state.digest, answer)
+        return await self._advance(turn, turn.stream, request_context)
+
+    async def _advance(
+        self,
+        turn: SuspendedTurn,
+        stream: MemoryStream,
+        request_context: "ServerRequestContext[Any, Any]",
+    ) -> "CallToolResult | InputRequiredResult":
+        """Run ``turn`` until it finishes or asks, and shape whichever happens.
+
+        Progress forwarding is scoped to this round because it holds the round's
+        request context: notifications belong to the call being answered now, not
+        to the one that started the run.
+        """
+        assert self._paused is not None
+        with ExitStack() as stack:
+            if self._stream_progress:
+                stack.enter_context(_progress_scope(stream, request_context))
+            outcome = await turn.advance()
+        if isinstance(outcome, CallToolResult):
+            return outcome
+        key, request = outcome
+        self._paused.register(turn)
+        state = PauseState.mint(
+            pause=turn.id,
+            question=key,
+            digest=question_digest(request),
+            conversation=turn.conversation,
+        )
+        # The state goes out in plaintext here and is sealed by the
+        # ``RequestStateBoundary`` at the wire boundary, which is the only place
+        # the codec is ever touched.
+        return InputRequiredResult(input_requests={key: request}, request_state=state.encode())
 
     async def _turn(
         self,
@@ -159,10 +298,33 @@ class AgentExecutor:
         message: str,
         context: str | None,
         request_context: "ServerRequestContext[Any, Any]",
+        *,
+        suspended: SuspendedTurn | None = None,
+        progress: bool = True,
     ) -> CallToolResult:
-        """Run one agent turn inside ``convo`` and shape its reply into a result."""
-        if self._stream_progress:
-            self._wire_progress(convo.stream, request_context)
+        """Run one agent turn inside ``convo`` and shape its reply into a result.
+
+        ``suspended`` is present on the modern era, where a question comes back
+        as the call's result: the elicitor asks *through* it and the coroutine
+        stays parked here until a retry answers.
+
+        ``progress`` is off for a suspendable turn, because this coroutine spans
+        more than one round and forwarding belongs to the round being answered —
+        :meth:`_advance` scopes it per round instead.
+        """
+        with ExitStack() as progress_stack:
+            if progress and self._stream_progress:
+                progress_stack.enter_context(_progress_scope(convo.stream, request_context))
+            return await self._run(convo, message, context, request_context, suspended)
+
+    async def _run(
+        self,
+        convo: Conversation,
+        message: str,
+        context: str | None,
+        request_context: "ServerRequestContext[Any, Any]",
+        suspended: SuspendedTurn | None,
+    ) -> CallToolResult:
 
         # Optional per-request context (variables/tools/prompt) from the host,
         # derived from the authenticated token. Omitted fields keep ask()'s
@@ -177,7 +339,20 @@ class AgentExecutor:
             if ctx.prompt is not None:
                 ask_kwargs["prompt"] = ctx.prompt
 
-        reply = await self._agent.ask(*_build_inputs(message, context), stream=convo.stream, **ask_kwargs)
+        # Scoped to this turn, and registered *before* ``ask`` so it runs ahead
+        # of whatever the agent registers for itself: the calling client's human
+        # is asked first, and a client that cannot answer falls through to the
+        # agent's own ``hitl_hook`` — or to the existing "nobody could be asked"
+        # failure. Scoped because the elicitor holds this call's request context,
+        # and a keyed conversation's stream outlives the call.
+        with ExitStack() as stack:
+            stack.enter_context(
+                convo.stream.where(HumanInputRequest).sub_scope(
+                    self._elicitor(request_context, suspended),
+                    interrupt=True,
+                )
+            )
+            reply = await self._agent.ask(*_build_inputs(message, context), stream=convo.stream, **ask_kwargs)
         content = reply_to_content(reply)
 
         if not self._has_object_output():
@@ -227,30 +402,54 @@ class AgentExecutor:
             return self._session_store.session(session_id, principal=principal)
         return self._session_store.fresh(principal=principal)
 
+    def _elicitor(
+        self,
+        request_context: "ServerRequestContext[Any, Any]",
+        suspended: SuspendedTurn | None,
+    ) -> ClientElicitor:
+        """The hook that puts this turn's questions to the calling client."""
+        return ClientElicitor(request_context, policy=self._elicitation_policy, suspended=suspended)
+
     def _has_object_output(self) -> bool:
         return object_output_schema(self._agent._response_schema) is not None
 
-    def _wire_progress(
-        self,
-        stream: MemoryStream,
-        request_context: "ServerRequestContext[Any, Any]",
-    ) -> None:
-        # ``_meta`` is an open mapping in ``mcp`` 2.0, not a model.
-        token = request_context.meta.get("progress_token") if request_context.meta else None
-        session = request_context.session
-        progress = _Counter()
 
-        @stream.subscribe
-        async def forward(event: BaseEvent) -> None:
-            if isinstance(event, ModelMessageChunk):
-                if token is not None:
-                    await session.send_progress_notification(token, progress.next(), message=event.content)
-                return
-            if isinstance(event, ToolResultEvent):
-                await session.send_log_message("info", f"tool result: {event.name}", logger=_LOGGER_NAME)
-                return
-            if isinstance(event, ToolCallEvent):
-                await session.send_log_message("info", f"tool call: {event.name}", logger=_LOGGER_NAME)
+def _progress_scope(
+    stream: MemoryStream,
+    request_context: "ServerRequestContext[Any, Any]",
+) -> "AbstractContextManager[None]":
+    """Forward this stream's events to the client for as long as the scope is open.
+
+    Scoped rather than left installed: the forwarder holds one round's request
+    context, and both a keyed conversation's stream and a suspended run outlive
+    the round that created it.
+    """
+    return stream.sub_scope(_ProgressForwarder(request_context))
+
+
+class _ProgressForwarder:
+    """Turns agent stream events into MCP progress / log notifications."""
+
+    __slots__ = ("_token", "_session", "_progress")
+
+    def __init__(self, request_context: "ServerRequestContext[Any, Any]") -> None:
+        # ``_meta`` is an open mapping in ``mcp`` 2.0, not a model.
+        self._token = request_context.meta.get("progress_token") if request_context.meta else None
+        self._session = request_context.session
+        self._progress = _Counter()
+
+    async def __call__(self, event: BaseEvent) -> None:
+        if isinstance(event, ModelMessageChunk):
+            if self._token is not None:
+                await self._session.send_progress_notification(
+                    self._token, self._progress.next(), message=event.content
+                )
+            return
+        if isinstance(event, ToolResultEvent):
+            await self._session.send_log_message("info", f"tool result: {event.name}", logger=_LOGGER_NAME)
+            return
+        if isinstance(event, ToolCallEvent):
+            await self._session.send_log_message("info", f"tool call: {event.name}", logger=_LOGGER_NAME)
 
 
 class _Counter:

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.exceptions import AG2Error
+from ag2.exceptions import AG2Error, HumanInputNotProvidedError
 
 
 class MCPServerError(AG2Error):
@@ -59,3 +59,21 @@ class UnknownConversationError(MCPServerError):
         super().__init__(
             "Unknown or expired conversation handle. Omit the 'conversation' argument to start a new conversation."
         )
+
+
+class MCPElicitationDeclinedError(HumanInputNotProvidedError):
+    """Raised when the calling MCP client refused a served agent's question.
+
+    A subclass of the existing "requested but not provided" failure rather than a
+    new type: the channel worked and the question was put, but no answer came
+    back, which is the same outcome the human-input model already names. Kept
+    distinct only so a host that wants to tell a refusal from an absent channel
+    still can.
+    """
+
+    def __init__(self, action: str) -> None:
+        super().__init__(
+            f"The calling MCP client answered the agent's question with {action!r}, "
+            "so there is no answer to continue from."
+        )
+        self.action = action

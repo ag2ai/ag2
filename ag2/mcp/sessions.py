@@ -122,7 +122,7 @@ class SessionStore:
     drops the evicted conversation's stored history so memory stays bounded.
     """
 
-    __slots__ = ("_storage", "_max", "_ttl", "_entries", "_by_handle", "_lock", "_clock")
+    __slots__ = ("_storage", "_max", "_ttl", "_entries", "_by_handle", "_lock", "_clock", "on_evict")
 
     def __init__(
         self,
@@ -143,6 +143,12 @@ class SessionStore:
         self._by_handle: dict[str, str] = {}
         self._lock = asyncio.Lock()
         self._clock = clock
+        # Called with a conversation's handle as it is dropped, so anything else
+        # keyed by that handle goes at the same time. Assigned by the owner
+        # (``MCPServer`` wires the paused-run registry to it) rather than taken
+        # in the constructor, which would make the store know what a paused run
+        # is.
+        self.on_evict: Callable[[str], None] | None = None
 
     @property
     def bounds(self) -> ConversationBounds:
@@ -259,6 +265,8 @@ class SessionStore:
     async def _drop(self, key: str) -> None:
         entry = self._entries.pop(key)
         self._by_handle.pop(entry.handle, None)
+        if self.on_evict is not None:
+            self.on_evict(entry.handle)
         await self._storage.drop_history(entry.stream_id)
 
 

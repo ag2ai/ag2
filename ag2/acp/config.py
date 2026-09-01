@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 
 from typing_extensions import Self
 
+from ag2.hitl import ElicitationPolicy
+
 from .tool_gateway import GatewayAddress
 
 if TYPE_CHECKING:
@@ -44,11 +46,12 @@ if TYPE_CHECKING:
 
 PermissionPolicy = Literal["ask", "auto", "deny"]
 
-# Deliberately two-valued, unlike ``PermissionPolicy``: a permission request
-# carries an allow option a client can pick blind, whereas an arbitrary
-# elicitation form has no answer AG2 could invent without fabricating data on
-# the user's behalf. So there is no ``"auto"`` — only ask a human, or decline.
-ElicitationPolicy = Literal["ask", "decline"]
+# Re-exported from core, where ``ag2.mcp`` reads the same alias: the policy is
+# one vocabulary shared by both protocol integrations, not a per-protocol word
+# that happens to coincide today. Deliberately two-valued, unlike
+# ``PermissionPolicy`` — see :data:`ag2.hitl.ElicitationPolicy` for why there is
+# no ``"auto"``. Imported above under its own name so ``ag2.acp.config``
+# keeps exporting it.
 
 
 @dataclass(slots=True)
