@@ -280,6 +280,9 @@ A `@mcp_tool` served alongside the agent can ask too, using the SDK's resolver m
 |---|---|---|
 | across a round trip | the run is held, and resumes where it stopped | the resolver body **re-runs**, with answers already collected supplied to it |
 | runs more than once? | never | once per round |
+| can ask for | a question for the client's human | `Elicit`, `Sample`, or `ListRoots` |
+
+The last row is the one worth noticing: the agent's own turn never asks for the caller's roots — it has no filesystem of its own to scope to them — but a deterministic tool may be exactly the code that wants them, and the resolver mechanism carries that request.
 
 Nothing is held for a deterministic tool, so nothing above about sticky routing applies to it. Write resolvers idempotently: a side effect in one fires once per round.
 

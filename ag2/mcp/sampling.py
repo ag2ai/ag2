@@ -52,7 +52,7 @@ from ag2.events import BaseEvent, BinaryInput, BinaryType, ModelMessage, ModelRe
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
-from .errors import MCPSamplingRefusedError, MCPSamplingUnavailableError
+from .errors import MCPSamplingRefusedError
 from .pause import SuspendedTurn
 
 if TYPE_CHECKING:
@@ -284,7 +284,6 @@ __all__ = (
     "ClientModel",
     "ClientModelClient",
     "ClientModelConfig",
-    "MCPSamplingUnavailableError",
     "client_can_sample",
     "to_sampling_messages",
 )

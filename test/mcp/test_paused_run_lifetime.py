@@ -135,6 +135,37 @@ class TestTheStatesLifetimeBoundsTheRun:
         assert closed == ["closed"], "the expired run's turn scope was left open"
         assert runs.take(abandoned.id) is None
 
+    async def test_a_run_that_pauses_again_is_held_for_its_newest_state(self) -> None:
+        """Retention runs from the state a client actually holds, not from the first one.
+
+        Every round mints a fresh ``requestState``, so a conversation that pauses
+        and resumes several times can outlive the TTL in total while the token
+        its client holds is always young. Measuring retention from the run's
+        first pause would reclaim it under a token the boundary still accepts —
+        the client presents valid state and is told the run is gone.
+        """
+        clock = _Clock()
+        runs = PausedRuns(ttl=10.0, clock=clock)
+        closed: list[str] = []
+        turn = SuspendedTurn(conversation=None, stream=MemoryStream(), created=runs.now())
+        turn.start(_records_when_cancelled(closed))
+        runs.register(turn)
+        await _settle()
+
+        clock.advance(8.0)
+        # A round arrives, does not finish the turn, and the run pauses again
+        # under freshly minted state.
+        assert runs.take(turn.id) is turn
+        runs.register(turn)
+
+        # Sixteen seconds since the first pause, eight since the last one.
+        clock.advance(8.0)
+        runs.register(SuspendedTurn(conversation=None, stream=MemoryStream(), created=runs.now()))
+        await _settle()
+
+        assert closed == [], "a run resumable by the state its client holds was reclaimed"
+        assert runs.take(turn.id) is turn
+
     async def test_a_run_is_reclaimed_when_its_conversation_is_evicted(self) -> None:
         """Neither bound elapsed — the registry that names the conversation dropped it."""
         outcomes: list[str] = []

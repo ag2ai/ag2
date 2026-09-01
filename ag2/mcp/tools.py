@@ -70,6 +70,8 @@ class MCPFunctionTool:
     # the statically analysed resolver DAG behind them. Both empty unless
     # :func:`mcp_tool` found any; a hand-built tool asks for nothing.
     resolved_params: Mapping[str, tuple[Resolve, bool]] = field(default_factory=dict)
+    # The plan type is private to the SDK (``_ResolverPlan``); these are built by
+    # ``build_resolver_plans`` and handed back to ``resolve_arguments`` untouched.
     resolver_plans: Mapping[Hashable, Any] = field(default_factory=dict)
 
     def _mcp_tool(self) -> MCPTool:

@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 from mcp.client.session import ClientRequestContext
 from mcp.server.request_state import RequestStateBoundary, RequestStateSecurity, authenticated_principal
+from mcp.shared.exceptions import MCPError
 from mcp.types import ElicitRequest, ElicitRequestParams, ElicitResult, InputRequiredResult, TextContent
 
 from ag2 import Agent, Context
@@ -181,14 +182,39 @@ class TestModernEraPause:
 class TestTheStateIsBoundToItsCaller:
     """A retry presenting state minted for another caller must not resume this run.
 
-    The check itself is the ``RequestStateBoundary``'s, and it is fail-closed:
-    the envelope carries a claim over the bound principal and refuses a mismatch
-    before any handler runs. What is *ours* is installing that boundary, and
-    leaving its principal binding and audience alone — a server that passed
-    ``bind_principal=None`` would still work in every other test here while
-    quietly making one caller's state usable by another. So this asserts the
-    seam, which is the part that can regress in this repository.
+    The first test drives it from the wire, with the identity the state binds to
+    swapped between the two calls. The other two assert the *seam*, and are not
+    redundant with it: the behavioural test supplies its own
+    ``bind_principal``, so only they can catch a default that stopped binding —
+    a server passing ``bind_principal=None`` would still pass every other test
+    in this file while quietly making one caller's state usable by another.
     """
+
+    @pytest.mark.asyncio
+    async def test_a_retry_from_a_different_caller_is_refused(self) -> None:
+        """Refused fail-closed, and the run still there for the caller it belongs to."""
+        caller = ["alice"]
+        answers: list[str] = []
+        server = MCPServer(
+            asking_agent(answers=answers),
+            request_state_security=RequestStateSecurity(keys=[b"k" * 32], bind_principal=lambda _ctx: caller[0]),
+        )
+
+        async with connect_modern(server, raise_exceptions=False, elicitation_callback=declares_elicitation) as session:
+            first = await _call(session)
+            assert isinstance(first, InputRequiredResult)
+            (key,) = (first.input_requests or {}).keys()
+
+            caller[0] = "bob"
+            with pytest.raises(MCPError) as raised:
+                await _call(session, input_responses={key: accepting("blue")}, request_state=first.request_state)
+
+            caller[0] = "alice"
+            answered = await _call(session, input_responses={key: accepting("blue")}, request_state=first.request_state)
+
+        assert "requestState" in str(raised.value)
+        assert not isinstance(answered, InputRequiredResult), "the rightful caller could no longer resume its own run"
+        assert answers == ["blue"], "the answer reached the run exactly once"
 
     def test_the_boundary_is_installed_with_its_principal_binding_intact(self) -> None:
         server = MCPServer(asking_agent(), name="pauser")

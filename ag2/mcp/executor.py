@@ -295,7 +295,6 @@ class AgentExecutor:
             pause=turn.id,
             question=key,
             digest=question_digest(request),
-            conversation=turn.conversation,
         )
         # The state goes out in plaintext here and is sealed by the
         # ``RequestStateBoundary`` at the wire boundary, which is the only place

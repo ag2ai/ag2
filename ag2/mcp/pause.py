@@ -64,17 +64,16 @@ class PauseState:
     plaintext it minted. Kept deliberately small — it names the paused run and
     the question, and nothing a client could learn anything from.
 
-    ``conversation`` is the handle the run's conversation goes by (``None`` under
-    ``sessions=False``, which mints none). It is carried so a run whose
-    conversation has since been evicted is refused rather than resumed into a
-    history that is gone; no second notion of continuity is introduced.
+    The run's conversation is deliberately *not* in here. A run whose
+    conversation has been evicted is already gone from the registry — the
+    eviction reclaims it — so ``take`` names nothing and the retry is refused
+    without a second notion of continuity to keep in step.
     """
 
     version: int
     pause: str
     question: str
     digest: str
-    conversation: str | None
 
     def encode(self) -> str:
         return json.dumps(
@@ -83,14 +82,13 @@ class PauseState:
                 "p": self.pause,
                 "q": self.question,
                 "d": self.digest,
-                "c": self.conversation,
             },
             separators=(",", ":"),
         )
 
     @classmethod
-    def mint(cls, *, pause: str, question: str, digest: str, conversation: str | None) -> "PauseState":
-        return cls(version=_STATE_VERSION, pause=pause, question=question, digest=digest, conversation=conversation)
+    def mint(cls, *, pause: str, question: str, digest: str) -> "PauseState":
+        return cls(version=_STATE_VERSION, pause=pause, question=question, digest=digest)
 
     @classmethod
     def decode(cls, raw: str) -> "PauseState | None":
@@ -109,7 +107,6 @@ class PauseState:
                 pause=str(data["p"]),
                 question=str(data["q"]),
                 digest=str(data["d"]),
-                conversation=data["c"] if data["c"] is None else str(data["c"]),
             )
         except (ValueError, KeyError, TypeError):
             return None
@@ -152,6 +149,8 @@ class SuspendedTurn:
         # forwarding to it without going back to the conversation registry (whose
         # turn lock this pause has deliberately let go of).
         self.stream = stream
+        # When the state naming this run was last minted, restamped by
+        # ``PausedRuns.register`` on every pause — see its docstring.
         self.created = created
         self._task: asyncio.Task[CallToolResult] | None = None
         self._outstanding: tuple[str, InputRequest] | None = None
@@ -274,7 +273,11 @@ class PausedRuns:
     Sweeping happens on every registry operation rather than on a timer: the
     boundary already refuses an expired token before a handler runs, so an
     expired run is unreachable the instant it expires and only its memory is
-    left to reclaim.
+    left to reclaim. The consequence to know is that a server which never
+    receives another call keeps an expired run's task and stream parked until it
+    does — unreachable, and capped by :data:`MAX_PAUSED_RUNS`, but not yet
+    collected. A timer would trade that for a second clock to keep in step with
+    this one.
     """
 
     __slots__ = ("_runs", "_ttl", "_max", "_clock")
@@ -299,7 +302,15 @@ class PausedRuns:
         return self._clock()
 
     def register(self, turn: SuspendedTurn) -> None:
+        """Hold a run that has just paused under freshly minted state.
+
+        Stamps the run with *now*, because the token naming it is minted now:
+        retention has to run from the state a client actually holds, or a run
+        that pauses and resumes several times is reclaimed while the token its
+        client holds is still one the boundary accepts.
+        """
         self._sweep()
+        turn.created = self._clock()
         self._runs[turn.id] = turn
         while len(self._runs) > self._max:
             _, oldest = self._runs.popitem(last=False)

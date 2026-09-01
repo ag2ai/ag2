@@ -20,8 +20,17 @@ from typing import Annotated, Any
 
 import pytest
 from mcp.client.session import ClientRequestContext
-from mcp.server.mcpserver import Elicit, Resolve
-from mcp.types import ElicitRequest, ElicitRequestParams, ElicitResult, InputRequiredResult, TextContent
+from mcp.server.mcpserver import Elicit, ListRoots, Resolve
+from mcp.types import (
+    ElicitRequest,
+    ElicitRequestParams,
+    ElicitResult,
+    InputRequiredResult,
+    ListRootsRequest,
+    ListRootsResult,
+    Root,
+    TextContent,
+)
 from pydantic import BaseModel
 
 from ag2 import Agent
@@ -53,6 +62,23 @@ def paint(room: str, colour: Annotated[Colour, Resolve(pick_colour)]) -> str:
     return f"painted {room} {colour.answer}"
 
 
+def project_roots() -> ListRoots:
+    """Read the client's roots. Available here and *not* to a conversational turn.
+
+    The served agent deliberately cannot ask for roots — it has no filesystem of
+    its own to scope, so the spec excluded it there. A deterministic tool is a
+    different thing: it may well be the code that wants the caller's directories,
+    and the resolver mechanism carries the request at no extra cost.
+    """
+    return ListRoots()
+
+
+@mcp_tool
+def where(roots: Annotated[ListRootsResult, Resolve(project_roots)]) -> str:
+    """Report the directories the calling client says its work lives in."""
+    return ", ".join(str(root.uri) for root in roots.roots)
+
+
 @pytest.fixture(autouse=True)
 def _reset() -> None:
     RESOLVER_RUNS.clear()
@@ -61,6 +87,14 @@ def _reset() -> None:
 
 def served() -> MCPServer:
     return MCPServer(Agent("host", config=TestConfig("unused")), tools=[paint])
+
+
+def rooted() -> MCPServer:
+    return MCPServer(Agent("host", config=TestConfig("unused")), tools=[where])
+
+
+async def lists_one_root(context: ClientRequestContext) -> ListRootsResult:
+    return ListRootsResult(roots=[Root(uri="file:///work")])
 
 
 async def accepts_blue(context: ClientRequestContext, params: ElicitRequestParams) -> ElicitResult:
@@ -112,6 +146,25 @@ class TestTheModernEraRoundTrip:
 
         assert RESOLVER_RUNS == ["resolver", "resolver"], "the resolver body did not re-run on the answered round"
         assert BODY_RUNS == ["body"], "the tool body ran on a round that had nothing to run with"
+
+    async def test_a_resolver_can_ask_for_the_clients_roots(self) -> None:
+        """Elicitation is not the only marker the pass-through carries."""
+        async with connect_modern(rooted(), list_roots_callback=lists_one_root) as session:
+            first = await session.call_tool("where", {}, allow_input_required=True)
+            assert isinstance(first, InputRequiredResult)
+            ((key, request),) = (first.input_requests or {}).items()
+            assert isinstance(request, ListRootsRequest)
+            final = await session.call_tool(
+                "where",
+                {},
+                allow_input_required=True,
+                input_responses={key: ListRootsResult(roots=[Root(uri="file:///work")])},
+                request_state=first.request_state,
+            )
+
+        assert not isinstance(final, InputRequiredResult)
+        assert final.is_error is False
+        assert final.content == [TextContent(type="text", text="file:///work")]
 
     async def test_the_resolved_parameter_is_not_advertised(self) -> None:
         """The caller supplies ``room``; ``colour`` is what the tool goes and asks for."""
