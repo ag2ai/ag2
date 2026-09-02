@@ -4,6 +4,7 @@
 
 import json
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import asdict, is_dataclass
 from typing import Any
 from uuid import UUID
 from weakref import ReferenceType, WeakKeyDictionary, ref
@@ -12,6 +13,7 @@ from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
     ATTR_HUMAN_INPUT_RESPONSE,
     ATTR_SPAN_TYPE,
+    ATTR_TOOL_RESULT_TRUNCATED,
     ATTR_USAGE_KIND,
     ATTR_USAGE_LABEL,
     ATTR_USAGE_TOTAL,
@@ -27,14 +29,20 @@ from ag2._telemetry_consts import (
 from ag2.annotations import Context
 from ag2.events import (
     BaseEvent,
+    BinaryInput,
+    DataInput,
+    FileIdInput,
     HumanInputRequest,
     HumanMessage,
+    Input,
     ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
     ToolErrorEvent,
+    ToolResult,
     ToolResultEvent,
+    UrlInput,
     UsageEvent,
 )
 from ag2.middleware.base import (
@@ -62,6 +70,61 @@ except ImportError as _err:
 def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
     provider = tracer_provider or trace.get_tracer_provider()
     return provider.get_tracer(OTEL_INSTRUMENTING_MODULE, schema_url=OTEL_SCHEMA_URL)
+
+
+# Default cap on the serialized tool result recorded on a tool span.
+MAX_TOOL_RESULT_CHARS = 8192
+_TOOL_RESULT_TRUNCATION_MARKER = "...[truncated]"
+
+
+def _json_default(obj: Any) -> Any:
+    """Coerce a value ``json`` cannot encode into one it can."""
+    model_dump = getattr(obj, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(mode="json")
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return asdict(obj)
+    if isinstance(obj, (set, frozenset)):
+        return sorted(obj, key=str)
+    return str(obj)
+
+
+def _render_tool_result_part(part: Input) -> str:
+    """Render one ``Input`` part of a tool result as span-attribute text.
+
+    Binary parts render as a descriptor, never their bytes. Mirrors
+    ``_stringify_tool_result`` in ``ag2/ag_ui/stream.py``.
+    """
+    if isinstance(part, TextInput):
+        return part.content
+    if isinstance(part, DataInput):
+        try:
+            return json.dumps(part.data, default=_json_default)
+        except Exception:
+            # Telemetry must not fail a tool call the tool itself completed.
+            return repr(part.data)
+    if isinstance(part, UrlInput):
+        return part.url
+    if isinstance(part, FileIdInput):
+        return f"[file:{part.file_id}]"
+    if isinstance(part, BinaryInput):
+        return f"[binary:{part.media_type} {len(part.data)}B]"
+    return repr(part)
+
+
+def _serialize_tool_result(result: ToolResult, max_chars: int | None) -> tuple[str, bool]:
+    """Flatten a ``ToolResult`` into ``(rendered text, was truncated)``.
+
+    A single text part stays an unwrapped plain string for backward
+    compatibility; multiple parts are newline-joined, not JSON-wrapped,
+    because the attribute is read as free text. ``max_chars=None`` disables
+    truncation.
+    """
+    rendered = "\n".join(_render_tool_result_part(p) for p in result.parts)
+    if max_chars is None or len(rendered) <= max_chars:
+        return rendered, False
+    keep = max(max_chars - len(_TOOL_RESULT_TRUNCATION_MARKER), 0)
+    return rendered[:keep] + _TOOL_RESULT_TRUNCATION_MARKER, True
 
 
 # At most one usage watcher per stream, process-wide. Keyed by the stream rather
@@ -125,6 +188,9 @@ class TelemetryMiddleware(MiddlewareFactory):
     Args:
         tracer_provider: Optional TracerProvider. Defaults to the global provider.
         capture_content: Whether to include message content, tool arguments/results in spans. Defaults to True.
+        max_tool_result_chars: Cap on the serialized tool result recorded per tool span. Defaults to
+            ``MAX_TOOL_RESULT_CHARS`` (8192). ``None`` disables truncation; large results may then exceed
+            your backend's attribute or payload limits.
         agent_name: Agent name for span attributes. If not set, defaults to "unknown".
         provider_name: LLM provider name (e.g. "openai", "anthropic").
         model_name: Model name (e.g. "gpt-4o-mini").
@@ -136,6 +202,7 @@ class TelemetryMiddleware(MiddlewareFactory):
         *,
         tracer_provider: TracerProvider | None = None,
         capture_content: bool = True,
+        max_tool_result_chars: int | None = MAX_TOOL_RESULT_CHARS,
         agent_name: str | None = None,
         provider_name: str | None = None,
         model_name: str | None = None,
@@ -143,6 +210,7 @@ class TelemetryMiddleware(MiddlewareFactory):
     ) -> None:
         self._tracer = _get_tracer(tracer_provider)
         self._capture_content = capture_content
+        self._max_tool_result_chars = max_tool_result_chars
         self._agent_name = agent_name or "unknown"
         self._provider_name = provider_name
         self._model_name = model_name
@@ -154,6 +222,7 @@ class TelemetryMiddleware(MiddlewareFactory):
             kind=type(self).__qualname__,
             config={
                 "capture_content": self._capture_content,
+                "max_tool_result_chars": self._max_tool_result_chars,
                 "agent_name": self._agent_name,
                 "provider_name": self._provider_name,
                 "model_name": self._model_name,
@@ -167,6 +236,7 @@ class TelemetryMiddleware(MiddlewareFactory):
             context,
             tracer=self._tracer,
             capture_content=self._capture_content,
+            max_tool_result_chars=self._max_tool_result_chars,
             agent_name=self._agent_name,
             provider_name=self._provider_name,
             model_name=self._model_name,
@@ -182,6 +252,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         *,
         tracer: trace.Tracer,
         capture_content: bool,
+        max_tool_result_chars: int | None,
         agent_name: str,
         provider_name: str | None,
         model_name: str | None,
@@ -191,6 +262,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         self._turn_context: Any = None
         self._tracer = tracer
         self._capture_content = capture_content
+        self._max_tool_result_chars = max_tool_result_chars
         self._agent_name = agent_name
         self._provider_name = provider_name
         self._model_name = model_name
@@ -417,9 +489,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.record_exception(result.error)
                 span.set_status(StatusCode.ERROR, str(result.error))
             elif self._capture_content and isinstance(result, ToolResultEvent) and result.result.parts:
-                part = result.result.parts[0]
-                if isinstance(part, TextInput):
-                    span.set_attribute("gen_ai.tool.call.result", part.content)
+                rendered, truncated = _serialize_tool_result(result.result, self._max_tool_result_chars)
+                span.set_attribute("gen_ai.tool.call.result", rendered)
+                if truncated:
+                    span.set_attribute(ATTR_TOOL_RESULT_TRUNCATED, True)
 
             return result
 

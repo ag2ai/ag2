@@ -12,6 +12,8 @@ a divergence between what telemetry emits and what scorers expect surfaces here
 rather than silently scoring a replayed trace incorrectly.
 """
 
+import json
+
 import pytest
 
 pytest.importorskip("opentelemetry.sdk")
@@ -107,6 +109,61 @@ async def test_tool_run_tool_calls_and_results_match(otel_provider) -> None:
     # Prebuilt scorers reach the same verdict on both Traces.
     assert tool_called("get_weather")._fn(trace=spans) == tool_called("get_weather")._fn(trace=live) is True
     assert no_tool_errors()._fn(trace=spans) == no_tool_errors()._fn(trace=live) is True
+
+
+@pytest.mark.asyncio()
+async def test_structured_tool_result_survives_the_span_round_trip(otel_provider) -> None:
+    """A tool returning structured data reconstructs with its data intact."""
+    exporter, provider = otel_provider
+
+    @tool
+    def get_weather(city: str) -> dict:
+        return {"city": city, "temp_c": 12}
+
+    agent = Agent(
+        "weather",
+        config=TestConfig([ToolCallEvent(name="get_weather", arguments='{"city": "Oslo"}')], "12C in Oslo."),
+        tools=[get_weather],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="weather", model_name="mock")],
+    )
+
+    await agent.ask("Weather in Oslo?")
+
+    spans = readable_spans_to_trace(exporter.get_finished_spans())
+
+    results = spans.events_of(ToolResultEvent)
+    assert len(results) == 1
+    parts = results[0].result.parts
+    assert len(parts) == 1
+    # One text part holding the JSON: the shape judge/attribution scorers read.
+    assert json.loads(parts[0].content) == {"city": "Oslo", "temp_c": 12}
+    assert parts[0].metadata == {}
+
+
+@pytest.mark.asyncio()
+async def test_truncated_tool_result_is_flagged_on_the_reconstructed_part(otel_provider) -> None:
+    exporter, provider = otel_provider
+
+    @tool
+    def dump() -> dict:
+        return {"rows": ["x" * 100 for _ in range(50)]}
+
+    agent = Agent(
+        "dumper",
+        config=TestConfig([ToolCallEvent(name="dump", arguments="{}")], "Done."),
+        tools=[dump],
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider, agent_name="dumper", model_name="mock", max_tool_result_chars=64
+            )
+        ],
+    )
+
+    await agent.ask("Dump")
+
+    part = readable_spans_to_trace(exporter.get_finished_spans()).events_of(ToolResultEvent)[0].result.parts[0]
+    assert part.content.endswith("...[truncated]")
+    assert part.metadata == {"truncated": True}
 
 
 @pytest.mark.asyncio()

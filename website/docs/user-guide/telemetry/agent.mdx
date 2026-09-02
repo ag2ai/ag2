@@ -114,9 +114,27 @@ When content capture is enabled (the default), spans include these additional at
 | `gen_ai.input.messages` | llm | JSON request messages |
 | `gen_ai.output.messages` | llm | JSON response messages |
 | `gen_ai.tool.call.arguments` | tool | Tool call arguments (JSON) |
-| `gen_ai.tool.call.result` | tool | Tool execution result |
+| `gen_ai.tool.call.result` | tool | Tool execution result (see below) |
+| `ag2.tool.call.result.truncated` | tool | Present and `true` when the result was truncated |
 | `ag2.human_input.prompt` | human_input | Prompt shown to human |
 | `ag2.human_input.response` | human_input | Human's response |
+
+The tool result is always recorded as a string:
+
+- text results verbatim,
+- structured results (dict, Pydantic model, list) as JSON,
+- binary/image/document parts as a `[binary:<media-type> <size>B]` descriptor,
+- multi-part results as the above joined with newlines.
+
+Results longer than `max_tool_result_chars` (default 8192) end with `...[truncated]` and carry
+`ag2.tool.call.result.truncated`; traces reconstructed by `ag2.eval` expose that flag as
+`metadata["truncated"]` on the result's text part. Raise the cap per middleware instance to keep large structured
+results parseable, or pass `None` to disable truncation (large results may then exceed your
+backend's attribute or payload limits):
+
+```python
+TelemetryMiddleware(capture_content=True, max_tool_result_chars=32_000)
+```
 
 !!! warning
     With `capture_content=True`, message content, tool arguments, and human input will appear in your tracing backend. Ensure your backend has appropriate access controls.
