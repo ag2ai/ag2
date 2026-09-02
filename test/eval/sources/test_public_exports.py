@@ -2,17 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""The span → ``Trace`` bridge is public API.
-
-Integrators who drive their own agents (their own sessions, auth, orchestration)
-cannot use ``run_agent``, but still want their traces graded by the *same* code
-AG2 grades its own runs with. That means reaching the reconstruction directly, so
-``readable_spans_to_trace`` / ``spans_to_trace`` are exported rather than reached
-through a private module.
-
-Nothing here needs the OpenTelemetry SDK — which is the other half of the
-contract: exporting the bridge must not put the SDK on ``ag2.eval``'s import path.
-"""
+"""``readable_spans_to_trace`` / ``spans_to_trace`` are public API and do not require the OTel SDK."""
 
 import subprocess
 import sys
@@ -33,7 +23,6 @@ def test_sources_package_exports_the_span_bridge() -> None:
 
 
 def test_eval_package_reexports_the_span_bridge() -> None:
-    """``readable_span_to_data`` stays at the sources level — it is a per-span primitive."""
     for name in ("readable_spans_to_trace", "spans_to_trace"):
         assert name in ag2.eval.__all__
 
@@ -43,17 +32,11 @@ def test_eval_package_reexports_the_span_bridge() -> None:
 
 
 def test_spans_to_trace_needs_no_sdk() -> None:
-    """The SDK-free primitive is importable and callable in this process regardless."""
     assert ag2.eval.spans_to_trace([]).events == ()
 
 
 def test_importing_ag2_eval_without_the_otel_sdk_still_works() -> None:
-    """Exporting the bridge must not drag ``opentelemetry`` onto the eval import path.
-
-    Run in a subprocess with ``opentelemetry`` blocked at the meta path, so the
-    check is real rather than a stand-in — and so a poisoned ``sys.modules``
-    cannot leak into the rest of the suite.
-    """
+    # Subprocess so blocking ``opentelemetry`` cannot leak into the rest of the suite.
     script = textwrap.dedent("""
         import sys
 
@@ -81,6 +64,5 @@ def test_importing_ag2_eval_without_the_otel_sdk_still_works() -> None:
     """)
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
 
-    # Calling it without the SDK fails with the install hint, not an obscure NameError.
     assert "opentelemetry.sdk' is not installed" in result.stdout
     assert "pip install ag2[tracing]" in result.stdout

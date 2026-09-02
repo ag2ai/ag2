@@ -192,12 +192,6 @@ async def test_delegated_spend_survives_the_span_round_trip(otel_provider) -> No
 
 @pytest.mark.asyncio()
 async def test_public_bridge_reconstructs_a_tool_run_end_to_end(otel_provider) -> None:
-    """The exported entry point is what an integrator actually calls.
-
-    Bring-your-own-spans: an agent driven outside ``run_agent`` still yields a
-    ``Trace`` carrying the tool call and its result, built through the public
-    ``ag2.eval.readable_spans_to_trace`` rather than a private module.
-    """
     exporter, provider = otel_provider
 
     @tool
