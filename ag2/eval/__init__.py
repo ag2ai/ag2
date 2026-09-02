@@ -51,6 +51,8 @@ from .sources import (
     TempoTraceSource,
     TraceRef,
     TraceSource,
+    readable_spans_to_trace,
+    spans_to_trace,
 )
 from .trace import Trace
 
@@ -90,8 +92,10 @@ __all__ = (
     "evaluate_pairwise",
     "evaluate_traces",
     "load_run",
+    "readable_spans_to_trace",
     "run_agent",
     "run_pairwise",
     "run_variants",
     "scorer",
+    "spans_to_trace",
 )

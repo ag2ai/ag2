@@ -272,6 +272,26 @@ Reconstruction understands **two span dialects**, auto-detected per trace, so tr
 - the [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/){.external-link target="_blank"} — `gen_ai.*` spans, what AG2's own `TelemetryMiddleware` emits, and
 - [OpenInference](https://github.com/Arize-ai/openinference){.external-link target="_blank"} — `openinference.span.kind` + `llm.*` / `tool.*`, emitted by the Arize/Phoenix instrumentors.
 
+### Bring your own spans
+
+If your agents run behind your own entry point — your sessions, your auth, your orchestration — `run_agent` isn't the shape you need, but you still want the *same* grading. Reconstruct the `Trace` yourself from the spans you already export, with the same function `run_agent` uses internally:
+
+```python linenums="1"
+from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_traces, readable_spans_to_trace
+
+# ... your own run, with TelemetryMiddleware exporting to a span exporter you control ...
+trace = readable_spans_to_trace(exporter.get_finished_spans())
+
+result = await evaluate_traces(
+    InMemoryTraceSource([(TraceRef(trace_id="run-1", task_id="checkout"), trace)]),
+    scorers=[...],
+    suite=suite,
+    store_dir="runs",
+)
+```
+
+`readable_spans_to_trace` takes OpenTelemetry `ReadableSpan`s and needs the tracing extra (`pip install "ag2[tracing]"`). If you already hold spans in a neutral form, `spans_to_trace` does the same job from `SpanData` and needs no SDK. Either way the result is an ordinary `Trace`, so it grades identically to one `run_agent` produced — no export/read-back round trip through a directory or Tempo.
+
 ## Observing a run
 
 Just like `agent.ask(stream=...)`, `run_agent`, `run_variants`, and `run_pairwise` all accept a `stream`. Pass one and the runner publishes **eval lifecycle events** to it as the run unfolds — so you observe an evaluation with the same machinery you use on an agent (`subscribe`, `where`, the watch system, persistent backends). Nothing is printed for you; you attach the observer and render however you like.
