@@ -9,6 +9,7 @@ from collections.abc import Sequence as SequenceType
 import pytest
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
+from pydantic import BaseModel
 
 from ag2 import Agent, Context
 from ag2.events import (
@@ -21,10 +22,10 @@ from ag2.events import (
     UsageEvent,
 )
 from ag2.middleware import BaseMiddleware, Middleware
-from ag2.middleware.builtin.telemetry import TelemetryMiddleware
+from ag2.middleware.builtin.telemetry import MAX_TOOL_RESULT_CHARS, TelemetryMiddleware
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
-from ag2.tools import tool
+from ag2.tools import ToolResult, tool
 
 
 class _InMemorySpanExporter(SpanExporter):
@@ -448,6 +449,132 @@ async def test_tool_span_with_content_capture(otel_setup):
     span = tool_spans[0]
     assert span.attributes["gen_ai.tool.call.arguments"] == '{"name": "World"}'
     assert "Hello World" in span.attributes["gen_ai.tool.call.result"]
+
+
+def _tool_span_of(exporter):
+    spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "tool"]
+    assert len(spans) == 1
+    return spans[0]
+
+
+def _agent_calling(tool_fn, provider, *, capture_content=True):
+    return Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent([ToolCallEvent(id="call_1", name=tool_fn.name, arguments="{}")]),
+            ),
+            ModelResponse(ModelMessage("Done")),
+        ),
+        tools=[tool_fn],
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider,
+                agent_name="assistant",
+                capture_content=capture_content,
+            )
+        ],
+    )
+
+
+@pytest.mark.asyncio()
+async def test_tool_span_records_dict_result_as_json(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def weather() -> dict:
+        """Report the weather."""
+        return {"city": "Oslo", "temp_c": 12, "conditions": ["cloud", "rain"]}
+
+    await _agent_calling(weather, provider).ask("Weather?")
+
+    recorded = _tool_span_of(exporter).attributes["gen_ai.tool.call.result"]
+    assert json.loads(recorded) == {"city": "Oslo", "temp_c": 12, "conditions": ["cloud", "rain"]}
+
+
+@pytest.mark.asyncio()
+async def test_tool_span_records_pydantic_result_as_json(otel_setup):
+    exporter, provider = otel_setup
+
+    class Report(BaseModel):
+        city: str
+        temp_c: int
+
+    @tool
+    def weather() -> Report:
+        """Report the weather."""
+        return Report(city="Oslo", temp_c=12)
+
+    await _agent_calling(weather, provider).ask("Weather?")
+
+    recorded = _tool_span_of(exporter).attributes["gen_ai.tool.call.result"]
+    assert json.loads(recorded) == {"city": "Oslo", "temp_c": 12}
+
+
+@pytest.mark.asyncio()
+async def test_tool_span_keeps_every_part_of_a_multi_part_result(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def summarise() -> ToolResult:
+        """Summarise, in parts."""
+        return ToolResult("headline", {"rows": 2}, "footnote")
+
+    await _agent_calling(summarise, provider).ask("Summarise")
+
+    recorded = _tool_span_of(exporter).attributes["gen_ai.tool.call.result"]
+    assert recorded.splitlines() == ["headline", '{"rows": 2}', "footnote"]
+
+
+@pytest.mark.asyncio()
+async def test_tool_span_truncates_and_flags_an_oversized_result(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def dump() -> dict:
+        """Return far too much."""
+        return {"rows": ["x" * 100 for _ in range(500)]}
+
+    await _agent_calling(dump, provider).ask("Dump")
+
+    span = _tool_span_of(exporter)
+    recorded = span.attributes["gen_ai.tool.call.result"]
+    assert len(recorded) == MAX_TOOL_RESULT_CHARS
+    assert recorded.endswith("...[truncated]")
+    assert span.attributes["ag2.tool.call.result.truncated"] is True
+
+
+@pytest.mark.asyncio()
+async def test_tool_span_omits_structured_result_without_content_capture(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def weather() -> dict:
+        """Report the weather."""
+        return {"city": "Oslo"}
+
+    await _agent_calling(weather, provider, capture_content=False).ask("Weather?")
+
+    attributes = _tool_span_of(exporter).attributes
+    assert "gen_ai.tool.call.result" not in attributes
+    assert "ag2.tool.call.result.truncated" not in attributes
+
+
+@pytest.mark.asyncio()
+async def test_tool_span_records_single_text_result_verbatim(otel_setup):
+    """A lone text part stays an unwrapped plain string."""
+    exporter, provider = otel_setup
+
+    @tool
+    def greet() -> str:
+        """Greet."""
+        return "Hello World"
+
+    await _agent_calling(greet, provider).ask("Greet")
+
+    span = _tool_span_of(exporter)
+    assert span.attributes["gen_ai.tool.call.result"] == "Hello World"
+    assert "ag2.tool.call.result.truncated" not in span.attributes
 
 
 @pytest.mark.asyncio()

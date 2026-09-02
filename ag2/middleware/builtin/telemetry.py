@@ -4,6 +4,7 @@
 
 import json
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import asdict, is_dataclass
 from typing import Any
 from uuid import UUID
 from weakref import ReferenceType, WeakKeyDictionary, ref
@@ -27,14 +28,20 @@ from ag2._telemetry_consts import (
 from ag2.annotations import Context
 from ag2.events import (
     BaseEvent,
+    BinaryInput,
+    DataInput,
+    FileIdInput,
     HumanInputRequest,
     HumanMessage,
+    Input,
     ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
     ToolErrorEvent,
+    ToolResult,
     ToolResultEvent,
+    UrlInput,
     UsageEvent,
 )
 from ag2.middleware.base import (
@@ -62,6 +69,61 @@ except ImportError as _err:
 def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
     provider = tracer_provider or trace.get_tracer_provider()
     return provider.get_tracer(OTEL_INSTRUMENTING_MODULE, schema_url=OTEL_SCHEMA_URL)
+
+
+# Cap on the serialized tool result recorded on a tool span.
+MAX_TOOL_RESULT_CHARS = 8192
+_TOOL_RESULT_TRUNCATION_MARKER = "...[truncated]"
+_ATTR_TOOL_RESULT_TRUNCATED = "ag2.tool.call.result.truncated"
+
+
+def _json_default(obj: Any) -> Any:
+    """Coerce a value ``json`` cannot encode into one it can."""
+    model_dump = getattr(obj, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(mode="json")
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return asdict(obj)
+    if isinstance(obj, (set, frozenset)):
+        return sorted(obj, key=str)
+    return str(obj)
+
+
+def _render_tool_result_part(part: Input) -> str:
+    """Render one ``Input`` part of a tool result as span-attribute text.
+
+    Binary parts render as a descriptor, never their bytes. Mirrors
+    ``_stringify_tool_result`` in ``ag2/ag_ui/stream.py``.
+    """
+    if isinstance(part, TextInput):
+        return part.content
+    if isinstance(part, DataInput):
+        try:
+            return json.dumps(part.data, default=_json_default)
+        except Exception:
+            # Telemetry must not fail a tool call the tool itself completed.
+            return repr(part.data)
+    if isinstance(part, UrlInput):
+        return part.url
+    if isinstance(part, FileIdInput):
+        return f"[file:{part.file_id}]"
+    if isinstance(part, BinaryInput):
+        return f"[binary:{part.media_type} {len(part.data)}B]"
+    return repr(part)
+
+
+def _serialize_tool_result(result: ToolResult) -> tuple[str, bool]:
+    """Flatten a ``ToolResult`` into ``(rendered text, was truncated)``.
+
+    A single text part stays an unwrapped plain string for backward
+    compatibility; multiple parts are newline-joined, not JSON-wrapped,
+    because the attribute is read as free text.
+    """
+    rendered = "\n".join(_render_tool_result_part(p) for p in result.parts)
+    if len(rendered) <= MAX_TOOL_RESULT_CHARS:
+        return rendered, False
+    keep = MAX_TOOL_RESULT_CHARS - len(_TOOL_RESULT_TRUNCATION_MARKER)
+    return rendered[:keep] + _TOOL_RESULT_TRUNCATION_MARKER, True
 
 
 # At most one usage watcher per stream, process-wide. Keyed by the stream rather
@@ -417,9 +479,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.record_exception(result.error)
                 span.set_status(StatusCode.ERROR, str(result.error))
             elif self._capture_content and isinstance(result, ToolResultEvent) and result.result.parts:
-                part = result.result.parts[0]
-                if isinstance(part, TextInput):
-                    span.set_attribute("gen_ai.tool.call.result", part.content)
+                rendered, truncated = _serialize_tool_result(result.result)
+                span.set_attribute("gen_ai.tool.call.result", rendered)
+                if truncated:
+                    span.set_attribute(_ATTR_TOOL_RESULT_TRUNCATED, True)
 
             return result
 
