@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from ag2 import Context
-from ag2.events import BaseEvent, ModelMessage, ModelResponse, TextInput
+from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse, TextInput
 from ag2.middleware import RetryMiddleware
 
 
@@ -82,3 +82,57 @@ async def test_llm_retry_does_not_retry_non_matching_errors(mock: MagicMock) -> 
         await middleware.on_llm_call(llm_call, [TextInput("Hi!")], mock)
 
     mock.llm_call.assert_called_once_with([TextInput("Hi!")])
+
+
+@pytest.mark.asyncio()
+async def test_llm_retry_propagates_when_chunks_emitted_before_error(mock: MagicMock) -> None:
+    retry_middleware = RetryMiddleware(max_retries=2, retry_on=(TransientError,))
+    emitted_chunks: list[str] = []
+
+    async def fake_send(event: BaseEvent) -> None:
+        if isinstance(event, ModelMessageChunk):
+            emitted_chunks.append(event.content)
+
+    mock.send = fake_send
+
+    async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
+        mock.llm_call(events)
+        await ctx.send(ModelMessageChunk("stale "))
+        raise TransientError("network dropped mid-stream")
+
+    middleware = retry_middleware(TextInput("Hi!"), mock)
+    with pytest.raises(TransientError, match="network dropped mid-stream"):
+        await middleware.on_llm_call(llm_call, [TextInput("Hi!")], mock)
+
+    mock.llm_call.assert_called_once_with([TextInput("Hi!")])
+    assert emitted_chunks == ["stale "]
+
+
+@pytest.mark.asyncio()
+async def test_llm_retry_retries_when_error_before_any_emission(mock: MagicMock) -> None:
+    retry_middleware = RetryMiddleware(max_retries=2, retry_on=(TransientError,))
+    attempts = 0
+    emitted_chunks: list[str] = []
+
+    async def fake_send(event: BaseEvent) -> None:
+        if isinstance(event, ModelMessageChunk):
+            emitted_chunks.append(event.content)
+
+    mock.send = fake_send
+
+    async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
+        nonlocal attempts
+        attempts += 1
+        mock.llm_call(events)
+        if attempts == 1:
+            # Error occurs before any chunk is emitted (e.g. rate limit, DNS)
+            raise TransientError("rate limited on handshake")
+        await ctx.send(ModelMessageChunk("clean stream"))
+        return ModelResponse(ModelMessage("clean stream"))
+
+    middleware = retry_middleware(TextInput("Hi!"), mock)
+    response = await middleware.on_llm_call(llm_call, [TextInput("Hi!")], mock)
+
+    assert response == ModelResponse(ModelMessage("clean stream"))
+    assert mock.llm_call.call_count == attempts == 2
+    assert emitted_chunks == ["clean stream"]

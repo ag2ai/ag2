@@ -3,11 +3,29 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
+from typing import Any
 
 from ag2.annotations import Context
 from ag2.events import BaseEvent, ModelResponse
 from ag2.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 from ag2.middleware.describe import MiddlewareDescription
+
+
+class _AttemptContext:
+    """Context wrapper that tracks whether any event was published during an attempt."""
+
+    __slots__ = ("_inner", "has_emitted")
+
+    def __init__(self, inner: Context) -> None:
+        self._inner = inner
+        self.has_emitted: bool = False
+
+    async def send(self, event: BaseEvent) -> None:
+        self.has_emitted = True
+        await self._inner.send(event)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
 
 
 class RetryMiddleware(MiddlewareFactory):
@@ -59,9 +77,11 @@ class _RetryMiddleware(BaseMiddleware):
         context: Context,
     ) -> ModelResponse:
         for _ in range(self._max_retries):
+            attempt_context = _AttemptContext(context)
             try:
-                return await call_next(events, context)
+                return await call_next(events, attempt_context)  # type: ignore[arg-type]
             except self._retry_on:
-                pass
+                if attempt_context.has_emitted:
+                    raise
         # Final attempt — let the original exception propagate.
         return await call_next(events, context)
