@@ -3,26 +3,27 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 from ag2.annotations import Context
+from ag2.context import Stream
 from ag2.events import BaseEvent, ModelResponse
 from ag2.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 from ag2.middleware.describe import MiddlewareDescription
 
 
-class _AttemptContext:
-    """Context wrapper that tracks whether any event was published during an attempt."""
+class _AttemptStream:
+    """Stream proxy that records whether an attempt published an event."""
 
     __slots__ = ("_inner", "has_emitted")
 
-    def __init__(self, inner: Context) -> None:
+    def __init__(self, inner: Stream) -> None:
         self._inner = inner
-        self.has_emitted: bool = False
+        self.has_emitted = False
 
-    async def send(self, event: BaseEvent) -> None:
+    async def send(self, event: BaseEvent, context: Context) -> None:
         self.has_emitted = True
-        await self._inner.send(event)
+        await self._inner.send(event, context)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
@@ -77,11 +78,16 @@ class _RetryMiddleware(BaseMiddleware):
         context: Context,
     ) -> ModelResponse:
         for _ in range(self._max_retries):
-            attempt_context = _AttemptContext(context)
+            original_stream = context.stream
+            attempt_stream = _AttemptStream(original_stream)
+            context.stream = cast(Stream, attempt_stream)
             try:
-                return await call_next(events, attempt_context)  # type: ignore[arg-type]
+                return await call_next(events, context)
             except self._retry_on:
-                if attempt_context.has_emitted:
+                if attempt_stream.has_emitted:
                     raise
+            finally:
+                if context.stream is attempt_stream:
+                    context.stream = original_stream
         # Final attempt — let the original exception propagate.
         return await call_next(events, context)
