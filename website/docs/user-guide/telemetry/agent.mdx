@@ -127,7 +127,8 @@ The tool result is always recorded as a string:
 - multi-part results as the above joined with newlines.
 
 Results longer than `max_tool_result_chars` (default 8192) end with `...[truncated]` and carry
-`ag2.tool.call.result.truncated`. Raise the cap per middleware instance to keep large structured
+`ag2.tool.call.result.truncated`; traces reconstructed by `ag2.eval` expose that flag as
+`metadata["truncated"]` on the result's text part. Raise the cap per middleware instance to keep large structured
 results parseable, or pass `None` to disable truncation (large results may then exceed your
 backend's attribute or payload limits):
 

@@ -13,6 +13,7 @@ from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
     ATTR_HUMAN_INPUT_RESPONSE,
     ATTR_SPAN_TYPE,
+    ATTR_TOOL_RESULT_TRUNCATED,
     ATTR_USAGE_KIND,
     ATTR_USAGE_LABEL,
     ATTR_USAGE_TOTAL,
@@ -74,7 +75,6 @@ def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
 # Default cap on the serialized tool result recorded on a tool span.
 MAX_TOOL_RESULT_CHARS = 8192
 _TOOL_RESULT_TRUNCATION_MARKER = "...[truncated]"
-_ATTR_TOOL_RESULT_TRUNCATED = "ag2.tool.call.result.truncated"
 
 
 def _json_default(obj: Any) -> Any:
@@ -492,7 +492,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 rendered, truncated = _serialize_tool_result(result.result, self._max_tool_result_chars)
                 span.set_attribute("gen_ai.tool.call.result", rendered)
                 if truncated:
-                    span.set_attribute(_ATTR_TOOL_RESULT_TRUNCATED, True)
+                    span.set_attribute(ATTR_TOOL_RESULT_TRUNCATED, True)
 
             return result
 

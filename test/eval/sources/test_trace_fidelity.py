@@ -137,6 +137,33 @@ async def test_structured_tool_result_survives_the_span_round_trip(otel_provider
     assert len(parts) == 1
     # One text part holding the JSON: the shape judge/attribution scorers read.
     assert json.loads(parts[0].content) == {"city": "Oslo", "temp_c": 12}
+    assert parts[0].metadata == {}
+
+
+@pytest.mark.asyncio()
+async def test_truncated_tool_result_is_flagged_on_the_reconstructed_part(otel_provider) -> None:
+    exporter, provider = otel_provider
+
+    @tool
+    def dump() -> dict:
+        return {"rows": ["x" * 100 for _ in range(50)]}
+
+    agent = Agent(
+        "dumper",
+        config=TestConfig([ToolCallEvent(name="dump", arguments="{}")], "Done."),
+        tools=[dump],
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider, agent_name="dumper", model_name="mock", max_tool_result_chars=64
+            )
+        ],
+    )
+
+    await agent.ask("Dump")
+
+    part = readable_spans_to_trace(exporter.get_finished_spans()).events_of(ToolResultEvent)[0].result.parts[0]
+    assert part.content.endswith("...[truncated]")
+    assert part.metadata == {"truncated": True}
 
 
 @pytest.mark.asyncio()
