@@ -457,7 +457,7 @@ def _tool_span_of(exporter):
     return spans[0]
 
 
-def _agent_calling(tool_fn, provider, *, capture_content=True):
+def _agent_calling(tool_fn, provider, *, capture_content=True, **telemetry_kwargs):
     return Agent(
         "assistant",
         config=TestConfig(
@@ -472,6 +472,7 @@ def _agent_calling(tool_fn, provider, *, capture_content=True):
                 tracer_provider=provider,
                 agent_name="assistant",
                 capture_content=capture_content,
+                **telemetry_kwargs,
             )
         ],
     )
@@ -542,6 +543,45 @@ async def test_tool_span_truncates_and_flags_an_oversized_result(otel_setup):
     assert len(recorded) == MAX_TOOL_RESULT_CHARS
     assert recorded.endswith("...[truncated]")
     assert span.attributes["ag2.tool.call.result.truncated"] is True
+
+
+@pytest.mark.asyncio()
+async def test_tool_span_result_cap_is_configurable_per_middleware(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def dump() -> dict:
+        """Return far too much."""
+        return {"rows": ["x" * 100 for _ in range(500)]}
+
+    await _agent_calling(dump, provider, max_tool_result_chars=100_000).ask("Dump")
+
+    span = _tool_span_of(exporter)
+    recorded = span.attributes["gen_ai.tool.call.result"]
+    assert len(recorded) > MAX_TOOL_RESULT_CHARS
+    assert json.loads(recorded) == {"rows": ["x" * 100 for _ in range(500)]}
+    assert "ag2.tool.call.result.truncated" not in span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_tool_span_result_cap_none_disables_truncation(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def dump() -> str:
+        """Return far too much."""
+        return "y" * (MAX_TOOL_RESULT_CHARS * 3)
+
+    await _agent_calling(dump, provider, max_tool_result_chars=None).ask("Dump")
+
+    span = _tool_span_of(exporter)
+    assert span.attributes["gen_ai.tool.call.result"] == "y" * (MAX_TOOL_RESULT_CHARS * 3)
+    assert "ag2.tool.call.result.truncated" not in span.attributes
+
+
+def test_describe_reports_tool_result_cap():
+    assert TelemetryMiddleware().describe().config["max_tool_result_chars"] == MAX_TOOL_RESULT_CHARS
+    assert TelemetryMiddleware(max_tool_result_chars=None).describe().config["max_tool_result_chars"] is None
 
 
 @pytest.mark.asyncio()

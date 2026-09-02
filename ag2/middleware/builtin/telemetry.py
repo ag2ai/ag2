@@ -71,7 +71,7 @@ def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
     return provider.get_tracer(OTEL_INSTRUMENTING_MODULE, schema_url=OTEL_SCHEMA_URL)
 
 
-# Cap on the serialized tool result recorded on a tool span.
+# Default cap on the serialized tool result recorded on a tool span.
 MAX_TOOL_RESULT_CHARS = 8192
 _TOOL_RESULT_TRUNCATION_MARKER = "...[truncated]"
 _ATTR_TOOL_RESULT_TRUNCATED = "ag2.tool.call.result.truncated"
@@ -112,17 +112,18 @@ def _render_tool_result_part(part: Input) -> str:
     return repr(part)
 
 
-def _serialize_tool_result(result: ToolResult) -> tuple[str, bool]:
+def _serialize_tool_result(result: ToolResult, max_chars: int | None) -> tuple[str, bool]:
     """Flatten a ``ToolResult`` into ``(rendered text, was truncated)``.
 
     A single text part stays an unwrapped plain string for backward
     compatibility; multiple parts are newline-joined, not JSON-wrapped,
-    because the attribute is read as free text.
+    because the attribute is read as free text. ``max_chars=None`` disables
+    truncation.
     """
     rendered = "\n".join(_render_tool_result_part(p) for p in result.parts)
-    if len(rendered) <= MAX_TOOL_RESULT_CHARS:
+    if max_chars is None or len(rendered) <= max_chars:
         return rendered, False
-    keep = MAX_TOOL_RESULT_CHARS - len(_TOOL_RESULT_TRUNCATION_MARKER)
+    keep = max(max_chars - len(_TOOL_RESULT_TRUNCATION_MARKER), 0)
     return rendered[:keep] + _TOOL_RESULT_TRUNCATION_MARKER, True
 
 
@@ -187,6 +188,9 @@ class TelemetryMiddleware(MiddlewareFactory):
     Args:
         tracer_provider: Optional TracerProvider. Defaults to the global provider.
         capture_content: Whether to include message content, tool arguments/results in spans. Defaults to True.
+        max_tool_result_chars: Cap on the serialized tool result recorded per tool span. Defaults to
+            ``MAX_TOOL_RESULT_CHARS`` (8192). ``None`` disables truncation; large results may then exceed
+            your backend's attribute or payload limits.
         agent_name: Agent name for span attributes. If not set, defaults to "unknown".
         provider_name: LLM provider name (e.g. "openai", "anthropic").
         model_name: Model name (e.g. "gpt-4o-mini").
@@ -198,6 +202,7 @@ class TelemetryMiddleware(MiddlewareFactory):
         *,
         tracer_provider: TracerProvider | None = None,
         capture_content: bool = True,
+        max_tool_result_chars: int | None = MAX_TOOL_RESULT_CHARS,
         agent_name: str | None = None,
         provider_name: str | None = None,
         model_name: str | None = None,
@@ -205,6 +210,7 @@ class TelemetryMiddleware(MiddlewareFactory):
     ) -> None:
         self._tracer = _get_tracer(tracer_provider)
         self._capture_content = capture_content
+        self._max_tool_result_chars = max_tool_result_chars
         self._agent_name = agent_name or "unknown"
         self._provider_name = provider_name
         self._model_name = model_name
@@ -216,6 +222,7 @@ class TelemetryMiddleware(MiddlewareFactory):
             kind=type(self).__qualname__,
             config={
                 "capture_content": self._capture_content,
+                "max_tool_result_chars": self._max_tool_result_chars,
                 "agent_name": self._agent_name,
                 "provider_name": self._provider_name,
                 "model_name": self._model_name,
@@ -229,6 +236,7 @@ class TelemetryMiddleware(MiddlewareFactory):
             context,
             tracer=self._tracer,
             capture_content=self._capture_content,
+            max_tool_result_chars=self._max_tool_result_chars,
             agent_name=self._agent_name,
             provider_name=self._provider_name,
             model_name=self._model_name,
@@ -244,6 +252,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         *,
         tracer: trace.Tracer,
         capture_content: bool,
+        max_tool_result_chars: int | None,
         agent_name: str,
         provider_name: str | None,
         model_name: str | None,
@@ -253,6 +262,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         self._turn_context: Any = None
         self._tracer = tracer
         self._capture_content = capture_content
+        self._max_tool_result_chars = max_tool_result_chars
         self._agent_name = agent_name
         self._provider_name = provider_name
         self._model_name = model_name
@@ -479,7 +489,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.record_exception(result.error)
                 span.set_status(StatusCode.ERROR, str(result.error))
             elif self._capture_content and isinstance(result, ToolResultEvent) and result.result.parts:
-                rendered, truncated = _serialize_tool_result(result.result)
+                rendered, truncated = _serialize_tool_result(result.result, self._max_tool_result_chars)
                 span.set_attribute("gen_ai.tool.call.result", rendered)
                 if truncated:
                     span.set_attribute(_ATTR_TOOL_RESULT_TRUNCATED, True)

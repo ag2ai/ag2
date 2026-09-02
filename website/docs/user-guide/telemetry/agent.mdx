@@ -126,8 +126,14 @@ The tool result is always recorded as a string:
 - binary/image/document parts as a `[binary:<media-type> <size>B]` descriptor,
 - multi-part results as the above joined with newlines.
 
-Results longer than 8192 characters end with `...[truncated]` and carry
-`ag2.tool.call.result.truncated`.
+Results longer than `max_tool_result_chars` (default 8192) end with `...[truncated]` and carry
+`ag2.tool.call.result.truncated`. Raise the cap per middleware instance to keep large structured
+results parseable, or pass `None` to disable truncation (large results may then exceed your
+backend's attribute or payload limits):
+
+```python
+TelemetryMiddleware(capture_content=True, max_tool_result_chars=32_000)
+```
 
 !!! warning
     With `capture_content=True`, message content, tool arguments, and human input will appear in your tracing backend. Ensure your backend has appropriate access controls.
