@@ -9,7 +9,7 @@ with prebuilt scorers, deterministic runs via ``TestConfig`` cassettes,
 and persisted run JSON suitable for run-vs-run diffing.
 """
 
-from ._types import Feedback, ScorerReturnTypeError
+from ._types import Feedback, MissingTraceError, ScorerReturnTypeError
 from .dataset import Suite, Task
 from .pairwise import (
     Agreement,
@@ -66,6 +66,7 @@ __all__ = (
     "Feedback",
     "InMemoryTraceSource",
     "LeaderboardRow",
+    "MissingTraceError",
     "OpenInferenceConvention",
     "PairwiseCase",
     "PairwiseComparator",

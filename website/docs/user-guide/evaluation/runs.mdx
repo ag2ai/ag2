@@ -267,6 +267,22 @@ A **`TraceSource`** is anything that yields traces. Three ship:
 
 Because grading depends only on the reconstructed `Trace`, the **same scorers** work whether the trace came from `run_agent`, a directory, or production.
 
+### Suite tasks with no trace — `on_missing_task`
+
+A trace whose `task_id` isn't in the suite is graded reference-free. The reverse — a **suite task no trace covers**, because the run crashed before emitting spans, or the export never landed — is controlled by `on_missing_task`:
+
+| Value | Behaviour |
+|---|---|
+| `"error"` *(default)* | The task is graded with an empty `Trace` carrying a `MissingTraceError`, so it counts in `aggregates.errors` **and** in the pass-rate denominator. |
+| `"ignore"` | The task is left out of the result and a warning is logged with the uncovered ids. |
+| `"raise"` | `MissingTraceError` is raised, listing the uncovered ids, before anything is graded. |
+
+The default is `"error"` so a missing trace can never make a suite look *better*: a task that produced nothing is a failure, not a smaller denominator. Missing tasks are appended in suite order after the graded traces.
+
+```python linenums="1"
+result = await evaluate_traces(source, scorers=[...], suite=suite, store_dir="runs", on_missing_task="raise")
+```
+
 Reconstruction understands **two span dialects**, auto-detected per trace, so traces from a range of tools and frameworks grade unchanged:
 
 - the [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/){.external-link target="_blank"} — `gen_ai.*` spans, what AG2's own `TelemetryMiddleware` emits, and
