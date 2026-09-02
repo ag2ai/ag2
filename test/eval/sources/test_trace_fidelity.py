@@ -21,9 +21,9 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from ag2 import Agent
+from ag2.eval import readable_spans_to_trace
 from ag2.eval.runtime._capture import EventCapture
 from ag2.eval.scorers import no_tool_errors, tool_called
-from ag2.eval.sources._otel import readable_spans_to_trace
 from ag2.eval.trace import TokenUsage, Trace
 from ag2.events import (
     ModelMessage,
@@ -188,3 +188,45 @@ async def test_delegated_spend_survives_the_span_round_trip(otel_provider) -> No
     assert spans.tokens == live.tokens
     assert spans.tokens == TokenUsage(input=1000, output=100)
     assert spans.tokens.total == 1100
+
+
+@pytest.mark.asyncio()
+async def test_public_bridge_reconstructs_a_tool_run_end_to_end(otel_provider) -> None:
+    """The exported entry point is what an integrator actually calls.
+
+    Bring-your-own-spans: an agent driven outside ``run_agent`` still yields a
+    ``Trace`` carrying the tool call and its result, built through the public
+    ``ag2.eval.readable_spans_to_trace`` rather than a private module.
+    """
+    exporter, provider = otel_provider
+
+    @tool
+    def lookup_order(order_id: str) -> str:
+        return f"Order {order_id} shipped"
+
+    agent = Agent(
+        "support",
+        config=TestConfig([ToolCallEvent(name="lookup_order", arguments='{"order_id": "A-42"}')], "It shipped."),
+        tools=[lookup_order],
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider,
+                agent_name="support",
+                model_name="mock",
+                capture_content=True,
+            )
+        ],
+    )
+
+    await agent.ask("Where is order A-42?")
+
+    trace = readable_spans_to_trace(exporter.get_finished_spans())
+
+    calls = trace.events_of(ToolCallEvent)
+    assert [(c.name, c.arguments) for c in calls] == [("lookup_order", '{"order_id": "A-42"}')]
+
+    results = trace.events_of(ToolResultEvent)
+    assert len(results) == 1
+    assert results[0].name == "lookup_order"
+    assert "A-42 shipped" in str(results[0].result)
+    assert len(trace.events_of(ToolErrorEvent)) == 0
