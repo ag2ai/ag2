@@ -145,6 +145,57 @@ agent_with_mcp = Agent(
 )
 ```
 
+When servers expose the same tool name, set `tool_name_prefix` to namespace the
+names locally. The prefix is visible to the model, while calls sent to the MCP
+server keep the original name:
+
+```python linenums="1" hl_lines="10 16"
+from ag2 import Agent
+from ag2.tools import MCPToolkit, MCPServerConfig
+
+agent_with_mcp = Agent(
+    name="Mixed bot",
+    tools=[
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://github.example.com/mcp",
+                tool_name_prefix="github_",
+            )
+        ),
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://docs.example.com/mcp",
+                tool_name_prefix="docs_",
+            )
+        ),
+    ],
+)
+```
+
+For example, two remote `search` tools are exposed locally as `github_search`
+and `docs_search`. `allowed_tools` and `blocked_tools` continue to match the
+original remote names.
+
+Like the other config fields, `tool_name_prefix` accepts a `Variable`, so the
+namespace can be resolved from the context at discovery time:
+
+```python linenums="1" hl_lines="7"
+from ag2 import Variable
+from ag2.tools import MCPToolkit, MCPServerConfig
+
+toolkit = MCPToolkit(
+    MCPServerConfig(
+        server_url="https://my-mcp-url.example.com",
+        tool_name_prefix=Variable("tenant_prefix"),
+    )
+)
+```
+
+!!! warning
+    Namespacing is opt-in. Two servers exposing the same tool name **without**
+    distinct prefixes still collide: both proxies answer the same tool call, so
+    the tool runs twice for one request.
+
 ## Provider-side: `MCPServerTool`
 
 `MCPServerTool` does not open a connection — it ships the server URL and credentials to the LLM provider as part of the request. The provider is then responsible for connecting to the MCP server and dispatching tool calls. Because the provider only accepts a URL, this path does **not** support local stdio servers — use `MCPToolkit` with `MCPStdioServerConfig` for those.

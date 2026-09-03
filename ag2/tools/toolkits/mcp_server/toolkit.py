@@ -108,17 +108,22 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncGenerator[ClientSession]:
 class _MCPProxyTool(Tool):
     """A function-tool-shaped proxy that forwards calls to a remote MCP server."""
 
-    __slots__ = ("name", "schema", "_config", "_middleware")
+    __slots__ = ("name", "schema", "_config", "_middleware", "_remote_name")
 
     def __init__(
         self,
         config: AnyMCPConfig,
         raw_tool: MCPTool,
+        *,
+        tool_name_prefix: str = "",
         middleware: tuple[ToolMiddleware, ...] = (),
     ) -> None:
         self._config = config
         self._middleware = middleware
-        self.name = raw_tool.name
+        # Two names for one tool: the remote one the server knows, and the
+        # (possibly prefixed) local one the agent and the LLM see.
+        self._remote_name = raw_tool.name
+        self.name = f"{tool_name_prefix}{raw_tool.name}"
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
                 name=self.name,
@@ -154,7 +159,7 @@ class _MCPProxyTool(Tool):
         try:
             resolved = _resolve_config(self._config, context)
             async with _mcp_session(resolved) as session:
-                result = await session.call_tool(self.name, event.serialized_arguments)
+                result = await session.call_tool(self._remote_name, event.serialized_arguments)
 
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)
@@ -179,6 +184,12 @@ class MCPToolkit(Toolkit):
     MCP handshake, lists the server's tools, and registers a proxy for each
     one. The agent never sees that these are MCP tools — they look and behave
     like ordinary :class:`FunctionTool` instances.
+
+    Set ``tool_name_prefix`` on the config to namespace the agent-visible tool
+    names, so that two servers exposing the same generic name (``search``) do
+    not collide locally. The prefix never reaches the server: discovery
+    filters (``allowed_tools`` / ``blocked_tools``) and the outbound
+    ``call_tool`` request both use the server's original names.
     """
 
     __slots__ = ("config", "_discovered", "_discover_lock")
@@ -218,11 +229,13 @@ class MCPToolkit(Toolkit):
             async with _mcp_session(resolved) as session:
                 raw_tools = (await session.list_tools()).tools
 
-            # Both already resolved (Variable -> concrete) by _resolve_config above.
+            # All already resolved (Variable -> concrete) by _resolve_config above.
             allowed = resolved.allowed_tools
             blocked = set(resolved.blocked_tools or [])  # type: ignore[arg-type]
+            prefix: str = resolved.tool_name_prefix  # type: ignore[assignment]
 
             for raw in raw_tools:
+                # Filters match the server's own names, before any prefixing.
                 if allowed is not None and raw.name not in allowed:  # type: ignore[operator]
                     continue
                 if raw.name in blocked:
@@ -230,6 +243,7 @@ class MCPToolkit(Toolkit):
                 proxy = _MCPProxyTool(
                     config=self.config,
                     raw_tool=raw,
+                    tool_name_prefix=prefix,
                     middleware=self._middleware,
                 )
                 self._tools[proxy.name] = proxy
@@ -334,6 +348,7 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
             description=_resolve_value(config.description, context),
             allowed_tools=_resolve_value(config.allowed_tools, context),
             blocked_tools=_resolve_value(config.blocked_tools, context),
+            tool_name_prefix=_resolve_value(config.tool_name_prefix, context) or "",
         )
 
     headers = dict(_resolve_value(config.headers, context) or {})
@@ -349,5 +364,6 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
         description=_resolve_value(config.description, context),
         allowed_tools=_resolve_value(config.allowed_tools, context),
         blocked_tools=_resolve_value(config.blocked_tools, context),
+        tool_name_prefix=_resolve_value(config.tool_name_prefix, context) or "",
         headers=headers or None,
     )
