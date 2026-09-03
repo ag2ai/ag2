@@ -5,7 +5,7 @@ sidebarTitle: Agent
 
 AG2 ships a `#!python TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/){.external-link target="_blank"} spans for a single agent's work — its turns, LLM calls, tool executions, and human-in-the-loop interactions.
 
-The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/){.external-link target="_blank"}, so traces can be exported to **any compatible backend** — Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and others.
+The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/){.external-link target="_blank"}, so traces can be exported to **any compatible backend** — Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, Arize AX, Arize Phoenix, and others.
 
 !!! tip
     To trace the interactions *between* agents in a network — the hub's dispatch, channels, agent lifecycles, and tasks — see [Network Telemetry](/docs/user-guide/telemetry/network). The two compose: an agent's `#!python invoke_agent` span links back to the network envelope that triggered it.
@@ -202,4 +202,6 @@ agent = Agent(
 
 ## Backend Integration
 
-Since `#!python TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works — Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, and others. Swap the `#!python ConsoleSpanExporter` from the Quick Start above for an `#!python OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
+Since `#!python TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works — Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, Arize AX, Arize Phoenix, and others. Swap the `#!python ConsoleSpanExporter` from the Quick Start above for an `#!python OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
+
+For Arize users, [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing){.external-link target="_blank"} provides a managed production path for tracing, evaluating, and monitoring AG2 agents, while [Arize Phoenix](https://arize.com/docs/phoenix){.external-link target="_blank"} is the open-source path for local development or self-hosted inspection. The same traces can support follow-on workflows such as [agent evaluation](https://arize.com/guides/ai-agent-handbook/agent-evaluation/){.external-link target="_blank"} and [LLM evaluation](https://arize.com/resources/llm-evaluation/){.external-link target="_blank"}.
