@@ -18,7 +18,7 @@ Every turn returns an [`AgentReply`](/docs/user-guide/agents). Two surfaces matt
 
 If the model’s output cannot be parsed or fails validation, `content()` raises an error from the underlying parser (for example Pydantic’s validation errors). You can pass `retries` to automatically [re-ask the model](#validation-retries) on failure.
 
-With the default **OpenAI** client, when the schema exposes a JSON Schema to the API, the client sends a structured `response_format` so the model is guided to emit JSON matching that schema. [`PromptedSchema`](#promptedschema-models-without-native-structured-output) is the escape hatch when the provider does not support that mechanism: the schema is injected into the system prompt instead, and `content()` still runs the same way afterward.
+With the default **OpenAI** client, when the schema exposes a JSON Schema to the API, the client sends a structured `response_format` so the model is guided to emit JSON matching that schema. [`PromptedSchema`](#promptedschema-models-without-native-structured-output) is the escape hatch when the provider does not support that mechanism: the schema is injected into the prompt — the system prompt by default, or the last user message via [`LastMessagePromptedSchema`](#injecting-into-the-last-user-message) — and `content()` still runs the same way afterward.
 
 ## When to use which tool
 
@@ -26,6 +26,7 @@ With the default **OpenAI** client, when the schema exposes a JSON Schema to the
 - Use **`ResponseSchema`** when you want a clear **`name`** and **`description`** in the API payload so the model knows the role of the structured payload.
 - Use **`@response_schema`** when you need **custom parsing**, normalization, or extra steps after JSON is read.
 - Use **`PromptedSchema`** when your **model or endpoint does not support** native structured output.
+- Use **`LastMessagePromptedSchema`** when the model pays more attention to the end of the conversation, when the endpoint has **no system-prompt slot**, or when you want the schema instruction adjacent to the request — e.g. in chained `.ask()` calls where the last user turn carries the actual task.
 
 ## Quick start
 
@@ -425,6 +426,34 @@ PromptedSchema(
     prompt_template="Reply with JSON matching this schema:\n{schema}",
 )
 ```
+
+### Injecting into the last user message
+
+By default `PromptedSchema` puts the JSON-schema instruction in the **system prompt**. Some models attend more strongly to the end of the conversation. Pass `inject_to="last_message"` to append the instruction to the final user turn instead:
+
+```python linenums="1" hl_lines="6"
+from ag2 import Agent, PromptedSchema
+
+agent = Agent(
+    "assistant",
+    config=config,
+    response_schema=PromptedSchema(int, inject_to="last_message"),
+)
+```
+
+`LastMessagePromptedSchema` is a convenience subclass equivalent to `PromptedSchema(inner, inject_to="last_message")`:
+
+```python linenums="1" hl_lines="1 6"
+from ag2 import Agent, LastMessagePromptedSchema
+
+agent = Agent(
+    "assistant",
+    config=config,
+    response_schema=LastMessagePromptedSchema(int),
+)
+```
+
+This is especially useful in **chained `.ask()` calls**: each turn's schema instruction lands right next to the question the model must answer, not in a system prompt that may be far back in the conversation. The inner schema's `validate` method is unchanged — only the injection location differs.
 
 ---
 
