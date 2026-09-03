@@ -246,6 +246,16 @@ agent = Agent(
 | `ContainerAutoEnvironment` | Provider-managed container with optional network policy |
 | `ContainerReferenceEnvironment` | Reference an existing container by ID |
 
+!!! warning "On OpenAI, name an environment"
+
+    `ShellTool()` without an `environment` is a *client-executed* shell: OpenAI
+    returns a `shell_call` for your application to run, and AG2 has no path to
+    execute it and feed the output back — so the turn would end with no result and
+    no reply. AG2 refuses it with `ClientExecutedShellUnsupportedError` rather than
+    let it happen silently. Pass `ContainerAutoEnvironment()` for the hosted shell,
+    or use [`SandboxShellTool`](/docs/user-guide/tools/local_shell), which AG2
+    executes itself and works with any provider.
+
 !!! warning
     `ShellTool` gives the model direct shell access. Use it only with trusted prompts and consider restricting the environment.
 

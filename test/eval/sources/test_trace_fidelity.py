@@ -12,6 +12,8 @@ a divergence between what telemetry emits and what scorers expect surfaces here
 rather than silently scoring a replayed trace incorrectly.
 """
 
+import json
+
 import pytest
 
 pytest.importorskip("opentelemetry.sdk")
@@ -21,9 +23,9 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from ag2 import Agent
+from ag2.eval import readable_spans_to_trace
 from ag2.eval.runtime._capture import EventCapture
 from ag2.eval.scorers import no_tool_errors, tool_called
-from ag2.eval.sources._otel import readable_spans_to_trace
 from ag2.eval.trace import TokenUsage, Trace
 from ag2.events import (
     ModelMessage,
@@ -110,6 +112,61 @@ async def test_tool_run_tool_calls_and_results_match(otel_provider) -> None:
 
 
 @pytest.mark.asyncio()
+async def test_structured_tool_result_survives_the_span_round_trip(otel_provider) -> None:
+    """A tool returning structured data reconstructs with its data intact."""
+    exporter, provider = otel_provider
+
+    @tool
+    def get_weather(city: str) -> dict:
+        return {"city": city, "temp_c": 12}
+
+    agent = Agent(
+        "weather",
+        config=TestConfig([ToolCallEvent(name="get_weather", arguments='{"city": "Oslo"}')], "12C in Oslo."),
+        tools=[get_weather],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="weather", model_name="mock")],
+    )
+
+    await agent.ask("Weather in Oslo?")
+
+    spans = readable_spans_to_trace(exporter.get_finished_spans())
+
+    results = spans.events_of(ToolResultEvent)
+    assert len(results) == 1
+    parts = results[0].result.parts
+    assert len(parts) == 1
+    # One text part holding the JSON: the shape judge/attribution scorers read.
+    assert json.loads(parts[0].content) == {"city": "Oslo", "temp_c": 12}
+    assert parts[0].metadata == {}
+
+
+@pytest.mark.asyncio()
+async def test_truncated_tool_result_is_flagged_on_the_reconstructed_part(otel_provider) -> None:
+    exporter, provider = otel_provider
+
+    @tool
+    def dump() -> dict:
+        return {"rows": ["x" * 100 for _ in range(50)]}
+
+    agent = Agent(
+        "dumper",
+        config=TestConfig([ToolCallEvent(name="dump", arguments="{}")], "Done."),
+        tools=[dump],
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider, agent_name="dumper", model_name="mock", max_tool_result_chars=64
+            )
+        ],
+    )
+
+    await agent.ask("Dump")
+
+    part = readable_spans_to_trace(exporter.get_finished_spans()).events_of(ToolResultEvent)[0].result.parts[0]
+    assert part.content.endswith("...[truncated]")
+    assert part.metadata == {"truncated": True}
+
+
+@pytest.mark.asyncio()
 async def test_accounting_events_survive_the_span_round_trip(otel_provider) -> None:
     """Every accounting event on the live stream reappears in the span-built Trace.
 
@@ -188,3 +245,39 @@ async def test_delegated_spend_survives_the_span_round_trip(otel_provider) -> No
     assert spans.tokens == live.tokens
     assert spans.tokens == TokenUsage(input=1000, output=100)
     assert spans.tokens.total == 1100
+
+
+@pytest.mark.asyncio()
+async def test_public_bridge_reconstructs_a_tool_run_end_to_end(otel_provider) -> None:
+    exporter, provider = otel_provider
+
+    @tool
+    def lookup_order(order_id: str) -> str:
+        return f"Order {order_id} shipped"
+
+    agent = Agent(
+        "support",
+        config=TestConfig([ToolCallEvent(name="lookup_order", arguments='{"order_id": "A-42"}')], "It shipped."),
+        tools=[lookup_order],
+        middleware=[
+            TelemetryMiddleware(
+                tracer_provider=provider,
+                agent_name="support",
+                model_name="mock",
+                capture_content=True,
+            )
+        ],
+    )
+
+    await agent.ask("Where is order A-42?")
+
+    trace = readable_spans_to_trace(exporter.get_finished_spans())
+
+    calls = trace.events_of(ToolCallEvent)
+    assert [(c.name, c.arguments) for c in calls] == [("lookup_order", '{"order_id": "A-42"}')]
+
+    results = trace.events_of(ToolResultEvent)
+    assert len(results) == 1
+    assert results[0].name == "lookup_order"
+    assert "A-42 shipped" in str(results[0].result)
+    assert len(trace.events_of(ToolErrorEvent)) == 0
