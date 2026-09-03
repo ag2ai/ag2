@@ -8,10 +8,14 @@ from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
-from openai.types.responses import ResponseUsage, SkillReferenceParam
+from openai.types.responses import ResponseFunctionShellToolCall, ResponseUsage, SkillReferenceParam
 
 from ag2.compact import CompactionSummary
-from ag2.config.openai.events import OpenAIReasoningEvent, OpenAIServerToolCallEvent
+from ag2.config.openai.events import (
+    OpenAIReasoningEvent,
+    OpenAIServerToolCallEvent,
+    OpenAIServerToolResultEvent,
+)
 from ag2.events import (
     BaseEvent,
     BinaryInput,
@@ -25,7 +29,12 @@ from ag2.events import (
     UrlInput,
     Usage,
 )
-from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.exceptions import (
+    BlockedToolsUnsupportedError,
+    ClientExecutedShellUnsupportedError,
+    UnsupportedInputError,
+    UnsupportedToolError,
+)
 from ag2.files.types import FileProvider
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
@@ -42,6 +51,13 @@ from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
+
+_OUTPUT_ONLY_FIELDS = {"created_by"}
+"""Fields the API puts on a hosted output item but rejects on the way back in.
+
+``created_by`` is answered with ``Unknown parameter: input[N].created_by``. The API leaves
+it unset today, so ``exclude_none`` already drops it; this is the guard for when it does not.
+"""
 
 
 def _kind_label(kind: BinaryType | str) -> str:
@@ -120,6 +136,7 @@ def events_to_responses_input(
     """Convert a sequence of events to Responses API input items."""
     result: list[dict[str, Any]] = []
     seen_reasoning_ids: set[str] = set()
+    answered_shell_calls = _answered_shell_calls(messages)
 
     for message in messages:
         if isinstance(message, ModelResponse):
@@ -200,10 +217,27 @@ def events_to_responses_input(
                 result.append(message.item.model_dump(exclude_none=True, mode="json"))
 
         elif isinstance(message, OpenAIServerToolCallEvent):
+            # A `shell_call` is the one hosted item the API will not accept
+            # alone: its outcome lives in a separate `shell_call_output`. A turn
+            # that ended between the two — an `incomplete` response, say — leaves
+            # the call unanswered, and replaying it would 400 the next request.
+            if (
+                isinstance(message.item, ResponseFunctionShellToolCall)
+                and message.item.call_id not in answered_shell_calls
+            ):
+                continue
+
             # warnings=False: openai SDK pins ActionSearchSource.type to
             # Literal["url"] but the API returns other values (e.g. "api"),
             # which makes pydantic warn on every round-trip serialization.
-            result.append(message.item.model_dump(exclude_none=True, mode="json", warnings=False))
+            result.append(
+                message.item.model_dump(exclude_none=True, mode="json", warnings=False, exclude=_OUTPUT_ONLY_FIELDS)
+            )
+
+        elif isinstance(message, OpenAIServerToolResultEvent) and message.item is not None:
+            # Only a hosted shell call carries one: its output is a separate
+            # item, so the call replays incomplete without it.
+            result.append(message.item.model_dump(exclude_none=True, mode="json", exclude=_OUTPUT_ONLY_FIELDS))
 
         elif isinstance(message, ModelRequest):
             for inp in message.parts:
@@ -487,6 +521,9 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         return result
 
     elif isinstance(t, MCPServerToolSchema):
+        if t.blocked_tools is not None:
+            raise BlockedToolsUnsupportedError("the OpenAI Responses API", t.server_label)
+
         # https://platform.openai.com/docs/guides/tools-remote-mcp
         result = {
             "type": "mcp",
@@ -496,6 +533,7 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         }
         if t.description is not None:
             result["server_description"] = t.description
+
         if t.allowed_tools is not None:
             result["allowed_tools"] = t.allowed_tools
         if t.headers is not None:
@@ -565,6 +603,20 @@ def merge_skills_into_shell_tools(
     return openai_tools
 
 
+def reject_client_executed_shell(openai_tools: list[dict[str, Any]]) -> None:
+    """Refuse a finalized ``shell`` entry the API would run client-side.
+
+    Checked on the finished array, not in :func:`tool_to_responses_api`: the skills path maps
+    a bare ``shell`` and :func:`merge_skills_into_shell_tools` gives it ``container_auto`` after.
+    """
+    for tool_dict in openai_tools:
+        if tool_dict.get("type") != "shell":
+            continue
+        environment = tool_dict.get("environment")
+        if environment is None or environment.get("type") == "local":
+            raise ClientExecutedShellUnsupportedError()
+
+
 def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
     includes: list[str] = []
     for t in tools:
@@ -604,3 +656,12 @@ _MIME_TO_AUDIO_FORMAT: dict[str, str] = {
     "audio/aiff": "aiff",
     "audio/aac": "aac",
 }
+
+
+def _answered_shell_calls(messages: Sequence[BaseEvent]) -> set[str]:
+    """The `call_id`s of hosted shell calls whose output is present in `messages`."""
+    return {
+        message.item.call_id
+        for message in messages
+        if isinstance(message, OpenAIServerToolResultEvent) and message.item is not None
+    }

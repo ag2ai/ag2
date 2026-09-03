@@ -6,6 +6,7 @@ import pytest
 
 from ag2 import Context
 from ag2.config.xai.mappers import tool_to_api
+from ag2.exceptions import BlockedToolsUnsupportedError
 from ag2.tools.builtin.mcp_server import MCPServerTool
 
 
@@ -47,3 +48,36 @@ async def test_allowed_tools(context: Context) -> None:
     api = tool_to_api(schema)
 
     assert list(api.mcp.allowed_tool_names) == ["search", "fetch"]
+
+
+@pytest.mark.asyncio
+async def test_blocked_tools_alone_is_refused(context: Context) -> None:
+    # `xai_sdk.tools.mcp` takes `allowed_tool_names` only, so dropping the filter
+    # silently would let the model call what was blocked.
+    tool = MCPServerTool(
+        server_url="https://mcp.example.com/sse",
+        server_label="ex",
+        blocked_tools=["delete"],
+    )
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(BlockedToolsUnsupportedError, match="blocked_tools"):
+        tool_to_api(schema)
+
+
+@pytest.mark.asyncio
+async def test_blocked_tools_beside_an_allow_list_is_refused_too(context: Context) -> None:
+    # Refused whole, not rewritten: narrowing `allowed_tools` by the blocked names
+    # would answer a request the caller did not write.
+    tool = MCPServerTool(
+        server_url="https://mcp.example.com/sse",
+        server_label="ex",
+        allowed_tools=["search", "fetch", "delete"],
+        blocked_tools=["delete"],
+    )
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(BlockedToolsUnsupportedError, match="blocked_tools"):
+        tool_to_api(schema)

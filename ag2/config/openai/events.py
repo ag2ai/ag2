@@ -9,14 +9,17 @@ from typing import Any, TypeAlias
 from openai.types.responses import (
     ResponseCodeInterpreterToolCall,
     ResponseFileSearchToolCall,
+    ResponseFunctionShellToolCall,
+    ResponseFunctionShellToolCallOutput,
     ResponseFunctionWebSearch,
     ResponseReasoningItem,
 )
 from openai.types.responses.response_code_interpreter_tool_call import OutputImage, OutputLogs
 from openai.types.responses.response_function_web_search import ActionFind, ActionOpenPage, ActionSearch
-from openai.types.responses.response_output_item import ImageGenerationCall
+from openai.types.responses.response_output_item import ImageGenerationCall, McpCall, McpListTools
 
 from ag2.events import (
+    BaseEvent,
     BinaryInput,
     BinaryType,
     BuiltinToolCallEvent,
@@ -32,10 +35,18 @@ from ag2.events import (
 from ag2.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME
 from ag2.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
+from ag2.tools.builtin.mcp_server import MCP_SERVER_TOOL_NAME
+from ag2.tools.builtin.shell import SHELL_TOOL_NAME
 from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
 OpenAIServerToolItem: TypeAlias = (
-    ResponseFunctionWebSearch | ResponseCodeInterpreterToolCall | ImageGenerationCall | ResponseFileSearchToolCall
+    ResponseFunctionWebSearch
+    | ResponseCodeInterpreterToolCall
+    | ImageGenerationCall
+    | ResponseFileSearchToolCall
+    | McpCall
+    | McpListTools
+    | ResponseFunctionShellToolCall
 )
 
 
@@ -76,10 +87,37 @@ class OpenAIServerToolCallEvent(BuiltinToolCallEvent):
                 arguments=json.dumps({"queries": item.queries}),
                 item=item,
             )
+        if isinstance(item, McpCall):
+            return cls(
+                id=item.id,
+                name=MCP_SERVER_TOOL_NAME,
+                arguments=item.arguments,
+                item=item,
+            )
+        if isinstance(item, McpListTools):
+            # A listing is not a tool invocation, but it is the only place a
+            # server that could not be reached shows up at all. Reporting it as a
+            # call keeps the failure observable instead of silently absent.
+            return cls(
+                id=item.id,
+                name=MCP_SERVER_TOOL_NAME,
+                arguments=json.dumps({"server_label": item.server_label}),
+                item=item,
+            )
+        if isinstance(item, ResponseFunctionShellToolCall):
+            return cls(
+                id=item.id,
+                name=SHELL_TOOL_NAME,
+                arguments=json.dumps({"commands": list(item.action.commands)}),
+                item=item,
+            )
         return None
 
 
 class OpenAIServerToolResultEvent(BuiltinToolResultEvent):
+    item: ResponseFunctionShellToolCallOutput | None = Field(default=None, repr=False)
+    """Set for a hosted shell call, whose outcome is a separate ``shell_call_output`` item to replay."""
+
     @classmethod
     def from_item(cls, item: object, *, parent_id: str) -> "OpenAIServerToolResultEvent | None":
         name: str
@@ -135,10 +173,131 @@ class OpenAIServerToolResultEvent(BuiltinToolResultEvent):
             if results_meta:
                 metadata["results"] = results_meta
 
+        elif isinstance(item, McpCall):
+            name = MCP_SERVER_TOOL_NAME
+            metadata = {"server_label": item.server_label, "tool": item.name, "status": item.status}
+            if item.output:
+                parts.append(TextInput(item.output))
+            if item.error is not None:
+                # A discriminated union: a protocol error and an HTTP error each
+                # carry a code and a message, a tool execution error carries the
+                # tool's own content. Dumping it whole keeps `type` — the
+                # discriminator — next to that arm's own fields, so a caller can
+                # branch instead of matching on prose.
+                metadata["error"] = item.error.model_dump(mode="json")
+
+        elif isinstance(item, McpListTools):
+            name = MCP_SERVER_TOOL_NAME
+            metadata = {"server_label": item.server_label, "tools": [t.name for t in item.tools]}
+            if item.error is not None:
+                # Shaped like `mcp_call`'s error rather than left as the bare
+                # string the SDK types here, so one `metadata["error"]["type"]`
+                # tells a caller what failed whichever item carried it. The
+                # listing has no discriminated union of its own, so the arm is
+                # ag2's — and named for the item, not for a guess at the cause.
+                metadata["error"] = {"type": "mcp_list_tools_error", "message": item.error}
+
+        elif isinstance(item, ResponseFunctionShellToolCallOutput):
+            # Paired with its `shell_call` by `ShellCallTracker`, which supplies
+            # both the parent id and the commands through `from_shell_output`.
+            return None
+
         else:
             return None
 
         return cls(parent_id=parent_id, name=name, result=ToolResult(parts=parts, metadata=metadata))
+
+    @classmethod
+    def from_shell_output(
+        cls,
+        item: ResponseFunctionShellToolCallOutput,
+        *,
+        call: ResponseFunctionShellToolCall,
+        parent_id: str,
+    ) -> "OpenAIServerToolResultEvent":
+        """Build the result of a hosted shell call from the output item answering it."""
+        parts: list[Input] = []
+        outputs: list[dict[str, Any]] = []
+
+        for output in item.output:
+            if output.stdout:
+                parts.append(TextInput(output.stdout))
+            if output.stderr:
+                parts.append(TextInput(output.stderr))
+            outputs.append({
+                "stdout": output.stdout,
+                "stderr": output.stderr,
+                "outcome": output.outcome.model_dump(),
+            })
+
+        return cls(
+            parent_id=parent_id,
+            name=SHELL_TOOL_NAME,
+            item=item,
+            result=ToolResult(
+                parts=parts,
+                metadata={
+                    "commands": list(call.action.commands),
+                    "status": item.status,
+                    "outputs": outputs,
+                },
+            ),
+        )
+
+
+class ShellCallTracker:
+    """Pairs a hosted ``shell_call`` with the ``shell_call_output`` answering it.
+
+    The two arrive as separate output items linked by ``call_id``, and the result event
+    needs the commands, which only the call item carries.
+    """
+
+    __slots__ = ("_open",)
+
+    def __init__(self) -> None:
+        self._open: dict[str, tuple[str, ResponseFunctionShellToolCall]] = {}
+
+    def opened(self, call: ResponseFunctionShellToolCall, *, event_id: str) -> None:
+        self._open[call.call_id] = (event_id, call)
+
+    def close(self, item: ResponseFunctionShellToolCallOutput) -> OpenAIServerToolResultEvent | None:
+        """Return the result event for ``item``, or ``None`` if its call was never seen."""
+        opened = self._open.pop(item.call_id, None)
+        if opened is None:
+            return None
+
+        parent_id, call = opened
+        return OpenAIServerToolResultEvent.from_shell_output(item, call=call, parent_id=parent_id)
+
+
+class OpenAIShellCommandChunk(BaseEvent):
+    """A slice of the shell command the model is composing.
+
+    Transient: superseded by the finished ``shell_call``. Kept out of
+    :class:`~ag2.events.ModelMessageChunk` so a command never lands in the assistant's reply.
+    """
+
+    __transient__ = True
+
+    content: str = Field(kw_only=False)
+    command_index: int
+    output_index: int
+
+
+class OpenAIShellOutputChunk(BaseEvent):
+    """A slice of the output a container produced running a shell command.
+
+    Transient. Separate from :class:`OpenAIShellCommandChunk` so neither type has to make
+    the other half's fields optional.
+    """
+
+    __transient__ = True
+
+    command_index: int
+    output_index: int
+    item_id: str
+    stdout: str | None = None
+    stderr: str | None = None
 
 
 class OpenAIReasoningEvent(ModelReasoning, ProviderReplay):

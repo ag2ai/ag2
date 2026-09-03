@@ -4,7 +4,7 @@
 
 import json
 
-import httpx
+import httpx2
 import pytest
 from fast_depends.use import SerializerCls
 
@@ -28,9 +28,9 @@ NULLABLE_OPTIONS = (
 
 
 def _capturing_config(captured: dict[str, object], **overrides: object) -> OpenAIResponsesConfig:
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         captured["body"] = json.loads(request.content)
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "id": "resp_1",
@@ -53,7 +53,7 @@ def _capturing_config(captured: dict[str, object], **overrides: object) -> OpenA
         model="m",
         api_key="test",
         base_url="http://test/v1",
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
         **overrides,
     )
 
