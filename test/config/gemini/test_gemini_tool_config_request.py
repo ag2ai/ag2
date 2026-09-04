@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import json
 from typing import Any
 
 import httpx
@@ -23,20 +22,6 @@ def get_weather(city: str) -> str:
     return f"{city}: 22C, sunny"
 
 
-def _capturing_client(captured: dict[str, Any]) -> httpx.AsyncClient:
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["body"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={
-                "candidates": [{"content": {"role": "model", "parts": [{"text": "ok"}]}, "finishReason": "STOP"}],
-                "usageMetadata": {"promptTokenCount": 1, "candidatesTokenCount": 1, "totalTokenCount": 2},
-            },
-        )
-
-    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-
 async def _send(client: GeminiClient, tools: list[Tool]) -> None:
     context = Context(stream=MemoryStream())
     schemas = [s for t in tools for s in await t.schemas(context)]
@@ -52,43 +37,52 @@ async def _send(client: GeminiClient, tools: list[Tool]) -> None:
 
 @pytest.mark.asyncio
 class TestToolConfigOnTheWire:
-    async def test_builtin_with_function_tool_sends_flag(self) -> None:
-        captured: dict[str, Any] = {}
+    async def test_builtin_with_function_tool_sends_flag(
+        self,
+        capturing_http_client: httpx.AsyncClient,
+        captured_request: dict[str, Any],
+    ) -> None:
         client = GeminiClient(
             model="gemini-3.6-flash",
             api_key="test",
             vertexai=False,
-            http_client=_capturing_client(captured),
+            http_client=capturing_http_client,
         )
 
         await _send(client, [WebSearchTool(), get_weather])
 
-        assert captured["body"]["toolConfig"] == {"includeServerSideToolInvocations": True}
+        assert captured_request["body"]["toolConfig"] == {"includeServerSideToolInvocations": True}
 
-    async def test_builtin_alone_sends_no_tool_config(self) -> None:
-        captured: dict[str, Any] = {}
+    async def test_builtin_alone_sends_no_tool_config(
+        self,
+        capturing_http_client: httpx.AsyncClient,
+        captured_request: dict[str, Any],
+    ) -> None:
         client = GeminiClient(
             model="gemini-3.6-flash",
             api_key="test",
             vertexai=False,
-            http_client=_capturing_client(captured),
+            http_client=capturing_http_client,
         )
 
         await _send(client, [WebSearchTool()])
 
-        assert "toolConfig" not in captured["body"]
+        assert "toolConfig" not in captured_request["body"]
 
-    async def test_vertexai_omits_flag(self) -> None:
-        captured: dict[str, Any] = {}
+    async def test_vertexai_omits_flag(
+        self,
+        capturing_http_client: httpx.AsyncClient,
+        captured_request: dict[str, Any],
+    ) -> None:
         client = GeminiClient(
             model="gemini-3.6-flash",
             vertexai=True,
             credentials=Credentials(token="fake-token"),
             project="test-project",
             location="us-central1",
-            http_client=_capturing_client(captured),
+            http_client=capturing_http_client,
         )
 
         await _send(client, [WebSearchTool(), get_weather])
 
-        assert "toolConfig" not in captured["body"]
+        assert "toolConfig" not in captured_request["body"]

@@ -51,8 +51,6 @@ class CreateConfig(TypedDict, total=False):
     top_k: int | None
     max_output_tokens: int | None
     stop_sequences: list[str] | None
-    presence_penalty: float | None
-    frequency_penalty: float | None
     seed: int | None
     response_modalities: list[str] | None
     image_config: types.ImageConfig | None

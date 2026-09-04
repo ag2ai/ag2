@@ -24,8 +24,6 @@ class GeminiBaseConfigOverrides(TypedDict, total=False):
     max_output_tokens: int | None
     stop_sequences: list[str] | None
     streaming: bool
-    presence_penalty: float | None
-    frequency_penalty: float | None
     seed: int | None
     cached_content: str | None
     response_modalities: list[str] | None
@@ -55,8 +53,6 @@ class GeminiBaseConfig:
     max_output_tokens: int | None = None
     stop_sequences: list[str] | None = None
     streaming: bool = False
-    presence_penalty: float | None = None
-    frequency_penalty: float | None = None
     seed: int | None = None
     cached_content: str | None = None
     response_modalities: list[str] | None = None
@@ -79,10 +75,6 @@ class GeminiBaseConfig:
             config["max_output_tokens"] = self.max_output_tokens
         if self.stop_sequences is not None:
             config["stop_sequences"] = self.stop_sequences
-        if self.presence_penalty is not None:
-            config["presence_penalty"] = self.presence_penalty
-        if self.frequency_penalty is not None:
-            config["frequency_penalty"] = self.frequency_penalty
         if self.seed is not None:
             config["seed"] = self.seed
         if self.response_modalities is not None:

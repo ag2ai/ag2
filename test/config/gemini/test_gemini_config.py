@@ -4,6 +4,7 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from google.genai import types
 from google.oauth2 import service_account
 
@@ -277,3 +278,26 @@ class TestThinkingConfig:
 
         assert copied.thinking_level == "high"
         assert config.thinking_level == "low"
+
+
+def test_penalty_fields_are_withdrawn() -> None:
+    """Gemini has no penalty controls, on either front end.
+
+    On the Developer API every one of the 40 models that advertises
+    ``generateContent`` answers ``400 INVALID_ARGUMENT — Penalty is not enabled
+    for this model``. Vertex's own model guides tell you to remove
+    ``frequency_penalty``/``presence_penalty`` because passing them throws. So
+    the fields are gone rather than deprecated: there is no working code to
+    migrate.
+    """
+    with pytest.raises(TypeError):
+        GeminiConfig(model="gemini-3.1-flash-lite", presence_penalty=0.5)  # type: ignore[call-arg]
+
+    with pytest.raises(TypeError):
+        GeminiConfig(model="gemini-3.1-flash-lite", frequency_penalty=0.5)  # type: ignore[call-arg]
+
+    with pytest.raises(TypeError):
+        VertexAIConfig(model="gemini-3.1-flash-lite", presence_penalty=0.5)  # type: ignore[call-arg]
+
+    with pytest.raises(TypeError):
+        VertexAIConfig(model="gemini-3.1-flash-lite", frequency_penalty=0.5)  # type: ignore[call-arg]
