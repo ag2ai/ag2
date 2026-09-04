@@ -9,18 +9,12 @@ from typing import Literal
 
 from ag2.annotations import Variable
 
-# How the connection settles which protocol revision it speaks.
-#
-# ``"legacy"`` (the default, and the only behaviour before this existed) performs
-# the ``initialize`` handshake, which negotiates the newest handshake-era
-# revision. ``"auto"`` probes ``server/discover`` first and falls back to the
-# handshake, so a modern-era server is met on the modern era.
-#
-# The distinction is not cosmetic: the modern revision defines no
-# server-to-client request, so a server there returns a question as the *result*
-# of the call and the toolkit answers and retries. On the handshake era the same
-# question arrives as a standalone request answered inline. Which one happens is
-# then the negotiated revision's doing, not a second setting.
+# How the connection settles which protocol revision it speaks. ``"legacy"`` (the
+# default) performs the ``initialize`` handshake; ``"auto"`` probes
+# ``server/discover`` first, so a modern-era server is met on the modern era —
+# where a question comes back as the *result* of a call rather than as a
+# standalone request. Which one happens is then the revision's doing, not a
+# second setting.
 ProtocolMode = Literal["legacy", "auto"]
 
 

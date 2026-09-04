@@ -3,28 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 """Run a served agent's own reasoning on the *calling client's* model.
 
-MCP lets a server ask its client for an LLM completion. For a served AG2 agent
-that turns into a deployment property worth stating plainly: the agent runs, but
-the thinking is bought, chosen and observed by whoever called it.
+Three things move to the caller, and none is visible on the wire: **cost**, since
+every turn spends their budget; **capability**, since which model answers is a
+fact about the client rather than this deployment; and **reproducibility**, since
+a trace cannot be re-run against a model that was the peer's. So it is off unless
+a :class:`ClientModel` is passed, never on because the transport allows it — and
+a turn needing tools or a response schema refuses rather than losing them, since
+this channel carries neither.
 
-* **Cost** moves to the caller. Every turn the agent takes spends their budget.
-* **Capability** becomes theirs. Which model answers, and how good it is, is a
-  fact about the client, not about this deployment — so the same agent gives
-  different answers to different callers, and a served agent's quality is no
-  longer something its operator controls.
-* **Reproducibility** goes with it. A trace cannot be re-run against a known
-  model, because the model was the peer's.
-
-None of that is a reason not to do it — a deployment with no credentials of its
-own can serve an agent that needs one, which is the whole point — but it is a
-decision, so it is off unless a :class:`ClientModel` is passed, and never turned
-on because the transport happens to allow it.
-
-The mechanics are small: :class:`~ag2.config.LLMClient` is a one-method protocol,
-and the two protocol eras differ here exactly as they do for a question — a
-standalone ``sampling/createMessage`` up to 2025-11-25, and from 2026-07-28 the
-request comes back as the result of the call, resumed by the client's retry. The
-same :class:`~ag2.mcp.pause.SuspendedTurn` carries both.
+The request travels exactly as a question does — a standalone
+``sampling/createMessage`` up to 2025-11-25, and from 2026-07-28 back as the
+call's result — over the same :class:`~ag2.mcp.pause.SuspendedTurn`.
 """
 
 import base64
@@ -73,19 +62,14 @@ UNKNOWN_MODEL = "unknown"
 class ClientModel:
     """Serve an agent whose model is the calling client's.
 
-    Passing one to :class:`~ag2.mcp.MCPServer` is what enables this; the default
-    is ``None``, and a server that has not enabled it never sends a sampling
-    request and never needs the capability of its clients.
-
-    Read :mod:`ag2.mcp.sampling` before enabling it: the caller pays for every
-    turn, the model that answers is theirs rather than yours, and a trace cannot
-    be re-run against a known model afterwards.
+    The caller pays for every turn, the model that answers is theirs rather than
+    yours, and a trace cannot be re-run against a known model afterwards. Read
+    :mod:`ag2.mcp.sampling` before enabling it.
 
     Attributes:
-        max_tokens: The generation bound sent with each request; the protocol
-            requires one. It is the only generation parameter sent — temperature
-            and stop sequences belong to a model configuration, and here there is
-            no configuration to take them from.
+        max_tokens: The generation bound sent with each request, and the only
+            generation parameter sent: the rest belong to a model configuration,
+            and here there is none to take them from.
         fallback: What to do about a client that advertised no sampling
             capability. ``False`` (the default) fails the turn, so a deployment
             that has no model of its own says so rather than answering by some
@@ -107,9 +91,8 @@ def client_can_sample(session: "ServerSession") -> bool:
 class ClientModelConfig(ModelConfig):
     """A :class:`~ag2.config.ModelConfig` whose completions run on the MCP peer.
 
-    Built per turn by the serving path, because what it needs — the live request
-    context, and on the modern era the suspended run to ask through — belongs to
-    one call.
+    Built per turn: what it holds — the live request context, and the suspended
+    run to ask through — belongs to one call.
     """
 
     __slots__ = ("_request_context", "_suspended", "_max_tokens")
@@ -131,8 +114,8 @@ class ClientModelConfig(ModelConfig):
 
     @property
     def model(self) -> str:
-        # Not known until a completion comes back and names one, and it may name
-        # a different one next time.
+        # Not known until a completion names one, and it may name another next
+        # time.
         return "mcp-client"
 
     def copy(self) -> Self:
@@ -177,13 +160,11 @@ class ClientModelClient(LLMClient):
         """Ask the peer to complete this conversation, and read the answer back.
 
         Raises:
-            MCPSamplingRefusedError: The agent needs something of a model this
-                channel cannot carry — tools, or a structured response — or the
-                peer answered with something other than a completion.
+            MCPSamplingRefusedError: The agent needs something this channel
+                cannot carry — tools, or a structured response — or the peer
+                answered with something other than a usable completion.
         """
         if any(True for _ in tools):
-            # Sampling with tools needs a capability of its own, and an agent
-            # whose tools silently vanished would answer as though it had none.
             raise MCPSamplingRefusedError(
                 "a served agent with tools cannot borrow the calling client's model: "
                 "the sampling request carries no tools this deployment can offer"
@@ -201,10 +182,10 @@ class ClientModelClient(LLMClient):
             )
         )
         if self._suspended is not None:
-            answered = await self._suspended.ask(request)
-            if not isinstance(answered, CreateMessageResult):
+            answered = await self._suspended.ask_for(request, CreateMessageResult)
+            if answered is None:
                 raise MCPSamplingRefusedError(
-                    f"the calling MCP client answered a completion request with {type(answered).__name__}"
+                    "the calling MCP client answered a completion request with something that is not a completion"
                 )
             result = answered
         else:
@@ -229,20 +210,18 @@ class ClientModelClient(LLMClient):
 
 
 def _as_completion(result: Any) -> CreateMessageResult:
+    """Narrow the SDK's result union; the tools arm is unreachable here."""
     if isinstance(result, CreateMessageResult):
         return result
-    # ``CreateMessageResultWithTools`` — only reachable if tools were sent, and
-    # they never are here.
     raise MCPSamplingRefusedError(f"the calling MCP client answered with {type(result).__name__}")
 
 
 def to_sampling_messages(messages: "Sequence[BaseEvent]") -> list[SamplingMessage]:
     """Render the agent's conversation as the sampling messages the peer receives.
 
-    Deliberately narrow: text, images and audio, under the two roles the protocol
-    has. Tool traffic has no rendering here and cannot occur — a turn on this
-    model refuses tools before it starts — and anything else is dropped rather
-    than guessed at, which is logged.
+    Text, images and audio under the protocol's two roles. Tool traffic cannot
+    occur — a turn on this model refuses tools before it starts — and anything
+    else is logged and dropped rather than guessed at.
     """
     rendered: list[SamplingMessage] = []
     for message in messages:
@@ -274,9 +253,24 @@ def _b64(data: bytes) -> str:
 
 
 def _text_of(result: CreateMessageResult) -> str:
+    """The completion's text, or refuse because there is none.
+
+    An image- or audio-only completion recorded as ``""`` would report success
+    while the agent answered with nothing.
+
+    Raises:
+        MCPSamplingRefusedError: The peer's completion carries no text.
+    """
     content = result.content
     blocks = content if isinstance(content, list) else [content]
-    return "".join(block.text for block in blocks if isinstance(block, TextContent))
+    spoken = [block for block in blocks if isinstance(block, TextContent)]
+    if not spoken:
+        # No text *block* — an empty text block is a model allowed to say nothing.
+        raise MCPSamplingRefusedError(
+            "the calling MCP client's completion carried no text, only "
+            + ", ".join(sorted({block.type for block in blocks}))
+        )
+    return "".join(block.text for block in spoken)
 
 
 __all__ = (

@@ -64,11 +64,9 @@ class UnknownConversationError(MCPServerError):
 class MCPElicitationDeclinedError(HumanInputNotProvidedError):
     """Raised when the calling MCP client refused a served agent's question.
 
-    A subclass of the existing "requested but not provided" failure rather than a
-    new type: the channel worked and the question was put, but no answer came
-    back, which is the same outcome the human-input model already names. Kept
-    distinct only so a host that wants to tell a refusal from an absent channel
-    still can.
+    A subclass rather than a new type: the question was put and no answer came
+    back, which is the outcome the human-input model already names. Distinct only
+    so a host can tell a refusal from an absent channel.
     """
 
     def __init__(self, action: str) -> None:
@@ -86,11 +84,9 @@ class MCPSamplingError(MCPServerError):
 class MCPSamplingUnavailableError(MCPSamplingError):
     """Raised when the caller cannot lend the model this server was told to borrow.
 
-    The turn fails rather than quietly answering some other way: a deployment
-    configured to run on its caller's model has said it has no model of its own,
-    and inventing one — or returning a degraded answer — would hide from the
-    caller that the agent never reasoned at all. Pass ``ClientModel(fallback=
-    True)`` to use the agent's own configured model instead.
+    Failing beats answering some other way, which would hide that the agent never
+    reasoned on the model the caller was told about. ``ClientModel(fallback=True)``
+    asks for the agent's own configured model instead.
     """
 
     def __init__(self) -> None:
@@ -104,9 +100,8 @@ class MCPSamplingUnavailableError(MCPSamplingError):
 class MCPSamplingRefusedError(MCPSamplingError):
     """Raised when a turn needs more of a model than a borrowed one can give.
 
-    Tools and structured output both need something ``sampling/createMessage``
-    does not carry here, and an agent that lost either without being told would
-    answer as though it had never had them.
+    An agent that lost its tools or its schema without being told would answer as
+    though it had never had them.
     """
 
     def __init__(self, reason: str) -> None:

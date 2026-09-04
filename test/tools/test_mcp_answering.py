@@ -37,6 +37,7 @@ from mcp.types import (
     ElicitRequest,
     ElicitRequestFormParams,
     ElicitResult,
+    ImageContent,
     InputRequest,
     InputRequiredResult,
     ListRootsRequest,
@@ -75,6 +76,18 @@ def sampling(prompt: str) -> CreateMessageRequest:
     return CreateMessageRequest(
         params=CreateMessageRequestParams(
             messages=[SamplingMessage(role="user", content=TextContent(type="text", text=prompt))],
+            max_tokens=64,
+        )
+    )
+
+
+def sampling_an_image(data: str) -> CreateMessageRequest:
+    """A completion over an image block, whose ``data`` the server chooses."""
+    return CreateMessageRequest(
+        params=CreateMessageRequestParams(
+            messages=[
+                SamplingMessage(role="user", content=ImageContent(type="image", data=data, mimeType="image/png"))
+            ],
             max_tokens=64,
         )
     )
@@ -338,7 +351,7 @@ class TestLendingTheAgentsModel:
     async def test_an_un_enabled_sampling_request_is_refused_rather_than_served(
         self, calling_agent: CallingAgent
     ) -> None:
-        """Sampling has no ``decline`` arm, so a refusal is an error — but an answer either way."""
+        """Sampling has no ``decline`` arm, so the refusal fails the call rather than reaching the server."""
         server = ThirdPartyServer({"s": sampling("Summarise this.")})
 
         result = await calling_agent.call(server, answering=AnswerPolicy(), config=TestConfig("never used"))
@@ -352,6 +365,34 @@ class TestLendingTheAgentsModel:
         result = await calling_agent.call(server, answering=AnswerPolicy(sampling=True), config=None)
 
         assert isinstance(result, ToolErrorEvent)
+
+    async def test_a_media_block_that_is_not_base64_is_reported_rather_than_raised(
+        self, calling_agent: CallingAgent
+    ) -> None:
+        """The payload is the *server's*, so malformed base64 is a thing one can send.
+
+        Decoded unguarded it surfaces as a ``binascii.Error`` out of the sampling
+        callback, naming neither the sender nor the field.
+        """
+        server = ThirdPartyServer({"s": sampling_an_image("not base64 at all!!")})
+
+        result = await calling_agent.call(
+            server, answering=AnswerPolicy(sampling=True), config=TestConfig("never reached")
+        )
+
+        assert isinstance(result, ToolErrorEvent)
+        assert "not base64" in str(result.error), result.error
+
+    async def test_a_well_formed_media_block_reaches_the_model(self, calling_agent: CallingAgent) -> None:
+        server = ThirdPartyServer({"s": sampling_an_image("aGVsbG8=")})
+
+        result = await calling_agent.call(
+            server, answering=AnswerPolicy(sampling=True), config=TestConfig("a description")
+        )
+
+        assert isinstance(result, ToolResultEvent), f"the call did not complete: {result}"
+        [round_one] = server.received
+        assert round_one["s"]["content"] == {"type": "text", "text": "a description"}
 
 
 @pytest.mark.asyncio

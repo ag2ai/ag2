@@ -22,6 +22,7 @@ from mcp.types import (
     CreateMessageRequest,
     CreateMessageRequestParams,
     CreateMessageResult,
+    ImageContent,
     InputRequiredResult,
     TextContent,
 )
@@ -106,6 +107,62 @@ class TestTheModernEra:
         reply = final.content[0]
         assert isinstance(reply, TextContent)
         assert reply.text == "the caller's model says hello"
+
+
+@pytest.mark.asyncio
+class TestACompletionThisAgentCannotUse:
+    """A borrowed model that answers with something unusable must fail loudly.
+
+    Every other unusable answer on this path refuses — tools, a response schema,
+    a peer that replies with the wrong result type. A completion carrying no text
+    is the same case: recorded as the empty string it would report success while
+    the agent answered with nothing at all.
+    """
+
+    async def test_a_completion_with_no_text_block_is_refused_rather_than_read_as_silence(self) -> None:
+        async with connect_modern(borrowing(), raise_exceptions=False, sampling_callback=lends_its_model) as session:
+            first = await _call(session)
+            assert isinstance(first, InputRequiredResult)
+            ((key, _request),) = (first.input_requests or {}).items()
+            final = await _call(
+                session,
+                input_responses={
+                    key: CreateMessageResult(
+                        role="assistant",
+                        content=ImageContent(type="image", data="aGk=", mimeType="image/png"),
+                        model="caller-model-v1",
+                    )
+                },
+                request_state=first.request_state,
+            )
+
+        assert not isinstance(final, InputRequiredResult)
+        assert final.is_error is True
+        reported = final.content[0]
+        assert isinstance(reported, TextContent)
+        assert "carried no text" in reported.text
+        assert "image" in reported.text, "the failure does not say what the peer sent instead"
+
+    async def test_an_empty_text_block_is_an_answer_and_is_kept(self) -> None:
+        """A model is allowed to say nothing; that is not the same as sending no text."""
+        async with connect_modern(borrowing(), raise_exceptions=False, sampling_callback=lends_its_model) as session:
+            first = await _call(session)
+            assert isinstance(first, InputRequiredResult)
+            ((key, _request),) = (first.input_requests or {}).items()
+            final = await _call(
+                session,
+                input_responses={
+                    key: CreateMessageResult(
+                        role="assistant",
+                        content=TextContent(type="text", text=""),
+                        model="caller-model-v1",
+                    )
+                },
+                request_state=first.request_state,
+            )
+
+        assert not isinstance(final, InputRequiredResult)
+        assert final.is_error is False
 
 
 @pytest.mark.asyncio

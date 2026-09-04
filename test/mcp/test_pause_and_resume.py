@@ -15,19 +15,29 @@ observable.
 The handshake era's inline path is covered in ``test_elicitation.py``.
 """
 
+import asyncio
 from typing import Any
 
 import pytest
 from mcp.client.session import ClientRequestContext
 from mcp.server.request_state import RequestStateBoundary, RequestStateSecurity, authenticated_principal
 from mcp.shared.exceptions import MCPError
-from mcp.types import ElicitRequest, ElicitRequestParams, ElicitResult, InputRequiredResult, TextContent
+from mcp.types import (
+    CallToolResult,
+    ElicitRequest,
+    ElicitRequestParams,
+    ElicitResult,
+    InputRequiredResult,
+    TextContent,
+)
 
 from ag2 import Agent, Context
 from ag2.events import ToolCallEvent
 from ag2.mcp import MCPServer
-from ag2.mcp.elicitation import ANSWER_FIELD
+from ag2.mcp.elicitation import ANSWER_FIELD, input_request
+from ag2.mcp.pause import SuspendedTurn
 from ag2.mcp.testing import connect_modern
+from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
 
@@ -150,7 +160,11 @@ class TestModernEraPause:
         assert final.is_error is False
 
     async def test_a_stale_answer_is_not_consumed_and_the_question_is_re_asked(self) -> None:
-        """An answer minted for a question the run has moved past must not be applied."""
+        """An answer minted for a question the run has moved past must not be applied.
+
+        Read from the wire, where a stale key names nothing in ``inputResponses``;
+        ``TestTheRunRefusesAStaleAnswer`` covers the run's own refusal.
+        """
         agent = asking_agent(questions=("First?", "Second?"))
 
         async with connect_modern(MCPServer(agent), elicitation_callback=declares_elicitation) as session:
@@ -177,6 +191,50 @@ class TestModernEraPause:
         first = result.content[0]
         assert isinstance(first, TextContent)
         assert "Human input was requested but not provided" in first.text
+
+
+@pytest.mark.asyncio
+class TestTheRunRefusesAStaleAnswer:
+    """The seam the wire test above cannot reach.
+
+    The serving path drops an answer whose key names nothing, so it never calls
+    the run — leaving the run's own refusal, the half that would let an answer
+    through if it went wrong, untested from outside.
+    """
+
+    async def test_an_answer_to_an_earlier_question_is_refused(self) -> None:
+        turn = SuspendedTurn(conversation=None, stream=MemoryStream(), created=0.0)
+        turn.start(_asks_twice(turn))
+        await _settle()
+        assert turn.outstanding is not None
+        (first_key, _first) = turn.outstanding
+
+        assert turn.answer(first_key, accepting("one")) is True
+        await _settle()
+        assert turn.outstanding is not None and turn.outstanding[0] != first_key, "the run did not move on"
+
+        assert turn.answer(first_key, accepting("one again")) is False, "an answer to the first question was consumed"
+        assert turn.outstanding is not None, "refusing it also cleared the question the run is waiting on"
+
+        turn.reclaim()
+
+    async def test_an_answer_to_a_run_waiting_on_nothing_is_refused(self) -> None:
+        turn = SuspendedTurn(conversation=None, stream=MemoryStream(), created=0.0)
+
+        assert turn.answer("whatever", accepting("blue")) is False
+
+
+async def _asks_twice(turn: SuspendedTurn) -> CallToolResult:
+    """A held turn with a second question behind the first."""
+    await turn.ask(input_request("First?"))
+    await turn.ask(input_request("Second?"))
+    return CallToolResult(content=[TextContent(type="text", text="done")])
+
+
+async def _settle() -> None:
+    """Give the loop enough turns for a held run to reach its next await."""
+    for _ in range(10):
+        await asyncio.sleep(0)
 
 
 class TestTheStateIsBoundToItsCaller:

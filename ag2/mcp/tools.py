@@ -66,9 +66,8 @@ class MCPFunctionTool:
     input_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object"})
     title: str | None = None
     annotations: ToolAnnotations | None = None
-    # The ``Resolve(...)``-marked parameters this tool asks the client for, and
-    # the statically analysed resolver DAG behind them. Both empty unless
-    # :func:`mcp_tool` found any; a hand-built tool asks for nothing.
+    # What this tool asks the client for, and the resolver DAG behind it. Empty
+    # unless :func:`mcp_tool` found any; a hand-built tool asks for nothing.
     resolved_params: Mapping[str, tuple[Resolve, bool]] = field(default_factory=dict)
     # The plan type is private to the SDK (``_ResolverPlan``); these are built by
     # ``build_resolver_plans`` and handed back to ``resolve_arguments`` untouched.
@@ -92,11 +91,9 @@ class MCPFunctionTool:
     ) -> "list[ContentBlock] | InputRequiredResult":
         """Run the tool, or come back asking the client for what it is missing.
 
-        A tool with no ``Resolve(...)`` parameter runs and returns content, as it
-        always has. One with them hands the resolver DAG to the SDK first, which
-        either fills every parameter — and the body then runs, once — or returns
-        the questions still outstanding, in whichever shape the negotiated
-        revision calls for.
+        With ``Resolve(...)`` parameters the SDK fills them first — and the body
+        then runs, once — or returns the questions still outstanding, in whichever
+        shape the negotiated revision calls for.
         """
         if self.resolved_params:
             resolved = await resolve_arguments(
@@ -106,8 +103,6 @@ class MCPFunctionTool:
                 ResolverContext(request_context=request_context, input_params=input_round),
             )
             if isinstance(resolved, InputRequiredResult):
-                # Still missing something the client has to supply, so the body
-                # is not run this round.
                 return resolved
             arguments = {**arguments, **resolved}
         result = await call_user_fn(self.handler, arguments, request_context)
@@ -205,24 +200,18 @@ def mcp_tool(
             "Paint a room."
             return f"painted {room} {colour.answer}"
 
-    Which way the question travels is the negotiated revision's doing: up to
-    2025-11-25 it is a standalone request answered inline, and from 2026-07-28 —
-    which defines no server-to-client request — it comes back as the result of
-    the call and the client retries with the answer.
+    Which way the question travels is the negotiated revision's doing: a
+    standalone request answered inline up to 2025-11-25, and from 2026-07-28 back
+    as the call's result, which the client retries with the answer.
 
-    **A resolver body re-runs on every round of that retry**, and the answers
-    already collected are supplied to it. Write resolvers accordingly: a
-    non-idempotent side effect in one happens once per round, not once per call.
-    The tool body itself is different — it does not run at all until every
-    resolver is satisfied, and then runs exactly once.
+    **A resolver body re-runs on every round of that retry**, with the answers
+    already collected supplied to it, so a non-idempotent side effect in one
+    happens once per round. The tool body is the opposite: it does not run until
+    every resolver is satisfied, and then runs exactly once.
 
-    **The agent's own ``ask`` tool is the opposite of both**, and the two are
-    stated together here so nobody carries one contract across to the other. A
-    conversational turn cannot be replayed — re-running it would re-issue LLM
-    calls, re-run tool side effects and re-spend tokens — so that turn is *held
-    open in the process* between rounds and continues exactly where it stopped.
-    Nothing about it re-runs. See :mod:`ag2.mcp.pause` for what holding it costs
-    an operator (sticky routing, no survival across a restart).
+    **The agent's own ``ask`` tool re-runs nothing at all** — its turn is held
+    open between rounds (see :mod:`ag2.mcp.pause`). Do not carry one contract
+    across to the other.
 
     Args:
         function: The function (when used as a bare ``@mcp_tool``).
@@ -236,10 +225,9 @@ def mcp_tool(
 
     def make(f: Callable[..., Any]) -> MCPFunctionTool:
         call_model = build_model(f, sync_to_thread=sync_to_thread, serialize_result=False)
-        # A resolved parameter is filled by its resolver, never by the caller, so
-        # it is kept out of what ``tools/list`` advertises — otherwise a model
-        # would be asked to supply the very thing the tool exists to go and ask
-        # the client for.
+        # Kept out of what ``tools/list`` advertises: a resolved parameter is
+        # filled by its resolver, never by the caller, and advertising it would
+        # ask a model for the very thing the tool goes and asks the client for.
         resolved_params = find_resolved_parameters(f)
         schema = get_schema(call_model, exclude=(CONTEXT_OPTION_NAME, *resolved_params))
         if schema.get("type") != "object":
@@ -263,9 +251,8 @@ def mcp_tool(
 class ToolProvider:
     """Serves a fixed set of custom :class:`MCPFunctionTool` over MCP.
 
-    Unlike resources/prompts, MCP exposes a single ``tools/call`` handler, so this
-    provider does not self-register decorators; :class:`~ag2.mcp.MCPServer` merges
-    it into the one tool list / dispatcher it already owns.
+    MCP exposes a single ``tools/call`` handler, so this registers nothing of its
+    own; :class:`~ag2.mcp.MCPServer` merges it into the dispatcher it owns.
     """
 
     __slots__ = ("_tools", "_by_name")

@@ -21,12 +21,9 @@ from .errors import UnknownConversationError
 # forbids establishing context from connection or process identity.
 STDIO_SESSION = "stdio"
 
-# Where a conversation handle travels back in a result's ``_meta``, for clients
-# threading it programmatically. Reverse-DNS from the project's domain, as the
-# ``_meta`` key rules require; prefixes whose second label is ``mcp`` or
-# ``modelcontextprotocol`` are reserved and are not used here. It lives beside
-# the conversation it names rather than in the executor so that reading it needs
-# no ``ag2[mcp]`` install.
+# Where a conversation handle travels back in a result's ``_meta``. Reverse-DNS
+# as the ``_meta`` key rules require; it lives here rather than in the executor
+# so reading it needs no ``ag2[mcp]`` install.
 CONVERSATION_META_KEY = "ai.ag2/conversation"
 
 
@@ -34,26 +31,14 @@ CONVERSATION_META_KEY = "ai.ag2/conversation"
 class SessionConfig:
     """Tunables for multi-turn conversation history on :class:`MCPServer`.
 
-    Each conversation gets its own history that accumulates across ``tools/call``
-    invocations, whichever name it goes by — a *conversation handle* the caller
-    threads through, or the MCP session a handshake-era caller already has. The
-    registry is bounded so a long-lived server cannot leak memory:
-
-    * ``max_sessions`` — LRU cap; the least-recently-used conversation's history
-      is dropped once the cap is exceeded. Any call that names no conversation
-      and has no MCP session to fall back on gets a fresh one — every modern-era
-      call, and every handshake-era call on a ``stateless=True`` transport — so
-      one-shot traffic occupies slots too; size the cap for the call rate and set
-      a ``ttl`` alongside it.
-    * ``ttl`` — optional idle expiry in seconds; a conversation untouched for
-      longer than this has its history dropped on the next access (``None`` = no
-      expiry).
-    * ``storage`` — pluggable history backend shared across conversations (each
-      keyed by its own stream id). Defaults to an in-memory :class:`MemoryStorage`;
-      pass e.g. a Redis-backed :class:`Storage` to keep histories out of process
-      memory. Note that the registry mapping a conversation's *name* to its
-      history is per-process either way, so a shared backend does not on its own
-      make a handle usable against another replica.
+    Attributes:
+        max_sessions: LRU cap on conversations held at once. Every call naming
+            none, with no MCP session to fall back on, mints one — so one-shot
+            traffic occupies slots too; size for the call rate and set a ``ttl``.
+        ttl: Idle expiry in seconds; ``None`` means no expiry.
+        storage: History backend shared across conversations. The registry
+            mapping a conversation's *name* to its history is per-process either
+            way, so a shared backend does not make a handle portable.
     """
 
     max_sessions: int = 1024
@@ -65,10 +50,8 @@ class SessionConfig:
 class ConversationBounds:
     """How long a conversation lives in a :class:`SessionStore`.
 
-    The store reports its configured bound and idle expiry as data; the tool
-    descriptor words them for a client. The protocol requires a stateful handle's
-    lifetime to be stated in the tool description, and a store that returned the
-    sentence itself would put client-facing prose behind the registry.
+    Reported as data, not prose: the protocol requires the lifetime to appear in
+    the tool description, and the descriptor is what words it.
     """
 
     max_conversations: int
@@ -79,9 +62,7 @@ class ConversationBounds:
 class Conversation:
     """One conversation as the serving path sees it: its stream and its handle.
 
-    ``handle`` is the opaque, server-minted name a caller presents to continue
-    this conversation. It is ``None`` only for a stateless call, which has no
-    conversation to continue.
+    ``handle`` is ``None`` only for a stateless call, which has none to continue.
     """
 
     stream: MemoryStream
@@ -99,27 +80,29 @@ class _Entry:
         # case the handle is the sole credential.
         self.principal = principal
         self.last = last
-        # Serializes turns of one conversation: a fresh MemoryStream is handed
-        # out per call, so the agent's per-stream turn lock can't serialize
-        # same-conversation concurrency — this entry-scoped lock does.
+        # Serializes turns of one conversation at *this* tier, for the whole
+        # scope rather than only the window ``Agent.ask`` is inside.
+        #
+        # Not the only lock in play, and the other one matters: every call gets a
+        # fresh ``MemoryStream`` object but always under this entry's stable
+        # ``stream_id``, and ``agent._get_stream_turn_lock`` keys on the id. So
+        # releasing this lock does not make a conversation concurrent, and a
+        # caller that releases it while a run is still inside ``ask`` (the
+        # modern-era pause) must keep the next call away by other means.
         self.turn_lock = asyncio.Lock()
 
 
 class SessionStore:
     """Bounded LRU registry mapping a conversation's key to a persistent stream.
 
-    The key is an opaque string: a *conversation handle* this store minted, or —
-    in the handshake era, where the protocol has one — the caller's MCP session
-    id. The store never derives a key itself, and never adopts one from a caller:
-    :meth:`by_handle` resolves only handles it minted, so a caller cannot name a
-    conversation of their choosing and evict other callers' out of the bound.
+    The key is a handle this store minted or, on the handshake era, the caller's
+    MCP session id. It never adopts a key from a caller — :meth:`by_handle`
+    resolves only its own — so nobody can name a conversation of their choosing
+    and evict other callers' out of the bound.
 
-    Each conversation is bound to a stable :class:`~uuid.UUID` stream id over a
-    shared :class:`Storage`; the serving methods return a *fresh*
-    :class:`MemoryStream` object on every call (so per-call progress subscribers
-    never accumulate) that reads prior turns back from storage — mirroring the
-    subagents' ``persistent_stream`` pattern. Eviction (LRU overflow + idle TTL)
-    drops the evicted conversation's stored history so memory stays bounded.
+    Each conversation has a stable stream id over a shared :class:`Storage`, and
+    every serving method hands out a *fresh* :class:`MemoryStream` object reading
+    that history back, so per-call progress subscribers never accumulate.
     """
 
     __slots__ = ("_storage", "_max", "_ttl", "_entries", "_by_handle", "_lock", "_clock", "on_evict")
@@ -143,29 +126,19 @@ class SessionStore:
         self._by_handle: dict[str, str] = {}
         self._lock = asyncio.Lock()
         self._clock = clock
-        # Called with a conversation's handle as it is dropped, so anything else
-        # keyed by that handle goes at the same time. Assigned by the owner
-        # (``MCPServer`` wires the paused-run registry to it) rather than taken
-        # in the constructor, which would make the store know what a paused run
-        # is.
+        # Called with a handle as it is dropped, so anything else keyed by it
+        # goes too. Assigned by the owner rather than taken in the constructor,
+        # which would make the store know what a paused run is.
         self.on_evict: Callable[[str], None] | None = None
 
     @property
     def bounds(self) -> ConversationBounds:
-        """The configured bound and idle expiry, for a client-facing description.
-
-        Reported as data rather than prose so the sentence the tool advertises
-        cannot drift from the configuration behind it.
-        """
+        """The configured bound and idle expiry, for a client-facing description."""
         return ConversationBounds(max_conversations=self._max, ttl=self._ttl)
 
     @asynccontextmanager
     async def session(self, session_id: str, *, principal: str | None = None) -> AsyncGenerator[Conversation]:
-        """Yield the conversation named by ``session_id``, holding its turn lock.
-
-        Holding the lock for the duration of the turn serializes concurrent calls
-        on the same conversation, so their accumulated history can't interleave.
-        """
+        """Yield the conversation named by ``session_id``, holding its turn lock."""
         entry = await self._entry(session_id, principal=principal)
         async with self._held(entry) as conversation:
             yield conversation
@@ -175,7 +148,7 @@ class SessionStore:
         """Mint a conversation under a new handle and yield it, holding its turn lock.
 
         The handle is a version-4 UUID: opaque and unguessable, as the protocol
-        requires of a stateful handle, and incidentally ASCII- and header-safe.
+        requires of a stateful handle.
         """
         handle = str(uuid4())
         entry = await self._entry(handle, principal=principal, handle=handle)
@@ -196,28 +169,37 @@ class SessionStore:
         async with self._held(entry) as conversation:
             yield conversation
 
+    async def touch(self, handle: str) -> None:
+        """Mark ``handle``'s conversation as used just now, without holding it.
+
+        For work that keeps a conversation alive without going through the
+        serving methods: resuming a paused run continues a turn already inside
+        one, and without this a long pause is evicted mid-question. Silent for an
+        unknown handle — this refreshes an idle clock, and the callers that must
+        refuse one raise where the handle is *resolved*.
+        """
+        async with self._lock:
+            key = self._by_handle.get(handle)
+            entry = self._entries.get(key) if key is not None else None
+            if key is None or entry is None:
+                return
+            entry.last = self._clock()
+            self._entries.move_to_end(key)
+
     async def acquire(self, session_id: str, *, principal: str | None = None) -> MemoryStream:
         """Return a stream carrying ``session_id``'s accumulated conversation.
 
         Does not hold the turn lock — prefer :meth:`session` on the serving path.
-
-        ``principal`` is recorded when this call is what creates the conversation,
-        exactly as :meth:`session` records it, so the handle minted alongside it
-        stays reachable through :meth:`by_handle` by the same caller. Defaulting
-        it to ``None`` and ignoring the argument would mint a conversation no
-        authenticated caller could ever name.
+        ``principal`` is recorded when this call is what creates the
+        conversation; ignoring it would mint one no authenticated caller could
+        ever name.
         """
         entry = await self._entry(session_id, principal=principal)
         return MemoryStream(storage=self._storage, id=entry.stream_id)
 
     @asynccontextmanager
     async def _held(self, entry: _Entry) -> AsyncGenerator[Conversation]:
-        """Yield ``entry``'s conversation while holding its turn lock.
-
-        Every serving method ends here: a fresh :class:`MemoryStream` object per
-        call (so per-call progress subscribers never accumulate) reading prior
-        turns back from storage, handed out under the entry's turn lock.
-        """
+        """Yield ``entry``'s conversation while holding its turn lock."""
         async with entry.turn_lock:
             yield Conversation(stream=MemoryStream(storage=self._storage, id=entry.stream_id), handle=entry.handle)
 
@@ -242,9 +224,9 @@ class SessionStore:
             await self._evict_expired(now)
             key = self._by_handle.get(handle)
             entry = self._entries.get(key) if key is not None else None
-            # Authorization is revalidated here, on every call rather than at
-            # creation, because a handle travels through model context and logs
-            # and a credential can be swapped or revoked between two calls.
+            # Revalidated on every call, not at creation: a handle travels
+            # through model context and logs, and a credential can be swapped or
+            # revoked between two calls.
             if key is None or entry is None or entry.principal != principal:
                 raise UnknownConversationError()
             entry.last = now

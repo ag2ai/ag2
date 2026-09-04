@@ -254,8 +254,11 @@ Three consequences belong in an operator's head rather than in a bug report:
 - **A pause does not survive a restart.** The retry is refused with a protocol error and the caller starts the call again.
 - **More than one replica needs a shared `requestState` key.** The default policy mints a process-local one, so state minted by one worker is rejected by another. Pass `request_state_security=RequestStateSecurity(keys=[...])`. Necessary, and not sufficient — the run is still in exactly one process.
 
+!!! warning "A conversation with a paused run takes no other calls"
+    While a turn is paused, a call naming that same `conversation` comes back as a tool error telling the caller to answer the outstanding question or start a separate conversation. The pause deliberately lets go of the conversation's lock — the retry that resumes it would otherwise deadlock behind it — but a conversation's history is still one thread of work, so a second call would queue inside the agent, behind a run that is waiting on a human, with nothing to time it out. Refusing it is the recoverable answer.
+
 !!! warning "Stateless serving and pausing pull against each other"
-    A server that can pause a run cannot be freely stateless. Both of the above fail *intermittently* under a load balancer, and the symptom is an occasional "Invalid or expired requestState" with nothing pointing at the cause. See `docs/adr/0018-a-paused-mcp-run-is-held-in-process.md`.
+    A server that can pause a run cannot be freely stateless. Both of the above fail *intermittently* under a load balancer, and the symptom is an occasional "Invalid or expired requestState" with nothing pointing at the cause.
 
 ### How long a pause lives
 
@@ -286,6 +289,8 @@ The last row is the one worth noticing: the agent's own turn never asks for the 
 
 Nothing is held for a deterministic tool, so nothing above about sticky routing applies to it. Write resolvers idempotently: a side effect in one fires once per round.
 
+`elicitation_policy` does not reach these. It governs the *agent's* questions — a tool inside it calling `context.input()` at run time, which the deployment may not have written — whereas an `Elicit` in a resolver is a request the server's own author put in that tool's signature. A deployment with no human anywhere serves no such tool.
+
 ## Running on the caller's model
 
 A deployment holding no model credentials can still serve an agent that needs one: `client_model=` runs the agent's own reasoning on the **calling client's** LLM, over MCP sampling.
@@ -303,7 +308,7 @@ It is off unless you pass one, and a server that has not enabled it never sends 
 !!! warning "This moves three things to the caller"
     **Cost** — every turn the agent takes spends their budget. **Capability** — which model answers is a fact about the client, so the same agent gives different answers to different callers and its quality is no longer yours to control. **Reproducibility** — a trace cannot be re-run against a known model, because the model was the peer's.
 
-A client that advertised no sampling capability is never asked: the turn fails with `MCPSamplingUnavailableError`, or falls back to the agent's own configured model under `ClientModel(fallback=True)` — which needs the agent to have one. A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here.
+A client that advertised no sampling capability is never asked: the turn fails with `MCPSamplingUnavailableError`, or falls back to the agent's own configured model under `ClientModel(fallback=True)` — which needs the agent to have one. A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here, and so does a completion that comes back carrying no text at all — read as an empty reply it would report success while the agent answered with nothing.
 
 ## Authentication and who owns a conversation
 
