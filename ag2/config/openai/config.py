@@ -5,7 +5,7 @@
 from dataclasses import dataclass, replace
 from typing import Any, TypedDict
 
-import httpx
+import httpx2
 from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
 from openai.types import ChatModel
 from typing_extensions import Unpack
@@ -34,7 +34,7 @@ class OpenAIConfigOverrides(TypedDict, total=False):
     max_retries: int
     default_headers: dict[str, str] | None
     default_query: dict[str, object] | None
-    http_client: httpx.AsyncClient | None
+    http_client: httpx2.AsyncClient | None
     frequency_penalty: float | None | Omit
     presence_penalty: float | None | Omit
     seed: int | None | Omit
@@ -76,7 +76,7 @@ class OpenAIConfig(ModelConfig):
     max_retries: int = DEFAULT_MAX_RETRIES
     default_headers: dict[str, str] | None = None
     default_query: dict[str, object] | None = None
-    http_client: httpx.AsyncClient | None = None
+    http_client: httpx2.AsyncClient | None = None
     frequency_penalty: float | None | Omit = omit
     presence_penalty: float | None | Omit = omit
     seed: int | None | Omit = omit
@@ -175,7 +175,7 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     max_retries: int
     default_headers: dict[str, str] | None
     default_query: dict[str, object] | None
-    http_client: httpx.AsyncClient | None
+    http_client: httpx2.AsyncClient | None
     parallel_tool_calls: bool
     top_logprobs: int | None | Omit
     metadata: dict[str, str] | None | Omit
@@ -202,7 +202,7 @@ class OpenAIResponsesConfig(ModelConfig):
     max_retries: int = DEFAULT_MAX_RETRIES
     default_headers: dict[str, str] | None = None
     default_query: dict[str, object] | None = None
-    http_client: httpx.AsyncClient | None = None
+    http_client: httpx2.AsyncClient | None = None
     parallel_tool_calls: bool = True
     top_logprobs: int | None | Omit = omit
     metadata: dict[str, str] | None | Omit = omit

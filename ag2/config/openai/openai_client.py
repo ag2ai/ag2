@@ -6,7 +6,7 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, Literal, TypedDict
 
-import httpx
+import httpx2
 from fast_depends.library.serializer import SerializerProto
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
@@ -78,7 +78,7 @@ class OpenAIClient(LLMClient):
         max_retries: int = DEFAULT_MAX_RETRIES,
         default_headers: dict[str, str] | None = None,
         default_query: dict[str, object] | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: httpx2.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
     ) -> None:
         self._client = AsyncOpenAI(

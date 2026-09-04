@@ -11,9 +11,9 @@ Both directions live here:
 
 * **ACP -> AG2** (:func:`map_session_update`, :func:`content_blocks_to_text`, …)
   serves the *client* side — AG2 driving an external CLI agent.
-* **AG2 -> ACP** (:func:`prompt_to_inputs`, :func:`event_to_session_update`)
-  serves the *serving* side — :class:`~ag2.acp.agent.ACPAgent` exposing an AG2
-  agent to an ACP Client.
+* **AG2 -> ACP** (:func:`prompt_to_inputs`, :func:`event_to_session_update`,
+  :func:`history_to_session_updates`) serves the *serving* side —
+  :class:`~ag2.acp.agent.ACPAgent` exposing an AG2 agent to an ACP Client.
 """
 
 import base64
@@ -30,17 +30,23 @@ from ag2.events import (
     BaseEvent,
     DataInput,
     DocumentInput,
+    HumanInputRequest,
     ImageInput,
     Input,
     ModelMessageChunk,
     ModelReasoning,
+    ModelRequest,
+    ModelResponse,
     TextInput,
     ToolCallEvent,
+    ToolCallsEvent,
     ToolErrorEvent,
     ToolResultEvent,
+    ToolResultsEvent,
 )
+from ag2.events.input_events import BinaryInput, BinaryType, FileIdInput, UrlInput
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent, ToolResult
-from ag2.events.types import BinaryResult, Usage
+from ag2.events.types import BinaryResult, HumanMessage, Usage
 from ag2.types import SendableMessage
 
 from .events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
@@ -231,6 +237,26 @@ def event_to_session_update(event: BaseEvent, *, stream_thoughts: bool = False) 
     if isinstance(event, ModelReasoning):
         return acp.update_agent_thought_text(event.content) if stream_thoughts else None
 
+    if isinstance(event, ToolResultEvent):
+        return _tool_result_update(event)
+
+    if isinstance(event, ToolCallEvent):
+        return _tool_call_start(event)
+
+    return None
+
+
+def _tool_call_start(event: ToolCallEvent) -> SessionUpdate:
+    return acp.start_tool_call(
+        event.id,
+        title=event.name,
+        kind=DEFAULT_TOOL_KIND,
+        status="in_progress",
+        raw_input=event.serialized_arguments,
+    )
+
+
+def _tool_result_update(event: ToolResultEvent) -> SessionUpdate:
     # ToolErrorEvent subclasses ToolResultEvent, so it must be tested first.
     if isinstance(event, ToolErrorEvent):
         return acp.update_tool_call(
@@ -239,25 +265,136 @@ def event_to_session_update(event: BaseEvent, *, stream_thoughts: bool = False) 
             status="failed",
             content=[acp.tool_content(acp.text_block(str(event.error)))],
         )
+    return acp.update_tool_call(
+        event.parent_id,
+        title=event.name,
+        status="completed",
+        content=[acp.tool_content(acp.text_block(tool_result_text(event.result)))],
+    )
 
-    if isinstance(event, ToolResultEvent):
-        return acp.update_tool_call(
-            event.parent_id,
-            title=event.name,
-            status="completed",
-            content=[acp.tool_content(acp.text_block(tool_result_text(event.result)))],
-        )
 
-    if isinstance(event, ToolCallEvent):
-        return acp.start_tool_call(
-            event.id,
-            title=event.name,
-            kind=DEFAULT_TOOL_KIND,
-            status="in_progress",
-            raw_input=event.serialized_arguments,
-        )
+def input_to_block(part: Input) -> ContentBlock:
+    """The inverse of :func:`block_to_input`, for replaying a stored user turn.
 
-    return None
+    Text and data render as text; image and audio bytes go back out as the
+    blocks they arrived in. Anything else — a document blob, a URL, a file id —
+    is *named* rather than reproduced, the way :func:`tool_result_text` treats
+    binary parts: the Client is being reminded what it sent, not re-sent it.
+    """
+    if isinstance(part, TextInput):
+        return acp.text_block(part.content)
+    if isinstance(part, DataInput):
+        return acp.text_block(_render_data(part.data))
+    if isinstance(part, BinaryInput):
+        data = base64.b64encode(part.data).decode()
+        if part.kind is BinaryType.IMAGE:
+            return schema.ImageContentBlock(type="image", data=data, mime_type=str(part.media_type))
+        if part.kind is BinaryType.AUDIO:
+            return schema.AudioContentBlock(type="audio", data=data, mime_type=str(part.media_type))
+        return acp.text_block(f"[{part.kind.value}]")
+    if isinstance(part, UrlInput):
+        return acp.text_block(f"[{part.kind.value}] {part.url}")
+    if isinstance(part, FileIdInput):
+        return acp.text_block(f"[file] {part.filename or part.file_id}")
+    return acp.text_block(f"[{getattr(part, 'kind', 'input')}]")
+
+
+def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str) -> list[SessionUpdate]:
+    """Retell a session's stored history as the ``session/update``s of a ``session/load``.
+
+    ACP has an Agent replay the whole conversation before it answers
+    ``session/load``, in the same notifications a live turn sends. Storage does
+    not hold what the live turn sent, though; it holds what the agent loop
+    persisted, and the two differ in three ways bridged here:
+
+    * Text goes out live as transient ``ModelMessageChunk``s that are never
+      stored; the stored ``ModelResponse`` carries the whole message. Replay
+      emits one ``agent_message_chunk`` per response that has one.
+    * A user turn is never sent live at all — the Client typed it. Replay emits
+      it as ``user_message_chunk``s, one per input part, because a cold Client
+      has nothing else to show for its own side of the conversation.
+    * A tool call is persisted up to three times (inside the ``ModelResponse``,
+      as the ``ToolCallsEvent`` the loop emits, as the loose ``ToolCallEvent``
+      the executor sends) and its result twice (loose, and inside the
+      ``ToolResultsEvent`` a finished or repaired batch is folded into). Replay
+      starts each call once and settles it once, at whichever record it meets
+      first, and never settles a call it did not start.
+
+    Every chunk carries a ``message_id`` so a Client can group chunks into
+    messages. Ids count per role from the start of the history, so replaying
+    the same history twice yields the same ids.
+
+    Within a response the text comes before its tool calls — the order a live
+    turn streams them. Not replayed: ``UsageEvent`` (telemetry), a compaction
+    summary (not a message the Client ever saw), and anything else with no ACP
+    counterpart.
+    """
+    updates: list[SessionUpdate] = []
+    started: set[str] = set()
+    settled: set[str] = set()
+    user_turns = agent_turns = 0
+
+    def start(call: ToolCallEvent) -> None:
+        if call.id not in started:
+            started.add(call.id)
+            updates.append(_tool_call_start(call))
+
+    def settle(result: ToolResultEvent) -> None:
+        if result.parent_id in started and result.parent_id not in settled:
+            settled.add(result.parent_id)
+            updates.append(_tool_result_update(result))
+
+    for event in events:
+        if isinstance(event, ModelRequest):
+            user_turns += 1
+            message_id = f"{session_id}:u{user_turns}"
+            for part in event.parts:
+                updates.append(
+                    schema.UserMessageChunk(
+                        session_update="user_message_chunk", message_id=message_id, content=input_to_block(part)
+                    )
+                )
+        elif isinstance(event, ModelResponse):
+            if event.message is not None and event.message.content:
+                agent_turns += 1
+                updates.append(
+                    schema.AgentMessageChunk(
+                        session_update="agent_message_chunk",
+                        message_id=f"{session_id}:a{agent_turns}",
+                        content=acp.text_block(event.message.content),
+                    )
+                )
+            for call in event.tool_calls.calls:
+                start(call)
+        elif isinstance(event, ToolCallsEvent):
+            for call in event.calls:
+                start(call)
+        elif isinstance(event, ToolCallEvent):
+            start(event)
+        elif isinstance(event, ToolResultsEvent):
+            for result in event.results:
+                settle(result)
+        elif isinstance(event, ToolResultEvent):
+            settle(event)
+        elif isinstance(event, HumanInputRequest):
+            agent_turns += 1
+            updates.append(
+                schema.AgentMessageChunk(
+                    session_update="agent_message_chunk",
+                    message_id=f"{session_id}:a{agent_turns}",
+                    content=acp.text_block(event.content),
+                )
+            )
+        elif isinstance(event, HumanMessage):
+            user_turns += 1
+            updates.append(
+                schema.UserMessageChunk(
+                    session_update="user_message_chunk",
+                    message_id=f"{session_id}:u{user_turns}",
+                    content=acp.text_block(event.content),
+                )
+            )
+    return updates
 
 
 def tool_result_text(result: ToolResult) -> str:

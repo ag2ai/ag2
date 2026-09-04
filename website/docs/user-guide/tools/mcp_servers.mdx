@@ -167,5 +167,14 @@ agent_with_mcp = Agent(
 
 `MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime.
 
+!!! warning "`blocked_tools` is not enforceable on every provider"
+
+    OpenAI's and xAI's remote-MCP tools take an allow-list and nothing else, so a
+    block cannot be expressed in the request they accept. AG2 raises
+    `BlockedToolsUnsupportedError` instead of sending a request that would permit
+    what you asked to block. Pass `allowed_tools` naming the tools you do want, or
+    connect the server as an MCP toolkit (above) so AG2 executes and filters its
+    tools itself — that path enforces `blocked_tools` on any provider.
+
 !!! warning
     With provider-side connections, your MCP credentials are sent to the LLM provider on every request. Only use this path with providers and servers you trust with those credentials.
