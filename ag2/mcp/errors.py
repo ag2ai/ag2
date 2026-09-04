@@ -14,7 +14,8 @@ class MCPAgentConfigError(MCPServerError):
 
     def __init__(self, agent_name: str) -> None:
         super().__init__(
-            f"Agent {agent_name!r} has no model config; set `Agent(config=...)` before serving it over MCP."
+            f"Agent {agent_name!r} has no model config. Give it one with `Agent(config=...)`, or run it on "
+            "the calling client's model with `MCPServer(..., client_model=ClientModel())`."
         )
 
 
@@ -85,8 +86,8 @@ class MCPSamplingUnavailableError(MCPSamplingError):
     """Raised when the caller cannot lend the model this server was told to borrow.
 
     Failing beats answering some other way, which would hide that the agent never
-    reasoned on the model the caller was told about. ``ClientModel(fallback=True)``
-    asks for the agent's own configured model instead.
+    reasoned on the model the caller was told about. An agent that has a ``config``
+    of its own falls back to it instead of raising this.
     """
 
     def __init__(self) -> None:

@@ -66,20 +66,20 @@ class ClientModel:
     yours, and a trace cannot be re-run against a known model afterwards. Read
     :mod:`ag2.mcp.sampling` before enabling it.
 
+    Passing this is the deployment's consent to spend the caller's budget, and
+    that is all it decides. *Which* model wins when the caller cannot lend one is
+    read off the agent instead: an agent with a ``config`` falls back to it, an
+    agent without one fails. There is deliberately no second switch for that —
+    ``fallback=True`` on an agent with no model was a no-op, and ``fallback=False``
+    on an agent with one meant "refuse, though a model is right here".
+
     Attributes:
         max_tokens: The generation bound sent with each request, and the only
             generation parameter sent: the rest belong to a model configuration,
             and here there is none to take them from.
-        fallback: What to do about a client that advertised no sampling
-            capability. ``False`` (the default) fails the turn, so a deployment
-            that has no model of its own says so rather than answering by some
-            other means. ``True`` falls back to the agent's own configured model,
-            which needs one — a deployment holding credentials it prefers not to
-            spend.
     """
 
     max_tokens: int = 4096
-    fallback: bool = False
 
 
 def client_can_sample(session: "ServerSession") -> bool:

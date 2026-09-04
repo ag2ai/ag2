@@ -416,15 +416,17 @@ class AgentExecutor:
 
         Raises:
             MCPSamplingUnavailableError: Configured to run on the caller's model,
-                which this caller advertised none of, with no fallback allowed.
-                Raised before the turn starts, so nobody is handed an answer from
-                a model they did not lend.
+                which this caller advertised none of, and the agent has none of
+                its own to fall back to. Raised before the turn starts, so nobody
+                is handed an answer from a model they did not lend.
         """
         if self._client_model is None:
             return None
         if not client_can_sample(request_context.session):
-            # Falling back needs something to fall back *to*.
-            if self._client_model.fallback and self._agent.config is not None:
+            # Falling back needs something to fall back *to*, and the agent's own
+            # config is the whole of that question: a deployment holding one would
+            # rather serve than fail, and one holding none has nothing to offer.
+            if self._agent.config is not None:
                 return None
             raise MCPSamplingUnavailableError()
         return ClientModelConfig(

@@ -51,9 +51,26 @@ async def lends_its_model(context: ClientRequestContext, params: CreateMessageRe
     )
 
 
-def borrowing(*, fallback: bool = False, config: TestConfig | None = None) -> MCPServer:
+def borrowing(*, config: TestConfig | None = None) -> MCPServer:
     """A server whose agent has no model of its own unless one is passed."""
-    return MCPServer(Agent("borrower", config=config), client_model=ClientModel(fallback=fallback))
+    return MCPServer(Agent("borrower", config=config), client_model=ClientModel())
+
+
+@pytest.mark.asyncio
+async def test_true_is_the_whole_of_the_common_case() -> None:
+    """``client_model=True`` needs no class name, the way ``sessions=True`` does not.
+
+    The dataclass is for tuning; asking for the feature at all is one word.
+    """
+    server = MCPServer(Agent("borrower"), client_model=True)
+
+    async with connect(server, sampling_callback=lends_its_model) as session:
+        result = await session.call_tool("ask", {"message": "hi"})
+
+    assert result.is_error is False
+    first = result.content[0]
+    assert isinstance(first, TextContent)
+    assert first.text == "the caller's model says hello"
 
 
 async def _call(session: Any, **kwargs: Any) -> Any:
@@ -178,7 +195,7 @@ class TestItIsADecision:
         assert ASKED == [], "a server that never enabled sampling asked for a completion"
 
     async def test_a_client_that_cannot_sample_is_not_asked_and_the_turn_fails(self) -> None:
-        """No capability declared, and no fallback configured: say so, do not improvise."""
+        """No capability declared, and no model of the agent's own: say so, do not improvise."""
         async with connect(borrowing(), raise_exceptions=False) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
@@ -188,8 +205,14 @@ class TestItIsADecision:
         assert "advertised no sampling capability" in first.text
         assert ASKED == []
 
-    async def test_the_configured_fallback_uses_the_agents_own_model(self) -> None:
-        server = borrowing(fallback=True, config=TestConfig("my own answer"))
+    async def test_an_agent_with_a_model_of_its_own_falls_back_to_it(self) -> None:
+        """Having one *is* the fallback: a deployment holding a model would rather serve than fail.
+
+        No second switch decides this. A flag saying "refuse anyway, though a
+        model is right here" only ever produced the failure above from a server
+        that could have answered.
+        """
+        server = borrowing(config=TestConfig("my own answer"))
 
         async with connect(server, raise_exceptions=False) as session:
             result = await session.call_tool("ask", {"message": "hi"})

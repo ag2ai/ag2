@@ -66,6 +66,17 @@ def _package_version() -> str:
         return _DEFAULT_VERSION
 
 
+def _build_client_model(client_model: "bool | ClientModel") -> "ClientModel | None":
+    """Normalise the ``client_model=`` argument, mirroring ``sessions=``.
+
+    ``True`` is the whole of the common case — borrow the caller's model on this
+    server's defaults — so nobody has to learn a class name to say it.
+    """
+    if client_model is False:
+        return None
+    return client_model if isinstance(client_model, ClientModel) else ClientModel()
+
+
 def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | None:
     if sessions is False:
         return None
@@ -175,13 +186,17 @@ class MCPServer:
     request is one the server's own author wrote into a tool signature, not one
     an agent's tool raised at run time.
 
-    ``client_model`` runs the agent's reasoning on the *calling client's* model,
-    so a deployment with no credentials can still serve an agent that needs one.
-    Off unless a :class:`~ag2.mcp.sampling.ClientModel` is passed; enabling it
-    moves cost, capability and reproducibility to the caller. A client
-    advertising no sampling capability fails the turn with
-    :class:`~ag2.mcp.errors.MCPSamplingUnavailableError`, or falls back to the
-    agent's own model under ``ClientModel(fallback=True)``.
+    ``client_model=True`` runs the agent's reasoning on the *calling client's*
+    model, so a deployment with no credentials can still serve an agent that needs
+    one; a :class:`~ag2.mcp.sampling.ClientModel` tunes it, the same shape as
+    ``sessions``. Off by default, because enabling it moves cost, capability and
+    reproducibility to the caller — and because the caller's own budget is not
+    something a transport should opt into on its behalf.
+
+    It answers only whether that budget may be spent. *Which* model runs when the
+    caller advertised no sampling capability is read off the agent: one with a
+    ``config`` falls back to it, one without fails the turn with
+    :class:`~ag2.mcp.errors.MCPSamplingUnavailableError`.
     """
 
     __slots__ = (
@@ -224,7 +239,7 @@ class MCPServer:
         lifespan: "ServerLifespan | None" = None,
         sessions: "bool | SessionConfig" = True,
         elicitation_policy: ElicitationPolicy = "ask",
-        client_model: "ClientModel | None" = None,
+        client_model: "bool | ClientModel" = False,
         request_state_security: RequestStateSecurity | None = None,
         resources: "Sequence[Resource]" = (),
         resource_templates: "Sequence[ResourceTemplate]" = (),
@@ -273,7 +288,7 @@ class MCPServer:
             context_provider=context_provider,
             session_store=self._session_store,
             elicitation_policy=elicitation_policy,
-            client_model=client_model,
+            client_model=_build_client_model(client_model),
             paused_runs=self._paused_runs,
         )
         if self._session_store is not None:

@@ -300,15 +300,18 @@ from ag2 import Agent
 from ag2.mcp import ClientModel, MCPServer
 
 agent = Agent(name="assistant")  # no config of its own
-app = MCPServer(agent, client_model=ClientModel(max_tokens=4096))
+app = MCPServer(agent, client_model=True)
+
+# ClientModel tunes the channel, the same shape as sessions=:
+app = MCPServer(agent, client_model=ClientModel(max_tokens=512))
 ```
 
-It is off unless you pass one, and a server that has not enabled it never sends a sampling request and never needs the capability of its clients.
+It is off unless you ask for it, and a server that has not enabled it never sends a sampling request and never needs the capability of its clients. `max_tokens` is the only generation parameter that travels, because it is the only one the protocol makes mandatory — the rest belong to a model configuration, and a borrowed model has none here.
 
 !!! warning "This moves three things to the caller"
     **Cost** — every turn the agent takes spends their budget. **Capability** — which model answers is a fact about the client, so the same agent gives different answers to different callers and its quality is no longer yours to control. **Reproducibility** — a trace cannot be re-run against a known model, because the model was the peer's.
 
-A client that advertised no sampling capability is never asked: the turn fails with `MCPSamplingUnavailableError`, or falls back to the agent's own configured model under `ClientModel(fallback=True)` — which needs the agent to have one. A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here, and so does a completion that comes back carrying no text at all — read as an empty reply it would report success while the agent answered with nothing.
+A client that advertised no sampling capability is never asked. What happens then is read off the agent, not off a second switch: one with a `config` of its own falls back to it, and one without fails the turn with `MCPSamplingUnavailableError`. So `client_model=` decides only whether the caller's budget may be spent at all — a deployment holding credentials it would rather not spend keeps them as the fallback simply by configuring them. A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here, and so does a completion that comes back carrying no text at all — read as an empty reply it would report success while the agent answered with nothing.
 
 ## Authentication and who owns a conversation
 
