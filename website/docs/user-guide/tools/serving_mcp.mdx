@@ -212,6 +212,107 @@ app = MCPServer(
 !!! warning "A shared backend does not make a handle portable"
     The registry is per-process, so a shared `Storage` shares the stored history but not the mapping from a name to it. Cross-replica continuity still needs the caller pinned to one replica.
 
+## Asking the caller a question
+
+A tool inside a served agent can call `context.input()`, and the question reaches the human behind the **calling client** — the same tool code that prompts a terminal locally:
+
+```python linenums="1"
+from ag2 import Agent, Context
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+
+async def book_table(when: str, ctx: Context) -> str:
+    """Book a table, confirming the party size with the user."""
+    size = await ctx.input(f"How many people for {when}?")
+    return f"Booked {when} for {size}."
+
+
+agent = Agent(name="concierge", config=AnthropicConfig(model="claude-haiku-4-5-20251001"), tools=[book_table])
+app = MCPServer(agent, elicitation_policy="ask")  # "ask" is the default
+```
+
+`elicitation_policy="decline"` never asks a client at all. There is deliberately no `"auto"`: an arbitrary question has no answer AG2 could invent without fabricating data on the user's behalf.
+
+Only a client that advertised it can answer is ever asked. A client that cannot — or a policy of `"decline"` — falls through to the agent's own `hitl_hook`, and with none configured the turn fails with the usual `HumanInputNotProvidedError` and its instructional message. That loud failure is deliberate: silently returning a degraded result would hide from the caller that the question went nowhere.
+
+### What it costs to serve, per protocol era
+
+How the question travels is decided by the negotiated revision, not by configuration:
+
+| | handshake era (up to 2025-11-25) | modern era (2026-07-28) |
+|---|---|---|
+| how the question travels | a standalone `elicitation/create` request, awaited inline | back as the **result** of the call, in an `InputRequiredResult` |
+| what the client does | answers on the back-channel | retries the call carrying the answer |
+| what the server holds | nothing | **the paused run, in this process** |
+
+The modern revision defines no server-to-client request at all, so a question can only come back as the result of the call. And a conversational turn cannot be replayed to get back to where it was — re-running it would re-issue LLM calls, re-run tool side effects and re-spend tokens — so the run is **held in the serving process** between the two calls.
+
+Three consequences belong in an operator's head rather than in a bug report:
+
+- **Sticky routing is required.** The retry must reach the process holding the run.
+- **A pause does not survive a restart.** The retry is refused with a protocol error and the caller starts the call again.
+- **More than one replica needs a shared `requestState` key.** The default policy mints a process-local one, so state minted by one worker is rejected by another. Pass `request_state_security=RequestStateSecurity(keys=[...])`. Necessary, and not sufficient — the run is still in exactly one process.
+
+!!! warning "A conversation with a paused run takes no other calls"
+    While a turn is paused, a call naming that same `conversation` comes back as a tool error telling the caller to answer the outstanding question or start a separate conversation. The pause deliberately lets go of the conversation's lock — the retry that resumes it would otherwise deadlock behind it — but a conversation's history is still one thread of work, so a second call would queue inside the agent, behind a run that is waiting on a human, with nothing to time it out. Refusing it is the recoverable answer.
+
+!!! warning "Stateless serving and pausing pull against each other"
+    A server that can pause a run cannot be freely stateless. Both of the above fail *intermittently* under a load balancer, and the symptom is an occasional "Invalid or expired requestState" with nothing pointing at the cause.
+
+### How long a pause lives
+
+Retention is bounded by the lifetime of the `requestState` token that names the run — one number, not two that can disagree. Once that has expired no client can resume, so the run is unreclaimable and is reclaimed:
+
+```python linenums="1"
+from mcp.server.request_state import RequestStateSecurity
+
+app = MCPServer(agent, request_state_security=RequestStateSecurity.ephemeral(ttl=120.0))
+```
+
+`context.input(timeout=)` keeps its own meaning — how long the caller waits for an answer — and is enforced independently; whichever bound elapses first ends the turn, and the other does not then report a second, contradictory failure.
+
+!!! note "The timeout now spans the client's side of the round trip"
+    Served this way, the wait covers the network and a human reading the question in another application, which it never did before. Size it for that, not for a local prompt.
+
+### Deterministic tools ask differently
+
+A `@mcp_tool` served alongside the agent can ask too, using the SDK's resolver mechanism (`Annotated[T, Resolve(fn)]`) — and its contract is the **opposite** of the conversational tool's:
+
+| | the agent's `ask` tool | a `@mcp_tool` resolver |
+|---|---|---|
+| across a round trip | the run is held, and resumes where it stopped | the resolver body **re-runs**, with answers already collected supplied to it |
+| runs more than once? | never | once per round |
+| can ask for | a question for the client's human | `Elicit`, `Sample`, or `ListRoots` |
+
+The last row is the one worth noticing: the agent's own turn never asks for the caller's roots — it has no filesystem of its own to scope to them — but a deterministic tool may be exactly the code that wants them, and the resolver mechanism carries that request.
+
+Nothing is held for a deterministic tool, so nothing above about sticky routing applies to it. Write resolvers idempotently: a side effect in one fires once per round.
+
+`elicitation_policy` does not reach these. It governs the *agent's* questions — a tool inside it calling `context.input()` at run time, which the deployment may not have written — whereas an `Elicit` in a resolver is a request the server's own author put in that tool's signature. A deployment with no human anywhere serves no such tool.
+
+## Running on the caller's model
+
+A deployment holding no model credentials can still serve an agent that needs one: `client_model=` runs the agent's own reasoning on the **calling client's** LLM, over MCP sampling.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.mcp import ClientModel, MCPServer
+
+agent = Agent(name="assistant")  # no config of its own
+app = MCPServer(agent, client_model=True)
+
+# ClientModel tunes the channel, the same shape as sessions=:
+app = MCPServer(agent, client_model=ClientModel(max_tokens=512))
+```
+
+It is off unless you ask for it, and a server that has not enabled it never sends a sampling request and never needs the capability of its clients. `max_tokens` is the only generation parameter that travels, because it is the only one the protocol makes mandatory — the rest belong to a model configuration, and a borrowed model has none here.
+
+!!! warning "This moves three things to the caller"
+    **Cost** — every turn the agent takes spends their budget. **Capability** — which model answers is a fact about the client, so the same agent gives different answers to different callers and its quality is no longer yours to control. **Reproducibility** — a trace cannot be re-run against a known model, because the model was the peer's.
+
+A client that advertised no sampling capability is never asked. What happens then is read off the agent, not off a second switch: one with a `config` of its own falls back to it, and one without fails the turn with `MCPSamplingUnavailableError`. So `client_model=` decides only whether the caller's budget may be spent at all — a deployment holding credentials it would rather not spend keeps them as the fallback simply by configuring them. A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here, and so does a completion that comes back carrying no text at all — read as an empty reply it would report success while the agent answered with nothing.
+
 ## Authentication and who owns a conversation
 
 `security=` makes the server an OAuth 2.1 Resource Server: it advertises RFC 9728 Protected Resource Metadata at `/.well-known/oauth-protected-resource`, answers a missing or invalid token with `401` (pointing at that metadata) and an insufficient scope with `403`.

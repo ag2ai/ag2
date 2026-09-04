@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.exceptions import AG2Error
+from ag2.exceptions import AG2Error, HumanInputNotProvidedError
 
 
 class MCPServerError(AG2Error):
@@ -14,7 +14,8 @@ class MCPAgentConfigError(MCPServerError):
 
     def __init__(self, agent_name: str) -> None:
         super().__init__(
-            f"Agent {agent_name!r} has no model config; set `Agent(config=...)` before serving it over MCP."
+            f"Agent {agent_name!r} has no model config. Give it one with `Agent(config=...)`, or run it on "
+            "the calling client's model with `MCPServer(..., client_model=ClientModel())`."
         )
 
 
@@ -59,3 +60,50 @@ class UnknownConversationError(MCPServerError):
         super().__init__(
             "Unknown or expired conversation handle. Omit the 'conversation' argument to start a new conversation."
         )
+
+
+class MCPElicitationDeclinedError(HumanInputNotProvidedError):
+    """Raised when the calling MCP client refused a served agent's question.
+
+    A subclass rather than a new type: the question was put and no answer came
+    back, which is the outcome the human-input model already names. Distinct only
+    so a host can tell a refusal from an absent channel.
+    """
+
+    def __init__(self, action: str) -> None:
+        super().__init__(
+            f"The calling MCP client answered the agent's question with {action!r}, "
+            "so there is no answer to continue from."
+        )
+        self.action = action
+
+
+class MCPSamplingError(MCPServerError):
+    """Base error for a served agent whose model is the calling client's."""
+
+
+class MCPSamplingUnavailableError(MCPSamplingError):
+    """Raised when the caller cannot lend the model this server was told to borrow.
+
+    Failing beats answering some other way, which would hide that the agent never
+    reasoned on the model the caller was told about. An agent that has a ``config``
+    of its own falls back to it instead of raising this.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This server runs the agent on the calling client's model, and this client advertised no "
+            "sampling capability. Connect with sampling enabled, or ask the operator to configure a model "
+            "for the agent to fall back to."
+        )
+
+
+class MCPSamplingRefusedError(MCPSamplingError):
+    """Raised when a turn needs more of a model than a borrowed one can give.
+
+    An agent that lost its tools or its schema without being told would answer as
+    though it had never had them.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Cannot run this turn on the calling MCP client's model: {reason}.")

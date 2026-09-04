@@ -14,21 +14,34 @@ from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAut
 from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
 from mcp.server.caching import CacheHint, CacheableMethod
 from mcp.server.lowlevel import Server
+from mcp.server.request_state import RequestStateBoundary, RequestStateSecurity
 from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import CallToolRequestParams, CallToolResult, Icon, ListToolsResult, PaginatedRequestParams
+from mcp.shared.exceptions import MCPError
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    Icon,
+    InputRequiredResult,
+    InputResponseRequestParams,
+    ListToolsResult,
+    PaginatedRequestParams,
+)
 from starlette.applications import Starlette
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.routing import BaseRoute, Mount, Route
 
 from ag2.agent import Agent
 from ag2.history import MemoryStorage
+from ag2.hitl import ElicitationPolicy
 
 from .errors import MCPToolNameConflictError
 from .executor import AgentExecutor, ContextProvider
 from .mappers import input_validation_error, tool_error
+from .pause import PausedRuns
 from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
+from .sampling import ClientModel
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
 from .tools import MCPFunctionTool, ToolProvider
@@ -53,6 +66,17 @@ def _package_version() -> str:
         return _DEFAULT_VERSION
 
 
+def _build_client_model(client_model: "bool | ClientModel") -> "ClientModel | None":
+    """Normalise the ``client_model=`` argument, mirroring ``sessions=``.
+
+    ``True`` is the whole of the common case — borrow the caller's model on this
+    server's defaults — so nobody has to learn a class name to say it.
+    """
+    if client_model is False:
+        return None
+    return client_model if isinstance(client_model, ClientModel) else ClientModel()
+
+
 def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | None:
     if sessions is False:
         return None
@@ -64,18 +88,24 @@ def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | Non
     )
 
 
-def _session_manager_lifespan(manager: StreamableHTTPSessionManager) -> "Lifespan[Any]":
+def _session_manager_lifespan(manager: StreamableHTTPSessionManager, paused_runs: PausedRuns) -> "Lifespan[Any]":
     """An ASGI lifespan that runs the streamable-HTTP session manager.
 
     ``StreamableHTTPSessionManager`` must be entered via ``manager.run()`` before
     it can serve requests; this wires that into the app's lifespan so a standalone
     ``uvicorn`` run (which drives lifespan automatically) just works.
+
+    Shutdown is also where the paused runs go: retention is swept lazily, and on
+    the way down there is no next call to sweep on.
     """
 
     @asynccontextmanager
     async def lifespan(_: Starlette) -> AsyncGenerator[None]:
-        async with manager.run():
-            yield
+        try:
+            async with manager.run():
+                yield
+        finally:
+            paused_runs.reclaim_all()
 
     return lifespan
 
@@ -85,40 +115,33 @@ class MCPServer:
 
     The agent is exposed as a single conversational tool (``ask`` by default)
     that runs :meth:`Agent.ask` and returns the reply — the inverse of the
-    consume-side toolkit ``ag2.tools.MCPToolkit``, which connects *to*
-    an MCP server.
+    consume-side ``ag2.tools.MCPToolkit``. The full guide is
+    ``website/docs/user-guide/tools/serving_mcp.mdx``.
 
-    The instance is itself an ASGI3 application: it serves MCP over streamable
-    HTTP and manages its own lifespan, so a standalone ``uvicorn`` run just works::
+    The instance is itself an ASGI3 application, serving MCP over streamable HTTP
+    and managing its own lifespan::
 
         app = MCPServer(agent, path="/mcp")
         uvicorn.run(app, host="127.0.0.1", port=8000)
 
-    For local clients (Claude Desktop, Cursor, the MCP Inspector), :meth:`run_stdio`
-    serves over stdin/stdout instead. The HTTP transport parameters (``path``,
-    ``stateless``, ``json_response``, ``security``) are ignored over stdio.
+    :meth:`run_stdio` serves over stdin/stdout instead, for local clients; the
+    HTTP parameters (``path``, ``stateless``, ``json_response``, ``security``)
+    are ignored there.
 
     ``name`` / ``version`` / ``title`` / ``description`` / ``instructions`` /
-    ``website_url`` / ``icons`` populate the ``initialize`` handshake's
-    ``serverInfo`` + ``instructions``. ``instructions`` is client-facing "how to
-    use this server" guidance — it is *not* derived from the agent's system
-    prompt (which is internal); pass it explicitly when you want to advertise
-    usage hints. ``title`` and ``description`` are likewise presentation-only
-    and never derived from the agent.
+    ``website_url`` / ``icons`` populate the ``initialize`` handshake. All are
+    presentation-only and none is derived from the agent — ``instructions`` in
+    particular is client-facing usage guidance, not the agent's system prompt.
 
-    ``cache_hints`` fills ``ttlMs`` / ``cacheScope`` freshness hints on results
-    of the cacheable methods (SEP-2549). The served tool set is fixed at
-    construction, so ``{"tools/list": CacheHint(ttl_ms=...)}`` is always sound
-    here; the same goes for ``resources`` / ``prompts``, which cannot change
-    after init. Only protocol revision 2026-07-28 clients see the hints — older
-    revisions drop the fields at serialization.
+    ``cache_hints`` fills ``ttlMs`` / ``cacheScope`` freshness hints (SEP-2549)
+    on the cacheable methods. The served tool, resource and prompt sets are fixed
+    at construction, so hinting them is always sound here. Only revision
+    2026-07-28 clients see the fields.
 
-    ``sessions`` controls multi-turn history. By default (``True``) a
-    conversation history accumulates across ``tools/call`` invocations; pass a
-    :class:`~ag2.mcp.sessions.SessionConfig` to tune the bound / TTL / backend,
-    or ``False`` to make every call stateless. Which conversation a call lands in
-    is decided by the protocol era, since each era sanctions a different
-    mechanism:
+    ``sessions`` controls multi-turn history: ``True`` accumulates one per
+    conversation, a :class:`~ag2.mcp.sessions.SessionConfig` tunes the bound /
+    TTL / backend, ``False`` makes every call stateless. Which conversation a
+    call lands in depends on the era, since each sanctions a different mechanism:
 
     | a conversation named? | handshake era (up to 2025-11-25)                     | modern era (2026-07-28) |
     |-----------------------|------------------------------------------------------|-------------------------|
@@ -126,31 +149,54 @@ class MCPServer:
     | no                    | the MCP session's own history (per-process on stdio)  | a fresh conversation    |
 
     The modern era has no MCP session and forbids deriving context from
-    connection or process identity, so a caller there continues a conversation
-    only by naming it. The name is an opaque handle the server mints and returns
-    — in a text content block and in the result's ``_meta`` under
-    ``ai.ag2/conversation`` — and never one the caller chooses. A handle the
-    server does not recognise is a tool-level error, not a fresh conversation;
-    under ``sessions=False`` — where the argument is not advertised and no handle
-    is ever minted — presenting one is likewise refused rather than dropped.
+    connection identity, so a caller there continues a conversation only by
+    naming it. The name is an opaque handle the server mints and returns — in a
+    text block and in ``_meta`` under ``ai.ag2/conversation`` — never one the
+    caller chooses, and one the server does not recognise is a tool error rather
+    than a fresh conversation.
 
-    A conversation is bound to the principal that created it (the access token's
-    subject, falling back to its client id) and that binding is revalidated on
-    every call, so a leaked handle does not expose one caller's history to
-    another. **With no** ``security`` **configured there is no principal to bind
-    to, and the handle is then the only credential for the conversation it
-    names** — it travels through readable content, so treat it as one.
+    A conversation is bound to the principal that created it, revalidated on
+    every call. **With no** ``security`` **configured there is no principal, and
+    the handle is then the only credential for the conversation it names** — and
+    it travels through readable content, so treat it as one.
 
     ``stateless`` governs the *handshake* era only: it stops the HTTP transport
-    issuing an ``mcp-session-id``, so handshake-era calls have no session to key
-    on and start fresh. Modern-era requests are single exchanges that never carry
-    a session id in the first place, so the flag does not reach them. Pairing
-    ``stateless=True`` with ``sessions=True`` is a valid configuration — no
-    transport session, conversations named explicitly.
+    issuing an ``mcp-session-id``. Modern-era requests never carry one anyway, so
+    pairing ``stateless=True`` with ``sessions=True`` is valid — no transport
+    session, conversations named explicitly.
 
-    ``resources`` / ``resource_templates`` / ``prompts`` expose MCP resources and
-    prompts alongside the conversational tool; the corresponding capability is
-    advertised only when a non-empty collection is supplied.
+    ``resources`` / ``resource_templates`` / ``prompts`` expose those alongside
+    the tool; each capability is advertised only when a non-empty collection is
+    supplied.
+
+    ``elicitation_policy`` governs whether the served agent may put a question to
+    the human behind the *calling client*. ``"ask"`` (the default) sends it as an
+    MCP elicitation; ``"decline"`` never asks a client at all. Same word, values
+    and reasoning as :attr:`ag2.acp.ACPConfig.elicitation_policy` — deliberately
+    no ``"auto"``, since an arbitrary form has no answer AG2 could invent.
+
+    Only a client that advertised it can answer is ever asked; one that cannot,
+    or a policy of ``"decline"``, falls through to the agent's own ``hitl_hook``
+    and then to :class:`~ag2.exceptions.HumanInputNotProvidedError`. The loud
+    failure is deliberate — a silent decline would hide that the question went
+    nowhere.
+
+    The policy governs the *agent's* questions and only those. A ``tools=`` entry
+    whose ``Resolve(...)`` parameter returns an ``Elicit`` asks regardless: that
+    request is one the server's own author wrote into a tool signature, not one
+    an agent's tool raised at run time.
+
+    ``client_model=True`` runs the agent's reasoning on the *calling client's*
+    model, so a deployment with no credentials can still serve an agent that needs
+    one; a :class:`~ag2.mcp.sampling.ClientModel` tunes it, the same shape as
+    ``sessions``. Off by default, because enabling it moves cost, capability and
+    reproducibility to the caller — and because the caller's own budget is not
+    something a transport should opt into on its behalf.
+
+    It answers only whether that budget may be spent. *Which* model runs when the
+    caller advertised no sampling capability is read off the agent: one with a
+    ``config`` falls back to it, one without fails the turn with
+    :class:`~ag2.mcp.errors.MCPSamplingUnavailableError`.
     """
 
     __slots__ = (
@@ -167,6 +213,7 @@ class MCPServer:
         "_cache_hints",
         "_lifespan",
         "_session_store",
+        "_paused_runs",
         "_resource_provider",
         "_prompt_provider",
         "_tool_provider",
@@ -191,6 +238,9 @@ class MCPServer:
         context_provider: "ContextProvider | None" = None,
         lifespan: "ServerLifespan | None" = None,
         sessions: "bool | SessionConfig" = True,
+        elicitation_policy: ElicitationPolicy = "ask",
+        client_model: "bool | ClientModel" = False,
+        request_state_security: RequestStateSecurity | None = None,
         resources: "Sequence[Resource]" = (),
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
@@ -211,6 +261,12 @@ class MCPServer:
         self._cache_hints = cache_hints
         self._lifespan = lifespan
         self._session_store = _build_session_store(sessions)
+        # One lifetime, taken from the state token: once it has expired no client
+        # can resume, so the run is unreachable. Two numbers could disagree.
+        state_security = (
+            request_state_security if request_state_security is not None else RequestStateSecurity.ephemeral()
+        )
+        self._paused_runs = PausedRuns(ttl=state_security.ttl)
         self._resource_provider = (
             ResourceProvider(resources, resource_templates) if (resources or resource_templates) else None
         )
@@ -231,12 +287,22 @@ class MCPServer:
             stream_progress=stream_progress,
             context_provider=context_provider,
             session_store=self._session_store,
+            elicitation_policy=elicitation_policy,
+            client_model=_build_client_model(client_model),
+            paused_runs=self._paused_runs,
         )
+        if self._session_store is not None:
+            # A run abandoned without either bound elapsing goes with its
+            # conversation.
+            self._session_store.on_evict = self._paused_runs.discard_conversation
         self._server = self._build_server()
+        # The lowlevel tier installs no default policy, so it is installed here
+        # and state never leaves this process unsealed.
+        self._server.middleware.append(RequestStateBoundary(state_security, default_audience=self._name))
         routes, manager = self._streamable_routes(
             path=path, stateless=stateless, json_response=json_response, security=security
         )
-        self._http: Starlette = Starlette(routes=routes, lifespan=_session_manager_lifespan(manager))
+        self._http: Starlette = Starlette(routes=routes, lifespan=_session_manager_lifespan(manager, self._paused_runs))
 
     @property
     def agent(self) -> Agent:
@@ -290,30 +356,46 @@ class MCPServer:
 
     async def _on_call_tool(
         self, ctx: "ServerRequestContext[Any, Any]", params: CallToolRequestParams
-    ) -> CallToolResult:
+    ) -> "CallToolResult | InputRequiredResult":
         arguments = params.arguments or {}
-        # A handler that raises would surface as a JSON-RPC error in mcp 2.0, where
-        # 1.x's decorator turned it into a tool-level error result; keep the latter.
-        # Validation sits inside that guard for the same reason: 1.x validated from
-        # within the decorator, so even a malformed schema stayed a *tool* error.
+        # 2.0 surfaces a raising handler as a JSON-RPC error and validates no
+        # arguments; 1.x's decorator did both as *tool* errors. Keep that, which
+        # is why validation sits inside the guard rather than ahead of it.
         try:
-            # 1.x's decorator validated arguments against the advertised schema
-            # before dispatching; 2.0 validates nothing, so an unchecked argument
-            # would reach the handler and surface as whatever it happened to raise.
             schema = self._advertised_input_schema(params.name)
             if schema is not None and (invalid := input_validation_error(arguments, schema)) is not None:
                 return tool_error(invalid)
             # Custom tools run their handler directly; everything else is the
             # agent's conversational tool (name collisions are rejected at init).
             if self._tool_provider is not None and self._tool_provider.has(params.name):
-                return CallToolResult(content=await self._tool_provider.call(params.name, arguments, ctx))
+                # Such a tool drives its own round trip through the SDK's
+                # resolvers, so this round's answers and state go to it rather
+                # than to the paused-run registry; the two never share a call.
+                outcome = await self._tool_provider.call(
+                    params.name,
+                    arguments,
+                    ctx,
+                    input_round=InputResponseRequestParams(
+                        inputResponses=params.input_responses,
+                        requestState=params.request_state,
+                    ),
+                )
+                if isinstance(outcome, InputRequiredResult):
+                    return outcome
+                return CallToolResult(content=outcome)
             return await self._executor.call(
                 params.name,
                 message=arguments.get("message", ""),
                 context=arguments.get("context"),
                 conversation=arguments.get("conversation"),
+                input_responses=params.input_responses,
+                request_state=params.request_state,
                 request_context=ctx,
             )
+        except MCPError:
+            # A protocol-level refusal the model cannot reword its way out of, so
+            # it must not be flattened into a tool result the way a failure is.
+            raise
         except Exception as e:
             # The wire carries the message only, so without this the stack is lost.
             logger.exception("MCP tools/call %r failed", params.name)
@@ -407,9 +489,14 @@ class MCPServer:
 
     async def run_stdio(self) -> None:  # pragma: no cover - needs real stdio pipes
         """Serve the agent over stdio until the client disconnects."""
-        async with stdio_server() as (read_stream, write_stream):
-            await self._server.run(
-                read_stream,
-                write_stream,
-                self._server.create_initialization_options(),
-            )
+        try:
+            async with stdio_server() as (read_stream, write_stream):
+                await self._server.run(
+                    read_stream,
+                    write_stream,
+                    self._server.create_initialization_options(),
+                )
+        finally:
+            # The HTTP app reclaims these from its lifespan; this transport has
+            # none, so it says the same thing here.
+            self._paused_runs.reclaim_all()

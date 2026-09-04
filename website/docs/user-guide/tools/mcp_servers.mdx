@@ -145,6 +145,52 @@ agent_with_mcp = Agent(
 )
 ```
 
+### When a server asks *you* for something
+
+A tool call can come back asking for input instead of returning a result. A server may want a question put to your user, an LLM completion run, or the directories it should scope itself to. `MCPToolkit` answers what you have enabled and retries the call — the whole loop happens inside the one operation, so nothing is held between calls: the pause is on the remote server and your end is simply waiting.
+
+Everything is **off by default**, because each one hands a resource of yours to a server you may not control:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import AnswerPolicy, MCPToolkit
+
+agent = Agent(
+    name="researcher",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+    hitl_hook=lambda event: input(event.content),  # where a server's question goes
+    tools=[
+        MCPToolkit(
+            "https://my-mcp-url.example.com",
+            answering=AnswerPolicy(
+                elicitation="ask",          # route questions to this agent's human
+                sampling=True,              # let the server borrow this agent's model
+                roots=["/srv/project"],     # directories to report
+                max_rounds=10,              # how often it may come back for more
+            ),
+        )
+    ],
+)
+```
+
+| option | what it hands over | default |
+|---|---|---|
+| `elicitation` | your user's attention — the question goes to `context.input()`, and so to the agent's `hitl_hook` | `"decline"` |
+| `sampling` | **your model budget** — the completion runs on this agent's own model, and you pay for it | `False` |
+| `roots` | your filesystem layout — plain paths only, no `Variable`, since these are deployment configuration rather than a runtime value | `()` |
+| `max_rounds` | nothing; it bounds how many times a server may come back before the call is abandoned | `10` |
+
+**A capability is advertised only when you enabled it**, so a conforming server never asks for what you would refuse. Nothing to keep in step by hand: the client derives what it declares from which answering callbacks are supplied, and not enabling one *is* how it goes unadvertised. A server that asks anyway is refused, and the two refusals do not look alike: a question is declined on the wire, so the server can degrade deliberately, while sampling and roots have no decline arm — the error returned for one of those ends the request loop, so the *tool call* fails with that message rather than the server hearing an answer.
+
+!!! note "What is *not* forwarded to your model"
+    The server's `max_tokens`, `temperature` and `stop_sequences` are ignored: AG2 fixes those on your config, and your configuration governs a call you are paying for. The completion is one call against the model client, not a turn of your agent — your tools, history and response schema stay out of it, so a borrowed model cannot reach back into the agent that lent it.
+
+With no human-input hook configured, a question surfaces the usual "human input was requested but not provided" failure rather than a silent decline: an absent channel is not a refusal, and reporting it as one would hand the server a decline you never made.
+
+!!! note "Modern-era servers need `protocol_mode="auto"`"
+    A server on protocol revision 2026-07-28 returns its questions as the *result* of the call. Reaching that revision means probing for it: pass `protocol_mode="auto"` on `MCPServerConfig` / `MCPStdioServerConfig` (the default `"legacy"` performs the handshake only, which is byte-identical to previous behaviour).
+
 ## Provider-side: `MCPServerTool`
 
 `MCPServerTool` does not open a connection — it ships the server URL and credentials to the LLM provider as part of the request. The provider is then responsible for connecting to the MCP server and dispatching tool calls. Because the provider only accepts a URL, this path does **not** support local stdio servers — use `MCPToolkit` with `MCPStdioServerConfig` for those.

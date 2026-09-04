@@ -5,8 +5,17 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from ag2.annotations import Variable
+
+# How the connection settles which protocol revision it speaks. ``"legacy"`` (the
+# default) performs the ``initialize`` handshake; ``"auto"`` probes
+# ``server/discover`` first, so a modern-era server is met on the modern era —
+# where a question comes back as the *result* of a call rather than as a
+# standalone request. Which one happens is then the revision's doing, not a
+# second setting.
+ProtocolMode = Literal["legacy", "auto"]
 
 
 @dataclass
@@ -26,6 +35,7 @@ class MCPServerConfig:
     connection_timeout: float = 30.0
     proxy: str | None = None
     verify: bool = True
+    protocol_mode: ProtocolMode = "legacy"
 
 
 @dataclass
@@ -48,3 +58,4 @@ class MCPStdioServerConfig:
     allowed_tools: list[str] | Variable | None = None
     blocked_tools: list[str] | Variable | None = None
     encoding: str = "utf-8"
+    protocol_mode: ProtocolMode = "legacy"
