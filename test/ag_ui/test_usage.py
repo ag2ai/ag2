@@ -24,6 +24,7 @@ from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEven
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.testing import TestConfig
 from ag2.tools import tool
+from test._helpers import lookup
 
 from .utils import (
     collect_events,
@@ -34,12 +35,6 @@ from .utils import (
 )
 
 pytestmark = pytest.mark.asyncio
-
-
-@tool
-def lookup() -> str:
-    """Look something up."""
-    return "42"
 
 
 async def _frames(agent: Agent) -> list[dict[str, Any]]:
@@ -446,6 +441,58 @@ class TestCompletedRun:
                 input_tokens=200,
                 output_tokens=60,
                 total_tokens=260,
+            ),
+        ]
+
+    async def test_a_delegation_omits_a_total_no_call_of_it_fully_reported(self) -> None:
+        """A rollup does not put a total on the wire that its calls did not measure."""
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="lookup", arguments="{}")]),
+                    usage=Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("researched"),
+                    usage=Usage(prompt_tokens=40, completion_tokens=4),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+            ),
+            tools=[lookup],
+        )
+        parent = Agent(
+            "test_agent",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(
+                        calls=[ToolCallEvent(name="task_worker", arguments='{"objective": "go"}')]
+                    ),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+                    model="gpt-5",
+                    provider="openai",
+                ),
+                ModelResponse(
+                    ModelMessage("summarised"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8, total_tokens=28),
+                    model="gpt-5",
+                    provider="openai",
+                ),
+            ),
+            tools=[worker.as_tool(description="Delegate research to the worker.")],
+        )
+
+        assert (await _finished(parent)).usage == [
+            TokenUsage(provider="openai", model="gpt-5", input_tokens=30, output_tokens=13, total_tokens=43),
+            TokenUsage(
+                provider="anthropic",
+                model="claude-haiku-4",
+                input_tokens=140,
+                output_tokens=14,
+                total_tokens=None,
             ),
         ]
 

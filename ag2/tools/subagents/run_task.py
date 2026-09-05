@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -72,12 +72,25 @@ async def _emit_rollup(parent_context: Context, agent_name: str, incurred: list[
     fields are declared ``compare=False`` on the event, so this disturbs no
     existing equality assertion.
     """
-    usage = sum((event.usage for event in incurred), Usage())
+    usage = _rollup_usage(incurred)
     if not usage:
         return
 
     provider, model = _sole_pair(incurred)
     await parent_context.send(UsageEvent(usage, kind="subtask", label=agent_name, provider=provider, model=model))
+
+
+def _rollup_usage(incurred: Iterable[UsageEvent]) -> Usage:
+    """One ``Usage`` covering everything the delegation spent.
+
+    Counts are summed. ``total_tokens`` survives only when every call reported
+    one, since a partial sum falls below the counts it is meant to cover.
+    """
+    spent = [event.usage for event in incurred if event.usage]
+    usage = sum(spent, Usage())
+    if any(one.total_tokens is None for one in spent):
+        usage = replace(usage, total_tokens=None)
+    return usage
 
 
 def _sole_pair(incurred: Iterable[UsageEvent]) -> tuple[str | None, str | None]:

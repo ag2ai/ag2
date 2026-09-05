@@ -34,8 +34,14 @@ from ag2.testing import TestConfig
 from ag2.tools import Toolkit
 from ag2.tools.subagents import background_agent_tool, subagent_tool
 from ag2.tools.subagents import run_task as run_task_mod
-from ag2.tools.subagents.run_task import run_task
+from ag2.tools.subagents.run_task import _rollup_usage, run_task
 from ag2.usage import UsageReport
+
+
+@tool
+def noop() -> str:
+    """A tool that does nothing."""
+    return "ok"
 
 
 def _tool_names(tools: list) -> set[str]:
@@ -1055,11 +1061,6 @@ class TestSubtaskUsageRollup:
         must be the sum of both — not just the final turn.
         """
 
-        @tool
-        def noop() -> str:
-            """A tool that does nothing."""
-            return "ok"
-
         worker = Agent(
             "worker",
             config=TestConfig(
@@ -1125,11 +1126,6 @@ class TestSubtaskUsageRollup:
         under an unlabelled row.
         """
 
-        @tool
-        def noop() -> str:
-            """A tool that does nothing."""
-            return "ok"
-
         worker = Agent(
             "worker",
             config=TestConfig(
@@ -1167,11 +1163,6 @@ class TestSubtaskUsageRollup:
         one. The tokens themselves are still rolled up in full.
         """
 
-        @tool
-        def noop() -> str:
-            """A tool that does nothing."""
-            return "ok"
-
         worker = Agent(
             "worker",
             config=TestConfig(
@@ -1199,6 +1190,76 @@ class TestSubtaskUsageRollup:
         assert [(e.provider, e.model, e.usage) for e in usage_events] == [
             (None, None, Usage(prompt_tokens=30, completion_tokens=13))
         ]
+
+    async def test_rollup_leaves_a_partial_total_absent(self) -> None:
+        """One call without a reported total leaves the rollup's total absent."""
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=40, completion_tokens=4),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert [(e.provider, e.model, e.usage) for e in usage_events] == [
+            ("anthropic", "claude-haiku-4", Usage(prompt_tokens=140, completion_tokens=14))
+        ]
+        assert usage_events[0].usage.total_tokens is None
+
+    async def test_rollup_of_a_mixed_delegation_also_drops_a_partial_total(self) -> None:
+        """The unlabelled rollup is subject to the same rule as a labelled one."""
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=40, completion_tokens=4),
+                    model="gpt-5-mini",
+                    provider="openai",
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert [(e.provider, e.model, e.usage) for e in usage_events] == [
+            (None, None, Usage(prompt_tokens=140, completion_tokens=14))
+        ]
+
+    async def test_a_record_that_spent_nothing_does_not_decide_the_total(self) -> None:
+        """An all-absent ``Usage`` is not a call that omitted its total."""
+        assert _rollup_usage([
+            UsageEvent(Usage(total_tokens=110), kind="model_call"),
+            UsageEvent(Usage(), kind="model_call"),
+        ]) == Usage(total_tokens=110)
 
     async def test_rollup_reports_usage_incurred_before_a_failure(self) -> None:
         """A sub-task that bills a model call and *then* dies still reports that

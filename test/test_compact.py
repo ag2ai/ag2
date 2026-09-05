@@ -31,14 +31,7 @@ from ag2.events.base import is_conversational
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
-from ag2.tools import tool
-from test._helpers import DurableReasoning
-
-
-@tool
-def lookup() -> str:
-    """Look something up."""
-    return "42"
+from test._helpers import DurableReasoning, lookup
 
 
 class TestTailWindowCompact:
