@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from ag2.events import BaseEvent, ModelReasoning, ProviderReplay
+from ag2.tools import tool
 
 
 class DurableReasoning(ModelReasoning, ProviderReplay):
@@ -27,3 +28,9 @@ class ProviderTurnState(BaseEvent, ProviderReplay):
     """
 
     __replay_role__ = "turn"
+
+
+@tool
+def lookup() -> str:
+    """Look something up."""
+    return "42"

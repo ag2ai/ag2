@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -18,7 +18,7 @@ from ag2.events import (
 )
 from ag2.exceptions import HumanInputError
 from ag2.stream import MemoryStream, Stream
-from ag2.usage import UsageReport
+from ag2.usage import UsageReport, collect_usage_events
 
 if TYPE_CHECKING:
     from ag2.agent import Agent
@@ -56,33 +56,59 @@ def _make_hitl_bridge(parent_context: Context):
     return _bridge_hitl
 
 
-def _make_usage_accumulator(incurred: list[Usage]) -> Callable[[UsageEvent], Awaitable[None]]:
-    """Collect what this invocation spends on the sub-task's stream.
-
-    History can't answer "this invocation" once the stream is reused — it would
-    re-report everything spent before — so the events are collected as they are
-    sent. ``incurred`` must therefore be a fresh list per call.
-    """
-
-    async def _accumulate(event: UsageEvent) -> None:
-        incurred.append(event.usage)
-
-    return _accumulate
-
-
-async def _emit_rollup(parent_context: Context, agent_name: str, incurred: list[Usage]) -> None:
+async def _emit_rollup(parent_context: Context, agent_name: str, incurred: list[UsageEvent]) -> None:
     """Emit one ``"subtask"`` rollup for what this invocation spent.
 
     The sub-agent's per-call ``UsageEvent`` events stay on its private stream;
     the parent gets this single rollup instead, so ``UsageReport`` — which
     aggregates additively — sees each delegation once. Nothing spent, no rollup.
     Shared by the success and the failure path so the two can't drift apart.
+
+    One rollup, always — that is an asserted invariant, not an accident, and
+    emitting one per pair instead would change ``UsageReport``'s by-model and
+    by-provider breakdown for every existing caller. It does carry the
+    ``(provider, model)`` pair when the delegated run used exactly one, so
+    per-model attribution survives a single-configuration delegation; the two
+    fields are declared ``compare=False`` on the event, so this disturbs no
+    existing equality assertion.
     """
-    usage = sum(incurred, Usage())
+    usage = _rollup_usage(incurred)
     if not usage:
         return
 
-    await parent_context.send(UsageEvent(usage, kind="subtask", label=agent_name))
+    provider, model = _sole_pair(incurred)
+    await parent_context.send(UsageEvent(usage, kind="subtask", label=agent_name, provider=provider, model=model))
+
+
+def _rollup_usage(incurred: Iterable[UsageEvent]) -> Usage:
+    """One ``Usage`` covering everything the delegation spent.
+
+    Counts are summed. ``total_tokens`` survives only when every call reported
+    one, since a partial sum falls below the counts it is meant to cover.
+    """
+    spent = [event.usage for event in incurred if event.usage]
+    usage = sum(spent, Usage())
+    if any(one.total_tokens is None for one in spent):
+        usage = replace(usage, total_tokens=None)
+    return usage
+
+
+def _sole_pair(incurred: Iterable[UsageEvent]) -> tuple[str | None, str | None]:
+    """The one ``(provider, model)`` behind this spend, or absence when several.
+
+    A mixed-model delegation has no honest label, and guessing one — the
+    parent's config, or the first call's — would show an attribution that is not
+    true. Absence says "this spend is real but unattributable", which a client
+    can render; a wrong label it cannot detect. Records that spent nothing are
+    ignored: they contribute no tokens, so they must not decide whose the
+    tokens are. A sub-agent that itself delegates carries an unlabelled rollup
+    of its own, which counts as a pair and correctly makes the parent's rollup
+    unlabelled too.
+    """
+    pairs = {(event.provider, event.model) for event in incurred if event.usage}
+    if len(pairs) != 1:
+        return None, None
+    return pairs.pop()
 
 
 async def run_task(
@@ -132,8 +158,8 @@ async def run_task(
     # are therefore accounted per call; concurrent delegations handed the *same*
     # ``Stream`` instance still cross-capture, since the events they emit are
     # indistinguishable on the one stream they share.
-    incurred: list[Usage] = []
-    usage_sub_id = task_stream.where(UsageEvent).subscribe(_make_usage_accumulator(incurred))
+    incurred: list[UsageEvent] = []
+    usage_sub_id = task_stream.where(UsageEvent).subscribe(collect_usage_events(incurred))
 
     try:
         reply = await agent.ask(
@@ -188,7 +214,7 @@ async def run_task(
             # more than the cumulative reading, so degrade to this invocation's
             # spend — already in hand, and equal to the cumulative value on
             # anything but a reused stream.
-            usage = sum(incurred, Usage())
+            usage = sum((event.usage for event in incurred), Usage())
 
         if emit_events:
             await _emit_rollup(parent_context, agent.name, incurred)

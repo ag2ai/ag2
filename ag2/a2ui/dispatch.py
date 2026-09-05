@@ -14,8 +14,9 @@ from types import MappingProxyType
 
 from ag2.agent import Agent
 from ag2.context import ConversationContext
-from ag2.events import BaseEvent, ModelRequest, TextInput
+from ag2.events import BaseEvent, ModelRequest, TextInput, UsageEvent
 from ag2.stream import MemoryStream
+from ag2.usage import collect_usage_events
 
 from ._runtime import _A2UIRuntime
 from ._types import ServerToClientMessage
@@ -53,6 +54,7 @@ async def stream_turn(
     request: A2UIServerRequest,
     *,
     server_actions: Mapping[str, A2UIAction] = _NO_SERVER_ACTIONS,
+    usage_records: list[UsageEvent] | None = None,
 ) -> AsyncIterator[A2UIFrame]:
     """Execute one turn and yield its prose then A2UI message frames.
 
@@ -71,6 +73,12 @@ async def stream_turn(
         request: The parsed turn (history, current inputs, prompt, variables).
         server_actions: Action name → :class:`A2UIAction` for ``@a2ui_action``
             buttons, executed on click without invoking the agent.
+        usage_records: Filled with this turn's :class:`~ag2.events.UsageEvent`
+            events as they are sent, for a transport that reports what the turn
+            cost. The list is the caller's because the turn's stream is not: it
+            is created here and never leaves, and a caller handed the records
+            only on a clean return would have none for a turn that raised —
+            which is the turn whose cost most wants reporting.
 
     Yields:
         Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
@@ -127,6 +135,9 @@ async def stream_turn(
         if isinstance(event, A2UIMessageEvent):
             a2ui_messages.append(event.message)
 
+    if usage_records is not None:
+        stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
+
     # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
     # prompt section, fold in negotiated client capabilities so the LLM only
     # targets components the client can render, and inject the validation
@@ -181,13 +192,23 @@ class _A2UITurnCore:
     runtime: _A2UIRuntime
     server_actions: Mapping[str, A2UIAction] = field(default_factory=dict)
 
-    def run_turn(self, request: A2UIServerRequest) -> AsyncIterator[A2UIFrame]:
-        """Run one turn and yield its prose then A2UI message frames."""
+    def run_turn(
+        self,
+        request: A2UIServerRequest,
+        *,
+        usage_records: list[UsageEvent] | None = None,
+    ) -> AsyncIterator[A2UIFrame]:
+        """Run one turn and yield its prose then A2UI message frames.
+
+        Pass ``usage_records`` to have the turn's token accounting collected into
+        it; see :func:`stream_turn`.
+        """
         return stream_turn(
             self.agent,
             self.runtime,
             request,
             server_actions=self.server_actions,
+            usage_records=usage_records,
         )
 
 

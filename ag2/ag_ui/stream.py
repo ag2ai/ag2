@@ -6,6 +6,7 @@ from base64 import b64decode
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from math import isfinite
 from typing import Any
 from uuid import uuid4
 
@@ -35,6 +36,7 @@ from ag_ui.core import (
     TextMessageContentEvent,
     TextMessageEndEvent,
     TextMessageStartEvent,
+    TokenUsage,
     ToolCallArgsEvent,
     ToolCallChunkEvent,
     ToolCallEndEvent,
@@ -50,12 +52,13 @@ from pydantic_core import to_jsonable_python
 
 from ag2 import Agent, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig
-from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput
+from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, Usage
 from ag2.hitl import HumanHook
 from ag2.middleware.base import MiddlewareFactory
 from ag2.observers import Observer
 from ag2.tools.final import ClientTool
 from ag2.tools.tool import Tool
+from ag2.usage import UsageRecord, UsageReport
 
 from .events import AGUIEvent
 
@@ -357,6 +360,7 @@ async def run_stream(
                 RunErrorEvent(
                     message=repr(e),
                     timestamp=_get_timestamp(),
+                    usage=await _run_token_usage(stream),
                 )
             )
             raise e
@@ -367,8 +371,104 @@ async def run_stream(
                     thread_id=command.incoming.thread_id,
                     run_id=command.incoming.run_id,
                     timestamp=_get_timestamp(),
+                    usage=await _run_token_usage(stream),
                 )
             )
+
+
+async def _run_token_usage(stream: MemoryStream) -> list[TokenUsage] | None:
+    """Token usage for this run, read off its event log.
+
+    Safe on the failure path: the stream awaits its subscribers on send, so persistence
+    has already seen every usage event emitted before the exception.
+    """
+    return map_usage_events_to_ag_ui(await stream.history.get_events())
+
+
+def map_usage_events_to_ag_ui(usage_events: Iterable[events.BaseEvent]) -> list[TokenUsage] | None:
+    """Attributed spend for a set of events, as AG-UI's per-(provider, model) list.
+
+    The whole path from events to wire entries, not just the mapping: attribution is
+    ``UsageReport``'s and the grouping is :func:`map_usage_records_to_ag_ui`'s, and a
+    transport that composed the two itself could compose them differently. Both AG-UI
+    transports call this, differing only in where their events come from — this module's
+    reads them back off the run's history, while ``ag2/a2ui/`` collects them live because
+    its turn core owns the stream and the transport never sees it.
+    """
+    return map_usage_records_to_ag_ui(UsageReport.from_events(usage_events).records)
+
+
+def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsage] | None:
+    """Attributed spend, as AG-UI's per-(provider, model) list.
+
+    Takes ``UsageReport.records`` rather than the report's ``by_model`` / ``by_provider``:
+    those are independent maps, so the pair is unrecoverable from them, and each drops what
+    the other side didn't label — where a delegated sub-agent's spend lives. Pairs aren't
+    folded together either, since absent counts add as zero: merging a provider that
+    reports reasoning tokens with one that doesn't would read as a complete measurement.
+
+    Within a pair the calls *are* summed, because there an absent additive count means the
+    provider had nothing to report for that call — it omits ``thinking_tokens`` on a call
+    that did no reasoning. ``total_tokens`` is the exception and is handled separately; see
+    ``_reported_total``.
+
+    Nothing is derived, and ``cache_creation_input_tokens`` is dropped rather than folded
+    into a neighbour — providers disagree on whether cached tokens already sit in the
+    prompt count.
+
+    The rule behind all of this: a transport copies a count or omits it, and never
+    derives, zero-fills or folds one into another. A client can tell absence from zero
+    and decide what to do about it; it cannot tell a measured figure from one this
+    layer invented. That binds any transport that grows a usage field, not just this
+    one — which is why the mapping lives here to be shared rather than restated.
+    """
+    grouped: dict[tuple[str | None, str | None], list[Usage]] = {}
+    for record in records:
+        grouped.setdefault((record.provider, record.model), []).append(record.usage)
+
+    entries = []
+    for (provider, model), usages in grouped.items():
+        summed = sum(usages, Usage())
+        entries.append(
+            TokenUsage(
+                provider=provider,
+                model=model,
+                input_tokens=_token_count(summed.prompt_tokens),
+                output_tokens=_token_count(summed.completion_tokens),
+                total_tokens=_token_count(_reported_total(usages)),
+                reasoning_tokens=_token_count(summed.thinking_tokens),
+                cached_input_tokens=_token_count(summed.cache_read_input_tokens),
+            )
+        )
+    return entries or None
+
+
+def _reported_total(usages: Iterable[Usage]) -> float | None:
+    """The pair's total across its calls, or absence when a call didn't report one.
+
+    Unlike the additive counts, an absent total does not mean zero: a call that ran had a
+    total whatever the provider chose to say about it. Summing anyway would put a figure on
+    the wire smaller than the input and output beside it — 100+10 with a total of 110, then
+    40+4 with none, reads as 140 in, 14 out, 110 altogether. So the total is reported only
+    when every call in the pair supplied one, and is otherwise left absent rather than
+    derived from input and output, which would add a third definition of "total" here.
+    """
+    totals = [usage.total_tokens for usage in usages]
+    if any(total is None for total in totals):
+        return None
+    return sum(total for total in totals if total is not None)
+
+
+def _token_count(value: float | None) -> int | None:
+    """Narrow an internal token count to what AG-UI accepts, or to absence.
+
+    The wire type admits only non-negative integers, and this also runs on the failure
+    path *before* the run's own exception is re-raised — so a value the wire type would
+    reject is omitted here rather than left to raise in place of the real cause.
+    """
+    if value is None or not isfinite(value) or value < 0:
+        return None
+    return int(value)
 
 
 def map_agui_content_to_input(content: InputContent) -> events.Input:

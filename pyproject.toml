@@ -76,7 +76,7 @@ acp = [
     "starlette>=0.40,<2",
     "uvicorn>=0.51.0,<1",
 ]
-ag-ui = ["ag-ui-protocol>=0.1.15,<0.2"]
+ag-ui = ["ag-ui-protocol>=0.1.20,<0.2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=3.4.0,<4"]
