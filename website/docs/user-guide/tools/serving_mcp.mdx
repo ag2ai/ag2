@@ -298,10 +298,78 @@ Reading is useful today; advertising mostly is not. `ServerCapabilities.extensio
 !!! warning "Do not gate behaviour on a client having seen your advertisement"
     A handshake-era client cannot receive it, so it can never acknowledge it. Branch on what the *client* declared — that reaches you in both eras — and treat your own advertisement as discovery decoration for modern-era clients.
 
+## Structured output
+
+A **custom tool** runs a handler of yours instead of invoking the agent. Declare one with `@mcp_tool` — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui#serving-a-ui-resource) for the decorator itself — and pass it in `MCPServer(tools=[...])`.
+
+MCP wants three separate things back from such a tool: a schema advertised up front, machine-readable data, and text a model can read. All three are derived from what the handler returns, ordered here by how much is derived:
+
+| the handler returns | `outputSchema` | `structuredContent` | text content |
+|---|---|---|---|
+| a pydantic model or a dataclass | its JSON schema | its dump | its `__str__` |
+| a mapping | none | the mapping verbatim | a JSON rendering |
+| a `str` or a content block | none | none | the value |
+| a sequence of content blocks | none | none | the blocks |
+| a `CallToolResult` | none | whatever you set | whatever you set |
+
+A typed return gets you all three from one annotation:
+
+```python linenums="1" hl_lines="4 9 13"
+from dataclasses import dataclass
+from ag2.mcp import mcp_tool
+
+@dataclass
+class Reading:
+    station: str
+    celsius: float
+
+    def __str__(self) -> str:
+        return f"{self.station}: {self.celsius}°C"
+
+@mcp_tool
+async def temperature(station: str) -> Reading:
+    """The latest temperature at a weather station."""
+    return Reading(station=station, celsius=11.4)
+```
+
+Which is why `__str__` is worth writing: a client that only shows text gets *"Gullfoss: 11.4°C"* rather than a JSON dump, while a client that reads `structuredContent` gets the fields.
+
+At the other end, returning a `CallToolResult` derives nothing and is how you state the text and the data separately:
+
+```python linenums="1"
+from mcp.types import CallToolResult, TextContent
+
+@mcp_tool
+async def temperature(station: str) -> CallToolResult:
+    """The latest temperature at a weather station."""
+    return CallToolResult(
+        content=[TextContent(type="text", text="Mild, around 11 degrees.")],
+        structuredContent={"station": station, "celsius": 11.4},
+    )
+```
+
+!!! note "The schema follows the annotation, not the value"
+    `outputSchema` is decided once, when the tool is declared. Annotating `-> CallToolResult` is what opts a tool out of an advertised schema; returning one from a handler annotated `-> Reading` still advertises `Reading`'s schema, and MCP requires your `structuredContent` to conform to it. `output_schema=` overrides the derivation when you want to describe something the annotation cannot.
+
+### Metadata
+
+`meta=` advertises `_meta` on a tool. `ag2.mcp` puts nothing of its own there, so an extension's keys go in verbatim, and no `meta=` means no `_meta` on the wire at all:
+
+```python linenums="1"
+@mcp_tool(meta={"com.example/audit": {"level": "full"}})
+async def temperature(station: str) -> Reading:
+    """The latest temperature at a weather station."""
+    return Reading(station=station, celsius=11.4)
+```
+
+The one key that does not travel unconditionally is `ui`: a tool bound to an [MCP App](/docs/user-guide/tools/mcp_apps) has its binding withheld from a client that cannot render the document, since to that client it is a promise about a resource it will never fetch.
+
+`Resource` takes the same `meta=`, plus a `title` — the display name a client shows in `resources/list`, where `name` stays the identifier. `title` reaches the listing entry only, so it is visible only on a resource that is `listed`.
+
 ## Beyond the conversational tool
 
-- **Custom tools** run a handler of yours directly instead of invoking the agent — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for `@mcp_tool` and returning renderable UI. Their state is their own; conversation handles apply only to the conversational tool.
-- **Apps** serve an interactive document alongside the agent, with `apps=[App(...)]` — see [MCP Apps](/docs/user-guide/tools/mcp_apps). A host reads the document in parallel with the call, so it is a registered resource rather than something a handler returns; that is the difference from MCP-UI above.
+- **Custom tools** run a handler of yours directly instead of invoking the agent — see [Structured output](#structured-output) for what a handler may return, and [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for `@mcp_tool` and returning renderable UI. Their state is their own; conversation handles apply only to the conversational tool.
+- **Apps** serve an interactive document alongside the agent, with `apps=[AppResource(...)]` — see [MCP Apps](/docs/user-guide/tools/mcp_apps). A host reads the document in parallel with the call, so it is a registered resource rather than something a handler returns; that is the difference from MCP-UI above.
 - **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`; the matching capability is advertised only when a non-empty collection is supplied.
 - **Progress and logs** — while the agent runs, its stream events are forwarded to the client as progress notifications and log messages. Turn this off with `stream_progress=False`.
 - **Protocol extensions** are declared with `extensions=` and read back with `client_extension()` — see [Protocol extensions](#protocol-extensions).

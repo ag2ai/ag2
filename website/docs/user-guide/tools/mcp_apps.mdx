@@ -22,7 +22,7 @@ Everything below follows from that one fact: why the HTML is declared next to th
 
 ## A first app
 
-`ag2ui` in the HTML below is not imported and not a package you install. It is a global that `ag2.mcp` itself injects: the server prepends a `<script>` to the document body before serving it, so by the time your own script runs the global exists. What it is and what it exposes is [below](#inside-the-document-ag2ui).
+`ag2ui` in the HTML below is not imported and not a package you install. It is a global that `ag2.mcp` itself injects: the server places a `<script>` at the head of the document before serving it — inside `<head>` when there is one, after `<html>` when there is not, at the very front of a fragment like the one below — so by the time your own script runs the global exists. What it is and what it exposes is [below](#inside-the-document-ag2ui).
 
 ```python linenums="1"
 import asyncio
@@ -77,7 +77,7 @@ That is the whole thing. `MCPServer(agent, apps=[shop])` registers the document 
 
 Which is why `__str__` is worth writing: a text-only client gets *"Espresso cup costs $12."* rather than a JSON dump.
 
-Both pydantic models and dataclasses work. This applies to any custom tool, not only a UI-bound one — see [Structured output](/docs/user-guide/tools/serving_mcp).
+Both pydantic models and dataclasses work. This applies to any custom tool, not only a UI-bound one — see [Structured output](/docs/user-guide/tools/serving_mcp#structured-output).
 
 ### Three levels of control
 
@@ -133,12 +133,17 @@ await ag2ui.requestDisplayMode("fullscreen");
 await ag2ui.downloadFile(contents);
 await ag2ui.sampling({ messages: [...] });
 ag2ui.log("info", "rendered");
+ag2ui.reportSize();                      // force a size report; it is automatic otherwise
 
-ag2ui.host.capabilities;   // what the host advertised
-ag2ui.host.context;        // theme, styles, display mode, container size
+ag2ui.host.capabilities;     // what the host advertised
+ag2ui.host.context;          // theme, styles, display mode, container size
+ag2ui.host.protocolVersion;  // the dialect revision the host answered with
+ag2ui.host.info;             // the host's name and version
 ```
 
 Each subscription returns an unsubscribe function. The document's size is reported automatically via a `ResizeObserver`, so the host can size the frame without your writing one.
+
+**Subscribe whenever you like; call only after `ag2ui.ready`.** Registering a handler is local and is safe the moment the document parses — which is why the card above awaits nothing. Everything that *talks* to the host is refused until the handshake completes, so `await ag2ui.ready` before the first `callTool`, `sendMessage` or `readResource`; calling earlier throws rather than posting into a channel the host is still discarding.
 
 Errors arrive on the **same** channel as results — a failed call is a result carrying `isError`, matching how `ag2.mcp` already treats a tool error as a result rather than an exception.
 
@@ -152,6 +157,8 @@ try {
 }
 ```
 
+`requestDisplayMode` refuses locally in the same way, against `ag2ui.host.context.availableDisplayModes` rather than against a capability: asking for a mode the host never offered throws instead of hanging on an answer that will not come.
+
 ### Which tool answered
 
 MCP Apps gives the document nothing to correlate with: the notification carrying a result names neither the call nor the tool. With one tool per document that does not matter. With two — a card that renders itself *and* updates after an action — it does.
@@ -164,6 +171,31 @@ ag2ui.onToolResult("add_to_cart", showConfirmation);
 ```
 
 Set that key yourself and your value travels instead, so you can route by your own scheme. This is the one respect in which a `CallToolResult` you assembled yourself is modified; every other key you set travels untouched alongside the stamp.
+
+### Who may call a tool
+
+A tool the document calls through `ag2ui.callTool` need not be one the model can call. `visibility=` says where the host surfaces it — `"model"` in the model's tool list, `"app"` to the document:
+
+```python linenums="1" hl_lines="8 13"
+@dataclass
+class CartLine:
+    status: str
+
+    def __str__(self) -> str:
+        return self.status
+
+@shop.tool
+async def show_item(item_id: str) -> Item:
+    """Show a product card."""
+    return Item(name="Espresso cup", price=12)
+
+@shop.tool(visibility=["app"])
+async def add_to_cart(item_id: str) -> CartLine:
+    """Add an item to the cart. Called by the card's button, not by the model."""
+    return CartLine(status="Added to your cart")
+```
+
+Omit it and no `visibility` is advertised at all, leaving the host to its own default. It is a hint about where to *surface* a tool, not an authorization boundary: the tool is served and dispatched exactly like any other, so anything that must not be called by the model has to refuse in the handler.
 
 ### Bringing your own bundle
 
@@ -217,7 +249,8 @@ shop = AppResource(
 - **`ui://` is required.** A host discards any other scheme, so a URI that is not `ui://` raises when the `AppResource` is constructed, and two apps claiming one URI raise when the server is.
 - **`listed` defaults to `False`.** The document stays out of `resources/list` — a person browsing a server's resources should not meet a file that is not one — while remaining readable by URI, which is how the host gets it. Set `listed=True` for a document meant to be discoverable.
 - **The body may be a callable**, sync or async, invoked per read — for a document built per locale, per deployment, or per feature flag. A file path is deliberately not accepted: taking one would force ag2 to decide whether it is re-read per request, which is your decision to make inside the callable.
-- **Sandbox policy is typed.** `csp`, `permissions`, `domain` and `prefers_border` use the SDK's own models, so the wire spelling is never guessed at. `meta=` is a raw passthrough merged alongside, for whatever the specification adds next — as is `meta=` on `@app.tool`.
+- **Sandbox policy is typed.** `csp`, `permissions`, `domain` and `prefers_border` use the SDK's own models, so the wire spelling is never guessed at. `meta=` is a raw passthrough merged alongside, for whatever the specification adds next.
+- **The `ui` slot behaves differently on a document and on a tool.** On the document it is shared, so a `ui` key inside `meta=` *merges over* the typed parameters above rather than being refused — the typed parameters are the spelling aid, not the authority. On a tool it is not shared: `@app.tool`'s `meta=` **rejects** a `ui` key outright, because the only thing in that slot is the binding the decorator itself writes. Pass `visibility=` instead, or declare the tool with `@mcp_tool` if it should not be bound to this document at all.
 
 ## Taking an app apart
 
