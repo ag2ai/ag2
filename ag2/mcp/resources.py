@@ -48,6 +48,10 @@ class Resource:
     nothing of its own there — so an extension's keys (``ui`` for MCP Apps, say)
     go in verbatim. An empty mapping puts no ``_meta`` on the wire at all.
 
+    ``title`` is the display name a client shows in ``resources/list``; ``name``
+    stays the identifier. It reaches the listing entry only — the wire's read
+    result has no such field — so it is visible only on a listed resource.
+
     ``listed`` keeps the resource out of ``resources/list`` when false. It stays
     readable by URI: the listing is a browsing surface, and a body that only
     makes sense to a machine that was told its URI does not belong there.
@@ -56,6 +60,7 @@ class Resource:
     uri: str
     name: str
     read: ReadFn
+    title: str | None = None
     description: str | None = None
     mime_type: str | None = None
     meta: Mapping[str, Any] | None = None
@@ -184,6 +189,7 @@ def _to_mcp_resource(resource: Resource) -> MCPResource:
     return MCPResource(
         uri=resource.uri,
         name=resource.name,
+        title=resource.title,
         description=resource.description,
         mimeType=resource.mime_type,
         _meta=_meta(resource.meta),

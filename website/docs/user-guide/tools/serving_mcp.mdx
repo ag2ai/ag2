@@ -301,6 +301,7 @@ Reading is useful today; advertising mostly is not. `ServerCapabilities.extensio
 ## Beyond the conversational tool
 
 - **Custom tools** run a handler of yours directly instead of invoking the agent — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for `@mcp_tool` and returning renderable UI. Their state is their own; conversation handles apply only to the conversational tool.
+- **Apps** serve an interactive document alongside the agent, with `apps=[App(...)]` — see [MCP Apps](/docs/user-guide/tools/mcp_apps). A host reads the document in parallel with the call, so it is a registered resource rather than something a handler returns; that is the difference from MCP-UI above.
 - **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`; the matching capability is advertised only when a non-empty collection is supplied.
 - **Progress and logs** — while the agent runs, its stream events are forwarded to the client as progress notifications and log messages. Turn this off with `stream_progress=False`.
 - **Protocol extensions** are declared with `extensions=` and read back with `client_extension()` — see [Protocol extensions](#protocol-extensions).

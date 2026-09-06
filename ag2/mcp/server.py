@@ -6,6 +6,7 @@ import importlib.metadata
 import logging
 from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from functools import partial
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
@@ -24,6 +25,7 @@ from starlette.routing import BaseRoute, Mount, Route
 from ag2.agent import Agent
 from ag2.history import MemoryStorage
 
+from .apps import EXTENSION_ID, AppResource, binds_ui, client_supports_apps, collect_apps, visible_meta
 from .errors import MCPToolNameConflictError
 from .executor import AgentExecutor, ContextProvider
 from .extensions import ExtensionMap, validated_extensions
@@ -32,7 +34,7 @@ from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
-from .tools import MCPFunctionTool, ToolProvider
+from .tools import MCPFunctionTool, MetaFilter, ToolProvider
 
 if TYPE_CHECKING:
     from mcp.server.context import ServerRequestContext
@@ -63,6 +65,16 @@ def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | Non
         ttl=cfg.ttl,
         storage=cfg.storage or MemoryStorage(),
     )
+
+
+def _ui_binding_filter(ctx: "ServerRequestContext[Any, Any]") -> MetaFilter:
+    """A ``_meta`` filter withholding the MCP Apps binding from a client that cannot render it.
+
+    Applied to every custom tool, whether it came from ``apps=`` or was
+    registered by hand, so the two routes describe the same server. It is a
+    no-op on a tool whose ``_meta`` has no ``ui`` key, which is most of them.
+    """
+    return partial(visible_meta, supports_apps=client_supports_apps(ctx))
 
 
 def _session_manager_lifespan(manager: StreamableHTTPSessionManager) -> "Lifespan[Any]":
@@ -153,6 +165,15 @@ class MCPServer:
     prompts alongside the conversational tool; the corresponding capability is
     advertised only when a non-empty collection is supplied.
 
+    ``apps`` serves interactive documents — MCP Apps — alongside the agent: each
+    :class:`~ag2.mcp.apps.AppResource` contributes its tools to ``tools`` and its document
+    to ``resources``, so ``apps=[app]`` is exactly shorthand for passing
+    ``app.tools`` and ``app.resource`` by hand. Two apps claiming one document URI
+    raise here, as a duplicate tool name does. A server holding at least one app
+    also advertises ``io.modelcontextprotocol/ui`` in ``extensions``, and withholds
+    each UI binding from a client that did not advertise it — see
+    :mod:`ag2.mcp.apps`.
+
     ``extensions`` advertises SEP-2133 extension support: a mapping of
     reverse-DNS identifier to that extension's settings, written to
     ``ServerCapabilities.extensions``. Identifiers are validated here, so a
@@ -207,6 +228,7 @@ class MCPServer:
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
         tools: "Sequence[MCPFunctionTool]" = (),
+        apps: "Sequence[AppResource]" = (),
         extensions: "ExtensionMap | None" = None,
         path: str = "/mcp",
         stateless: bool = False,
@@ -224,6 +246,10 @@ class MCPServer:
         self._cache_hints = cache_hints
         self._lifespan = lifespan
         self._session_store = _build_session_store(sessions)
+        if apps:
+            app_tools, app_resources = collect_apps(apps)
+            tools = (*tools, *app_tools)
+            resources = (*resources, *app_resources)
         self._resource_provider = (
             ResourceProvider(resources, resource_templates) if (resources or resource_templates) else None
         )
@@ -238,6 +264,14 @@ class MCPServer:
                 seen.add(tool.name)
         self._tool_provider = ToolProvider(tools) if tools else None
         self._extensions = validated_extensions(extensions) if extensions else {}
+        if binds_ui(tools):
+            # Read off the tools rather than off ``apps=``, so registering an app's
+            # pieces by hand yields the same server. Deliberate decoration: the
+            # specification defines only the client direction of SEP-2133 and says
+            # nothing about servers advertising at all, and a handshake-era client
+            # never receives it. Visible in discovery, inert otherwise. An explicit
+            # setting wins.
+            self._extensions.setdefault(EXTENSION_ID, {})
         self._executor = AgentExecutor(
             agent,
             tool_name=tool_name,
@@ -300,7 +334,7 @@ class MCPServer:
     ) -> ListToolsResult:
         tools = self._executor.list_tools()
         if self._tool_provider is not None:
-            tools += self._tool_provider.list_mcp_tools()
+            tools += self._tool_provider.list_mcp_tools(_ui_binding_filter(ctx))
         return ListToolsResult(tools=tools)
 
     async def _on_call_tool(

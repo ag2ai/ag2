@@ -24,7 +24,7 @@ from ._async import call_user_fn
 from .info import object_output_schema
 from .mappers import to_structured_dict
 
-# What a handler may return; :func:`_to_call_result` maps each arm onto the wire.
+# What a handler may return; :func:`to_call_result` maps each arm onto the wire.
 # Any dataclass is accepted too, alongside ``BaseModel``: it has no runtime type
 # to name here, and naming it would cost this alias its resolvability.
 ToolResult: TypeAlias = (
@@ -33,6 +33,12 @@ ToolResult: TypeAlias = (
 
 # The MCP request context handed to a handler (``None`` outside a live request).
 ToolContext: TypeAlias = "ServerRequestContext[Any, Any] | None"
+
+# A per-request view of a tool's ``_meta``, applied when the tool list is built.
+# Some metadata is addressed to a capability the requesting client may not have,
+# and is worth withholding from one that has not got it; what that means belongs
+# to whoever owns the key, so this module only takes the callable.
+MetaFilter: TypeAlias = Callable[["Mapping[str, Any] | None"], "Mapping[str, Any] | None"]
 
 # A tool handler receives the call's ``arguments`` and the live MCP request
 # context. Sync or async.
@@ -70,7 +76,8 @@ class MCPFunctionTool:
     output_schema: dict[str, Any] | None = None
     meta: Mapping[str, Any] | None = None
 
-    def _mcp_tool(self) -> MCPTool:
+    def _mcp_tool(self, meta_filter: "MetaFilter | None" = None) -> MCPTool:
+        meta = self.meta if meta_filter is None else meta_filter(self.meta)
         return MCPTool(
             name=self.name,
             description=self.description,
@@ -78,14 +85,14 @@ class MCPFunctionTool:
             outputSchema=self.output_schema,
             title=self.title,
             annotations=self.annotations,
-            _meta=dict(self.meta) if self.meta else None,
+            _meta=dict(meta) if meta else None,
         )
 
     async def call(self, arguments: dict[str, Any], request_context: ToolContext = None) -> CallToolResult:
-        return _to_call_result(await call_user_fn(self.handler, arguments, request_context))
+        return to_call_result(await call_user_fn(self.handler, arguments, request_context))
 
 
-def _to_call_result(result: "ToolResult") -> CallToolResult:
+def to_call_result(result: "ToolResult") -> CallToolResult:
     """Map a handler's return onto a ``tools/call`` result.
 
     Ordered by how much is derived: a ``CallToolResult`` is already the answer,
@@ -256,8 +263,13 @@ class ToolProvider:
     def names(self) -> frozenset[str]:
         return frozenset(self._by_name)
 
-    def list_mcp_tools(self) -> list[MCPTool]:
-        return [t._mcp_tool() for t in self._tools]
+    def list_mcp_tools(self, meta_filter: "MetaFilter | None" = None) -> list[MCPTool]:
+        """The advertised tools, with ``meta_filter`` applied to each one's ``_meta``.
+
+        The filter is per request, because whether a key is worth sending can
+        depend on what the requesting client advertised.
+        """
+        return [t._mcp_tool(meta_filter) for t in self._tools]
 
     def has(self, name: str) -> bool:
         return name in self._by_name

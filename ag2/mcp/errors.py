@@ -59,3 +59,20 @@ class UnknownConversationError(MCPServerError):
         super().__init__(
             "Unknown or expired conversation handle. Omit the 'conversation' argument to start a new conversation."
         )
+
+
+class MCPAppURIError(MCPServerError):
+    """Raised when an app's document URI does not use the ``ui://`` scheme."""
+
+    def __init__(self, uri: str) -> None:
+        super().__init__(f"An app document URI must use the ui:// scheme, got {uri!r}; a host discards anything else.")
+
+
+class MCPDuplicateAppURIError(MCPServerError):
+    """Raised when two apps registered on one server claim the same document URI."""
+
+    def __init__(self, uri: str) -> None:
+        super().__init__(
+            f"Duplicate app document URI {uri!r}; one document would shadow the other and the losing "
+            "app's tools would point at a body nobody wrote."
+        )

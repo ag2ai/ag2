@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from mcp.client.extension import advertise
-from mcp.types import DiscoverResult
+from mcp.types import CallToolResult, DiscoverResult, TextContent
 from mcp_types.version import LATEST_MODERN_VERSION
 
 from ag2 import Agent
@@ -33,6 +33,13 @@ async def read_thing(ctx: MCPRequestContext) -> str:
 def _handshake_ad(settings: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """What ``connect`` forwards to ``ClientSession(extensions=...)``."""
     return {_ID: settings}
+
+
+def _reported(result: CallToolResult) -> Any:
+    """What ``read_thing`` saw, decoded from its one text block."""
+    block = result.content[0]
+    assert isinstance(block, TextContent)
+    return json.loads(block.text)
 
 
 async def _discovered(session: Any) -> DiscoverResult:
@@ -87,7 +94,7 @@ class TestServerReadsClientExtensions:
         async with connect(server, extensions=_handshake_ad({"level": 1})) as session:
             result = await session.call_tool("read_thing", {})
 
-        assert json.loads(result.content[0].text) == {"level": 1}  # type: ignore[union-attr]
+        assert _reported(result) == {"level": 1}
 
     async def test_modern_client_advertisement_is_readable(self) -> None:
         server = MCPServer(_agent(), tools=[read_thing])
@@ -95,7 +102,7 @@ class TestServerReadsClientExtensions:
         async with connect_modern(server, extensions=[advertise(_ID, {"level": 1})]) as session:
             result = await session.call_tool("read_thing", {})
 
-        assert json.loads(result.content[0].text) == {"level": 1}  # type: ignore[union-attr]
+        assert _reported(result) == {"level": 1}
 
     async def test_empty_settings_are_distinguishable_from_no_advertisement(self) -> None:
         server = MCPServer(_agent(), tools=[read_thing])
@@ -105,8 +112,8 @@ class TestServerReadsClientExtensions:
         async with connect(server) as session:
             silent = await session.call_tool("read_thing", {})
 
-        assert json.loads(supported.content[0].text) == {}  # type: ignore[union-attr]
-        assert json.loads(silent.content[0].text) is None  # type: ignore[union-attr]
+        assert _reported(supported) == {}
+        assert _reported(silent) is None
 
     async def test_reading_outside_a_request_yields_none(self) -> None:
         assert client_extension(None, _ID) is None
