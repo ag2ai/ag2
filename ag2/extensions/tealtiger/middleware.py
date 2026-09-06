@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
 from ag2.events import ToolErrorEvent
 from ag2.extensions.tealtiger.types import (
+    ARG_TYPES_BY_NAME,
     DEFAULT_INJECTION_CONFIDENCE_THRESHOLD,
     INJECTION_PATTERNS,
     INJECTION_TECHNIQUES,
@@ -56,15 +57,75 @@ _SECRET_PATTERNS: list[re.Pattern[str]] = [
 # Injection findings keep a snippet of the match as evidence, not the whole argument.
 _MAX_MATCHED_TEXT_CHARS = 100
 
-# Maps arg_validation `type` names to the Python types they check against.
-_TYPE_NAMES: dict[str, type] = {
-    "str": str,
-    "int": int,
-    "float": float,
-    "bool": bool,
-    "list": list,
-    "dict": dict,
-}
+# Stands in for the argument name in an arg_validation reason code when the call's
+# arguments were not a mapping and the hit cannot be attributed to one argument.
+_UNNAMED_ARG = "*"
+
+
+def _matches_blocked_terms(text: str, spec: dict[str, Any]) -> bool:
+    """Whether `text` contains any of the spec's blocked terms, case-insensitively."""
+    if "blocked_terms" not in spec:
+        return False
+    lowered = text.lower()
+    return any(term.lower() in lowered for term in spec["blocked_terms"])
+
+
+def _matches_blocked_patterns(text: str, spec: dict[str, Any]) -> bool:
+    """Whether any of the spec's blocked patterns matches `text`.
+
+    Patterns are compiled by `GovernancePolicy.arg_validation`, so nothing is
+    compiled here.
+    """
+    return "blocked_patterns" in spec and any(pattern.search(text) for pattern in spec["blocked_patterns"])
+
+
+def _check_value(value: Any, spec: dict[str, Any]) -> str | None:
+    """Name the first check ``value`` violates, or ``None``.
+
+    Type runs first so a length or membership failure is never reported for a
+    value that was the wrong shape to begin with.
+    """
+    text = value if isinstance(value, str) else str(value)
+
+    if "type" in spec:
+        expected = ARG_TYPES_BY_NAME[spec["type"]]
+        # bool is a subclass of int, so reject a bool where "int" is required.
+        if not isinstance(value, expected) or (expected is int and isinstance(value, bool)):
+            return "type"
+
+    if "allowed_values" in spec and value not in spec["allowed_values"]:
+        return "allowed_values"
+
+    if "max_length" in spec and len(text) > spec["max_length"]:
+        return "max_length"
+
+    if "min_length" in spec and len(text) < spec["min_length"]:
+        return "min_length"
+
+    if _matches_blocked_terms(text, spec):
+        return "blocked_terms"
+
+    if _matches_blocked_patterns(text, spec):
+        return "blocked_patterns"
+
+    return None
+
+
+def _scan_unnamed_args(args_str: str, constraints: dict[str, dict[str, Any]]) -> str | None:
+    """Check a call whose arguments are not a mapping.
+
+    With no names to read by, length/type/`allowed_values` cannot apply. Rather
+    than let the call through, the term and pattern checks run over the whole
+    serialized call — fail-closed, so a banned term denies even from an
+    argument the policy does not constrain. Reported against ``*``, since no
+    single argument can honestly be blamed.
+    """
+    for spec in constraints.values():
+        if _matches_blocked_terms(args_str, spec):
+            return f"{_UNNAMED_ARG}:blocked_terms"
+        if _matches_blocked_patterns(args_str, spec):
+            return f"{_UNNAMED_ARG}:blocked_patterns"
+    return None
 
 
 class TealTigerMiddleware:
@@ -352,7 +413,7 @@ class _TealTigerPerTurn(BaseMiddleware):
 
             elif policy.type == "arg_validation":
                 if fnmatch.fnmatch(tool_name, policy.config.get("tool", "")):
-                    violation = self._validate_args(tool_args, policy.config.get("constraints", {}))
+                    violation = self._validate_args(tool_args, args_str, policy.config.get("constraints", {}))
                     if violation is not None:
                         action = "DENY"
                         reason_codes.append(f"ARG_VALIDATION:{violation}")
@@ -424,58 +485,21 @@ class _TealTigerPerTurn(BaseMiddleware):
         return any(p.search(text) for p in _SECRET_PATTERNS)
 
     @staticmethod
-    def _validate_args(tool_args: Any, constraints: dict[str, dict[str, Any]]) -> str | None:
-        """Check a tool's arguments against per-argument constraints.
+    def _validate_args(tool_args: Any, args_str: str, constraints: dict[str, dict[str, Any]]) -> str | None:
+        """Name the first violated constraint as ``"{arg}:{check}"``, or ``None``.
 
-        Returns ``"{arg}:{check}"`` for the first violated constraint (e.g.
-        ``"query:max_length"``), or ``None`` if every constrained argument
-        passes. Arguments not named in ``constraints`` are ignored, and a
-        constrained argument that is absent from the call is skipped.
-
-        When ``tool_args`` is not a mapping (already serialized to a string, or
-        positional), per-name checks cannot be applied, so only the
-        whole-value string checks (``blocked_terms``, ``blocked_patterns``) run
-        against the serialized form under each constrained name.
+        ``args_str`` is the caller's already-serialized form of the call, used
+        only by the non-mapping fallback.
         """
-        is_mapping = isinstance(tool_args, dict)
-        serialized = tool_args if isinstance(tool_args, str) else str(tool_args)
+        if not isinstance(tool_args, dict):
+            return _scan_unnamed_args(args_str, constraints)
 
         for arg_name, spec in constraints.items():
-            if is_mapping:
-                if arg_name not in tool_args:
-                    continue
-                value = tool_args[arg_name]
-                value_present = True
-            else:
-                # No named access — fall back to substring/regex over the serialized args.
-                value = serialized
-                value_present = False
-
-            text = value if isinstance(value, str) else str(value)
-
-            if value_present and "type" in spec:
-                expected = _TYPE_NAMES.get(spec["type"])
-                # bool is a subclass of int, so reject a bool where "int" is required.
-                type_ok = isinstance(value, expected) and not (expected is int and isinstance(value, bool))
-                if not type_ok:
-                    return f"{arg_name}:type"
-
-            if value_present and "allowed_values" in spec and value not in spec["allowed_values"]:
-                return f"{arg_name}:allowed_values"
-
-            if value_present and "max_length" in spec and len(text) > spec["max_length"]:
-                return f"{arg_name}:max_length"
-
-            if value_present and "min_length" in spec and len(text) < spec["min_length"]:
-                return f"{arg_name}:min_length"
-
-            if "blocked_terms" in spec:
-                lowered = text.lower()
-                if any(term.lower() in lowered for term in spec["blocked_terms"]):
-                    return f"{arg_name}:blocked_terms"
-
-            if "blocked_patterns" in spec and any(re.search(pattern, text) for pattern in spec["blocked_patterns"]):
-                return f"{arg_name}:blocked_patterns"
+            if arg_name not in tool_args:
+                continue
+            violated = _check_value(tool_args[arg_name], spec)
+            if violated is not None:
+                return f"{arg_name}:{violated}"
 
         return None
 
