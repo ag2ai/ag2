@@ -10,6 +10,7 @@ schemas come from MCP ``tools/list`` at runtime and are not hardcoded here.
 
 Maintainer: ShakedDegani
 Docs: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/webzio/
+Examples: https://github.com/ag2ai/build-with-ag2/tree/main/webzio-news-search
 """
 
 from __future__ import annotations
