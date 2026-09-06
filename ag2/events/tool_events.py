@@ -68,6 +68,10 @@ class ToolCallEvent(ToolEvent):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str = Field(kw_only=False)
     arguments: str = "{}"
+    # Provider-native fields with no home on this event that the provider needs
+    # back verbatim (Anthropic's ``caller`` / ``toolset_name``). Same role as
+    # ``BinaryInput.vendor_metadata``.
+    vendor_metadata: dict[str, Any] = Field(default_factory=dict)
 
     _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False, compare=False)
 
