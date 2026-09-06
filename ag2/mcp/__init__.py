@@ -6,6 +6,7 @@ from ag2.exceptions import missing_optional_dependency
 
 try:
     from .executor import AskContext, ContextProvider
+    from .extensions import client_extension
     from .info import build_ask_tool
     from .prompts import Prompt, PromptArgument, PromptMessage
     from .resources import Resource, ResourceTemplate
@@ -25,6 +26,7 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
     PromptMessage = missing_optional_dependency("PromptMessage", "mcp", e)  # type: ignore[misc]
     MCPFunctionTool = missing_optional_dependency("MCPFunctionTool", "mcp", e)  # type: ignore[misc]
     mcp_tool = missing_optional_dependency("mcp_tool", "mcp", e)  # type: ignore[misc]
+    client_extension = missing_optional_dependency("client_extension", "mcp", e)  # type: ignore[misc]
 
 __all__ = (
     "AskContext",
@@ -38,5 +40,6 @@ __all__ = (
     "ResourceTemplate",
     "SessionConfig",
     "build_ask_tool",
+    "client_extension",
     "mcp_tool",
 )

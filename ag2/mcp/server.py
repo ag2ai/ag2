@@ -26,6 +26,7 @@ from ag2.history import MemoryStorage
 
 from .errors import MCPToolNameConflictError
 from .executor import AgentExecutor, ContextProvider
+from .extensions import ExtensionMap, validated_extensions
 from .mappers import input_validation_error, tool_error
 from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
@@ -151,6 +152,16 @@ class MCPServer:
     ``resources`` / ``resource_templates`` / ``prompts`` expose MCP resources and
     prompts alongside the conversational tool; the corresponding capability is
     advertised only when a non-empty collection is supplied.
+
+    ``extensions`` advertises SEP-2133 extension support: a mapping of
+    reverse-DNS identifier to that extension's settings, written to
+    ``ServerCapabilities.extensions``. Identifiers are validated here, so a
+    malformed one fails at construction the way a tool-name conflict does. The
+    two directions of SEP-2133 are **not** symmetric, and this one is the weaker:
+    the field does not exist in the 2025-11-25 wire schema, so a handshake-era
+    client never receives what is advertised here — only a 2026-07-28 client
+    does. Reading what a *client* advertised works in both eras; see
+    :func:`~ag2.mcp.extensions.client_extension`.
     """
 
     __slots__ = (
@@ -170,6 +181,7 @@ class MCPServer:
         "_resource_provider",
         "_prompt_provider",
         "_tool_provider",
+        "_extensions",
         "_http",
     )
 
@@ -195,6 +207,7 @@ class MCPServer:
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
         tools: "Sequence[MCPFunctionTool]" = (),
+        extensions: "ExtensionMap | None" = None,
         path: str = "/mcp",
         stateless: bool = False,
         json_response: bool = False,
@@ -224,6 +237,7 @@ class MCPServer:
                     raise MCPToolNameConflictError(tool.name, reserved=False)
                 seen.add(tool.name)
         self._tool_provider = ToolProvider(tools) if tools else None
+        self._extensions = validated_extensions(extensions) if extensions else {}
         self._executor = AgentExecutor(
             agent,
             tool_name=tool_name,
@@ -233,6 +247,7 @@ class MCPServer:
             session_store=self._session_store,
         )
         self._server = self._build_server()
+        self._server.extensions.update(self._extensions)
         routes, manager = self._streamable_routes(
             path=path, stateless=stateless, json_response=json_response, security=security
         )
