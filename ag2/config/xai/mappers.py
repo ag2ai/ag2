@@ -48,7 +48,7 @@ from ag2.events import (
     UrlInput,
     Usage,
 )
-from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.exceptions import BlockedToolsUnsupportedError, UnsupportedInputError, UnsupportedToolError
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
@@ -168,6 +168,9 @@ def tool_to_api(t: ToolSchema) -> chat_pb2.Tool:
         return xai_tools.code_execution()
 
     if isinstance(t, MCPServerToolSchema):
+        if t.blocked_tools is not None:
+            raise BlockedToolsUnsupportedError("xAI", t.server_label)
+
         kwargs = {"server_url": t.server_url}
         if t.server_label is not None:
             kwargs["server_label"] = t.server_label

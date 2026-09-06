@@ -125,6 +125,11 @@ ATTR_USAGE_TOTAL = "ag2.usage.total_tokens"  # provider-reported total; gen_ai s
 ATTR_HUMAN_INPUT_PROMPT = "ag2.human_input.prompt"
 ATTR_HUMAN_INPUT_RESPONSE = "ag2.human_input.response"
 
+# ── Tool-result capture ──────────────────────────────────────────────────────
+# Set when ``gen_ai.tool.call.result`` was cut at ``max_tool_result_chars``;
+# the eval trace reconstructor copies it onto the result part's metadata.
+ATTR_TOOL_RESULT_TRUNCATED = "ag2.tool.call.result.truncated"
+
 # ── Checkpoint capture (span-events on the active span) ──────────────────────
 # Emitted by ``HubBackedCheckpointStore`` write/read so task checkpoint
 # save/restore surface as markers on the active task/turn span — checkpoints

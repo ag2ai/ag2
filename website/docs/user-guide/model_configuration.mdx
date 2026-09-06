@@ -496,19 +496,50 @@ config = OpenAIConfig(
 ```
 
 !!! tip
-    If you are running a self-hosted server via HTTPS without a valid SSL certificate (e.g., a local self-signed certificate), you can disable SSL checks by passing a custom `httpx.AsyncClient` with `verify=False` to the configuration:
+    If you are running a self-hosted server via HTTPS without a valid SSL certificate (e.g., a local self-signed certificate), you can disable SSL checks by passing a custom `httpx2.AsyncClient` with `verify=False` to the configuration:
 
     ```python linenums="1" hl_lines="8"
-    import httpx
+    import httpx2
     from ag2.config import OpenAIConfig
 
     config = OpenAIConfig(
         model="qwen-3",
         base_url="https://localhost:8000/v1",
         api_key="NotRequired",
-        http_client=httpx.AsyncClient(verify=False)
+        http_client=httpx2.AsyncClient(verify=False)
     )
     ```
+
+!!! note "`http_client` is an `httpx2` client"
+    From `openai>=3` the OpenAI SDK uses [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, which
+    `ag2[openai]` installs for you. `OpenAIConfig` and `OpenAIResponsesConfig` annotate
+    `http_client` accordingly, and ag2 forwards whatever you pass to the SDK untouched.
+
+    A legacy `httpx.AsyncClient` still works at runtime: the SDK keeps a compatibility path
+    for it, though it fails static type checking and the SDK's
+    [migration guide](https://github.com/openai/openai-python/blob/main/httpx2.md){.external-link target="_blank"} calls that
+    path a migration aid that may be discontinued. Build the client with `httpx2.AsyncClient`
+    to be done with it.
+
+    Each provider takes the client its own SDK takes, so the annotation differs by provider —
+    `AnthropicConfig.http_client`, for instance, follows whichever package the pinned
+    `anthropic` release is built on.
+
+!!! warning "TLS certificates come from the operating system"
+    `httpx2` verifies certificates against the **operating system trust store**, not a
+    bundled one. Nothing extra is needed on a normal machine or a standard base image, but a
+    minimal container without system CA certificates will fail to connect. Install the
+    distribution's CA bundle (e.g. `ca-certificates`), or point the client at one explicitly:
+
+    ```python
+    import httpx2
+    from ag2.config import OpenAIConfig
+
+    config = OpenAIConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
+    ```
+
+    `certifi` remains installed — ag2's own core depends on `httpx` — but the OpenAI client
+    no longer reads it. Its presence is not evidence that TLS is configured there.
 
 ### Extra Body Parameters
 

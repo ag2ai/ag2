@@ -96,6 +96,28 @@ def _tool_call_batches(events: "Sequence[BaseEvent]") -> "list[ToolCallsEvent]":
     return batches
 
 
+def unanswered_tool_calls(events: "Sequence[BaseEvent]") -> set[str]:
+    """Ids of the tool calls in ``events`` that no result answers, loose or wrapped.
+
+    The question :func:`close_unanswered_tool_calls` does not ask, because a
+    repair does not need it: it settles a batch only once a ``ToolResultsEvent``
+    wraps it, which is right when closing a stopped turn — a partially completed
+    batch has to be rebuilt whole. But a turn that ended *cleanly* through a
+    ``final=True`` tool never gets that wrapper: it sends its forced
+    ``ModelResponse`` and stops. Repairing such a history would append a fresh
+    wrapper every time it was asked, rewriting a transcript that was already
+    valid.
+
+    So a caller that repairs speculatively — resuming a session it did not
+    write, with no way to know how the last turn ended — asks this first. A
+    loose result counts as an answer here precisely because it is the thing
+    that distinguishes "finished without a wrapper" from "died mid-call".
+    """
+    answered = {e.parent_id for e in events if isinstance(e, ToolResultEvent)}
+    answered.update(r.parent_id for e in events if isinstance(e, ToolResultsEvent) for r in e.results)
+    return {call.id for batch in _tool_call_batches(events) for call in batch.calls if call.id not in answered}
+
+
 async def close_unanswered_tool_calls(history: "History", *, result: str) -> int:
     """Close off tool calls a stopped turn left unanswered. Returns how many.
 
