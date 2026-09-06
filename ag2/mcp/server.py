@@ -321,7 +321,7 @@ class MCPServer:
             # Custom tools run their handler directly; everything else is the
             # agent's conversational tool (name collisions are rejected at init).
             if self._tool_provider is not None and self._tool_provider.has(params.name):
-                return CallToolResult(content=await self._tool_provider.call(params.name, arguments, ctx))
+                return await self._tool_provider.call(params.name, arguments, ctx)
             return await self._executor.call(
                 params.name,
                 message=arguments.get("message", ""),
