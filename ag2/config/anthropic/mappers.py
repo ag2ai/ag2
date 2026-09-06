@@ -11,7 +11,11 @@ from typing import Any
 from fast_depends.library.serializer import SerializerProto
 
 from ag2.compact import CompactionSummary
-from ag2.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
+from ag2.config.anthropic.events import (
+    AnthropicRedactedThinkingEvent,
+    AnthropicServerToolCallEvent,
+    AnthropicServerToolResultEvent,
+)
 from ag2.events import (
     BaseEvent,
     BinaryInput,
@@ -33,6 +37,7 @@ logger = logging.getLogger(__name__)
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.files import FileProvider
 from ag2.response import ResponseProto
+from ag2.tools.builtin.anthropic_bash import ANTHROPIC_BASH_TOOL_NAME, AnthropicBashToolSchema
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.memory import MemoryToolSchema
@@ -155,6 +160,13 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
         return {"type": t.version, "name": "memory"}
 
+    elif isinstance(t, AnthropicBashToolSchema):
+        # https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
+        # Client-executed: Anthropic returns a plain tool_use block and waits for
+        # a tool_result. AnthropicBashTool registers the executor under the same
+        # name, so the call is answered instead of raising ToolNotFound.
+        return {"type": t.version, "name": ANTHROPIC_BASH_TOOL_NAME}
+
     elif isinstance(t, ShellToolSchema):
         # Anthropic's bash tool is client-side — it ships a typed schema but the
         # application must execute the command itself and return a tool_result.
@@ -258,6 +270,67 @@ def _file_id_block_type(filename: str | None) -> str:
     return "document"
 
 
+def _tool_result_block(
+    result: "ToolResultEvent",
+    serializer: Any,
+    toolset_name: str | None = None,
+) -> dict[str, Any]:
+    """Render one tool result as an Anthropic ``tool_result`` block.
+
+    Shared by the wrapped (``ToolResultsEvent``) and loose paths so a result
+    renders identically whichever one carries it.
+    """
+    parts: list[dict[str, Any]] = []
+    for part in result.result.parts:
+        if isinstance(part, TextInput):
+            parts.append({"type": "text", "text": part.content})
+        elif isinstance(part, DataInput):
+            parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+        elif isinstance(part, BinaryInput):
+            if part.kind is BinaryType.IMAGE:
+                b64 = base64.b64encode(part.data).decode()
+                parts.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                })
+            elif part.kind is BinaryType.DOCUMENT:
+                b64 = base64.b64encode(part.data).decode()
+                parts.append({
+                    "type": "document",
+                    "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                })
+            else:
+                raise UnsupportedInputError(f"BinaryInput({part.kind.value})", "anthropic")
+        elif isinstance(part, UrlInput):
+            if part.kind is BinaryType.IMAGE:
+                parts.append({"type": "image", "source": {"type": "url", "url": part.url}})
+            elif part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
+                parts.append({"type": "document", "source": {"type": "url", "url": part.url}})
+            else:
+                raise UnsupportedInputError(f"UrlInput({part.kind.value})", "anthropic")
+        elif isinstance(part, FileIdInput):
+            parts.append({
+                "type": _file_id_block_type(part.filename),
+                "source": {"type": "file", "file_id": part.file_id},
+            })
+        else:
+            raise UnsupportedInputError(type(part).__name__, "anthropic")
+
+    if len(parts) == 1 and (only := parts[0])["type"] == "text":
+        content: str | list[dict[str, Any]] = only["text"]
+    else:
+        content = parts
+    block: dict[str, Any] = {"type": "tool_result", "tool_use_id": result.parent_id, "content": content}
+    if isinstance(result, ToolErrorEvent):
+        # Without this the model reads a traceback as a successful result.
+        block["is_error"] = True
+    if toolset_name is not None:
+        # The API refuses a tool_result answering a member tool_use that does not
+        # repeat the paired tool_use's toolset_name.
+        block["toolset_name"] = toolset_name
+    return block
+
+
 def has_file_id_references(messages: Iterable[BaseEvent]) -> bool:
     """True if any message (user turn or tool result) references a file_id.
 
@@ -284,10 +357,14 @@ def convert_messages(
     # drop orphaned tool_result blocks whose matching tool_use was
     # trimmed by a reduction policy (SlidingWindow, TokenBudget, etc.).
     valid_tool_ids: set[str] = set()
+    # A member tool_use's toolset_name has to be repeated on its tool_result.
+    toolset_names: dict[str, str] = {}
     for message in event_list:
         if isinstance(message, ModelResponse):
             for call in message.tool_calls.calls:
                 valid_tool_ids.add(call.id)
+                if name := call.vendor_metadata.get("toolset_name"):
+                    toolset_names[call.id] = name
 
     # Collect all parent_ids referenced by ToolResultsEvent blocks so we
     # can also drop orphaned tool_use blocks — the mirror case of the
@@ -351,16 +428,26 @@ def convert_messages(
                         call.name,
                     )
                     continue
-                content.append({
+                use_block: dict[str, Any] = {
                     "type": "tool_use",
                     "id": call.id,
                     "name": call.name,
                     "input": json.loads(call.arguments or "{}"),
-                })
+                }
+                for key in ("caller", "toolset_name"):
+                    if (value := call.vendor_metadata.get(key)) is not None:
+                        use_block[key] = value
+                content.append(use_block)
             if content:
                 result.append({"role": "assistant", "content": content})
 
-        elif isinstance(message, (AnthropicServerToolCallEvent, AnthropicServerToolResultEvent)):
+        # AnthropicRedactedThinkingEvent rides along: Anthropic requires the block
+        # echoed back unchanged. AnthropicContainerUploadEvent deliberately has no
+        # branch — the API refuses container_upload inside an assistant turn.
+        elif isinstance(
+            message,
+            (AnthropicServerToolCallEvent, AnthropicServerToolResultEvent, AnthropicRedactedThinkingEvent),
+        ):
             block = message.block.model_dump(exclude_none=True, mode="json")
             if result and result[-1]["role"] == "assistant":
                 result[-1]["content"].append(block)
@@ -377,52 +464,7 @@ def convert_messages(
                 # (e.g. unit-testing the rendering in isolation).
                 if valid_tool_ids and r.parent_id not in valid_tool_ids:
                     continue
-                parts: list[dict[str, Any]] = []
-                for part in r.result.parts:
-                    if isinstance(part, TextInput):
-                        parts.append({"type": "text", "text": part.content})
-                    elif isinstance(part, DataInput):
-                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
-                    elif isinstance(part, BinaryInput):
-                        if part.kind is BinaryType.IMAGE:
-                            b64 = base64.b64encode(part.data).decode()
-                            parts.append({
-                                "type": "image",
-                                "source": {"type": "base64", "media_type": part.media_type, "data": b64},
-                            })
-                        elif part.kind is BinaryType.DOCUMENT:
-                            b64 = base64.b64encode(part.data).decode()
-                            parts.append({
-                                "type": "document",
-                                "source": {"type": "base64", "media_type": part.media_type, "data": b64},
-                            })
-                        else:
-                            raise UnsupportedInputError(f"BinaryInput({part.kind.value})", "anthropic")
-                    elif isinstance(part, UrlInput):
-                        if part.kind is BinaryType.IMAGE:
-                            parts.append({"type": "image", "source": {"type": "url", "url": part.url}})
-                        elif part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
-                            parts.append({"type": "document", "source": {"type": "url", "url": part.url}})
-                        else:
-                            raise UnsupportedInputError(f"UrlInput({part.kind.value})", "anthropic")
-                    elif isinstance(part, FileIdInput):
-                        block_type = _file_id_block_type(part.filename)
-                        parts.append({
-                            "type": block_type,
-                            "source": {"type": "file", "file_id": part.file_id},
-                        })
-                    else:
-                        raise UnsupportedInputError(type(part).__name__, "anthropic")
-
-                if len(parts) == 1 and (part := parts[0])["type"] == "text":
-                    tool_content: str | list[dict[str, Any]] = part["text"]
-                else:
-                    tool_content = parts
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": r.parent_id,
-                    "content": tool_content,
-                })
+                tool_results.append(_tool_result_block(r, serializer, toolset_names.get(r.parent_id)))
             if tool_results:
                 emitted_result_ids.update(r["tool_use_id"] for r in tool_results)
                 result.append({"role": "user", "content": tool_results})
@@ -504,13 +546,7 @@ def convert_messages(
                 emitted_result_ids.add(parent)
                 result.append({
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": parent,
-                            "content": message.content,
-                        }
-                    ],
+                    "content": [_tool_result_block(message, serializer, toolset_names.get(parent))],
                 })
 
     return result

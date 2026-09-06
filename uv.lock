@@ -260,7 +260,7 @@ types = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk", marker = "extra == 'a2a'", specifier = ">=1.1.0,<2" },
-    { name = "ag-ui-protocol", marker = "extra == 'ag-ui'", specifier = ">=0.1.15,<0.2" },
+    { name = "ag-ui-protocol", marker = "extra == 'ag-ui'", specifier = ">=0.1.20,<0.2" },
     { name = "ag2", extras = ["mcp"], marker = "extra == 'acp'" },
     { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.12.1,<0.13" },
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.2.0,<2" },

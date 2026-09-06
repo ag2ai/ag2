@@ -3,7 +3,7 @@ title: TealTiger Governance
 sidebarTitle: TealTiger
 ---
 
-The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists and blocklists, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — with no LLM in the governance path.
+The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists and blocklists, validates tool arguments, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — with no LLM in the governance path.
 
 ## Installation
 
@@ -90,7 +90,7 @@ flowchart LR
 | Hook | Stage | What It Does |
 |------|-------|-------------|
 | `on_turn` | Turn defense | Kill switch enforcement — frozen agents cannot take turns |
-| `on_tool_execution` | Pre-tool defense | Tool allowlist/blocklist, PII scan, secret scan, cost limit check |
+| `on_tool_execution` | Pre-tool defense | Tool allowlist/blocklist, argument validation, PII scan, secret scan, cost limit check |
 
 Both stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
 
@@ -168,6 +168,62 @@ Here `read_file` passes both policies, while `read_secrets` clears the allowlist
     asymmetry denies too much; for a blocklist it lets a call through. If your tool names are
     not under your control, list the casings you need to block explicitly, or normalize tool
     names before registering them.
+
+### Argument Validation
+
+Where the allowlist and blocklist govern *which* tools run, `arg_validation` governs *what* a tool is called with — a defense against dangerous argument values such as SQL injection, path traversal, or oversized payloads. It applies to any tool whose name matches `tool` via `fnmatch`, and checks the named arguments against per-argument constraints:
+
+```python linenums="1"
+# Reject long queries and dangerous SQL verbs
+GovernancePolicy.arg_validation(
+    "sql_query",
+    {"query": {"max_length": 500, "blocked_terms": ["DROP", "DELETE", ";--"]}},
+)
+
+# Reject path traversal in a file tool
+GovernancePolicy.arg_validation(
+    "read_file",
+    {"path": {"blocked_patterns": [r"\.\.[\\/]"]}},  # ../ and ..\
+)
+```
+
+Each argument's constraint spec may combine any of these checks:
+
+| Check | Denies when |
+|-------|-------------|
+| `max_length` | `len(str(value))` exceeds the limit |
+| `min_length` | `len(str(value))` is below the minimum |
+| `type` | The value is not of this type — one of `"str"`, `"int"`, `"float"`, `"bool"`, `"list"`, `"dict"` |
+| `blocked_terms` | Any term appears in the value (case-insensitive substring) |
+| `blocked_patterns` | Any regex matches the value |
+| `allowed_values` | The value is not one of these |
+
+A violation is denied with reason code `ARG_VALIDATION:{argument}:{check}` (for example `ARG_VALIDATION:query:max_length`) and risk score 85. Only the arguments named in `constraints` are checked — any others pass through — and a constrained argument that is absent from the call is skipped.
+
+!!! note "Type note: `bool` is not accepted for `int`"
+
+    Because `bool` is a subclass of `int` in Python, `{"type": "int"}` explicitly rejects a
+    boolean value, so a `True`/`False` cannot slip through where a real integer is required.
+
+The policy validates its own spec at construction, checking each check's *value* and not just its name. An empty `tool` or `constraints`, a non-dict spec, an unknown check name, an unsupported `type`, a negative or non-integer length bound, a `max_length` below the `min_length`, an empty term or value list, or an uncompilable regex all raise `ValueError`. A typo therefore surfaces where you wrote it — rather than leaving a policy that silently validates nothing, or one that raises from inside the governance path on the first call it evaluates.
+
+Patterns are compiled during that same validation, so evaluation never pays for compilation:
+
+```python linenums="1"
+GovernancePolicy.arg_validation("read_file", {"path": {"blocked_patterns": ["[unclosed"]}})
+# ValueError: Invalid regex in `blocked_patterns` for argument 'path': '[unclosed' — ...
+```
+
+!!! warning "Named checks need mapping-style arguments"
+
+    Length, type, and `allowed_values` checks rely on reading an argument by name. A model
+    usually sends a JSON object, but it can send an array or a bare value instead, leaving no
+    names to read. The policy then stays **fail-closed**: every constrained argument's
+    `blocked_terms` and `blocked_patterns` run over the whole serialized call, and the
+    value-specific checks are skipped. A denial from that path is reported as
+    `ARG_VALIDATION:*:{check}` — the `*` marking that the hit could not be attributed to one
+    argument, and that a term found anywhere in the call, including in an argument the policy
+    does not constrain, is enough to deny.
 
 ### PII Detection
 
@@ -339,7 +395,7 @@ for decision in governance.decisions:
 | `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
 | `agent_name` | `str` | Agent that made the call, or `unknown` |
 | `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
-| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
 | `risk_score` | `int` | 0 (safe) to 100 (critical) |
 | `evaluation_time_ms` | `float` | Governance latency for this decision |
 | `cost_tracked` | `float` | Cost attributed to this call in USD |
@@ -543,6 +599,7 @@ Each policy type carries its own risk score when it denies:
 | Prompt injection | `PROMPT_INJECTION:{technique}/{pattern}` | 95 |
 | Secret detection | `SECRET_DETECTED` | 95 |
 | PII detection | `PII_DETECTED:{category}` | 90 |
+| Argument validation | `ARG_VALIDATION:{argument}:{check}` | 85 |
 | Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
 | Tool blocklist | `TOOL_BLOCKED` | 80 |
 | Cost limit / factory budget | `BUDGET_EXCEEDED` | 70 |
@@ -592,7 +649,7 @@ The middleware follows AG2's middleware factory pattern:
 
 ## Performance
 
-Governance runs entirely in-process: no network calls, no LLM inference, and no external service dependencies. Every check is a `fnmatch` glob or a precompiled `re` pattern over the serialized tool arguments, so evaluation cost scales with argument size rather than with model latency.
+Governance runs entirely in-process: no network calls, no LLM inference, and no external service dependencies. Every check is a `fnmatch` glob, a precompiled `re` pattern, or a plain comparison over the tool arguments — every regex the middleware evaluates, `arg_validation`'s `blocked_patterns` included, is compiled before the first call reaches it. Evaluation cost therefore scales with argument size rather than with model latency.
 
 Each decision records its own measured cost in `evaluation_time_ms`, so you can profile governance overhead against your own workload:
 

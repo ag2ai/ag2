@@ -120,6 +120,54 @@ data: {"type":"TEXT_MESSAGE_CHUNK","delta":"Hello! How can I help?",...}
 data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",...}
 ```
 
+## Token usage
+
+Both run-terminating events carry the run's token usage, broken down per
+provider and model configuration:
+
+```text
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
+       "usage":[{"provider":"openai","model":"gpt-5","inputTokens":1284,
+                 "outputTokens":96,"totalTokens":1380,"cachedInputTokens":1024}]}
+```
+
+`RUN_ERROR` carries the same field, reporting what the run had spent before it
+failed, so a crashed run is not accounted for as free. (`RUN_ERROR` has no
+`threadId` / `runId` — the protocol defines neither for it; a client correlates
+the run from `RUN_STARTED` on the same event stream.)
+
+The figures cover every model call in the run — the whole tool loop, delegated
+sub-agents, history compaction and memory aggregation — and agree with
+`AgentReply.usage()` for the same run, because both read the same accounting
+events.
+
+An entry carries `inputTokens`, `outputTokens`, `totalTokens`, `reasoningTokens`
+and `cachedInputTokens`. Any of them may be missing — three properties are worth
+knowing before you sum them:
+
+- **A count the provider did not report is absent, not `0`.** `cachedInputTokens`
+  absent means "never measured"; `0` means the provider measured no cache hit.
+  The same holds for `reasoningTokens`, which most non-reasoning calls omit.
+- **`totalTokens` is never derived.** It appears only when every call behind an
+  entry supplied one, so a client is never handed a computed figure dressed up
+  as a measurement. Sum `inputTokens` and `outputTokens` yourself if you need a
+  figure regardless.
+- **Cache *writes* are not reported at all.** `cachedInputTokens` counts a cache
+  *read*. Tokens spent creating a cache entry have no field in the protocol, and
+  they are omitted rather than folded into a neighbouring count, because
+  providers disagree on whether cached tokens already sit in the prompt figure.
+  A cost model built on these entries alone under-counts a run that primed a
+  cache; read `AgentReply.usage()` server-side if you need that number.
+
+One entry is emitted per distinct provider/model pair, in order of first
+appearance in the run. A delegated sub-agent that used a single configuration is
+attributed to it; one that spanned several arrives with `provider` and `model`
+unset rather than mislabelled. A run that spent nothing omits `usage` entirely.
+
+The A2UI AG-UI transport (`A2UIServer(..., transport=AgUiTransport())`) reports
+the same field on the same two events, so what a client can show does not depend
+on which endpoint it connected to.
+
 ## UI clients
 
 Any AG-UI client works with this endpoint.

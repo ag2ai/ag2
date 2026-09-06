@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .anthropic_bash import AnthropicBashTool
 from .code_execution import CodeExecutionTool
 from .file_search import FileSearchTool
 from .google_maps import GoogleMapsTool
@@ -17,6 +18,7 @@ from .web_search import UserLocation, WebSearchTool
 from .x_search import XSearchTool
 
 __all__ = (
+    "AnthropicBashTool",
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
