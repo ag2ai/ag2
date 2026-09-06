@@ -495,6 +495,10 @@ class TestAMalformedSpecIsRejectedAtConstruction:
         with pytest.raises(ValueError, match="must be a dict, got list"):
             GovernancePolicy.arg_validation("sql_query", {"query": ["max_length"]})
 
+    def test_empty_argument_spec_raises(self):
+        with pytest.raises(ValueError, match="Constraint spec for argument 'query' must not be empty"):
+            GovernancePolicy.arg_validation("sql_query", {"query": {}})
+
     def test_unknown_check_raises(self):
         with pytest.raises(ValueError, match="Unknown constraint\\(s\\) for argument 'query': max_len"):
             GovernancePolicy.arg_validation("sql_query", {"query": {"max_len": 10}})
@@ -502,6 +506,10 @@ class TestAMalformedSpecIsRejectedAtConstruction:
     def test_unsupported_type_raises(self):
         with pytest.raises(ValueError, match="Unsupported type 'complex'"):
             GovernancePolicy.arg_validation("sql_query", {"query": {"type": "complex"}})
+
+    def test_non_string_type_raises_value_error(self):
+        with pytest.raises(ValueError, match="Unsupported type"):
+            GovernancePolicy.arg_validation("sql_query", {"query": {"type": ["int"]}})
 
     def test_uncompilable_pattern_raises(self):
         with pytest.raises(ValueError, match="Invalid regex in `blocked_patterns`"):

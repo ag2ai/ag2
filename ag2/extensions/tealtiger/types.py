@@ -50,11 +50,15 @@ def _normalize_arg_spec(arg_name: str, spec: dict[str, Any]) -> dict[str, Any]:
     for compilation — hence "ready to evaluate", and hence a returned spec that
     holds `re.Pattern` objects where the caller passed strings.
     """
+    if not spec:
+        raise ValueError(f"Constraint spec for argument '{arg_name}' must not be empty.")
+
     normalized = dict(spec)
 
-    if "type" in spec and spec["type"] not in ARG_TYPES_BY_NAME:
+    type_name = spec.get("type")
+    if type_name is not None and (not isinstance(type_name, str) or type_name not in ARG_TYPES_BY_NAME):
         raise ValueError(
-            f"Unsupported type '{spec['type']}' for argument '{arg_name}'. "
+            f"Unsupported type {type_name!r} for argument '{arg_name}'. "
             f"Valid types: {', '.join(sorted(ARG_TYPES_BY_NAME))}."
         )
 
