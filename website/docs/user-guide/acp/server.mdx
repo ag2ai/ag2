@@ -113,6 +113,7 @@ environment. Zed's `#!json settings.json`, for example:
 |---|---|
 | `#!python initialize` | Negotiates the protocol version and advertises exactly which optional features are implemented |
 | `#!python session/new` | Opens an independent conversation and returns its id |
+| `#!python session/load` | Reattaches to a conversation by id, replays its history, then returns — see [Loading a session](#loading-a-session) |
 | `#!python session/prompt` | Runs one ordinary AG2 turn — tools and all — and returns when it ends |
 | `#!python session/update` | Pushed *during* the turn: the answer as it is produced, every tool call, every result |
 | `#!python session/cancel` | Stops that session's turn and anything queued behind it |
@@ -168,6 +169,87 @@ session.
     one — and in practice it answers a fresh session with the previous one's context. Treat
     every session on such a deployment as sharing one conversation, and give a caller that
     must not see another's history its own process.
+
+### Loading a session
+
+A client that still holds a session id can come back to it with `#!python session/load` —
+from a new connection, or a new process, as long as the session's history is still in
+storage. The agent replays the whole conversation as `#!python session/update`
+notifications and then answers. The response is the line between history and whatever
+comes next: nothing is sent after it, and the next `#!python session/prompt` continues the
+conversation where it left off.
+
+How far that reaches is decided by two settings on `#!python SessionConfig`:
+
+- **`#!python storage`** — where history lives. The default is in-memory, so it lasts as
+  long as the process does. Pass a durable `#!python Storage` — the
+  `#!python RedisStorage` that ships with `ag2`, or your own — for history that outlives it.
+- **`#!python retain_history`** — whether a session's history is kept when the session is
+  *let go*: evicted to make room, expired by `#!python ttl`, or dropped because its
+  connection closed. Off by default, since retaining in the default in-memory storage only
+  grows the process. Turn it on together with a durable storage. An explicit
+  `#!python SessionStore.close` still deletes; that is the one act that means the
+  conversation is over — and, since ACP's `#!python session/delete` is not wired, the
+  only one. Nothing else in `ag2` ever removes a retained history: `#!python max_sessions`
+  and `#!python ttl` bound the *live* registry, not the storage behind it. With a durable
+  storage, retention is the host's to manage — expire or cap it in the storage itself, or
+  close sessions whose conversations are over.
+
+```python linenums="1"
+from ag2.acp import ACPAgent, SessionConfig
+from ag2.streams.redis import RedisStorage
+
+acp_agent = ACPAgent(
+    agent,
+    sessions=SessionConfig(storage=RedisStorage("redis://localhost:6379"), retain_history=True),
+)
+```
+
+The id is enough on its own: it is the key the history is stored under, so nothing else has
+to be persisted for a later process to find the conversation. A host keeping its own record
+per conversation can tie the two together in `#!python on_session`, which is called with the
+session and `#!python "created"` after `#!python session/new` and `#!python "loaded"` after
+`#!python session/load`. A hook that raises refuses the request: nothing is registered, the
+conversation in storage is untouched, and a `#!python session/prompt` on that id is answered
+as unknown.
+
+What comes back is the history, and only the history:
+
+- User turns, replies, tool calls and their results, in order — one
+  `#!python agent_message_chunk` per reply, since the chunks a live turn streams are never
+  stored.
+- **Not** the session's context variables: a session loaded in a new process starts them
+  from the agent's defaults again. Not the `pending_messages` inbox, and not a compaction
+  summary. A session loaded on the connection it already lives on keeps all of those — only
+  the request context (`#!python cwd` and friends) is refreshed.
+- A turn that was cut short — the process died with a tool still running — is repaired
+  first, so the next prompt sends a valid conversation to the provider.
+
+A session with a turn in progress is refused rather than replayed underneath it. A session
+that was opened and never prompted has no history, so from another process it is
+indistinguishable from an id that was never issued — and is answered the same way.
+
+!!! warning "A session id is a credential"
+    Any connection that has passed `#!python initialize` (and `#!python authenticate`, if
+    a provider is configured) may load any id it holds. The id is the whole credential: a
+    `#!python uuid4`, unguessable, and bound to nothing else — ACP itself defines no link
+    between a session and an authenticated party. A host that needs one enforces it at its
+    transport, or refuses the load in `#!python on_session`.
+
+    Since the id is also the storage key, it now appears wherever stream ids are logged.
+
+!!! warning "One live process per session id"
+    Two processes loading the same id would interleave their writes to one history, and
+    the repair a load performs — a read of the whole transcript followed by a rewrite —
+    could discard what the other wrote in between. The storage holds no lease and `ag2`
+    does not add one. Within a process this is caught: a second load of an id whose turn
+    is running elsewhere is refused. Across processes it is the client's contract to
+    keep, and a client that spawns one agent process per turn keeps it by construction.
+
+Over stdio and WebSocket this all just works. The ACP SDK's HTTP/SSE server, as of 0.12,
+does not register a *loaded* session's stream the way it does a new one, so a
+`#!python session/prompt` on a loaded session over that transport is answered with a 404 —
+serve resumable sessions over one of the other two.
 
 ## Cancelling
 
@@ -231,6 +313,7 @@ acp_agent = ACPAgent(
 | `#!python prompt_content` | Which non-text prompt content to advertise — see [Multimodal content](#multimodal-content) |
 | `#!python stream_thoughts` | Whether to forward the agent's reasoning as `#!python agent_thought_chunk` updates. Off by default |
 | `#!python hitl_hook` | How to answer a turn that calls `#!python context.input()` — see [Human input](#human-input). `#!python None` (the default) fails such a turn |
+| `#!python on_session` | Called with `#!python (session, origin)` after `#!python session/new` (`#!python "created"`) and `#!python session/load` (`#!python "loaded"`) — see [Loading a session](#loading-a-session) |
 
 ### Bounds
 
@@ -247,6 +330,10 @@ acp_agent = ACPAgent(
 The last two are what keep one client from opening every session and starting a paid turn
 in each. `#!python max_concurrent_turns` bounds spend; `#!python max_active_prompts` bounds
 how many request handlers can be parked at once.
+
+Two more settings are about what outlives the registry rather than what bounds it —
+`#!python storage` and `#!python retain_history`, covered under
+[Loading a session](#loading-a-session).
 
 ### Multimodal content
 
@@ -367,14 +454,18 @@ During `#!python initialize` the agent declares what it supports, and the client
 interface from that answer. Claiming a feature that is not wired is worse than admitting
 its absence — the client offers users a button that cannot work.
 
-Reported as **not** supported: `#!python session/load`, `#!python session/resume`,
-`#!python session/fork`, `#!python session/list`, `#!python session/delete`, and connecting
-to client-provided MCP servers over any transport. The client's own filesystem and terminal
-methods are never called either — those the client offers, so there is nothing to declare.
+Reported as **not** supported: `#!python session/resume`, `#!python session/fork`,
+`#!python session/list`, `#!python session/delete`, `#!python session/close`, and
+connecting to client-provided MCP servers over any transport. The client's own filesystem
+and terminal methods are never called either — those the client offers, so there is nothing
+to declare.
 
 These are optional parts of the protocol, not missing pieces of this one. ACP grew up
 around coding agents, and most of that list exists to serve them — a client offering its
 open buffers and its terminal to an agent whose job is editing your repository.
+`#!python session/resume` — reattach *without* a replay — is the one most likely to follow
+`#!python session/load`; it is not wired yet, and the SDK gates it behind its unstable
+protocol flag besides.
 
 !!! note "Your agent still reaches files — through its own tools"
     Serving over ACP changes nothing about what an agent can do. Give it a file tool, a

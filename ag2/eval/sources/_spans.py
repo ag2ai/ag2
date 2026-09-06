@@ -60,6 +60,7 @@ from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
     ATTR_HUMAN_INPUT_RESPONSE,
     ATTR_SPAN_TYPE,
+    ATTR_TOOL_RESULT_TRUNCATED,
     ATTR_USAGE_KIND,
     ATTR_USAGE_LABEL,
     ATTR_USAGE_TOTAL,
@@ -75,6 +76,7 @@ from ag2.events import (
     HumanMessage,
     ModelMessage,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
@@ -565,8 +567,10 @@ def _tool_span_to_events(span: SpanData) -> list[BaseEvent]:
     if span.status == "ERROR":
         return [call, ToolErrorEvent.from_call(call, _exception_from_span(span))]
 
-    result = a.get(_ATTR_TOOL_RESULT)
-    return [call, ToolResultEvent.from_call(call, result if result is not None else "")]
+    text = a.get(_ATTR_TOOL_RESULT) or ""
+    if a.get(ATTR_TOOL_RESULT_TRUNCATED):
+        return [call, ToolResultEvent.from_call(call, TextInput(text, metadata={"truncated": True}))]
+    return [call, ToolResultEvent.from_call(call, text)]
 
 
 def _human_span_to_events(span: SpanData) -> list[BaseEvent]:

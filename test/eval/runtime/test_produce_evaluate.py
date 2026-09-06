@@ -18,7 +18,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from ag2 import Agent
 from ag2.eval import DirectoryTraceSource, Suite, evaluate_traces
 from ag2.eval.scorers import final_answer_matches, no_tool_errors, tool_called
-from ag2.eval.sources._otel import readable_span_to_data
+from ag2.eval.sources import readable_span_to_data
 from ag2.eval.sources.trace_source import save_trace
 from ag2.events import ToolCallEvent
 from ag2.middleware.builtin.telemetry import TelemetryMiddleware

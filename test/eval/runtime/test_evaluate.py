@@ -5,6 +5,7 @@
 """Tests for evaluate_traces() — grading traces from a TraceSource."""
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Sequence
 
 import pytest
@@ -12,9 +13,11 @@ import pytest
 from ag2.eval import (
     BudgetThresholds,
     InMemoryTraceSource,
+    MissingTraceError,
     Suite,
     TraceRef,
     evaluate_traces,
+    load_run,
     scorer,
 )
 from ag2.eval.scorers import final_answer_matches, tool_called
@@ -224,3 +227,94 @@ async def test_evaluate_propagates_cancellation(tmp_path) -> None:
 
     with pytest.raises(asyncio.CancelledError):
         await evaluate_traces(source, scorers=[cancels], suite=suite, store_dir=tmp_path)
+
+
+def _two_of_three() -> tuple[InMemoryTraceSource, Suite]:
+    """A 3-task suite whose source only covers ``task-1`` and ``task-2``."""
+    source = InMemoryTraceSource([
+        (TraceRef("t1", task_id="task-1"), _trace("Paris")),
+        (TraceRef("t2", task_id="task-2"), _trace("London")),
+    ])
+    suite = Suite.from_list([
+        {"task_id": "task-1", "inputs": {"input": "capital of France?"}},
+        {"task_id": "task-2", "inputs": {"input": "capital of UK?"}},
+        {"task_id": "task-3", "inputs": {"input": "capital of Japan?"}},
+    ])
+    return source, suite
+
+
+@pytest.mark.asyncio()
+class TestOnMissingTask:
+    """A suite task the source has no trace for — the CI-gate failure mode."""
+
+    async def test_default_counts_the_uncovered_task_as_an_error(self, tmp_path) -> None:
+        source, suite = _two_of_three()
+
+        result = await evaluate_traces(source, scorers=[has_one_response], suite=suite, store_dir=tmp_path)
+
+        assert [tr.task.task_id for tr in result.tasks] == ["task-1", "task-2", "task-3"]
+        assert result.aggregates.errors == 1
+        # denominator is 3, not 2: the uncovered task scores as a failure
+        assert result.pass_rate("has_one_response") == pytest.approx(2 / 3)
+        missing = result.tasks[-1]
+        assert isinstance(missing.trace.exception, MissingTraceError)
+        assert missing.trace.exception.task_ids == ("task-3",)
+        assert "task-3" in str(missing.trace.exception)
+
+    async def test_ignore_drops_the_uncovered_task_and_warns(self, tmp_path, caplog) -> None:
+        source, suite = _two_of_three()
+
+        with caplog.at_level(logging.WARNING, logger="ag2.eval.runtime.evaluate"):
+            result = await evaluate_traces(
+                source, scorers=[has_one_response], suite=suite, store_dir=tmp_path, on_missing_task="ignore"
+            )
+
+        assert [tr.task.task_id for tr in result.tasks] == ["task-1", "task-2"]
+        assert result.aggregates.errors == 0
+        assert result.pass_rate("has_one_response") == 1.0
+        [record] = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert "1 suite task(s) have no trace" in record.getMessage()
+        assert "task-3" in record.getMessage()
+
+    async def test_raise_aborts_before_anything_is_graded(self, tmp_path) -> None:
+        source, suite = _two_of_three()
+        graded: list[str] = []
+
+        @scorer
+        def record(task) -> bool:
+            graded.append(task.task_id)
+            return True
+
+        with pytest.raises(MissingTraceError, match="task-3"):
+            await evaluate_traces(source, scorers=[record], suite=suite, store_dir=tmp_path, on_missing_task="raise")
+
+        assert graded == []
+
+    async def test_ref_outside_the_suite_is_still_graded_reference_free(self, tmp_path) -> None:
+        """The tolerated asymmetry: an extra trace is graded, never dropped."""
+        source = InMemoryTraceSource([
+            (TraceRef("t1", task_id="task-1"), _trace("Paris")),
+            (TraceRef("t9", task_id="not-in-suite"), _trace("Tokyo")),
+        ])
+        suite = Suite.from_list([{"task_id": "task-1", "inputs": {"input": "capital of France?"}}])
+
+        result = await evaluate_traces(source, scorers=[has_one_response], suite=suite, store_dir=tmp_path)
+
+        assert [tr.task.task_id for tr in result.tasks] == ["task-1", "not-in-suite"]
+        assert result.aggregates.errors == 0
+        extra = result.tasks[-1]
+        assert extra.task.reference_outputs is None
+        assert extra.feedback[0].score is True
+
+    async def test_missing_task_error_survives_save_and_load(self, tmp_path) -> None:
+        source, suite = _two_of_three()
+
+        result = await evaluate_traces(source, scorers=[has_one_response], suite=suite, store_dir=tmp_path)
+        loaded = load_run(result.save())
+
+        assert loaded.aggregates.errors == 1
+        assert loaded.pass_rate("has_one_response") == pytest.approx(2 / 3)
+        # store.py keeps only the exception's type + message
+        restored = loaded.tasks[-1].trace.exception
+        assert restored is not None
+        assert str(restored) == "MissingTraceError: no trace in the source for task(s): task-3"
