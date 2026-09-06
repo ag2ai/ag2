@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.exceptions import missing_additional_dependency
+from ag2.exceptions import missing_additional_dependency, missing_optional_dependency
 
 try:
     from .exa import ExaToolkit
@@ -15,11 +15,18 @@ except ImportError as e:
     TinyFishSearchToolkit = missing_additional_dependency("TinyFishSearchToolkit", "tinyfish>=0.2.3", e)  # type: ignore[misc]
 
 from .serply import SerplySearchToolkit
+
+try:
+    from .webzio import WebzioNewsSearchToolkit
+except ImportError as e:
+    WebzioNewsSearchToolkit = missing_optional_dependency("WebzioNewsSearchToolkit", "mcp", e)  # type: ignore[misc]
+
 from .xquik import XquikSearchToolkit
 
 __all__ = (
     "ExaToolkit",
     "SerplySearchToolkit",
     "TinyFishSearchToolkit",
+    "WebzioNewsSearchToolkit",
     "XquikSearchToolkit",
 )

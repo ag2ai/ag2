@@ -1,0 +1,59 @@
+---
+title: Webzio News Search
+sidebarTitle: Webzio News Search
+---
+
+`WebzioNewsSearchToolkit` gives an AG2 agent semantic news search powered by [Webz.io](https://webz.io){.external-link target="_blank"}. Ask a question in plain language, optionally steer filters in the prompt, and get back ranked article excerpts with titles, URLs, and metadata.
+
+!!! note
+    Requires AG2 with MCP support and a Webz.io API token: `pip install "ag2[mcp]"`
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import WebzioNewsSearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[WebzioNewsSearchToolkit(api_token=os.environ["WEBZ_API_TOKEN"])],
+)
+```
+
+If `api_token` is omitted, the toolkit reads `WEBZ_API_TOKEN` from the environment.
+
+## Tool
+
+| Tool | Description |
+| :--- | :--- |
+| `news_search_by_webz` | Semantic news search with filters (language, country, days, sentiment, domain, ticker, and more) |
+
+Filter names and schemas are loaded live from the hosted [News Search MCP server](https://docs.webz.io/docs/webz/news-search-api-mcp){.external-link target="_blank"} (`tools/list`). New filters on the server appear without an AG2 release.
+
+## Register only news search
+
+Call `search()` to register the news search tool:
+
+```python linenums="1"
+toolkit = WebzioNewsSearchToolkit(api_token=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search()],
+)
+```
+
+Today the MCP server exposes a single tool, so `toolkit` and `toolkit.search()` are equivalent.
+
+## Configuration
+
+| Name | Default | Description |
+| :--- | :--- | :--- |
+| `WEBZ_API_TOKEN` | required | API token from the [Webz.io dashboard](https://webz.io){.external-link target="_blank"} |
+| `WEBZ_MCP_URL` | `https://news-search-mcp.webz.io/mcp` | Override for testing against another MCP endpoint |
+
+You can also pass `api_token=` and `mcp_url=` to `WebzioNewsSearchToolkit()`. Each search uses the same News Search API credits and rate limits as other Webz.io clients.
+
+See the [MCP tool reference](https://docs.webz.io/docs/webz/news-search-api-mcp#tool-reference){.external-link target="_blank"} for current filters.
