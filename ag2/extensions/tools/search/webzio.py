@@ -4,11 +4,11 @@
 
 """Webz.io contextual news search Extension for AG2.
 
-Wraps the hosted News Search MCP server so agents can search global news
-in natural language. Filter schemas come from MCP ``tools/list`` at runtime
-and are not hardcoded in this module.
+Provides a toolkit that lets agents query the hosted News Search MCP server
+and receive ranked article excerpts with titles, URLs, and metadata. Filter
+schemas come from MCP ``tools/list`` at runtime and are not hardcoded here.
 
-Maintainer: Webz.io (ShakedDegani)
+Maintainer: ShakedDegani
 Docs: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/webzio/
 """
 
@@ -108,6 +108,10 @@ class WebzioNewsSearchToolkit(MCPToolkit):
         agent = Agent("researcher", config=config, tools=[toolkit.search()])
 
     Reads ``WEBZ_API_TOKEN`` from the environment when ``api_token`` is omitted.
+
+    Attributes:
+        config: MCP server configuration. Includes the hosted URL, Bearer
+            token, ``allowed_tools``, and ``server_label``.
     """
 
     def __init__(
