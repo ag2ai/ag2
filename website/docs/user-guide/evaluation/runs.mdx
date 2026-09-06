@@ -286,7 +286,9 @@ result = await evaluate_traces(source, scorers=[...], suite=suite, store_dir="ru
 Reconstruction understands **two span dialects**, auto-detected per trace, so traces from a range of tools and frameworks grade unchanged:
 
 - the [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/){.external-link target="_blank"} — `gen_ai.*` spans, what AG2's own `TelemetryMiddleware` emits, and
-- [OpenInference](https://github.com/Arize-ai/openinference){.external-link target="_blank"} — `openinference.span.kind` + `llm.*` / `tool.*`, emitted by the Arize/Phoenix instrumentors.
+- [OpenInference](https://github.com/Arize-ai/openinference){.external-link target="_blank"} — `openinference.span.kind` + `llm.*` / `tool.*`, emitted by Arize Phoenix instrumentors and other OpenInference-compatible instrumentation.
+
+If you are exporting AG2 traces to Arize, use [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing){.external-link target="_blank"} for managed production observability and evaluation, or [Arize Phoenix](https://arize.com/docs/phoenix){.external-link target="_blank"} for open-source local or self-hosted workflows. Arize's guides cover how trace data feeds [agent evaluation](https://arize.com/guides/ai-agent-handbook/agent-evaluation/){.external-link target="_blank"} and [LLM evaluation](https://arize.com/resources/llm-evaluation/){.external-link target="_blank"}.
 
 ### Bring your own spans
 

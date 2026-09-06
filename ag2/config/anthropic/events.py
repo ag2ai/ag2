@@ -14,8 +14,10 @@ from anthropic.types import (
     CodeExecutionResultBlock,
     CodeExecutionToolResultBlock,
     CodeExecutionToolResultError,
+    ContainerUploadBlock,
     EncryptedCodeExecutionResultBlock,
     PlainTextSource,
+    RedactedThinkingBlock,
     ServerToolUseBlock,
     TextEditorCodeExecutionCreateResultBlock,
     TextEditorCodeExecutionStrReplaceResultBlock,
@@ -34,6 +36,7 @@ from anthropic.types import (
 )
 
 from ag2.events import (
+    BaseEvent,
     BinaryInput,
     BinaryType,
     BuiltinToolCallEvent,
@@ -41,6 +44,7 @@ from ag2.events import (
     Field,
     FileIdInput,
     Input,
+    ProviderReplay,
     TextInput,
     ToolResult,
     UrlInput,
@@ -58,6 +62,32 @@ AnthropicServerToolResultBlockType: TypeAlias = (
     | TextEditorCodeExecutionToolResultBlock
     | ToolSearchToolResultBlock
 )
+
+
+class AnthropicRedactedThinkingEvent(BaseEvent, ProviderReplay):
+    """Safety-redacted thinking, opaque and encrypted.
+
+    Anthropic requires the block echoed back unchanged on the next turn, so it is
+    a replay anchor rather than a transient reasoning event.
+    """
+
+    __replay_role__ = "anchor"
+
+    block: RedactedThinkingBlock = Field(repr=False)
+
+
+class AnthropicContainerUploadEvent(BaseEvent):
+    """A file the code-execution container produced.
+
+    Recorded so the ``file_id`` survives, never replayed: the API answers 400
+    "'container_upload' blocks are not permitted within assistant turns".
+    """
+
+    block: ContainerUploadBlock = Field(repr=False)
+
+    @property
+    def file_id(self) -> str:
+        return self.block.file_id
 
 
 class AnthropicServerToolCallEvent(BuiltinToolCallEvent):
