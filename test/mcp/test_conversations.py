@@ -20,7 +20,6 @@ from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from mcp_types.version import LATEST_HANDSHAKE_VERSION, LATEST_MODERN_VERSION
-from pydantic import BaseModel
 
 from ag2 import Agent, Context
 from ag2.context import StreamId
@@ -33,14 +32,9 @@ from ag2.mcp.testing import connect, connect_modern, serve
 from ag2.mcp.tools import ToolContext
 from ag2.testing import TestConfig
 
-from ._helpers import RecordingConfig
+from ._helpers import RecordingConfig, Weather
 
 _JSON = {"Accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}", "Content-Type": CONTENT_TYPE_JSON}
-
-
-class Weather(BaseModel):
-    city: str
-    temp_c: float
 
 
 def _agent(config: RecordingConfig) -> Agent:

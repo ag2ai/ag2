@@ -16,27 +16,25 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from dirty_equals import IsPartialDict
 from mcp.client.extension import advertise
 from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID, ResourceCsp, ResourcePermissions
 from mcp.types import CallToolResult, DiscoverResult, TextContent, TextResourceContents
 from mcp_types.version import LATEST_MODERN_VERSION
 
-from ag2 import Agent
-from ag2.mcp import AppResource, MCPServer, mcp_tool
+from ag2.mcp import AppResource, MCPServer, client_supports_apps, mcp_tool
 from ag2.mcp.apps import TOOL_META_KEY
 from ag2.mcp.errors import MCPAppURIError, MCPDuplicateAppURIError, MCPToolNameConflictError
 from ag2.mcp.testing import connect, connect_modern
-from ag2.testing import TestConfig
+from ag2.mcp.tools import MCPRequestContext
+
+from ._helpers import make_agent, text_of, tool_named
 
 CARD = "<html><head><title>Card</title></head><body><div id='card'></div></body></html>"
 
 # What an MCP Apps client advertises: the extension, listing the one MIME type a
 # ``ui://`` document is ever served under.
 _UI_AD = {EXTENSION_ID: {"mimeTypes": [APP_MIME_TYPE]}}
-
-
-def _agent() -> Agent:
-    return Agent("shopkeeper", config=TestConfig("hi"))
 
 
 @dataclass
@@ -60,17 +58,6 @@ def _card_app(html: Any = CARD, **kwargs: Any) -> AppResource:
     return app
 
 
-def _tool(result: Any, name: str) -> Any:
-    """The advertised tool named ``name`` in a ``tools/list`` result."""
-    return next(t for t in result.tools if t.name == name)
-
-
-def _text(result: CallToolResult) -> str:
-    block = result.content[0]
-    assert isinstance(block, TextContent)
-    return block.text
-
-
 def _body(contents: Any) -> str:
     assert isinstance(contents, TextResourceContents)
     return contents.text
@@ -79,12 +66,12 @@ def _body(contents: Any) -> str:
 @pytest.mark.asyncio
 class TestTheBinding:
     async def test_a_tool_advertises_the_documents_uri(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect(server, extensions=_UI_AD) as session:
             listed = await session.list_tools()
 
-        assert _tool(listed, "show_item").meta == {"ui": {"resourceUri": "ui://shop/card"}}
+        assert tool_named(listed, "show_item").meta == {"ui": {"resourceUri": "ui://shop/card"}}
 
     async def test_several_tools_on_one_app_all_carry_it(self) -> None:
         app = AppResource("ui://shop/card", CARD)
@@ -99,11 +86,11 @@ class TestTheBinding:
             """Refresh the card in place."""
             return Item("b", 2)
 
-        async with connect(MCPServer(_agent(), apps=[app]), extensions=_UI_AD) as session:
+        async with connect(MCPServer(make_agent(), apps=[app]), extensions=_UI_AD) as session:
             listed = await session.list_tools()
 
-        assert _tool(listed, "render").meta == {"ui": {"resourceUri": "ui://shop/card"}}
-        assert _tool(listed, "refresh").meta == {"ui": {"resourceUri": "ui://shop/card", "visibility": ["app"]}}
+        assert tool_named(listed, "render").meta == {"ui": {"resourceUri": "ui://shop/card"}}
+        assert tool_named(listed, "refresh").meta == {"ui": {"resourceUri": "ui://shop/card", "visibility": ["app"]}}
 
     async def test_authors_own_meta_travels_alongside_the_binding(self) -> None:
         app = AppResource("ui://shop/card", CARD)
@@ -113,10 +100,10 @@ class TestTheBinding:
             """Render the card."""
             return Item("a", 1)
 
-        async with connect(MCPServer(_agent(), apps=[app]), extensions=_UI_AD) as session:
+        async with connect(MCPServer(make_agent(), apps=[app]), extensions=_UI_AD) as session:
             listed = await session.list_tools()
 
-        assert _tool(listed, "render").meta == {
+        assert tool_named(listed, "render").meta == {
             "com.example/hint": "left",
             "ui": {"resourceUri": "ui://shop/card"},
         }
@@ -135,7 +122,7 @@ class TestTheBinding:
 @pytest.mark.asyncio
 class TestTheDocument:
     async def test_it_is_read_with_the_required_mime_type(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app(bootstrap=False)])
+        server = MCPServer(make_agent(), apps=[_card_app(bootstrap=False)])
 
         async with connect(server) as session:
             read = await session.read_resource("ui://shop/card")
@@ -144,7 +131,7 @@ class TestTheDocument:
         assert _body(read.contents[0]) == CARD
 
     async def test_it_is_hidden_from_the_listing_by_default(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect(server) as session:
             listed = await session.list_resources()
@@ -155,7 +142,7 @@ class TestTheDocument:
         assert _body(read.contents[0])
 
     async def test_it_is_listed_when_the_app_asks(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app(listed=True)])
+        server = MCPServer(make_agent(), apps=[_card_app(listed=True)])
 
         async with connect(server) as session:
             listed = await session.list_resources()
@@ -169,7 +156,7 @@ class TestTheDocument:
             reads.append(1)
             return f"<p>read {len(reads)}</p>"
 
-        server = MCPServer(_agent(), apps=[_card_app(body)])
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
 
         async with connect(server) as session:
             first = await session.read_resource("ui://shop/card")
@@ -182,7 +169,7 @@ class TestTheDocument:
         async def body() -> str:
             return "<p>async</p>"
 
-        server = MCPServer(_agent(), apps=[_card_app(body)])
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
 
         async with connect(server) as session:
             read = await session.read_resource("ui://shop/card")
@@ -197,7 +184,7 @@ class TestTheDocument:
             prefers_border=True,
         )
 
-        async with connect(MCPServer(_agent(), apps=[app])) as session:
+        async with connect(MCPServer(make_agent(), apps=[app])) as session:
             read = await session.read_resource("ui://shop/card")
 
         assert read.contents[0].meta == {
@@ -212,7 +199,7 @@ class TestTheDocument:
     async def test_raw_meta_passes_through_alongside_the_policy(self) -> None:
         app = _card_app(prefers_border=False, meta={"com.example/rev": 3})
 
-        async with connect(MCPServer(_agent(), apps=[app])) as session:
+        async with connect(MCPServer(make_agent(), apps=[app])) as session:
             read = await session.read_resource("ui://shop/card")
 
         assert read.contents[0].meta == {"com.example/rev": 3, "ui": {"prefersBorder": False}}
@@ -220,13 +207,12 @@ class TestTheDocument:
     async def test_title_and_description_reach_the_listing(self) -> None:
         app = _card_app(listed=True, title="Product card", description="A product card.")
 
-        async with connect(MCPServer(_agent(), apps=[app])) as session:
+        async with connect(MCPServer(make_agent(), apps=[app])) as session:
             listed = await session.list_resources()
 
-        assert (listed.resources[0].title, listed.resources[0].description) == (
-            "Product card",
-            "A product card.",
-        )
+        assert [r.model_dump() for r in listed.resources] == [
+            IsPartialDict({"title": "Product card", "description": "A product card."})
+        ]
 
     async def test_a_non_ui_uri_raises_at_construction(self) -> None:
         with pytest.raises(MCPAppURIError, match="ui://"):
@@ -234,13 +220,13 @@ class TestTheDocument:
 
     async def test_two_apps_sharing_a_uri_raise_at_construction(self) -> None:
         with pytest.raises(MCPDuplicateAppURIError, match="ui://shop/card"):
-            MCPServer(_agent(), apps=[_card_app(), _card_app()])
+            MCPServer(make_agent(), apps=[_card_app(), _card_app()])
 
 
 @pytest.mark.asyncio
 class TestTheRuntime:
     async def test_a_served_document_carries_it_by_default(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect(server) as session:
             read = await session.read_resource("ui://shop/card")
@@ -249,7 +235,7 @@ class TestTheRuntime:
 
     async def test_the_text_exposed_is_the_text_injected(self) -> None:
         app = _card_app()
-        server = MCPServer(_agent(), apps=[app])
+        server = MCPServer(make_agent(), apps=[app])
 
         async with connect(server) as session:
             read = await session.read_resource("ui://shop/card")
@@ -258,7 +244,7 @@ class TestTheRuntime:
 
     async def test_it_runs_before_the_authors_own_script(self) -> None:
         app = _card_app()
-        server = MCPServer(_agent(), apps=[app])
+        server = MCPServer(make_agent(), apps=[app])
 
         async with connect(server) as session:
             served = _body((await session.read_resource("ui://shop/card")).contents[0])
@@ -271,7 +257,7 @@ class TestTheRuntime:
             "ui://shop/card",
             '<html><head\n  lang="en"><title>Card</title></head><body></body></html>',
         )
-        server = MCPServer(_agent(), apps=[app])
+        server = MCPServer(make_agent(), apps=[app])
 
         async with connect(server) as session:
             served = _body((await session.read_resource("ui://shop/card")).contents[0])
@@ -280,9 +266,18 @@ class TestTheRuntime:
         assert served.index("window.ag2ui") > served.index('lang="en"')
         assert served.index("window.ag2ui") < served.index("<title>")
 
+    async def test_it_lands_after_the_html_tag_when_there_is_no_head(self) -> None:
+        app = AppResource("ui://shop/card", "<html><body><div id='card'></div></body></html>")
+        server = MCPServer(make_agent(), apps=[app])
+
+        async with connect(server) as session:
+            served = _body((await session.read_resource("ui://shop/card")).contents[0])
+
+        assert served == "<html>" + app.runtime_script() + "<body><div id='card'></div></body></html>"
+
     async def test_a_fragment_gets_it_at_the_front(self) -> None:
         app = AppResource("ui://shop/card", "<div id='card'></div>")
-        server = MCPServer(_agent(), apps=[app])
+        server = MCPServer(make_agent(), apps=[app])
 
         async with connect(server) as session:
             served = _body((await session.read_resource("ui://shop/card")).contents[0])
@@ -290,7 +285,7 @@ class TestTheRuntime:
         assert served == app.runtime_script() + "<div id='card'></div>"
 
     async def test_turning_injection_off_leaves_the_document_byte_for_byte(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app(bootstrap=False)])
+        server = MCPServer(make_agent(), apps=[_card_app(bootstrap=False)])
 
         async with connect(server) as session:
             read = await session.read_resource("ui://shop/card")
@@ -322,25 +317,25 @@ class TestTheRuntime:
 @pytest.mark.asyncio
 class TestDegradation:
     async def test_a_client_without_the_extension_does_not_see_the_binding(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect(server) as session:
             listed = await session.list_tools()
             called = await session.call_tool("show_item", {"item_id": "mug"})
 
-        assert _tool(listed, "show_item").meta is None
+        assert tool_named(listed, "show_item").meta is None
         # Still listed, still callable, and the text is the whole answer for it.
-        assert _text(called) == "mug costs 10."
+        assert text_of(called) == "mug costs 10."
 
     async def test_the_extension_without_the_mime_type_is_not_support(self) -> None:
         # Advertising the identifier alone says nothing about being able to render
         # ``text/html;profile=mcp-app``, which is the only thing the binding promises.
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect(server, extensions={EXTENSION_ID: {}}) as session:
             listed = await session.list_tools()
 
-        assert _tool(listed, "show_item").meta is None
+        assert tool_named(listed, "show_item").meta is None
 
     async def test_other_meta_survives_the_withholding(self) -> None:
         app = AppResource("ui://shop/card", CARD)
@@ -350,31 +345,47 @@ class TestDegradation:
             """Render the card."""
             return Item("a", 1)
 
-        async with connect(MCPServer(_agent(), apps=[app])) as session:
+        async with connect(MCPServer(make_agent(), apps=[app])) as session:
             listed = await session.list_tools()
 
-        assert _tool(listed, "render").meta == {"com.example/hint": "left"}
+        assert tool_named(listed, "render").meta == {"com.example/hint": "left"}
+
+    async def test_a_handler_can_ask_whether_the_client_will_render(self) -> None:
+        app = AppResource("ui://shop/card", CARD)
+
+        @app.tool
+        async def render(ctx: MCPRequestContext) -> str:
+            """Word the answer differently when there will be no card."""
+            return "a card is coming" if client_supports_apps(ctx) else "Espresso cup, $12, in stock."
+
+        async with connect(MCPServer(make_agent(), apps=[app]), extensions=_UI_AD) as session:
+            with_ui = await session.call_tool("render", {})
+        async with connect(MCPServer(make_agent(), apps=[app])) as session:
+            without_ui = await session.call_tool("render", {})
+
+        assert text_of(with_ui) == "a card is coming"
+        assert text_of(without_ui) == "Espresso cup, $12, in stock."
 
     async def test_a_modern_client_that_advertised_sees_the_binding(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect_modern(server, extensions=[advertise(EXTENSION_ID, {"mimeTypes": [APP_MIME_TYPE]})]) as s:
             listed = await s.list_tools()
 
-        assert _tool(listed, "show_item").meta == {"ui": {"resourceUri": "ui://shop/card"}}
+        assert tool_named(listed, "show_item").meta == {"ui": {"resourceUri": "ui://shop/card"}}
 
     async def test_a_modern_client_that_advertised_nothing_does_not_see_it(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect_modern(server) as session:
             listed = await session.list_tools()
             called = await session.call_tool("show_item", {"item_id": "mug"})
 
-        assert _tool(listed, "show_item").meta is None
-        assert _text(called) == "mug costs 10."
+        assert tool_named(listed, "show_item").meta is None
+        assert text_of(called) == "mug costs 10."
 
     async def test_a_server_holding_an_app_advertises_the_extension(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect_modern(server) as session:
             discovered = DiscoverResult.model_validate(await session.send_discover(LATEST_MODERN_VERSION))
@@ -382,7 +393,7 @@ class TestDegradation:
         assert discovered.capabilities.extensions == {EXTENSION_ID: {}}
 
     async def test_an_explicit_setting_wins_over_the_automatic_one(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app()], extensions={EXTENSION_ID: {"mimeTypes": ["x"]}})
+        server = MCPServer(make_agent(), apps=[_card_app()], extensions={EXTENSION_ID: {"mimeTypes": ["x"]}})
 
         async with connect_modern(server) as session:
             discovered = DiscoverResult.model_validate(await session.send_discover(LATEST_MODERN_VERSION))
@@ -395,7 +406,7 @@ class TestDegradation:
             """A tool with no document."""
             return "ok"
 
-        async with connect_modern(MCPServer(_agent(), tools=[plain])) as session:
+        async with connect_modern(MCPServer(make_agent(), tools=[plain])) as session:
             discovered = DiscoverResult.model_validate(await session.send_discover(LATEST_MODERN_VERSION))
 
         assert discovered.capabilities.extensions is None
@@ -404,7 +415,7 @@ class TestDegradation:
 @pytest.mark.asyncio
 class TestWhichToolAnswered:
     async def test_a_result_names_the_tool_that_produced_it(self) -> None:
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect(server, extensions=_UI_AD) as session:
             result = await session.call_tool("show_item", {"item_id": "mug"})
@@ -420,7 +431,7 @@ class TestWhichToolAnswered:
             """Show a product card."""
             return Item("mug", 10)
 
-        async with connect(MCPServer(_agent(), apps=[app]), extensions=_UI_AD) as session:
+        async with connect(MCPServer(make_agent(), apps=[app]), extensions=_UI_AD) as session:
             result = await session.call_tool("show", {})
 
         assert result.meta == {TOOL_META_KEY: "show"}
@@ -436,11 +447,11 @@ class TestWhichToolAnswered:
                 structuredContent={"name": "mug"},
             )
 
-        async with connect(MCPServer(_agent(), apps=[app]), extensions=_UI_AD) as session:
+        async with connect(MCPServer(make_agent(), apps=[app]), extensions=_UI_AD) as session:
             result = await session.call_tool("render", {})
 
         assert result.meta == {TOOL_META_KEY: "render"}
-        assert _text(result) == "a mug"
+        assert text_of(result) == "a mug"
         assert result.structured_content == {"name": "mug"}
 
     async def test_an_author_who_sets_the_key_keeps_their_value(self) -> None:
@@ -451,7 +462,7 @@ class TestWhichToolAnswered:
             """Route by my own scheme rather than by tool name."""
             return CallToolResult(content=[], _meta={TOOL_META_KEY: "card:refresh"})
 
-        async with connect(MCPServer(_agent(), apps=[app]), extensions=_UI_AD) as session:
+        async with connect(MCPServer(make_agent(), apps=[app]), extensions=_UI_AD) as session:
             result = await session.call_tool("render", {})
 
         assert result.meta == {TOOL_META_KEY: "card:refresh"}
@@ -464,7 +475,7 @@ class TestWhichToolAnswered:
             """Render with metadata of my own."""
             return CallToolResult(content=[], _meta={"com.example/rev": 3})
 
-        async with connect(MCPServer(_agent(), apps=[app]), extensions=_UI_AD) as session:
+        async with connect(MCPServer(make_agent(), apps=[app]), extensions=_UI_AD) as session:
             result = await session.call_tool("render", {})
 
         assert result.meta == {"com.example/rev": 3, TOOL_META_KEY: "render"}
@@ -475,7 +486,7 @@ class TestWhichToolAnswered:
             """A tool with no document."""
             return Item("mug", 10)
 
-        async with connect(MCPServer(_agent(), tools=[plain])) as session:
+        async with connect(MCPServer(make_agent(), tools=[plain])) as session:
             result = await session.call_tool("plain", {})
 
         assert result.meta is None
@@ -483,7 +494,7 @@ class TestWhichToolAnswered:
     async def test_the_stamp_survives_the_binding_being_withheld(self) -> None:
         # The stamp is on the *result* and the binding is on the *tool*; a client
         # without UI support loses one and not the other.
-        server = MCPServer(_agent(), apps=[_card_app()])
+        server = MCPServer(make_agent(), apps=[_card_app()])
 
         async with connect(server) as session:
             result = await session.call_tool("show_item", {"item_id": "mug"})
@@ -499,9 +510,9 @@ class TestDecomposition:
         Compares what a client actually receives — the advertised tool, the
         resource listing, the document read — between the two registrations.
         """
-        shorthand = MCPServer(_agent(), apps=[_card_app(listed=True)])
+        shorthand = MCPServer(make_agent(), apps=[_card_app(listed=True)])
         by_hand_app = _card_app(listed=True)
-        by_hand = MCPServer(_agent(), tools=by_hand_app.tools, resources=[by_hand_app.resource])
+        by_hand = MCPServer(make_agent(), tools=by_hand_app.tools, resources=[by_hand_app.resource])
 
         async with connect(shorthand, extensions=_UI_AD) as session:
             a_tools = await session.list_tools()
@@ -521,7 +532,7 @@ class TestDecomposition:
 
     async def test_the_extension_advertisement_follows_the_tools_too(self) -> None:
         app = _card_app()
-        by_hand = MCPServer(_agent(), tools=app.tools, resources=[app.resource])
+        by_hand = MCPServer(make_agent(), tools=app.tools, resources=[app.resource])
 
         async with connect_modern(by_hand) as session:
             discovered = DiscoverResult.model_validate(await session.send_discover(LATEST_MODERN_VERSION))
@@ -537,24 +548,25 @@ class TestDecomposition:
             return Item("a", 1)
 
         with pytest.raises(MCPToolNameConflictError, match="conversational tool"):
-            MCPServer(_agent(), apps=[app])
+            MCPServer(make_agent(), apps=[app])
 
 
 @pytest.mark.asyncio
-class TestOrdinaryToolsAreUnaffected:
-    async def test_a_plain_tool_alongside_an_app_keeps_its_shape(self) -> None:
-        @mcp_tool
-        async def plain(word: str) -> str:
-            """Echo a word."""
-            return word
+async def test_an_ordinary_tool_alongside_an_app_keeps_its_shape() -> None:
+    @mcp_tool
+    async def plain(word: str) -> str:
+        """Echo a word."""
+        return word
 
-        server = MCPServer(_agent(), tools=[plain], apps=[_card_app()])
+    server = MCPServer(make_agent(), tools=[plain], apps=[_card_app()])
 
-        async with connect(server, extensions=_UI_AD) as session:
-            listed = await session.list_tools()
-            result = await session.call_tool("plain", {"word": "hi"})
+    async with connect(server, extensions=_UI_AD) as session:
+        listed = await session.list_tools()
+        result = await session.call_tool("plain", {"word": "hi"})
 
-        assert _tool(listed, "plain").meta is None
-        assert _tool(listed, "plain").output_schema is None
-        assert _text(result) == "hi"
-        assert result.meta is None
+    advertised = tool_named(listed, "plain")
+
+    assert advertised.meta is None
+    assert advertised.output_schema is None
+    assert text_of(result) == "hi"
+    assert result.meta is None

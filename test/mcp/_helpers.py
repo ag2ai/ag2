@@ -5,12 +5,39 @@
 from collections.abc import Sequence
 from typing import Any
 
+from mcp.types import CallToolResult, ListToolsResult, TextContent
+from mcp.types import Tool as MCPTool
+from pydantic import BaseModel
 from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig
 from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelRequest, ModelResponse, TextInput
+from ag2.testing import TestConfig
+
+
+class Weather(BaseModel):
+    """The stock structured reply these tests hand an agent as its response schema."""
+
+    city: str
+    temp_c: float
+
+
+def text_of(result: CallToolResult) -> str:
+    """The text carried by a result's first content block."""
+    block = result.content[0]
+    assert isinstance(block, TextContent)
+    return block.text
+
+
+def tool_named(result: ListToolsResult, name: str) -> MCPTool:
+    """The advertised tool called ``name``.
+
+    By name and not by index: the conversational tool shares the listing, so a
+    positional read passes just as happily against the wrong tool.
+    """
+    return next(t for t in result.tools if t.name == name)
 
 
 class ChunkConfig(ModelConfig):
@@ -47,8 +74,15 @@ class ChunkClient(LLMClient):
         return ModelResponse(message=message)
 
 
-def make_agent(*, name: str = "test-agent", prompt: str = "", config: ModelConfig, **kwargs: Any) -> Agent:
-    return Agent(name, prompt, config=config, **kwargs)
+def make_agent(
+    *, name: str = "test-agent", prompt: str = "", config: ModelConfig | None = None, **kwargs: Any
+) -> Agent:
+    """An agent for server-side tests.
+
+    ``config`` defaults to a scripted one-line reply, for the many tests where
+    what the model says never enters the assertion.
+    """
+    return Agent(name, prompt, config=config if config is not None else TestConfig("hi"), **kwargs)
 
 
 class RecordingConfig(ModelConfig):

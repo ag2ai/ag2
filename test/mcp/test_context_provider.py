@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from mcp.types import CallToolResult
 from pydantic import BaseModel
 
 from ag2 import Agent
@@ -11,14 +10,11 @@ from ag2.events import ModelResponse
 from ag2.mcp.executor import AgentExecutor, AskContext
 from ag2.testing import TestConfig
 
+from ._helpers import text_of
+
 
 class _Weather(BaseModel):
     city: str
-
-
-def _text(result: CallToolResult) -> str:
-    block = result.content[0]
-    return getattr(block, "text", "")
 
 
 @pytest.mark.asyncio
@@ -40,7 +36,7 @@ class TestContextProvider:
         # No auth context bound in this unit test, so the provider gets None.
         assert seen["access"] is None
         # The reply came back (the injected variables/prompt were accepted by ask()).
-        assert _text(result) == "hi"
+        assert text_of(result) == "hi"
 
     async def test_no_provider_is_stateless(self) -> None:
         agent = Agent("greeter", config=TestConfig("hi"))
@@ -48,7 +44,7 @@ class TestContextProvider:
 
         result = await executor.call("ask", message="hello", context=None, request_context=None)
 
-        assert _text(result) == "hi"
+        assert text_of(result) == "hi"
 
     async def test_empty_message_is_error(self) -> None:
         executor = AgentExecutor(Agent("greeter", config=TestConfig("hi")), stream_progress=False)
@@ -69,7 +65,7 @@ class TestContextProvider:
 
         result = await executor.call("ask", message="hello", context=None, request_context=None)
 
-        assert _text(result) == "hi"
+        assert text_of(result) == "hi"
 
     async def test_structured_output_none_is_error(self) -> None:
         # Object response_schema + an empty model reply -> content() is None ->

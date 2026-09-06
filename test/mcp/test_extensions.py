@@ -7,21 +7,17 @@ from typing import Any
 
 import pytest
 from mcp.client.extension import advertise
-from mcp.types import CallToolResult, DiscoverResult, TextContent
+from mcp.types import CallToolResult, DiscoverResult
 from mcp_types.version import LATEST_MODERN_VERSION
 
-from ag2 import Agent
 from ag2.mcp import MCPServer, mcp_tool
 from ag2.mcp.extensions import client_extension
 from ag2.mcp.testing import connect, connect_modern
 from ag2.mcp.tools import MCPRequestContext
-from ag2.testing import TestConfig
+
+from ._helpers import make_agent, text_of
 
 _ID = "com.example/thing"
-
-
-def _agent() -> Agent:
-    return Agent("g", config=TestConfig("hi"))
 
 
 @mcp_tool
@@ -37,9 +33,7 @@ def _handshake_ad(settings: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def _reported(result: CallToolResult) -> Any:
     """What ``read_thing`` saw, decoded from its one text block."""
-    block = result.content[0]
-    assert isinstance(block, TextContent)
-    return json.loads(block.text)
+    return json.loads(text_of(result))
 
 
 async def _discovered(session: Any) -> DiscoverResult:
@@ -55,7 +49,7 @@ async def _discovered(session: Any) -> DiscoverResult:
 @pytest.mark.asyncio
 class TestServerAdvertisesExtensions:
     async def test_modern_client_receives_the_extension_map(self) -> None:
-        server = MCPServer(_agent(), extensions={_ID: {"level": 2}})
+        server = MCPServer(make_agent(), extensions={_ID: {"level": 2}})
 
         async with connect_modern(server) as session:
             discovered = await _discovered(session)
@@ -66,7 +60,7 @@ class TestServerAdvertisesExtensions:
         # Not a bug to fix: ``ServerCapabilities.extensions`` does not exist in the
         # 2025-11-25 wire schema, so handshake-era serialization drops the field.
         # Advertising is modern-era only; reading a client's advertisement is not.
-        server = MCPServer(_agent(), extensions={_ID: {"level": 2}})
+        server = MCPServer(make_agent(), extensions={_ID: {"level": 2}})
 
         async with connect(server) as session:
             capabilities = session.server_capabilities
@@ -77,10 +71,10 @@ class TestServerAdvertisesExtensions:
     async def test_invalid_identifier_raises_at_construction(self) -> None:
         # A reverse-DNS prefix is mandatory; "thing" has none.
         with pytest.raises(TypeError, match="vendor-prefix/name"):
-            MCPServer(_agent(), extensions={"thing": {}})
+            MCPServer(make_agent(), extensions={"thing": {}})
 
     async def test_no_extensions_advertises_nothing(self) -> None:
-        async with connect_modern(MCPServer(_agent())) as session:
+        async with connect_modern(MCPServer(make_agent())) as session:
             discovered = await _discovered(session)
 
         assert discovered.capabilities.extensions is None
@@ -89,7 +83,7 @@ class TestServerAdvertisesExtensions:
 @pytest.mark.asyncio
 class TestServerReadsClientExtensions:
     async def test_handshake_client_advertisement_is_readable(self) -> None:
-        server = MCPServer(_agent(), tools=[read_thing])
+        server = MCPServer(make_agent(), tools=[read_thing])
 
         async with connect(server, extensions=_handshake_ad({"level": 1})) as session:
             result = await session.call_tool("read_thing", {})
@@ -97,7 +91,7 @@ class TestServerReadsClientExtensions:
         assert _reported(result) == {"level": 1}
 
     async def test_modern_client_advertisement_is_readable(self) -> None:
-        server = MCPServer(_agent(), tools=[read_thing])
+        server = MCPServer(make_agent(), tools=[read_thing])
 
         async with connect_modern(server, extensions=[advertise(_ID, {"level": 1})]) as session:
             result = await session.call_tool("read_thing", {})
@@ -105,7 +99,7 @@ class TestServerReadsClientExtensions:
         assert _reported(result) == {"level": 1}
 
     async def test_empty_settings_are_distinguishable_from_no_advertisement(self) -> None:
-        server = MCPServer(_agent(), tools=[read_thing])
+        server = MCPServer(make_agent(), tools=[read_thing])
 
         async with connect(server, extensions=_handshake_ad({})) as session:
             supported = await session.call_tool("read_thing", {})
