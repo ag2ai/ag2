@@ -506,6 +506,8 @@ To configure a model, import the specific provider's configuration class and ini
     )
     ```
 
+    `ag2[anthropic]` requires `anthropic>=1.2.0,<2`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and the sampling parameters (`temperature`, `top_p`, `top_k`).
+
 === "Gemini"
     ```python linenums="1"
     from ag2.config import GeminiConfig
@@ -524,7 +526,7 @@ To configure a model, import the specific provider's configuration class and ini
 
     # Configure an Amazon Bedrock model (Converse API)
     config = BedrockConfig(
-        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
+        model="global.anthropic.claude-sonnet-5",
         region_name="us-east-1",
         streaming=True
     )
@@ -608,6 +610,60 @@ from ag2.config import OpenAIConfig
 config = OpenAIConfig(model="gpt-5")
 ```
 
+### Anthropic Configuration
+
+`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview) through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.2.0,<2`.
+
+If `api_key` is not passed explicitly, it is resolved from the `ANTHROPIC_API_KEY` environment variable.
+
+```python
+from ag2.config import AnthropicConfig
+
+# Auth resolved from ANTHROPIC_API_KEY when omitted
+config = AnthropicConfig(model="claude-haiku-4-5-20251001", streaming=True)
+```
+
+#### Custom HTTP Client
+
+`anthropic>=1` is built on [`httpx2`](https://pypi.org/project/httpx2/), so `http_client` takes an `httpx2.AsyncClient`:
+
+```python
+import httpx2
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(
+    model="claude-haiku-4-5-20251001",
+    api_key="sk-ant-...",
+    http_client=httpx2.AsyncClient(proxy="http://proxy.example.com:8080"),
+)
+```
+
+!!! warning "An `httpx` client is rejected"
+
+    The `anthropic` SDK keeps no compatibility path for a legacy `httpx.AsyncClient` - it raises `TypeError` as soon as the client is built, where the OpenAI SDK would still accept one. Rebuild yours against `httpx2`; the two packages share an API, so this is usually just the import line.
+
+#### Sampling Parameters
+
+`temperature`, `top_p` and `top_k` are ordinary fields on `AnthropicConfig`. The 1.x Messages API dropped them from its method signature, so AG2 sends them in the request body, where the API still reads them:
+
+```python
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(
+    model="claude-haiku-4-5-20251001",
+    api_key="sk-ant-...",
+    temperature=0.2,
+)
+```
+
+!!! warning "Recent Claude models reject sampling parameters"
+
+    Claude Fable 5, Opus 5, Opus 4.8, Opus 4.7 and Sonnet 5 removed `temperature`, `top_p` and `top_k` from the Messages API - a request carrying any of them is answered with HTTP 400. Leave all three unset (the default) on those models. Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 and earlier still accept them.
+
+!!! note "`extra_body` precedence"
+
+    Pass `extra_body` to forward provider-specific keys that have no dedicated field. A key you write there wins over the same key AG2 derived from a field - an `extra_body={"temperature": 0.9}` overrides `temperature=0.2` - while unrelated keys are merged through untouched.
+
 ### Amazon Bedrock Authentication
 
 `BedrockConfig` authenticates in either of two ways, both resolved by the underlying AWS SDK:
@@ -625,7 +681,7 @@ export AWS_DEFAULT_REGION=us-east-1
 from ag2.config import BedrockConfig
 
 # Auth from AWS_BEARER_TOKEN_BEDROCK, region from AWS_DEFAULT_REGION
-config = BedrockConfig(model="anthropic.claude-sonnet-4-5-20250929-v1:0")
+config = BedrockConfig(model="global.anthropic.claude-sonnet-5")
 ```
 
 A region is always required - pass `region_name=` or set `AWS_DEFAULT_REGION`. Notes on API keys:
@@ -857,19 +913,50 @@ config = OpenAIConfig(
 ```
 
 !!! tip
-    If you are running a self-hosted server via HTTPS without a valid SSL certificate (e.g., a local self-signed certificate), you can disable SSL checks by passing a custom `httpx.AsyncClient` with `verify=False` to the configuration:
+    If you are running a self-hosted server via HTTPS without a valid SSL certificate (e.g., a local self-signed certificate), you can disable SSL checks by passing a custom `httpx2.AsyncClient` with `verify=False` to the configuration:
 
     ```python linenums="1" hl_lines="8"
-    import httpx
+    import httpx2
     from ag2.config import OpenAIConfig
 
     config = OpenAIConfig(
         model="qwen-3",
         base_url="https://localhost:8000/v1",
         api_key="NotRequired",
-        http_client=httpx.AsyncClient(verify=False)
+        http_client=httpx2.AsyncClient(verify=False)
     )
     ```
+
+!!! note "`http_client` is an `httpx2` client"
+    From `openai>=3` the OpenAI SDK uses [`httpx2`](https://pypi.org/project/httpx2/), which
+    `ag2[openai]` installs for you. `OpenAIConfig` and `OpenAIResponsesConfig` annotate
+    `http_client` accordingly, and ag2 forwards whatever you pass to the SDK untouched.
+
+    A legacy `httpx.AsyncClient` still works at runtime: the SDK keeps a compatibility path
+    for it, though it fails static type checking and the SDK's
+    [migration guide](https://github.com/openai/openai-python/blob/main/httpx2.md) calls that
+    path a migration aid that may be discontinued. Build the client with `httpx2.AsyncClient`
+    to be done with it.
+
+    Each provider takes the client its own SDK takes, so the annotation differs by provider -
+    `AnthropicConfig.http_client`, for instance, follows whichever package the pinned
+    `anthropic` release is built on.
+
+!!! warning "TLS certificates come from the operating system"
+    `httpx2` verifies certificates against the **operating system trust store**, not a
+    bundled one. Nothing extra is needed on a normal machine or a standard base image, but a
+    minimal container without system CA certificates will fail to connect. Install the
+    distribution's CA bundle (e.g. `ca-certificates`), or point the client at one explicitly:
+
+    ```python
+    import httpx2
+    from ag2.config import OpenAIConfig
+
+    config = OpenAIConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
+    ```
+
+    `certifi` remains installed - ag2's own core depends on `httpx` - but the OpenAI client
+    no longer reads it. Its presence is not evidence that TLS is configured there.
 
 ### Extra Body Parameters
 
@@ -2005,7 +2092,7 @@ from ag2.tools import SkillPlugin
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     plugins=[SkillPlugin()],
 )
 ```
@@ -2058,7 +2145,7 @@ from ag2.tools import SkillsToolkit
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SkillsToolkit()],
 )
 ```
@@ -2079,7 +2166,7 @@ skills = SkillsToolkit()
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[skills.list_skills(), skills.load_skill()],
 )
 ```
@@ -2158,7 +2245,7 @@ def convert(value: float, factor: float) -> str:
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     plugins=[SkillPlugin(unit_converter)],
 )
 ```
@@ -2212,7 +2299,7 @@ from ag2.tools import SkillSearchToolkit
 agent = Agent(
     "coder",
     "You are a helpful coding assistant. Use skills to extend your capabilities.",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SkillSearchToolkit()],  # adds search_skills, install_skill, remove_skill
 )
 
@@ -2624,6 +2711,12 @@ Retries failed LLM calls up to `max_retries` times.
 By default it retries any `Exception`, but you can narrow that with `retry_on=...`.
 
 Use it for transient failures such as provider timeouts or flaky network issues.
+
+A call that already published something to the stream - a chunk, reasoning, or a
+server-side tool call - is not retried; the exception propagates instead.
+Retrying would leave anyone watching the stream with both attempts' output, while the
+reply carries only the second.
+Failures that arrive before anything is published - connection errors, rate limits, `5xx` - retry as usual.
 
 ### `HistoryLimiter`
 
@@ -3283,6 +3376,7 @@ class TaskConfig:
     include_tools: Iterable[str] | None = None
     exclude_tools: Iterable[str] = ()
     extra_tools: Iterable[Callable | Tool] = ()
+    max_concurrency: int | None = None
 ```
 
 | Field | What it does |
@@ -3292,6 +3386,7 @@ class TaskConfig:
 | `include_tools` | Allowlist of parent-tool names to inherit. `None` means "inherit all". |
 | `exclude_tools` | Blocklist of parent-tool names to drop. Applied after `include_tools`. |
 | `extra_tools` | Additional tools given to sub-tasks that the parent does not have. |
+| `max_concurrency` | Optional cap shared by all sub-tasks spawned by this Agent. Extra work waits for a slot. `None` keeps concurrency unbounded. |
 
 By default a sub-task Agent inherits **all** of the parent's user-supplied tools. Sub-tasks are themselves constructed with `tasks=False` (the Agent default), so they have no `run_subtask` / `run_subtasks` tools - recursive delegation is structurally impossible and no depth limit is needed.
 
@@ -3306,6 +3401,7 @@ agent = Agent(
         config=worker_config,                 # cheaper model for sub-tasks
         prompt="You are a focused worker; one step only.",
         include_tools=["search", "fetch_url"],  # don't expose summarize to children
+        max_concurrency=4,                    # bound model/API fan-out
     ),
 )
 ```
@@ -3331,6 +3427,11 @@ When you opt in via `tasks=TaskConfig(...)`, the Agent exposes two tools to the 
 - `run_subtasks(tasks: list[str], parallel: bool = True)` - spawn multiple sub-tasks in one tool call. Defaults to running them concurrently with `asyncio.gather`; pass `parallel=False` only when later tasks depend on earlier results.
 
 The LLM is told (via the tool descriptions) that it can call `run_subtask` multiple times in parallel within a single response, and that `run_subtasks` is the deliberate fan-out form. Each child gets a fresh `MemoryStream` and the parent's tools (filtered by `TaskConfig`).
+
+Set `TaskConfig(max_concurrency=N)` when that fan-out needs a model, API, or
+resource limit. The cap is shared by both tools on the Agent, so several
+parallel `run_subtask` calls and a concurrent `run_subtasks` call cannot
+bypass one another.
 
 For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agentas_tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
 
@@ -3454,7 +3555,7 @@ For lightweight LLM-driven sub-agent delegation see [Subagents](subagents.md) - 
 from ag2 import Agent
 from ag2.config import AnthropicConfig
 
-agent = Agent("indexer", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent("indexer", config=AnthropicConfig(model="claude-sonnet-5"))
 
 async with agent.task("index documents") as task:
     await task.progress({"stage": "discover", "files": 12})
@@ -3663,7 +3764,7 @@ Breaking work across multiple agents gives you:
 - **LLM-driven orchestration** - the calling agent decides when to delegate, what context to pass, and how to use the result.
 
 !!! note
-    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other.
+    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other. For auto-injected sub-tasks, `TaskConfig(max_concurrency=N)` bounds the total fan-out across both `run_subtask` and `run_subtasks`.
 
 !!! tip
     For lightweight self-delegation where the parent doesn't need a *named* delegate, opt in to the auto-injected `run_subtask` / `run_subtasks` tools by passing `tasks=TaskConfig(...)` - see [`tasks=` in The Agent Harness](agent_harness.md#tasks-taskconfig). Use `Agent.as_tool()` (below) when you want a distinct, purpose-named tool exposed to the LLM.
@@ -3676,7 +3777,7 @@ Use `Agent.as_tool()` to make one agent available as a tool for another.
 from ag2 import Agent
 from ag2.config import AnthropicConfig
 
-config = AnthropicConfig("claude-sonnet-4-6")
+config = AnthropicConfig("claude-sonnet-5")
 
 researcher = Agent(
     "researcher",
@@ -5148,7 +5249,7 @@ fs = FilesystemToolkit(base_path="/tmp/workspace")
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[fs],
 )
 ```
@@ -5180,7 +5281,7 @@ fs = FilesystemToolkit(base_path="/tmp/workspace")
 
 agent = Agent(
     "reader",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[fs.read_file(), fs.find_files()],
 )
 ```
@@ -5201,7 +5302,7 @@ async def main() -> None:
 
         agent = Agent(
             "assistant",
-            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            config=AnthropicConfig(model="claude-sonnet-5"),
             tools=[fs],
         )
         await agent.ask("Create a hello.py file that prints 'Hello, World!'")
@@ -5237,7 +5338,7 @@ from ag2.tools import DuckDuckSearchTool
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[DuckDuckSearchTool()],
 )
 ```
@@ -5271,7 +5372,7 @@ from ag2.tools import PerplexitySearchToolkit
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[PerplexitySearchToolkit(api_key=os.environ["PERPLEXITY_API_KEY"])],
 )
 ```
@@ -5383,7 +5484,7 @@ from ag2.tools import TavilySearchTool
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[TavilySearchTool(api_key=os.environ["TAVILY_API_KEY"])],
 )
 ```
@@ -5446,7 +5547,7 @@ from ag2.tools import SandboxShellTool, LocalEnvironment
 
 agent = Agent(
     "engineer",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SandboxShellTool(LocalEnvironment("/tmp/my_project"))],
 )
 ```
@@ -5621,6 +5722,57 @@ agent_with_mcp = Agent(
 )
 ```
 
+When servers expose the same tool name, set `tool_name_prefix` to namespace the
+names locally. The prefix is visible to the model, while calls sent to the MCP
+server keep the original name:
+
+```python
+from ag2 import Agent
+from ag2.tools import MCPToolkit, MCPServerConfig
+
+agent_with_mcp = Agent(
+    name="Mixed bot",
+    tools=[
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://github.example.com/mcp",
+                tool_name_prefix="github_",
+            )
+        ),
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://docs.example.com/mcp",
+                tool_name_prefix="docs_",
+            )
+        ),
+    ],
+)
+```
+
+For example, two remote `search` tools are exposed locally as `github_search`
+and `docs_search`. `allowed_tools` and `blocked_tools` continue to match the
+original remote names.
+
+Like the other config fields, `tool_name_prefix` accepts a `Variable`, so the
+namespace can be resolved from the context at discovery time:
+
+```python
+from ag2 import Variable
+from ag2.tools import MCPToolkit, MCPServerConfig
+
+toolkit = MCPToolkit(
+    MCPServerConfig(
+        server_url="https://my-mcp-url.example.com",
+        tool_name_prefix=Variable("tenant_prefix"),
+    )
+)
+```
+
+!!! warning
+    Namespacing is opt-in. Two servers exposing the same tool name **without**
+    distinct prefixes still collide: both proxies answer the same tool call, so
+    the tool runs twice for one request.
+
 ## Provider-side: `MCPServerTool`
 
 `MCPServerTool` does not open a connection - it ships the server URL and credentials to the LLM provider as part of the request. The provider is then responsible for connecting to the MCP server and dispatching tool calls. Because the provider only accepts a URL, this path does **not** support local stdio servers - use `MCPToolkit` with `MCPStdioServerConfig` for those.
@@ -5642,6 +5794,15 @@ agent_with_mcp = Agent(
 ```
 
 `MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime.
+
+!!! warning "`blocked_tools` is not enforceable on every provider"
+
+    OpenAI's and xAI's remote-MCP tools take an allow-list and nothing else, so a
+    block cannot be expressed in the request they accept. AG2 raises
+    `BlockedToolsUnsupportedError` instead of sending a request that would permit
+    what you asked to block. Pass `allowed_tools` naming the tools you do want, or
+    connect the server as an MCP toolkit (above) so AG2 executes and filters its
+    tools itself - that path enforces `blocked_tools` on any provider.
 
 !!! warning
     With provider-side connections, your MCP credentials are sent to the LLM provider on every request. Only use this path with providers and servers you trust with those credentials.
@@ -6088,7 +6249,7 @@ Source: https://docs.ag2.ai/docs/user-guide/tools/builtin_tools/
 
 # Built-in Provider Tools
 
-AG2 includes built-in tools that map to server-side capabilities offered by LLM providers. These tools are executed by the provider's API - not locally - and require no function implementation on your side.
+AG2 includes built-in tools that map to capabilities offered by LLM providers. Almost all of them are executed by the provider's API - not locally - and require no function implementation on your side. The one exception is marked in the table below.
 
 | Tool | Anthropic | OpenAI | Gemini | xAI | Z.AI |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -6096,7 +6257,8 @@ AG2 includes built-in tools that map to server-side capabilities offered by LLM 
 | `WebSearchTool` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `WebFetchTool` | ✓ | ✗ | ✓ | ✗ | ✗ |
 | `FileSearchTool` | ✗ | ✓ | ✓ | ✗ | ✗ |
-| `ShellTool` | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `ShellTool` | ✗ | ✓ | ✗ | ✗ | ✗ |
+| `AnthropicBashTool` | ✓ | ✗ | ✗ | ✗ | ✗ |
 | `SkillsTool` | ✓ | ✓ | ✗ | ✗ | ✗ |
 | `MCPServerTool` | ✓ | ✓ | ✗ | ✓ | ✗ |
 | `ImageGenerationTool` | ✗ | ✓ | ✗ | ✗ | ✗ |
@@ -6104,6 +6266,11 @@ AG2 includes built-in tools that map to server-side capabilities offered by LLM 
 | `XSearchTool` | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `RetrievalTool` | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `GoogleMapsTool` | ✗ | ✗ | ✓ | ✗ | ✗ |
+
+!!! note
+    `AnthropicBashTool` is the exception: Anthropic ships the tool definition
+    but does not run it, so AG2 executes the command on your machine and sends
+    the output back. See [Anthropic Bash](#anthropic-bash).
 
 ## Web Search
 
@@ -6116,7 +6283,7 @@ from ag2.tools import WebSearchTool, UserLocation
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[
         WebSearchTool(
             max_uses=5,
@@ -6152,7 +6319,7 @@ from ag2.tools import WebFetchTool
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[
         WebFetchTool(
             max_uses=3,
@@ -6255,7 +6422,7 @@ from ag2.tools import CodeExecutionTool
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[CodeExecutionTool()],
 )
 ```
@@ -6279,7 +6446,7 @@ from ag2.tools import MemoryTool
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[MemoryTool()],
 )
 ```
@@ -6289,21 +6456,7 @@ agent = Agent(
 
 ## Shell
 
-Gives the model the ability to run shell commands. The execution environment depends on the provider.
-
-```python
-from ag2 import Agent
-from ag2.config import AnthropicConfig
-from ag2.tools import ShellTool
-
-agent = Agent(
-    "devops",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[ShellTool()],
-)
-```
-
-OpenAI supports configuring the execution environment:
+Gives the model the ability to run shell commands inside a provider-hosted environment. Only OpenAI offers one; the environment carries the backend configuration.
 
 ```python
 from ag2 import Agent
@@ -6329,8 +6482,100 @@ agent = Agent(
 | `ContainerAutoEnvironment` | Provider-managed container with optional network policy |
 | `ContainerReferenceEnvironment` | Reference an existing container by ID |
 
+!!! warning "On OpenAI, name an environment"
+
+    `ShellTool()` without an `environment` is a *client-executed* shell: OpenAI
+    returns a `shell_call` for your application to run, and AG2 has no path to
+    execute it and feed the output back - so the turn would end with no result and
+    no reply. AG2 refuses it with `ClientExecutedShellUnsupportedError` rather than
+    let it happen silently. Pass `ContainerAutoEnvironment()` for the hosted shell,
+    or use [`SandboxShellTool`](local_shell.md), which AG2
+    executes itself and works with any provider.
+
 !!! warning
     `ShellTool` gives the model direct shell access. Use it only with trusted prompts and consider restricting the environment.
+
+!!! note "Not available on Anthropic"
+
+    Anthropic's own shell tool is client-executed - it defines the tool but runs
+    nothing, so a provider-hosted shell has no meaning there and `ShellTool`
+    raises `UnsupportedToolError`. Use [`AnthropicBashTool`](#anthropic-bash) for
+    Anthropic's tool, or [`SandboxShellTool`](local_shell.md)
+    for a provider-neutral shell.
+
+## Anthropic Bash
+
+`AnthropicBashTool` declares Anthropic's `bash_20250124` tool. Anthropic does not
+execute it: the model returns an ordinary `tool_use` block and waits for a
+`tool_result`, so **AG2 runs the command for you** and sends the output back.
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import AnthropicBashTool
+
+agent = Agent(
+    "devops",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[AnthropicBashTool()],
+)
+
+reply = await agent.ask("How many Python files are in this directory?")
+print(await reply.content())
+```
+
+With no arguments, commands run in a local subprocess. Execution is backed by the
+same machinery as [`SandboxShellTool`](local_shell.md), so the
+first argument picks the backend and the keyword arguments restrict what the model
+may run:
+
+```python
+from ag2.extensions.docker import DockerEnvironment
+from ag2.tools import AnthropicBashTool
+
+bash = AnthropicBashTool(
+    DockerEnvironment(image="python:3.12-slim", network_mode="none"),
+    allowed=["ls", "cat", "python"],
+    ignore=["**/.env", "*.key"],
+)
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `environment` | Execution backend (`LocalEnvironment`, `DockerEnvironment`, `DaytonaEnvironment`, `TenkiEnvironment`, or a custom one). `None` means a local subprocess. |
+| `allowed` | Whitelist of command prefixes. |
+| `blocked` | Blacklist of command prefixes. Best-effort: it matches the head command only, so chaining bypasses it. |
+| `ignore` | Gitignore-style path patterns. A command referencing a matching path is refused. |
+| `readonly` | When `True` and `allowed` is unset, restricts to a built-in read-only command set (`cat`, `ls`, `grep`, ...). |
+
+The semantics are identical to `SandboxShellTool`'s - see [Command Filtering](local_shell.md#command-filtering) for the details.
+
+### Which Anthropic tool runs shell commands
+
+Anthropic exposes bash twice, and the two are not interchangeable:
+
+| | Runs where | AG2 tool |
+| :--- | :--- | :--- |
+| `bash_20250124` | On your machine, in the environment you pass | `AnthropicBashTool` |
+| bash inside `code_execution_*` | In Anthropic's container | [`CodeExecutionTool`](#code-execution) |
+
+Pick `CodeExecutionTool` when a throwaway sandbox on Anthropic's side is enough;
+pick `AnthropicBashTool` when the commands must act on your own files.
+
+!!! note
+    Each command runs in a fresh sandbox, so there is no session to carry over.
+    When the model asks for a `restart`, AG2 answers that there was nothing to
+    restart rather than report a restart that never happened.
+
+!!! note
+    `AnthropicBashTool` is Anthropic-only; other providers reject the schema with
+    `UnsupportedToolError`. For a client-executed shell that works everywhere, use
+    [`SandboxShellTool`](local_shell.md).
+
+!!! warning
+    `AnthropicBashTool` executes model-authored commands on your machine. Use it
+    only with trusted prompts, and prefer a container environment together with an
+    `allowed` list.
 
 ## Provider Skills
 
@@ -6347,7 +6592,7 @@ agent = Agent(
 
     agent = Agent(
         "analyst",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[SkillsTool("pptx", Skill("xlsx", version="latest"))],
     )
     ```
@@ -6383,7 +6628,7 @@ from ag2.tools import MCPServerTool
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[
         MCPServerTool(
             server_url="https://mcp.example.com/sse",
@@ -6545,7 +6790,7 @@ from ag2.tools import CodeExecutionTool
 
 agent = Agent(
     "analyst",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[CodeExecutionTool()],
 )
 ```
@@ -6584,7 +6829,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
     async with env:
         agent = Agent(
             "analyst",
-            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            config=AnthropicConfig(model="claude-sonnet-5"),
             tools=[SandboxCodeTool(env.code_environment())],
         )
         reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
@@ -6608,7 +6853,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
 
     agent = Agent(
         "analyst",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[SandboxCodeTool(DaytonaEnvironment())],
     )
 
@@ -6633,7 +6878,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
 
     agent = Agent(
         "analyst",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[SandboxCodeTool(DockerEnvironment(image="python:3.12-slim"))],
     )
     ```
@@ -6682,7 +6927,7 @@ from ag2.tools import SandboxCodeTool
 async with DaytonaEnvironment(image="python:3.12") as env:
     agent = Agent(
         "analyst",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[SandboxCodeTool(env)],
     )
     await agent.ask("...")
@@ -6727,7 +6972,7 @@ Source: https://docs.ag2.ai/docs/user-guide/tools/local_shell/
 
 # Sandbox Shell Tool
 
-`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose - a local subprocess, a Docker container, a Daytona or Tenki sandbox, or any custom backend. Unlike the provider-native [`ShellTool`](builtin_tools.md#shell) (which runs server-side and only on Anthropic/OpenAI), it executes client-side, so it works with **any model provider**.
+`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose - a local subprocess, a Docker container, a Daytona or Tenki sandbox, or any custom backend. Unlike the provider-hosted [`ShellTool`](builtin_tools.md#shell) (which runs server-side, and only on OpenAI), it executes client-side, so it works with **any model provider**.
 
 The design has two orthogonal pieces:
 
@@ -6746,7 +6991,7 @@ from ag2.tools import SandboxShellTool
 agent = Agent(
     "coder",
     "You write and run Python code.",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SandboxShellTool()],
 )
 
@@ -6859,7 +7104,7 @@ from ag2.config import AnthropicConfig
 from ag2.tools import SandboxShellTool, LocalEnvironment
 
 sh = SandboxShellTool(LocalEnvironment("/tmp/counter_demo"))
-agent = Agent("coder", "You manage files.", config=AnthropicConfig(model="claude-sonnet-4-6"), tools=[sh])
+agent = Agent("coder", "You manage files.", config=AnthropicConfig(model="claude-sonnet-5"), tools=[sh])
 
 reply1 = await agent.ask("Create counter.txt with value 0")
 reply2 = await reply1.ask("Increment the counter by 1")
@@ -6869,14 +7114,21 @@ reply3 = await reply2.ask("Read the counter and tell me the value")
 !!! warning
     A `LocalEnvironment` gives the agent direct access to your filesystem and the ability to run arbitrary commands. Always set `allowed`, `blocked`, or `readonly` when exposing it to untrusted prompts, or use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment` for real isolation.
 
-## SandboxShellTool vs ShellTool
+## SandboxShellTool vs ShellTool vs AnthropicBashTool
 
-| | `SandboxShellTool` | `ShellTool` |
-| :--- | :--- | :--- |
-| **Execution** | Client-side, in your environment | Provider-side (Anthropic / OpenAI) |
-| **Provider support** | Any provider | Anthropic, OpenAI only |
-| **Environment control** | Full (`allowed`, `blocked`, `ignore`, backend choice) | Limited (provider-dependent) |
-| **Import** | `ag2.tools.SandboxShellTool` | `ag2.tools.ShellTool` |
+| | `SandboxShellTool` | `ShellTool` | `AnthropicBashTool` |
+| :--- | :--- | :--- | :--- |
+| **Execution** | Client-side, in your environment | Provider-side, in OpenAI's container | Client-side, in your environment |
+| **Provider support** | Any provider | OpenAI only | Anthropic only |
+| **Tool definition** | AG2's `run_shell_command` function | OpenAI's hosted shell | Anthropic's `bash_20250124` |
+| **Environment control** | Full (`allowed`, `blocked`, `ignore`, backend choice) | Limited (provider-dependent) | Full - same options as `SandboxShellTool` |
+| **Import** | `ag2.tools.SandboxShellTool` | `ag2.tools.ShellTool` | `ag2.tools.AnthropicBashTool` |
+
+`AnthropicBashTool` exists because Anthropic ships its own bash tool definition
+but does not run it. It reuses everything on this page for execution, so reach for
+it when you want Claude to use the tool it was trained on; reach for
+`SandboxShellTool` when the same agent code has to run against several providers.
+See [Anthropic Bash](builtin_tools.md#anthropic-bash).
 
 ---
 
@@ -7706,7 +7958,7 @@ Source: https://docs.ag2.ai/docs/user-guide/telemetry/agent/
 
 AG2 ships a `TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/) spans for a single agent's work - its turns, LLM calls, tool executions, and human-in-the-loop interactions.
 
-The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/), so traces can be exported to **any compatible backend** - Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and others.
+The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/), so traces can be exported to **any compatible backend** - Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, Arize AX, Arize Phoenix, and others.
 
 !!! tip
     To trace the interactions *between* agents in a network - the hub's dispatch, channels, agent lifecycles, and tasks - see [Network Telemetry](network.md). The two compose: an agent's `invoke_agent` span links back to the network envelope that triggered it.
@@ -7815,9 +8067,27 @@ When content capture is enabled (the default), spans include these additional at
 | `gen_ai.input.messages` | llm | JSON request messages |
 | `gen_ai.output.messages` | llm | JSON response messages |
 | `gen_ai.tool.call.arguments` | tool | Tool call arguments (JSON) |
-| `gen_ai.tool.call.result` | tool | Tool execution result |
+| `gen_ai.tool.call.result` | tool | Tool execution result (see below) |
+| `ag2.tool.call.result.truncated` | tool | Present and `true` when the result was truncated |
 | `ag2.human_input.prompt` | human_input | Prompt shown to human |
 | `ag2.human_input.response` | human_input | Human's response |
+
+The tool result is always recorded as a string:
+
+- text results verbatim,
+- structured results (dict, Pydantic model, list) as JSON,
+- binary/image/document parts as a `[binary:<media-type> <size>B]` descriptor,
+- multi-part results as the above joined with newlines.
+
+Results longer than `max_tool_result_chars` (default 8192) end with `...[truncated]` and carry
+`ag2.tool.call.result.truncated`; traces reconstructed by `ag2.eval` expose that flag as
+`metadata["truncated"]` on the result's text part. Raise the cap per middleware instance to keep large structured
+results parseable, or pass `None` to disable truncation (large results may then exceed your
+backend's attribute or payload limits):
+
+```python
+TelemetryMiddleware(capture_content=True, max_tool_result_chars=32_000)
+```
 
 !!! warning
     With `capture_content=True`, message content, tool arguments, and human input will appear in your tracing backend. Ensure your backend has appropriate access controls.
@@ -7885,7 +8155,9 @@ agent = Agent(
 
 ## Backend Integration
 
-Since `TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works - Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, and others. Swap the `ConsoleSpanExporter` from the Quick Start above for an `OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
+Since `TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works - Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, Arize AX, Arize Phoenix, and others. Swap the `ConsoleSpanExporter` from the Quick Start above for an `OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
+
+For Arize users, [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing) provides a managed production path for tracing, evaluating, and monitoring AG2 agents, while [Arize Phoenix](https://arize.com/docs/phoenix) is the open-source path for local development or self-hosted inspection. The same traces can support follow-on workflows such as [agent evaluation](https://arize.com/guides/ai-agent-handbook/agent-evaluation/) and [LLM evaluation](https://arize.com/resources/llm-evaluation/).
 
 ---
 
@@ -8963,10 +9235,48 @@ A **`TraceSource`** is anything that yields traces. Three ship:
 
 Because grading depends only on the reconstructed `Trace`, the **same scorers** work whether the trace came from `run_agent`, a directory, or production.
 
+### Suite tasks with no trace - `on_missing_task`
+
+A trace whose `task_id` isn't in the suite is graded reference-free. The reverse - a **suite task no trace covers**, because the run crashed before emitting spans, or the export never landed - is controlled by `on_missing_task`:
+
+| Value | Behaviour |
+|---|---|
+| `"error"` *(default)* | The task is graded with an empty `Trace` carrying a `MissingTraceError`, so it counts in `aggregates.errors` **and** in the pass-rate denominator. |
+| `"ignore"` | The task is left out of the result and a warning is logged with the uncovered ids. |
+| `"raise"` | `MissingTraceError` is raised, listing the uncovered ids, before anything is graded. |
+
+The default is `"error"` so a missing trace can never make a suite look *better*: a task that produced nothing is a failure, not a smaller denominator. Missing tasks are appended in suite order after the graded traces.
+
+```python
+result = await evaluate_traces(source, scorers=[...], suite=suite, store_dir="runs", on_missing_task="raise")
+```
+
 Reconstruction understands **two span dialects**, auto-detected per trace, so traces from a range of tools and frameworks grade unchanged:
 
 - the [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) - `gen_ai.*` spans, what AG2's own `TelemetryMiddleware` emits, and
-- [OpenInference](https://github.com/Arize-ai/openinference) - `openinference.span.kind` + `llm.*` / `tool.*`, emitted by the Arize/Phoenix instrumentors.
+- [OpenInference](https://github.com/Arize-ai/openinference) - `openinference.span.kind` + `llm.*` / `tool.*`, emitted by Arize Phoenix instrumentors and other OpenInference-compatible instrumentation.
+
+If you are exporting AG2 traces to Arize, use [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing) for managed production observability and evaluation, or [Arize Phoenix](https://arize.com/docs/phoenix) for open-source local or self-hosted workflows. Arize's guides cover how trace data feeds [agent evaluation](https://arize.com/guides/ai-agent-handbook/agent-evaluation/) and [LLM evaluation](https://arize.com/resources/llm-evaluation/).
+
+### Bring your own spans
+
+If your agents run behind your own entry point - your sessions, your auth, your orchestration - `run_agent` isn't the shape you need, but you still want the *same* grading. Reconstruct the `Trace` yourself from the spans you already export, with the same function `run_agent` uses internally:
+
+```python
+from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_traces, readable_spans_to_trace
+
+# ... your own run, with TelemetryMiddleware exporting to a span exporter you control ...
+trace = readable_spans_to_trace(exporter.get_finished_spans())
+
+result = await evaluate_traces(
+    InMemoryTraceSource([(TraceRef(trace_id="run-1", task_id="checkout"), trace)]),
+    scorers=[...],
+    suite=suite,
+    store_dir="runs",
+)
+```
+
+`readable_spans_to_trace` takes OpenTelemetry `ReadableSpan`s and needs the tracing extra (`pip install "ag2[tracing]"`). If you already hold spans in a neutral form, `spans_to_trace` does the same job from `SpanData` and needs no SDK. Either way the result is an ordinary `Trace`, so it grades identically to one `run_agent` produced - no export/read-back round trip through a directory or Tempo.
 
 ## Observing a run
 
@@ -11313,11 +11623,11 @@ print(await store.list("/"))  # ['artifacts/']
 from ag2 import SqliteKnowledgeStore
 
 store = SqliteKnowledgeStore("/var/agents/alice/knowledge.db")
-await store.write("/config/model.txt", "claude-opus-4-7")
+await store.write("/config/model.txt", "claude-opus-5")
 
 # In a later run, the same DB:
 store2 = SqliteKnowledgeStore("/var/agents/alice/knowledge.db")
-print(await store2.read("/config/model.txt"))  # "claude-opus-4-7"
+print(await store2.read("/config/model.txt"))  # "claude-opus-5"
 ```
 
 ### Disk store - files on the filesystem
@@ -12258,6 +12568,54 @@ data: {"type":"TEXT_MESSAGE_CHUNK","delta":"Hello! How can I help?",...}
 data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",...}
 ```
 
+## Token usage
+
+Both run-terminating events carry the run's token usage, broken down per
+provider and model configuration:
+
+```text
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
+       "usage":[{"provider":"openai","model":"gpt-5","inputTokens":1284,
+                 "outputTokens":96,"totalTokens":1380,"cachedInputTokens":1024}]}
+```
+
+`RUN_ERROR` carries the same field, reporting what the run had spent before it
+failed, so a crashed run is not accounted for as free. (`RUN_ERROR` has no
+`threadId` / `runId` - the protocol defines neither for it; a client correlates
+the run from `RUN_STARTED` on the same event stream.)
+
+The figures cover every model call in the run - the whole tool loop, delegated
+sub-agents, history compaction and memory aggregation - and agree with
+`AgentReply.usage()` for the same run, because both read the same accounting
+events.
+
+An entry carries `inputTokens`, `outputTokens`, `totalTokens`, `reasoningTokens`
+and `cachedInputTokens`. Any of them may be missing - three properties are worth
+knowing before you sum them:
+
+- **A count the provider did not report is absent, not `0`.** `cachedInputTokens`
+  absent means "never measured"; `0` means the provider measured no cache hit.
+  The same holds for `reasoningTokens`, which most non-reasoning calls omit.
+- **`totalTokens` is never derived.** It appears only when every call behind an
+  entry supplied one, so a client is never handed a computed figure dressed up
+  as a measurement. Sum `inputTokens` and `outputTokens` yourself if you need a
+  figure regardless.
+- **Cache *writes* are not reported at all.** `cachedInputTokens` counts a cache
+  *read*. Tokens spent creating a cache entry have no field in the protocol, and
+  they are omitted rather than folded into a neighbouring count, because
+  providers disagree on whether cached tokens already sit in the prompt figure.
+  A cost model built on these entries alone under-counts a run that primed a
+  cache; read `AgentReply.usage()` server-side if you need that number.
+
+One entry is emitted per distinct provider/model pair, in order of first
+appearance in the run. A delegated sub-agent that used a single configuration is
+attributed to it; one that spanned several arrives with `provider` and `model`
+unset rather than mislabelled. A run that spent nothing omits `usage` entirely.
+
+The A2UI AG-UI transport (`A2UIServer(..., transport=AgUiTransport())`) reports
+the same field on the same two events, so what a client can show does not depend
+on which endpoint it connected to.
+
 ## UI clients
 
 Any AG-UI client works with this endpoint.
@@ -12933,7 +13291,7 @@ async def calc_add(a: int, b: int) -> str:
 async def main() -> None:
     agent = Agent(
         name="claude",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[calc_add],
     )
     server = A2AServer(agent)
@@ -12977,7 +13335,7 @@ from ag2.tools.builtin import WebSearchTool
 
 agent = Agent(
     name="claude",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[
         WebSearchTool(),  # built-in provider tool - runs on Anthropic's side
         calc_add,         # @tool - runs on this server
@@ -13380,7 +13738,7 @@ researcher = Agent(
 writer = Agent(
     "writer",
     prompt="Use the researcher tool to gather facts before writing a draft.",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[researcher.as_tool(description="Delegate research questions to the remote researcher.")],
 )
 
@@ -13537,7 +13895,7 @@ from ag2 import Agent
 from ag2.a2a import A2AServer
 from ag2.config import AnthropicConfig
 
-agent = Agent(name="weather", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="weather", config=AnthropicConfig(model="claude-sonnet-5"))
 server = A2AServer(agent, card_signer=signer)
 asgi = server.build_jsonrpc(url="http://127.0.0.1:8000")
 ```
@@ -14076,7 +14434,7 @@ from ag2.config import AnthropicConfig
 def book_table(time: str, party_size: int) -> str:
     return f"booked a table for {party_size} at {time}"
 
-agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
 
 app = A2UIServer(
     agent,
@@ -14129,7 +14487,7 @@ from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import RestTransport
 from ag2.config import AnthropicConfig
 
-agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
 
 app = A2UIServer(
     agent,
@@ -14248,7 +14606,7 @@ from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import AgUiTransport
 from ag2.config import AnthropicConfig
 
-agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
 
 app = A2UIServer(agent, transport=AgUiTransport())  # POST /  ->  AG-UI SSE events
 
@@ -14313,7 +14671,7 @@ def book_table(time: str) -> str:
     return f"booked a table for {time}"
 
 def build_app():
-    agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+    agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
     # Buttons are declared on the executor via actions=, just like A2UIServer -
     # the agent stays plain.
     executor = A2UIAgentExecutor(agent, actions=[book_table], protocol_version="v0.9")
@@ -14397,7 +14755,7 @@ def schedule_posts(time: str) -> dict:
         {"id": "root", "component": "Text", "text": f"Scheduled for {time}"},
     ]{{ "}}" }}
 
-agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
 
 app = A2UIServer(agent, transport=RestTransport(encoding="jsonl"), actions=[schedule_posts])
 ```
@@ -14521,7 +14879,7 @@ custom_catalog = {
     },
 }
 
-agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
 
 server = A2UIServer(
     agent,
@@ -14623,7 +14981,7 @@ async def calc_add(a: int, b: int) -> str:
 agent = Agent(
     name="workie",
     prompt="You are a concise assistant. Use tools when they help.",
-    config=AnthropicConfig(model="claude-sonnet-4-6", streaming=True),
+    config=AnthropicConfig(model="claude-sonnet-5", streaming=True),
     tools=[calc_add],
 )
 
@@ -14679,6 +15037,7 @@ environment. Zed's `#!json settings.json`, for example:
 |---|---|
 | `initialize` | Negotiates the protocol version and advertises exactly which optional features are implemented |
 | `session/new` | Opens an independent conversation and returns its id |
+| `session/load` | Reattaches to a conversation by id, replays its history, then returns - see [Loading a session](#loading-a-session) |
 | `session/prompt` | Runs one ordinary AG2 turn - tools and all - and returns when it ends |
 | `session/update` | Pushed *during* the turn: the answer as it is produced, every tool call, every result |
 | `session/cancel` | Stops that session's turn and anything queued behind it |
@@ -14734,6 +15093,87 @@ session.
     one - and in practice it answers a fresh session with the previous one's context. Treat
     every session on such a deployment as sharing one conversation, and give a caller that
     must not see another's history its own process.
+
+### Loading a session
+
+A client that still holds a session id can come back to it with `session/load` -
+from a new connection, or a new process, as long as the session's history is still in
+storage. The agent replays the whole conversation as `session/update`
+notifications and then answers. The response is the line between history and whatever
+comes next: nothing is sent after it, and the next `session/prompt` continues the
+conversation where it left off.
+
+How far that reaches is decided by two settings on `SessionConfig`:
+
+- **`storage`** - where history lives. The default is in-memory, so it lasts as
+  long as the process does. Pass a durable `Storage` - the
+  `RedisStorage` that ships with `ag2`, or your own - for history that outlives it.
+- **`retain_history`** - whether a session's history is kept when the session is
+  *let go*: evicted to make room, expired by `ttl`, or dropped because its
+  connection closed. Off by default, since retaining in the default in-memory storage only
+  grows the process. Turn it on together with a durable storage. An explicit
+  `SessionStore.close` still deletes; that is the one act that means the
+  conversation is over - and, since ACP's `session/delete` is not wired, the
+  only one. Nothing else in `ag2` ever removes a retained history: `max_sessions`
+  and `ttl` bound the *live* registry, not the storage behind it. With a durable
+  storage, retention is the host's to manage - expire or cap it in the storage itself, or
+  close sessions whose conversations are over.
+
+```python
+from ag2.acp import ACPAgent, SessionConfig
+from ag2.streams.redis import RedisStorage
+
+acp_agent = ACPAgent(
+    agent,
+    sessions=SessionConfig(storage=RedisStorage("redis://localhost:6379"), retain_history=True),
+)
+```
+
+The id is enough on its own: it is the key the history is stored under, so nothing else has
+to be persisted for a later process to find the conversation. A host keeping its own record
+per conversation can tie the two together in `on_session`, which is called with the
+session and `"created"` after `session/new` and `"loaded"` after
+`session/load`. A hook that raises refuses the request: nothing is registered, the
+conversation in storage is untouched, and a `session/prompt` on that id is answered
+as unknown.
+
+What comes back is the history, and only the history:
+
+- User turns, replies, tool calls and their results, in order - one
+  `agent_message_chunk` per reply, since the chunks a live turn streams are never
+  stored.
+- **Not** the session's context variables: a session loaded in a new process starts them
+  from the agent's defaults again. Not the `pending_messages` inbox, and not a compaction
+  summary. A session loaded on the connection it already lives on keeps all of those - only
+  the request context (`cwd` and friends) is refreshed.
+- A turn that was cut short - the process died with a tool still running - is repaired
+  first, so the next prompt sends a valid conversation to the provider.
+
+A session with a turn in progress is refused rather than replayed underneath it. A session
+that was opened and never prompted has no history, so from another process it is
+indistinguishable from an id that was never issued - and is answered the same way.
+
+!!! warning "A session id is a credential"
+    Any connection that has passed `initialize` (and `authenticate`, if
+    a provider is configured) may load any id it holds. The id is the whole credential: a
+    `uuid4`, unguessable, and bound to nothing else - ACP itself defines no link
+    between a session and an authenticated party. A host that needs one enforces it at its
+    transport, or refuses the load in `on_session`.
+
+    Since the id is also the storage key, it now appears wherever stream ids are logged.
+
+!!! warning "One live process per session id"
+    Two processes loading the same id would interleave their writes to one history, and
+    the repair a load performs - a read of the whole transcript followed by a rewrite -
+    could discard what the other wrote in between. The storage holds no lease and `ag2`
+    does not add one. Within a process this is caught: a second load of an id whose turn
+    is running elsewhere is refused. Across processes it is the client's contract to
+    keep, and a client that spawns one agent process per turn keeps it by construction.
+
+Over stdio and WebSocket this all just works. The ACP SDK's HTTP/SSE server, as of 0.12,
+does not register a *loaded* session's stream the way it does a new one, so a
+`session/prompt` on a loaded session over that transport is answered with a 404 -
+serve resumable sessions over one of the other two.
 
 ## Cancelling
 
@@ -14797,6 +15237,7 @@ acp_agent = ACPAgent(
 | `prompt_content` | Which non-text prompt content to advertise - see [Multimodal content](#multimodal-content) |
 | `stream_thoughts` | Whether to forward the agent's reasoning as `agent_thought_chunk` updates. Off by default |
 | `hitl_hook` | How to answer a turn that calls `context.input()` - see [Human input](#human-input). `None` (the default) fails such a turn |
+| `on_session` | Called with `(session, origin)` after `session/new` (`"created"`) and `session/load` (`"loaded"`) - see [Loading a session](#loading-a-session) |
 
 ### Bounds
 
@@ -14813,6 +15254,10 @@ acp_agent = ACPAgent(
 The last two are what keep one client from opening every session and starting a paid turn
 in each. `max_concurrent_turns` bounds spend; `max_active_prompts` bounds
 how many request handlers can be parked at once.
+
+Two more settings are about what outlives the registry rather than what bounds it -
+`storage` and `retain_history`, covered under
+[Loading a session](#loading-a-session).
 
 ### Multimodal content
 
@@ -14933,14 +15378,18 @@ During `initialize` the agent declares what it supports, and the client builds i
 interface from that answer. Claiming a feature that is not wired is worse than admitting
 its absence - the client offers users a button that cannot work.
 
-Reported as **not** supported: `session/load`, `session/resume`,
-`session/fork`, `session/list`, `session/delete`, and connecting
-to client-provided MCP servers over any transport. The client's own filesystem and terminal
-methods are never called either - those the client offers, so there is nothing to declare.
+Reported as **not** supported: `session/resume`, `session/fork`,
+`session/list`, `session/delete`, `session/close`, and
+connecting to client-provided MCP servers over any transport. The client's own filesystem
+and terminal methods are never called either - those the client offers, so there is nothing
+to declare.
 
 These are optional parts of the protocol, not missing pieces of this one. ACP grew up
 around coding agents, and most of that list exists to serve them - a client offering its
 open buffers and its terminal to an agent whose job is editing your repository.
+`session/resume` - reattach *without* a replay - is the one most likely to follow
+`session/load`; it is not wired yet, and the SDK gates it behind its unstable
+protocol flag besides.
 
 !!! note "Your agent still reaches files - through its own tools"
     Serving over ACP changes nothing about what an agent can do. Give it a file tool, a
@@ -15640,7 +16089,7 @@ from ag2.network import (
 )
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     # Hub: registry + WAL + audit log + adapters live here.
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
@@ -15767,7 +16216,7 @@ from ag2.network import Passport, Resume, ResumeExample
 passport = Passport(
     name="alice",
     owner="acme",
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
 )
 
 resume = Resume(
@@ -16689,7 +17138,7 @@ from ag2.config import AnthropicConfig
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import Hub
 
-config = AnthropicConfig(model="claude-sonnet-4-6")
+config = AnthropicConfig(model="claude-sonnet-5")
 hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
 alice = await hub.register(
@@ -16835,7 +17284,7 @@ from ag2.network import (
     Hub,
 )
 
-config = AnthropicConfig(model="claude-sonnet-4-6")
+config = AnthropicConfig(model="claude-sonnet-5")
 hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
 alice = await hub.register(
@@ -16982,7 +17431,7 @@ from ag2.network import (
     Hub,
 )
 
-config = AnthropicConfig(model="claude-sonnet-4-6")
+config = AnthropicConfig(model="claude-sonnet-5")
 hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
 alice = await hub.register(
@@ -18437,7 +18886,7 @@ sequenceDiagram
 ## Code
 
 !!! tip
-    Each agent uses `AnthropicConfig(model="claude-sonnet-4-6")`
+    Each agent uses `AnthropicConfig(model="claude-sonnet-5")`
     so the validator / enricher / fulfilment stages produce real
     domain output. Set `ANTHROPIC_API_KEY` before running.
 
@@ -18470,7 +18919,7 @@ from ag2.testing import TestConfig
 load_dotenv()
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
@@ -18725,7 +19174,7 @@ async def delegate_writer(reason: str) -> Handoff:
     return Handoff(target="writer", reason=reason)
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
@@ -18928,7 +19377,7 @@ talk to each other; everything routes through the hub.
 
     ```python
     AnthropicConfig(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         extra_body={"tool_choice": {"type": "auto", "disable_parallel_tool_use": True{{ "}}" }},
     )
     ```
@@ -19066,7 +19515,7 @@ async def main() -> None:
     # one ask_spoke (or synthesise) per LLM response. Spokes use
     # TestConfig so they don't need this.
     hub_config = AnthropicConfig(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         extra_body={"tool_choice": {"type": "auto", "disable_parallel_tool_use": True{{ "}}" }},
     )
 
@@ -19375,7 +19824,7 @@ sequenceDiagram
 ## Code
 
 !!! tip
-    Every LLM-driven agent uses `AnthropicConfig(model="claude-sonnet-4-6")` - set `ANTHROPIC_API_KEY` in your environment (the script calls `load_dotenv()`), or swap in `OpenAIConfig` / `GeminiConfig` to run on another provider. The `user` agent uses `TestConfig()` because it only opens the channel and sends the kickoff - it never takes an LLM turn. All agents register with `attach_plugin=False`: none of them need the `NetworkPlugin` tools (`say` / `delegate` / `peers` / ...), and leaving those off keeps the coordinator's tool surface to just `handoff` and `finish`.
+    Every LLM-driven agent uses `AnthropicConfig(model="claude-sonnet-5")` - set `ANTHROPIC_API_KEY` in your environment (the script calls `load_dotenv()`), or swap in `OpenAIConfig` / `GeminiConfig` to run on another provider. The `user` agent uses `TestConfig()` because it only opens the channel and sends the kickoff - it never takes an LLM turn. All agents register with `attach_plugin=False`: none of them need the `NetworkPlugin` tools (`say` / `delegate` / `peers` / ...), and leaving those off keeps the coordinator's tool surface to just `handoff` and `finish`.
 
 ```python
 """Cookbook - Coordinator (manager + specialists) pattern.
@@ -19423,7 +19872,7 @@ async def finish(summary: str = "") -> ToolResult:
 
 async def main() -> None:
     config = AnthropicConfig(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         extra_body={"tool_choice": {"type": "auto", "disable_parallel_tool_use": True{{ "}}" }},
     )
 
@@ -19592,7 +20041,7 @@ if __name__ == "__main__":
 
 ## Output
 
-A real `claude-sonnet-4-6` run. The coordinator's turn-by-turn
+A real `claude-sonnet-5` run. The coordinator's turn-by-turn
 selection is LLM-driven, so wording varies between runs; the specialist
 replies and the final summary below are abridged for length.
 
@@ -19805,7 +20254,7 @@ async def resolve(answer: str, channel: ChannelInject) -> str:
     return "resolved"
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
@@ -20066,7 +20515,7 @@ from ag2.testing import TestConfig
 load_dotenv()
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
@@ -20327,7 +20776,7 @@ async def approve(reason: str, channel: ChannelInject) -> str:
     return f"approved: {reason}"
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
@@ -20609,7 +21058,7 @@ async def classify_as_general(reason: str) -> Handoff:
     return Handoff(target="general", reason=reason)
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
@@ -20908,7 +21357,7 @@ from ag2.testing import TestConfig
 load_dotenv()
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
@@ -22949,7 +23398,7 @@ from ag2.extensions.tools.search import ExaToolkit
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[ExaToolkit(api_key=os.environ["EXA_API_KEY"])],
 )
 ```
@@ -23037,7 +23486,7 @@ from ag2.extensions.tools.search import SerplySearchToolkit
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SerplySearchToolkit(api_key=os.environ["SERPLY_API_KEY"])],
 )
 ```
@@ -23148,7 +23597,7 @@ from ag2.extensions.tools.search import TinyFishSearchToolkit
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[TinyFishSearchToolkit(api_key=os.environ["TINYFISH_API_KEY"])],
 )
 ```
@@ -23264,7 +23713,7 @@ from ag2.extensions.tools.search import XquikSearchToolkit
 
 agent = Agent(
     "social-researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[XquikSearchToolkit(api_key=os.environ["XQUIK_API_KEY"])],
 )
 ```
@@ -23298,7 +23747,7 @@ search_tool = toolkit.search(
 
 agent = Agent(
     "social-researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[search_tool],
 )
 ```
@@ -23652,7 +24101,7 @@ python coordinator.py
 
 Source: https://docs.ag2.ai/docs/user-guide/extensions/tealtiger/
 
-The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts - with no LLM in the governance path.
+The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists and blocklists, validates tool arguments, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts - with no LLM in the governance path.
 
 ## Installation
 
@@ -23700,7 +24149,7 @@ governance = TealTigerMiddleware(
 async def main() -> None:
     agent = Agent(
         "assistant",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         middleware=[governance],
     )
     reply = await agent.ask("Summarize the AG2 middleware guide.")
@@ -23739,7 +24188,7 @@ flowchart LR
 | Hook | Stage | What It Does |
 |------|-------|-------------|
 | `on_turn` | Turn defense | Kill switch enforcement - frozen agents cannot take turns |
-| `on_tool_execution` | Pre-tool defense | Tool allowlist, PII scan, secret scan, cost limit check |
+| `on_tool_execution` | Pre-tool defense | Tool allowlist/blocklist, argument validation, PII scan, secret scan, cost limit check |
 
 Both stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
 
@@ -23782,6 +24231,97 @@ GovernancePolicy.tool_allowlist(["search", "read_*", "github_*"])
 ```
 
 Any tool not matching the patterns is denied with reason code `TOOL_NOT_ALLOWED` and risk score 80.
+
+### Tool Blocklist
+
+The complement of the allowlist: allow every tool *except* the ones you name. Reach for this when an agent has many safe tools and only a few dangerous ones, so enumerating every safe tool would be tedious. Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`, `[seq]`) applies:
+
+```python
+GovernancePolicy.tool_blocklist(["delete_*", "shell", "drop_table"])
+```
+
+Any tool matching a pattern is denied with reason code `TOOL_BLOCKED` and risk score 80.
+
+An empty blocklist raises `ValueError` at policy construction, so a policy that blocks nothing cannot be created by mistake.
+
+You can combine an allowlist with a blocklist - for example, permit everything under `read_*` but still deny `read_secrets`. When both are configured, every policy is evaluated until one denies, so either one denying results in a `DENY`; the policy that denies is the one reported, whatever its position in the list:
+
+```python
+from ag2.extensions.tealtiger import GovernancePolicy, TealTigerMiddleware
+
+governance = TealTigerMiddleware(
+    policies=[
+        GovernancePolicy.tool_allowlist(["read_*"]),
+        GovernancePolicy.tool_blocklist(["read_secrets"]),
+    ],
+)
+```
+
+Here `read_file` passes both policies, while `read_secrets` clears the allowlist and is denied by the blocklist - so the reason code is `TOOL_BLOCKED`, from the *second* entry.
+
+!!! warning "Pattern matching is case-sensitive on Linux and macOS"
+
+    `fnmatch` normalizes case the way the host filesystem does, so `["shell"]` blocks `shell`
+    but **not** `Shell` on Linux/macOS, while on Windows it blocks both. For an allowlist that
+    asymmetry denies too much; for a blocklist it lets a call through. If your tool names are
+    not under your control, list the casings you need to block explicitly, or normalize tool
+    names before registering them.
+
+### Argument Validation
+
+Where the allowlist and blocklist govern *which* tools run, `arg_validation` governs *what* a tool is called with - a defense against dangerous argument values such as SQL injection, path traversal, or oversized payloads. It applies to any tool whose name matches `tool` via `fnmatch`, and checks the named arguments against per-argument constraints:
+
+```python
+# Reject long queries and dangerous SQL verbs
+GovernancePolicy.arg_validation(
+    "sql_query",
+    {"query": {"max_length": 500, "blocked_terms": ["DROP", "DELETE", ";--"]{{ "}}" }},
+)
+
+# Reject path traversal in a file tool
+GovernancePolicy.arg_validation(
+    "read_file",
+    {"path": {"blocked_patterns": [r"\.\.[\\/]"]{{ "}}" }},  # ../ and ..\
+)
+```
+
+Each argument's constraint spec may combine any of these checks:
+
+| Check | Denies when |
+|-------|-------------|
+| `max_length` | `len(str(value))` exceeds the limit |
+| `min_length` | `len(str(value))` is below the minimum |
+| `type` | The value is not of this type - one of `"str"`, `"int"`, `"float"`, `"bool"`, `"list"`, `"dict"` |
+| `blocked_terms` | Any term appears in the value (case-insensitive substring) |
+| `blocked_patterns` | Any regex matches the value |
+| `allowed_values` | The value is not one of these |
+
+A violation is denied with reason code `ARG_VALIDATION:{argument}:{check}` (for example `ARG_VALIDATION:query:max_length`) and risk score 85. Only the arguments named in `constraints` are checked - any others pass through - and a constrained argument that is absent from the call is skipped.
+
+!!! note "Type note: `bool` is not accepted for `int`"
+
+    Because `bool` is a subclass of `int` in Python, `{"type": "int"}` explicitly rejects a
+    boolean value, so a `True`/`False` cannot slip through where a real integer is required.
+
+The policy validates its own spec at construction, checking each check's *value* and not just its name. An empty `tool` or `constraints`, a non-dict spec, an unknown check name, an unsupported `type`, a negative or non-integer length bound, a `max_length` below the `min_length`, an empty term or value list, or an uncompilable regex all raise `ValueError`. A typo therefore surfaces where you wrote it - rather than leaving a policy that silently validates nothing, or one that raises from inside the governance path on the first call it evaluates.
+
+Patterns are compiled during that same validation, so evaluation never pays for compilation:
+
+```python
+GovernancePolicy.arg_validation("read_file", {"path": {"blocked_patterns": ["[unclosed"]{{ "}}" }})
+# ValueError: Invalid regex in `blocked_patterns` for argument 'path': '[unclosed' - ...
+```
+
+!!! warning "Named checks need mapping-style arguments"
+
+    Length, type, and `allowed_values` checks rely on reading an argument by name. A model
+    usually sends a JSON object, but it can send an array or a bare value instead, leaving no
+    names to read. The policy then stays **fail-closed**: every constrained argument's
+    `blocked_terms` and `blocked_patterns` run over the whole serialized call, and the
+    value-specific checks are skipped. A denial from that path is reported as
+    `ARG_VALIDATION:*:{check}` - the `*` marking that the hit could not be attributed to one
+    argument, and that a term found anywhere in the call, including in an argument the policy
+    does not constrain, is enough to deny.
 
 ### PII Detection
 
@@ -23953,7 +24493,7 @@ for decision in governance.decisions:
 | `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
 | `agent_name` | `str` | Agent that made the call, or `unknown` |
 | `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
-| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
 | `risk_score` | `int` | 0 (safe) to 100 (critical) |
 | `evaluation_time_ms` | `float` | Governance latency for this decision |
 | `cost_tracked` | `float` | Cost attributed to this call in USD |
@@ -24051,7 +24591,7 @@ governance = TealTigerMiddleware(
         GovernancePolicy.cost_limit(max_per_session=10.0),
     ],
 )
-config = AnthropicConfig(model="claude-sonnet-4-6")
+config = AnthropicConfig(model="claude-sonnet-5")
 
 async def main() -> None:
     researcher = Agent("researcher", config=config, middleware=[governance])
@@ -24107,7 +24647,7 @@ governance = TealTigerMiddleware(
 async def main() -> None:
     agent = Agent(
         "research_assistant",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         middleware=[governance],
     )
     reply = await agent.ask("Research AI governance frameworks for enterprise deployment.")
@@ -24157,7 +24697,9 @@ Each policy type carries its own risk score when it denies:
 | Prompt injection | `PROMPT_INJECTION:{technique}/{pattern}` | 95 |
 | Secret detection | `SECRET_DETECTED` | 95 |
 | PII detection | `PII_DETECTED:{category}` | 90 |
+| Argument validation | `ARG_VALIDATION:{argument}:{check}` | 85 |
 | Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
+| Tool blocklist | `TOOL_BLOCKED` | 80 |
 | Cost limit / factory budget | `BUDGET_EXCEEDED` | 70 |
 
 !!! warning "Policy order is yours to choose"
@@ -24205,7 +24747,7 @@ The middleware follows AG2's middleware factory pattern:
 
 ## Performance
 
-Governance runs entirely in-process: no network calls, no LLM inference, and no external service dependencies. Every check is a `fnmatch` glob or a precompiled `re` pattern over the serialized tool arguments, so evaluation cost scales with argument size rather than with model latency.
+Governance runs entirely in-process: no network calls, no LLM inference, and no external service dependencies. Every check is a `fnmatch` glob, a precompiled `re` pattern, or a plain comparison over the tool arguments - every regex the middleware evaluates, `arg_validation`'s `blocked_patterns` included, is compiled before the first call reaches it. Evaluation cost therefore scales with argument size rather than with model latency.
 
 Each decision records its own measured cost in `evaluation_time_ms`, so you can profile governance overhead against your own workload:
 
@@ -24263,7 +24805,7 @@ async def main() -> None:
     async with env:
         agent = Agent(
             "developer",
-            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            config=AnthropicConfig(model="claude-sonnet-5"),
             tools=[SandboxShellTool(env), SandboxCodeTool(env.code_environment())],
         )
         reply = await agent.ask("Write hello.txt, then read it with Python.")
