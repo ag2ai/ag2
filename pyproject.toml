@@ -108,7 +108,7 @@ tracing = ["opentelemetry-sdk>=1.20"]
 metrics = ["prometheus-client>=0.20.0,<0.30.0"]
 
 # === Search tools ===
-tavily = ["tavily-python>=0.7.4,<0.8"]
+tavily = ["tavily-python>=0.7.4,<0.9"]
 ddgs = ["ddgs>=9.0.0,<10"]
 perplexity = ["perplexityai>=0.30.0,<1"]
 
@@ -239,14 +239,14 @@ types = [
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.16.4", "codespell==2.4.3", "zizmor==1.30.0"]
+lint = ["ruff==0.16.5", "codespell==2.4.3", "zizmor==1.30.0"]
 
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
-    "prek==0.4.14",
+    "prek==0.5.0",
 ]
 
 [tool.pytest.ini_options]
