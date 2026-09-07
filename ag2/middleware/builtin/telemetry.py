@@ -42,6 +42,7 @@ from ag2.events import (
     ToolErrorEvent,
     ToolResult,
     ToolResultEvent,
+    ToolResultsEvent,
     UrlInput,
     UsageEvent,
 )
@@ -125,6 +126,37 @@ def _serialize_tool_result(result: ToolResult, max_chars: int | None) -> tuple[s
         return rendered, False
     keep = max(max_chars - len(_TOOL_RESULT_TRUNCATION_MARKER), 0)
     return rendered[:keep] + _TOOL_RESULT_TRUNCATION_MARKER, True
+
+
+def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: int | None) -> list[dict[str, Any]]:
+    """Serialise the conversation history handed to the model as OpenAI-style message dicts.
+
+    ``on_llm_call`` receives the whole stream history, so on a tool-calling turn
+    the prompt the model sees is the user message, its own earlier reply (with
+    ``tool_calls``), and the tool results. Recording only the user text left a
+    trace that could not replay the call or explain the output. This walks the
+    same events the provider mappers do and emits the chat-completions shape:
+    ``user`` for text inputs, ``assistant`` (with ``tool_calls``) for prior
+    responses, and ``tool`` with ``tool_call_id`` for results.
+
+    Tool results render through ``_serialize_tool_result`` so binary parts
+    appear as descriptors and the same ``max_tool_result_chars`` cap applies
+    as on tool spans. Non-text user inputs (images, audio, documents, raw
+    data) are omitted: their bytes have no place in a string attribute.
+    """
+    result: list[dict[str, Any]] = []
+    for event in events:
+        if isinstance(event, ModelRequest):
+            for inp in event.parts:
+                if isinstance(inp, TextInput):
+                    result.append(inp.to_api())
+        elif isinstance(event, ModelResponse):
+            result.append(event.to_api())
+        elif isinstance(event, ToolResultsEvent):
+            for r in event.results:
+                rendered, _ = _serialize_tool_result(r.result, max_tool_result_chars)
+                result.append({"role": "tool", "tool_call_id": r.parent_id, "content": rendered})
+    return result
 
 
 # At most one usage watcher per stream, process-wide. Keyed by the stream rather
@@ -410,14 +442,8 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
             if self._capture_content:
-                input_messages = json.dumps([
-                    inp.to_api()
-                    for event in events
-                    if isinstance(event, ModelRequest)
-                    for inp in event.parts
-                    if isinstance(inp, TextInput)
-                ])
-                span.set_attribute("gen_ai.input.messages", input_messages)
+                input_messages = _build_input_messages(events, self._max_tool_result_chars)
+                span.set_attribute("gen_ai.input.messages", json.dumps(input_messages))
 
             try:
                 response = await call_next(events, context)
@@ -452,7 +478,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if usage.thinking_tokens:
                 span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
 
-            if self._capture_content and response.message:
+            # ``response.message`` is None when the model answers with tool
+            # calls only; ``to_api`` already carries ``tool_calls``, so emit
+            # whenever the model produced either.
+            if self._capture_content and (response.message or response.tool_calls):
                 span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
 
             return response

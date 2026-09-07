@@ -14,15 +14,20 @@ from pydantic import BaseModel
 from ag2 import Agent, Context
 from ag2.events import (
     BaseEvent,
+    ImageInput,
     ModelMessage,
+    ModelRequest,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolErrorEvent,
+    ToolResultsEvent,
     Usage,
     UsageEvent,
 )
 from ag2.middleware import BaseMiddleware, Middleware
-from ag2.middleware.builtin.telemetry import MAX_TOOL_RESULT_CHARS, TelemetryMiddleware
+from ag2.middleware.builtin.telemetry import MAX_TOOL_RESULT_CHARS, TelemetryMiddleware, _build_input_messages
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 from ag2.tools import ToolResult, tool
@@ -713,6 +718,199 @@ async def test_capture_content_true_includes_messages(otel_setup):
 
     input_msgs = json.loads(llm_span.attributes["gen_ai.input.messages"])
     assert any("Hi" in str(m) for m in input_msgs)
+
+
+def _llm_spans_in_order(exporter: _InMemorySpanExporter) -> list[ReadableSpan]:
+    spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "llm"]
+    return sorted(spans, key=lambda s: s.start_time)
+
+
+def _messages(span: ReadableSpan, attribute: str) -> list[dict]:
+    return json.loads(span.attributes[attribute])
+
+
+def _weather_agent(provider, *, reply: str, **telemetry_kwargs) -> Agent:
+    """Agent scripted for one tool-calling turn: call ``get_weather``, then answer."""
+
+    @tool
+    def get_weather(city: str) -> str:
+        """Return the current weather for a city."""
+        return f"15°C and partly cloudy in {city}"
+
+    return Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent([
+                    ToolCallEvent(id="call_abc", name="get_weather", arguments='{"city": "Paris"}'),
+                ]),
+            ),
+            ModelResponse(ModelMessage(reply)),
+        ),
+        tools=[get_weather],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", **telemetry_kwargs)],
+    )
+
+
+_USER_MSG = {"content": "What's the weather in Paris?", "role": "user"}
+_TOOL_CALL_MSG = {
+    "content": None,
+    "role": "assistant",
+    "tool_calls": [
+        {"id": "call_abc", "type": "function", "function": {"arguments": '{"city": "Paris"}', "name": "get_weather"}},
+    ],
+}
+
+
+@pytest.mark.asyncio()
+async def test_tool_call_turn_records_tool_call_as_output_and_full_history_as_input(otel_setup):
+    exporter, provider = otel_setup
+    agent = _weather_agent(provider, reply="It's 15°C and partly cloudy in Paris.")
+
+    await agent.ask("What's the weather in Paris?")
+
+    first, second = _llm_spans_in_order(exporter)
+
+    # The call that chose the tool: input is the user message, output the tool call.
+    assert _messages(first, "gen_ai.input.messages") == [_USER_MSG]
+    assert _messages(first, "gen_ai.output.messages") == [_TOOL_CALL_MSG]
+
+    # The call after the tool ran: input replays everything the model saw.
+    assert _messages(second, "gen_ai.input.messages") == [
+        _USER_MSG,
+        _TOOL_CALL_MSG,
+        {"role": "tool", "tool_call_id": "call_abc", "content": "15°C and partly cloudy in Paris"},
+    ]
+    assert _messages(second, "gen_ai.output.messages") == [
+        {"content": "It's 15°C and partly cloudy in Paris.", "role": "assistant"},
+    ]
+
+
+@pytest.mark.asyncio()
+async def test_parallel_tool_calls_record_one_tool_message_per_result(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def get_weather(city: str) -> str:
+        """Return the current weather for a city."""
+        return f"18°C in {city}"
+
+    @tool
+    def get_current_time(timezone: str) -> str:
+        """Return the local time in a timezone."""
+        return f"22:15 in {timezone}"
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent([
+                    ToolCallEvent(id="call_w", name="get_weather", arguments='{"city": "Paris"}'),
+                    ToolCallEvent(id="call_t", name="get_current_time", arguments='{"timezone": "Asia/Tokyo"}'),
+                ]),
+            ),
+            ModelResponse(ModelMessage("Paris is 18°C; it's 22:15 in Tokyo.")),
+        ),
+        tools=[get_weather, get_current_time],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Weather in Paris and time in Tokyo?")
+
+    first, second = _llm_spans_in_order(exporter)
+
+    (assistant_out,) = _messages(first, "gen_ai.output.messages")
+    assert [c["id"] for c in assistant_out["tool_calls"]] == ["call_w", "call_t"]
+
+    history = _messages(second, "gen_ai.input.messages")
+    assert history[0]["role"] == "user"
+    assert history[1]["role"] == "assistant"
+    assert [c["id"] for c in history[1]["tool_calls"]] == ["call_w", "call_t"]
+    tool_msgs = history[2:]
+    assert all(m["role"] == "tool" for m in tool_msgs)
+    # Parallel results may land in completion order; each result must still be paired to its call.
+    assert {(m["tool_call_id"], m["content"]) for m in tool_msgs} == {
+        ("call_w", "18°C in Paris"),
+        ("call_t", "22:15 in Asia/Tokyo"),
+    }
+
+
+@pytest.mark.asyncio()
+async def test_capture_content_false_omits_messages_on_tool_call_turn(otel_setup):
+    exporter, provider = otel_setup
+    agent = _weather_agent(provider, reply="Done", capture_content=False)
+
+    await agent.ask("What's the weather in Paris?")
+
+    llm_spans = _llm_spans_in_order(exporter)
+    assert len(llm_spans) == 2
+    for span in llm_spans:
+        assert "gen_ai.input.messages" not in span.attributes
+        assert "gen_ai.output.messages" not in span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_input_messages_tool_result_honours_max_tool_result_chars(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def dump() -> str:
+        """Return a large payload."""
+        return "x" * 200
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(tool_calls=ToolCallsEvent([ToolCallEvent(id="call_1", name="dump", arguments="{}")])),
+            ModelResponse(ModelMessage("Done")),
+        ),
+        tools=[dump],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", max_tool_result_chars=40)],
+    )
+
+    await agent.ask("Dump it")
+
+    _, second = _llm_spans_in_order(exporter)
+    tool_msg = _messages(second, "gen_ai.input.messages")[-1]
+    assert tool_msg["role"] == "tool"
+    assert tool_msg["tool_call_id"] == "call_1"
+    assert len(tool_msg["content"]) == 40
+    assert tool_msg["content"].endswith("...[truncated]")
+
+
+@pytest.mark.asyncio()
+async def test_input_messages_skip_binary_user_input(otel_setup):
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("A picture."))),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Describe this", ImageInput(data=b"\x89PNG", media_type="image/png"))
+
+    (span,) = _llm_spans_in_order(exporter)
+    assert _messages(span, "gen_ai.input.messages") == [{"content": "Describe this", "role": "user"}]
+
+
+def test_build_input_messages_renders_tool_error_as_tool_message():
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments='{"city": "Tokyo"}')
+    events = [
+        ModelRequest([TextInput("And Tokyo?")]),
+        ModelResponse(tool_calls=ToolCallsEvent([call])),
+        ToolResultsEvent([ToolErrorEvent.from_call(call, RuntimeError("boom"))]),
+    ]
+
+    user, assistant, tool_error = _build_input_messages(events, None)
+
+    assert user == {"content": "And Tokyo?", "role": "user"}
+    assert assistant["role"] == "assistant"
+    assert assistant["tool_calls"][0]["id"] == "call_1"
+    # A failed tool feeds its traceback back to the model, so the trace shows it too.
+    assert tool_error["role"] == "tool"
+    assert tool_error["tool_call_id"] == "call_1"
+    assert "RuntimeError: boom" in tool_error["content"]
 
 
 @pytest.mark.asyncio()

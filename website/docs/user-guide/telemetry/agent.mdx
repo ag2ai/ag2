@@ -111,13 +111,23 @@ When content capture is enabled (the default), spans include these additional at
 
 | Attribute | Span type | Content |
 |---|---|---|
-| `gen_ai.input.messages` | llm | JSON request messages |
-| `gen_ai.output.messages` | llm | JSON response messages |
+| `gen_ai.input.messages` | llm | JSON request messages (see below) |
+| `gen_ai.output.messages` | llm | JSON response messages (see below) |
 | `gen_ai.tool.call.arguments` | tool | Tool call arguments (JSON) |
 | `gen_ai.tool.call.result` | tool | Tool execution result (see below) |
 | `ag2.tool.call.result.truncated` | tool | Present and `true` when the result was truncated |
 | `ag2.human_input.prompt` | human_input | Prompt shown to human |
 | `ag2.human_input.response` | human_input | Human's response |
+
+`gen_ai.input.messages` is the full conversation history the model received on that call, not just the
+latest user message, serialised as OpenAI-style chat messages: `user` for text inputs, `assistant` for earlier
+model replies (with `tool_calls` when the model requested tools), and `tool` with a `tool_call_id` for each
+tool result. Tool results render the same way as `gen_ai.tool.call.result` below, including the
+`max_tool_result_chars` cap. Non-text user inputs (images, audio, documents) are omitted.
+
+`gen_ai.output.messages` is the model's reply for that call, recorded whether the model answered with text,
+tool calls, or both. On a tool-calling turn the first `chat` span's output therefore carries the tool call, and
+the next `chat` span's input carries that tool call together with its result.
 
 The tool result is always recorded as a string:
 
