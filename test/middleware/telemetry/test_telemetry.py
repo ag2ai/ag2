@@ -1025,6 +1025,61 @@ def test_build_input_messages_pairs_a_server_side_tool_call_with_its_result():
 
 
 @pytest.mark.asyncio()
+async def test_malformed_tool_arguments_do_not_break_the_turn(otel_setup):
+    """Capturing content must not turn a recoverable bad tool call into a crash."""
+    exporter, provider = otel_setup
+
+    @tool
+    def get_weather(city: str) -> str:
+        """Return the current weather for a city."""
+        return f"18°C in {city}"
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent([ToolCallEvent(id="c1", name="get_weather", arguments='{"city": ')])
+            ),
+            ModelResponse(ModelMessage("Recovered")),
+            raise_tool_errors=False,
+        ),
+        tools=[get_weather],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", capture_content=True)],
+    )
+
+    reply = await agent.ask("Weather?")
+
+    assert await reply.content() == "Recovered"
+    # The unparsable arguments are recorded exactly as the model sent them.
+    first, _ = _llm_spans_in_order(exporter)
+    (assistant,) = _messages(first, "gen_ai.output.messages")
+    assert assistant["tool_calls"][0]["function"]["arguments"] == '{"city": '
+
+
+@pytest.mark.asyncio()
+async def test_a_failure_while_capturing_does_not_fail_the_call(otel_setup, monkeypatch):
+    """The guard of last resort: any serialisation failure is swallowed."""
+    exporter, provider = otel_setup
+    monkeypatch.setattr(
+        "ag2.middleware.builtin.telemetry._build_input_messages",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hello!"))),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    reply = await agent.ask("Hi")
+
+    assert await reply.content() == "Hello!"
+    (span,) = _llm_spans_in_order(exporter)
+    assert "gen_ai.input.messages" not in span.attributes
+    assert "gen_ai.output.messages" in span.attributes
+
+
+@pytest.mark.asyncio()
 async def test_compacted_history_reaches_the_span(otel_setup):
     """End to end: once history is summarised, the span carries the summary."""
     exporter, provider = otel_setup

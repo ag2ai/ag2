@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
 import json
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, is_dataclass
@@ -135,9 +136,23 @@ def _tool_result_message(event: ToolResultEvent, max_chars: int | None) -> dict[
     return {"role": "tool", "tool_call_id": event.parent_id, "content": rendered}
 
 
+def _tool_call_api(call: ToolCallEvent) -> dict[str, Any]:
+    """Serialise a tool call, keeping ``arguments`` as the provider sent it."""
+    # ``ToolCallEvent.to_api`` reparses the JSON; malformed arguments must not raise here.
+    return {"id": call.id, "type": "function", "function": {"arguments": call.arguments, "name": call.name}}
+
+
+def _response_message(response: ModelResponse) -> dict[str, Any]:
+    """Render a model reply as an OpenAI-style ``assistant`` message."""
+    message: dict[str, Any] = {"content": response.content, "role": "assistant"}
+    if response.tool_calls:
+        message["tool_calls"] = [_tool_call_api(c) for c in response.tool_calls.calls]
+    return message
+
+
 def _assistant_message(response: ModelResponse, resolved: set[str]) -> dict[str, Any] | None:
     """Render a model reply, dropping tool calls whose result never landed."""
-    message = response.to_api()
+    message = _response_message(response)
     calls = [c for c in message.get("tool_calls", []) if c["id"] in resolved]
     if calls:
         message["tool_calls"] = calls
@@ -189,7 +204,7 @@ def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: in
                 result.append(message)
         elif isinstance(event, BuiltinToolCallEvent):
             if event.id in resolved:
-                result.append({"content": None, "role": "assistant", "tool_calls": [event.to_api()]})
+                result.append({"content": None, "role": "assistant", "tool_calls": [_tool_call_api(event)]})
         elif isinstance(event, ToolResultsEvent):
             for r in event.results:
                 if r.parent_id in called:
@@ -488,8 +503,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
             if self._capture_content:
-                input_messages = _build_input_messages(events, self._max_tool_result_chars)
-                span.set_attribute("gen_ai.input.messages", json.dumps(input_messages))
+                # Recording a call must never be able to fail it.
+                with contextlib.suppress(Exception):
+                    input_messages = _build_input_messages(events, self._max_tool_result_chars)
+                    span.set_attribute("gen_ai.input.messages", json.dumps(input_messages, default=_json_default))
 
             try:
                 response = await call_next(events, context)
@@ -524,9 +541,13 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if usage.thinking_tokens:
                 span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
 
-            # ``message`` is None on a tool-call-only reply; ``to_api`` has the calls.
+            # ``message`` is None on a tool-call-only reply, which still has the calls.
             if self._capture_content and (response.message or response.tool_calls):
-                span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
+                # Recording a reply must never be able to discard it.
+                with contextlib.suppress(Exception):
+                    span.set_attribute(
+                        "gen_ai.output.messages", json.dumps([_response_message(response)], default=_json_default)
+                    )
 
             return response
 
