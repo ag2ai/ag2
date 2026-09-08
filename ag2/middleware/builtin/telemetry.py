@@ -128,22 +128,26 @@ def _serialize_tool_result(result: ToolResult, max_chars: int | None) -> tuple[s
     return rendered[:keep] + _TOOL_RESULT_TRUNCATION_MARKER, True
 
 
+def _tool_result_message(event: ToolResultEvent, max_chars: int | None) -> dict[str, Any]:
+    """Render one tool result as an OpenAI-style ``tool`` message."""
+    rendered, _ = _serialize_tool_result(event.result, max_chars)
+    return {"role": "tool", "tool_call_id": event.parent_id, "content": rendered}
+
+
 def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: int | None) -> list[dict[str, Any]]:
-    """Serialise the conversation history handed to the model as OpenAI-style message dicts.
+    """Serialise the history sent to the model as OpenAI-style message dicts.
 
-    ``on_llm_call`` receives the whole stream history, so on a tool-calling turn
-    the prompt the model sees is the user message, its own earlier reply (with
-    ``tool_calls``), and the tool results. Recording only the user text left a
-    trace that could not replay the call or explain the output. This walks the
-    same events the provider mappers do and emits the chat-completions shape:
-    ``user`` for text inputs, ``assistant`` (with ``tool_calls``) for prior
-    responses, and ``tool`` with ``tool_call_id`` for results.
-
-    Tool results render through ``_serialize_tool_result`` so binary parts
-    appear as descriptors and the same ``max_tool_result_chars`` cap applies
-    as on tool spans. Non-text user inputs (images, audio, documents, raw
-    data) are omitted: their bytes have no place in a string attribute.
+    Binary user inputs are omitted; tool results honour ``max_tool_result_chars``.
     """
+    # Local: a module-level import cycles via ``ag2.config`` mappers.
+    from ag2.compact import CompactionSummary
+
+    # History holds the loose result and its wrapper; emit at the wrapper only.
+    wrapped: set[str] = {
+        r.parent_id for event in events if isinstance(event, ToolResultsEvent) for r in event.results if r.parent_id
+    }
+    loose_seen: set[str] = set()
+
     result: list[dict[str, Any]] = []
     for event in events:
         if isinstance(event, ModelRequest):
@@ -154,8 +158,15 @@ def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: in
             result.append(event.to_api())
         elif isinstance(event, ToolResultsEvent):
             for r in event.results:
-                rendered, _ = _serialize_tool_result(r.result, max_tool_result_chars)
-                result.append({"role": "tool", "tool_call_id": r.parent_id, "content": rendered})
+                result.append(_tool_result_message(r, max_tool_result_chars))
+        elif isinstance(event, ToolResultEvent):
+            # Fallback when the wrapper was never persisted; unpairable ids skipped.
+            if event.parent_id and event.parent_id not in wrapped and event.parent_id not in loose_seen:
+                loose_seen.add(event.parent_id)
+                result.append(_tool_result_message(event, max_tool_result_chars))
+        elif isinstance(event, CompactionSummary):
+            # The synthetic user turn the provider mappers send.
+            result.append({"role": "user", "content": f"[Summary of earlier conversation]\n{event.summary}"})
     return result
 
 
@@ -478,9 +489,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if usage.thinking_tokens:
                 span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
 
-            # ``response.message`` is None when the model answers with tool
-            # calls only; ``to_api`` already carries ``tool_calls``, so emit
-            # whenever the model produced either.
+            # ``message`` is None on a tool-call-only reply; ``to_api`` has the calls.
             if self._capture_content and (response.message or response.tool_calls):
                 span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
 

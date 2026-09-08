@@ -12,6 +12,8 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult
 from pydantic import BaseModel
 
 from ag2 import Agent, Context
+from ag2.agent import KnowledgeConfig
+from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact
 from ag2.events import (
     BaseEvent,
     ImageInput,
@@ -22,10 +24,12 @@ from ag2.events import (
     ToolCallEvent,
     ToolCallsEvent,
     ToolErrorEvent,
+    ToolResultEvent,
     ToolResultsEvent,
     Usage,
     UsageEvent,
 )
+from ag2.knowledge import MemoryKnowledgeStore
 from ag2.middleware import BaseMiddleware, Middleware
 from ag2.middleware.builtin.telemetry import MAX_TOOL_RESULT_CHARS, TelemetryMiddleware, _build_input_messages
 from ag2.stream import MemoryStream
@@ -911,6 +915,107 @@ def test_build_input_messages_renders_tool_error_as_tool_message():
     assert tool_error["role"] == "tool"
     assert tool_error["tool_call_id"] == "call_1"
     assert "RuntimeError: boom" in tool_error["content"]
+
+
+def _result_event(parent_id: str, text: str) -> ToolResultEvent:
+    return ToolResultEvent(parent_id=parent_id, name="get_weather", result=ToolResult(text))
+
+
+def test_build_input_messages_includes_compaction_summary():
+    """Every provider mapper sends the summary, so the span must record it."""
+    events = [
+        CompactionSummary(summary="The user asked about Paris.", event_count=4),
+        ModelRequest([TextInput("And Tokyo?")]),
+    ]
+
+    assert _build_input_messages(events, None) == [
+        {"role": "user", "content": "[Summary of earlier conversation]\nThe user asked about Paris."},
+        {"content": "And Tokyo?", "role": "user"},
+    ]
+
+
+def test_build_input_messages_falls_back_to_a_loose_tool_result():
+    """Recovery path: anthropic, bedrock and zai send a result with no wrapper."""
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments='{"city": "Tokyo"}')
+    events = [
+        ModelRequest([TextInput("Tokyo?")]),
+        ModelResponse(tool_calls=ToolCallsEvent([call])),
+        _result_event("call_1", "22°C in Tokyo"),
+    ]
+
+    assert _build_input_messages(events, None)[-1] == {
+        "role": "tool",
+        "tool_call_id": "call_1",
+        "content": "22°C in Tokyo",
+    }
+
+
+def test_build_input_messages_records_a_wrapped_result_once():
+    """History holds both forms; recording both would double every result."""
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
+    result = _result_event("call_1", "18°C")
+    events = [
+        ModelRequest([TextInput("Weather?")]),
+        ModelResponse(tool_calls=ToolCallsEvent([call])),
+        result,
+        ToolResultsEvent([result]),
+    ]
+
+    messages = _build_input_messages(events, None)
+    assert [m for m in messages if m["role"] == "tool"] == [
+        {"role": "tool", "tool_call_id": "call_1", "content": "18°C"}
+    ]
+
+
+def test_build_input_messages_skips_a_loose_result_without_a_call_id():
+    """An unpairable result is dropped, as the bedrock mapper drops it."""
+    events = [ModelRequest([TextInput("Hi")]), _result_event("", "orphaned")]
+
+    assert _build_input_messages(events, None) == [{"content": "Hi", "role": "user"}]
+
+
+def test_build_input_messages_records_a_loose_tool_error():
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
+    events = [ModelResponse(tool_calls=ToolCallsEvent([call])), ToolErrorEvent.from_call(call, RuntimeError("boom"))]
+
+    tool_message = _build_input_messages(events, None)[-1]
+    assert tool_message["role"] == "tool"
+    assert tool_message["tool_call_id"] == "call_1"
+    assert "RuntimeError: boom" in tool_message["content"]
+
+
+@pytest.mark.asyncio()
+async def test_compacted_history_reaches_the_span(otel_setup):
+    """End to end: once history is summarised, the span carries the summary."""
+    exporter, provider = otel_setup
+    summarizer = TestConfig(ModelResponse(ModelMessage("Earlier: the user asked about Paris.")))
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(ModelMessage("First answer")),
+            ModelResponse(ModelMessage("Second answer")),
+            ModelResponse(ModelMessage("Third answer")),
+        ),
+        knowledge=KnowledgeConfig(
+            store=MemoryKnowledgeStore(),
+            compact=SummarizeCompact(target=1, config=summarizer),
+            compact_trigger=CompactTrigger(max_events=2),
+            expose_tool=False,
+            write_event_log=False,
+        ),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    reply = await agent.ask("What about Paris?")
+    reply = await reply.ask("And Tokyo?")
+    # The third turn is the first compacted before its call.
+    await reply.ask("And Berlin?")
+
+    inputs = [_messages(s, "gen_ai.input.messages") for s in _llm_spans_in_order(exporter)]
+    summaries = [m for msgs in inputs for m in msgs if str(m.get("content", "")).startswith("[Summary of earlier")]
+    assert summaries, f"no compaction summary recorded in any chat span: {inputs}"
+    assert "Earlier: the user asked about Paris." in summaries[0]["content"]
 
 
 @pytest.mark.asyncio()
