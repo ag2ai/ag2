@@ -16,6 +16,8 @@ from ag2.agent import KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact
 from ag2.events import (
     BaseEvent,
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     ImageInput,
     ModelMessage,
     ModelRequest,
@@ -982,6 +984,44 @@ def test_build_input_messages_records_a_loose_tool_error():
     assert tool_message["role"] == "tool"
     assert tool_message["tool_call_id"] == "call_1"
     assert "RuntimeError: boom" in tool_message["content"]
+
+
+def test_build_input_messages_drops_a_result_with_no_matching_call():
+    """An orphaned result is never sent, so the span must not claim it was."""
+    events = [ModelRequest([TextInput("Hi")]), ToolResultsEvent([_result_event("gone", "stale")])]
+
+    assert _build_input_messages(events, None) == [{"content": "Hi", "role": "user"}]
+
+
+def test_build_input_messages_drops_an_unresolved_tool_call():
+    """A call whose result never landed is dropped, keeping the reply's text."""
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
+    events = [ModelResponse(ModelMessage("Checking..."), tool_calls=ToolCallsEvent([call]))]
+
+    assert _build_input_messages(events, None) == [{"content": "Checking...", "role": "assistant"}]
+
+
+def test_build_input_messages_omits_a_reply_that_is_only_unresolved_calls():
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
+    events = [ModelRequest([TextInput("Hi")]), ModelResponse(tool_calls=ToolCallsEvent([call]))]
+
+    assert _build_input_messages(events, None) == [{"content": "Hi", "role": "user"}]
+
+
+def test_build_input_messages_pairs_a_server_side_tool_call_with_its_result():
+    """Server-side tools bypass ``ModelResponse``; both halves still belong in the span."""
+    call = BuiltinToolCallEvent(id="ws_1", name="web_search", arguments='{"q": "Paris"}')
+    events = [
+        ModelRequest([TextInput("Paris?")]),
+        call,
+        BuiltinToolResultEvent(parent_id="ws_1", name="web_search", result=ToolResult("Paris is in France")),
+    ]
+
+    user, assistant, tool_message = _build_input_messages(events, None)
+    assert user == {"content": "Paris?", "role": "user"}
+    assert assistant["role"] == "assistant"
+    assert [c["id"] for c in assistant["tool_calls"]] == ["ws_1"]
+    assert tool_message == {"role": "tool", "tool_call_id": "ws_1", "content": "Paris is in France"}
 
 
 @pytest.mark.asyncio()
