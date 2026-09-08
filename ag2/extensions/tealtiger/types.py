@@ -225,6 +225,88 @@ class GovernancePolicy:
         return cls(type="secret_detection", config={})
 
     @classmethod
+    def output_scan(
+        cls,
+        scan_pii: bool = True,
+        scan_secrets: bool = True,
+        pii_action: str = "REDACT",
+        secret_action: str = "BLOCK",
+        categories: list[str] | None = None,
+    ) -> "GovernancePolicy":
+        """Scan tool *results* for PII/secrets before they flow back into agent context.
+
+        Where `pii_block` / `secret_detection` inspect a tool's *arguments*
+        before it runs, this inspects what the tool *returns* — the data-leakage
+        direction. A tool that reads a database, file, or API can hand back an
+        SSN or a leaked credential that would otherwise land straight in the
+        model's context on the next turn. This policy scans that result and
+        redacts, blocks, or flags it first.
+
+        Each detector has an independent action:
+
+        | Action | Effect |
+        |--------|--------|
+        | `REDACT` | Replace matched values in the result with `[REDACTED:<type>]`; the sanitized result flows through. |
+        | `BLOCK` | Replace the whole result with a governance error (ENFORCE only). In MONITOR/OBSERVE it degrades to REDACT so the value still never leaks. |
+        | `FLAG` | Record the finding in the decision/receipt trail; pass the result through unchanged. |
+
+        Defaults mirror the sensible split: PII is redacted (the agent usually
+        still needs the surrounding result), secrets are blocked (a leaked
+        credential should not reach the model at all).
+
+        Example::
+
+            GovernancePolicy.output_scan()  # redact PII, block secrets
+            GovernancePolicy.output_scan(
+                pii_action="BLOCK", categories=["ssn", "credit_card"]
+            )
+
+        Args:
+            scan_pii: Scan results for PII. Default True.
+            scan_secrets: Scan results for leaked credentials. Default True.
+            pii_action: Action when PII is found — `REDACT`, `BLOCK`, or `FLAG`.
+            secret_action: Action when a secret is found — `REDACT`, `BLOCK`, or `FLAG`.
+            categories: PII categories to detect. Default:
+                `["ssn", "credit_card", "email", "phone"]`.
+
+        Raises:
+            ValueError: If both `scan_pii` and `scan_secrets` are False (the
+                policy would scan nothing), if an action is not one of
+                `REDACT`/`BLOCK`/`FLAG`, or if `categories` names an unknown
+                PII category — any of which would silently do nothing.
+        """
+        valid_actions = {"REDACT", "BLOCK", "FLAG"}
+        valid_categories = {"ssn", "credit_card", "email", "phone"}
+
+        if not scan_pii and not scan_secrets:
+            raise ValueError(
+                "output_scan must scan something: set scan_pii and/or scan_secrets to True."
+            )
+        for label, value in (("pii_action", pii_action), ("secret_action", secret_action)):
+            if value not in valid_actions:
+                raise ValueError(
+                    f"Invalid {label} '{value}'. Valid actions: {', '.join(sorted(valid_actions))}."
+                )
+        resolved_categories = categories if categories is not None else ["ssn", "credit_card", "email", "phone"]
+        unknown = set(resolved_categories) - valid_categories
+        if unknown:
+            raise ValueError(
+                f"Unknown PII category(ies): {', '.join(sorted(unknown))}. "
+                f"Valid categories: {', '.join(sorted(valid_categories))}."
+            )
+
+        return cls(
+            type="output_scan",
+            config={
+                "scan_pii": scan_pii,
+                "scan_secrets": scan_secrets,
+                "pii_action": pii_action,
+                "secret_action": secret_action,
+                "categories": resolved_categories,
+            },
+        )
+
+    @classmethod
     def cost_limit(cls, max_per_session: float) -> "GovernancePolicy":
         """Deny tool calls once cumulative session cost exceeds the limit.
 

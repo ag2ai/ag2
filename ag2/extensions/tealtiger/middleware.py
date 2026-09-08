@@ -22,7 +22,8 @@ if TYPE_CHECKING:
     from ag2.events import BaseEvent, ToolCallEvent
     from ag2.middleware.base import ToolExecution
 
-from ag2.events import ToolErrorEvent
+from ag2.events import ToolErrorEvent, ToolResultEvent
+from ag2.events.input_events import TextInput
 from ag2.extensions.tealtiger.types import (
     ARG_TYPES_BY_NAME,
     DEFAULT_INJECTION_CONFIDENCE_THRESHOLD,
@@ -352,7 +353,10 @@ class _TealTigerPerTurn(BaseMiddleware):
         outcome = "error" if isinstance(result, ToolErrorEvent) else "executed"
         self._emit_receipt(decision, execution_outcome=outcome)
 
-        return result
+        # Post-tool defense: scan the RESULT for PII/secrets before it flows back
+        # into agent context. Runs only on successful results (not errors) and
+        # only if an output_scan policy is configured.
+        return self._scan_result(event, tool_name, result)
 
     def _evaluate(self, tool_name: str, tool_args: Any) -> GovernanceDecision:
         """Evaluate governance policies deterministically."""
@@ -452,6 +456,145 @@ class _TealTigerPerTurn(BaseMiddleware):
             risk_score=risk_score,
             cumulative_cost=self._factory._cumulative_cost,
         )
+
+    def _scan_result(
+        self, event: "ToolCallEvent", tool_name: str, result: "ToolResultType"
+    ) -> "ToolResultType":
+        """Scan a tool result for PII/secrets (post-tool defense).
+
+        Only successful ``ToolResultEvent`` results are scanned; errors and
+        other result types pass through untouched. For each configured
+        ``output_scan`` policy, the concatenated text of the result's parts is
+        scanned. The most restrictive action across findings wins
+        (BLOCK > REDACT > FLAG):
+
+        - BLOCK (ENFORCE only): the result is replaced with a governance error.
+          In MONITOR the block degrades to REDACT so the value still never
+          reaches the model.
+        - REDACT: matched values in each text part are replaced in place.
+        - FLAG: recorded only; the result is returned unchanged.
+
+        A GovernanceDecision (+ receipt) is recorded whenever findings occur.
+        """
+        # Only successful results carry scannable content; skip errors/others.
+        if not isinstance(result, ToolResultEvent) or isinstance(result, ToolErrorEvent):
+            return result
+
+        policies = [p for p in self._factory.policies if p.type == "output_scan"]
+        if not policies:
+            return result
+
+        # Gather the text parts of the result (TextInput.content) with indices.
+        text_parts = [
+            (idx, part)
+            for idx, part in enumerate(result.result.parts)
+            if isinstance(part, TextInput) and isinstance(part.content, str)
+        ]
+        if not text_parts:
+            return result
+
+        combined = "\n".join(part.content for _, part in text_parts)
+
+        pii_hits: list[str] = []
+        secret_hit = False
+        pii_action = "REDACT"
+        secret_action = "BLOCK"
+
+        for policy in policies:
+            cfg = policy.config
+            if cfg.get("scan_pii", True):
+                found = self._detect_pii(combined, cfg.get("categories", []))
+                if found:
+                    pii_hits.extend(found)
+                    pii_action = cfg.get("pii_action", "REDACT")
+            if cfg.get("scan_secrets", True) and self._detect_secrets(combined):
+                secret_hit = True
+                secret_action = cfg.get("secret_action", "BLOCK")
+
+        if not pii_hits and not secret_hit:
+            return result
+
+        reason_codes: list[str] = []
+        if pii_hits:
+            reason_codes.extend(f"OUTPUT_PII_DETECTED:{cat}" for cat in dict.fromkeys(pii_hits))
+        if secret_hit:
+            reason_codes.append("OUTPUT_SECRET_DETECTED")
+
+        # Effective action: most restrictive across triggered detectors.
+        actions = set()
+        if pii_hits:
+            actions.add(pii_action)
+        if secret_hit:
+            actions.add(secret_action)
+        risk_score = 90 if secret_hit else 60
+        agent_name = self._agent_name or "unknown"
+
+        # BLOCK (ENFORCE only) — replace the result with a governance error.
+        if "BLOCK" in actions and self._factory.mode == GovernanceMode.ENFORCE:
+            reason_codes.append("OUTPUT_BLOCKED")
+            decision = GovernanceDecision(
+                action="DENY",
+                mode=self._factory.mode.value,
+                agent_name=agent_name,
+                tool_name=tool_name,
+                reason_codes=reason_codes,
+                risk_score=risk_score,
+                cumulative_cost=self._factory._cumulative_cost,
+            )
+            self._factory._decisions.append(decision)
+            if self._factory.on_decision:
+                self._factory.on_decision(decision)
+            self._emit_receipt(decision, execution_outcome="blocked")
+            reason = ", ".join(reason_codes)
+            return ToolErrorEvent.from_call(
+                event,
+                error=Exception(
+                    f"[GOVERNANCE DENIED] Result of tool '{tool_name}' withheld — "
+                    f"sensitive data detected. Reason: {reason}. Decision ID: {decision.decision_id}"
+                ),
+            )
+
+        # REDACT — either an explicit REDACT action, or a BLOCK degraded because
+        # we are not in ENFORCE mode (the value must still not leak).
+        should_redact = "REDACT" in actions or ("BLOCK" in actions and self._factory.mode != GovernanceMode.ENFORCE)
+        if should_redact:
+            reason_codes.append("OUTPUT_REDACTED")
+            categories = sorted({p for policy in policies for p in policy.config.get("categories", [])})
+            for _, part in text_parts:
+                part.content = self._redact(part.content, categories, redact_secrets=secret_hit)
+            action_value = "MONITOR" if self._factory.mode == GovernanceMode.MONITOR else "ALLOW"
+        else:
+            # FLAG only — record but pass the result through unchanged.
+            action_value = "ALLOW"
+
+        decision = GovernanceDecision(
+            action=action_value,
+            mode=self._factory.mode.value,
+            agent_name=agent_name,
+            tool_name=tool_name,
+            reason_codes=reason_codes,
+            risk_score=risk_score,
+            cumulative_cost=self._factory._cumulative_cost,
+        )
+        self._factory._decisions.append(decision)
+        if self._factory.on_decision:
+            self._factory.on_decision(decision)
+        self._emit_receipt(decision, execution_outcome="executed")
+
+        return result
+
+    @staticmethod
+    def _redact(text: str, categories: list[str], redact_secrets: bool) -> str:
+        """Replace PII (in ``categories``) and, if requested, secrets with markers."""
+        redacted = text
+        for cat in categories:
+            pattern = _PII_PATTERNS.get(cat)
+            if pattern is not None:
+                redacted = pattern.sub(f"[REDACTED:{cat}]", redacted)
+        if redact_secrets:
+            for pattern in _SECRET_PATTERNS:
+                redacted = pattern.sub("[REDACTED:secret]", redacted)
+        return redacted
 
     def _emit_receipt(self, decision: GovernanceDecision, execution_outcome: str) -> None:
         """Emit a TEEC receipt for the governance decision."""
