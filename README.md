@@ -36,7 +36,7 @@
   <a href="https://playground.ag2.ai">💡 Playground</a> |
   <a href="https://github.com/ag2ai/build-with-ag2">💡 Examples</a> |
   <a href="https://docs.ag2.ai/docs/contributor-guide/contributing/">🤝 Contributing</a> |
-  <a href="#related-papers">📝 Cite paper</a> |
+  <a href="https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/ending-a-conversation">📝 Cite paper</a> |
   <a href="https://discord.gg/pAbnFJrkgZ">💬 Join Discord</a> |
   <a href="#ag2-classic-the-autogen-namespace">🏛️ AG2 Classic</a>
 </p>
@@ -72,12 +72,9 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
     - [Orchestrating Multiple Agents](#orchestrating-multiple-agents)
     - [The agent harness: knowledge and compaction](#the-agent-harness-knowledge-and-compaction)
     - [Advanced agentic design patterns](#advanced-agentic-design-patterns)
-  - [Announcements](#announcements)
-  - [Code style and linting](#code-style-and-linting)
-  - [Related papers](#related-papers)
-  - [Contributors Wall](#contributors-wall)
-  - [Cite the project](#cite-the-project)
-  - [License](#license)
+    - [Code style and linting](#code-style-and-linting)
+    - [Contributors Wall](#contributors-wall)
+    - [License](#license)
 
 ## AG2 Classic (the `autogen.*` namespace)
 
