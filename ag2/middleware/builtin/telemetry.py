@@ -2,32 +2,51 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import asdict, is_dataclass
+from typing import Any
+from uuid import UUID
+from weakref import ReferenceType, WeakKeyDictionary, ref
 
 from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
     ATTR_HUMAN_INPUT_RESPONSE,
     ATTR_SPAN_TYPE,
+    ATTR_TOOL_RESULT_TRUNCATED,
+    ATTR_USAGE_KIND,
+    ATTR_USAGE_LABEL,
+    ATTR_USAGE_TOTAL,
     OTEL_INSTRUMENTING_MODULE,
     OTEL_SCHEMA_URL,
     SPAN_TYPE_AGENT,
     SPAN_TYPE_HUMAN_INPUT,
     SPAN_TYPE_LLM,
     SPAN_TYPE_TOOL,
+    SPAN_TYPE_USAGE,
     TRACEPARENT_DEP_KEY,
 )
 from ag2.annotations import Context
 from ag2.events import (
     BaseEvent,
+    BinaryInput,
+    BuiltinToolCallEvent,
+    DataInput,
+    FileIdInput,
     HumanInputRequest,
     HumanMessage,
+    Input,
     ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
     ToolErrorEvent,
+    ToolResult,
     ToolResultEvent,
+    ToolResultsEvent,
+    UrlInput,
+    UsageEvent,
 )
 from ag2.middleware.base import (
     AgentTurn,
@@ -56,6 +75,175 @@ def _get_tracer(tracer_provider: TracerProvider | None = None) -> trace.Tracer:
     return provider.get_tracer(OTEL_INSTRUMENTING_MODULE, schema_url=OTEL_SCHEMA_URL)
 
 
+# Default cap on the serialized tool result recorded on a tool span.
+MAX_TOOL_RESULT_CHARS = 8192
+_TOOL_RESULT_TRUNCATION_MARKER = "...[truncated]"
+
+
+def _json_default(obj: Any) -> Any:
+    """Coerce a value ``json`` cannot encode into one it can."""
+    model_dump = getattr(obj, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(mode="json")
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return asdict(obj)
+    if isinstance(obj, (set, frozenset)):
+        return sorted(obj, key=str)
+    return str(obj)
+
+
+def _render_tool_result_part(part: Input) -> str:
+    """Render one ``Input`` part of a tool result as span-attribute text.
+
+    Binary parts render as a descriptor, never their bytes. Mirrors
+    ``_stringify_tool_result`` in ``ag2/ag_ui/stream.py``.
+    """
+    if isinstance(part, TextInput):
+        return part.content
+    if isinstance(part, DataInput):
+        try:
+            return json.dumps(part.data, default=_json_default)
+        except Exception:
+            # Telemetry must not fail a tool call the tool itself completed.
+            return repr(part.data)
+    if isinstance(part, UrlInput):
+        return part.url
+    if isinstance(part, FileIdInput):
+        return f"[file:{part.file_id}]"
+    if isinstance(part, BinaryInput):
+        return f"[binary:{part.media_type} {len(part.data)}B]"
+    return repr(part)
+
+
+def _serialize_tool_result(result: ToolResult, max_chars: int | None) -> tuple[str, bool]:
+    """Flatten a ``ToolResult`` into ``(rendered text, was truncated)``.
+
+    A single text part stays an unwrapped plain string for backward
+    compatibility; multiple parts are newline-joined, not JSON-wrapped,
+    because the attribute is read as free text. ``max_chars=None`` disables
+    truncation.
+    """
+    rendered = "\n".join(_render_tool_result_part(p) for p in result.parts)
+    if max_chars is None or len(rendered) <= max_chars:
+        return rendered, False
+    keep = max(max_chars - len(_TOOL_RESULT_TRUNCATION_MARKER), 0)
+    return rendered[:keep] + _TOOL_RESULT_TRUNCATION_MARKER, True
+
+
+def _tool_result_message(event: ToolResultEvent, max_chars: int | None) -> dict[str, Any]:
+    """Render one tool result as an OpenAI-style ``tool`` message."""
+    rendered, _ = _serialize_tool_result(event.result, max_chars)
+    return {"role": "tool", "tool_call_id": event.parent_id, "content": rendered}
+
+
+def _tool_call_api(call: ToolCallEvent) -> dict[str, Any]:
+    """Serialise a tool call, keeping ``arguments`` as the provider sent it."""
+    # ``ToolCallEvent.to_api`` reparses the JSON; malformed arguments must not raise here.
+    return {"id": call.id, "type": "function", "function": {"arguments": call.arguments, "name": call.name}}
+
+
+def _response_message(response: ModelResponse) -> dict[str, Any]:
+    """Render a model reply as an OpenAI-style ``assistant`` message."""
+    message: dict[str, Any] = {"content": response.content, "role": "assistant"}
+    if response.tool_calls:
+        message["tool_calls"] = [_tool_call_api(c) for c in response.tool_calls.calls]
+    return message
+
+
+def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: int | None) -> list[dict[str, Any]]:
+    """Serialise the history sent to the model as OpenAI-style message dicts.
+
+    Binary user inputs are omitted; tool results honour ``max_tool_result_chars``.
+    """
+    # Local: a module-level import cycles via ``ag2.config`` mappers.
+    from ag2.compact import CompactionSummary
+
+    # Recorded as AG2 assembled it, repairing nothing: providers disagree on which
+    # half of an orphaned tool pair they drop, and dropping one hides the defect.
+    # History holds the loose result and its wrapper; emit at the wrapper only.
+    wrapped: set[str] = {
+        r.parent_id for event in events if isinstance(event, ToolResultsEvent) for r in event.results if r.parent_id
+    }
+    loose_seen: set[str] = set()
+
+    result: list[dict[str, Any]] = []
+    for event in events:
+        if isinstance(event, ModelRequest):
+            for inp in event.parts:
+                if isinstance(inp, TextInput):
+                    result.append(inp.to_api())
+        elif isinstance(event, ModelResponse):
+            result.append(_response_message(event))
+        elif isinstance(event, BuiltinToolCallEvent):
+            # Server-side tools are sent standalone, never via ``ModelResponse``.
+            result.append({"content": None, "role": "assistant", "tool_calls": [_tool_call_api(event)]})
+        elif isinstance(event, ToolResultsEvent):
+            for r in event.results:
+                result.append(_tool_result_message(r, max_tool_result_chars))
+        elif isinstance(event, ToolResultEvent):
+            # Fallback when the wrapper was never persisted; an id-less result cannot be paired.
+            if event.parent_id and event.parent_id not in wrapped and event.parent_id not in loose_seen:
+                loose_seen.add(event.parent_id)
+                result.append(_tool_result_message(event, max_tool_result_chars))
+        elif isinstance(event, CompactionSummary):
+            # The synthetic user turn the provider mappers send.
+            result.append({"role": "user", "content": f"[Summary of earlier conversation]\n{event.summary}"})
+    return result
+
+
+# At most one usage watcher per stream, process-wide. Keyed by the stream rather
+# than held by a middleware instance or factory: the watcher must outlive the
+# turn (see ``_subscribe_usage``), and two agents sharing a stream — or a fresh
+# ``TelemetryMiddleware`` per ``ask`` — would otherwise each add their own and
+# record the same event several times, into whichever trace happened to install
+# it first. Turns on a shared stream are serialised by the agent's per-stream
+# lock, so the current holder is always the turn now running. Weak keys let a
+# finished stream's entry go with it. Mirrors the per-stream turn-lock registry
+# in ``ag2.agent``.
+_usage_watchers: "WeakKeyDictionary[Any, UUID]" = WeakKeyDictionary()
+
+
+def _make_usage_recorder(
+    owner: "ReferenceType[_TelemetryMiddlewareInstance]",
+    stream: Any,
+) -> Callable[[UsageEvent], Awaitable[None]]:
+    """Route accounting events to the run that installed this watcher.
+
+    Holds the middleware **weakly**, which is what bounds the subscription to
+    one run. The instance lives exactly as long as the ``ask`` that built it —
+    the agent keeps its middleware instances alive for the duration of the run
+    and drops them when the run's ``ExitStack`` closes — so a strong reference
+    here would keep a finished run's recorder alive and let the *next* run on a
+    shared stream record into a trace that was already complete. Once the owner
+    is gone the watcher retires itself.
+
+    A module-level factory rather than a nested function, per the repository
+    rule against nested functions in runtime execution paths.
+    """
+
+    async def _record(event: UsageEvent) -> None:
+        middleware = owner()
+        if middleware is None:
+            _retire_usage_watcher(stream)
+            return
+        await middleware.record_usage_span(event)
+
+    return _record
+
+
+def _retire_usage_watcher(stream: Any) -> None:
+    """Drop the watcher of a run that has ended.
+
+    Safe to do unconditionally: a watcher is only ever displaced by
+    ``_subscribe_usage``, which unsubscribes it as it replaces it, so a recorder
+    that still fires is by construction the registered one. A dead recorder can
+    therefore never retire a live successor.
+    """
+    sub_id = _usage_watchers.pop(stream, None)
+    if sub_id is not None:
+        stream.unsubscribe(sub_id)
+
+
 class TelemetryMiddleware(MiddlewareFactory):
     """Middleware that emits OpenTelemetry spans for agent turns, LLM calls, tool executions, and human input.
 
@@ -64,6 +252,9 @@ class TelemetryMiddleware(MiddlewareFactory):
     Args:
         tracer_provider: Optional TracerProvider. Defaults to the global provider.
         capture_content: Whether to include message content, tool arguments/results in spans. Defaults to True.
+        max_tool_result_chars: Cap on the serialized tool result recorded per tool span. Defaults to
+            ``MAX_TOOL_RESULT_CHARS`` (8192). ``None`` disables truncation; large results may then exceed
+            your backend's attribute or payload limits.
         agent_name: Agent name for span attributes. If not set, defaults to "unknown".
         provider_name: LLM provider name (e.g. "openai", "anthropic").
         model_name: Model name (e.g. "gpt-4o-mini").
@@ -75,6 +266,7 @@ class TelemetryMiddleware(MiddlewareFactory):
         *,
         tracer_provider: TracerProvider | None = None,
         capture_content: bool = True,
+        max_tool_result_chars: int | None = MAX_TOOL_RESULT_CHARS,
         agent_name: str | None = None,
         provider_name: str | None = None,
         model_name: str | None = None,
@@ -82,6 +274,7 @@ class TelemetryMiddleware(MiddlewareFactory):
     ) -> None:
         self._tracer = _get_tracer(tracer_provider)
         self._capture_content = capture_content
+        self._max_tool_result_chars = max_tool_result_chars
         self._agent_name = agent_name or "unknown"
         self._provider_name = provider_name
         self._model_name = model_name
@@ -93,6 +286,7 @@ class TelemetryMiddleware(MiddlewareFactory):
             kind=type(self).__qualname__,
             config={
                 "capture_content": self._capture_content,
+                "max_tool_result_chars": self._max_tool_result_chars,
                 "agent_name": self._agent_name,
                 "provider_name": self._provider_name,
                 "model_name": self._model_name,
@@ -106,6 +300,7 @@ class TelemetryMiddleware(MiddlewareFactory):
             context,
             tracer=self._tracer,
             capture_content=self._capture_content,
+            max_tool_result_chars=self._max_tool_result_chars,
             agent_name=self._agent_name,
             provider_name=self._provider_name,
             model_name=self._model_name,
@@ -121,14 +316,17 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         *,
         tracer: trace.Tracer,
         capture_content: bool,
+        max_tool_result_chars: int | None,
         agent_name: str,
         provider_name: str | None,
         model_name: str | None,
         span_attributes: dict[str, str],
     ) -> None:
         super().__init__(event, context)
+        self._turn_context: Any = None
         self._tracer = tracer
         self._capture_content = capture_content
+        self._max_tool_result_chars = max_tool_result_chars
         self._agent_name = agent_name
         self._provider_name = provider_name
         self._model_name = model_name
@@ -164,6 +362,11 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if self._model_name:
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
+            # Parent late-arriving usage explicitly at this turn, since the
+            # ambient context is gone once the span below closes.
+            self._turn_context = trace.set_span_in_context(span)
+            self._subscribe_usage(context)
+
             try:
                 response = await call_next(event, context)
             except Exception as exc:
@@ -172,6 +375,82 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 raise
 
             return response
+
+    def _subscribe_usage(self, context: Context) -> None:
+        """Watch the stream for accounting events, replacing this stream's previous watcher.
+
+        ``UsageEvent`` is the framework's accounting record and the only route by
+        which spend that never becomes an LLM span reaches a trace: a sub-task
+        rollup (the worker is not instrumented), history compaction and memory
+        aggregation (they call the model outside these hooks), and the
+        live-session clients.
+
+        The subscription deliberately outlives the turn. Middleware that reports
+        usage does so *after* its own ``call_next`` returns — compaction
+        summarises what the finished turn produced — and agent-level middleware
+        wraps middleware passed to ``ask``, which is how the eval runner
+        installs telemetry. Unsubscribing when the turn span closed therefore
+        dropped exactly the maintenance spend this is here to capture.
+
+        Exactly-once is kept by replacing rather than adding: the registry holds
+        one watcher per stream process-wide, re-pointed at the current turn each
+        time, so neither a second turn nor a second instrumented agent on a
+        shared stream can record an event twice.
+
+        It outlives the turn but *not* the run: the watcher holds this instance
+        weakly (see :func:`_make_usage_recorder`), and this instance dies with
+        the ``ask`` that built it. An uninstrumented run reusing the stream
+        afterwards therefore records nothing, instead of filing its spend under
+        the previous run's finished trace.
+        """
+        stream = context.stream
+        previous = _usage_watchers.pop(stream, None)
+        if previous is not None:
+            stream.unsubscribe(previous)
+        recorder = _make_usage_recorder(ref(self), stream)
+        _usage_watchers[stream] = stream.where(UsageEvent).subscribe(recorder)
+
+    async def record_usage_span(self, event: UsageEvent) -> None:
+        """Record one accounting event as its own span.
+
+        Parented at the turn rather than at the ambient context: this runs in a
+        stream callback that may fire after the turn span closed, where the
+        ambient context would start a *new trace* and a backend grouping by
+        trace id would lose the spend. Not made current either — rebinding the
+        ambient context inside a callback would reparent whatever runs next.
+        """
+        span = self._tracer.start_span(
+            f"record_usage {event.kind}",
+            kind=SpanKind.INTERNAL,
+            context=self._turn_context,
+        )
+        try:
+            for k, v in self._span_attributes.items():
+                span.set_attribute(k, v)
+            span.set_attribute(ATTR_SPAN_TYPE, SPAN_TYPE_USAGE)
+            span.set_attribute(ATTR_USAGE_KIND, event.kind)
+            if event.label:
+                span.set_attribute(ATTR_USAGE_LABEL, event.label)
+            if event.model:
+                span.set_attribute("gen_ai.response.model", event.model)
+            if event.provider:
+                span.set_attribute("gen_ai.provider.name", event.provider)
+
+            usage = event.usage
+            if usage.prompt_tokens:
+                span.set_attribute("gen_ai.usage.input_tokens", int(usage.prompt_tokens))
+            if usage.completion_tokens:
+                span.set_attribute("gen_ai.usage.output_tokens", int(usage.completion_tokens))
+            if usage.cache_creation_input_tokens:
+                span.set_attribute("gen_ai.usage.cache_creation_input_tokens", int(usage.cache_creation_input_tokens))
+            if usage.cache_read_input_tokens:
+                span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage.cache_read_input_tokens))
+            if usage.thinking_tokens:
+                span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
+            if usage.total_tokens:
+                span.set_attribute(ATTR_USAGE_TOTAL, int(usage.total_tokens))
+        finally:
+            span.end()
 
     async def on_llm_call(
         self,
@@ -195,14 +474,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
             if self._capture_content:
-                input_messages = json.dumps([
-                    inp.to_api()
-                    for event in events
-                    if isinstance(event, ModelRequest)
-                    for inp in event.parts
-                    if isinstance(inp, TextInput)
-                ])
-                span.set_attribute("gen_ai.input.messages", input_messages)
+                # Recording a call must never be able to fail it.
+                with contextlib.suppress(Exception):
+                    input_messages = _build_input_messages(events, self._max_tool_result_chars)
+                    span.set_attribute("gen_ai.input.messages", json.dumps(input_messages, default=_json_default))
 
             try:
                 response = await call_next(events, context)
@@ -237,8 +512,13 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if usage.thinking_tokens:
                 span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
 
-            if self._capture_content and response.message:
-                span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
+            # ``message`` is None on a tool-call-only reply, which still has the calls.
+            if self._capture_content and (response.message or response.tool_calls):
+                # Recording a reply must never be able to discard it.
+                with contextlib.suppress(Exception):
+                    span.set_attribute(
+                        "gen_ai.output.messages", json.dumps([_response_message(response)], default=_json_default)
+                    )
 
             return response
 
@@ -274,9 +554,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.record_exception(result.error)
                 span.set_status(StatusCode.ERROR, str(result.error))
             elif self._capture_content and isinstance(result, ToolResultEvent) and result.result.parts:
-                part = result.result.parts[0]
-                if isinstance(part, TextInput):
-                    span.set_attribute("gen_ai.tool.call.result", part.content)
+                rendered, truncated = _serialize_tool_result(result.result, self._max_tool_result_chars)
+                span.set_attribute("gen_ai.tool.call.result", rendered)
+                if truncated:
+                    span.set_attribute(ATTR_TOOL_RESULT_TRUNCATED, True)
 
             return result
 

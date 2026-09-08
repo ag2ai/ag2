@@ -24,16 +24,19 @@ if TYPE_CHECKING:
 
 from ag2.events import ToolErrorEvent
 from ag2.extensions.tealtiger.types import (
+    ARG_TYPES_BY_NAME,
+    DEFAULT_INJECTION_CONFIDENCE_THRESHOLD,
+    INJECTION_PATTERNS,
+    INJECTION_TECHNIQUES,
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
+    InjectionFinding,
     TEECReceipt,
 )
 from ag2.middleware import BaseMiddleware
 from ag2.middleware.base import ToolResultType
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
-
-# ── PII and secret patterns ──────────────────────────────────────────────────
 
 _PII_PATTERNS: dict[str, re.Pattern[str]] = {
     "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
@@ -50,6 +53,79 @@ _SECRET_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"(?i)(?:api[_-]?key|apikey)\s*[:=]\s*['\"]?[a-zA-Z0-9_\-]{20,}"),
     re.compile(r"-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----"),
 ]
+
+# Injection findings keep a snippet of the match as evidence, not the whole argument.
+_MAX_MATCHED_TEXT_CHARS = 100
+
+# Stands in for the argument name in an arg_validation reason code when the call's
+# arguments were not a mapping and the hit cannot be attributed to one argument.
+_UNNAMED_ARG = "*"
+
+
+def _matches_blocked_terms(text: str, spec: dict[str, Any]) -> bool:
+    """Whether `text` contains any of the spec's blocked terms, case-insensitively."""
+    if "blocked_terms" not in spec:
+        return False
+    lowered = text.lower()
+    return any(term.lower() in lowered for term in spec["blocked_terms"])
+
+
+def _matches_blocked_patterns(text: str, spec: dict[str, Any]) -> bool:
+    """Whether any of the spec's blocked patterns matches `text`.
+
+    Patterns are compiled by `GovernancePolicy.arg_validation`, so nothing is
+    compiled here.
+    """
+    return "blocked_patterns" in spec and any(pattern.search(text) for pattern in spec["blocked_patterns"])
+
+
+def _check_value(value: Any, spec: dict[str, Any]) -> str | None:
+    """Name the first check ``value`` violates, or ``None``.
+
+    Type runs first so a length or membership failure is never reported for a
+    value that was the wrong shape to begin with.
+    """
+    text = value if isinstance(value, str) else str(value)
+
+    if "type" in spec:
+        expected = ARG_TYPES_BY_NAME[spec["type"]]
+        # bool is a subclass of int, so reject a bool where "int" is required.
+        if not isinstance(value, expected) or (expected is int and isinstance(value, bool)):
+            return "type"
+
+    if "allowed_values" in spec and value not in spec["allowed_values"]:
+        return "allowed_values"
+
+    if "max_length" in spec and len(text) > spec["max_length"]:
+        return "max_length"
+
+    if "min_length" in spec and len(text) < spec["min_length"]:
+        return "min_length"
+
+    if _matches_blocked_terms(text, spec):
+        return "blocked_terms"
+
+    if _matches_blocked_patterns(text, spec):
+        return "blocked_patterns"
+
+    return None
+
+
+def _scan_unnamed_args(args_str: str, constraints: dict[str, dict[str, Any]]) -> str | None:
+    """Check a call whose arguments are not a mapping.
+
+    With no names to read by, length/type/`allowed_values` cannot apply. Rather
+    than let the call through, the term and pattern checks run over the whole
+    serialized call — fail-closed, so a banned term denies even from an
+    argument the policy does not constrain. Reported against ``*``, since no
+    single argument can honestly be blamed.
+    """
+    for spec in constraints.values():
+        if _matches_blocked_terms(args_str, spec):
+            return f"{_UNNAMED_ARG}:blocked_terms"
+        if _matches_blocked_patterns(args_str, spec):
+            return f"{_UNNAMED_ARG}:blocked_patterns"
+    return None
 
 
 class TealTigerMiddleware:
@@ -278,8 +354,6 @@ class _TealTigerPerTurn(BaseMiddleware):
 
         return result
 
-    # ─── Inline policy evaluation (no external deps) ─────────────────────
-
     def _evaluate(self, tool_name: str, tool_args: Any) -> GovernanceDecision:
         """Evaluate governance policies deterministically."""
         action = "ALLOW"
@@ -287,7 +361,6 @@ class _TealTigerPerTurn(BaseMiddleware):
         risk_score = 0
         agent_name = self._agent_name or "unknown"
 
-        # 1. Kill switch
         if agent_name != "unknown" and self._factory.is_frozen(agent_name):
             return GovernanceDecision(
                 action="DENY",
@@ -298,7 +371,6 @@ class _TealTigerPerTurn(BaseMiddleware):
                 risk_score=100,
             )
 
-        # 2. Budget limit (factory-level, always enforced)
         if self._factory._cumulative_cost >= self._factory.budget_limit:
             return GovernanceDecision(
                 action="DENY",
@@ -310,17 +382,43 @@ class _TealTigerPerTurn(BaseMiddleware):
                 cumulative_cost=self._factory._cumulative_cost,
             )
 
-        # 3. Policy evaluation
         args_str = str(tool_args) if not isinstance(tool_args, str) else tool_args
 
         for policy in self._factory.policies:
-            if policy.type == "tool_allowlist":
+            if policy.type == "prompt_injection_block":
+                techniques = policy.config.get("techniques", list(INJECTION_TECHNIQUES))
+                threshold = policy.config.get("confidence_threshold", DEFAULT_INJECTION_CONFIDENCE_THRESHOLD)
+                injection_findings = self._detect_prompt_injection(args_str, techniques, threshold)
+                if injection_findings:
+                    top = injection_findings[0]
+                    action = "DENY"
+                    reason_codes.append(f"PROMPT_INJECTION:{top.technique}/{top.pattern_name}")
+                    risk_score = max(risk_score, 95)
+                    break
+            elif policy.type == "tool_allowlist":
                 allowed = policy.config.get("allowed", [])
                 if not any(fnmatch.fnmatch(tool_name, p) for p in allowed):
                     action = "DENY"
                     reason_codes.append("TOOL_NOT_ALLOWED")
                     risk_score = max(risk_score, 80)
                     break
+
+            elif policy.type == "tool_blocklist":
+                blocked = policy.config.get("blocked", [])
+                if any(fnmatch.fnmatch(tool_name, p) for p in blocked):
+                    action = "DENY"
+                    reason_codes.append("TOOL_BLOCKED")
+                    risk_score = max(risk_score, 80)
+                    break
+
+            elif policy.type == "arg_validation":
+                if fnmatch.fnmatch(tool_name, policy.config.get("tool", "")):
+                    violation = self._validate_args(tool_args, args_str, policy.config.get("constraints", {}))
+                    if violation is not None:
+                        action = "DENY"
+                        reason_codes.append(f"ARG_VALIDATION:{violation}")
+                        risk_score = max(risk_score, 85)
+                        break
 
             elif policy.type == "pii_block":
                 categories = policy.config.get("categories", [])
@@ -355,8 +453,6 @@ class _TealTigerPerTurn(BaseMiddleware):
             cumulative_cost=self._factory._cumulative_cost,
         )
 
-    # ─── Helpers ─────────────────────────────────────────────────────────
-
     def _emit_receipt(self, decision: GovernanceDecision, execution_outcome: str) -> None:
         """Emit a TEEC receipt for the governance decision."""
         receipt = TEECReceipt(
@@ -387,6 +483,62 @@ class _TealTigerPerTurn(BaseMiddleware):
     def _detect_secrets(text: str) -> bool:
         """Detect secret patterns in text."""
         return any(p.search(text) for p in _SECRET_PATTERNS)
+
+    @staticmethod
+    def _validate_args(tool_args: Any, args_str: str, constraints: dict[str, dict[str, Any]]) -> str | None:
+        """Name the first violated constraint as ``"{arg}:{check}"``, or ``None``.
+
+        ``args_str`` is the caller's already-serialized form of the call, used
+        only by the non-mapping fallback.
+        """
+        if not isinstance(tool_args, dict):
+            return _scan_unnamed_args(args_str, constraints)
+
+        for arg_name, spec in constraints.items():
+            if arg_name not in tool_args:
+                continue
+            violated = _check_value(tool_args[arg_name], spec)
+            if violated is not None:
+                return f"{arg_name}:{violated}"
+
+        return None
+
+    @staticmethod
+    def _detect_prompt_injection(
+        text: str, techniques: list[str], confidence_threshold: float
+    ) -> list[InjectionFinding]:
+        """Detect prompt injection patterns in text.
+
+        Args:
+            text: The text to scan (typically serialized tool arguments).
+            techniques: Technique categories to check.
+            confidence_threshold: Minimum pattern confidence for a pattern to be evaluated.
+
+        Returns:
+            At most one finding per matching pattern, sorted by confidence (highest first).
+        """
+        findings: list[InjectionFinding] = []
+        for technique in techniques:
+            for injection_pattern in INJECTION_PATTERNS.get(technique, []):
+                if injection_pattern.confidence < confidence_threshold:
+                    continue
+                # The first match is enough — the decision only needs the top finding, so
+                # scanning every occurrence of every pattern would be wasted work.
+                match = injection_pattern.pattern.search(text)
+                if match is None:
+                    continue
+                findings.append(
+                    InjectionFinding(
+                        technique=injection_pattern.technique,
+                        pattern_name=injection_pattern.name,
+                        matched_text=match.group()[:_MAX_MATCHED_TEXT_CHARS],
+                        confidence=injection_pattern.confidence,
+                        start=match.start(),
+                        end=match.end(),
+                    )
+                )
+        findings.sort(key=lambda finding: finding.confidence, reverse=True)
+        return findings
 
     def _get_agent_name(self, context: "Context") -> str | None:
         """Extract agent name from context dependencies."""

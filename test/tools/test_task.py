@@ -34,8 +34,14 @@ from ag2.testing import TestConfig
 from ag2.tools import Toolkit
 from ag2.tools.subagents import background_agent_tool, subagent_tool
 from ag2.tools.subagents import run_task as run_task_mod
-from ag2.tools.subagents.run_task import run_task
+from ag2.tools.subagents.run_task import _rollup_usage, run_task
 from ag2.usage import UsageReport
+
+
+@tool
+def noop() -> str:
+    """A tool that does nothing."""
+    return "ok"
 
 
 def _tool_names(tools: list) -> set[str]:
@@ -617,6 +623,10 @@ class TestSubtaskOptOut:
 
         assert _tool_names(agent._additional_tools) == {"run_subtask", "run_subtasks"}
 
+    async def test_taskconfig_rejects_non_positive_max_concurrency(self) -> None:
+        with pytest.raises(ValueError, match="max_concurrency must be >= 1"):
+            TaskConfig(max_concurrency=0)
+
 
 @pytest.mark.asyncio
 class TestSubtaskInheritance:
@@ -814,6 +824,98 @@ class TestSubtaskNoRecursion:
 
 @pytest.mark.asyncio
 class TestParallelSubtasks:
+    async def test_max_concurrency_bounds_parallel_run_subtask_calls(self) -> None:
+        parent = Agent(
+            "parent",
+            config=TestConfig(
+                [
+                    ToolCallEvent(name="run_subtask", arguments='{"task": "do A"}'),
+                    ToolCallEvent(name="run_subtask", arguments='{"task": "do B"}'),
+                    ToolCallEvent(name="run_subtask", arguments='{"task": "do C"}'),
+                ],
+                "done",
+            ),
+            tasks=TaskConfig(
+                config=TestConfig(ModelResponse(ModelMessage("subtask done."))),
+                max_concurrency=2,
+            ),
+        )
+        stream = MemoryStream()
+        active = 0
+        peak = 0
+        two_started = asyncio.Event()
+        release = asyncio.Event()
+
+        @stream.where(TaskStarted).subscribe
+        async def hold_started(_: TaskStarted) -> None:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            if active == 2:
+                two_started.set()
+            try:
+                await release.wait()
+            finally:
+                active -= 1
+
+        turn = asyncio.create_task(parent.ask("go", stream=stream))
+        await asyncio.wait_for(two_started.wait(), timeout=1)
+
+        assert active == 2
+        assert not turn.done()
+
+        release.set()
+        reply = await asyncio.wait_for(turn, timeout=1)
+
+        assert reply.body == "done"
+        assert peak == 2
+
+    async def test_max_concurrency_bounds_run_subtasks_fan_out(self) -> None:
+        parent = Agent(
+            "parent",
+            config=TestConfig(
+                ToolCallEvent(
+                    name="run_subtasks",
+                    arguments='{"tasks": ["task X", "task Y"], "parallel": true}',
+                ),
+                "done",
+            ),
+            tasks=TaskConfig(
+                config=TestConfig(ModelResponse(ModelMessage("subtask done."))),
+                max_concurrency=1,
+            ),
+        )
+        stream = MemoryStream()
+        active = 0
+        peak = 0
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        @stream.where(TaskStarted).subscribe
+        async def hold_started(_: TaskStarted) -> None:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            started.set()
+            try:
+                await release.wait()
+            finally:
+                active -= 1
+
+        turn = asyncio.create_task(parent.ask("go", stream=stream))
+        await asyncio.wait_for(started.wait(), timeout=1)
+
+        assert active == 1
+        assert not turn.done()
+
+        release.set()
+        reply = await asyncio.wait_for(turn, timeout=1)
+        events = list(await stream.history.get_events())
+
+        assert reply.body == "done"
+        assert peak == 1
+        assert len([event for event in events if isinstance(event, TaskCompleted)]) == 2
+
     async def test_parallel_run_subtask_calls_succeed(self) -> None:
         """The LLM can emit multiple ``run_subtask`` tool_use blocks in one
         assistant message; the executor dispatches them concurrently and
@@ -902,6 +1004,53 @@ def test_run_subtask_description_advertises_parallel_invocation() -> None:
     assert "parallel" in run_subtasks.schema.function.description.lower()
 
 
+def test_max_concurrency_agent_is_reusable_across_event_loops() -> None:
+    """A capped Agent survives being driven from more than one event loop.
+
+    ``asyncio.Semaphore`` binds to the first loop that awaits it *while
+    contended*, so a semaphore cached on the Agent for its whole lifetime would
+    raise ``RuntimeError`` on the second loop. This is deliberately sync (one
+    ``asyncio.run`` per turn) and uses a cap smaller than the fan-out so the
+    semaphore is guaranteed to block.
+    """
+    parent = Agent(
+        "parent",
+        config=TestConfig(
+            [
+                ToolCallEvent(name="run_subtask", arguments='{"task": "do A"}'),
+                ToolCallEvent(name="run_subtask", arguments='{"task": "do B"}'),
+                ToolCallEvent(name="run_subtask", arguments='{"task": "do C"}'),
+            ],
+            "done",
+        ),
+        tasks=TaskConfig(
+            config=TestConfig(ModelResponse(ModelMessage("subtask done."))),
+            max_concurrency=1,
+        ),
+    )
+
+    async def turn() -> tuple[str | None, int]:
+        stream = MemoryStream()
+        active = 0
+        peak = 0
+
+        @stream.where(TaskStarted).subscribe
+        async def track(_: TaskStarted) -> None:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            await asyncio.sleep(0)
+            active -= 1
+
+        reply = await parent.ask("go", stream=stream)
+        return reply.body, peak
+
+    for _ in range(3):
+        body, peak = asyncio.run(turn())
+        assert body == "done"
+        assert peak == 1
+
+
 @pytest.mark.asyncio
 class TestSubtaskUsageRollup:
     async def test_rollup_sums_all_model_calls(self) -> None:
@@ -911,11 +1060,6 @@ class TestSubtaskUsageRollup:
         rollup carried back via ``TaskResult.usage`` / ``TaskCompleted.usage``
         must be the sum of both — not just the final turn.
         """
-
-        @tool
-        def noop() -> str:
-            """A tool that does nothing."""
-            return "ok"
 
         worker = Agent(
             "worker",
@@ -963,14 +1107,159 @@ class TestSubtaskUsageRollup:
 
         events = list(await parent_ctx.stream.history.get_events())
         usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert usage_events == [
-            UsageEvent(Usage(prompt_tokens=20, completion_tokens=8), kind="subtask"),
+        # ``label`` is ``compare=False`` on the event, so comparing whole
+        # ``UsageEvent``s would not check it — the fields go in a tuple instead.
+        assert [(e.usage, e.kind, e.label) for e in usage_events] == [
+            (Usage(prompt_tokens=20, completion_tokens=8), "subtask", "worker")
         ]
-        assert usage_events[0].label == "worker"
 
         report = UsageReport.from_events(events)
         assert report.total == Usage(prompt_tokens=20, completion_tokens=8)
         assert report.by_kind == {"subtask": Usage(prompt_tokens=20, completion_tokens=8)}
+
+    async def test_rollup_carries_the_pair_of_a_single_configuration_delegation(self) -> None:
+        """One configuration behind the spend means the rollup can name it.
+
+        Still one rollup — that invariant is asserted above and unchanged — but a
+        consumer breaking spend down per provider and model now sees this
+        delegation under the configuration that actually billed it instead of
+        under an unlabelled row.
+        """
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert [(e.provider, e.model) for e in usage_events] == [("anthropic", "claude-haiku-4")]
+        assert UsageReport.from_events(events).by_model == {
+            "claude-haiku-4": Usage(prompt_tokens=30, completion_tokens=13)
+        }
+
+    async def test_rollup_leaves_the_pair_unset_when_the_delegation_spanned_several(self) -> None:
+        """Two configurations behind the spend leave the rollup unlabelled.
+
+        Naming either — or the parent's — would attribute tokens to a model that
+        did not spend them, and a consumer cannot tell a wrong label from a right
+        one. The tokens themselves are still rolled up in full.
+        """
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=20, completion_tokens=8),
+                    model="gpt-5-mini",
+                    provider="openai",
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert [(e.provider, e.model, e.usage) for e in usage_events] == [
+            (None, None, Usage(prompt_tokens=30, completion_tokens=13))
+        ]
+
+    async def test_rollup_leaves_a_partial_total_absent(self) -> None:
+        """One call without a reported total leaves the rollup's total absent."""
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=40, completion_tokens=4),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert [(e.provider, e.model, e.usage) for e in usage_events] == [
+            ("anthropic", "claude-haiku-4", Usage(prompt_tokens=140, completion_tokens=14))
+        ]
+        assert usage_events[0].usage.total_tokens is None
+
+    async def test_rollup_of_a_mixed_delegation_also_drops_a_partial_total(self) -> None:
+        """The unlabelled rollup is subject to the same rule as a labelled one."""
+
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    usage=Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=40, completion_tokens=4),
+                    model="gpt-5-mini",
+                    provider="openai",
+                ),
+            ),
+            tools=[noop],
+        )
+
+        parent_ctx = _make_parent_context()
+        await run_task(worker, "go", parent_context=parent_ctx)
+
+        events = list(await parent_ctx.stream.history.get_events())
+        usage_events = [e for e in events if isinstance(e, UsageEvent)]
+        assert [(e.provider, e.model, e.usage) for e in usage_events] == [
+            (None, None, Usage(prompt_tokens=140, completion_tokens=14))
+        ]
+
+    async def test_a_record_that_spent_nothing_does_not_decide_the_total(self) -> None:
+        """An all-absent ``Usage`` is not a call that omitted its total."""
+        assert _rollup_usage([
+            UsageEvent(Usage(total_tokens=110), kind="model_call"),
+            UsageEvent(Usage(), kind="model_call"),
+        ]) == Usage(total_tokens=110)
 
     async def test_rollup_reports_usage_incurred_before_a_failure(self) -> None:
         """A sub-task that bills a model call and *then* dies still reports that

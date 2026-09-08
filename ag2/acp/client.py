@@ -42,14 +42,10 @@ from .tool_gateway import GATEWAY_SERVER_NAME, ToolGateway, partition_tools
 from .transport import ACPTransportError
 
 if TYPE_CHECKING:
+    from .bridge import BridgeState
     from .config import ACPConfig, ElicitationPolicy
 
 logger = logging.getLogger(__name__)
-
-# Ceiling on waiting for received `session/update`s to finish being handled. Only
-# approached if a handler is wedged — the normal wait is a scheduling round or
-# two — and exceeding it costs the tail of the turn's text, never a hung turn.
-_UPDATE_SETTLE_TIMEOUT = 10.0
 
 
 def _elicitation_capabilities(policy: "ElicitationPolicy") -> schema.ElicitationCapabilities | None:
@@ -199,7 +195,7 @@ class ACPClient:
                 raise ACPTransportError(self.config._transport_label, e) from e
 
         try:
-            timed_out, response = await self._drive_turn(session, _run_turn)
+            timed_out, response = await self._drive_turn(session, _run_turn, state)
         except ACPTransportError:
             # The connection is gone, so the session it carried is gone too:
             # drop it rather than leaving a started session with a dead
@@ -210,23 +206,23 @@ class ACPClient:
             await session.close()
             raise
 
-        # The prompt response arriving does not mean the `session/update`s that
-        # preceded it on the wire have been handled — see `dispatch`. Reading the
-        # turn now would cut off its tail, so wait for them first. Bounded only
-        # against a wedged update handler: the normal wait is the time it takes to
-        # drain a queue whose items are already there.
-        try:
-            await asyncio.wait_for(state.updates.settle(), _UPDATE_SETTLE_TIMEOUT)
-        except asyncio.TimeoutError:
-            logger.warning(
-                "Timed out after %.0fs waiting for streamed updates to be handled; "
-                "the reply may be missing its tail (agent=%r).",
-                _UPDATE_SETTLE_TIMEOUT,
-                self.config._agent_label,
-            )
-
+        # The turn is read out below without waiting on anything: since SDK 0.12.1
+        # `conn.prompt` itself does not return until every `session/update` handler
+        # this session has in flight has returned, so the response arriving means
+        # the tail has landed. A wedged handler therefore holds up the prompt, and
+        # is bounded by `turn_timeout` — the same ceiling as a wedged agent. Order
+        # among those handlers is AG2's own doing; see `dispatch`.
         if response is not None:
             session.sent_count = new_count
+
+        if state.channel_failure is not None:
+            # A tool asked a human over the gateway and the channel was dead.
+            # The agent's own words are not the answer to that question: letting
+            # the turn report success would tell the caller it finished, and tell
+            # the model it may find another route to what an approval refused it.
+            # Same failure, and the same type, as every surface where AG2 itself
+            # runs the loop.
+            raise state.channel_failure
 
         finish_reason = "timeout" if timed_out else (response.stop_reason if response is not None else None)
 
@@ -262,42 +258,62 @@ class ACPClient:
         self,
         session: ACPSession,
         run_turn: "Callable[[], Awaitable[schema.PromptResponse]]",
+        state: "BridgeState",
     ) -> "tuple[bool, schema.PromptResponse | None]":
-        """Run one prompt turn under the configured timeout; report (timed out, response)."""
-        timed_out = False
-        response: schema.PromptResponse | None = None
-        if self.config.turn_timeout is not None:
-            # Prefer cooperative cancellation: signal session/cancel and let the
-            # agent return the in-flight prompt with stop_reason="cancelled".
-            # Cancelling the coroutine outright would corrupt the JSON-RPC stream.
-            task = asyncio.ensure_future(run_turn())
-            done, _ = await asyncio.wait({task}, timeout=self.config.turn_timeout)
+        """Run one prompt turn, stopping early on the deadline or a dead channel.
+
+        Two things end a turn before the agent is finished with it, and they end
+        it the same way. The deadline is one. The other is a tool that asked a
+        human over the gateway and could not reach one: the turn's answer is
+        already known to be worthless, so letting the agent carry on would leave
+        it working — editing files, calling more tools — for a caller who is
+        about to be told the turn failed.
+
+        A third way is the caller itself being cancelled, which ends the turn
+        without reporting anything at all.
+
+        Reports ``(timed out, response)``; a dead channel is not a timeout, and
+        the caller raises for it separately.
+        """
+        # Prefer cooperative cancellation: signal session/cancel and let the
+        # agent return the in-flight prompt with stop_reason="cancelled".
+        # Cancelling the coroutine outright would corrupt the JSON-RPC stream.
+        task = asyncio.ensure_future(run_turn())
+        stopped = asyncio.ensure_future(state.channel_failed.wait())
+        try:
+            done, _ = await asyncio.wait(
+                {task, stopped},
+                timeout=self.config.turn_timeout,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
             if task in done:
-                response = await task
-            else:
-                timed_out = True
-                await _cancel_quietly(session)
-                # Bounded grace for the agent to honor the cancel.
-                done, _ = await asyncio.wait({task}, timeout=self.config.cancel_timeout)
-                if task in done:
-                    response = await task
-                else:
-                    # Agent ignored the cancel; hard-stop so we never block the
-                    # turn forever. The session is torn down and the next turn
-                    # re-opens it — closing the connection where a remote agent
-                    # leaves no process to kill.
-                    task.cancel()
-                    # Drain the cancelled/broken prompt before tearing down.
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
-                    except Exception:
-                        logger.debug("draining the hard-stopped prompt raised", exc_info=True)
-                    await session.close()
-        else:
-            response = await run_turn()
-        return timed_out, response
+                return False, await task
+
+            # Nothing finished within the deadline, or the channel died. The
+            # agent is asked to stop the same way either way.
+            timed_out = stopped not in done
+            await _cancel_quietly(session)
+            # Bounded grace for the agent to honor the cancel.
+            done, _ = await asyncio.wait({task}, timeout=self.config.cancel_timeout)
+            if task in done:
+                return timed_out, await task
+
+            # Agent ignored the cancel; hard-stop so we never block the turn
+            # forever.
+            await _hard_stop(session, task)
+            return timed_out, None
+        except asyncio.CancelledError:
+            # The caller was cancelled out from under us, and the prompt is
+            # ours to end: ``asyncio.wait`` does not cancel what it waits on, so
+            # without this the turn would outlive the call that started it — the
+            # agent still editing files and calling tools for nobody, and the
+            # session never torn down. There is no cooperative attempt first: the
+            # caller is already gone, so spending ``cancel_timeout`` on a stop
+            # reason nobody will read only delays its cancellation.
+            await _hard_stop(session, task)
+            raise
+        finally:
+            stopped.cancel()
 
 
 def _refresh_tools(session: ACPSession, tools: Sequence[ToolSchema]) -> None:
@@ -329,3 +345,23 @@ async def _cancel_quietly(session: ACPSession) -> None:
             await session.conn.cancel(session_id=session.session_id)
     except Exception as e:  # noqa: BLE001 — cancellation is best-effort
         logger.debug("session/cancel failed (best-effort): %s", e)
+
+
+async def _hard_stop(session: ACPSession, task: "asyncio.Task[schema.PromptResponse]") -> None:
+    """Cancel an in-flight prompt outright and tear its session down.
+
+    For a turn that cannot be ended cooperatively — the agent ignored
+    ``session/cancel``, or the caller is gone and there is nobody left to wait
+    for it. Cancelling mid-exchange leaves the JSON-RPC stream unusable, so the
+    session goes with it and the next turn re-opens one; closing the connection
+    is what stops a remote agent, which leaves no process to kill.
+    """
+    task.cancel()
+    # Drain the cancelled/broken prompt before tearing down.
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        logger.debug("draining the hard-stopped prompt raised", exc_info=True)
+    await session.close()

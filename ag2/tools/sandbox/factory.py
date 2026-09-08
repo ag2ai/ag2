@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
@@ -86,7 +86,7 @@ class SingletonFactory:
     async def open(
         self,
         context: "ConversationContext | None" = None,
-    ) -> AsyncIterator[Sandbox]:
+    ) -> AsyncGenerator[Sandbox]:
         del context
         yield self._sandbox
 

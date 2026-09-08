@@ -268,7 +268,7 @@ class TestToolExposure:
             (advertised,) = session.conn.new_session_kwargs["mcp_servers"]
             observed["url"] = advertised.url
             async with (
-                streamable_http_client(advertised.url) as (read, write, _),
+                streamable_http_client(advertised.url) as (read, write),
                 ClientSession(read, write) as mcp,
             ):
                 await mcp.initialize()
@@ -321,7 +321,7 @@ class TestToolExposure:
             async def probe() -> None:
                 session = next(iter(cfg.sessions.values()))
                 async with (
-                    streamable_http_client(session.gateway.url) as (read, write, _),
+                    streamable_http_client(session.gateway.url) as (read, write),
                     ClientSession(read, write) as mcp,
                 ):
                     await mcp.initialize()

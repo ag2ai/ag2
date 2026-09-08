@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from mcp.types import TextContent
 
 from ag2 import Agent
 from ag2.events import ToolCallEvent
@@ -27,12 +28,13 @@ class TestProgress:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"}, progress_callback=on_progress)
 
-        assert result.isError is False
+        assert result.is_error is False
         # One progress notification per streamed chunk, monotonically increasing.
         assert [m for _, _, m in updates] == ["Hello, ", "world!"]
         assert [p for p, _, _ in updates] == [1.0, 2.0]
         # Final body is still returned in full.
-        assert [c.text for c in result.content if c.type == "text"] == ["Hello, world!"]
+        reply, _trailer = result.content
+        assert reply == TextContent(type="text", text="Hello, world!")
 
     async def test_no_progress_without_token(self) -> None:
         agent = make_agent(config=ChunkConfig("a", "b"))
@@ -42,7 +44,7 @@ class TestProgress:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
-        assert result.isError is False
+        assert result.is_error is False
 
     async def test_progress_disabled(self) -> None:
         agent = make_agent(config=ChunkConfig("a", "b"))
@@ -56,7 +58,7 @@ class TestProgress:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"}, progress_callback=on_progress)
 
-        assert result.isError is False
+        assert result.is_error is False
         assert updates == []
 
     async def test_tool_events_are_logged(self) -> None:
@@ -71,5 +73,6 @@ class TestProgress:
         async with connect(MCPServer(agent)) as session:
             result = await session.call_tool("ask", {"message": "go"})
 
-        assert result.isError is False
-        assert [c.text for c in result.content if c.type == "text"] == ["done"]
+        assert result.is_error is False
+        reply, _trailer = result.content
+        assert reply == TextContent(type="text", text="done")

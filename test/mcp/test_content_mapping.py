@@ -32,7 +32,7 @@ class TestContentMapping:
             result = await session.call_tool("ask", {"message": "draw"})
 
         image = next(c for c in result.content if c.type == "image")
-        assert image.mimeType == "image/png"
+        assert image.mime_type == "image/png"
         assert base64.b64decode(image.data) == _IMG
         assert any(c.type == "text" and c.text == "here is the image" for c in result.content)
 
@@ -47,7 +47,7 @@ class TestContentMapping:
             result = await session.call_tool("ask", {"message": "speak"})
 
         audio = next(c for c in result.content if c.type == "audio")
-        assert audio.mimeType == "audio/wav"
+        assert audio.mime_type == "audio/wav"
         assert base64.b64decode(audio.data) == _AUDIO
 
     async def test_missing_media_type_defaults_to_image(self) -> None:
@@ -59,7 +59,7 @@ class TestContentMapping:
             result = await session.call_tool("ask", {"message": "draw"})
 
         image = next(c for c in result.content if c.type == "image")
-        assert image.mimeType == "image/png"
+        assert image.mime_type == "image/png"
         assert base64.b64decode(image.data) == _IMG
 
     async def test_other_blob_maps_to_embedded_resource(self) -> None:
@@ -73,7 +73,7 @@ class TestContentMapping:
             result = await session.call_tool("ask", {"message": "write"})
 
         resource = next(c for c in result.content if c.type == "resource")
-        assert resource.resource.mimeType == "application/pdf"
+        assert resource.resource.mime_type == "application/pdf"
         assert base64.b64decode(resource.resource.blob) == _BLOB
 
 

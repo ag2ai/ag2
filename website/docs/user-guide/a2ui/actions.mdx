@@ -22,7 +22,7 @@ def schedule_posts(time: str) -> dict:
         {"id": "root", "component": "Text", "text": f"Scheduled for {time}"},
     ]}}
 
-agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="ui_agent", config=AnthropicConfig(model="claude-sonnet-5"))
 
 app = A2UIServer(agent, transport=RestTransport(encoding="jsonl"), actions=[schedule_posts])
 ```

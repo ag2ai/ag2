@@ -5,6 +5,7 @@
 from ag2.events import ToolResult
 
 from .builtin import (
+    AnthropicBashTool,
     CodeExecutionTool,
     ContainerAutoEnvironment,
     ContainerReferenceEnvironment,
@@ -31,6 +32,7 @@ from .skills import MemorySkill, SkillPlugin, SkillSearchToolkit, SkillsToolkit
 from .toolkits import FilesystemToolkit, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
 
 __all__ = (
+    "AnthropicBashTool",
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",

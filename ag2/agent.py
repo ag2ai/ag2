@@ -19,7 +19,8 @@ import asyncio
 import json
 import logging
 import types
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
+import weakref
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
@@ -63,8 +64,8 @@ from .events.lifecycle import (
     ObserverCompleted,
     ObserverStarted,
 )
-from .exceptions import ConfigNotProvidedError
-from .history import History
+from .exceptions import ConfigNotProvidedError, HumanInputError
+from .history import HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore
 from .knowledge.config import KnowledgeConfig
@@ -79,7 +80,7 @@ from .middleware.describe import DescribedMiddleware
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
-from .stream import MemoryStream, Stream
+from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
@@ -88,11 +89,10 @@ from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
 from .tools.tool import Tool
 from .types import Omittable, SendableMessage, omit
-from .usage import UsageReport
+from .usage import UsageReport, collect_usage_events
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 logger = logging.getLogger(__name__)
-
 
 TResult = TypeVar313("TResult", default=str)
 TAgent = TypeVar313("TAgent", default=str)
@@ -110,7 +110,8 @@ class TaskConfig:
 
     Use ``include_tools`` (allowlist) and ``exclude_tools`` (blocklist) to
     narrow what the subtask sees, and ``extra_tools`` to add capabilities the
-    parent doesn't have.
+    parent doesn't have. ``max_concurrency`` optionally bounds the total
+    number of sub-tasks running for this Agent across both spawning tools.
     """
 
     config: ModelConfig | None = None
@@ -118,6 +119,11 @@ class TaskConfig:
     include_tools: Iterable[str] | None = None
     exclude_tools: Iterable[str] = ()
     extra_tools: Iterable[Callable[..., Any] | Tool] = ()
+    max_concurrency: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_concurrency is not None and self.max_concurrency < 1:
+            raise ValueError(f"max_concurrency must be >= 1 when set, got {self.max_concurrency}.")
 
 
 class AgentReply(Generic[TResult, TAgent]):
@@ -549,39 +555,52 @@ class AgentRun(Generic[TResult, TAgent]):
 
 _STREAM_TURN_LOCK_ATTR = "_ag2_turn_lock"
 
+# Registry mapping ``stream.id`` -> that stream's turn lock. Weak-valued: each
+# stream instance holds a strong reference to its own lock (see below), so an
+# entry lives exactly as long as some object for that id does, and is reclaimed
+# once the last one is collected.
+_stream_locks_by_id: "weakref.WeakValueDictionary[StreamId, asyncio.Lock]" = weakref.WeakValueDictionary()
 
-def _get_stream_turn_lock(stream: Any) -> asyncio.Lock:
+
+def _get_stream_turn_lock(stream: Stream) -> asyncio.Lock:
     """Return (creating if needed) a per-stream asyncio.Lock.
 
-    Attaching the lock to the stream object itself means:
+    A stream's identity is its ``id`` — that is the key ``History`` is built
+    on — not the Python object holding it. Two objects constructed from the
+    same ``(id, storage)`` pair (``persistent_stream()``, a session resumed
+    from storage, a stream reconstructed in user code) denote one stream and
+    take one lock, so:
       * A fresh stream per turn (the default subtask / subagent path)
         pays a trivial no-contention acquire — no behaviour change.
-      * A stream shared across concurrent ``Agent.ask`` calls
-        serializes those calls so subscribers registered by one turn
-        never fire for events of another.
+      * Concurrent ``Agent.ask`` calls on a stream, however each caller got
+        hold of it, serialize so subscribers registered by one turn never
+        fire for events of another.
+
+    The lock is cached on the stream instance, which keeps the common case a
+    single attribute read and keeps the registry entry alive.
 
     The lock is allocated lazily on first use so Agent instantiation
     outside an event loop (which would bind the lock to the wrong loop)
     still works.
     """
+    # ``_STREAM_TURN_LOCK_ATTR`` is ours, not part of the ``Stream`` protocol,
+    # so it has to be read defensively — unlike ``id``, which the protocol
+    # guarantees.
     lock = getattr(stream, _STREAM_TURN_LOCK_ATTR, None)
+    if lock is not None:
+        return lock
+
+    lock = _stream_locks_by_id.get(stream.id)
     if lock is None:
-        lock = asyncio.Lock()
-        try:
-            setattr(stream, _STREAM_TURN_LOCK_ATTR, lock)
-        except (AttributeError, TypeError):
-            # Stream uses __slots__ and doesn't declare our attr — fall
-            # back to a per-id registry so the lock still persists.
-            _stream_id_locks.setdefault(id(stream), lock)
-            lock = _stream_id_locks[id(stream)]
+        lock = _stream_locks_by_id[stream.id] = asyncio.Lock()
+
+    # Cache on the instance: keeps the common case a single getattr, and the
+    # strong reference keeps this stream's registry entry alive. A stream that
+    # rejects the assignment (``__slots__`` without our attr) still serializes
+    # via the registry, it just re-looks-up each turn.
+    with suppress(AttributeError, TypeError):
+        setattr(stream, _STREAM_TURN_LOCK_ATTR, lock)
     return lock
-
-
-# Fallback for streams that reject attribute assignment. Keyed by
-# ``id(stream)`` — asyncio.Lock has no weakref slot, so we can't key on
-# a weak reference. Only populated for slotted streams without the
-# turn-lock slot (MemoryStream declares it).
-_stream_id_locks: dict[int, asyncio.Lock] = {}
 
 
 class Agent(PluginTarget, Generic[TResult]):
@@ -733,6 +752,12 @@ class Agent(PluginTarget, Generic[TResult]):
         else:
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
+        # Created on first use, and re-created whenever the running loop
+        # changes: an asyncio.Semaphore binds to the first loop that awaits on
+        # it while contended, so a cached one would raise on a later loop (the
+        # same hazard called out in ag2/extensions/docker/sandbox.py).
+        self._task_slots: asyncio.Semaphore | None = None
+        self._task_slots_loop: asyncio.AbstractEventLoop | None = None
 
         # Knowledge store + compaction/aggregation strategies
         if knowledge:
@@ -1285,7 +1310,7 @@ class Agent(PluginTarget, Generic[TResult]):
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
-    ) -> "AsyncIterator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
+    ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
         """Open a turn scope and yield a ``drive`` callable that runs it once.
 
         Sets up everything a turn needs and keeps it live across the ``yield``:
@@ -1430,7 +1455,14 @@ class Agent(PluginTarget, Generic[TResult]):
                 ):
 
                     async def drive() -> "AgentReply[Any, Any]":
-                        message = await agent_turn(event, context)
+                        try:
+                            message = await agent_turn(event, context)
+                        except HumanInputError:
+                            await close_unanswered_tool_calls(
+                                context.stream.history,
+                                result=HUMAN_INPUT_ABANDONED_TOOL_RESULT,
+                            )
+                            raise
                         return AgentReply(
                             message,
                             context=context,
@@ -1457,7 +1489,16 @@ class Agent(PluginTarget, Generic[TResult]):
         tc = self._task_config
         if tc is None:
             return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
+        if tc.max_concurrency is not None:
+            loop = asyncio.get_running_loop()
+            if self._task_slots is None or self._task_slots_loop is not loop:
+                self._task_slots = asyncio.Semaphore(tc.max_concurrency)
+                self._task_slots_loop = loop
+            async with self._task_slots:
+                return await self._run_subtask(task, ctx, tc)
+        return await self._run_subtask(task, ctx, tc)
 
+    async def _run_subtask(self, task: str, ctx: Context, tc: TaskConfig) -> str:
         # Inherit only the parent's user-supplied tools — never the
         # auto-injected subtask toolkit or knowledge tool (excluded by
         # identity), so the child can't recurse or see parent-only tooling.
@@ -1530,7 +1571,7 @@ class _KnowledgeContext:
         self.__bootstrapped = None
 
     @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncIterator[None]:
+    async def enter(self, context: "Context") -> AsyncGenerator[None]:
         store = self.config.store
 
         if not self.__bootstrapped:
@@ -1567,7 +1608,7 @@ class _KnowledgeContext:
 
 class _FakeKnowledgeContext:
     @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncIterator[None]:
+    async def enter(self, context: "Context") -> AsyncGenerator[None]:
         yield
 
 
@@ -1659,7 +1700,7 @@ async def _observer_lifecycle(
     observers: Sequence[Observer],
     stack: ExitStack,
     context: Context,
-) -> AsyncIterator[None]:
+) -> AsyncGenerator[None]:
     """Register ``observers`` on ``stack`` and bracket the turn with lifecycle events.
 
     Observers subscribe to the stream under the caller's ``ExitStack``, then an
@@ -1720,12 +1761,20 @@ def _build_subtask_toolkit(agent: "Agent[Any]") -> Toolkit:
                 *(agent._spawn_subtask(t, ctx) for t in tasks),
                 return_exceptions=True,
             )
+            # One sub-task that could not reach a human sinks the whole call:
+            # rendering it as text would make it the tool's output, and the
+            # model would read an unaskable approval as a subtask that failed.
+            for r in raw:
+                if isinstance(r, HumanInputError):
+                    raise r
             results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
         else:
             results = []
             for t in tasks:
                 try:
                     results.append(await agent._spawn_subtask(t, ctx))
+                except HumanInputError:
+                    raise
                 except Exception as e:
                     results.append(f"Error: {e}")
 
@@ -1927,8 +1976,15 @@ class _CompactionMiddleware(BaseMiddleware):
                     event_count=len(events),
                 )
             )
+            # Collected live rather than re-read from history afterwards: the
+            # summarization call's own record is sent *while* the strategy runs,
+            # so it is in neither ``events`` nor what the strategy returns. A
+            # subscriber sees it as it is sent, which needs no assumption about
+            # how history grew in the meantime and no second full read of it.
+            spent_during: list[UsageEvent] = []
             try:
-                compacted = await self._strategy.compact(events, context, self._store)
+                with context.stream.where(UsageEvent).sub_scope(collect_usage_events(spent_during)):
+                    compacted = await self._strategy.compact(events, context, self._store)
             except Exception as exc:
                 logger.exception("Compaction failed for %s", self._actor_name)
                 with suppress(Exception):
@@ -1942,7 +1998,9 @@ class _CompactionMiddleware(BaseMiddleware):
                     )
                 return result
 
-            await context.stream.history.replace(compacted)
+            await context.stream.history.replace(
+                _with_usage_events(before=events, compacted=compacted, spent_during=spent_during)
+            )
             self._last_compact_event_count = len([e for e in compacted if is_conversational(e)])
 
             usage = getattr(self._strategy, "last_usage", {})
@@ -1958,6 +2016,58 @@ class _CompactionMiddleware(BaseMiddleware):
             )
 
         return result
+
+
+def _with_usage_events(
+    *,
+    before: list[BaseEvent],
+    compacted: list[BaseEvent],
+    spent_during: list[UsageEvent],
+) -> list[BaseEvent]:
+    """``compacted``, with every token record of the run put back around it.
+
+    Compaction replaces stream history with what its strategy retained, and
+    ``UsageEvent`` is the only thing ``UsageReport`` reads (`ADR 0014`), so
+    without this a run that compacted under-reports what it cost — on
+    ``AgentReply.usage()`` and on every transport that reports spend. Two
+    records are lost, for two different reasons: those outside the retained
+    window, which the strategy drops along with the conversation, and the
+    summarization call's own, which is emitted *while* the strategy runs and is
+    therefore absent from the snapshot the strategy returns. ``spent_during``
+    carries the second kind, collected from the stream as they were sent.
+
+    The records are rebuilt from ``before`` rather than from ``compacted``, so a
+    strategy that retained a record and one that dropped it read the same: each
+    record of the run appears exactly once, whatever the strategy did with it.
+    The one case this does not cover is a strategy that *synthesises* a new
+    ``UsageEvent`` into its returned list without sending it — that record is
+    dropped here, because telling it apart from a rebuilt copy of an existing
+    one would need identity, which does not survive a storage backend that
+    deserializes on read, or equality, which is wrong on an event whose
+    ``model`` / ``provider`` / ``label`` are ``compare=False``. A strategy that
+    ``context.send``s its spend, as the built-in ones do, is accounted correctly.
+
+    Order is telemetry from before the compaction, then the retained
+    conversation, then what was spent during it. That is not the chronological
+    order of the run — records from inside the retained window are hoisted ahead
+    of the conversation they were interleaved with — but the token records keep
+    their order relative to each other, which is what consumers that group by
+    first appearance need (AG-UI's per-``(provider, model)`` list among them).
+
+    None of this feeds the model or moves the compaction trigger: ``UsageEvent``
+    is not conversational (`ADR 0010`).
+
+    Note that the kept records accumulate: every compaction carries forward
+    every record the stream has seen, so a long-lived stream keeps one event per
+    model call for its whole life and each compaction rewrites all of them. That
+    is the cost of `ADR 0014`'s decision to keep spend in the event log; bounding
+    it belongs with that decision, not here.
+    """
+    return [
+        *(e for e in before if isinstance(e, UsageEvent)),
+        *(e for e in compacted if not isinstance(e, UsageEvent)),
+        *spent_during,
+    ]
 
 
 class _CompactionMiddlewareFactory:

@@ -27,7 +27,12 @@ class TestHttpTransport:
             resp = await client.post("/mcp", headers=_HEADERS, json=_INIT)
 
         assert resp.status_code == 200
-        assert resp.json()["result"]["serverInfo"]["name"] == "greeter"
+        result = resp.json()["result"]
+        assert result["serverInfo"]["name"] == "greeter"
+        # ``mcp`` 2.0 serves both the legacy and the modern protocol era, and which
+        # one a connection lands in is settled by this first request. Pinned so a
+        # silent era switch — which changes capability semantics — cannot pass.
+        assert result["protocolVersion"] == "2025-06-18"
 
     async def test_custom_path(self) -> None:
         app = MCPServer(Agent("greeter", config=TestConfig("hi")), path="/agent", json_response=True)

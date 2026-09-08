@@ -8,7 +8,7 @@ from ag2.tools import MCPServerConfig, MCPToolkit
 async def main() -> None:
     agent = Agent(
         name="client",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[
             MCPToolkit(
                 MCPServerConfig(

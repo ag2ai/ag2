@@ -99,6 +99,21 @@ class TestOverrideIsRefused:
                     {"cwd": "/tmp", "mcpServers": [], "_meta": {"cwd": "/etc"}},
                 )
 
+    async def test_meta_cannot_redirect_a_load_to_another_session(self) -> None:
+        server = ACPAgent(_agent("ok", "ok"))
+
+        async with connect(server) as (conn, _):
+            victim = (await conn.new_session(cwd="/tmp")).session_id
+            mine = (await conn.new_session(cwd="/tmp")).session_id
+
+            with pytest.raises(RequestError) as caught:
+                await _raw(conn).send_request(
+                    "session/load",
+                    {"sessionId": mine, "cwd": "/tmp", "mcpServers": [], "_meta": {"sessionId": victim}},
+                )
+
+        assert "sessionId" in caught.value.data["reason"]
+
     async def test_the_error_names_the_offending_key(self) -> None:
         server = ACPAgent(_agent())
 

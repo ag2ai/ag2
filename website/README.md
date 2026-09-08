@@ -7,19 +7,12 @@ This website is built using [Material for MkDocs](https://squidfunk.github.io/mk
 You can build and serve the documentation locally by following these steps:
 
 
-### Prerequisites
-
-1.  Install Quarto:
-    - Visit the Quarto download <a href="https://quarto.org/docs/download/" target="_blank">page</a>.
-    - Navigate to the Pre-release tab and download the latest version
-    - Ensure you install version `1.5.23` or higher.
-
 ### Installation
 
 From the project root directory, install the necessary Python packages:
 
 ```console
-pip install -e ".[docs]"
+uv pip install --group docs -e .
 ```
 
 ### Building the Documentation
@@ -45,42 +38,6 @@ Once the build is complete, please run the following command to serve the docs:
 ```
 
 This will spin up a server at port 8000, which you can access by visiting `http://localhost:8000` in your browser.
-
-## Build with Dev Containers
-
-If you prefer to use a containerized development environment, you can build and test the documentation using Dev Containers.
-
-### Setting up Dev Containers
-
-- Install <a href="https://code.visualstudio.com" target="_blank">VSCode</a> if you haven't already.
-- Open the project in VSCode.
-- Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) and select `Dev Containers: Reopen in Container`.
-
-This will open the project in a Dev Container with all the required dependencies pre-installed.
-
-### Building and serving in the container
-
-Once your project is open in the Dev Container:
-
-- Open a terminal in VSCode and install the project with docs dependencies:
-
-    ```console
-    pip install -e ".[docs]"
-    ```
-
-- Build the documentation:
-
-    ```console
-    ./scripts/docs_build_mkdocs.sh
-    ```
-
-- Serve the documentation:
-
-    ```console
-    ./scripts/docs_serve_mkdocs.sh
-    ```
-
-The documentation will be accessible at `http://localhost:8000` in your browser.
 
 ## Handling updates or changes
 

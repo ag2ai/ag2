@@ -125,7 +125,7 @@ async def approve(reason: str, channel: ChannelInject) -> str:
     return f"approved: {reason}"
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 

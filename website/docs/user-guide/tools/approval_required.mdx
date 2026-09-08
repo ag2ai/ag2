@@ -51,7 +51,25 @@ Y/N?
 Typing **y** lets the tool run. Any other input denies it — the agent receives the denied message and can adjust.
 
 !!! note
-    `approval_required()` relies on the agent's `#!python hitl_hook` to collect user input. If no `hitl_hook` is configured, `#!python context.input()` will raise an error at runtime. Read more about [Human in the Loop](/docs/user-guide/context/human_in_the_loop) to learn how to configure a HITL hook.
+    `approval_required()` relies on the agent's `#!python hitl_hook` to collect user input. With no `hitl_hook` configured there is nobody to ask, so `#!python context.input()` raises `#!python HumanInputNotProvidedError` and **the turn ends** — the gated tool does not run, and the model is not handed a tool failure it could route around. Read more about [Human in the Loop](/docs/user-guide/context/human_in_the_loop) to learn how to configure a HITL hook.
+
+## Waiting for the answer
+
+By default `approval_required()` waits as long as the human takes. An approval is a question for a person, so the deadline is yours to set:
+
+```python linenums="1" hl_lines="2"
+@tool(
+    middleware=[approval_required(timeout=120)],
+)
+def delete_account(user_id: str) -> str:
+    """Deletes a user account by ID permanently."""
+    return f"Account {user_id} deleted."
+```
+
+When the timeout expires the turn ends with `#!python HumanInputTimeoutError` and the gated tool does not run — an unanswered approval is not an approval. A late answer arriving after the deadline does not release it either.
+
+!!! warning "`timeout` used to be `30` and used to do nothing"
+    Before AG2 fixed the human-input channel, `timeout` never fired: the hook ran inline, so the clock only started once it had already returned. It now binds, and the default changed from `30` to `None` (wait indefinitely) so that turning the parameter on does not silently start failing turns whenever a human takes over half a minute to read a prompt.
 
 ## Inspecting the configuration
 

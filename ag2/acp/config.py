@@ -16,7 +16,7 @@ Claude Code, Codex, OpenCode and Kilo Code ACP adapters respectively.
 """
 
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from typing_extensions import Self
 
@@ -40,21 +40,6 @@ if TYPE_CHECKING:
     # (see ``acp.testing``) — the process handle is optional precisely so a
     # connection that has no process can satisfy this.
     ConnectHook = Callable[["acp.Client"], "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]"]
-
-
-def _dispatch_kwargs(client: "acp.Client") -> dict[str, Any]:
-    """Connection arguments that make this client's notifications waitable.
-
-    Read off the bridge the connection hook already receives, so no hook signature
-    has to carry them (see :mod:`~ag2.acp.dispatch`). A client that is not an AG2
-    bridge — a double standing in for one — gets the SDK's own defaults.
-
-    ``ACPBridge`` is imported inside the function, as ``acp`` itself is below: the
-    bridge pulls in the SDK, and importing ``ag2.acp.config`` must not.
-    """
-    from .bridge import ACPBridge
-
-    return client.state.updates.connection_kwargs() if isinstance(client, ACPBridge) else {}
 
 
 PermissionPolicy = Literal["ask", "auto", "deny"]
@@ -196,7 +181,6 @@ class ACPConfig:
             env=self.env,
             cwd=self.cwd,
             use_unstable_protocol=True,
-            **_dispatch_kwargs(client),
         )
 
     def _gateway_address(self) -> GatewayAddress:

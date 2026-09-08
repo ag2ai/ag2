@@ -69,7 +69,7 @@ async def test_custom_message(tool_call: ToolCallEvent) -> None:
 
     context.input.assert_awaited_once_with(
         'Approve calculator with {"a": 1, "b": 2}?',
-        timeout=30,
+        timeout=None,
     )
 
 

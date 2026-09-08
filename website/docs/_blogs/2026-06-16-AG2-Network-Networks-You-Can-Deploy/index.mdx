@@ -77,7 +77,7 @@ HUB_URL = "ws://hub:8765"
 async def main() -> None:
     hc = HubClient(WsLink(HUB_URL))
     alice = await hc.register(
-        Agent("alice", prompt="You coordinate tasks.", config=AnthropicConfig(model="claude-sonnet-4-6")),
+        Agent("alice", prompt="You coordinate tasks.", config=AnthropicConfig(model="claude-sonnet-5")),
         Passport(name="alice"),
         Resume(summary="coordinator"),
     )
@@ -236,7 +236,7 @@ alice = await hc.register(
     Agent(
         "alice",
         prompt="You run long multi-step research tasks.",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         checkpoint_store=checkpoint_store,
     ),
     Passport(name="alice"),

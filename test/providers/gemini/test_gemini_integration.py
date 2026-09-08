@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from io import BytesIO
 
 import pytest
+
+pytest.importorskip("PIL")
+
 from PIL import Image
 from google.genai import types
 

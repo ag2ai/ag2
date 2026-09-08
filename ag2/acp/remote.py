@@ -35,7 +35,7 @@ from acp.core import ClientSideConnection
 from acp.http.client import AcpHttpStatusError, create_http_stream
 from acp.ws.client import create_websocket_stream
 
-from .config import ACPConfig, _dispatch_kwargs
+from .config import ACPConfig
 from .tool_gateway import GatewayAddress, MCPCapabilityError
 from .transport import ACPTransport, resolve_transport
 
@@ -178,7 +178,7 @@ async def open_remote_connection(
     # `use_unstable_protocol` registers the `elicitation/*` client routes, as on
     # the subprocess path; without it the SDK answers the agent's question with
     # method-not-found before the bridge ever sees it.
-    conn = acp.connect_to_agent(client, stream, use_unstable_protocol=True, **_dispatch_kwargs(client))
+    conn = acp.connect_to_agent(client, stream, use_unstable_protocol=True)
     try:
         yield conn, None
     finally:

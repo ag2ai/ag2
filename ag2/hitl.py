@@ -29,6 +29,9 @@ def wrap_hitl(
     call_model = build_model(func)
 
     async def _call_model(event: HumanInputRequest, context: Context) -> HumanMessage:
+        # Nothing is caught here: a hook that raises is the channel failing, and
+        # ``Context.input`` — the only way in — turns that into a
+        # ``HumanInputError`` on the way back out.
         async with AsyncExitStack() as stack:
             result = await call_model.asolve(
                 event,
@@ -37,6 +40,7 @@ def wrap_hitl(
                 dependency_provider=context.dependency_provider,
                 **{CONTEXT_OPTION_NAME: context},
             )
+
         return HumanMessage.ensure_message(result, parent_id=event.id)
 
     def make_hook(middlewares: Iterable["BaseMiddleware"]) -> HitlExecution:

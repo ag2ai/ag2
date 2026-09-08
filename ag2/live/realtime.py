@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncGenerator, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, suppress
 from typing import Any, Protocol
 
@@ -113,7 +113,7 @@ class LiveAgent(PluginTarget):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         hitl_hook: HumanHook | None = None,
-    ) -> AsyncIterator[ConversationContext]:
+    ) -> AsyncGenerator[ConversationContext]:
         stream = self._stream if self._stream is not None else MemoryStream()
 
         context = ConversationContext(

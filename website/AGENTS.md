@@ -142,7 +142,7 @@ Example — adding a page inside a nested group:
 
 ### Links
 
-- **Internal links**: use absolute paths from the docs root: `[Agent Tools](/docs/user-guide/tools/)`. Do not use relative paths.
+- **Internal links**: use absolute paths from the docs root: `[Agent Tools](/docs/user-guide/tools/tools)`. Do not use relative paths.
 - **External links**: append `{.external-link target="_blank"}` after the markdown link. Use descriptive anchor text — do **not** use bare URLs or generic text like "here" or "this link".
 
 Good: `[OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/){.external-link target="_blank"}`

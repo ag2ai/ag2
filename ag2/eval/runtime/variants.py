@@ -140,7 +140,7 @@ async def run_variants(
 
     Variants run sequentially; within each, tasks run up to ``concurrency`` in
     parallel (and ``repeats`` times each). When ``store_dir`` is set, every
-    variant's run is persisted as its own schema-0.1 JSON under it
+    variant's run is persisted as its own schema-0.2 JSON under it
     (``<run_id>-<variant>.json``); omit it to run without persisting.
 
     Pass ``stream`` to observe the sweep: ``VariantStarted`` / ``VariantCompleted``

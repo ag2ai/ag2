@@ -60,7 +60,7 @@ from ag2.tools import SkillPlugin
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     plugins=[SkillPlugin()],
 )
 ```
@@ -113,7 +113,7 @@ from ag2.tools import SkillsToolkit
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SkillsToolkit()],
 )
 ```
@@ -134,7 +134,7 @@ skills = SkillsToolkit()
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[skills.list_skills(), skills.load_skill()],
 )
 ```
@@ -213,7 +213,7 @@ def convert(value: float, factor: float) -> str:
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     plugins=[SkillPlugin(unit_converter)],
 )
 ```
@@ -267,7 +267,7 @@ from ag2.tools import SkillSearchToolkit
 agent = Agent(
     "coder",
     "You are a helpful coding assistant. Use skills to extend your capabilities.",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SkillSearchToolkit()],  # adds search_skills, install_skill, remove_skill
 )
 

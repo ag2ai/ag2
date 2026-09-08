@@ -4,7 +4,7 @@
 
 import asyncio
 import base64
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
@@ -292,7 +292,7 @@ class RealTimeConfig(RealtimeConfig):
         instructions: Iterable[str] = (),
         tools: Iterable[ToolSchema] = (),
         serializer: SerializerProto,
-    ) -> AsyncIterator[None]:
+    ) -> AsyncGenerator[None]:
         final_session = self._build_session(instructions=instructions, tools=tools)
 
         async with self.client.realtime.connect(model=self.model) as conn:

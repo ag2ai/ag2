@@ -7,17 +7,21 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
-import httpx
+import httpx2
 from fast_depends.library.serializer import SerializerProto
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
 from openai.types.responses import (
     Response,
     ResponseCompletedEvent,
+    ResponseFunctionShellToolCall,
+    ResponseFunctionShellToolCallOutput,
     ResponseFunctionToolCall,
     ResponseOutputItemDoneEvent,
     ResponseOutputMessage,
     ResponseReasoningItem,
+    ResponseShellCallCommandDeltaEvent,
+    ResponseShellCallOutputContentDeltaEvent,
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
 )
@@ -40,12 +44,20 @@ from ag2.response import ResponseProto
 from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.schemas import ToolSchema
 
-from .events import OpenAIReasoningEvent, OpenAIServerToolCallEvent, OpenAIServerToolResultEvent
+from .events import (
+    OpenAIReasoningEvent,
+    OpenAIServerToolCallEvent,
+    OpenAIServerToolResultEvent,
+    OpenAIShellCommandChunk,
+    OpenAIShellOutputChunk,
+    ShellCallTracker,
+)
 from .mappers import (
     events_to_responses_input,
     extract_skills_for_shell,
     merge_skills_into_shell_tools,
     normalize_responses_usage,
+    reject_client_executed_shell,
     response_proto_to_text_config,
     responses_api_includes,
     tool_to_responses_api,
@@ -81,7 +93,7 @@ class OpenAIResponsesClient(LLMClient):
         max_retries: int = DEFAULT_MAX_RETRIES,
         default_headers: dict[str, str] | None = None,
         default_query: dict[str, object] | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: httpx2.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
     ) -> None:
         self._client = AsyncOpenAI(
@@ -125,6 +137,7 @@ class OpenAIResponsesClient(LLMClient):
             [tool_to_responses_api(t) for t in tools_list],
             openai_skills,
         )
+        reject_client_executed_shell(openai_tools)
 
         kwargs: dict[str, Any] = {}
         if r := response_proto_to_text_config(response_schema):
@@ -159,6 +172,7 @@ class OpenAIResponsesClient(LLMClient):
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
         files: list[BinaryResult] = []
+        shell_calls = ShellCallTracker()
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
@@ -186,12 +200,18 @@ class OpenAIResponsesClient(LLMClient):
 
             elif call_event := OpenAIServerToolCallEvent.from_item(item):
                 await context.send(call_event)
+                if isinstance(item, ResponseFunctionShellToolCall):
+                    shell_calls.opened(item, event_id=call_event.id)
                 result_event = OpenAIServerToolResultEvent.from_item(item, parent_id=call_event.id)
                 if result_event:
                     await context.send(result_event)
                     if isinstance(item, ImageGenerationCall) and item.result:
                         binary = result_event.result.parts[0]
                         files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
+
+            elif isinstance(item, ResponseFunctionShellToolCallOutput):
+                if shell_result := shell_calls.close(item):
+                    await context.send(shell_result)
 
         usage = normalize_responses_usage(response.usage) if response.usage else Usage()
 
@@ -216,11 +236,32 @@ class OpenAIResponsesClient(LLMClient):
         finish_reason: str | None = None
         resolved_model: str | None = None
         usage = Usage()
+        shell_calls = ShellCallTracker()
 
         async for event in response_stream:
             if isinstance(event, ResponseTextDeltaEvent):
                 full_content += event.delta
                 await context.send(ModelMessageChunk(event.delta))
+
+            elif isinstance(event, ResponseShellCallCommandDeltaEvent):
+                await context.send(
+                    OpenAIShellCommandChunk(
+                        event.delta,
+                        command_index=event.command_index,
+                        output_index=event.output_index,
+                    )
+                )
+
+            elif isinstance(event, ResponseShellCallOutputContentDeltaEvent):
+                await context.send(
+                    OpenAIShellOutputChunk(
+                        command_index=event.command_index,
+                        output_index=event.output_index,
+                        item_id=event.item_id,
+                        stdout=event.delta.stdout,
+                        stderr=event.delta.stderr,
+                    )
+                )
 
             elif isinstance(event, ResponseOutputItemDoneEvent):
                 # Builtin and reasoning events are emitted on Done so the typed
@@ -246,12 +287,18 @@ class OpenAIResponsesClient(LLMClient):
 
                 elif call_event := OpenAIServerToolCallEvent.from_item(event.item):
                     await context.send(call_event)
+                    if isinstance(event.item, ResponseFunctionShellToolCall):
+                        shell_calls.opened(event.item, event_id=call_event.id)
                     result_event = OpenAIServerToolResultEvent.from_item(event.item, parent_id=call_event.id)
                     if result_event:
                         await context.send(result_event)
                         if isinstance(event.item, ImageGenerationCall) and event.item.result:
                             binary = result_event.result.parts[0]
                             files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
+
+                elif isinstance(event.item, ResponseFunctionShellToolCallOutput):
+                    if shell_result := shell_calls.close(event.item):
+                        await context.send(shell_result)
 
             elif isinstance(event, ResponseCompletedEvent):
                 # Stream finished

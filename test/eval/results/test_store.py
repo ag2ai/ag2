@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Public-API tests for store-layer serialization — schema 0.1 shape + JSON round-trip.
+"""Public-API tests for store-layer serialization — schema 0.2 shape + JSON round-trip.
 
 The store layer is what a future hosted dashboard will read, so the
 schema shape is locked. Tests verify every documented field is present
@@ -78,9 +78,9 @@ class TestTopLevelSchema:
             "aggregates",
         }
 
-    def test_schema_version_is_zero_one(self) -> None:
+    def test_schema_version_is_zero_two(self) -> None:
         data = to_dict(_make_result())
-        assert data["schema_version"] == "0.1"
+        assert data["schema_version"] == "0.2"
 
     def test_suite_block_shape(self) -> None:
         data = to_dict(_make_result())
@@ -223,7 +223,33 @@ class TestRoundTrip:
         assert written == target
         data = json.loads(target.read_text(encoding="utf-8"))
         assert data["run_id"] == "test-run"
-        assert data["schema_version"] == "0.1"
+        assert data["schema_version"] == "0.2"
+
+    def test_a_loaded_run_keeps_the_version_it_was_written_with(self, tmp_path: Path) -> None:
+        """Token counts under 0.1 predate accounting reading ``UsageEvent``.
+
+        Restamping a loaded baseline as 0.2 would advertise numbers as
+        comparable when they are not.
+        """
+        target = tmp_path / "old-run.json"
+        doc = to_dict(_make_result())
+        doc["schema_version"] = "0.1"
+        target.write_text(json.dumps(doc), encoding="utf-8")
+
+        loaded = load_run(target)
+
+        assert loaded.schema_version == "0.1"
+
+    def test_a_loaded_run_does_not_restamp_on_resave(self, tmp_path: Path) -> None:
+        target = tmp_path / "old-run.json"
+        doc = to_dict(_make_result())
+        doc["schema_version"] = "0.1"
+        target.write_text(json.dumps(doc), encoding="utf-8")
+
+        resaved = tmp_path / "resaved.json"
+        load_run(target).save(resaved)
+
+        assert json.loads(resaved.read_text(encoding="utf-8"))["schema_version"] == "0.1"
 
 
 class TestTraceRefSerialization:

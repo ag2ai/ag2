@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeAlias, overload, runtime_checkable
+from typing import Any, Protocol, TypeAlias, cast, overload, runtime_checkable
 from uuid import UUID
 
 from fast_depends import Provider
@@ -16,6 +16,7 @@ from ag2.types import ClassInfo, SendableMessage
 
 from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, ModelRequest
 from .events.conditions import Condition
+from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -138,14 +139,65 @@ class ConversationContext:
         self.stream.enqueue(*content)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
+        """Put ``message`` to a human and return their answer.
+
+        Every way this can fail to produce an answer leaves as a
+        :class:`~ag2.exceptions.HumanInputError`, and this is the only place
+        that decides so: the hook raising, nobody answering within *timeout*,
+        or the send itself breaking. Normalising here rather than at each
+        catch site downstream is what keeps the distinction from evaporating —
+        the alternative, tagging whatever the hook threw, is lost the moment
+        anything in between re-raises it as its own error.
+        """
         request_msg = HumanInputRequest(message)
         async with self.stream.get(HumanMessage.parent_id == request_msg.id) as response:
-            await self.send(request_msg)
-            result: HumanMessage = await asyncio.wait_for(response, timeout)
-            return result.content
+            try:
+                # The hook runs inline inside ``send``, so *timeout* has to
+                # cover the asking as well as the waiting. Timing only
+                # ``response`` starts the clock after the hook has already
+                # returned, which makes the timeout unreachable and leaves a
+                # hook that hangs hanging the turn forever.
+                result = await asyncio.wait_for(_ask_human(self, request_msg, response), timeout)
+
+            except HumanInputError:
+                raise  # classified already, by _ask_human or by the hook itself
+
+            except asyncio.TimeoutError as exc:
+                # Only ``wait_for`` can reach this: anything the channel raised,
+                # timeouts included, left _ask_human as a HumanInputError.
+                raise HumanInputTimeoutError(timeout) from exc  # type: ignore[arg-type]
+
+        return result.content
 
     async def send(self, event: BaseEvent) -> None:
         await self.stream.send(event, self)
+
+
+async def _ask_human(
+    context: "ConversationContext",
+    request: HumanInputRequest,
+    response: "asyncio.Future[BaseEvent]",
+) -> HumanMessage:
+    """Ask, then wait — as one awaitable, so a timeout can cover both.
+
+    Module level rather than nested in ``Context.input`` (per AGENTS.md: no
+    nested functions in runtime execution paths).
+    """
+    try:
+        await context.send(request)
+
+    except HumanInputError:
+        raise  # already says the channel failed, and says it precisely
+
+    # Classifying the hook's exceptions here, inside the awaited coroutine,
+    # rather than around ``wait_for`` is what keeps a hook that raises
+    # ``TimeoutError`` of its own from being reported as nobody answering: after
+    # this, the only bare timeout the caller can see is ``wait_for``'s.
+    except Exception as exc:
+        raise HumanInputFailedError(exc) from exc
+
+    # The future is filtered on ``HumanMessage.parent_id``, so this is one.
+    return cast(HumanMessage, await response)
 
 
 def drop_background_task(tasks: set[asyncio.Task[None]], task: asyncio.Task[Any]) -> None:

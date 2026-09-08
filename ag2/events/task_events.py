@@ -58,6 +58,11 @@ class TaskCompleted(TaskEvent):
     # Stream reference for inspection. Resolves against the parent's storage
     # only when the sub-task's stream shares it, as `stream=None` builds it to.
     task_stream: "StreamId"
+    # Cumulative snapshot of the sub-task's stream, for a holder of this one
+    # event to inspect. Never sum these: on a reused stream each snapshot
+    # re-reports everything spent before it. Anything that accumulates reads
+    # the ``UsageEvent`` rollup instead — see
+    # ``docs/adr/0014-token-accounting-reads-usageevent.md``.
     usage: Usage = Field(default_factory=Usage)
 
 

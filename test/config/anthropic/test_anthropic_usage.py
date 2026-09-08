@@ -44,7 +44,7 @@ def _make_response(usage: Any, content_text: str = "Hello") -> MagicMock:
     response = MagicMock()
     response.content = [text_block]
     response.usage = usage
-    response.model = "claude-sonnet-4-6"
+    response.model = "claude-sonnet-5"
     response.stop_reason = "end_turn"
     return response
 
@@ -119,7 +119,7 @@ async def test_process_stream_normalizes_usage():
 
     final_message = MagicMock()
     final_message.usage = usage
-    final_message.model = "claude-sonnet-4-6"
+    final_message.model = "claude-sonnet-5"
     final_message.stop_reason = "end_turn"
 
     # Mock stream: emits one text_delta then stops

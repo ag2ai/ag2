@@ -23,27 +23,27 @@ from ag2.agent import Agent
 from ag2.context import ConversationContext
 from ag2.events import (
     BaseEvent,
+    HumanInputRequest,
     ModelMessageChunk,
     ModelRequest,
     ModelResponse,
     TextInput,
-    ToolCallsEvent,
-    ToolResultEvent,
-    ToolResultsEvent,
 )
-from ag2.events.tool_events import ToolResult
+from ag2.exceptions import HumanInputError
+from ag2.history import close_unanswered_tool_calls
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 from .mappers import event_to_session_update, prompt_to_inputs
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
 
     from ag2.context import SubId
+    from ag2.hitl import HumanHook
     from ag2.stream import MemoryStream
 
     from .sessions import AgentSession, SessionStore
-    from .types import ContentBlock
+    from .types import ContentBlock, SessionUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,12 @@ META_VARIABLE = "acp.meta"
 # cancelled while the tool was still running. See :func:`heal_cancelled_turn`.
 CANCELLED_TOOL_RESULT = "The turn was cancelled before this tool finished."
 
+# Put on the ``data`` of the protocol error raised when a turn died because
+# nobody could answer a human-input request. Stable across every reason the
+# channel can fail, so a Client can branch on it — unlike ``type``, which is
+# whichever Python exception happened to come out.
+HUMAN_INPUT_ERROR_CATEGORY = "human_input"
+
 
 class UpdateDeliveryError(RuntimeError):
     """Raised when a ``session/update`` could not be pushed to the Client.
@@ -76,18 +82,28 @@ class UpdateDeliveryError(RuntimeError):
         self.session_id = session_id
 
 
-class HumanInputUnsupportedError(RuntimeError):
-    """Raised when an agent asks for human input over a transport that has none.
+class HumanInputUnsupportedError(HumanInputError, RuntimeError):
+    """Raised when an agent asks for human input and no ``hitl_hook`` was given.
 
-    ACP elicitation is not wired in this version. Failing loudly beats hanging
-    forever on a prompt the Client will never be asked to answer.
+    ACP elicitation is not wired in this version, so the protocol itself has no
+    way to put the question to the Client. Failing loudly beats hanging forever
+    on a prompt nobody will be asked to answer. A host that can reach a human by
+    its own means passes ``ACPAgent(..., hitl_hook=...)`` and never sees this.
+
+    A :class:`~ag2.exceptions.HumanInputError`, which is what carries it out of
+    tool execution to the Client: caught as an ordinary exception there it
+    would become a tool result, and the Client would be told the turn
+    succeeded. The protocol error it becomes carries
+    ``data["category"] == "human_input"``. ``RuntimeError`` is kept in the
+    bases for anyone already catching it as one.
     """
 
     def __init__(self) -> None:
         super().__init__(
             "The agent requested human input, but ACPAgent does not implement ACP "
-            "elicitation yet, so there is nobody to ask. Remove the human-input step "
-            "or serve this agent over a transport that supports it."
+            "elicitation yet, so there is nobody to ask. Pass ACPAgent(..., hitl_hook=...) "
+            "to answer from the hosting application, remove the human-input step, or serve "
+            "this agent over a transport that supports it."
         )
 
 
@@ -102,11 +118,21 @@ class AgentExecutor:
     dependencies through the same path every off-protocol turn uses.
     """
 
-    __slots__ = ("_agent", "_stream_thoughts")
+    __slots__ = ("_agent", "_stream_thoughts", "_hitl_hook")
 
-    def __init__(self, agent: Agent, *, stream_thoughts: bool = False) -> None:
+    def __init__(
+        self,
+        agent: Agent,
+        *,
+        stream_thoughts: bool = False,
+        hitl_hook: "HumanHook | None" = None,
+    ) -> None:
         self._agent = agent
         self._stream_thoughts = stream_thoughts
+        # ``None`` keeps the transport honest: with nobody to ask, a turn that
+        # requests human input fails rather than hanging on an answer that is
+        # never coming. A host that *does* have a human supplies the hook.
+        self._hitl_hook: HumanHook = _reject_human_input if hitl_hook is None else hitl_hook
 
     @property
     def agent(self) -> Agent:
@@ -216,6 +242,17 @@ class AgentExecutor:
             return
         await self._deliver(acp.update_agent_message_text(final), client=client, session_id=session_id)
 
+    async def deliver(self, updates: "Iterable[SessionUpdate]", *, client: acp.Client, session_id: str) -> None:
+        """Push ``updates`` to the Client in order, stopping at the first that fails.
+
+        The ``session/load`` replay path. Sequential on purpose: ACP lets the
+        Client rebuild its view from the order notifications arrive in, and a
+        replay whose tool result overtook its tool call would be a different
+        conversation.
+        """
+        for update in updates:
+            await self._deliver(update, client=client, session_id=session_id)
+
     async def _deliver(self, update: Any, *, client: acp.Client, session_id: str) -> None:
         """Push one ``session/update``, letting a delivery failure fail the turn.
 
@@ -280,38 +317,8 @@ class AgentExecutor:
             initial_event,
             context=context,
             client=client,
-            hitl_hook=_reject_human_input,
+            hitl_hook=self._hitl_hook,
         )
-
-
-def _tool_call_batches(events: "Sequence[BaseEvent]") -> "list[ToolCallsEvent]":
-    """Every batch of tool calls in ``events``, from either place they appear.
-
-    A turn persists the model's :class:`ModelResponse` — which already carries
-    ``tool_calls`` — *before* the agent emits the matching
-    :class:`ToolCallsEvent`. Cancelling in that window leaves history holding
-    calls that no ``ToolCallsEvent`` describes, so reading only the latter would
-    find nothing to repair and leave the transcript with an unanswered call.
-
-    Batches are deduplicated by call id, because the usual case is both records
-    present and describing the same calls.
-    """
-    batches: list[ToolCallsEvent] = []
-    seen: set[str] = set()
-    for event in events:
-        calls = (
-            event.tool_calls.calls
-            if isinstance(event, ModelResponse) and event.tool_calls
-            else event.calls
-            if isinstance(event, ToolCallsEvent)
-            else []
-        )
-        fresh = [call for call in calls if call.id not in seen]
-        if not fresh:
-            continue
-        seen.update(call.id for call in fresh)
-        batches.append(ToolCallsEvent(fresh))
-    return batches
 
 
 def isolate_variables(defaults: dict[Any, Any]) -> dict[Any, Any]:
@@ -345,58 +352,27 @@ def isolate_variables(defaults: dict[Any, Any]) -> dict[Any, Any]:
 async def heal_cancelled_turn(stream: "MemoryStream") -> int:
     """Close off tool calls a cancelled turn left unanswered. Returns how many.
 
-    Cancelling stops the turn wherever it happened to be, which can be *between*
-    a tool call and its result. That leaves history holding an assistant
-    tool-call with nothing answering it — and providers reject that shape, so the
-    session would fail on its next prompt even though cancelling is supposed to
-    be a normal, recoverable thing to do.
+    The repair itself lives in :func:`ag2.history.close_unanswered_tool_calls`,
+    because every surface needs it and not only ACP; what this adds is the
+    reason ACP has for asking, which is the text the model reads next turn.
 
-    Appending a synthetic result per unanswered call keeps the transcript valid
-    and tells the model plainly what happened, rather than rewriting history to
-    pretend the call was never made.
+    Still called on the failure path, where it covers the ways a turn can die
+    that the turn boundary does not repair itself — a ``session/update`` that
+    could not be delivered, a storage error. A human-input failure has already
+    been closed off by then, with its own reason, so this finds nothing left to
+    do and the transcript is not mislabelled as cancelled. The repair is
+    idempotent, which is what makes calling it twice harmless.
     """
-    events = list(await stream.history.get_events())
-
-    # A batch counts as settled only once a ``ToolResultsEvent`` covers it —
-    # that wrapper is what providers serialize. A loose ``ToolResultEvent`` left
-    # behind by a tool that *did* finish is not enough on its own: a partially
-    # completed batch would otherwise be rebuilt with the finished call missing,
-    # and the transcript would carry more tool calls than tool results.
-    settled = {r.parent_id for e in events if isinstance(e, ToolResultsEvent) for r in e.results}
-    completed = {e.parent_id: e for e in events if isinstance(e, ToolResultEvent) and e.parent_id not in settled}
-
-    repaired: list[ToolResultsEvent] = []
-    closed = 0
-    for event in _tool_call_batches(events):
-        pending = [call for call in event.calls if call.id not in settled]
-        if not pending:
-            continue
-        # Rebuild the *whole* outstanding batch: results that did land, plus a
-        # stand-in for each call the cancellation cut short.
-        results = []
-        for call in pending:
-            done = completed.get(call.id)
-            results.append(
-                done
-                if done is not None
-                else ToolResultEvent(
-                    parent_id=call.id,
-                    name=call.name,
-                    result=ToolResult(CANCELLED_TOOL_RESULT),
-                )
-            )
-            closed += int(done is None)
-        repaired.append(ToolResultsEvent(results))
-
-    if not repaired:
-        return 0
-
-    await stream.history.replace([*events, *repaired])
-    return closed
+    return await close_unanswered_tool_calls(stream.history, result=CANCELLED_TOOL_RESULT)
 
 
-async def _reject_human_input(event: BaseEvent, context: Any) -> str:
-    """``hitl_hook`` that fails the turn instead of waiting forever.
+async def _reject_human_input(event: HumanInputRequest) -> str:
+    """Default ``hitl_hook``: fail the turn instead of waiting forever.
+
+    Takes the request and nothing else, because a hook is resolved the way a
+    tool is: an un-annotated second parameter is read as another *field* to fill
+    from the event, and the turn then dies of a validation error naming this
+    function instead of the error that explains the problem.
 
     Declared as returning ``str`` to satisfy the hook signature; it never
     returns. See :class:`HumanInputUnsupportedError`.

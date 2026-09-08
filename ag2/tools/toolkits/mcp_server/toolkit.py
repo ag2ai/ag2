@@ -4,12 +4,12 @@
 
 import asyncio
 import base64
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import replace
 from typing import Any, get_args
 
-import httpx
+import httpx2
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
@@ -61,7 +61,7 @@ AnyMCPConfig = MCPServerConfig | MCPStdioServerConfig
 
 
 @asynccontextmanager
-async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
+async def _mcp_session(config: AnyMCPConfig) -> AsyncGenerator[ClientSession]:
     """Open a short-lived MCP ``ClientSession`` for one operation.
 
     Dispatches on the config type — HTTP/streamable-http for
@@ -82,17 +82,23 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
             await session.initialize()
             yield session
     else:
+        # ``httpx2``, not ``httpx``: that is the client type mcp 2.0's streamable-HTTP
+        # transport takes. AG2 core stays on ``httpx`` — separate distributions with
+        # separate module names, so the two coexist in one environment.
         async with (
-            httpx.AsyncClient(
+            httpx2.AsyncClient(
                 headers=config.headers,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 timeout=config.connection_timeout,
                 proxy=config.proxy,
                 verify=config.verify,
+                # A Starlette-mounted endpoint 307s the slashless form, which is the
+                # form a caller naturally writes; without this the connection fails.
+                follow_redirects=True,
             ) as client,
             streamable_http_client(
                 config.server_url,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 http_client=client,
-            ) as (read_stream, write_stream, _),
+            ) as (read_stream, write_stream),
             ClientSession(read_stream, write_stream) as session,
         ):
             await session.initialize()
@@ -102,22 +108,27 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
 class _MCPProxyTool(Tool):
     """A function-tool-shaped proxy that forwards calls to a remote MCP server."""
 
-    __slots__ = ("name", "schema", "_config", "_middleware")
+    __slots__ = ("name", "schema", "_config", "_middleware", "_remote_name")
 
     def __init__(
         self,
         config: AnyMCPConfig,
         raw_tool: MCPTool,
+        *,
+        tool_name_prefix: str = "",
         middleware: tuple[ToolMiddleware, ...] = (),
     ) -> None:
         self._config = config
         self._middleware = middleware
-        self.name = raw_tool.name
+        # Two names for one tool: the remote one the server knows, and the
+        # (possibly prefixed) local one the agent and the LLM see.
+        self._remote_name = raw_tool.name
+        self.name = f"{tool_name_prefix}{raw_tool.name}"
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
                 name=self.name,
                 description=raw_tool.description or "",
-                parameters=dict(raw_tool.inputSchema or {}),
+                parameters=dict(raw_tool.input_schema or {}),
             )
         )
 
@@ -148,12 +159,12 @@ class _MCPProxyTool(Tool):
         try:
             resolved = _resolve_config(self._config, context)
             async with _mcp_session(resolved) as session:
-                result = await session.call_tool(self.name, event.serialized_arguments)
+                result = await session.call_tool(self._remote_name, event.serialized_arguments)
 
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)
 
-        if result.isError:
+        if result.is_error:
             return ToolErrorEvent.from_call(event, error=RuntimeError(str(result)))
 
         return ToolResultEvent.from_call(event, result=_extract_content(result))
@@ -173,6 +184,12 @@ class MCPToolkit(Toolkit):
     MCP handshake, lists the server's tools, and registers a proxy for each
     one. The agent never sees that these are MCP tools — they look and behave
     like ordinary :class:`FunctionTool` instances.
+
+    Set ``tool_name_prefix`` on the config to namespace the agent-visible tool
+    names, so that two servers exposing the same generic name (``search``) do
+    not collide locally. The prefix never reaches the server: discovery
+    filters (``allowed_tools`` / ``blocked_tools``) and the outbound
+    ``call_tool`` request both use the server's original names.
     """
 
     __slots__ = ("config", "_discovered", "_discover_lock")
@@ -212,11 +229,13 @@ class MCPToolkit(Toolkit):
             async with _mcp_session(resolved) as session:
                 raw_tools = (await session.list_tools()).tools
 
-            # Both already resolved (Variable -> concrete) by _resolve_config above.
+            # All already resolved (Variable -> concrete) by _resolve_config above.
             allowed = resolved.allowed_tools
             blocked = set(resolved.blocked_tools or [])  # type: ignore[arg-type]
+            prefix: str = resolved.tool_name_prefix  # type: ignore[assignment]
 
             for raw in raw_tools:
+                # Filters match the server's own names, before any prefixing.
                 if allowed is not None and raw.name not in allowed:  # type: ignore[operator]
                     continue
                 if raw.name in blocked:
@@ -224,6 +243,7 @@ class MCPToolkit(Toolkit):
                 proxy = _MCPProxyTool(
                     config=self.config,
                     raw_tool=raw,
+                    tool_name_prefix=prefix,
                     middleware=self._middleware,
                 )
                 self._tools[proxy.name] = proxy
@@ -257,7 +277,7 @@ def _extract_content(result: CallToolResult) -> ToolResult:
             inputs.append(
                 BinaryInput(
                     data=base64.b64decode(p.data),
-                    media_type=p.mimeType,
+                    media_type=p.mime_type,
                     kind=BinaryType.IMAGE,
                 )
             )
@@ -265,12 +285,12 @@ def _extract_content(result: CallToolResult) -> ToolResult:
             inputs.append(
                 BinaryInput(
                     data=base64.b64decode(p.data),
-                    media_type=p.mimeType,
+                    media_type=p.mime_type,
                     kind=BinaryType.AUDIO,
                 )
             )
         elif isinstance(p, ResourceLink):
-            inputs.append(UrlInput(url=str(p.uri), kind=_kind_from_mime(p.mimeType)))
+            inputs.append(UrlInput(url=str(p.uri), kind=_kind_from_mime(p.mime_type)))
         elif isinstance(p, EmbeddedResource):
             resource = p.resource
             if isinstance(resource, TextResourceContents):
@@ -279,8 +299,8 @@ def _extract_content(result: CallToolResult) -> ToolResult:
                 inputs.append(
                     BinaryInput(
                         data=base64.b64decode(resource.blob),
-                        media_type=resource.mimeType or "application/octet-stream",
-                        kind=_kind_from_mime(resource.mimeType),
+                        media_type=resource.mime_type or "application/octet-stream",
+                        kind=_kind_from_mime(resource.mime_type),
                     )
                 )
         else:
@@ -328,6 +348,7 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
             description=_resolve_value(config.description, context),
             allowed_tools=_resolve_value(config.allowed_tools, context),
             blocked_tools=_resolve_value(config.blocked_tools, context),
+            tool_name_prefix=_resolve_value(config.tool_name_prefix, context) or "",
         )
 
     headers = dict(_resolve_value(config.headers, context) or {})
@@ -343,5 +364,6 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
         description=_resolve_value(config.description, context),
         allowed_tools=_resolve_value(config.allowed_tools, context),
         blocked_tools=_resolve_value(config.blocked_tools, context),
+        tool_name_prefix=_resolve_value(config.tool_name_prefix, context) or "",
         headers=headers or None,
     )

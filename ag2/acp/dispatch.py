@@ -1,109 +1,51 @@
 # Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Make inbound ACP notifications handled in wire order, and waitable.
+"""Make inbound ``session/update`` notifications handled in wire order.
 
-The SDK's receive loop is not order-preserving across message kinds. A response
-is correlated inline, while a notification is published to a queue whose
-consumer dispatches it as a fire-and-forget task and marks the queue entry done
-the moment that task is *created*. Two consequences, both visible to a caller:
-``session/prompt`` can return while ``session/update``s that preceded it on the
-wire are still unhandled, so the turn read out at that moment is short by
-whatever has not landed; and concurrent handler tasks can interleave, so chunks
-can be handled out of the order the agent sent them.
+The SDK spawns each inbound notification as its own task: the receive loop reads
+a message and calls ``create_task`` on the handler, so two ``session/update``
+handlers that both await — and AG2's does, it sends an event to the run's stream —
+can interleave. Chunks then land out of the order the agent sent them, and the
+assembled reply is scrambled rather than short.
 
-``Connection`` takes both the queue and the dispatcher as arguments, which is the
-seam used here: :class:`_InOrderDispatcher` *awaits* each notification instead of
-spawning it, so the dispatcher's own sequential loop becomes the ordering, and
-the queue entry is marked done only once the handler has returned. That is what
-makes :meth:`InboundUpdates.settle` exact — ``join()`` returns when every
-notification read off the wire has been handled, with nothing to poll or time.
+Completeness, the other half of this, is the SDK's own since 0.12.1: a
+``ClientSideConnection`` tracks the ``session/update`` handlers it has in flight
+per session and ``session/prompt`` does not return until they have all returned.
+So a caller that reads the turn out after the prompt response sees every update
+that preceded it on the wire. That is what this module used to arrange itself, by
+handing ``Connection`` a queue it could ``join()``; the queue is gone from the SDK
+and the guarantee is now upstream, but the ordering is not.
 
-The trade-off: an inbound *request* published behind a notification now waits for
-that notification's handler. For AG2 that means a ``session/request_permission``
-arriving mid-stream is delayed by one ``handle_update``, which sends an event to
-the run's stream — bounded by whatever the caller's subscribers do. Requests
-themselves still run concurrently once dispatched, so a permission prompt
-awaiting a human never blocks the updates behind it.
+Ordering is recovered with a lock rather than a queue, because task *creation* is
+already in wire order: the receive loop is sequential, so handler tasks start in
+the order their messages were read, and each one takes this lock as its first
+await. ``asyncio.Lock`` hands off to waiters in the order they arrived, so the
+lock's order is the wire's order. The trade-off is that a slow handler holds up
+the updates behind it — bounded by the run's own subscribers, and by the turn
+timeout above it, since ``prompt`` is waiting on the same handlers.
 """
 
-from typing import Any
+import asyncio
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
-from acp.task import (
-    DefaultMessageDispatcher,
-    InMemoryMessageQueue,
-    MessageDispatcher,
-    MessageQueue,
-    MessageStateStore,
-    NotificationRunner,
-    RequestRunner,
-    TaskSupervisor,
-)
-
-__all__ = ["InboundUpdates"]
+__all__ = ["InOrderUpdates"]
 
 
-class _InOrderDispatcher(DefaultMessageDispatcher):
-    """``DefaultMessageDispatcher``, but notifications are awaited, not spawned."""
+class InOrderUpdates:
+    """The per-bridge lock that makes update handling sequential.
 
-    def __init__(self, *, notification_runner: NotificationRunner, **kwargs: Any) -> None:
-        super().__init__(notification_runner=notification_runner, **kwargs)
-        # Held separately rather than reaching for the base class's own copy.
-        self._run_notification = notification_runner
-
-    async def _dispatch_notification(self, message: dict[str, Any]) -> None:
-        # The base class's loop calls ``task_done()`` once this returns, so
-        # awaiting here is also what makes "done" mean "handled".
-        await self._run_notification(message)
-
-
-class InboundUpdates:
-    """Per-connection notification plumbing, and the wait a turn does on it.
-
-    One of these is owned by the bridge (:class:`~.bridge.BridgeState`), whose
-    connection hooks splat :attr:`connection_kwargs` into the SDK call that builds
-    the connection. A bridge with no connection yet — or a test double that never
-    builds a real one — simply never has anything to settle.
+    One of these is owned by the bridge (:class:`~.bridge.BridgeState`) and taken
+    by its ``session_update`` route. A bridge with no connection — a test double
+    that calls ``handle_update`` directly — simply never contends on it.
     """
 
     def __init__(self) -> None:
-        self._queue: MessageQueue | None = None
+        self._lock = asyncio.Lock()
 
-    def connection_kwargs(self) -> dict[str, Any]:
-        """What to pass to ``spawn_agent_process`` / ``connect_to_agent``.
-
-        The queue is minted here rather than left to ``Connection``, because it is
-        what :meth:`settle` waits on and so this side needs the reference. One
-        fresh queue per call: a queue is closed along with the connection that
-        drained it, so a second connection cannot be handed the first one's.
-        """
-        self._queue = InMemoryMessageQueue()
-        return {"queue": self._queue, "dispatcher_factory": self._make_dispatcher}
-
-    def _make_dispatcher(
-        self,
-        queue: MessageQueue,
-        supervisor: TaskSupervisor,
-        store: MessageStateStore,
-        request_runner: RequestRunner,
-        notification_runner: NotificationRunner,
-    ) -> MessageDispatcher:
-        return _InOrderDispatcher(
-            queue=queue,
-            supervisor=supervisor,
-            store=store,
-            request_runner=request_runner,
-            notification_runner=notification_runner,
-        )
-
-    async def settle(self) -> None:
-        """Wait until every notification read off the wire has been handled.
-
-        Every notification the agent sent before its ``session/prompt`` response
-        was published to the queue before that response was read, so a caller
-        that reaches here after the response awaits exactly this turn's updates.
-        A bridge whose connection never went through here — an in-process test
-        double calls ``session_update`` directly — has nothing to wait for.
-        """
-        if self._queue is not None:
-            await self._queue.join()
+    @asynccontextmanager
+    async def in_order(self) -> AsyncGenerator[None]:
+        """Hold off the updates read after this one until this one is handled."""
+        async with self._lock:
+            yield

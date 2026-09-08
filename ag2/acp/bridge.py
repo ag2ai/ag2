@@ -18,8 +18,9 @@ import acp
 from acp import schema
 
 from ag2.events.types import BinaryResult
+from ag2.exceptions import HumanInputError
 
-from .dispatch import InboundUpdates
+from .dispatch import InOrderUpdates
 from .elicitation import resolve_elicitation_response
 from .mappers import block_text, block_to_files, map_session_update
 from .permissions import resolve_permission_option_id
@@ -156,15 +157,36 @@ class BridgeState:
         self._turn_parts: list[str] = []
         self._turn_files: list[BinaryResult] = []
         self._turn_worked = False
+        # Set when a tool served over the gateway asked a human and could not
+        # reach one. The gateway runs each ``tools/call`` on the HTTP server's
+        # own task, so it cannot raise into the task awaiting ``session/prompt``;
+        # this is how the failure crosses over. See :meth:`fail_channel`.
+        self.channel_failure: HumanInputError | None = None
+        self.channel_failed = asyncio.Event()
         self.terminals = TerminalManager(config.fs_root or config.cwd)
-        # Owned here because the connection is built from this bridge and a turn
-        # is read out of this bridge: both ends of `settle()` are already here.
-        self.updates = InboundUpdates()
+        # Owned here rather than per-connection: it orders the updates of whatever
+        # connection this bridge is currently serving, and only one is ever live.
+        self.updates = InOrderUpdates()
 
     def begin_turn(self) -> None:
         self._turn_parts = []
         self._turn_files = []
         self._turn_worked = False
+        self.channel_failure = None
+        self.channel_failed.clear()
+
+    def fail_channel(self, error: "HumanInputError") -> None:
+        """Record that this turn's human-input channel failed, and stop the turn.
+
+        First one wins: a batch of tools can each hit a dead channel, and the
+        first is the one that describes what happened — the ones after it are
+        being cancelled, not diagnosing anything. Setting the event is what lets
+        the client stop the agent instead of waiting out a prompt whose answer
+        is already known to be worthless.
+        """
+        if self.channel_failure is None:
+            self.channel_failure = error
+        self.channel_failed.set()
 
     @property
     def turn_text(self) -> str:
@@ -241,7 +263,10 @@ class ACPBridge(acp.Client):
         self.state = state
 
     async def session_update(self, session_id: str, update: SessionUpdate, **kwargs: Any) -> None:
-        await self.state.handle_update(update)
+        # Serialized: the SDK spawns a task per notification, so without this the
+        # handlers can interleave and chunks land out of order (see `dispatch`).
+        async with self.state.updates.in_order():
+            await self.state.handle_update(update)
 
     async def request_permission(
         self,

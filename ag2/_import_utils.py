@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any, Generic, Optional, TypeVar
 
 from fast_depends.utils import is_coroutine_callable
-from packaging import version
 
 __all__ = [
     "optional_import_block",
@@ -28,79 +27,41 @@ __all__ = [
 logger = getLogger(__name__)
 
 
+_MODULE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
+
+
 @dataclass
 class ModuleInfo:
     name: str
-    min_version: str | None = None
-    max_version: str | None = None
-    min_inclusive: bool = False
-    max_inclusive: bool = False
 
     def is_in_sys_modules(self) -> str | None:
-        """Check if the module is installed and satisfies the version constraints
+        """Check if the module is installed.
 
         Returns:
-            None if the module is installed and satisfies the version constraints, otherwise a message indicating the issue.
+            None if the module is installed, otherwise a message indicating the issue.
 
         """
         if self.name not in sys.modules:
             return f"'{self.name}' is not installed."
-        else:
-            if hasattr(sys.modules[self.name], "__file__") and sys.modules[self.name].__file__ is not None:
-                ag2_path = (Path(__file__).parent).resolve()
-                test_path = (Path(__file__).parent.parent / "test").resolve()
-                module_path = Path(sys.modules[self.name].__file__).resolve()  # type: ignore[arg-type]
 
-                if str(ag2_path) in str(module_path) or str(test_path) in str(module_path):
-                    # The module is in the ag2 or test directory
-                    # Aka similarly named module in the ag2 or test directory
-                    return f"'{self.name}' is not installed."
+        if hasattr(sys.modules[self.name], "__file__") and sys.modules[self.name].__file__ is not None:
+            ag2_path = (Path(__file__).parent).resolve()
+            test_path = (Path(__file__).parent.parent / "test").resolve()
+            module_path = Path(sys.modules[self.name].__file__).resolve()  # type: ignore[arg-type]
 
-        # Ensure that the retrieved version is a string. Some packages might unexpectedly
-        # have a __version__ attribute that is not a string (e.g., a module).
-        raw_version_attr = (
-            sys.modules[self.name].__version__ if hasattr(sys.modules[self.name], "__version__") else None
-        )
-        installed_version = raw_version_attr if isinstance(raw_version_attr, str) else None
-        if installed_version is None and (self.min_version or self.max_version):
-            return f"'{self.name}' is installed, but the version is not available."
-
-        if installed_version:
-            # Convert to version object for comparison
-            installed_ver = version.parse(installed_version)
-
-            if self.min_version:
-                min_ver = version.parse(self.min_version)
-                msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
-                if not self.min_inclusive and installed_ver == min_ver:
-                    return msg
-                if self.min_inclusive and installed_ver < min_ver:
-                    return msg
-
-            if self.max_version:
-                max_ver = version.parse(self.max_version)
-                msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
-                if not self.max_inclusive and installed_ver == max_ver:
-                    return msg
-                if self.max_inclusive and installed_ver > max_ver:
-                    return msg
+            if str(ag2_path) in str(module_path) or str(test_path) in str(module_path):
+                # The module is in the ag2 or test directory
+                # Aka similarly named module in the ag2 or test directory
+                return f"'{self.name}' is not installed."
 
         return None
 
-    def __repr__(self) -> str:
-        s = self.name
-        if self.min_version:
-            s += f">={self.min_version}" if self.min_inclusive else f">{self.min_version}"
-        if self.max_version:
-            s += f"<={self.max_version}" if self.max_inclusive else f"<{self.max_version}"
-        return s
-
     @classmethod
     def from_str(cls, module_info: str) -> "ModuleInfo":
-        """Parse a string to create a ModuleInfo object
+        """Parse a module name string to create a ModuleInfo object.
 
         Args:
-            module_info (str): A string containing the module name and optional version constraints
+            module_info (str): The importable module name.
 
         Returns:
             ModuleInfo: A ModuleInfo object with the parsed information
@@ -108,46 +69,13 @@ class ModuleInfo:
         Raises:
             ValueError: If the module information is invalid
         """
-        pattern = re.compile(r"^(?P<name>[a-zA-Z0-9-_]+)(?P<constraint>.*)$")
-        match = pattern.match(module_info.strip())
-
-        if not match:
+        # Importable names only — no version constraints. Nothing in the tree ever
+        # passed one, and honouring them meant depending on `packaging` for a
+        # PEP 440 parser. Reintroduce both together if a guard ever needs a bound.
+        name = module_info.strip()
+        if not _MODULE_NAME_RE.fullmatch(name):
             raise ValueError(f"Invalid package information: {module_info}")
-
-        name = match.group("name")
-        constraints = match.group("constraint").strip()
-        min_version = max_version = None
-        min_inclusive = max_inclusive = False
-
-        if constraints:
-            constraint_pattern = re.findall(r"(>=|<=|>|<)([0-9\.]+)?", constraints)
-
-            if not all(version for _, version in constraint_pattern):
-                raise ValueError(f"Invalid module information: {module_info}")
-
-            for operator, version in constraint_pattern:
-                if operator == ">=":
-                    min_version = version
-                    min_inclusive = True
-                elif operator == "<=":
-                    max_version = version
-                    max_inclusive = True
-                elif operator == ">":
-                    min_version = version
-                    min_inclusive = False
-                elif operator == "<":
-                    max_version = version
-                    max_inclusive = False
-                else:
-                    raise ValueError(f"Invalid package information: {module_info}")
-
-        return ModuleInfo(
-            name=name,
-            min_version=min_version,
-            max_version=max_version,
-            min_inclusive=min_inclusive,
-            max_inclusive=max_inclusive,
-        )
+        return cls(name=name)
 
 
 class Result:

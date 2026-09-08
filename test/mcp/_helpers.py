@@ -10,7 +10,7 @@ from typing_extensions import Self
 from ag2 import Agent, Context
 from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig
-from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse
+from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelRequest, ModelResponse, TextInput
 
 
 class ChunkConfig(ModelConfig):
@@ -49,3 +49,49 @@ class ChunkClient(LLMClient):
 
 def make_agent(*, name: str = "test-agent", prompt: str = "", config: ModelConfig, **kwargs: Any) -> Agent:
     return Agent(name, prompt, config=config, **kwargs)
+
+
+class RecordingConfig(ModelConfig):
+    """Records the whole message list the framework sends the LLM on each turn.
+
+    ``TrackingConfig`` keeps only each turn's last message, but a conversation is
+    exactly what accumulates *before* it — so continuity tests read the full list
+    through :attr:`prompts`.
+    """
+
+    def __init__(self, config: ModelConfig) -> None:
+        self.config = config
+        self.calls: list[list[BaseEvent]] = []
+
+    @property
+    def prompts(self) -> list[list[str]]:
+        """The text inputs replayed on each turn: one list per turn, in order."""
+        return [
+            [
+                part.content
+                for m in call
+                if isinstance(m, ModelRequest)
+                for part in m.parts
+                if isinstance(part, TextInput)
+            ]
+            for call in self.calls
+        ]
+
+    def copy(self) -> Self:
+        return self
+
+    def create(self) -> "RecordingClient":
+        return RecordingClient(self.config.create(), self.calls)
+
+    def create_files_client(self) -> None:
+        raise NotImplementedError
+
+
+class RecordingClient(LLMClient):
+    def __init__(self, client: LLMClient, sink: list[list[BaseEvent]]) -> None:
+        self.client = client
+        self.sink = sink
+
+    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+        self.sink.append(list(messages))
+        return await self.client(messages, context=context, **kwargs)

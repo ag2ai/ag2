@@ -268,7 +268,7 @@ async def test_run_id_is_generated_unless_provided(tmp_path: Path) -> None:
 
     assert auto.run_id != ""
     assert explicit.run_id == "my-fixed-run-id"
-    assert auto.schema_version == "0.1"
+    assert auto.schema_version == "0.2"
 
 
 @pytest.mark.asyncio

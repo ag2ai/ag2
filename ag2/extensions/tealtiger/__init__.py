@@ -9,16 +9,26 @@ runs inline with no LLM in the governance path.
 
 from ag2.extensions.tealtiger.middleware import TealTigerMiddleware
 from ag2.extensions.tealtiger.types import (
+    DEFAULT_INJECTION_CONFIDENCE_THRESHOLD,
+    INJECTION_PATTERNS,
+    INJECTION_TECHNIQUES,
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
+    InjectionFinding,
+    InjectionPattern,
     TEECReceipt,
 )
 
 __all__ = [
+    "DEFAULT_INJECTION_CONFIDENCE_THRESHOLD",
+    "INJECTION_PATTERNS",
+    "INJECTION_TECHNIQUES",
     "GovernanceDecision",
     "GovernanceMode",
     "GovernancePolicy",
+    "InjectionFinding",
+    "InjectionPattern",
     "TEECReceipt",
     "TealTigerMiddleware",
 ]

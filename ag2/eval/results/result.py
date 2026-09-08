@@ -38,7 +38,13 @@ __all__ = (
 )
 
 
-_SCHEMA_VERSION = "0.1"
+# 0.2 — token accounting reads ``UsageEvent`` rather than ``ModelResponse``, so
+# the same run serialises larger numbers: delegated sub-task spend, history
+# compaction, memory aggregation and live sessions are now counted. A stored
+# result keeps the version it was written with, so a reader can tell which
+# accounting produced it. Archived 0.1 results are not comparable and are not
+# migrated — the events needed to recompute them are not in the results file.
+_SCHEMA_VERSION = "0.2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +86,7 @@ class RunResult:
     Holds per-task records, run-level metadata, and computed aggregates.
     Lookup helpers (``pass_rate``, ``score_stats``, ``value_counts``)
     surface single keys; :meth:`summary` renders a printable table;
-    :meth:`save` writes the schema-0.1 JSON.
+    :meth:`save` writes the schema-0.2 JSON.
 
     Aggregates are computed once at construction time so repeated lookups
     are cheap.
@@ -88,6 +94,7 @@ class RunResult:
 
     __slots__ = (
         "_run_id",
+        "_schema_version",
         "_tasks",
         "_suite",
         "_target_path",
@@ -112,8 +119,10 @@ class RunResult:
         created_at: str,
         label: str | None = None,
         store_dir: str | os.PathLike[str] | None = None,
+        schema_version: str = _SCHEMA_VERSION,
     ) -> None:
         self._run_id = run_id
+        self._schema_version = schema_version
         self._tasks = tasks
         self._suite = suite
         self._target_path = target_path
@@ -132,8 +141,14 @@ class RunResult:
 
     @property
     def schema_version(self) -> str:
-        """Run JSON schema version. Always ``"0.1"`` in v0."""
-        return _SCHEMA_VERSION
+        """Schema version this run was written under — ``"0.2"`` for a fresh run.
+
+        A run loaded from disk keeps the version it was *written* with, so a
+        reader can tell which token accounting produced its numbers. ``"0.1"``
+        results predate accounting reading ``UsageEvent`` and their token counts
+        are not comparable with ``"0.2"``.
+        """
+        return self._schema_version
 
     @property
     def tasks(self) -> tuple[TaskResult, ...]:
@@ -234,7 +249,7 @@ class RunResult:
         return _render_summary(self)
 
     def save(self, path: str | os.PathLike[str] | None = None) -> Path:
-        """Write the run as schema-0.1 JSON.
+        """Write the run as schema-0.2 JSON.
 
         If ``path`` is ``None``, saves under the run's configured
         ``store_dir`` (set by the runner via ``run_agent(..., store_dir=...)``)

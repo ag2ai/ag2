@@ -196,7 +196,7 @@ agent = Agent(
 
 #### TokenMonitor
 
-Tracks cumulative token usage across `ModelResponse` and `TaskCompleted` events. Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
+Tracks cumulative token usage across `UsageEvent` — the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, sub-task rollups (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
 
 ```python linenums="1"
 from ag2 import Agent

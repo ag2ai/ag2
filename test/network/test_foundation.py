@@ -32,7 +32,7 @@ from ag2.network import (
 
 
 def _agent(name: str) -> Agent:
-    return Agent(name=name, config=AnthropicConfig(model="claude-sonnet-4-6"))
+    return Agent(name=name, config=AnthropicConfig(model="claude-sonnet-5"))
 
 
 # Channel-based envelope round-trip lives in test_consulting.py — once

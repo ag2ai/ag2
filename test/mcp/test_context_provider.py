@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from mcp.types import CallToolResult
 from pydantic import BaseModel
 
 from ag2 import Agent
@@ -15,8 +16,8 @@ class _Weather(BaseModel):
     city: str
 
 
-def _text(result: object) -> str:
-    block = result[0]  # type: ignore[index]
+def _text(result: CallToolResult) -> str:
+    block = result.content[0]
     return getattr(block, "text", "")
 
 
@@ -54,7 +55,7 @@ class TestContextProvider:
 
         result = await executor.call("ask", message="", context=None, request_context=None)
 
-        assert result.isError is True  # type: ignore[union-attr]
+        assert result.is_error is True  # type: ignore[union-attr]
 
     async def test_provider_tools_field_forwarded(self) -> None:
         # AskContext.tools set (variables/prompt left None) exercises the tools
@@ -78,4 +79,4 @@ class TestContextProvider:
 
         result = await executor.call("ask", message="weather?", context=None, request_context=None)
 
-        assert result.isError is True  # type: ignore[union-attr]
+        assert result.is_error is True  # type: ignore[union-attr]

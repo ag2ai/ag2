@@ -8,7 +8,7 @@ from ag2.config import AnthropicConfig
 
 agent = Agent(
     name="claude",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
 )
 
 

@@ -5,7 +5,7 @@
 import asyncio
 import json
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
 
@@ -417,7 +417,7 @@ class _RecordingFactory:
         self._sandbox = _LoopRecordingSandbox(self.loops)
 
     @asynccontextmanager
-    async def open(self, context: object = None) -> "AsyncIterator[_LoopRecordingSandbox]":
+    async def open(self, context: object = None) -> "AsyncGenerator[_LoopRecordingSandbox]":
         yield self._sandbox
 
 

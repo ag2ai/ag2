@@ -13,7 +13,7 @@ from ag2.tools.sandbox.base import Sandbox
 from ag2.tools.sandbox.factory import SandboxFactory, SingletonFactory
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
     from ag2.context import ConversationContext
 
@@ -149,6 +149,6 @@ class CodeAdapter:
     async def _open(
         self,
         context: "ConversationContext | None",
-    ) -> "AsyncIterator[Sandbox]":
+    ) -> "AsyncGenerator[Sandbox]":
         async with self._factory.open(context) as sb:
             yield sb

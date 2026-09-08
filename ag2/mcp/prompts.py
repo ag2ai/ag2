@@ -4,9 +4,15 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from mcp.types import GetPromptResult, TextContent
+from mcp.types import (
+    GetPromptRequestParams,
+    GetPromptResult,
+    ListPromptsResult,
+    PaginatedRequestParams,
+    TextContent,
+)
 from mcp.types import Prompt as MCPPrompt
 from mcp.types import PromptArgument as MCPPromptArgument
 from mcp.types import PromptMessage as MCPPromptMessage
@@ -15,7 +21,7 @@ from ._async import call_user_fn
 from .errors import MCPPromptNotFoundError
 
 if TYPE_CHECKING:
-    from mcp.server.lowlevel import Server
+    from mcp.server.context import ServerRequestContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,17 +72,15 @@ class PromptProvider:
         self._prompts = tuple(prompts)
         self._by_name = {p.name: p for p in self._prompts}
 
-    def register(self, server: "Server") -> None:
-        provider = self
+    async def on_list_prompts(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> ListPromptsResult:
+        return ListPromptsResult(prompts=[_to_mcp_prompt(p) for p in self._prompts])
 
-        # ``mcp``'s low-level decorators are untyped; ignore the resulting noise.
-        @server.list_prompts()  # type: ignore[no-untyped-call, misc]
-        async def _list_prompts() -> list[MCPPrompt]:
-            return [_to_mcp_prompt(p) for p in provider._prompts]
-
-        @server.get_prompt()  # type: ignore[no-untyped-call, misc]
-        async def _get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
-            return await provider.get(name, arguments or {})
+    async def on_get_prompt(
+        self, ctx: "ServerRequestContext[Any, Any]", params: GetPromptRequestParams
+    ) -> GetPromptResult:
+        return await self.get(params.name, params.arguments or {})
 
     async def get(self, name: str, arguments: dict[str, str]) -> GetPromptResult:
         prompt = self._by_name.get(name)

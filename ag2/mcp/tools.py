@@ -9,8 +9,7 @@ from typing import Annotated, Any, TypeAlias, overload
 
 from fast_depends import dependency_provider
 from fast_depends.pydantic.schema import get_schema
-from mcp.server.session import ServerSession
-from mcp.shared.context import RequestContext
+from mcp.server.context import ServerRequestContext
 from mcp.types import ContentBlock, TextContent, ToolAnnotations
 from mcp.types import Tool as MCPTool
 
@@ -24,7 +23,7 @@ from ._async import call_user_fn
 ToolResult: TypeAlias = "ContentBlock | Sequence[ContentBlock] | str"
 
 # The MCP request context handed to a handler (``None`` outside a live request).
-ToolContext: TypeAlias = "RequestContext[ServerSession, Any, Any] | None"
+ToolContext: TypeAlias = "ServerRequestContext[Any, Any] | None"
 
 # A tool handler receives the call's ``arguments`` and the live MCP request
 # context. Sync or async.
@@ -36,7 +35,7 @@ ToolHandler: TypeAlias = Callable[[dict[str, Any], ToolContext], "Awaitable[Tool
 #   async def my_tool(x: str, ctx: MCPRequestContext) -> ...
 # Mirrors ``ag2.annotations.Context``; the parameter is excluded from the
 # advertised ``inputSchema``.
-MCPRequestContext = Annotated[RequestContext[ServerSession, Any, Any], ContextField(cast=False)]
+MCPRequestContext = Annotated[ServerRequestContext[Any, Any], ContextField(cast=False)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +193,10 @@ class ToolProvider:
 
     def has(self, name: str) -> bool:
         return name in self._by_name
+
+    def input_schema(self, name: str) -> dict[str, Any]:
+        """The JSON Schema advertised for ``name``."""
+        return self._by_name[name].input_schema
 
     async def call(
         self, name: str, arguments: dict[str, Any], request_context: ToolContext = None

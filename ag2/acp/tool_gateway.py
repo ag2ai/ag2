@@ -34,7 +34,14 @@ from acp import schema
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import CallToolResult, ImageContent, TextContent
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ImageContent,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+)
 from mcp.types import Tool as MCPTool
 from starlette.applications import Starlette
 from starlette.routing import Mount
@@ -51,11 +58,15 @@ from ag2.events import (
     ToolResultEvent,
     UrlInput,
 )
-from ag2.exceptions import AG2Error, UnsupportedToolError
+from ag2.exceptions import AG2Error, HumanInputError, UnsupportedToolError
+from ag2.history import HUMAN_INPUT_ABANDONED_TOOL_RESULT
+from ag2.mcp.mappers import tool_error
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.final import FunctionToolSchema
 
 if TYPE_CHECKING:
+    from mcp.server.context import ServerRequestContext
+
     from ag2.tools.schemas import ToolSchema
 
     from .bridge import BridgeState
@@ -64,6 +75,18 @@ logger = logging.getLogger(__name__)
 
 GATEWAY_SERVER_NAME = "ag2"
 GATEWAY_PATH = "/mcp"
+
+# Answers the CLI agent's ``tools/call`` when the tool asked a human and the
+# channel to them was dead. The request has to be answered — an unanswered one
+# just hangs the agent — but AG2's own exception message must not be what it
+# says: that text is advice for whoever wired the agent up ("pass hitl_hook="),
+# and it would land in someone else's conversation as if it were the tool's
+# output. The turn is cancelled the moment this is sent, so in practice the
+# agent stops rather than acting on it.
+HUMAN_INPUT_GATEWAY_TOOL_ERROR = (
+    "This tool had to ask a person, and there is no way to reach one. The turn is ending; "
+    "this is not a tool that failed, so do not look for another way to do the same thing."
+)
 
 
 class MCPCapabilityError(AG2Error):
@@ -275,26 +298,14 @@ class ToolGateway:
         Defaults to ``127.0.0.1:<os-assigned port>``; a caller-supplied
         :class:`GatewayAddress` binds that instead so a remote agent can dial it.
         """
-        server: Server = Server(name=self.name)
-        gateway = self
-
-        @server.list_tools()  # type: ignore[no-untyped-call, misc, untyped-decorator]
-        async def _list_tools() -> list[MCPTool]:
-            return [
-                MCPTool(
-                    name=t.function.name,
-                    description=t.function.description or None,
-                    inputSchema=t.function.parameters or {"type": "object", "properties": {}},
-                )
-                for t in gateway.tools
-            ]
-
-        # validate_input=False: argument coercion is FunctionTool's job (pydantic),
-        # matching the executor path — the SDK's jsonschema check would reject
-        # values like "5" for an int that the tool itself accepts.
-        @server.call_tool(validate_input=False)  # type: ignore[no-untyped-call, misc, untyped-decorator]
-        async def _call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult | list[TextContent | ImageContent]:
-            return await gateway._execute(name, arguments or {})
+        # Handlers are constructor callbacks in mcp 2.0; argument coercion stays
+        # FunctionTool's job (pydantic), matching the executor path — and 2.0's
+        # lowlevel server validates no tool input of its own, so nothing to disable.
+        server: Server = Server(
+            name=self.name,
+            on_list_tools=self._on_list_tools,
+            on_call_tool=self._on_call_tool,
+        )
 
         # Host/Origin validation stops a browser page reaching this port via DNS
         # rebinding (a page cannot forge Host). It does not stop a local process,
@@ -373,6 +384,40 @@ class ToolGateway:
         self.url = f"http://{self.address.authority}:{port}{self._path}"
         return self.url
 
+    async def _on_list_tools(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        return ListToolsResult(
+            tools=[
+                MCPTool(
+                    name=t.function.name,
+                    description=t.function.description or None,
+                    inputSchema=t.function.parameters or {"type": "object", "properties": {}},
+                )
+                for t in self.tools
+            ]
+        )
+
+    async def _on_call_tool(
+        self, ctx: "ServerRequestContext[Any, Any]", params: CallToolRequestParams
+    ) -> CallToolResult:
+        # A raised exception would reach the agent as a JSON-RPC error in mcp 2.0,
+        # where 1.x's decorator turned it into a tool-level error result; keep the
+        # latter, so a CLI agent sees a failed tool rather than a failed protocol.
+        try:
+            result = await self._execute(params.name, params.arguments or {})
+        except HumanInputError as e:
+            # Not this turn's to finish. Record it so the client driving the
+            # prompt fails the turn with it, and answer the request with
+            # something that does not read as an ordinary tool failure.
+            self.state.fail_channel(e)
+            return tool_error(HUMAN_INPUT_GATEWAY_TOOL_ERROR)
+        except Exception as e:
+            return tool_error(str(e))
+        if isinstance(result, CallToolResult):
+            return result
+        return CallToolResult(content=list(result))
+
     async def close(self) -> None:
         """Stop the HTTP server; idempotent and bounded by ``close_timeout``."""
         server, self._uvicorn = self._uvicorn, None
@@ -409,31 +454,41 @@ class ToolGateway:
             ) as pending:
                 await context.send(call)
                 event = await pending
+
+        # Same reasoning as in FunctionTool and the tool executor: a tool that
+        # asked a human and got nowhere has not produced a tool failure. Caught
+        # here it would become this agent's tool output — and the CLI agent, told
+        # only that a tool broke, is free to route around an approval nobody was
+        # actually asked for. ``_on_call_tool`` turns it into the end of the turn.
+        except HumanInputError:
+            # The call is closed off here rather than at the turn boundary: this
+            # one was never part of a ``ToolCallsEvent`` — the gateway sends it
+            # alone — so the repair there has no batch to find it in, and
+            # widening that repair to loose calls would sweep up the provider's
+            # own builtin calls, which answer themselves. Same stand-in text as
+            # the turn boundary writes, and the same shape this path already
+            # leaves behind when a tool succeeds: a bare ``ToolResultEvent``.
+            #
+            # Best-effort, and deliberately so: this runs on the way out of a
+            # failure whose whole point is that it must reach the caller. A
+            # transcript left one result short is worth less than the exception
+            # that says why, so nothing raised here is allowed to replace it.
+            try:
+                await context.send(ToolResultEvent.from_call(call, result=HUMAN_INPUT_ABANDONED_TOOL_RESULT))
+            except Exception:
+                logger.debug("MCP tool gateway: closing off the abandoned call %r failed", name, exc_info=True)
+            raise
+
         except Exception as e:
             logger.exception("MCP tool gateway: executing tool %r failed", name)
-            return CallToolResult(
-                content=[TextContent(type="text", text=str(e))],
-                isError=True,
-            )
+            return tool_error(str(e))
 
         if isinstance(event, ToolErrorEvent):
-            return CallToolResult(
-                content=[TextContent(type="text", text=str(event.error))],
-                isError=True,
-            )
+            return tool_error(str(event.error))
 
         if isinstance(event, ClientToolCallEvent):
-            return CallToolResult(
-                content=[
-                    TextContent(
-                        type="text",
-                        text=(
-                            f"tool {name!r} requires client-side execution and cannot be executed "
-                            "through the ACP tool gateway."
-                        ),
-                    )
-                ],
-                isError=True,
+            return tool_error(
+                f"tool {name!r} requires client-side execution and cannot be executed through the ACP tool gateway."
             )
 
         assert isinstance(event, ToolResultEvent)  # the get() filter admits nothing else

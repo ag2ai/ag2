@@ -44,3 +44,18 @@ class MCPPromptNotFoundError(MCPServerError):
 
     def __init__(self, name: str) -> None:
         super().__init__(f"No prompt named {name!r}.")
+
+
+class UnknownConversationError(MCPServerError):
+    """Raised when a presented conversation handle names no live conversation.
+
+    Reported to the caller as a *tool execution* error rather than a JSON-RPC
+    one: the protocol draws that line so the model can recover by starting a new
+    conversation instead of failing the turn. A handle created by a different
+    principal raises this too, so the error does not disclose that it exists.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Unknown or expired conversation handle. Omit the 'conversation' argument to start a new conversation."
+        )
