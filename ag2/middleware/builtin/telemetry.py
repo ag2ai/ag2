@@ -150,19 +150,6 @@ def _response_message(response: ModelResponse) -> dict[str, Any]:
     return message
 
 
-def _assistant_message(response: ModelResponse, resolved: set[str]) -> dict[str, Any] | None:
-    """Render a model reply, dropping tool calls whose result never landed."""
-    message = _response_message(response)
-    calls = [c for c in message.get("tool_calls", []) if c["id"] in resolved]
-    if calls:
-        message["tool_calls"] = calls
-    else:
-        message.pop("tool_calls", None)
-        if message.get("content") is None:
-            return None
-    return message
-
-
 def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: int | None) -> list[dict[str, Any]]:
     """Serialise the history sent to the model as OpenAI-style message dicts.
 
@@ -171,21 +158,8 @@ def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: in
     # Local: a module-level import cycles via ``ag2.config`` mappers.
     from ag2.compact import CompactionSummary
 
-    # A call and its result are only sent as a pair; providers drop either half
-    # left orphaned by compaction or a partial write, so the span must too.
-    called: set[str] = set()
-    resolved: set[str] = set()
-    for event in events:
-        if isinstance(event, ModelResponse):
-            called.update(c.id for c in event.tool_calls.calls)
-        elif isinstance(event, BuiltinToolCallEvent):
-            # Server-side tools are sent standalone, never via ``ModelResponse``.
-            called.add(event.id)
-        elif isinstance(event, ToolResultsEvent):
-            resolved.update(r.parent_id for r in event.results if r.parent_id)
-        elif isinstance(event, ToolResultEvent) and event.parent_id:
-            resolved.add(event.parent_id)
-
+    # Recorded as AG2 assembled it, repairing nothing: providers disagree on which
+    # half of an orphaned tool pair they drop, and dropping one hides the defect.
     # History holds the loose result and its wrapper; emit at the wrapper only.
     wrapped: set[str] = {
         r.parent_id for event in events if isinstance(event, ToolResultsEvent) for r in event.results if r.parent_id
@@ -199,19 +173,16 @@ def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: in
                 if isinstance(inp, TextInput):
                     result.append(inp.to_api())
         elif isinstance(event, ModelResponse):
-            message = _assistant_message(event, resolved)
-            if message is not None:
-                result.append(message)
+            result.append(_response_message(event))
         elif isinstance(event, BuiltinToolCallEvent):
-            if event.id in resolved:
-                result.append({"content": None, "role": "assistant", "tool_calls": [_tool_call_api(event)]})
+            # Server-side tools are sent standalone, never via ``ModelResponse``.
+            result.append({"content": None, "role": "assistant", "tool_calls": [_tool_call_api(event)]})
         elif isinstance(event, ToolResultsEvent):
             for r in event.results:
-                if r.parent_id in called:
-                    result.append(_tool_result_message(r, max_tool_result_chars))
+                result.append(_tool_result_message(r, max_tool_result_chars))
         elif isinstance(event, ToolResultEvent):
-            # Fallback when the wrapper was never persisted.
-            if event.parent_id in called and event.parent_id not in wrapped and event.parent_id not in loose_seen:
+            # Fallback when the wrapper was never persisted; an id-less result cannot be paired.
+            if event.parent_id and event.parent_id not in wrapped and event.parent_id not in loose_seen:
                 loose_seen.add(event.parent_id)
                 result.append(_tool_result_message(event, max_tool_result_chars))
         elif isinstance(event, CompactionSummary):

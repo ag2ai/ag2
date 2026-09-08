@@ -7,6 +7,7 @@ import threading
 from collections.abc import Sequence as SequenceType
 
 import pytest
+from dirty_equals import IsPartialDict
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 from pydantic import BaseModel
@@ -986,29 +987,42 @@ def test_build_input_messages_records_a_loose_tool_error():
     assert "RuntimeError: boom" in tool_message["content"]
 
 
-def test_build_input_messages_drops_a_result_with_no_matching_call():
-    """An orphaned result is never sent, so the span must not claim it was."""
+def test_build_input_messages_keeps_a_result_with_no_matching_call():
+    """Orphans are kept: openai sends them, and dropping one hides a partial write."""
     events = [ModelRequest([TextInput("Hi")]), ToolResultsEvent([_result_event("gone", "stale")])]
 
-    assert _build_input_messages(events, None) == [{"content": "Hi", "role": "user"}]
+    assert _build_input_messages(events, None) == [
+        {"content": "Hi", "role": "user"},
+        {"role": "tool", "tool_call_id": "gone", "content": "stale"},
+    ]
 
 
-def test_build_input_messages_drops_an_unresolved_tool_call():
-    """A call whose result never landed is dropped, keeping the reply's text."""
+def test_build_input_messages_keeps_a_tool_call_whose_result_never_landed():
+    """Anthropic drops this call and openai keeps it; the span records what AG2 held."""
     call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
     events = [ModelResponse(ModelMessage("Checking..."), tool_calls=ToolCallsEvent([call]))]
 
-    assert _build_input_messages(events, None) == [{"content": "Checking...", "role": "assistant"}]
+    assert _build_input_messages(events, None) == [
+        {
+            "content": "Checking...",
+            "role": "assistant",
+            "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"arguments": "{}", "name": "get_weather"}}
+            ],
+        }
+    ]
 
 
-def test_build_input_messages_omits_a_reply_that_is_only_unresolved_calls():
+def test_build_input_messages_keeps_a_reply_that_is_only_tool_calls():
     call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
     events = [ModelRequest([TextInput("Hi")]), ModelResponse(tool_calls=ToolCallsEvent([call]))]
 
-    assert _build_input_messages(events, None) == [{"content": "Hi", "role": "user"}]
+    user, assistant = _build_input_messages(events, None)
+    assert user == {"content": "Hi", "role": "user"}
+    assert assistant == IsPartialDict({"content": None, "role": "assistant"})
 
 
-def test_build_input_messages_pairs_a_server_side_tool_call_with_its_result():
+def test_build_input_messages_records_a_server_side_tool_call_with_its_result():
     """Server-side tools bypass ``ModelResponse``; both halves still belong in the span."""
     call = BuiltinToolCallEvent(id="ws_1", name="web_search", arguments='{"q": "Paris"}')
     events = [
