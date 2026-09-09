@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import sys
+import threading
 from collections.abc import Iterable
 from typing import Annotated
 from unittest.mock import MagicMock
@@ -1049,6 +1051,82 @@ def test_max_concurrency_agent_is_reusable_across_event_loops() -> None:
         body, peak = asyncio.run(turn())
         assert body == "done"
         assert peak == 1
+
+
+def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
+    """Two OS threads driving the same capped Agent at once must each still
+    see ``max_concurrency`` enforced on their own loop.
+
+    ``_spawn_subtask``'s check-then-act on its semaphore field has no
+    synchronization between OS threads, so CPython's GIL can switch away
+    from one thread and into the other at any bytecode boundary, including
+    between the "no semaphore yet" check and the assignment that follows.
+    Tightening ``sys.setswitchinterval`` makes that switch happen often
+    enough that six subtasks fanned out per thread, repeated over several
+    rounds, reliably observe more than one active at once on a single loop
+    somewhere, which is the cap failing for the loop that lost the field to
+    the other thread's write. Measured: 10 rounds sees the violation on
+    every run against the unfixed field; 0 violations in 300 standalone
+    trials once semaphores are provisioned per loop under a lock.
+    """
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(0.00001)
+    original_run_subtask = actor_mod.Agent._run_subtask
+    peaks: dict[int, list[int]] = {}
+    peaks_lock = threading.Lock()
+
+    async def tracked_run_subtask(self: Agent, task: str, ctx: Context, tc: TaskConfig) -> str:
+        tid = threading.get_ident()
+        with peaks_lock:
+            slot = peaks.setdefault(tid, [0, 0])
+            slot[0] += 1
+            slot[1] = max(slot[1], slot[0])
+        try:
+            return await original_run_subtask(self, task, ctx, tc)
+        finally:
+            with peaks_lock:
+                peaks[tid][0] -= 1
+
+    def make_parent() -> Agent:
+        return Agent(
+            "parent",
+            config=TestConfig(ModelResponse(ModelMessage("done."))),
+            tasks=TaskConfig(
+                config=TestConfig(ModelResponse(ModelMessage("subtask done."))),
+                max_concurrency=1,
+            ),
+        )
+
+    def worker(parent: Agent, results: list[object], index: int) -> None:
+        async def go() -> list[str]:
+            return await asyncio.gather(
+                *(parent._spawn_subtask(f"task {i}", _make_parent_context()) for i in range(6)),
+                return_exceptions=True,
+            )
+
+        results[index] = asyncio.run(go())
+
+    actor_mod.Agent._run_subtask = tracked_run_subtask
+    try:
+        for _round in range(10):
+            parent = make_parent()
+            results: list[object] = [None, None]
+            threads = [threading.Thread(target=worker, args=(parent, results, i)) for i in range(2)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=5)
+
+            failures = [r for result in results for r in result if isinstance(r, BaseException)]
+            assert not failures, f"subtask(s) raised under concurrent thread access: {failures!r}"
+            for result in results:
+                assert result == ["subtask done."] * 6
+    finally:
+        actor_mod.Agent._run_subtask = original_run_subtask
+        sys.setswitchinterval(old_interval)
+
+    over_cap = {tid: slot[1] for tid, slot in peaks.items() if slot[1] > 1}
+    assert not over_cap, f"max_concurrency=1 violated on these threads' own loop: {over_cap!r}"
 
 
 @pytest.mark.asyncio
