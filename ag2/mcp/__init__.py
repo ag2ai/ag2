@@ -5,7 +5,7 @@
 from ag2.exceptions import missing_optional_dependency
 
 try:
-    from .apps import AppResource, client_supports_apps
+    from .apps import AppSandbox, MCPApp, client_supports_apps
     from .executor import AskContext, ContextProvider
     from .extensions import ExtensionMap, client_extension
     from .info import build_ask_tool
@@ -29,14 +29,16 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
     mcp_tool = missing_optional_dependency("mcp_tool", "mcp", e)  # type: ignore[misc]
     client_extension = missing_optional_dependency("client_extension", "mcp", e)  # type: ignore[misc]
     ExtensionMap = missing_optional_dependency("ExtensionMap", "mcp", e)  # type: ignore[misc]
-    AppResource = missing_optional_dependency("AppResource", "mcp", e)  # type: ignore[misc]
+    AppSandbox = missing_optional_dependency("AppSandbox", "mcp", e)  # type: ignore[misc]
+    MCPApp = missing_optional_dependency("MCPApp", "mcp", e)  # type: ignore[misc]
     client_supports_apps = missing_optional_dependency("client_supports_apps", "mcp", e)  # type: ignore[misc]
 
 __all__ = (
-    "AppResource",
+    "AppSandbox",
     "AskContext",
     "ContextProvider",
     "ExtensionMap",
+    "MCPApp",
     "MCPFunctionTool",
     "MCPServer",
     "Prompt",

@@ -2,12 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Annotated
+
 import pytest
+from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
-from ag2 import Agent
+from ag2 import Agent, Inject, Variable
 from ag2.events import ModelResponse
+from ag2.mcp import MCPServer, Resource, mcp_tool
 from ag2.mcp.executor import AgentExecutor, AskContext
+from ag2.mcp.testing import connect
+from ag2.mcp.tools import MCPRequestContext
 from ag2.testing import TestConfig
 
 from ._helpers import text_of
@@ -76,3 +82,79 @@ class TestContextProvider:
         result = await executor.call("ask", message="weather?", context=None, request_context=None)
 
         assert result.is_error is True  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
+class TestRequestScopedContext:
+    async def test_resource_reads_resolve_variables_dependencies_and_mcp_context(self) -> None:
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"tenant": "north"}, dependencies={"catalog": {"sku": "mug"}})
+
+        async def read(
+            tenant: Annotated[str, Variable("tenant")],
+            catalog: Annotated[dict[str, str], Inject("catalog")],
+            ctx: MCPRequestContext,
+        ) -> str:
+            return f"{tenant}:{catalog['sku']}:{ctx.session is not None}"
+
+        server = MCPServer(
+            Agent("g", config=TestConfig("hi")),
+            resources=[Resource("catalog://card", "card", read)],
+            context_provider=provider,
+        )
+
+        async with connect(server) as session:
+            result = await session.read_resource("catalog://card")
+
+        assert [c.model_dump() for c in result.contents] == [IsPartialDict({"text": "north:mug:True"})]
+
+    async def test_resource_reads_do_not_receive_an_ag2_context(self) -> None:
+        async def read(ctx: MCPRequestContext) -> str:
+            return f"mcp={ctx.session is not None}"
+
+        server = MCPServer(
+            Agent("g", config=TestConfig("hi")),
+            resources=[Resource("catalog://card", "card", read)],
+        )
+
+        async with connect(server) as session:
+            result = await session.read_resource("catalog://card")
+
+        assert [c.model_dump() for c in result.contents] == [IsPartialDict({"text": "mcp=True"})]
+
+    async def test_tool_listing_resolves_request_scoped_metadata(self) -> None:
+        @mcp_tool(title=Variable("tool_title"), meta={"tenant": Variable("tenant")})
+        async def read_scope() -> str:
+            """Read request-scoped data."""
+            return "ok"
+
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"tenant": "north", "tool_title": "North catalog"})
+
+        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[read_scope], context_provider=provider)
+
+        async with connect(server) as session:
+            result = await session.list_tools()
+
+        listed = next(t for t in result.tools if t.name == "read_scope")
+        assert listed.model_dump() == IsPartialDict({"title": "North catalog", "meta": {"tenant": "north"}})
+
+    async def test_custom_tools_resolve_request_scoped_values(self) -> None:
+        @mcp_tool
+        async def read_scope(
+            tenant: Annotated[str, Variable("tenant")],
+            catalog: Annotated[dict[str, str], Inject("catalog")],
+            ctx: MCPRequestContext,
+        ) -> str:
+            """Read request-scoped data."""
+            return f"{tenant}:{catalog['sku']}:{ctx.session is not None}"
+
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"tenant": "north"}, dependencies={"catalog": {"sku": "mug"}})
+
+        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[read_scope], context_provider=provider)
+
+        async with connect(server) as session:
+            result = await session.call_tool("read_scope", {})
+
+        assert text_of(result) == "north:mug:True"

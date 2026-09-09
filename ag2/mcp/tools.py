@@ -16,8 +16,10 @@ from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
 from mcp.types import Tool as MCPTool
 from pydantic import BaseModel, JsonValue
 
-from ag2.annotations import ContextField
+from ag2.annotations import ContextField, Variable
+from ag2.context import ConversationContext
 from ag2.response import ResponseSchema
+from ag2.tools.builtin._resolve import resolve_variable
 from ag2.utils import CONTEXT_OPTION_NAME, build_model
 
 from ._async import call_user_fn
@@ -40,6 +42,45 @@ ToolContext: TypeAlias = "ServerRequestContext[Any, Any] | None"
 # to whoever owns the key, so this module only takes the callable.
 MetaFilter: TypeAlias = Callable[["Mapping[str, Any] | None"], "Mapping[str, Any] | None"]
 
+# The live MCP request context is stored in the request-scoped dependency map
+# under this private key. The key is intentionally not a string: applications may
+# use string dependency names, while this is internal protocol plumbing.
+MCP_REQUEST_CONTEXT_DEP = object()
+
+
+@dataclass(slots=True)
+class MCPExecutionContext:
+    dependency_provider: Any = None
+    variables: dict[str, Any] = field(default_factory=dict)
+    dependencies: dict[Any, Any] = field(default_factory=dict)
+    prompt: list[str] = field(default_factory=list)
+
+
+class MCPRequestContextField(ContextField):
+    def use(self, /, **kwargs: Any) -> dict[str, Any]:
+        if ctx := kwargs.get(CONTEXT_OPTION_NAME):
+            assert self.param_name
+            if isinstance(ctx, ConversationContext | MCPExecutionContext):
+                kwargs[self.param_name] = ctx.dependencies.get(MCP_REQUEST_CONTEXT_DEP)
+            else:
+                kwargs[self.param_name] = ctx
+        return kwargs
+
+
+def resolve_context_value(value: Any, context: MCPExecutionContext | ConversationContext) -> Any:
+    if isinstance(value, Variable):
+        return resolve_variable(value, context)
+    if isinstance(value, BaseModel):
+        return value.model_dump(by_alias=True, exclude_none=True)
+    if isinstance(value, Mapping):
+        return {key: resolve_context_value(item, context) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return tuple(resolve_context_value(item, context) for item in value)
+    if isinstance(value, list):
+        return [resolve_context_value(item, context) for item in value]
+    return value
+
+
 # A tool handler receives the call's ``arguments`` and the live MCP request
 # context. Sync or async.
 ToolHandler: TypeAlias = Callable[[dict[str, Any], ToolContext], "Awaitable[ToolResult] | ToolResult"]
@@ -50,7 +91,7 @@ ToolHandler: TypeAlias = Callable[[dict[str, Any], ToolContext], "Awaitable[Tool
 #   async def my_tool(x: str, ctx: MCPRequestContext) -> ...
 # Mirrors ``ag2.annotations.Context``; the parameter is excluded from the
 # advertised ``inputSchema``.
-MCPRequestContext = Annotated[ServerRequestContext[Any, Any], ContextField(cast=False)]
+MCPRequestContext = Annotated[ServerRequestContext[Any, Any], MCPRequestContextField(cast=False)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,20 +112,24 @@ class MCPFunctionTool:
     description: str
     handler: ToolHandler
     input_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object"})
-    title: str | None = None
-    annotations: ToolAnnotations | None = None
+    title: str | Variable | None = None
+    annotations: ToolAnnotations | Variable | None = None
     output_schema: dict[str, Any] | None = None
     meta: Mapping[str, Any] | None = None
 
-    def _mcp_tool(self, meta_filter: "MetaFilter | None" = None) -> MCPTool:
+    def _mcp_tool(
+        self, context: MCPExecutionContext | ConversationContext | None = None, meta_filter: "MetaFilter | None" = None
+    ) -> MCPTool:
         meta = self.meta if meta_filter is None else meta_filter(self.meta)
+        if context is not None:
+            meta = resolve_context_value(meta, context)
         return MCPTool(
             name=self.name,
             description=self.description,
             inputSchema=self.input_schema,
             outputSchema=self.output_schema,
-            title=self.title,
-            annotations=self.annotations,
+            title=resolve_context_value(self.title, context) if context is not None else self.title,
+            annotations=resolve_context_value(self.annotations, context) if context is not None else self.annotations,
             _meta=dict(meta) if meta else None,
         )
 
@@ -153,12 +198,15 @@ def _bind(call_model: Any) -> ToolHandler:
     """
 
     async def handler(arguments: dict[str, Any], request_context: ToolContext) -> Any:
+        context = request_context
+        if not isinstance(context, ConversationContext | MCPExecutionContext):
+            context = MCPExecutionContext(dependencies={MCP_REQUEST_CONTEXT_DEP: request_context})
         async with AsyncExitStack() as stack:
             return await call_model.asolve(
-                **(arguments | {CONTEXT_OPTION_NAME: request_context}),
+                **(arguments | {CONTEXT_OPTION_NAME: context}),
                 stack=stack,
                 cache_dependencies={},
-                dependency_provider=dependency_provider,
+                dependency_provider=context.dependency_provider or dependency_provider,
             )
 
     return handler
@@ -263,13 +311,15 @@ class ToolProvider:
     def names(self) -> frozenset[str]:
         return frozenset(self._by_name)
 
-    def list_mcp_tools(self, meta_filter: "MetaFilter | None" = None) -> list[MCPTool]:
+    def list_mcp_tools(
+        self, context: MCPExecutionContext | ConversationContext | None = None, meta_filter: "MetaFilter | None" = None
+    ) -> list[MCPTool]:
         """The advertised tools, with ``meta_filter`` applied to each one's ``_meta``.
 
         The filter is per request, because whether a key is worth sending can
         depend on what the requesting client advertised.
         """
-        return [t._mcp_tool(meta_filter) for t in self._tools]
+        return [t._mcp_tool(context, meta_filter) for t in self._tools]
 
     def has(self, name: str) -> bool:
         return name in self._by_name

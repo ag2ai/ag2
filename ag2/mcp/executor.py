@@ -45,6 +45,7 @@ class AskContext:
     left ``None`` is omitted, so the default is the stateless behavior."""
 
     variables: dict[str, Any] | None = None
+    dependencies: dict[Any, Any] | None = None
     tools: list[Any] | None = None
     prompt: list[str] | str | None = None
 
@@ -91,6 +92,11 @@ class AgentExecutor:
         self._stream_progress = stream_progress
         self._context_provider = context_provider
         self._session_store = session_store
+
+    @property
+    def context_provider(self) -> "ContextProvider | None":
+        """The optional per-request context provider shared by MCP handlers."""
+        return self._context_provider
 
     def list_tools(self) -> list[MCPTool]:
         return [
@@ -172,6 +178,8 @@ class AgentExecutor:
             ctx = await self._context_provider(get_access_token())
             if ctx.variables is not None:
                 ask_kwargs["variables"] = ctx.variables
+            if ctx.dependencies is not None:
+                ask_kwargs["dependencies"] = ctx.dependencies
             if ctx.tools is not None:
                 ask_kwargs["tools"] = ctx.tools
             if ctx.prompt is not None:

@@ -10,7 +10,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
+from mcp.server.auth.middleware.auth_context import AuthContextMiddleware, get_access_token
 from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
 from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
 from mcp.server.caching import CacheHint, CacheableMethod
@@ -25,7 +25,7 @@ from starlette.routing import BaseRoute, Mount, Route
 from ag2.agent import Agent
 from ag2.history import MemoryStorage
 
-from .apps import EXTENSION_ID, AppResource, binds_ui, client_supports_apps, collect_apps, visible_meta
+from .apps import EXTENSION_ID, MCPApp, binds_ui, client_supports_apps, collect_apps, visible_meta
 from .errors import MCPToolNameConflictError
 from .executor import AgentExecutor, ContextProvider
 from .extensions import ExtensionMap, validated_extensions
@@ -34,7 +34,7 @@ from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
-from .tools import MCPFunctionTool, MetaFilter, ToolProvider
+from .tools import MCP_REQUEST_CONTEXT_DEP, MCPExecutionContext, MCPFunctionTool, MetaFilter, ToolProvider
 
 if TYPE_CHECKING:
     from mcp.server.context import ServerRequestContext
@@ -166,7 +166,7 @@ class MCPServer:
     advertised only when a non-empty collection is supplied.
 
     ``apps`` serves interactive documents — MCP Apps — alongside the agent: each
-    :class:`~ag2.mcp.apps.AppResource` contributes its tools to ``tools`` and its document
+    :class:`~ag2.mcp.apps.MCPApp` contributes its tools to ``tools`` and its document
     to ``resources``, so ``apps=[app]`` is exactly shorthand for passing
     ``app.tools`` and ``app.resource`` by hand. Two apps claiming one document URI
     raise here, as a duplicate tool name does. A server holding at least one app
@@ -228,7 +228,7 @@ class MCPServer:
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
         tools: "Sequence[MCPFunctionTool]" = (),
-        apps: "Sequence[AppResource]" = (),
+        apps: "Sequence[MCPApp]" = (),
         extensions: "ExtensionMap | None" = None,
         path: str = "/mcp",
         stateless: bool = False,
@@ -308,10 +308,10 @@ class MCPServer:
         if self._lifespan is not None:
             kwargs["lifespan"] = self._lifespan
         if self._resource_provider is not None:
-            kwargs["on_list_resources"] = self._resource_provider.on_list_resources
-            kwargs["on_read_resource"] = self._resource_provider.on_read_resource
+            kwargs["on_list_resources"] = self._on_list_resources
+            kwargs["on_read_resource"] = self._on_read_resource
             if self._resource_provider.has_templates:
-                kwargs["on_list_resource_templates"] = self._resource_provider.on_list_resource_templates
+                kwargs["on_list_resource_templates"] = self._on_list_resource_templates
         if self._prompt_provider is not None:
             kwargs["on_list_prompts"] = self._prompt_provider.on_list_prompts
             kwargs["on_get_prompt"] = self._prompt_provider.on_get_prompt
@@ -329,12 +329,29 @@ class MCPServer:
             **kwargs,
         )
 
+    async def _on_list_resources(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> Any:
+        assert self._resource_provider is not None
+        return await self._resource_provider.on_list_resources(await self._request_context(ctx), params)
+
+    async def _on_list_resource_templates(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> Any:
+        assert self._resource_provider is not None
+        return await self._resource_provider.on_list_resource_templates(await self._request_context(ctx), params)
+
+    async def _on_read_resource(self, ctx: "ServerRequestContext[Any, Any]", params: Any) -> Any:
+        assert self._resource_provider is not None
+        return await self._resource_provider.on_read_resource(await self._request_context(ctx), params)
+
     async def _on_list_tools(
         self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
     ) -> ListToolsResult:
         tools = self._executor.list_tools()
         if self._tool_provider is not None:
-            tools += self._tool_provider.list_mcp_tools(_ui_binding_filter(ctx))
+            context = await self._request_context(ctx)
+            tools += self._tool_provider.list_mcp_tools(context, _ui_binding_filter(ctx))
         return ListToolsResult(tools=tools)
 
     async def _on_call_tool(
@@ -355,7 +372,7 @@ class MCPServer:
             # Custom tools run their handler directly; everything else is the
             # agent's conversational tool (name collisions are rejected at init).
             if self._tool_provider is not None and self._tool_provider.has(params.name):
-                return await self._tool_provider.call(params.name, arguments, ctx)
+                return await self._tool_provider.call(params.name, arguments, await self._request_context(ctx))
             return await self._executor.call(
                 params.name,
                 message=arguments.get("message", ""),
@@ -369,6 +386,23 @@ class MCPServer:
             # ``str`` is empty for a bare ``raise SomeError``; the class name is the
             # least a client can act on.
             return tool_error(str(e) or type(e).__name__)
+
+    async def _request_context(self, ctx: "ServerRequestContext[Any, Any]") -> MCPExecutionContext:
+        context = MCPExecutionContext(dependencies={MCP_REQUEST_CONTEXT_DEP: ctx})
+        if self._executor.context_provider is None:
+            return context
+        provided = await self._executor.context_provider(get_access_token())
+        if provided.variables is not None:
+            context.variables.update(provided.variables)
+        if provided.dependencies is not None:
+            context.dependencies.update(provided.dependencies)
+            context.dependencies[MCP_REQUEST_CONTEXT_DEP] = ctx
+        if provided.prompt is not None:
+            if isinstance(provided.prompt, str):
+                context.prompt.append(provided.prompt)
+            else:
+                context.prompt.extend(provided.prompt)
+        return context
 
     def _advertised_input_schema(self, name: str) -> dict[str, Any] | None:
         """The ``inputSchema`` ``tools/list`` advertises for ``name``, if any.

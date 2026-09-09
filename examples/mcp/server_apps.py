@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from ag2 import Agent
 from ag2.config import AnthropicConfig
-from ag2.mcp import AppResource, MCPServer
+from ag2.mcp import MCPApp, MCPServer
 
 CATALOG = {"42": ("Espresso cup", 12), "43": ("Pour-over kettle", 48)}
 
@@ -58,7 +58,7 @@ CARD = """<!doctype html>
 </html>
 """
 
-shop = AppResource(
+shop = MCPApp(
     "ui://shop/card",
     CARD,
     title="Product card",

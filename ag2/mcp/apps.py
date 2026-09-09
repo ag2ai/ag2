@@ -6,7 +6,7 @@
 
 An **app** is a document plus the tools that render it::
 
-    shop = AppResource("ui://shop/card", CARD_HTML)
+    shop = MCPApp("ui://shop/card", CARD_HTML)
 
     @shop.tool
     async def show_item(item_id: str) -> Item:
@@ -24,26 +24,33 @@ That is the opposite of :mod:`ag2.mcp_ui`, which builds HTML inside the handler
 from the arguments it was given. The two are alternatives; this module does not
 replace that one.
 
-Nothing here is a dead end. :attr:`AppResource.tools` are ordinary
-:class:`~ag2.mcp.MCPFunctionTool`\\ s, :attr:`AppResource.resource` is an ordinary
+Nothing here is a dead end. :attr:`MCPApp.tools` are ordinary
+:class:`~ag2.mcp.MCPFunctionTool`\\ s, :attr:`MCPApp.resource` is an ordinary
 :class:`~ag2.mcp.Resource`, and ``apps=[app]`` is defined as shorthand for
 passing those two to ``tools=`` and ``resources=`` by hand.
 """
 
 import json
+import os
 import re
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
-from dataclasses import replace
+from contextlib import AsyncExitStack
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any, overload
 
 from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID, ResourceCsp, ResourcePermissions, Visibility
 from mcp.server.apps import client_supports_apps as client_supports_apps
 from mcp.types import CallToolResult, ToolAnnotations
 
+from ag2.annotations import Variable
+from ag2.tools.builtin._resolve import resolve_variable
+from ag2.utils import CONTEXT_OPTION_NAME, build_model
+
 from ._async import call_user_fn
 from .errors import MCPAppURIError, MCPDuplicateAppURIError
 from .resources import Resource as AG2Resource
-from .tools import MCPFunctionTool, ToolContext, mcp_tool, to_call_result
+from .tools import MCPExecutionContext, MCPFunctionTool, ToolContext, mcp_tool, resolve_context_value, to_call_result
 
 # The key ``_meta`` reserves for MCP Apps, on a tool and on a resource alike.
 UI_META_KEY = "ui"
@@ -62,13 +69,23 @@ TOOL_META_KEY = "ai.ag2/tool"
 # constant for the dialect spoken inside the frame.
 APP_PROTOCOL_VERSION = "2026-01-26"
 
-# The document body: a fixed string, or a sync/async callable producing one per
-# read, mirroring :class:`~ag2.mcp.Resource`'s reader contract. Text only — the
-# only MIME type a host will render a ``ui://`` resource under is HTML.
-AppBody = str | Callable[[], "Awaitable[str] | str"]
+# The document content: inline HTML, a path-like file read per request, a
+# request-time variable, or a sync/async callable producing HTML per read.
+AppContent = str | os.PathLike[str] | Variable | Callable[..., "Awaitable[str] | str"]
+AppBody = AppContent
+AppText = str | Variable
 
 
-class AppResource:
+@dataclass(frozen=True, slots=True)
+class AppSandbox:
+    """Sandbox policy for an MCP app document."""
+
+    csp: ResourceCsp | Variable | None = None
+    permissions: ResourcePermissions | Variable | None = None
+    domain: str | Variable | None = None
+
+
+class MCPApp:
     """A document and the tools that render it.
 
     ``uri`` must use the ``ui://`` scheme — a host discards anything else — and
@@ -96,52 +113,144 @@ class AppResource:
     ``@app.tool``'s ``meta`` rejects a ``ui`` key outright, since there the only
     thing in that slot is the binding the decorator itself writes.
 
-    ``bootstrap`` controls injection of the document runtime (see
+    ``inject_runtime`` controls injection of the document runtime (see
     :meth:`runtime_script`). Turn it off for a document that brings its own
     bundle: the body is then served byte-for-byte as given.
     """
 
     __slots__ = (
         "_uri",
-        "_html",
+        "_content",
         "_name",
         "_title",
         "_description",
         "_listed",
-        "_bootstrap",
+        "_inject_runtime",
+        "_sandbox",
         "_meta",
         "_tools",
+        "_frozen",
     )
+
+    @overload
+    def __init__(
+        self,
+        uri: str,
+        content: str,
+        *,
+        name: str | None = None,
+        title: AppText | None = None,
+        description: AppText | None = None,
+        listed: bool = False,
+        inject_runtime: bool | Variable = True,
+        sandbox: AppSandbox | None = None,
+        csp: ResourceCsp | Variable | None = None,
+        permissions: ResourcePermissions | Variable | None = None,
+        domain: str | Variable | None = None,
+        prefers_border: bool | Variable | None = None,
+        meta: Mapping[str, Any] | None = None,
+        tools: Sequence[Callable[..., Any] | MCPFunctionTool] = (),
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        uri: str,
+        content: os.PathLike[str],
+        *,
+        name: str | None = None,
+        title: AppText | None = None,
+        description: AppText | None = None,
+        listed: bool = False,
+        inject_runtime: bool | Variable = True,
+        sandbox: AppSandbox | None = None,
+        csp: ResourceCsp | Variable | None = None,
+        permissions: ResourcePermissions | Variable | None = None,
+        domain: str | Variable | None = None,
+        prefers_border: bool | Variable | None = None,
+        meta: Mapping[str, Any] | None = None,
+        tools: Sequence[Callable[..., Any] | MCPFunctionTool] = (),
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        uri: str,
+        content: Callable[..., Awaitable[str] | str],
+        *,
+        name: str | None = None,
+        title: AppText | None = None,
+        description: AppText | None = None,
+        listed: bool = False,
+        inject_runtime: bool | Variable = True,
+        sandbox: AppSandbox | None = None,
+        csp: ResourceCsp | Variable | None = None,
+        permissions: ResourcePermissions | Variable | None = None,
+        domain: str | Variable | None = None,
+        prefers_border: bool | Variable | None = None,
+        meta: Mapping[str, Any] | None = None,
+        tools: Sequence[Callable[..., Any] | MCPFunctionTool] = (),
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        uri: str,
+        content: Variable,
+        *,
+        name: str | None = None,
+        title: AppText | None = None,
+        description: AppText | None = None,
+        listed: bool = False,
+        inject_runtime: bool | Variable = True,
+        sandbox: AppSandbox | None = None,
+        csp: ResourceCsp | Variable | None = None,
+        permissions: ResourcePermissions | Variable | None = None,
+        domain: str | Variable | None = None,
+        prefers_border: bool | Variable | None = None,
+        meta: Mapping[str, Any] | None = None,
+        tools: Sequence[Callable[..., Any] | MCPFunctionTool] = (),
+    ) -> None: ...
 
     def __init__(
         self,
         uri: str,
-        html: AppBody,
+        content: AppContent,
         *,
         name: str | None = None,
-        title: str | None = None,
-        description: str | None = None,
+        title: AppText | None = None,
+        description: AppText | None = None,
         listed: bool = False,
-        bootstrap: bool = True,
-        csp: ResourceCsp | None = None,
-        permissions: ResourcePermissions | None = None,
-        domain: str | None = None,
-        prefers_border: bool | None = None,
+        inject_runtime: bool | Variable = True,
+        sandbox: AppSandbox | None = None,
+        csp: ResourceCsp | Variable | None = None,
+        permissions: ResourcePermissions | Variable | None = None,
+        domain: str | Variable | None = None,
+        prefers_border: bool | Variable | None = None,
         meta: Mapping[str, Any] | None = None,
+        tools: Sequence[Callable[..., Any] | MCPFunctionTool] = (),
     ) -> None:
         if not uri.startswith("ui://"):
             raise MCPAppURIError(uri)
         self._uri = uri
-        self._html = html
+        self._content = content
         self._name = name or uri
         self._title = title
         self._description = description
         self._listed = listed
-        self._bootstrap = bootstrap
+        self._inject_runtime = inject_runtime
+        self._sandbox = sandbox or AppSandbox(csp=csp, permissions=permissions, domain=domain)
         self._meta = _document_meta(
-            csp=csp, permissions=permissions, domain=domain, prefers_border=prefers_border, extra=meta
+            csp=self._sandbox.csp,
+            permissions=self._sandbox.permissions,
+            domain=self._sandbox.domain,
+            prefers_border=prefers_border,
+            extra=meta,
         )
         self._tools: list[MCPFunctionTool] = []
+        self._frozen = False
+        for tool in tools:
+            self.tool(tool)
 
     @property
     def uri(self) -> str:
@@ -167,7 +276,7 @@ class AppResource:
         return AG2Resource(
             uri=self._uri,
             name=self._name,
-            read=self._read,
+            read=_AppResourceReader(self),
             title=self._title,
             description=self._description,
             mime_type=APP_MIME_TYPE,
@@ -175,9 +284,10 @@ class AppResource:
             listed=self._listed,
         )
 
-    async def _read(self) -> str:
-        body = self._html if isinstance(self._html, str) else await call_user_fn(self._html)
-        return _inject(body, self.runtime_script()) if self._bootstrap else body
+    async def _read(self, context: MCPExecutionContext) -> str:
+        body = await _resolve_content(self._content, context)
+        inject_runtime = resolve_context_value(self._inject_runtime, context)
+        return _inject(body, self.runtime_script()) if inject_runtime else body
 
     def runtime_script(self) -> str:
         """The ``<script>`` element performing the MCP Apps handshake, as text.
@@ -195,12 +305,15 @@ class AppResource:
         promise; and automatic size reporting.
 
         This is the same text injection uses, exposed for a document that would
-        rather place it itself (with ``bootstrap=False``).
+        rather place it itself (with ``inject_runtime=False``).
         """
         return _runtime_script(self._name)
 
     @overload
     def tool(self, function: Callable[..., Any]) -> MCPFunctionTool: ...
+
+    @overload
+    def tool(self, function: MCPFunctionTool) -> MCPFunctionTool: ...
 
     @overload
     def tool(
@@ -219,7 +332,7 @@ class AppResource:
 
     def tool(
         self,
-        function: Callable[..., Any] | None = None,
+        function: Callable[..., Any] | MCPFunctionTool | None = None,
         *,
         name: str | None = None,
         description: str | None = None,
@@ -262,30 +375,65 @@ class AppResource:
         """
         if meta and UI_META_KEY in meta:
             raise ValueError(
-                f"@AppResource.tool owns _meta[{UI_META_KEY!r}]; pass visibility= rather than a 'ui' meta key, "
+                f"@MCPApp.tool owns _meta[{UI_META_KEY!r}]; pass visibility= rather than a 'ui' meta key, "
                 "or declare the tool with mcp_tool() if it should not be bound to this document."
             )
+        if self._frozen:
+            raise ValueError(f"MCPApp {self._uri!r} is frozen because it has already been registered with a server.")
         ui: dict[str, Any] = {"resourceUri": self._uri}
         if visibility is not None:
             ui["visibility"] = list(visibility)
         merged = {**(meta or {}), UI_META_KEY: ui}
 
-        def make(f: Callable[..., Any]) -> MCPFunctionTool:
-            built = mcp_tool(
-                f,
-                name=name,
-                description=description,
-                title=title,
-                annotations=annotations,
-                output_schema=output_schema,
-                meta=merged,
-                sync_to_thread=sync_to_thread,
-            )
+        def make(f: Callable[..., Any] | MCPFunctionTool) -> MCPFunctionTool:
+            if isinstance(f, MCPFunctionTool):
+                if (
+                    name is not None
+                    or description is not None
+                    or output_schema is not None
+                    or sync_to_thread is not True
+                ):
+                    raise ValueError(
+                        "Existing MCPFunctionTool objects already define name, description, schema, and execution."
+                    )
+                if f.meta and UI_META_KEY in f.meta and f.meta[UI_META_KEY].get("resourceUri") != self._uri:
+                    raise ValueError("Existing MCPFunctionTool is already bound to a different MCP app document.")
+                built = replace(
+                    f,
+                    title=title if title is not None else f.title,
+                    annotations=annotations if annotations is not None else f.annotations,
+                    meta={**dict(f.meta or {}), **merged},
+                )
+            else:
+                built = mcp_tool(
+                    f,
+                    name=name,
+                    description=description,
+                    title=title,
+                    annotations=annotations,
+                    output_schema=output_schema,
+                    meta=merged,
+                    sync_to_thread=sync_to_thread,
+                )
             stamped = replace(built, handler=_stamping(built.handler, built.name))
             self._tools.append(stamped)
             return stamped
 
         return make(function) if function is not None else make
+
+    def freeze(self) -> None:
+        """Freeze the app's routing identity and tool composition."""
+        self._frozen = True
+
+
+class _AppResourceReader:
+    __slots__ = ("_app",)
+
+    def __init__(self, app: MCPApp) -> None:
+        self._app = app
+
+    async def __call__(self, context: MCPExecutionContext) -> str:
+        return await self._app._read(context)
 
 
 def _stamping(handler: Callable[..., Any], tool_name: str) -> Callable[[dict[str, Any], ToolContext], Any]:
@@ -339,7 +487,7 @@ def binds_ui(tools: "Iterable[MCPFunctionTool]") -> bool:
     return any(tool.meta and UI_META_KEY in tool.meta for tool in tools)
 
 
-def collect_apps(apps: "Iterable[AppResource]") -> "tuple[tuple[MCPFunctionTool, ...], tuple[AG2Resource, ...]]":
+def collect_apps(apps: "Iterable[MCPApp]") -> "tuple[tuple[MCPFunctionTool, ...], tuple[AG2Resource, ...]]":
     """The tools and resources ``apps`` contributes, refusing a shared document URI.
 
     Two apps claiming one URI would silently shadow each other — one document
@@ -354,25 +502,50 @@ def collect_apps(apps: "Iterable[AppResource]") -> "tuple[tuple[MCPFunctionTool,
         if app.uri in seen:
             raise MCPDuplicateAppURIError(app.uri)
         seen.add(app.uri)
+        app.freeze()
         tools.extend(app.tools)
         resources.append(app.resource)
     return tuple(tools), tuple(resources)
 
 
+async def _resolve_content(content: AppContent, context: MCPExecutionContext) -> str:
+    resolved = resolve_variable(content, context, param_name="content")
+    if isinstance(resolved, str):
+        return resolved
+    if isinstance(resolved, os.PathLike):
+        try:
+            return Path(resolved).read_text()
+        except OSError as e:
+            raise ValueError(f"Could not read MCP app document from {resolved!s}: {e.strerror or e}") from e
+    if callable(resolved):
+        call_model = build_model(resolved, serialize_result=False)
+        async with AsyncExitStack() as stack:
+            value = await call_model.asolve(
+                **{CONTEXT_OPTION_NAME: context},
+                stack=stack,
+                cache_dependencies={},
+                dependency_provider=context.dependency_provider,
+            )
+        if isinstance(value, str):
+            return value
+        raise TypeError(f"MCP app content provider returned {type(value).__name__}; expected str.")
+    raise TypeError(f"MCP app content resolved to {type(resolved).__name__}; expected str, path-like, or callable.")
+
+
 def _document_meta(
     *,
-    csp: "ResourceCsp | None",
-    permissions: "ResourcePermissions | None",
-    domain: str | None,
-    prefers_border: bool | None,
+    csp: "ResourceCsp | Variable | None",
+    permissions: "ResourcePermissions | Variable | None",
+    domain: str | Variable | None,
+    prefers_border: bool | Variable | None,
     extra: "Mapping[str, Any] | None",
 ) -> dict[str, Any]:
     """The document's ``_meta``: its sandbox policy under ``ui``, plus a passthrough."""
     ui: dict[str, Any] = {}
     if csp is not None:
-        ui["csp"] = csp.model_dump(by_alias=True, exclude_none=True)
+        ui["csp"] = csp
     if permissions is not None:
-        ui["permissions"] = permissions.model_dump(by_alias=True, exclude_none=True)
+        ui["permissions"] = permissions
     if domain is not None:
         ui["domain"] = domain
     if prefers_border is not None:
@@ -661,7 +834,9 @@ __all__ = (
     "TOOL_META_KEY",
     "UI_META_KEY",
     "AppBody",
-    "AppResource",
+    "AppContent",
+    "AppSandbox",
+    "MCPApp",
     "ResourceCsp",
     "ResourcePermissions",
     "Visibility",

@@ -7,24 +7,28 @@
 Everything here drives a real :class:`~ag2.mcp.MCPServer` through the real
 protocol and asserts on what crosses the wire — the tool list a client receives,
 the document it reads, the result it gets back. The one unavoidable exception is
-:meth:`~ag2.mcp.apps.AppResource.runtime_script`, which is a string as far as Python is
+:meth:`~ag2.mcp.apps.MCPApp.runtime_script`, which is a string as far as Python is
 concerned; what it does in a browser is not reachable from this suite and no
 attempt is made to fake it.
 """
 
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import Annotated, Any
 
 import pytest
 from dirty_equals import IsPartialDict
 from mcp.client.extension import advertise
 from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID, ResourceCsp, ResourcePermissions
+from mcp.shared.exceptions import MCPError
 from mcp.types import CallToolResult, DiscoverResult, TextContent, TextResourceContents
 from mcp_types.version import LATEST_MODERN_VERSION
 
-from ag2.mcp import AppResource, MCPServer, client_supports_apps, mcp_tool
+from ag2 import Inject, Variable
+from ag2.mcp import AppSandbox, MCPApp, MCPServer, client_supports_apps, mcp_tool
 from ag2.mcp.apps import TOOL_META_KEY
 from ag2.mcp.errors import MCPAppURIError, MCPDuplicateAppURIError, MCPToolNameConflictError
+from ag2.mcp.executor import AskContext
 from ag2.mcp.testing import connect, connect_modern
 from ag2.mcp.tools import MCPRequestContext
 
@@ -46,9 +50,9 @@ class Item:
         return f"{self.name} costs {self.price}."
 
 
-def _card_app(html: Any = CARD, **kwargs: Any) -> AppResource:
+def _card_app(html: Any = CARD, **kwargs: Any) -> MCPApp:
     """An app with one tool, built fresh so each test owns its own tool list."""
-    app = AppResource("ui://shop/card", html, **kwargs)
+    app = MCPApp("ui://shop/card", html, **kwargs)
 
     @app.tool
     async def show_item(item_id: str) -> Item:
@@ -74,7 +78,7 @@ class TestTheBinding:
         assert tool_named(listed, "show_item").meta == {"ui": {"resourceUri": "ui://shop/card"}}
 
     async def test_several_tools_on_one_app_all_carry_it(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         @app.tool
         async def render() -> Item:
@@ -93,7 +97,7 @@ class TestTheBinding:
         assert tool_named(listed, "refresh").meta == {"ui": {"resourceUri": "ui://shop/card", "visibility": ["app"]}}
 
     async def test_authors_own_meta_travels_alongside_the_binding(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         @app.tool(meta={"com.example/hint": "left"})
         async def render() -> Item:
@@ -109,7 +113,7 @@ class TestTheBinding:
         }
 
     async def test_a_ui_meta_key_is_refused(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         with pytest.raises(ValueError, match="owns _meta"):
 
@@ -122,7 +126,7 @@ class TestTheBinding:
 @pytest.mark.asyncio
 class TestTheDocument:
     async def test_it_is_read_with_the_required_mime_type(self) -> None:
-        server = MCPServer(make_agent(), apps=[_card_app(bootstrap=False)])
+        server = MCPServer(make_agent(), apps=[_card_app(inject_runtime=False)])
 
         async with connect(server) as session:
             read = await session.read_resource("ui://shop/card")
@@ -176,6 +180,34 @@ class TestTheDocument:
 
         assert "async" in _body(read.contents[0])
 
+    async def test_a_string_body_is_never_treated_as_a_path(self) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app("missing.html", inject_runtime=False)])
+
+        async with connect(server) as session:
+            read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == "missing.html"
+
+    async def test_a_pathlike_body_is_reread_per_request(self, tmp_path: Path) -> None:
+        document = tmp_path / "card.html"
+        document.write_text("<p>first</p>")
+        server = MCPServer(make_agent(), apps=[_card_app(document, inject_runtime=False)])
+
+        async with connect(server) as session:
+            first = await session.read_resource("ui://shop/card")
+            document.write_text("<p>second</p>")
+            second = await session.read_resource("ui://shop/card")
+
+        assert _body(first.contents[0]) == "<p>first</p>"
+        assert _body(second.contents[0]) == "<p>second</p>"
+
+    async def test_a_missing_pathlike_body_fails_on_read(self, tmp_path: Path) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(tmp_path / "missing.html")])
+
+        async with connect(server, raise_exceptions=False) as session:
+            with pytest.raises(MCPError, match="Could not read MCP app document"):
+                await session.read_resource("ui://shop/card")
+
     async def test_sandbox_policy_reaches_the_documents_meta(self) -> None:
         app = _card_app(
             csp=ResourceCsp(connect_domains=["https://api.example.com"]),
@@ -194,6 +226,38 @@ class TestTheDocument:
                 "domain": "https://shop.example.com",
                 "prefersBorder": True,
             }
+        }
+
+    async def test_document_options_resolve_request_scoped_variables(self) -> None:
+        async def provider(access: object) -> AskContext:
+            return AskContext(
+                variables={
+                    "domain": "https://tenant.example.com",
+                    "border": True,
+                    "inject": False,
+                    "title": "Tenant card",
+                    "rev": 7,
+                }
+            )
+
+        app = _card_app(
+            inject_runtime=Variable("inject"),
+            title=Variable("title"),
+            sandbox=AppSandbox(domain=Variable("domain")),
+            prefers_border=Variable("border"),
+            meta={"com.example/rev": Variable("rev")},
+            listed=True,
+        )
+
+        async with connect(MCPServer(make_agent(), apps=[app], context_provider=provider)) as session:
+            listed = await session.list_resources()
+            read = await session.read_resource("ui://shop/card")
+
+        assert [r.model_dump() for r in listed.resources] == [IsPartialDict({"title": "Tenant card"})]
+        assert _body(read.contents[0]) == CARD
+        assert read.contents[0].meta == {
+            "com.example/rev": 7,
+            "ui": {"domain": "https://tenant.example.com", "prefersBorder": True},
         }
 
     async def test_raw_meta_passes_through_alongside_the_policy(self) -> None:
@@ -216,7 +280,7 @@ class TestTheDocument:
 
     async def test_a_non_ui_uri_raises_at_construction(self) -> None:
         with pytest.raises(MCPAppURIError, match="ui://"):
-            AppResource("https://shop/card", CARD)
+            MCPApp("https://shop/card", CARD)
 
     async def test_two_apps_sharing_a_uri_raise_at_construction(self) -> None:
         with pytest.raises(MCPDuplicateAppURIError, match="ui://shop/card"):
@@ -253,7 +317,7 @@ class TestTheRuntime:
         assert served.index("window.ag2ui") < served.index("<body>")
 
     async def test_it_lands_inside_a_head_tag_carrying_attributes(self) -> None:
-        app = AppResource(
+        app = MCPApp(
             "ui://shop/card",
             '<html><head\n  lang="en"><title>Card</title></head><body></body></html>',
         )
@@ -267,7 +331,7 @@ class TestTheRuntime:
         assert served.index("window.ag2ui") < served.index("<title>")
 
     async def test_it_lands_after_the_html_tag_when_there_is_no_head(self) -> None:
-        app = AppResource("ui://shop/card", "<html><body><div id='card'></div></body></html>")
+        app = MCPApp("ui://shop/card", "<html><body><div id='card'></div></body></html>")
         server = MCPServer(make_agent(), apps=[app])
 
         async with connect(server) as session:
@@ -276,7 +340,7 @@ class TestTheRuntime:
         assert served == "<html>" + app.runtime_script() + "<body><div id='card'></div></body></html>"
 
     async def test_a_fragment_gets_it_at_the_front(self) -> None:
-        app = AppResource("ui://shop/card", "<div id='card'></div>")
+        app = MCPApp("ui://shop/card", "<div id='card'></div>")
         server = MCPServer(make_agent(), apps=[app])
 
         async with connect(server) as session:
@@ -284,8 +348,8 @@ class TestTheRuntime:
 
         assert served == app.runtime_script() + "<div id='card'></div>"
 
-    async def test_turning_injection_off_leaves_the_document_byte_for_byte(self) -> None:
-        server = MCPServer(make_agent(), apps=[_card_app(bootstrap=False)])
+    async def test_inject_runtime_off_leaves_the_document_byte_for_byte(self) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(inject_runtime=False)])
 
         async with connect(server) as session:
             read = await session.read_resource("ui://shop/card")
@@ -309,7 +373,7 @@ class TestTheRuntime:
         assert 'protocolVersion: "2026-01-26"' in script
 
     async def test_it_cannot_be_closed_by_the_apps_own_name(self) -> None:
-        app = AppResource("ui://x/y", "<p>hi</p>", name="</script><script>alert(1)</script>")
+        app = MCPApp("ui://x/y", "<p>hi</p>", name="</script><script>alert(1)</script>")
 
         assert "</script><script>" not in app.runtime_script()
 
@@ -338,7 +402,7 @@ class TestDegradation:
         assert tool_named(listed, "show_item").meta is None
 
     async def test_other_meta_survives_the_withholding(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         @app.tool(meta={"com.example/hint": "left"})
         async def render() -> Item:
@@ -351,7 +415,7 @@ class TestDegradation:
         assert tool_named(listed, "render").meta == {"com.example/hint": "left"}
 
     async def test_a_handler_can_ask_whether_the_client_will_render(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         @app.tool
         async def render(ctx: MCPRequestContext) -> str:
@@ -365,6 +429,24 @@ class TestDegradation:
 
         assert text_of(with_ui) == "a card is coming"
         assert text_of(without_ui) == "Espresso cup, $12, in stock."
+
+    async def test_document_provider_receives_request_scoped_dependencies(self) -> None:
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"tenant": "north"}, dependencies={"catalog": {"sku": "mug"}})
+
+        async def body(
+            tenant: Annotated[str, Variable("tenant")],
+            catalog: Annotated[dict[str, str], Inject("catalog")],
+            ctx: MCPRequestContext,
+        ) -> str:
+            return f"<p>{tenant}:{catalog['sku']}:{ctx.session is not None}</p>"
+
+        app = MCPApp("ui://shop/card", body, inject_runtime=False)
+
+        async with connect(MCPServer(make_agent(), apps=[app], context_provider=provider)) as session:
+            read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == "<p>north:mug:True</p>"
 
     async def test_a_modern_client_that_advertised_sees_the_binding(self) -> None:
         server = MCPServer(make_agent(), apps=[_card_app()])
@@ -424,7 +506,7 @@ class TestWhichToolAnswered:
         assert result.structured_content == {"name": "mug", "price": 10}
 
     async def test_a_renamed_tool_is_stamped_with_its_advertised_name(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         @app.tool(name="show")
         async def show_item() -> Item:
@@ -437,7 +519,7 @@ class TestWhichToolAnswered:
         assert result.meta == {TOOL_META_KEY: "show"}
 
     async def test_a_fully_formed_result_is_stamped_too(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         @app.tool
         async def render() -> CallToolResult:
@@ -455,7 +537,7 @@ class TestWhichToolAnswered:
         assert result.structured_content == {"name": "mug"}
 
     async def test_an_author_who_sets_the_key_keeps_their_value(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         @app.tool
         async def render() -> CallToolResult:
@@ -468,7 +550,7 @@ class TestWhichToolAnswered:
         assert result.meta == {TOOL_META_KEY: "card:refresh"}
 
     async def test_other_meta_the_author_set_is_preserved_alongside_the_stamp(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         @app.tool
         async def render() -> CallToolResult:
@@ -540,7 +622,7 @@ class TestDecomposition:
         assert discovered.capabilities.extensions == {EXTENSION_ID: {}}
 
     async def test_an_apps_tool_names_still_conflict_with_the_agents(self) -> None:
-        app = AppResource("ui://shop/card", CARD)
+        app = MCPApp("ui://shop/card", CARD)
 
         @app.tool(name="ask")
         async def render() -> Item:
@@ -549,6 +631,34 @@ class TestDecomposition:
 
         with pytest.raises(MCPToolNameConflictError, match="conversational tool"):
             MCPServer(make_agent(), apps=[app])
+
+    async def test_an_existing_tool_is_copied_when_bound_to_an_app(self) -> None:
+        @mcp_tool(meta={"com.example/hint": "left"})
+        async def render() -> str:
+            """Render."""
+            return "ok"
+
+        app = MCPApp("ui://shop/card", CARD, tools=[render])
+
+        assert render.meta == {"com.example/hint": "left"}
+        assert app.tools[0].meta == {"com.example/hint": "left", "ui": {"resourceUri": "ui://shop/card"}}
+
+    async def test_late_tool_registration_after_server_construction_is_rejected(self) -> None:
+        app = _card_app()
+        MCPServer(make_agent(), apps=[app])
+
+        with pytest.raises(ValueError, match="frozen"):
+
+            @app.tool
+            async def late() -> str:
+                """Too late."""
+                return "late"
+
+    async def test_a_frozen_app_can_be_registered_more_than_once(self) -> None:
+        app = _card_app()
+
+        MCPServer(make_agent(), apps=[app])
+        MCPServer(make_agent(), apps=[app])
 
 
 @pytest.mark.asyncio
