@@ -16,77 +16,26 @@ carries on. Asserting "this ends the turn" against a re-raising double would
 assert the double.
 """
 
-from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
+from dirty_equals import IsPartialDict
 from mcp.client.session import ClientRequestContext
-from mcp.types import ElicitRequestParams, ElicitResult, ErrorData, TextContent
+from mcp.types import ElicitRequestFormParams, ElicitRequestParams, ElicitResult, TextContent
 
-from ag2 import Agent, Context
-from ag2.events import HumanInputRequest, HumanMessage, ToolCallEvent
+from ag2.events import HumanInputRequest, HumanMessage
 from ag2.mcp import MCPServer
 from ag2.mcp.elicitation import ANSWER_FIELD
 from ag2.mcp.testing import connect
-from ag2.testing import TestConfig
 
-ElicitationCallback = Callable[[ClientRequestContext, ElicitRequestParams], Awaitable[ElicitResult | ErrorData]]
-
-
-def asking_agent(
-    *,
-    hitl_hook: Any = None,
-    question: str = "What colour?",
-    answers: list[str] | None = None,
-) -> Agent:
-    """An agent whose one tool asks the human a question.
-
-    ``answers`` collects what ``context.input()`` actually returned, which is the
-    assertion that matters: the turn completing proves only that *something*
-    answered.
-    """
-
-    async def ask_human(ctx: Context) -> str:
-        answer = await ctx.input(question)
-        if answers is not None:
-            answers.append(answer)
-        return f"human said: {answer}"
-
-    return Agent(
-        "asker",
-        config=TestConfig(ToolCallEvent(name="ask_human"), "done", raise_tool_errors=False),
-        tools=[ask_human],
-        hitl_hook=hitl_hook,
-    )
-
-
-def answering(answer: str, *, seen: list[str] | None = None) -> ElicitationCallback:
-    """A client-side elicitation callback that accepts with ``answer``."""
-
-    async def callback(context: ClientRequestContext, params: ElicitRequestParams) -> ElicitResult:
-        if seen is not None:
-            seen.append(params.message)
-        return ElicitResult(action="accept", content={ANSWER_FIELD: answer})
-
-    return callback
-
-
-def refusing(action: str = "decline", *, seen: list[str] | None = None) -> ElicitationCallback:
-    async def callback(context: ClientRequestContext, params: ElicitRequestParams) -> ElicitResult:
-        if seen is not None:
-            seen.append(params.message)
-        return ElicitResult(action=action)  # type: ignore[arg-type]
-
-    return callback
+from ._helpers import Asked, answering, asking_agent, first_text, refusing
 
 
 async def _tool_result_text(server: MCPServer, **session_kwargs: Any) -> tuple[bool, str]:
     """Call ``ask`` once and return ``(is_error, the first text block)``."""
     async with connect(server, raise_exceptions=False, **session_kwargs) as session:
         result = await session.call_tool("ask", {"message": "go"})
-    first = result.content[0]
-    assert isinstance(first, TextContent)
-    return bool(result.is_error), first.text
+    return bool(result.is_error), first_text(result)
 
 
 @pytest.mark.asyncio
@@ -105,13 +54,13 @@ class TestHandshakeEraElicitation:
 
     async def test_the_answer_is_what_the_tool_receives(self) -> None:
         """``context.input()`` returns the client's answer, not merely a completion."""
-        answers: list[str] = []
-        server = MCPServer(asking_agent(answers=answers))
+        asked = Asked()
+        server = MCPServer(asking_agent(asked))
 
         async with connect(server, elicitation_callback=answering("teal")) as session:
             await session.call_tool("ask", {"message": "go"})
 
-        assert answers == ["teal"]
+        assert asked.answers == ["teal"]
 
     async def test_a_client_that_cannot_answer_is_never_asked(self) -> None:
         """No elicitation callback means no advertised capability, so nothing is sent."""
@@ -131,30 +80,30 @@ class TestHandshakeEraElicitation:
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
             return HumanMessage("from the server-side human")
 
-        answers: list[str] = []
+        asked = Asked()
 
-        async with connect(MCPServer(asking_agent(hitl_hook=hitl_hook, answers=answers))) as session:
+        async with connect(MCPServer(asking_agent(asked, hitl_hook=hitl_hook))) as session:
             result = await session.call_tool("ask", {"message": "go"})
 
         assert result.is_error is False
-        assert answers == ["from the server-side human"]
+        assert asked.answers == ["from the server-side human"]
 
     async def test_the_client_wins_over_the_agents_own_hook(self) -> None:
         """The whole point: HITL over MCP without wiring a second, server-side human."""
-        asked: list[str] = []
+        consulted: list[str] = []
 
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-            asked.append(event.content)
+            consulted.append(event.content)
             return HumanMessage("from the server-side human")
 
-        answers: list[str] = []
-        server = MCPServer(asking_agent(hitl_hook=hitl_hook, answers=answers))
+        asked = Asked()
+        server = MCPServer(asking_agent(asked, hitl_hook=hitl_hook))
 
         async with connect(server, elicitation_callback=answering("from the client")) as session:
             await session.call_tool("ask", {"message": "go"})
 
-        assert asked == [], "the server-side hook was consulted even though the client could answer"
-        assert answers == ["from the client"]
+        assert consulted == [], "the server-side hook was consulted even though the client could answer"
+        assert asked.answers == ["from the client"]
 
     async def test_the_decline_policy_never_asks_a_client_that_could_answer(self) -> None:
         seen: list[str] = []
@@ -208,6 +157,9 @@ class TestHandshakeEraElicitation:
             await session.call_tool("ask", {"message": "go"})
 
         (form,) = forms
-        assert form.mode == "form"
-        assert form.requested_schema["required"] == [ANSWER_FIELD]  # type: ignore[union-attr]
-        assert form.requested_schema["properties"][ANSWER_FIELD]["type"] == "string"  # type: ignore[union-attr]
+        assert isinstance(form, ElicitRequestFormParams), "a free-text answer only fits form mode"
+        assert form.requested_schema == IsPartialDict({
+            "type": "object",
+            "properties": {ANSWER_FIELD: IsPartialDict({"type": "string"})},
+            "required": [ANSWER_FIELD],
+        })

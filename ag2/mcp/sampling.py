@@ -3,22 +3,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """Run a served agent's own reasoning on the *calling client's* model.
 
-Three things move to the caller, and none is visible on the wire: **cost**, since
-every turn spends their budget; **capability**, since which model answers is a
-fact about the client rather than this deployment; and **reproducibility**, since
-a trace cannot be re-run against a model that was the peer's. So it is off unless
-a :class:`ClientModel` is passed, never on because the transport allows it — and
-a turn needing tools or a response schema refuses rather than losing them, since
-this channel carries neither.
+Cost, capability and reproducibility all move to the caller, so this is off
+unless ``MCPServer(..., client_model=True)`` says otherwise — and a turn needing
+tools or a response schema refuses rather than losing them, since this channel
+carries neither.
 
-The request travels exactly as a question does — a standalone
+The request travels exactly as a question does: a standalone
 ``sampling/createMessage`` up to 2025-11-25, and from 2026-07-28 back as the
-call's result — over the same :class:`~ag2.mcp.pause.SuspendedTurn`.
+call's result, over the same :class:`~ag2.mcp.pause.SuspendedTurn`.
 """
 
 import base64
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from fast_depends.library.serializer import SerializerProto
@@ -58,28 +54,10 @@ logger = logging.getLogger(__name__)
 UNKNOWN_MODEL = "unknown"
 
 
-@dataclass(frozen=True, slots=True)
-class ClientModel:
-    """Serve an agent whose model is the calling client's.
-
-    The caller pays for every turn, the model that answers is theirs rather than
-    yours, and a trace cannot be re-run against a known model afterwards. Read
-    :mod:`ag2.mcp.sampling` before enabling it.
-
-    Passing this is the deployment's consent to spend the caller's budget, and
-    that is all it decides. *Which* model wins when the caller cannot lend one is
-    read off the agent instead: an agent with a ``config`` falls back to it, an
-    agent without one fails. There is deliberately no second switch for that —
-    ``fallback=True`` on an agent with no model was a no-op, and ``fallback=False``
-    on an agent with one meant "refuse, though a model is right here".
-
-    Attributes:
-        max_tokens: The generation bound sent with each request, and the only
-            generation parameter sent: the rest belong to a model configuration,
-            and here there is none to take them from.
-    """
-
-    max_tokens: int = 4096
+# The generation bound sent with each borrowed request, and the only generation
+# parameter sent: the rest belong to a model configuration, and a borrowed model
+# has none to take them from.
+CLIENT_MODEL_MAX_TOKENS = 4096
 
 
 def client_can_sample(session: "ServerSession") -> bool:
@@ -91,8 +69,7 @@ def client_can_sample(session: "ServerSession") -> bool:
 class ClientModelConfig(ModelConfig):
     """A :class:`~ag2.config.ModelConfig` whose completions run on the MCP peer.
 
-    Built per turn: what it holds — the live request context, and the suspended
-    run to ask through — belongs to one call.
+    Built per turn: the request context it holds belongs to one call.
     """
 
     __slots__ = ("_request_context", "_suspended", "_max_tokens")
@@ -160,9 +137,9 @@ class ClientModelClient(LLMClient):
         """Ask the peer to complete this conversation, and read the answer back.
 
         Raises:
-            MCPSamplingRefusedError: The agent needs something this channel
-                cannot carry — tools, or a structured response — or the peer
-                answered with something other than a usable completion.
+            MCPSamplingRefusedError: The agent needs tools or a structured
+                response, which this channel cannot carry, or the peer answered
+                with something other than a usable completion.
         """
         if any(True for _ in tools):
             raise MCPSamplingRefusedError(
@@ -219,9 +196,8 @@ def _as_completion(result: Any) -> CreateMessageResult:
 def to_sampling_messages(messages: "Sequence[BaseEvent]") -> list[SamplingMessage]:
     """Render the agent's conversation as the sampling messages the peer receives.
 
-    Text, images and audio under the protocol's two roles. Tool traffic cannot
-    occur — a turn on this model refuses tools before it starts — and anything
-    else is logged and dropped rather than guessed at.
+    Text, images and audio under the protocol's two roles; anything else is
+    logged and dropped rather than guessed at.
     """
     rendered: list[SamplingMessage] = []
     for message in messages:
@@ -255,11 +231,8 @@ def _b64(data: bytes) -> str:
 def _text_of(result: CreateMessageResult) -> str:
     """The completion's text, or refuse because there is none.
 
-    An image- or audio-only completion recorded as ``""`` would report success
-    while the agent answered with nothing.
-
     Raises:
-        MCPSamplingRefusedError: The peer's completion carries no text.
+        MCPSamplingRefusedError: The peer's completion carries no text block.
     """
     content = result.content
     blocks = content if isinstance(content, list) else [content]
@@ -275,7 +248,6 @@ def _text_of(result: CreateMessageResult) -> str:
 
 __all__ = (
     "UNKNOWN_MODEL",
-    "ClientModel",
     "ClientModelClient",
     "ClientModelConfig",
     "client_can_sample",

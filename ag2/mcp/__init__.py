@@ -5,11 +5,16 @@
 from ag2.exceptions import missing_optional_dependency
 
 try:
+    # Curated MCP SDK re-exports: the names AG2's own deterministic-tool examples
+    # type. The rest of the SDK is not mirrored — import wire models and less
+    # common types from ``mcp`` directly.
+    from mcp.server.mcpserver import Elicit, ListRoots, Resolve, Sample
+    from mcp.server.request_state import RequestStateSecurity
+
     from .executor import AskContext, ContextProvider
     from .info import build_ask_tool
     from .prompts import Prompt, PromptArgument, PromptMessage
     from .resources import Resource, ResourceTemplate
-    from .sampling import ClientModel
     from .server import MCPServer
     from .sessions import SessionConfig
     from .tools import MCPFunctionTool, mcp_tool
@@ -19,7 +24,6 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
     AskContext = missing_optional_dependency("AskContext", "mcp", e)  # type: ignore[misc]
     ContextProvider = missing_optional_dependency("ContextProvider", "mcp", e)  # type: ignore[misc]
     SessionConfig = missing_optional_dependency("SessionConfig", "mcp", e)  # type: ignore[misc]
-    ClientModel = missing_optional_dependency("ClientModel", "mcp", e)  # type: ignore[misc]
     Resource = missing_optional_dependency("Resource", "mcp", e)  # type: ignore[misc]
     ResourceTemplate = missing_optional_dependency("ResourceTemplate", "mcp", e)  # type: ignore[misc]
     Prompt = missing_optional_dependency("Prompt", "mcp", e)  # type: ignore[misc]
@@ -27,18 +31,27 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
     PromptMessage = missing_optional_dependency("PromptMessage", "mcp", e)  # type: ignore[misc]
     MCPFunctionTool = missing_optional_dependency("MCPFunctionTool", "mcp", e)  # type: ignore[misc]
     mcp_tool = missing_optional_dependency("mcp_tool", "mcp", e)  # type: ignore[misc]
+    Elicit = missing_optional_dependency("Elicit", "mcp", e)  # type: ignore[misc]
+    ListRoots = missing_optional_dependency("ListRoots", "mcp", e)  # type: ignore[misc]
+    Resolve = missing_optional_dependency("Resolve", "mcp", e)  # type: ignore[misc]
+    Sample = missing_optional_dependency("Sample", "mcp", e)  # type: ignore[misc]
+    RequestStateSecurity = missing_optional_dependency("RequestStateSecurity", "mcp", e)  # type: ignore[misc]
 
 __all__ = (
     "AskContext",
-    "ClientModel",
     "ContextProvider",
+    "Elicit",
+    "ListRoots",
     "MCPFunctionTool",
     "MCPServer",
     "Prompt",
     "PromptArgument",
     "PromptMessage",
+    "RequestStateSecurity",
+    "Resolve",
     "Resource",
     "ResourceTemplate",
+    "Sample",
     "SessionConfig",
     "build_ask_tool",
     "mcp_tool",

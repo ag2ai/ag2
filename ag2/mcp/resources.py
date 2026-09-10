@@ -143,12 +143,7 @@ class ResourceProvider:
 
 
 def _to_wire_contents(uri: str, contents: ReadResourceContents) -> TextResourceContents | BlobResourceContents:
-    """Map a read body onto the wire contents variant matching its type.
-
-    ``mcp`` 1.x did this inside the ``read_resource`` decorator; the 2.0 handler
-    returns a complete result, so the mapping — and its MIME-type defaults, which
-    :class:`Resource` documents — moves here.
-    """
+    """Map a read body onto the wire contents variant matching its type."""
     if isinstance(contents.content, bytes):
         return BlobResourceContents(
             uri=uri,

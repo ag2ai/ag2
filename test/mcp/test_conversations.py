@@ -14,13 +14,12 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from dirty_equals import IsPartialDict, IsStr
-from mcp.server.streamable_http import CONTENT_TYPE_JSON, CONTENT_TYPE_SSE, MCP_SESSION_ID_HEADER
+from mcp.server.streamable_http import MCP_SESSION_ID_HEADER
 from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, MCP_PROTOCOL_VERSION_HEADER
-from mcp.types import CallToolResult, TextContent
+from mcp.types import TextContent
 from mcp.types import Tool as MCPTool
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from mcp_types.version import LATEST_HANDSHAKE_VERSION, LATEST_MODERN_VERSION
-from pydantic import BaseModel
 
 from ag2 import Agent, Context
 from ag2.context import StreamId
@@ -33,14 +32,7 @@ from ag2.mcp.testing import connect, connect_modern, serve
 from ag2.mcp.tools import ToolContext
 from ag2.testing import TestConfig
 
-from ._helpers import RecordingConfig
-
-_JSON = {"Accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}", "Content-Type": CONTENT_TYPE_JSON}
-
-
-class Weather(BaseModel):
-    city: str
-    temp_c: float
+from ._helpers import JSON_HEADERS, RecordingConfig, Weather, handle_of
 
 
 def _agent(config: RecordingConfig) -> Agent:
@@ -104,7 +96,7 @@ async def _modern_call_with_response(
     if conversation is not None:
         arguments["conversation"] = conversation
     headers = {
-        **_JSON,
+        **JSON_HEADERS,
         MCP_PROTOCOL_VERSION_HEADER: LATEST_MODERN_VERSION,
         MCP_METHOD_HEADER: "tools/call",
         MCP_NAME_HEADER: "ask",
@@ -136,7 +128,7 @@ async def _open_handshake_session(
     client: httpx.AsyncClient, *, request_id: int, token: str | None = None
 ) -> dict[str, str]:
     """Run the ``initialize`` handshake and return the headers its session needs."""
-    opening = _JSON if token is None else {**_JSON, "Authorization": f"Bearer {token}"}
+    opening = JSON_HEADERS if token is None else {**JSON_HEADERS, "Authorization": f"Bearer {token}"}
     response = await client.post(
         "/mcp",
         headers=opening,
@@ -247,14 +239,8 @@ class TestHandshakeEraContinuity:
         assert config.prompts == [["first"], ["second"]]
 
 
-def _handle(result: CallToolResult) -> str:
-    """The conversation handle a result carries, as a programmatic client reads it."""
-    assert result.meta is not None
-    return result.meta[CONVERSATION_META_KEY]
-
-
-def _modern_handle(result: dict[str, Any]) -> str:
-    """:func:`_handle` for the raw JSON a modern-era POST returns."""
+def _modernhandle_of(result: dict[str, Any]) -> str:
+    """:func:`handle_of` for the raw JSON a modern-era POST returns."""
     return str(result["_meta"][CONVERSATION_META_KEY])
 
 
@@ -262,23 +248,23 @@ def _modern_handle(result: dict[str, Any]) -> str:
 class TestConversationHandle:
     """Continuity the caller names, which is the only kind the modern era has."""
 
-    async def test_modern_era_continues_by_handle(self) -> None:
+    async def test_modern_era_continues_byhandle_of(self) -> None:
         config = RecordingConfig(TestConfig("ok", "ok"))
         server = MCPServer(_agent(config))
 
         async with connect_modern(server) as session:
             first = await session.call_tool("ask", {"message": "first"})
-            await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
+            await session.call_tool("ask", {"message": "second", "conversation": handle_of(first)})
 
         assert config.prompts == [["first"], ["first", "second"]]
 
-    async def test_handshake_era_continues_by_handle(self) -> None:
+    async def test_handshake_era_continues_byhandle_of(self) -> None:
         config = RecordingConfig(TestConfig("ok", "ok"))
         server = MCPServer(_agent(config))
 
         async with connect(server) as session:
             first = await session.call_tool("ask", {"message": "first"})
-            await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
+            await session.call_tool("ask", {"message": "second", "conversation": handle_of(first)})
 
         assert config.prompts == [["first"], ["first", "second"]]
 
@@ -287,8 +273,8 @@ class TestConversationHandle:
         server = MCPServer(_agent(config))
 
         async with connect_modern(server) as session:
-            one = _handle(await session.call_tool("ask", {"message": "one"}))
-            two = _handle(await session.call_tool("ask", {"message": "two"}))
+            one = handle_of(await session.call_tool("ask", {"message": "one"}))
+            two = handle_of(await session.call_tool("ask", {"message": "two"}))
             await session.call_tool("ask", {"message": "one again", "conversation": one})
             await session.call_tool("ask", {"message": "two again", "conversation": two})
 
@@ -306,7 +292,7 @@ class TestConversationHandle:
         async with connect_modern(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
-        handle = _handle(result)
+        handle = handle_of(result)
         # The agent's own reply leads; the handle rides in the block after it, so
         # the model can recover from an expired one without reading `_meta`.
         reply, trailer = result.content
@@ -317,8 +303,8 @@ class TestConversationHandle:
         server = MCPServer(_agent(RecordingConfig(TestConfig("ok", "ok"))))
 
         async with connect_modern(server) as session:
-            first = _handle(await session.call_tool("ask", {"message": "one"}))
-            second = _handle(await session.call_tool("ask", {"message": "two"}))
+            first = handle_of(await session.call_tool("ask", {"message": "one"}))
+            second = handle_of(await session.call_tool("ask", {"message": "two"}))
 
         # Version-4 UUIDs: opaque, unguessable, and header-safe.
         assert UUID(first).version == 4
@@ -347,16 +333,16 @@ class TestBlankHandle:
         assert result.is_error is False
         # A handle comes back, so the caller that could not omit the key can still
         # continue what it just started.
-        assert UUID(_handle(result)).version == 4
+        assert UUID(handle_of(result)).version == 4
         assert config.prompts == [["first"]]
 
-    async def test_the_conversation_it_started_continues_by_its_handle(self) -> None:
+    async def test_the_conversation_it_started_continues_by_itshandle_of(self) -> None:
         config = RecordingConfig(TestConfig("ok", "ok"))
         server = MCPServer(_agent(config))
 
         async with connect_modern(server) as session:
             first = await session.call_tool("ask", {"message": "first", "conversation": ""})
-            await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
+            await session.call_tool("ask", {"message": "second", "conversation": handle_of(first)})
 
         assert config.prompts == [["first"], ["first", "second"]]
 
@@ -502,11 +488,11 @@ async def test_structured_content_is_exactly_the_output_schema() -> None:
     assert tool.output_schema is not None
     assert set(tool.output_schema["properties"]) == {"city", "temp_c"}
     # The handle still travels, just not through the declared output contract.
-    assert _handle(result)
+    assert handle_of(result)
 
 
 @pytest.mark.asyncio
-async def test_stateless_transport_serves_conversations_by_handle() -> None:
+async def test_stateless_transport_serves_conversations_byhandle_of() -> None:
     """``stateless=True`` with ``sessions=True`` is coherent, not contradictory.
 
     It was contradictory only while continuity depended on the transport issuing
@@ -520,7 +506,7 @@ async def test_stateless_transport_serves_conversations_by_handle() -> None:
         first, response = await _modern_call_with_response(client, "first", request_id=1)
         # The one assertion that is genuinely about HTTP: no session comes back.
         assert MCP_SESSION_ID_HEADER not in response.headers
-        handle = _modern_handle(first)
+        handle = _modernhandle_of(first)
         await _modern_call(client, "second", request_id=2, conversation=handle)
 
     assert config.prompts == [["first"], ["first", "second"]]
@@ -535,7 +521,7 @@ class TestRegistryGuaranteesApplyToHandles:
         server = MCPServer(_agent(config), sessions=SessionConfig(max_sessions=1))
 
         async with connect_modern(server) as session:
-            evicted = _handle(await session.call_tool("ask", {"message": "one"}))
+            evicted = handle_of(await session.call_tool("ask", {"message": "one"}))
             await session.call_tool("ask", {"message": "two"})
             result = await session.call_tool("ask", {"message": "one again", "conversation": evicted})
 
@@ -547,7 +533,7 @@ class TestRegistryGuaranteesApplyToHandles:
         server = MCPServer(_agent(config), sessions=SessionConfig(storage=storage))
 
         async with connect_modern(server) as session:
-            first = _handle(await session.call_tool("ask", {"message": "first"}))
+            first = handle_of(await session.call_tool("ask", {"message": "first"}))
             await session.call_tool("ask", {"message": "second", "conversation": first})
 
         # One conversation, its turns replayed from the backend the operator
@@ -616,7 +602,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
-            handle = _modern_handle(first)
+            handle = _modernhandle_of(first)
             await _modern_call(client, "second", request_id=2, conversation=handle, token="alice")
 
         assert config.prompts == [["first"], ["first", "second"]]
@@ -626,7 +612,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
-            handle = _modern_handle(first)
+            handle = _modernhandle_of(first)
             stolen = await _modern_call(client, "second", request_id=2, conversation=handle, token="bob")
             unknown = await _modern_call(client, "second", request_id=3, conversation=str(uuid4()), token="bob")
 
@@ -641,7 +627,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
-            handle = _modern_handle(first)
+            handle = _modernhandle_of(first)
             continued = await _modern_call(client, "second", request_id=2, conversation=handle, token="alice")
             swapped = await _modern_call(client, "third", request_id=3, conversation=handle, token="bob")
 
@@ -684,7 +670,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="kiosk")
-            handle = _modern_handle(first)
+            handle = _modernhandle_of(first)
             same = await _modern_call(client, "second", request_id=2, conversation=handle, token="kiosk")
             other = await _modern_call(client, "third", request_id=3, conversation=handle, token="other-kiosk")
 

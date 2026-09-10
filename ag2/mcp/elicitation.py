@@ -4,10 +4,9 @@
 """Route a served agent's ``context.input()`` to the human behind the MCP client.
 
 The question travels as an MCP *elicitation*, in whichever shape the negotiated
-revision has: a standalone ``elicitation/create`` request awaited inline on the
-handshake era, or — from 2026-07-28, which defines no server-to-client request —
-back as the call's own result (see :mod:`ag2.mcp.pause`). Everything above the
-transport is shared: one rendering, one capability check, one policy.
+revision has: a standalone ``elicitation/create`` awaited inline on the handshake
+era, or — from 2026-07-28 — back as the call's own result (see
+:mod:`ag2.mcp.pause`).
 """
 
 import logging
@@ -40,10 +39,7 @@ ANSWER_FIELD = "answer"
 
 
 def input_form_schema() -> ElicitRequestedSchema:
-    """The requested schema for a ``context.input()`` question.
-
-    Top-level properties only, which is all elicitation's form mode permits.
-    """
+    """The requested schema for a ``context.input()`` question."""
     return {
         "type": "object",
         "properties": {
@@ -84,9 +80,7 @@ def can_answer(session: "ServerSession", policy: ElicitationPolicy) -> bool:
     """Whether this client may be put a question at all.
 
     Two gates: the deployment's policy, and the client's own declaration. A bare
-    ``elicitation: {}`` — the only shape there was before modes existed — counts
-    as form support; a url-only declaration does not, since a URL is not
-    somewhere a free-text answer can come from.
+    ``elicitation: {}`` counts as form support; a url-only declaration does not.
     """
     if policy == "decline":
         return False
@@ -103,8 +97,7 @@ class ClientElicitor:
     Registered as a stream interrupter ahead of whatever the agent registers for
     itself, which is what builds the fallback chain: returning the event passes
     the question on to the agent's own ``hitl_hook``, or — with none — to the
-    existing "nobody could be asked" failure. Answering with a silent decline
-    instead would hand the caller a degraded result of unexplained origin.
+    existing "nobody could be asked" failure.
     """
 
     __slots__ = ("_request_context", "_policy", "_suspended")

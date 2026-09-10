@@ -49,29 +49,38 @@ MCPRequestContext = Annotated[ServerRequestContext[Any, Any], ContextField(cast=
 class MCPFunctionTool:
     """A deterministic MCP tool served next to the agent's ``ask`` tool.
 
-    Usually produced by :func:`mcp_tool`. Constructed directly, ``handler`` takes
-    the raw ``tools/call`` ``arguments`` dict and the MCP request context, and
-    returns the content block(s) — typically an :mod:`ag2.mcp_ui` resource, but
-    any content block (or plain string) works. ``input_schema`` is the JSON
-    Schema advertised in ``tools/list`` (defaults to an open object).
-
-    ``title`` and ``annotations`` (``mcp.types.ToolAnnotations`` behavior hints
-    such as ``readOnlyHint`` / ``destructiveHint``) are passed through to
-    ``tools/list`` so hosts can decide e.g. whether to ask the user first.
+    Usually produced by :func:`mcp_tool`; build one directly to serve a handler
+    that already speaks raw ``tools/call`` arguments.
     """
 
     name: str
+    """The name the tool is advertised and called under."""
+
     description: str
+    """What the tool does, shown to the model choosing whether to call it."""
+
     handler: ToolHandler
+    """Runs the call: takes the raw ``arguments`` dict and the MCP request context."""
+
     input_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object"})
+    """The JSON Schema advertised in ``tools/list``; an open object by default."""
+
     title: str | None = None
+    """Human-readable display name for hosts that show one."""
+
     annotations: ToolAnnotations | None = None
-    # What this tool asks the client for, and the resolver DAG behind it. Empty
-    # unless :func:`mcp_tool` found any; a hand-built tool asks for nothing.
-    resolved_params: Mapping[str, tuple[Resolve, bool]] = field(default_factory=dict)
-    # The plan type is private to the SDK (``_ResolverPlan``); these are built by
-    # ``build_resolver_plans`` and handed back to ``resolve_arguments`` untouched.
-    resolver_plans: Mapping[Hashable, Any] = field(default_factory=dict)
+    """``mcp.types.ToolAnnotations`` behaviour hints — ``readOnlyHint``, ``destructiveHint`` — for the host."""
+
+    # What this tool asks the client for, and the resolver DAG behind it. Filled
+    # by :func:`mcp_tool`, which is their only producer; a hand-built tool asks
+    # for nothing. Not constructor arguments: the plan type is private to the SDK
+    # (``_ResolverPlan``), so it has no place in a signature a user reads.
+    #
+    # Being non-init, they are reinitialised empty by ``dataclasses.replace``,
+    # which would hand back a tool that has quietly stopped asking. Rebuild
+    # through the decorator instead of replacing a field on a decorated tool.
+    _resolved_params: "Mapping[str, tuple[Resolve, bool]]" = field(default_factory=dict, init=False, repr=False)
+    _resolver_plans: "Mapping[Hashable, Any]" = field(default_factory=dict, init=False, repr=False)
 
     def _mcp_tool(self) -> MCPTool:
         return MCPTool(
@@ -91,14 +100,13 @@ class MCPFunctionTool:
     ) -> "list[ContentBlock] | InputRequiredResult":
         """Run the tool, or come back asking the client for what it is missing.
 
-        With ``Resolve(...)`` parameters the SDK fills them first — and the body
-        then runs, once — or returns the questions still outstanding, in whichever
-        shape the negotiated revision calls for.
+        With ``Resolve(...)`` parameters the SDK fills them first and the body
+        then runs once; otherwise the outstanding questions come back instead.
         """
-        if self.resolved_params:
+        if self._resolved_params:
             resolved = await resolve_arguments(
-                self.resolved_params,
-                self.resolver_plans,
+                self._resolved_params,
+                self._resolver_plans,
                 arguments,
                 ResolverContext(request_context=request_context, input_params=input_round),
             )
@@ -116,10 +124,10 @@ class MCPFunctionTool:
 def _bind(call_model: Any) -> ToolHandler:
     """Wrap a ``fast_depends`` call model as a handler that unpacks ``arguments``.
 
-    Mirrors ``ag2.a2ui.actions.A2UIAction.run``: the call's arguments become the
-    function's keyword arguments (serializer-coerced), ``Depends``/``Inject``
-    parameters resolve against the process dependency provider, and a
-    :data:`MCPRequestContext`-annotated parameter receives the request context.
+    The call's arguments become the function's keyword arguments,
+    ``Depends``/``Inject`` parameters resolve against the process dependency
+    provider, and a :data:`MCPRequestContext` parameter receives the request
+    context.
     """
 
     async def handler(arguments: dict[str, Any], request_context: ToolContext) -> Any:
@@ -176,14 +184,14 @@ def mcp_tool(
     :data:`MCPRequestContext` receives the live request context and is excluded
     from the advertised schema. Pass the result in ``MCPServer(tools=[...])``.
 
-    **Asking the client for something.** A parameter annotated
-    ``Annotated[T, Resolve(fn)]`` is filled by running ``fn`` before the body,
-    and ``fn`` may return a request marker — ``Elicit`` to ask the client's
-    human, ``Sample`` to borrow its model, ``ListRoots`` to read its roots —
-    which the framework puts to the client and injects the answer of::
+    A parameter annotated ``Annotated[T, Resolve(fn)]`` is filled by running
+    ``fn`` before the body, and ``fn`` may return a request marker — ``Elicit``
+    to ask the client's human, ``Sample`` to borrow its model, ``ListRoots`` to
+    read its roots — which the framework puts to the client and injects the
+    answer of::
 
         from typing import Annotated
-        from mcp.server.mcpserver import Elicit, Resolve
+        from ag2.mcp import Elicit, Resolve
         from pydantic import BaseModel
 
 
@@ -200,18 +208,10 @@ def mcp_tool(
             "Paint a room."
             return f"painted {room} {colour.answer}"
 
-    Which way the question travels is the negotiated revision's doing: a
-    standalone request answered inline up to 2025-11-25, and from 2026-07-28 back
-    as the call's result, which the client retries with the answer.
-
-    **A resolver body re-runs on every round of that retry**, with the answers
-    already collected supplied to it, so a non-idempotent side effect in one
-    happens once per round. The tool body is the opposite: it does not run until
-    every resolver is satisfied, and then runs exactly once.
-
-    **The agent's own ``ask`` tool re-runs nothing at all** — its turn is held
-    open between rounds (see :mod:`ag2.mcp.pause`). Do not carry one contract
-    across to the other.
+    A resolver body re-runs on every round of that exchange, so keep side
+    effects in one idempotent. The tool body is the opposite: it does not run
+    until every resolver is satisfied, and then runs exactly once. (The agent's
+    own ``ask`` tool re-runs nothing — its turn is held open between rounds.)
 
     Args:
         function: The function (when used as a bare ``@mcp_tool``).
@@ -232,16 +232,21 @@ def mcp_tool(
         schema = get_schema(call_model, exclude=(CONTEXT_OPTION_NAME, *resolved_params))
         if schema.get("type") != "object":
             schema = {"type": "object", "properties": {}}
-        return MCPFunctionTool(
+        built = MCPFunctionTool(
             name=name or f.__name__,
             description=description or f.__doc__ or "",
             handler=_bind(call_model),
             input_schema=schema,
             title=title,
             annotations=annotations,
-            resolved_params=dict(resolved_params),
-            resolver_plans=build_resolver_plans(resolved_params, set(schema.get("properties") or ())),
         )
+        # Frozen with slots, so the decorator sets its own state the only way
+        # such a dataclass allows.
+        object.__setattr__(built, "_resolved_params", dict(resolved_params))
+        object.__setattr__(
+            built, "_resolver_plans", build_resolver_plans(resolved_params, set(schema.get("properties") or ()))
+        )
+        return built
 
     if function is not None:
         return make(function)
@@ -249,11 +254,7 @@ def mcp_tool(
 
 
 class ToolProvider:
-    """Serves a fixed set of custom :class:`MCPFunctionTool` over MCP.
-
-    MCP exposes a single ``tools/call`` handler, so this registers nothing of its
-    own; :class:`~ag2.mcp.MCPServer` merges it into the dispatcher it owns.
-    """
+    """Serves a fixed set of custom :class:`MCPFunctionTool` over MCP."""
 
     __slots__ = ("_tools", "_by_name")
 

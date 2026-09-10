@@ -5,17 +5,11 @@
 
 Revision 2026-07-28 defines no server-to-client request, so a question comes back
 as the *result* of the call and the run is held here until the client retries.
-Held rather than replayed because replaying a conversational turn re-issues LLM
-calls, re-runs tool side effects and re-spends tokens.
 
-Three consequences for an operator: the retry must reach the process holding the
-run, so **sticky routing is required**; a pause does not survive a restart; and
-more than one replica needs a shared ``requestState`` key, since the default
-policy mints a process-local one.
-
-Retention is the lifetime of that state token and nothing else — once no client
-can present a resumable one the run is unreachable, so it is reclaimed. One
-number, not two that can disagree.
+For an operator: the retry must reach the process holding the run, so **sticky
+routing is required**; a pause does not survive a restart; more than one replica
+needs a shared ``requestState`` key; and a pause lives exactly as long as the
+state token that names it.
 """
 
 import asyncio
@@ -48,9 +42,7 @@ class PauseState:
     """The plaintext this server puts inside ``requestState``.
 
     Sealed by the ``RequestStateBoundary`` on the way out and verified on the way
-    back, so a handler only ever reads plaintext it minted. The run's
-    conversation is deliberately absent: eviction already reclaims the run, so
-    there is no second notion of continuity to keep in step.
+    back, so a handler only ever reads plaintext it minted.
 
     Attributes:
         run_id: The :class:`SuspendedTurn` this state names.
@@ -78,12 +70,7 @@ class PauseState:
 
     @classmethod
     def decode(cls, raw: str) -> "PauseState | None":
-        """Read state this server minted, or ``None`` when it is not that.
-
-        Arrives boundary-authenticated, so anything unreadable is drift within
-        the operator's own fleet (a rolling upgrade across a shared key) and
-        names no paused run.
-        """
+        """Read state this server minted, or ``None`` when it is not that."""
         try:
             data = json.loads(raw)
             if data["v"] != _STATE_VERSION:
@@ -102,8 +89,7 @@ class SuspendedTurn:
 
     Inside the turn, whatever needs something from the client calls :meth:`ask`
     and blocks; outside, the serving path drives :meth:`advance` and
-    :meth:`answer`. What kind of request it is never matters here — this holds
-    the run, and the asker judges the response.
+    :meth:`answer`.
     """
 
     __slots__ = ("id", "conversation", "stream", "created", "_task", "_outstanding", "_answer", "_raised")
@@ -122,8 +108,7 @@ class SuspendedTurn:
         self._raised = asyncio.Event()
 
     def start(self, run: Coroutine[Any, Any, CallToolResult]) -> None:
-        """Launch the turn. Separate from ``__init__`` because the coroutine needs
-        this object: the elicitor inside it asks *through* the turn it belongs to."""
+        """Launch the turn (separate from ``__init__``: the coroutine needs this object)."""
         task = asyncio.ensure_future(run)
         # A turn that fails while nobody awaits it (an input timeout elapsing
         # mid-pause) would be reported as an unretrieved exception; ``result()``
@@ -132,11 +117,7 @@ class SuspendedTurn:
         self._task = task
 
     async def ask(self, request: InputRequest) -> InputResponse:
-        """Put a question to the client and suspend until the retry answers it.
-
-        Called from inside the turn, so any ``context.input(timeout=)`` wraps
-        this await and thus spans the client's side of the round trip.
-        """
+        """Put a question to the client and suspend until the retry answers it."""
         key = uuid4().hex
         answer: asyncio.Future[InputResponse] = asyncio.get_running_loop().create_future()
         self._outstanding = (key, request)
@@ -152,11 +133,7 @@ class SuspendedTurn:
                 self._answer = None
 
     async def ask_for(self, request: InputRequest, expected: type[_T]) -> "_T | None":
-        """:meth:`ask`, and ``None`` when the answer is not of the kind asked for.
-
-        Reports the mismatch and decides nothing: what to do about one differs
-        per asker (fall through to the agent's hook, or refuse the turn).
-        """
+        """:meth:`ask`, and ``None`` when the answer is not of the kind asked for."""
         answered = await self.ask(request)
         if isinstance(answered, expected):
             return answered
@@ -178,8 +155,7 @@ class SuspendedTurn:
         Returns the finished result, or the outstanding ``(key, request)``.
 
         Raises:
-            Exception: Whatever the turn raised — a declined elicitation, an
-                input timeout, an agent failure — for this round's caller.
+            Exception: Whatever the turn raised, for this round's caller.
         """
         assert self._task is not None, "advance() before start()"
         # A finished turn wins over a question: both hold at once only when a
@@ -204,10 +180,8 @@ class SuspendedTurn:
     def answer(self, key: str, result: InputResponse) -> bool:
         """Hand an answer to the outstanding question, or refuse it.
 
-        The key **is** the pinning, and nothing further is needed: :meth:`ask`
-        mints a fresh one per question, so a matching key can only have come from
-        the question now outstanding. ``False`` consumes nothing, and the caller
-        re-asks whatever the run is actually waiting on.
+        ``False`` when ``key`` does not name the question the run is waiting on;
+        it consumes nothing, and the caller re-asks whatever that question is.
         """
         if self._answer is None or self._outstanding is None:
             return False
@@ -242,8 +216,7 @@ class PausedRuns:
     ``ttl`` is the ``requestState`` TTL: a run whose state no client can present
     any more is unreachable, so it is reclaimed. Sweeping is **lazy**, on each
     registry operation rather than on a timer, so an idle server keeps an expired
-    run's task parked until its next call — deliberate, since a timer would add a
-    second clock to keep in step with this one.
+    run's task parked until its next call.
     """
 
     __slots__ = ("_runs", "_ttl", "_max", "_clock")
@@ -266,10 +239,9 @@ class PausedRuns:
     def register(self, turn: SuspendedTurn) -> None:
         """Hold a run that has just paused under freshly minted state.
 
-        Restamps ``created``, because the token naming the run is minted now.
-        Measuring from the *first* pause instead reclaims a run that pauses
-        repeatedly while the token its client holds is still one the boundary
-        accepts — do not simplify this back.
+        Restamps ``created``: the token naming the run is minted now, and
+        measuring from the *first* pause would reclaim a run whose client still
+        holds a token the boundary accepts.
         """
         self._sweep()
         turn.created = self._clock()
@@ -302,18 +274,14 @@ class PausedRuns:
         """Cancel every run this process is holding, on the way down.
 
         Nothing else does: sweeping is lazy, and on the way down there is no next
-        call. Without this each held task is destroyed pending, closing none of
-        the turn scopes its tools opened.
+        call to sweep on.
         """
         while self._runs:
             _, turn = self._runs.popitem(last=False)
             turn.reclaim()
 
     def discard_conversation(self, handle: str) -> None:
-        """Reclaim any run of a conversation that has just been evicted.
-
-        The third way out, for a run abandoned without either bound elapsing.
-        """
+        """Reclaim any run of a conversation that has just been evicted."""
         for run_id in [r for r, t in self._runs.items() if t.conversation == handle]:
             self._runs.pop(run_id).reclaim()
 

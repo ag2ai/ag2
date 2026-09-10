@@ -28,10 +28,9 @@ from .sandbox import LocalEnvironment
 from .search import DuckDuckSearchTool, PerplexitySearchToolkit, TavilySearchTool
 from .shell import SandboxShellTool
 from .skills import MemorySkill, SkillPlugin, SkillSearchToolkit, SkillsToolkit
-from .toolkits import AnswerPolicy, FilesystemToolkit, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
+from .toolkits import FilesystemToolkit, MCPAnswerPolicy, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
 
 __all__ = (
-    "AnswerPolicy",
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
@@ -41,6 +40,7 @@ __all__ = (
     "GoogleMapsTool",
     "ImageGenerationTool",
     "LocalEnvironment",
+    "MCPAnswerPolicy",
     "MCPServerConfig",
     "MCPServerTool",
     "MCPStdioServerConfig",

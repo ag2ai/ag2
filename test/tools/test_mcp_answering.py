@@ -54,7 +54,7 @@ from ag2.events import HumanInputRequest, HumanMessage, TextInput, ToolCallEvent
 from ag2.exceptions import HumanInputNotProvidedError
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
-from ag2.tools import AnswerPolicy, MCPStdioServerConfig, MCPToolkit
+from ag2.tools import MCPAnswerPolicy, MCPStdioServerConfig, MCPToolkit
 from ag2.tools.toolkits.mcp_server import toolkit as _toolkit_module
 from ag2.tools.toolkits.mcp_server.answering import InputRequestAnswerer
 from ag2.utils import MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
@@ -185,7 +185,7 @@ class CallingAgent:
         self,
         server: ThirdPartyServer,
         *,
-        answering: AnswerPolicy,
+        answering: MCPAnswerPolicy,
         human: Human | None = None,
         config: TestConfig | None = None,
     ) -> ToolResultEvent | ToolErrorEvent:
@@ -201,7 +201,7 @@ class CallingAgent:
         with context.stream.where(HumanInputRequest).sub_scope(human, interrupt=True):
             return await proxy(call, context)
 
-    async def ask_as_an_agent(self, server: ThirdPartyServer, *, answering: AnswerPolicy) -> str:
+    async def ask_as_an_agent(self, server: ThirdPartyServer, *, answering: MCPAnswerPolicy) -> str:
         """Drive the same call through a real ``Agent.ask``.
 
         The agent is what installs the default human-input hook, so this is the
@@ -228,7 +228,7 @@ class TestAnsweringAQuestion:
         server = ThirdPartyServer({"q": elicitation("What colour?")})
         human = Human("blue")
 
-        result = await calling_agent.call(server, answering=AnswerPolicy(elicitation="ask"), human=human)
+        result = await calling_agent.call(server, answering=MCPAnswerPolicy(elicitation="ask"), human=human)
 
         assert human.asked == ["What colour?"], "the server's question never reached the agent's human"
         assert server.received == [{"q": {"action": "accept", "content": {"answer": "blue"}}}]
@@ -252,7 +252,7 @@ class TestAnsweringAQuestion:
         })
         human = Human()
 
-        result = await calling_agent.call(server, answering=AnswerPolicy(elicitation="ask"), human=human)
+        result = await calling_agent.call(server, answering=MCPAnswerPolicy(elicitation="ask"), human=human)
 
         assert human.asked == [], "an unanswerable form still reached the human"
         assert server.received == [{"q": {"action": "decline"}}]
@@ -262,7 +262,7 @@ class TestAnsweringAQuestion:
         """A third-party form names its property whatever it likes."""
         server = ThirdPartyServer({"q": elicitation("City?", field="city")})
 
-        result = await calling_agent.call(server, answering=AnswerPolicy(elicitation="ask"), human=Human("Kraków"))
+        result = await calling_agent.call(server, answering=MCPAnswerPolicy(elicitation="ask"), human=Human("Kraków"))
 
         assert server.received == [{"q": {"action": "accept", "content": {"city": "Kraków"}}}]
         assert isinstance(result, ToolResultEvent)
@@ -274,7 +274,7 @@ class TestAnsweringAQuestion:
         server = ThirdPartyServer({"q": elicitation("What colour?")})
 
         with pytest.raises(HumanInputNotProvidedError):
-            await calling_agent.ask_as_an_agent(server, answering=AnswerPolicy(elicitation="ask"))
+            await calling_agent.ask_as_an_agent(server, answering=MCPAnswerPolicy(elicitation="ask"))
 
         assert server.received == [], "the server was told 'declined' by an operator who never declined"
 
@@ -285,7 +285,7 @@ class TestAnsweringAQuestion:
         that the callback is not wired at all, so there is no route through a
         conforming session to reach this.
         """
-        answerer = InputRequestAnswerer(AnswerPolicy(elicitation="decline"), Context(stream=MemoryStream()))
+        answerer = InputRequestAnswerer(MCPAnswerPolicy(elicitation="decline"), Context(stream=MemoryStream()))
 
         answer = await answerer.on_elicitation(
             ClientRequestContext(session=None, request_id="q", meta=None),  # type: ignore[arg-type]
@@ -305,7 +305,7 @@ class TestWhatIsAdvertised:
         """The default policy hands over nothing, so a conforming server asks for nothing."""
         server = ThirdPartyServer()
 
-        await calling_agent.call(server, answering=AnswerPolicy())
+        await calling_agent.call(server, answering=MCPAnswerPolicy())
 
         assert server.capabilities is not None
         assert server.capabilities.elicitation is None
@@ -315,7 +315,7 @@ class TestWhatIsAdvertised:
     async def test_only_the_enabled_capability_is_advertised(self, calling_agent: CallingAgent) -> None:
         server = ThirdPartyServer()
 
-        await calling_agent.call(server, answering=AnswerPolicy(elicitation="ask"), human=Human())
+        await calling_agent.call(server, answering=MCPAnswerPolicy(elicitation="ask"), human=Human())
 
         assert server.capabilities is not None
         assert server.capabilities.elicitation is not None
@@ -330,7 +330,7 @@ class TestLendingTheAgentsModel:
 
         result = await calling_agent.call(
             server,
-            answering=AnswerPolicy(sampling=True),
+            answering=MCPAnswerPolicy(sampling=True),
             config=TestConfig("a summary"),
         )
 
@@ -342,7 +342,7 @@ class TestLendingTheAgentsModel:
     async def test_sampling_is_advertised_only_when_enabled(self, calling_agent: CallingAgent) -> None:
         server = ThirdPartyServer()
 
-        await calling_agent.call(server, answering=AnswerPolicy(sampling=True), config=TestConfig("unused"))
+        await calling_agent.call(server, answering=MCPAnswerPolicy(sampling=True), config=TestConfig("unused"))
 
         assert server.capabilities is not None
         assert server.capabilities.sampling is not None
@@ -354,7 +354,7 @@ class TestLendingTheAgentsModel:
         """Sampling has no ``decline`` arm, so the refusal fails the call rather than reaching the server."""
         server = ThirdPartyServer({"s": sampling("Summarise this.")})
 
-        result = await calling_agent.call(server, answering=AnswerPolicy(), config=TestConfig("never used"))
+        result = await calling_agent.call(server, answering=MCPAnswerPolicy(), config=TestConfig("never used"))
 
         assert isinstance(result, ToolErrorEvent)
         assert server.received == []
@@ -362,7 +362,7 @@ class TestLendingTheAgentsModel:
     async def test_sampling_without_a_model_is_refused_rather_than_crashing(self, calling_agent: CallingAgent) -> None:
         server = ThirdPartyServer({"s": sampling("Summarise this.")})
 
-        result = await calling_agent.call(server, answering=AnswerPolicy(sampling=True), config=None)
+        result = await calling_agent.call(server, answering=MCPAnswerPolicy(sampling=True), config=None)
 
         assert isinstance(result, ToolErrorEvent)
 
@@ -377,7 +377,7 @@ class TestLendingTheAgentsModel:
         server = ThirdPartyServer({"s": sampling_an_image("not base64 at all!!")})
 
         result = await calling_agent.call(
-            server, answering=AnswerPolicy(sampling=True), config=TestConfig("never reached")
+            server, answering=MCPAnswerPolicy(sampling=True), config=TestConfig("never reached")
         )
 
         assert isinstance(result, ToolErrorEvent)
@@ -387,7 +387,7 @@ class TestLendingTheAgentsModel:
         server = ThirdPartyServer({"s": sampling_an_image("aGVsbG8=")})
 
         result = await calling_agent.call(
-            server, answering=AnswerPolicy(sampling=True), config=TestConfig("a description")
+            server, answering=MCPAnswerPolicy(sampling=True), config=TestConfig("a description")
         )
 
         assert isinstance(result, ToolResultEvent), f"the call did not complete: {result}"
@@ -400,7 +400,7 @@ class TestReportingRoots:
     async def test_configured_roots_are_reported(self, calling_agent: CallingAgent, tmp_path: Path) -> None:
         server = ThirdPartyServer({"r": ListRootsRequest()})
 
-        result = await calling_agent.call(server, answering=AnswerPolicy(roots=[str(tmp_path)]))
+        result = await calling_agent.call(server, answering=MCPAnswerPolicy(roots=[str(tmp_path)]))
 
         assert isinstance(result, ToolResultEvent), f"the call did not complete: {result}"
         [round_one] = server.received
@@ -409,7 +409,7 @@ class TestReportingRoots:
     async def test_roots_are_advertised_only_when_configured(self, calling_agent: CallingAgent, tmp_path: Path) -> None:
         server = ThirdPartyServer()
 
-        await calling_agent.call(server, answering=AnswerPolicy(roots=[str(tmp_path)]))
+        await calling_agent.call(server, answering=MCPAnswerPolicy(roots=[str(tmp_path)]))
 
         assert server.capabilities is not None
         assert server.capabilities.roots is not None
@@ -420,7 +420,7 @@ class TestReportingRoots:
         """No roots is not an empty list of roots — the agent has nothing to report."""
         server = ThirdPartyServer({"r": ListRootsRequest()})
 
-        result = await calling_agent.call(server, answering=AnswerPolicy())
+        result = await calling_agent.call(server, answering=MCPAnswerPolicy())
 
         assert server.capabilities is not None
         assert server.capabilities.roots is None
@@ -434,7 +434,7 @@ class TestTheRoundBound:
 
         result = await calling_agent.call(
             server,
-            answering=AnswerPolicy(elicitation="ask", max_rounds=2),
+            answering=MCPAnswerPolicy(elicitation="ask", max_rounds=2),
             human=Human(),
         )
 
@@ -448,7 +448,7 @@ class TestTheRoundBound:
 
         result = await calling_agent.call(
             server,
-            answering=AnswerPolicy(sampling=True, roots=[str(tmp_path)], max_rounds=2),
+            answering=MCPAnswerPolicy(sampling=True, roots=[str(tmp_path)], max_rounds=2),
             config=TestConfig(*["a summary"] * 5),
         )
 

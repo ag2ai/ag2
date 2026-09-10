@@ -33,12 +33,12 @@ class SessionConfig:
 
     Attributes:
         max_sessions: LRU cap on conversations held at once. Every call naming
-            none, with no MCP session to fall back on, mints one — so one-shot
-            traffic occupies slots too; size for the call rate and set a ``ttl``.
+            none, with no MCP session to fall back on, mints one — so size for
+            the call rate and set a ``ttl``.
         ttl: Idle expiry in seconds; ``None`` means no expiry.
-        storage: History backend shared across conversations. The registry
-            mapping a conversation's *name* to its history is per-process either
-            way, so a shared backend does not make a handle portable.
+        storage: History backend shared across conversations. The handle-to-
+            history registry is per-process either way, so a shared backend does
+            not make a handle portable.
     """
 
     max_sessions: int = 1024
@@ -51,7 +51,7 @@ class ConversationBounds:
     """How long a conversation lives in a :class:`SessionStore`.
 
     Reported as data, not prose: the protocol requires the lifetime to appear in
-    the tool description, and the descriptor is what words it.
+    the ``ask`` tool's description, and :mod:`ag2.mcp.info` is what words it.
     """
 
     max_conversations: int
@@ -96,13 +96,10 @@ class SessionStore:
     """Bounded LRU registry mapping a conversation's key to a persistent stream.
 
     The key is a handle this store minted or, on the handshake era, the caller's
-    MCP session id. It never adopts a key from a caller — :meth:`by_handle`
-    resolves only its own — so nobody can name a conversation of their choosing
-    and evict other callers' out of the bound.
-
-    Each conversation has a stable stream id over a shared :class:`Storage`, and
-    every serving method hands out a *fresh* :class:`MemoryStream` object reading
-    that history back, so per-call progress subscribers never accumulate.
+    MCP session id; it never adopts a key from a caller. Each conversation has a
+    stable stream id over a shared :class:`Storage`, and every serving method
+    hands out a *fresh* :class:`MemoryStream` reading that history back, so
+    per-call progress subscribers never accumulate.
     """
 
     __slots__ = ("_storage", "_max", "_ttl", "_entries", "_by_handle", "_lock", "_clock", "on_evict")
@@ -160,10 +157,9 @@ class SessionStore:
         """Yield the conversation ``handle`` names, holding its turn lock.
 
         Raises:
-            UnknownConversationError: when no live conversation carries that
-                handle, or when it was created by a different principal. Both
-                read the same from outside, so the error does not disclose that
-                an unreachable handle exists.
+            UnknownConversationError: No live conversation carries that handle,
+                or it was created by a different principal. Both read the same
+                from outside.
         """
         entry = await self._handle_entry(handle, principal)
         async with self._held(entry) as conversation:
@@ -173,10 +169,8 @@ class SessionStore:
         """Mark ``handle``'s conversation as used just now, without holding it.
 
         For work that keeps a conversation alive without going through the
-        serving methods: resuming a paused run continues a turn already inside
-        one, and without this a long pause is evicted mid-question. Silent for an
-        unknown handle — this refreshes an idle clock, and the callers that must
-        refuse one raise where the handle is *resolved*.
+        serving methods, such as resuming a paused run. Silent for an unknown
+        handle: the callers that must refuse one raise where it is resolved.
         """
         async with self._lock:
             key = self._by_handle.get(handle)
@@ -189,10 +183,8 @@ class SessionStore:
     async def acquire(self, session_id: str, *, principal: str | None = None) -> MemoryStream:
         """Return a stream carrying ``session_id``'s accumulated conversation.
 
-        Does not hold the turn lock — prefer :meth:`session` on the serving path.
-        ``principal`` is recorded when this call is what creates the
-        conversation; ignoring it would mint one no authenticated caller could
-        ever name.
+        Does not hold the turn lock — prefer :meth:`session` on the serving
+        path. ``principal`` is recorded when this call creates the conversation.
         """
         entry = await self._entry(session_id, principal=principal)
         return MemoryStream(storage=self._storage, id=entry.stream_id)

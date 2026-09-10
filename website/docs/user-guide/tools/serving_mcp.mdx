@@ -7,13 +7,11 @@ sidebarTitle: "Serving MCP"
 
 `ag2.mcp.MCPServer` exposes an AG2 `Agent` **as** an MCP server: any MCP client — Claude Desktop, Cursor, the MCP Inspector, another agent framework — can list its tools and talk to your agent. This is the inverse of [consuming an MCP server as tools](/docs/user-guide/tools/mcp_servers) with `MCPToolkit` / `MCPServerTool`.
 
-## Installation
+## Quick start
 
 ```bash
 pip install "ag2[mcp]"
 ```
-
-## Serving over HTTP
 
 An `MCPServer` **is** an ASGI3 application. It serves MCP over streamable HTTP and manages its own lifespan, so a standalone `uvicorn` run just works:
 
@@ -29,17 +27,23 @@ agent = Agent(
     prompt="You are a helpful assistant.",
     config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
 )
-app = MCPServer(agent, path="/mcp")
+app = MCPServer(agent)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
 ```
 
+That is the whole of the common case. The agent is exposed as one tool — `ask` — that runs `Agent.ask()` and returns the reply; conversations are kept, and questions the agent raises reach the human behind the calling client. Everything below is opt-in on top of it.
+
 The server is also mountable into a host Starlette/FastAPI app, since it is an ordinary ASGI app.
 
-## Serving over stdio
+---
 
-For a locally-launched client, serve over stdin/stdout instead. The HTTP parameters (`path`, `stateless`, `json_response`, `security`) are ignored on this transport:
+## Recipes
+
+### Serve over stdio instead
+
+For a locally-launched client, serve over stdin/stdout. The HTTP parameters (`path`, `stateless`, `json_response`, `security`) are ignored on this transport:
 
 ```python linenums="1"
 import asyncio
@@ -55,11 +59,9 @@ if __name__ == "__main__":
     asyncio.run(server.run_stdio())
 ```
 
-## The conversational tool
+### Rename the tool, or return a schema
 
-The agent is exposed as a single tool — `ask` by default — that runs `Agent.ask()` and returns the reply. It takes a required `message` and an optional `context` string that is prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`.
-
-If the agent has a `response_schema`, that schema is advertised verbatim as the tool's `outputSchema` and validated replies come back as `structuredContent`.
+The conversational tool takes a required `message` and an optional `context` string prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`. If the agent has a `response_schema`, that schema is advertised verbatim as the tool's `outputSchema` and validated replies come back as `structuredContent`:
 
 ```python linenums="1"
 from pydantic import BaseModel
@@ -82,11 +84,214 @@ app = MCPServer(agent, tool_name="forecast")
 
 Presentation metadata (`name`, `version`, `title`, `description`, `instructions`, `website_url`, `icons`) is never derived from the agent — `instructions` in particular is client-facing "how to use this server" guidance, not the agent's system prompt. Pass it explicitly when you want it.
 
-## Conversations
+### Ask the calling client's human a question
+
+A tool inside a served agent can call `context.input()`, and the question reaches the human behind the **calling client** — the same tool code that prompts a terminal locally:
+
+```python linenums="1"
+from ag2 import Agent, Context
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+async def book_table(when: str, ctx: Context) -> str:
+    """Book a table, confirming the party size with the user."""
+    size = await ctx.input(f"How many people for {when}?")
+    return f"Booked {when} for {size}."
+
+agent = Agent(name="concierge", config=AnthropicConfig(model="claude-haiku-4-5-20251001"), tools=[book_table])
+app = MCPServer(agent, elicitation_policy="ask")  # "ask" is the default
+```
+
+`elicitation_policy="decline"` never asks a client at all. There is deliberately no `"auto"`: an arbitrary question has no answer AG2 could invent without fabricating data on the user's behalf.
+
+Only a client that advertised it can answer is ever asked. A client that cannot — or a policy of `"decline"` — falls through to the agent's own `hitl_hook`, and with none configured the turn fails with the usual `HumanInputNotProvidedError` and its instructional message. That loud failure is deliberate: silently returning a degraded result would hide from the caller that the question went nowhere.
+
+### Run on the calling client's model
+
+A deployment holding no model credentials can still serve an agent that needs one: `client_model=True` runs the agent's own reasoning on the **calling client's** LLM, over MCP sampling.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.mcp import MCPServer
+
+agent = Agent(name="assistant")  # no config of its own
+app = MCPServer(agent, client_model=True)
+```
+
+It is off unless you ask for it, and a server that has not enabled it never sends a sampling request and never needs the capability of its clients.
+
+!!! warning "This moves three things to the caller"
+    **Cost** — every turn the agent takes spends their budget. **Capability** — which model answers is a fact about the client, so the same agent gives different answers to different callers and its quality is no longer yours to control. **Reproducibility** — a trace cannot be re-run against a known model, because the model was the peer's.
+
+A client that advertised no sampling capability is never asked. What happens then is read off the agent, not off a second switch: one with a `config` of its own falls back to it, and one without fails the turn with `MCPSamplingUnavailableError`. So `client_model=` decides only whether the caller's budget may be spent at all — a deployment holding credentials it would rather not spend keeps them as the fallback simply by configuring them.
+
+A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here, and so does a completion that comes back carrying no text at all — read as an empty reply it would report success while the agent answered with nothing.
+
+!!! note "`MCPDeprecationWarning` on this path is expected"
+    MCP deprecated sampling in revision 2026-07-28 (SEP-2577), and the `mcp` SDK raises `mcp.MCPDeprecationWarning` on every borrowed request. The warning comes from the SDK, not from AG2, and AG2 does not suppress it — it is true, and hiding it would leave you believing a mechanism with an expiry date is ordinary. The deprecation is annotation-only: sampling stays functional for a year past each subsequent specification release. The alternative SEP-2577 recommends is integrating an LLM provider directly, which is what `client_model=False` already does.
+
+### Serve a deterministic tool that asks for something
+
+A `@mcp_tool` served alongside the agent can ask the calling client for a parameter's value, using the SDK's resolver mechanism. A parameter annotated `Annotated[T, Resolve(fn)]` is a **resolved parameter**: the framework runs `fn`, and if it returns a request marker — `Elicit`, `Sample` or `ListRoots` — puts that request to the client and injects the answer.
+
+```python linenums="1"
+from typing import Annotated
+
+from pydantic import BaseModel
+
+from ag2 import Agent
+from ag2.mcp import Elicit, MCPServer, Resolve, mcp_tool
+
+class Colour(BaseModel):
+    answer: str
+
+def pick_colour() -> Elicit[Colour]:
+    return Elicit("What colour?", Colour)
+
+@mcp_tool
+def paint(room: str, colour: Annotated[Colour, Resolve(pick_colour)]) -> str:
+    """Paint a room."""
+    return f"painted {room} {colour.answer}"
+
+app = MCPServer(Agent(name="painter"), tools=[paint])
+```
+
+A resolved parameter is kept out of the advertised `inputSchema` — it is filled by its resolver, never by the caller.
+
+`Resolve`, `Elicit`, `Sample`, `ListRoots` and `RequestStateSecurity` are re-exported from `ag2.mcp` so AG2's own examples have one import location. Everything else — wire models, less common types — comes from `mcp` directly; AG2 does not mirror the SDK.
+
+### Run both halves against each other
+
+`examples/mcp/server_elicitation_stdio.py` serves an agent whose tool asks a question, and `examples/mcp/client_elicitation.py` calls it from a second AG2 agent whose `hitl_hook` answers it:
+
+```python linenums="1"
+# examples/mcp/server_elicitation_stdio.py — the served half
+import asyncio
+
+from ag2 import Agent, Context
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+from ag2.tools import tool
+
+@tool(description="Book a table, confirming the party size with the user.")
+async def book_table(when: str, context: Context) -> str:
+    size = await context.input(f"How many people for {when}?")
+    return f"Booked {when} for {size}."
+
+agent = Agent(
+    name="concierge",
+    prompt="You are a restaurant concierge. Use book_table to make a booking.",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[book_table],
+)
+
+async def main() -> None:
+    await MCPServer(agent, elicitation_policy="ask").run_stdio()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+```python linenums="1"
+# examples/mcp/client_elicitation.py — the calling half
+import asyncio
+import os
+import sys
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.events import HumanInputRequest, HumanMessage
+from ag2.tools import MCPAnswerPolicy, MCPStdioServerConfig, MCPToolkit
+
+def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+    print(f"[the served agent asks] {event.content}")
+    return HumanMessage(content="four")
+
+async def main() -> None:
+    agent = Agent(
+        name="diner",
+        config=AnthropicConfig(model="claude-sonnet-5"),
+        hitl_hook=hitl_hook,
+        tools=[
+            MCPToolkit(
+                MCPStdioServerConfig(
+                    command=sys.executable,
+                    args=["-m", "examples.mcp.server_elicitation_stdio"],
+                    env=dict(os.environ),
+                ),
+                answering=MCPAnswerPolicy(elicitation="ask"),
+            )
+        ],
+    )
+
+    reply = await agent.ask("Ask the concierge to book a table for Friday at 8pm.")
+    print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Run `python -m examples.mcp.client_elicitation` with `ANTHROPIC_API_KEY` set; it launches the served half as a subprocess.
+
+---
+
+## Concepts
+
+### Served agent and calling client
+
+The **served agent** is the AG2 agent this server exposes; the **calling client** is whatever MCP client invokes it. The two are separate deployments with separate resources — separate humans, separate model credentials — and every setting on this page is about which of them supplies what.
+
+### Elicitation, and what the policy governs
+
+An **elicitation** is a question raised while a turn is running and put to the human behind the calling client. `elicitation_policy` governs the **served agent's own** questions: a `context.input()` inside a tool the agent called, which the deployment may not have written.
+
+**It does not gate a resolved parameter.** An `Elicit` returned by a `Resolve(...)` resolver asks regardless of the policy, and that is deliberate on two grounds:
+
+- A resolved parameter is part of a tool's signature — written by whoever wrote that tool and put it in `tools=[...]`. It is not run-time agent behaviour for a policy to override.
+- It cannot be gated cleanly. The SDK's `Resolve` marker holds only a callable, so what a resolver will ask for is unknowable until it runs. Gating would therefore have to refuse `Sample` and `ListRoots` resolvers too — a setting named for elicitation breaking two unrelated mechanisms.
+
+A deployment with no human anywhere simply serves no such tool.
+
+### Calling-client model
+
+The **calling-client model** is the model a client makes available for the served agent's reasoning. It is not a second AG2 model configuration: nothing selects a model, and only `max_tokens` travels, because it is the only generation parameter the protocol makes mandatory. AG2 fixes that internally at 4096 and exposes no knob for it — the remaining generation parameters belong to a model configuration, and a borrowed model has none here.
+
+### Deterministic MCP tool and resolved parameter
+
+A **deterministic MCP tool** is a `@mcp_tool` served next to the agent: its declared inputs and its result do not depend on an agent turn. A **resolved parameter** is one whose value comes from asking the calling client, declared in the signature rather than raised at run time.
+
+Its contract is the **opposite** of the conversational tool's:
+
+| | the agent's `ask` tool | a `@mcp_tool` resolver |
+|---|---|---|
+| across a round trip | the run is **held**, and resumes where it stopped | the resolver body **re-runs**, with answers already collected supplied to it |
+| runs more than once? | never | once per round |
+| the tool body | is the turn | runs **once**, on the round where every resolved parameter is satisfied |
+| can ask for | a question for the client's human | `Elicit`, `Sample`, or `ListRoots` |
+
+The last row is worth noticing: the agent's own turn never asks for the caller's roots — it has no filesystem of its own to scope to them — but a deterministic tool may be exactly the code that wants them.
+
+Write resolvers **idempotently**: a side effect in one fires once per round. Nothing is held for a deterministic tool, so none of the paused-run operations below apply to it.
+
+### Protocol era
+
+MCP has two eras, and which one a connection speaks decides how a request for input travels:
+
+| | handshake era (up to 2025-11-25) | modern era (2026-07-28) |
+|---|---|---|
+| how the question travels | a standalone `elicitation/create` request, awaited inline | back as the **result** of the call, in an `InputRequiredResult` |
+| what the client does | answers on the back-channel | retries the call carrying the answer |
+| what the server holds | nothing | **the paused run, in this process** |
+
+The modern revision defines no server-to-client request at all, so a question can only come back as the result of the call.
+
+### Paused run
+
+A **paused run** is a served agent's turn held mid-flight while the calling client is asked for something. A conversational turn cannot be replayed to get back to where it was — re-running it would re-issue LLM calls, re-run tool side effects and re-spend tokens — so on the modern era the run is held in the serving process between the two calls. See [Operating a server that pauses](#operating-a-server-that-pauses).
+
+### Conversations
 
 By default (`sessions=True`) the server keeps **conversation sessions**: a history that accumulates across `tools/call` invocations, so a caller can hold a multi-turn exchange instead of a series of unrelated questions.
-
-### Starting and continuing one
 
 A caller names the conversation it wants to continue. The tool takes an optional `conversation` argument holding an opaque **conversation handle**:
 
@@ -127,28 +332,26 @@ asyncio.run(main())
 
 Handles are minted by the server and are version-4 UUIDs — opaque and unguessable. A caller-chosen string is never adopted as a new conversation name; that would let any caller push other callers' conversations out of the bounded registry.
 
-### When a handle is not recognised
-
 A handle the server does not know — expired, evicted, or never minted — comes back as a **tool execution error**: a result flagged `isError`, not a JSON-RPC protocol error. The protocol draws that line so the model can recover by starting a new conversation instead of failing the turn. It is never treated as a fresh conversation, and never falls back to the MCP session.
 
-### What differs between the two protocol eras
-
-MCP has two eras, and each sanctions a different continuity mechanism:
+Which conversation an unnamed call lands in depends on the era, since each sanctions a different mechanism:
 
 | a `conversation` passed? | handshake era (up to 2025-11-25) | modern era (2026-07-28) |
 |---|---|---|
 | yes | that conversation | that conversation |
 | no  | the caller's **MCP session** keeps its own history (one per process over stdio) | a fresh conversation each call |
 
-A **handshake-era** client negotiates an `initialize` handshake that opens an **MCP session** — the transport's own notion of a connected client — so it gets implicit continuity without passing anything, exactly as before. It may still opt into explicit handles: the handle returned on its first call names the same conversation its MCP session does, so it can migrate ahead of changing protocol revision.
+A **handshake-era** client negotiates an `initialize` handshake that opens an **MCP session** — the transport's own notion of a connected client — so it gets implicit continuity without passing anything. It may still opt into explicit handles: the handle returned on its first call names the same conversation its MCP session does, so it can migrate ahead of changing protocol revision.
 
 A **modern-era** client has no MCP session. The revision states that connections do not represent conversations, that clients may interleave unrelated requests on one transport, and that servers must not use connection or process identity to establish context — so the handle is the only continuity mechanism available there, on every transport.
 
-### Turning conversations off
+`sessions=False` makes every call stateless, and the `conversation` argument disappears from the advertised tool — a client is never offered an argument that cannot work. A client that passes one anyway gets a tool error saying the server keeps no conversations, rather than a reply that quietly forgets.
 
-`sessions=False` makes every call stateless, and the `conversation` argument disappears from the advertised tool — a client is never offered an argument that cannot work. A client that passes one anyway gets a tool error saying the server keeps no conversations, rather than a reply that quietly forgets: this server mints no handles, so continuity is not something omitting the argument would restore either.
+---
 
-### Tuning the registry
+## Operations
+
+### Sizing the conversation registry
 
 `SessionConfig` bounds the registry so a long-lived server cannot leak memory:
 
@@ -166,29 +369,14 @@ app = MCPServer(
 
 - `max_sessions` — LRU cap; the least-recently-used conversation's history is dropped once the cap is exceeded.
 - `ttl` — idle expiry in seconds; a conversation untouched for longer has its history dropped (`None`, the default, means no expiry).
-- `storage` — the history backend (see below).
+- `storage` — the history backend.
 
 Both bounds are quoted in the `conversation` argument's own description, so a client can judge whether an old handle is still worth presenting.
 
 !!! note "Every unnamed call with no session to fall back on creates a conversation"
     A call that omits `conversation` and has no MCP session to key on gets a fresh conversation — and a handle for it — on every call. That is every modern-era call, and every handshake-era call on a `stateless=True` transport, so one-shot traffic occupies registry slots too. Size `max_sessions` for your call rate, and set a `ttl` so abandoned one-shot conversations expire instead of pushing real ones out.
 
-## What `stateless` governs
-
-`stateless=True` stops the **HTTP transport** issuing an `mcp-session-id`. That is a *handshake-era* switch: modern-era requests are self-contained single exchanges that never carry a session id in the first place, so the flag does not reach them.
-
-Pairing `stateless=True` with `sessions=True` is a valid configuration, not a contradiction — no transport session, conversations named by handle:
-
-```python linenums="1"
-from ag2 import Agent
-from ag2.config import AnthropicConfig
-from ag2.mcp import MCPServer
-
-agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
-app = MCPServer(agent, stateless=True)
-```
-
-## Where conversations live
+### Where conversations live
 
 A conversation's history is written through the configured `Storage`; the registry that maps a conversation's *name* — a handle, or an MCP session id — to that history is held **in the serving process**.
 
@@ -212,108 +400,36 @@ app = MCPServer(
 !!! warning "A shared backend does not make a handle portable"
     The registry is per-process, so a shared `Storage` shares the stored history but not the mapping from a name to it. Cross-replica continuity still needs the caller pinned to one replica.
 
-## Asking the caller a question
+### What `stateless` governs
 
-A tool inside a served agent can call `context.input()`, and the question reaches the human behind the **calling client** — the same tool code that prompts a terminal locally:
+`stateless=True` stops the **HTTP transport** issuing an `mcp-session-id`. That is a *handshake-era* switch: modern-era requests are self-contained single exchanges that never carry a session id in the first place, so the flag does not reach them.
 
-```python linenums="1"
-from ag2 import Agent, Context
-from ag2.config import AnthropicConfig
-from ag2.mcp import MCPServer
+Pairing `stateless=True` with `sessions=True` is a valid configuration, not a contradiction — no transport session, conversations named by handle.
 
+### Operating a server that pauses
 
-async def book_table(when: str, ctx: Context) -> str:
-    """Book a table, confirming the party size with the user."""
-    size = await ctx.input(f"How many people for {when}?")
-    return f"Booked {when} for {size}."
+A modern-era paused run lives in exactly one process. Four facts decide a deployment:
 
-
-agent = Agent(name="concierge", config=AnthropicConfig(model="claude-haiku-4-5-20251001"), tools=[book_table])
-app = MCPServer(agent, elicitation_policy="ask")  # "ask" is the default
-```
-
-`elicitation_policy="decline"` never asks a client at all. There is deliberately no `"auto"`: an arbitrary question has no answer AG2 could invent without fabricating data on the user's behalf.
-
-Only a client that advertised it can answer is ever asked. A client that cannot — or a policy of `"decline"` — falls through to the agent's own `hitl_hook`, and with none configured the turn fails with the usual `HumanInputNotProvidedError` and its instructional message. That loud failure is deliberate: silently returning a degraded result would hide from the caller that the question went nowhere.
-
-### What it costs to serve, per protocol era
-
-How the question travels is decided by the negotiated revision, not by configuration:
-
-| | handshake era (up to 2025-11-25) | modern era (2026-07-28) |
-|---|---|---|
-| how the question travels | a standalone `elicitation/create` request, awaited inline | back as the **result** of the call, in an `InputRequiredResult` |
-| what the client does | answers on the back-channel | retries the call carrying the answer |
-| what the server holds | nothing | **the paused run, in this process** |
-
-The modern revision defines no server-to-client request at all, so a question can only come back as the result of the call. And a conversational turn cannot be replayed to get back to where it was — re-running it would re-issue LLM calls, re-run tool side effects and re-spend tokens — so the run is **held in the serving process** between the two calls.
-
-Three consequences belong in an operator's head rather than in a bug report:
-
-- **Sticky routing is required.** The retry must reach the process holding the run.
+- **Sticky routing is required.** The retry that resumes a run must reach the process holding it. A pausing server must not sit behind plain round-robin.
 - **A pause does not survive a restart.** The retry is refused with a protocol error and the caller starts the call again.
-- **More than one replica needs a shared `requestState` key.** The default policy mints a process-local one, so state minted by one worker is rejected by another. Pass `request_state_security=RequestStateSecurity(keys=[...])`. Necessary, and not sufficient — the run is still in exactly one process.
-
-!!! warning "A conversation with a paused run takes no other calls"
-    While a turn is paused, a call naming that same `conversation` comes back as a tool error telling the caller to answer the outstanding question or start a separate conversation. The pause deliberately lets go of the conversation's lock — the retry that resumes it would otherwise deadlock behind it — but a conversation's history is still one thread of work, so a second call would queue inside the agent, behind a run that is waiting on a human, with nothing to time it out. Refusing it is the recoverable answer.
+- **More than one replica needs a shared `requestState` key.** The default policy mints a process-local one, so state minted by one worker is rejected by another; name the signing keys yourself with `request_state_security=` (see [Advanced: replacing the request-state policy](#advanced-replacing-the-request-state-policy)). Necessary, and not sufficient — the run is still in exactly one process.
+- **A conversation with a paused run takes no other calls.** A call naming that same `conversation` comes back as a tool error telling the caller to answer the outstanding question or start a separate conversation. The pause deliberately lets go of the conversation's lock — the retry that resumes it would otherwise deadlock behind it — but a conversation's history is still one thread of work, so a second call would queue inside the agent behind a run waiting on a human, with nothing to time it out. Refusing it is the recoverable answer, and one a model can act on.
 
 !!! warning "Stateless serving and pausing pull against each other"
-    A server that can pause a run cannot be freely stateless. Both of the above fail *intermittently* under a load balancer, and the symptom is an occasional "Invalid or expired requestState" with nothing pointing at the cause.
+    A server that can pause a run cannot be freely stateless. The first two failures above are *intermittent* under a load balancer, and the symptom is an occasional "Invalid or expired requestState" with nothing pointing at the cause.
 
-### How long a pause lives
+### How long a pause lives, and what an idle server retains
 
-Retention is bounded by the lifetime of the `requestState` token that names the run — one number, not two that can disagree. Once that has expired no client can resume, so the run is unreclaimable and is reclaimed:
+Retention is bounded by the lifetime of the `requestState` token that names the run — one number, not two that can disagree. Unless you replace the policy that mints it, that lifetime is the SDK ephemeral default of **600 seconds**. Once the token has expired no client can resume, so the run is unreachable.
 
-```python linenums="1"
-from mcp.server.request_state import RequestStateSecurity
-
-app = MCPServer(agent, request_state_security=RequestStateSecurity.ephemeral(ttl=120.0))
-```
+**Reclamation is lazy.** An expired run is swept on the next registry operation, so a server that receives no further call keeps an unreachable task and its stream until the process exits. What an idle server therefore retains is at most `ag2.mcp.pause.MAX_PAUSED_RUNS` (256) runs' worth of task and stream, whatever their tokens' age; a server still taking traffic sweeps them as it goes. Process shutdown reclaims all of them.
 
 `context.input(timeout=)` keeps its own meaning — how long the caller waits for an answer — and is enforced independently; whichever bound elapses first ends the turn, and the other does not then report a second, contradictory failure.
 
-!!! note "The timeout now spans the client's side of the round trip"
+!!! note "The timeout spans the client's side of the round trip"
     Served this way, the wait covers the network and a human reading the question in another application, which it never did before. Size it for that, not for a local prompt.
 
-### Deterministic tools ask differently
-
-A `@mcp_tool` served alongside the agent can ask too, using the SDK's resolver mechanism (`Annotated[T, Resolve(fn)]`) — and its contract is the **opposite** of the conversational tool's:
-
-| | the agent's `ask` tool | a `@mcp_tool` resolver |
-|---|---|---|
-| across a round trip | the run is held, and resumes where it stopped | the resolver body **re-runs**, with answers already collected supplied to it |
-| runs more than once? | never | once per round |
-| can ask for | a question for the client's human | `Elicit`, `Sample`, or `ListRoots` |
-
-The last row is the one worth noticing: the agent's own turn never asks for the caller's roots — it has no filesystem of its own to scope to them — but a deterministic tool may be exactly the code that wants them, and the resolver mechanism carries that request.
-
-Nothing is held for a deterministic tool, so nothing above about sticky routing applies to it. Write resolvers idempotently: a side effect in one fires once per round.
-
-`elicitation_policy` does not reach these. It governs the *agent's* questions — a tool inside it calling `context.input()` at run time, which the deployment may not have written — whereas an `Elicit` in a resolver is a request the server's own author put in that tool's signature. A deployment with no human anywhere serves no such tool.
-
-## Running on the caller's model
-
-A deployment holding no model credentials can still serve an agent that needs one: `client_model=` runs the agent's own reasoning on the **calling client's** LLM, over MCP sampling.
-
-```python linenums="1"
-from ag2 import Agent
-from ag2.mcp import ClientModel, MCPServer
-
-agent = Agent(name="assistant")  # no config of its own
-app = MCPServer(agent, client_model=True)
-
-# ClientModel tunes the channel, the same shape as sessions=:
-app = MCPServer(agent, client_model=ClientModel(max_tokens=512))
-```
-
-It is off unless you ask for it, and a server that has not enabled it never sends a sampling request and never needs the capability of its clients. `max_tokens` is the only generation parameter that travels, because it is the only one the protocol makes mandatory — the rest belong to a model configuration, and a borrowed model has none here.
-
-!!! warning "This moves three things to the caller"
-    **Cost** — every turn the agent takes spends their budget. **Capability** — which model answers is a fact about the client, so the same agent gives different answers to different callers and its quality is no longer yours to control. **Reproducibility** — a trace cannot be re-run against a known model, because the model was the peer's.
-
-A client that advertised no sampling capability is never asked. What happens then is read off the agent, not off a second switch: one with a `config` of its own falls back to it, and one without fails the turn with `MCPSamplingUnavailableError`. So `client_model=` decides only whether the caller's budget may be spent at all — a deployment holding credentials it would rather not spend keeps them as the fallback simply by configuring them. A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here, and so does a completion that comes back carrying no text at all — read as an empty reply it would report success while the agent answered with nothing.
-
-## Authentication and who owns a conversation
+### Authentication and who owns a conversation
 
 `security=` makes the server an OAuth 2.1 Resource Server: it advertises RFC 9728 Protected Resource Metadata at `/.well-known/oauth-protected-resource`, answers a missing or invalid token with `401` (pointing at that metadata) and an insufficient scope with `403`.
 
@@ -341,8 +457,77 @@ With authentication configured, a conversation records the principal that create
 !!! warning "Without `security`, the handle is the only credential"
     With no authentication there is no principal to bind to, so anyone holding a handle can continue the conversation it names. The handle travels through readable content — the model's context, client logs, tracing in between — so decide whether that is acceptable for your deployment before serving unauthenticated.
 
+### Advanced: replacing the request-state policy
+
+`request_state_security=` is an escape hatch, not part of the happy path. It replaces the ephemeral policy that seals the state a paused run is resumed with, and whose `ttl` (600 seconds by default) is how long a pause lives. Pass `ephemeral(ttl=)` to move that bound; name the signing `keys` when more than one replica has to accept state another one minted:
+
+```python linenums="1"
+import os
+
+from ag2.mcp import MCPServer, RequestStateSecurity
+
+# A shorter pause lifetime, under a key this process alone knows.
+app = MCPServer(agent, request_state_security=RequestStateSecurity.ephemeral(ttl=120.0))
+
+# A key every replica shares, so a retry can be verified by whichever one answers it.
+app = MCPServer(agent, request_state_security=RequestStateSecurity(keys=[os.environ["MCP_STATE_KEY"]]))
+```
+
+Each key must carry at least 32 bytes of secret randomness — generate one with `python -c "import secrets; print(secrets.token_hex(32))"` — and a shorter one is rejected at construction. Pass several to rotate: any of them verifies, the first one signs.
+
+The shared key only makes the state *verifiable* everywhere; the run it names is still held in one process, so sticky routing is still what gets the retry back to it.
+
+### Other escape hatches
+
+- **`server`** — the underlying low-level `mcp` `Server`, for wiring the SDK reaches that AG2 does not.
+- **`lifespan=`** — an `mcp` server lifespan whose yielded state every `tools/call` can reach via `request_context.lifespan_context`.
+- **`context_provider=`** — build the agent's `ConversationContext` yourself per call.
+
+---
+
+## Constructor reference
+
+### `MCPServer(agent, **options)`
+
+| option | default | what it is for |
+|---|---|---|
+| `name` / `version` / `title` / `description` / `instructions` / `website_url` / `icons` | derived / `None` | populate the `initialize` handshake; presentation only, never derived from the agent |
+| `cache_hints` | `None` | `ttlMs` / `cacheScope` freshness hints (SEP-2549); only 2026-07-28 clients see them |
+| `tool_name` | `"ask"` | the conversational tool's name |
+| `tool_description` | `None` | its description |
+| `stream_progress` | `True` | forward the agent's stream events as progress notifications and log messages |
+| `context_provider` | `None` | build the agent's context per call |
+| `lifespan` | `None` | an `mcp` server lifespan |
+| `sessions` | `True` | conversation history: `True`, a `SessionConfig`, or `False` for stateless |
+| `elicitation_policy` | `"ask"` | whether the served agent's questions reach the calling client's human |
+| `client_model` | `False` | run the agent's reasoning on the calling client's model |
+| `resources` / `resource_templates` / `prompts` | `()` | expose these alongside the tool; each capability is advertised only when non-empty |
+| `tools` | `()` | deterministic `@mcp_tool` tools served next to `ask` |
+| `path` | `"/mcp"` | the HTTP endpoint path |
+| `stateless` | `False` | stop the HTTP transport issuing an `mcp-session-id` |
+| `json_response` | `False` | answer with JSON rather than SSE |
+| `security` | `None` | OAuth 2.1 Resource Server requirements |
+| `request_state_security` | `None` | advanced: replace the ephemeral request-state policy |
+
+### `SessionConfig`
+
+| field | default | what it is for |
+|---|---|---|
+| `max_sessions` | `1024` | LRU cap on remembered conversations |
+| `ttl` | `None` | idle expiry, in seconds |
+| `storage` | `None` | the history backend; in-memory when unset |
+
+### `MCPFunctionTool`
+
+Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `description`, `handler`, `input_schema`, `title` and `annotations` — and nothing else; resolver metadata is the decorator's own state, not a constructor argument.
+
+### Names re-exported from `ag2.mcp`
+
+`MCPServer`, `SessionConfig`, `MCPFunctionTool`, `mcp_tool`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
+
+Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the last: `MCPAgentConfigError`, `MCPToolNameConflictError`, `UnknownConversationError` (a handle naming no live conversation, reported to the caller as a tool error), `MCPResourceNotFoundError`, `MCPPromptNotFoundError`, and `MCPSamplingUnavailableError` / `MCPSamplingRefusedError` (both `MCPSamplingError`). `MCPElicitationDeclinedError` subclasses core's `HumanInputNotProvidedError` instead, so a question the client refused is the same failure as one nobody was there to answer.
+
 ## Beyond the conversational tool
 
-- **Custom tools** run a handler of yours directly instead of invoking the agent — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for `@mcp_tool` and returning renderable UI. Their state is their own; conversation handles apply only to the conversational tool.
-- **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`; the matching capability is advertised only when a non-empty collection is supplied.
-- **Progress and logs** — while the agent runs, its stream events are forwarded to the client as progress notifications and log messages. Turn this off with `stream_progress=False`.
+- **MCP-UI** — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for returning renderable UI from a `@mcp_tool`.
+- **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`.

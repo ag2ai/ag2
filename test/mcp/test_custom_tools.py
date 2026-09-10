@@ -8,12 +8,12 @@ import pytest
 from dirty_equals import IsPartialDict
 from mcp.types import TextContent, ToolAnnotations
 
-from ag2 import Agent
 from ag2.mcp import MCPFunctionTool, MCPServer, mcp_tool
 from ag2.mcp.errors import MCPToolNameConflictError
 from ag2.mcp.testing import connect
 from ag2.mcp.tools import MCPRequestContext, ToolContext
-from ag2.testing import TestConfig
+
+from ._helpers import greeter
 
 
 async def _echo(args: dict[str, Any], _ctx: ToolContext) -> TextContent:
@@ -24,7 +24,7 @@ async def _echo(args: dict[str, Any], _ctx: ToolContext) -> TextContent:
 class TestCustomTools:
     async def test_custom_tools_listed_next_to_ask(self) -> None:
         server = MCPServer(
-            Agent("g", config=TestConfig("hi")),
+            greeter(),
             tools=[
                 MCPFunctionTool("echo", "Echo x", _echo, {"type": "object", "properties": {"x": {"type": "string"}}})
             ],
@@ -36,7 +36,7 @@ class TestCustomTools:
         assert [t.name for t in tools.tools] == ["ask", "echo"]
 
     async def test_custom_tool_dispatches_to_handler(self) -> None:
-        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[MCPFunctionTool("echo", "Echo x", _echo)])
+        server = MCPServer(greeter(), tools=[MCPFunctionTool("echo", "Echo x", _echo)])
 
         async with connect(server) as session:
             result = await session.call_tool("echo", {"x": "42"})
@@ -45,7 +45,7 @@ class TestCustomTools:
         assert result.content == [TextContent(type="text", text="got 42")]
 
     async def test_ask_still_works_alongside_custom_tools(self) -> None:
-        server = MCPServer(Agent("g", config=TestConfig("hello")), tools=[MCPFunctionTool("echo", "Echo x", _echo)])
+        server = MCPServer(greeter("hello"), tools=[MCPFunctionTool("echo", "Echo x", _echo)])
 
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
@@ -56,7 +56,7 @@ class TestCustomTools:
         def sync_handler(args: dict[str, Any], _ctx: ToolContext) -> TextContent:
             return TextContent(type="text", text="sync ok")
 
-        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[MCPFunctionTool("s", "sync", sync_handler)])
+        server = MCPServer(greeter(), tools=[MCPFunctionTool("s", "sync", sync_handler)])
 
         async with connect(server) as session:
             result = await session.call_tool("s", {})
@@ -65,19 +65,19 @@ class TestCustomTools:
 
     async def test_name_collision_with_ask_is_rejected(self) -> None:
         with pytest.raises(MCPToolNameConflictError):
-            MCPServer(Agent("g", config=TestConfig("hi")), tools=[MCPFunctionTool("ask", "clash", _echo)])
+            MCPServer(greeter(), tools=[MCPFunctionTool("ask", "clash", _echo)])
 
     async def test_duplicate_tool_names_are_rejected(self) -> None:
         with pytest.raises(MCPToolNameConflictError):
             MCPServer(
-                Agent("g", config=TestConfig("hi")),
+                greeter(),
                 tools=[MCPFunctionTool("echo", "first", _echo), MCPFunctionTool("echo", "second", _echo)],
             )
 
     async def test_string_result_from_handler_becomes_a_text_block(self) -> None:
         # A plain string must not be split into per-character blocks.
         server = MCPServer(
-            Agent("g", config=TestConfig("hi")),
+            greeter(),
             tools=[MCPFunctionTool("hello", "Say hello", lambda args, ctx: "hello world")],
         )
 
@@ -88,7 +88,7 @@ class TestCustomTools:
 
     async def test_title_and_annotations_are_advertised(self) -> None:
         server = MCPServer(
-            Agent("g", config=TestConfig("hi")),
+            greeter(),
             tools=[
                 MCPFunctionTool("echo", "Echo x", _echo, title="Echo", annotations=ToolAnnotations(readOnlyHint=True))
             ],
@@ -108,7 +108,7 @@ class TestCustomTools:
     async def test_collision_respects_custom_tool_name(self) -> None:
         # The reserved name follows ``tool_name``; "ask" is free when renamed.
         server = MCPServer(
-            Agent("g", config=TestConfig("hi")),
+            greeter(),
             tool_name="chat",
             tools=[MCPFunctionTool("ask", "now free", _echo)],
         )
@@ -141,7 +141,7 @@ class TestMcpToolDecorator:
             """Add an item."""
             return TextContent(type="text", text=f"added {good_id}")
 
-        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[add])
+        server = MCPServer(greeter(), tools=[add])
 
         async with connect(server) as session:
             tools = await session.list_tools()
@@ -156,7 +156,7 @@ class TestMcpToolDecorator:
             """Greet."""
             return TextContent(type="text", text=f"hi {name}")
 
-        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[greet])
+        server = MCPServer(greeter(), tools=[greet])
 
         async with connect(server) as session:
             result = await session.call_tool("greet", {})
@@ -187,7 +187,7 @@ class TestMcpToolDecorator:
             """Greet."""
             return f"hi {name}"
 
-        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[greet])
+        server = MCPServer(greeter(), tools=[greet])
 
         async with connect(server) as session:
             result = await session.call_tool("greet", {})
@@ -202,7 +202,7 @@ class TestMcpToolDecorator:
 
         assert "ctx" not in whoami.input_schema.get("properties", {})
 
-        server = MCPServer(Agent("g", config=TestConfig("hi")), tools=[whoami])
+        server = MCPServer(greeter(), tools=[whoami])
 
         async with connect(server) as session:
             result = await session.call_tool("whoami", {})

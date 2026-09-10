@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import ag2.tools
+import ag2.tools.toolkits
+import ag2.tools.toolkits.mcp_server
 import ag2.tools.types
 from ag2 import Agent
 from ag2.tools import Toolkit, tool
@@ -48,6 +50,18 @@ class TestImportPathsStaySeparate:
 
     def test_concrete_tools_are_untouched(self) -> None:
         assert [name for name in _CONCRETE_TOOLS if name not in ag2.tools.__all__] == []
+
+
+class TestTheMCPAnswerPolicyNamesItsProtocol:
+    """`ag2.tools` holds several protocols' names; a policy must say which it answers for."""
+
+    def test_it_is_advertised_under_the_protocol_qualified_name(self) -> None:
+        assert "MCPAnswerPolicy" in ag2.tools.__all__
+
+    def test_the_generic_name_is_exported_at_no_level(self) -> None:
+        for module in (ag2.tools, ag2.tools.toolkits, ag2.tools.toolkits.mcp_server):
+            assert "AnswerPolicy" not in module.__all__
+            assert not hasattr(module, "AnswerPolicy")
 
 
 class TestToolAbstraction:

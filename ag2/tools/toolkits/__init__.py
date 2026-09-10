@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .filesystem import FilesystemToolkit
-from .mcp_server import AnswerPolicy, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
+from .mcp_server import MCPAnswerPolicy, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
 
 __all__ = (
-    "AnswerPolicy",
     "FilesystemToolkit",
+    "MCPAnswerPolicy",
     "MCPServerConfig",
     "MCPStdioServerConfig",
     "MCPToolkit",

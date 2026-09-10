@@ -64,7 +64,7 @@ from ag2.types import (
     VideoMediaType,
 )
 
-from .answering import AnswerPolicy, InputRequestAnswerer
+from .answering import InputRequestAnswerer, MCPAnswerPolicy
 from .types import MCPServerConfig, MCPStdioServerConfig, ProtocolMode
 
 AnyMCPConfig = MCPServerConfig | MCPStdioServerConfig
@@ -182,7 +182,7 @@ class _MCPProxyTool(Tool):
         raw_tool: MCPTool,
         *,
         middleware: tuple[ToolMiddleware, ...] = (),
-        answering: AnswerPolicy,
+        answering: MCPAnswerPolicy,
     ) -> None:
         self._config = config
         self._middleware = middleware
@@ -279,13 +279,25 @@ class MCPToolkit(Toolkit):
 
     A server may answer a tool call by asking for something instead of returning
     a result — a question for the user, a model completion, the client's roots.
-    ``answering`` says which of those this agent will supply, and everything in
-    it is off by default: these hand the operator's own resources to a server
-    they may not control. See :class:`.AnswerPolicy`. Whatever is enabled is
-    answered inside the same operation that opened the session and the call is
-    retried, so nothing is held between calls — the pause is on the remote
-    server and this end is simply waiting.
+    Whatever ``answering`` enables is answered inside the same operation that
+    opened the session and the call is retried, so nothing is held between calls:
+    the pause is on the remote server and this end is simply waiting.
+
+    Args:
+        server: The server to reach — a URL string, an :class:`MCPServerConfig`
+            for a remote one, or an :class:`MCPStdioServerConfig` for one
+            launched as a local subprocess.
+        middleware: Tool middleware applied to every call made through this
+            toolkit.
+        answering: Which of the operator's own resources this server may use.
+            With none passed, nothing is advertised and nothing is answered.
     """
+
+    config: "AnyMCPConfig"
+    """The resolved configuration of the server this toolkit reaches."""
+
+    answering: MCPAnswerPolicy
+    """Which of the operator's own resources this server may use."""
 
     __slots__ = ("config", "answering", "_discovered", "_discover_lock")
 
@@ -294,12 +306,12 @@ class MCPToolkit(Toolkit):
         server: str | MCPServerConfig | MCPStdioServerConfig,
         *,
         middleware: Iterable[ToolMiddleware] = (),
-        answering: AnswerPolicy | None = None,
+        answering: MCPAnswerPolicy | None = None,
     ) -> None:
         if isinstance(server, str):
             server = MCPServerConfig(server_url=server)
         self.config: AnyMCPConfig = server
-        self.answering = answering if answering is not None else AnswerPolicy()
+        self.answering = answering if answering is not None else MCPAnswerPolicy()
         self._discovered = False
         self._discover_lock = asyncio.Lock()
 

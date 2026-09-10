@@ -15,7 +15,7 @@ class MCPAgentConfigError(MCPServerError):
     def __init__(self, agent_name: str) -> None:
         super().__init__(
             f"Agent {agent_name!r} has no model config. Give it one with `Agent(config=...)`, or run it on "
-            "the calling client's model with `MCPServer(..., client_model=ClientModel())`."
+            "the calling client's model with `MCPServer(..., client_model=True)`."
         )
 
 
@@ -50,10 +50,9 @@ class MCPPromptNotFoundError(MCPServerError):
 class UnknownConversationError(MCPServerError):
     """Raised when a presented conversation handle names no live conversation.
 
-    Reported to the caller as a *tool execution* error rather than a JSON-RPC
-    one: the protocol draws that line so the model can recover by starting a new
-    conversation instead of failing the turn. A handle created by a different
-    principal raises this too, so the error does not disclose that it exists.
+    Reported as a *tool execution* error, so the model can recover by starting a
+    new conversation instead of failing the turn. A handle created by a
+    different principal raises this too.
     """
 
     def __init__(self) -> None:
@@ -65,9 +64,8 @@ class UnknownConversationError(MCPServerError):
 class MCPElicitationDeclinedError(HumanInputNotProvidedError):
     """Raised when the calling MCP client refused a served agent's question.
 
-    A subclass rather than a new type: the question was put and no answer came
-    back, which is the outcome the human-input model already names. Distinct only
-    so a host can tell a refusal from an absent channel.
+    A :class:`HumanInputNotProvidedError` subclass, distinct only so a host can
+    tell a refusal from an absent channel.
     """
 
     def __init__(self, action: str) -> None:
@@ -85,9 +83,7 @@ class MCPSamplingError(MCPServerError):
 class MCPSamplingUnavailableError(MCPSamplingError):
     """Raised when the caller cannot lend the model this server was told to borrow.
 
-    Failing beats answering some other way, which would hide that the agent never
-    reasoned on the model the caller was told about. An agent that has a ``config``
-    of its own falls back to it instead of raising this.
+    An agent that has a ``config`` of its own falls back to it instead.
     """
 
     def __init__(self) -> None:
@@ -99,11 +95,7 @@ class MCPSamplingUnavailableError(MCPSamplingError):
 
 
 class MCPSamplingRefusedError(MCPSamplingError):
-    """Raised when a turn needs more of a model than a borrowed one can give.
-
-    An agent that lost its tools or its schema without being told would answer as
-    though it had never had them.
-    """
+    """Raised when a turn needs more of a model than a borrowed one can give."""
 
     def __init__(self, reason: str) -> None:
         super().__init__(f"Cannot run this turn on the calling MCP client's model: {reason}.")

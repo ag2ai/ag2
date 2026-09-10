@@ -33,10 +33,10 @@ from mcp.types import (
 )
 from pydantic import BaseModel
 
-from ag2 import Agent
 from ag2.mcp import MCPServer, mcp_tool
 from ag2.mcp.testing import connect, connect_modern
-from ag2.testing import TestConfig
+
+from ._helpers import greeter, outstanding
 
 
 class Colour(BaseModel):
@@ -86,23 +86,34 @@ def _reset() -> None:
 
 
 def served() -> MCPServer:
-    return MCPServer(Agent("host", config=TestConfig("unused")), tools=[paint])
+    return MCPServer(greeter("unused", name="host"), tools=[paint])
 
 
 def rooted() -> MCPServer:
-    return MCPServer(Agent("host", config=TestConfig("unused")), tools=[where])
+    return MCPServer(greeter("unused", name="host"), tools=[where])
 
 
 async def lists_one_root(context: ClientRequestContext) -> ListRootsResult:
     return ListRootsResult(roots=[Root(uri="file:///work")])
 
 
+def accepts(colour: str) -> ElicitResult:
+    """A ``Colour`` the client's human picked, as the wire carries it."""
+    return ElicitResult(action="accept", content={"answer": colour})
+
+
 async def accepts_blue(context: ClientRequestContext, params: ElicitRequestParams) -> ElicitResult:
-    return ElicitResult(action="accept", content={"answer": "blue"})
+    return accepts("blue")
 
 
 async def _call(session: Any, **kwargs: Any) -> Any:
     return await session.call_tool("paint", {"room": "kitchen"}, allow_input_required=True, **kwargs)
+
+
+async def _answer(session: Any, paused: InputRequiredResult, response: Any) -> Any:
+    """Retry the paused call, answering the question it came back with."""
+    key, _request = outstanding(paused)
+    return await _call(session, input_responses={key: response}, request_state=paused.request_state)
 
 
 @pytest.mark.asyncio
@@ -112,7 +123,7 @@ class TestTheModernEraRoundTrip:
             first = await _call(session)
 
         assert isinstance(first, InputRequiredResult)
-        ((_key, request),) = (first.input_requests or {}).items()
+        _key, request = outstanding(first)
         assert isinstance(request, ElicitRequest)
         assert request.params.message == "What colour?"
         assert BODY_RUNS == [], "the body ran before its parameter was resolved"
@@ -121,12 +132,7 @@ class TestTheModernEraRoundTrip:
         async with connect_modern(served(), elicitation_callback=accepts_blue) as session:
             first = await _call(session)
             assert isinstance(first, InputRequiredResult)
-            (key,) = (first.input_requests or {}).keys()
-            final = await _call(
-                session,
-                input_responses={key: ElicitResult(action="accept", content={"answer": "blue"})},
-                request_state=first.request_state,
-            )
+            final = await _answer(session, first, accepts("blue"))
 
         assert not isinstance(final, InputRequiredResult)
         assert final.is_error is False
@@ -137,12 +143,7 @@ class TestTheModernEraRoundTrip:
         async with connect_modern(served(), elicitation_callback=accepts_blue) as session:
             first = await _call(session)
             assert isinstance(first, InputRequiredResult)
-            (key,) = (first.input_requests or {}).keys()
-            await _call(
-                session,
-                input_responses={key: ElicitResult(action="accept", content={"answer": "blue"})},
-                request_state=first.request_state,
-            )
+            await _answer(session, first, accepts("blue"))
 
         assert RESOLVER_RUNS == ["resolver", "resolver"], "the resolver body did not re-run on the answered round"
         assert BODY_RUNS == ["body"], "the tool body ran on a round that had nothing to run with"
@@ -152,7 +153,7 @@ class TestTheModernEraRoundTrip:
         async with connect_modern(rooted(), list_roots_callback=lists_one_root) as session:
             first = await session.call_tool("where", {}, allow_input_required=True)
             assert isinstance(first, InputRequiredResult)
-            ((key, request),) = (first.input_requests or {}).items()
+            key, request = outstanding(first)
             assert isinstance(request, ListRootsRequest)
             final = await session.call_tool(
                 "where",
@@ -176,13 +177,12 @@ class TestTheModernEraRoundTrip:
 
 
 @pytest.mark.asyncio
-class TestTheHandshakeEra:
-    async def test_the_question_is_answered_inline_with_no_second_round(self) -> None:
-        """That era has a back-channel, so the answer arrives inside the one call."""
-        async with connect(served(), elicitation_callback=accepts_blue) as session:
-            result = await session.call_tool("paint", {"room": "kitchen"})
+async def test_the_handshake_era_answers_the_question_inline_with_no_second_round() -> None:
+    """That era has a back-channel, so the answer arrives inside the one call."""
+    async with connect(served(), elicitation_callback=accepts_blue) as session:
+        result = await session.call_tool("paint", {"room": "kitchen"})
 
-        assert result.is_error is False
-        assert result.content == [TextContent(type="text", text="painted kitchen blue")]
-        assert RESOLVER_RUNS == ["resolver"], "the inline path ran the resolver more than once"
-        assert BODY_RUNS == ["body"]
+    assert result.is_error is False
+    assert result.content == [TextContent(type="text", text="painted kitchen blue")]
+    assert RESOLVER_RUNS == ["resolver"], "the inline path ran the resolver more than once"
+    assert BODY_RUNS == ["body"]

@@ -6,10 +6,10 @@ import pytest
 from mcp.types import TextContent
 from mcp_types.version import LATEST_MODERN_VERSION
 
-from ag2 import Agent
 from ag2.mcp import MCPServer
 from ag2.mcp.testing import connect_modern
-from ag2.testing import TestConfig
+
+from ._helpers import greeter
 
 
 @pytest.mark.asyncio
@@ -22,7 +22,7 @@ class TestE2EModern:
     """
 
     async def test_negotiated_version_is_the_modern_revision(self) -> None:
-        server = MCPServer(Agent("greeter", config=TestConfig("hi")))
+        server = MCPServer(greeter())
 
         async with connect_modern(server) as session:
             negotiated = session.protocol_version
@@ -30,7 +30,7 @@ class TestE2EModern:
         assert negotiated == LATEST_MODERN_VERSION
 
     async def test_list_tools_exposes_ask(self) -> None:
-        server = MCPServer(Agent("greeter", "Be nice.", config=TestConfig("hi")))
+        server = MCPServer(greeter())
 
         async with connect_modern(server) as session:
             tools = await session.list_tools()
@@ -38,7 +38,7 @@ class TestE2EModern:
         assert [t.name for t in tools.tools] == ["ask"]
 
     async def test_call_tool_returns_reply(self) -> None:
-        server = MCPServer(Agent("greeter", config=TestConfig("hello there!")))
+        server = MCPServer(greeter("hello there!"))
 
         async with connect_modern(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})

@@ -41,7 +41,6 @@ from .mappers import input_validation_error, tool_error
 from .pause import PausedRuns
 from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
-from .sampling import ClientModel
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
 from .tools import MCPFunctionTool, ToolProvider
@@ -66,17 +65,6 @@ def _package_version() -> str:
         return _DEFAULT_VERSION
 
 
-def _build_client_model(client_model: "bool | ClientModel") -> "ClientModel | None":
-    """Normalise the ``client_model=`` argument, mirroring ``sessions=``.
-
-    ``True`` is the whole of the common case — borrow the caller's model on this
-    server's defaults — so nobody has to learn a class name to say it.
-    """
-    if client_model is False:
-        return None
-    return client_model if isinstance(client_model, ClientModel) else ClientModel()
-
-
 def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | None:
     if sessions is False:
         return None
@@ -92,11 +80,8 @@ def _session_manager_lifespan(manager: StreamableHTTPSessionManager, paused_runs
     """An ASGI lifespan that runs the streamable-HTTP session manager.
 
     ``StreamableHTTPSessionManager`` must be entered via ``manager.run()`` before
-    it can serve requests; this wires that into the app's lifespan so a standalone
-    ``uvicorn`` run (which drives lifespan automatically) just works.
-
-    Shutdown is also where the paused runs go: retention is swept lazily, and on
-    the way down there is no next call to sweep on.
+    it can serve requests, so a standalone ``uvicorn`` run just works. Shutdown
+    is also where the paused runs are reclaimed.
     """
 
     @asynccontextmanager
@@ -113,90 +98,66 @@ def _session_manager_lifespan(manager: StreamableHTTPSessionManager, paused_runs
 class MCPServer:
     """Wrap an AG2 :class:`Agent` as an MCP server.
 
-    The agent is exposed as a single conversational tool (``ask`` by default)
-    that runs :meth:`Agent.ask` and returns the reply — the inverse of the
-    consume-side ``ag2.tools.MCPToolkit``. The full guide is
-    ``website/docs/user-guide/tools/serving_mcp.mdx``.
+    The agent is exposed as a single conversational tool (``ask`` by default) that
+    runs :meth:`Agent.ask` and returns the reply — the inverse of the consume-side
+    ``ag2.tools.MCPToolkit``. The instance is itself an ASGI3 application serving
+    MCP over streamable HTTP; :meth:`run_stdio` serves over stdin/stdout instead,
+    where the HTTP options are ignored.
 
-    The instance is itself an ASGI3 application, serving MCP over streamable HTTP
-    and managing its own lifespan::
+    The full guide is ``website/docs/user-guide/tools/serving_mcp.mdx``.
 
-        app = MCPServer(agent, path="/mcp")
-        uvicorn.run(app, host="127.0.0.1", port=8000)
+    Args:
+        agent: The agent to serve.
+        name: Server name in the ``initialize`` handshake. Defaults to the agent's.
+        version: Server version in the handshake. Defaults to the installed ag2's.
+        title: Human-readable server name for hosts that show one.
+        description: What this server is, for the handshake.
+        instructions: Client-facing guidance on using this server. Not the agent's
+            system prompt.
+        website_url: A page about this server, for the handshake.
+        icons: Icons a host may display for this server.
+        cache_hints: ``ttlMs`` / ``cacheScope`` freshness hints (SEP-2549) per
+            cacheable method. Only revision 2026-07-28 clients see them.
+        tool_name: The conversational tool's name.
+        tool_description: The conversational tool's description.
+        stream_progress: Forward the agent's stream events to the client as
+            progress notifications and log messages.
+        context_provider: Build the agent's :class:`~ag2.context.ConversationContext`
+            for each call yourself.
+        lifespan: An ``mcp`` server lifespan whose yielded state each call reaches
+            through ``request_context.lifespan_context``.
+        sessions: Multi-turn history. ``True`` keeps one per conversation, a
+            :class:`~ag2.mcp.sessions.SessionConfig` tunes the bound, TTL and
+            backend, ``False`` makes every call stateless.
+        elicitation_policy: Whether the served agent's own questions reach the
+            human behind the calling client. ``"ask"`` sends them as an MCP
+            elicitation; ``"decline"`` falls through to the agent's
+            ``hitl_hook``. It does not gate an ``Elicit`` declared in a
+            ``tools=`` entry's resolved parameter.
+        client_model: Run the served agent's reasoning on the calling client's
+            model, so a deployment holding no credentials can still serve an
+            agent that needs one. Off by default: the caller then pays for every
+            turn and supplies whichever model answers. MCP deprecated sampling
+            in revision 2026-07-28, and the SDK warns on every borrowed
+            request.
+        resources: Resources exposed alongside the tool.
+        resource_templates: Resource templates exposed alongside the tool.
+        prompts: Prompts exposed alongside the tool.
+        tools: Deterministic :func:`mcp_tool` tools served next to the agent's.
+        path: The HTTP endpoint path.
+        stateless: Stop the HTTP transport issuing an ``mcp-session-id``. A
+            handshake-era switch; modern-era requests never carry one.
+        json_response: Answer with JSON rather than SSE.
+        security: OAuth 2.1 Resource Server requirements. With none configured a
+            conversation has no principal, so its handle is the only credential
+            for it.
+        request_state_security: Advanced. Replaces the ephemeral policy that
+            seals the state a paused run is resumed with, and whose TTL bounds
+            how long a pause lives.
 
-    :meth:`run_stdio` serves over stdin/stdout instead, for local clients; the
-    HTTP parameters (``path``, ``stateless``, ``json_response``, ``security``)
-    are ignored there.
-
-    ``name`` / ``version`` / ``title`` / ``description`` / ``instructions`` /
-    ``website_url`` / ``icons`` populate the ``initialize`` handshake. All are
-    presentation-only and none is derived from the agent — ``instructions`` in
-    particular is client-facing usage guidance, not the agent's system prompt.
-
-    ``cache_hints`` fills ``ttlMs`` / ``cacheScope`` freshness hints (SEP-2549)
-    on the cacheable methods. The served tool, resource and prompt sets are fixed
-    at construction, so hinting them is always sound here. Only revision
-    2026-07-28 clients see the fields.
-
-    ``sessions`` controls multi-turn history: ``True`` accumulates one per
-    conversation, a :class:`~ag2.mcp.sessions.SessionConfig` tunes the bound /
-    TTL / backend, ``False`` makes every call stateless. Which conversation a
-    call lands in depends on the era, since each sanctions a different mechanism:
-
-    | a conversation named? | handshake era (up to 2025-11-25)                     | modern era (2026-07-28) |
-    |-----------------------|------------------------------------------------------|-------------------------|
-    | yes                   | that conversation                                    | that conversation       |
-    | no                    | the MCP session's own history (per-process on stdio)  | a fresh conversation    |
-
-    The modern era has no MCP session and forbids deriving context from
-    connection identity, so a caller there continues a conversation only by
-    naming it. The name is an opaque handle the server mints and returns — in a
-    text block and in ``_meta`` under ``ai.ag2/conversation`` — never one the
-    caller chooses, and one the server does not recognise is a tool error rather
-    than a fresh conversation.
-
-    A conversation is bound to the principal that created it, revalidated on
-    every call. **With no** ``security`` **configured there is no principal, and
-    the handle is then the only credential for the conversation it names** — and
-    it travels through readable content, so treat it as one.
-
-    ``stateless`` governs the *handshake* era only: it stops the HTTP transport
-    issuing an ``mcp-session-id``. Modern-era requests never carry one anyway, so
-    pairing ``stateless=True`` with ``sessions=True`` is valid — no transport
-    session, conversations named explicitly.
-
-    ``resources`` / ``resource_templates`` / ``prompts`` expose those alongside
-    the tool; each capability is advertised only when a non-empty collection is
-    supplied.
-
-    ``elicitation_policy`` governs whether the served agent may put a question to
-    the human behind the *calling client*. ``"ask"`` (the default) sends it as an
-    MCP elicitation; ``"decline"`` never asks a client at all. Same word, values
-    and reasoning as :attr:`ag2.acp.ACPConfig.elicitation_policy` — deliberately
-    no ``"auto"``, since an arbitrary form has no answer AG2 could invent.
-
-    Only a client that advertised it can answer is ever asked; one that cannot,
-    or a policy of ``"decline"``, falls through to the agent's own ``hitl_hook``
-    and then to :class:`~ag2.exceptions.HumanInputNotProvidedError`. The loud
-    failure is deliberate — a silent decline would hide that the question went
-    nowhere.
-
-    The policy governs the *agent's* questions and only those. A ``tools=`` entry
-    whose ``Resolve(...)`` parameter returns an ``Elicit`` asks regardless: that
-    request is one the server's own author wrote into a tool signature, not one
-    an agent's tool raised at run time.
-
-    ``client_model=True`` runs the agent's reasoning on the *calling client's*
-    model, so a deployment with no credentials can still serve an agent that needs
-    one; a :class:`~ag2.mcp.sampling.ClientModel` tunes it, the same shape as
-    ``sessions``. Off by default, because enabling it moves cost, capability and
-    reproducibility to the caller — and because the caller's own budget is not
-    something a transport should opt into on its behalf.
-
-    It answers only whether that budget may be spent. *Which* model runs when the
-    caller advertised no sampling capability is read off the agent: one with a
-    ``config`` falls back to it, one without fails the turn with
-    :class:`~ag2.mcp.errors.MCPSamplingUnavailableError`.
+    Raises:
+        MCPToolNameConflictError: A ``tools=`` entry collides with ``tool_name`` or
+            with another entry.
     """
 
     __slots__ = (
@@ -239,8 +200,7 @@ class MCPServer:
         lifespan: "ServerLifespan | None" = None,
         sessions: "bool | SessionConfig" = True,
         elicitation_policy: ElicitationPolicy = "ask",
-        client_model: "bool | ClientModel" = False,
-        request_state_security: RequestStateSecurity | None = None,
+        client_model: bool = False,
         resources: "Sequence[Resource]" = (),
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
@@ -249,6 +209,7 @@ class MCPServer:
         stateless: bool = False,
         json_response: bool = False,
         security: Requirement | None = None,
+        request_state_security: RequestStateSecurity | None = None,
     ) -> None:
         self._agent = agent
         self._name = name or agent.name
@@ -288,7 +249,7 @@ class MCPServer:
             context_provider=context_provider,
             session_store=self._session_store,
             elicitation_policy=elicitation_policy,
-            client_model=_build_client_model(client_model),
+            client_model=client_model,
             paused_runs=self._paused_runs,
         )
         if self._session_store is not None:
@@ -306,6 +267,7 @@ class MCPServer:
 
     @property
     def agent(self) -> Agent:
+        """The agent this server serves."""
         return self._agent
 
     @property
@@ -316,9 +278,7 @@ class MCPServer:
     def _build_server(self) -> Server:
         """Build the low-level server, wiring every handler as a constructor callback.
 
-        ``mcp`` 2.0 removed the decorator registration API; handlers now take a
-        request context plus typed params and return a complete result model. A
-        capability is advertised from the handlers actually registered, so the
+        A capability is advertised from the handlers actually registered, so the
         optional providers contribute their callbacks only when present.
         """
         kwargs: dict[str, Any] = {}
@@ -404,11 +364,7 @@ class MCPServer:
             return tool_error(str(e) or type(e).__name__)
 
     def _advertised_input_schema(self, name: str) -> dict[str, Any] | None:
-        """The ``inputSchema`` ``tools/list`` advertises for ``name``, if any.
-
-        ``None`` for a name nobody advertises, leaving the unknown-tool error to
-        the dispatcher that already words it.
-        """
+        """The ``inputSchema`` ``tools/list`` advertises for ``name``, or ``None``."""
         if self._tool_provider is not None and self._tool_provider.has(name):
             return self._tool_provider.input_schema(name)
         for tool in self._executor.list_tools():
@@ -419,18 +375,15 @@ class MCPServer:
     async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
         """ASGI3 entrypoint serving MCP over streamable HTTP.
 
-        Handles the ``lifespan`` scope (running the streamable-HTTP session
-        manager) and the ``http`` scope (MCP requests, bearer auth, and — when
-        ``security`` is set — RFC 9728 Protected Resource Metadata at
-        ``/.well-known/oauth-protected-resource``). Run it standalone::
+        Run it standalone::
 
             uvicorn.run(MCPServer(agent, path="/mcp"), host="127.0.0.1", port=8000)
 
-        When ``security`` is given (build it with
-        :func:`ag2.mcp.security.require`), missing/invalid tokens get
-        ``401`` (with a ``WWW-Authenticate`` header pointing at the metadata) and
-        insufficient scopes get ``403``. ``security.resource_url`` must point at
-        this endpoint (its path component must equal ``path``).
+        With ``security`` set (build it with :func:`ag2.mcp.security.require`),
+        missing or invalid tokens get ``401`` and insufficient scopes ``403``,
+        and RFC 9728 metadata is served at
+        ``/.well-known/oauth-protected-resource``. ``security.resource_url``
+        must point at this endpoint (its path must equal ``path``).
         """
         await self._http(scope, receive, send)
 
@@ -442,10 +395,10 @@ class MCPServer:
         json_response: bool,
         security: Requirement | None,
     ) -> "tuple[list[BaseRoute], StreamableHTTPSessionManager]":
-        """Build the streamable-HTTP routes + session manager for the ASGI app.
+        """Build the streamable-HTTP routes and session manager for the ASGI app.
 
-        Bearer auth is wrapped *around the MCP route* (not as app-level middleware)
-        so it stays scoped if the route is mounted into a host app.
+        Bearer auth wraps the MCP route rather than the app, so it stays scoped
+        if the route is mounted into a host app.
         """
         manager = StreamableHTTPSessionManager(
             app=self._server,

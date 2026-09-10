@@ -66,30 +66,45 @@ _AG2_ANSWER_FIELD = "answer"
 
 
 @dataclass(frozen=True, slots=True)
-class AnswerPolicy:
-    """What this agent answers when a third-party MCP server asks it for input.
+class MCPAnswerPolicy:
+    """Which of your own resources a third-party MCP server may use.
 
-    Every field is off by default: the toolkit reaches servers the operator may
-    not control, and each hands over one of the operator's own resources.
-
-    Attributes:
-        elicitation: ``"ask"`` routes a server's question to the agent's own
-            ``context.input()`` and advertises the capability; ``"decline"``
-            (default) advertises nothing. Same word, values and reasoning as
-            :data:`ag2.hitl.ElicitationPolicy`.
-        sampling: When true, a server's ``sampling/createMessage`` runs on the
-            agent's own model — the server gets an LLM without holding a key, and
-            **the operator pays for it**. Off by default for that reason.
-        roots: Directories reported to a server that scopes its work to them.
-            With none configured the capability is not advertised.
-        max_rounds: How many times a server may come back asking before the call
-            is abandoned, so one that re-asks indefinitely cannot loop the agent.
+    Every field is off by default, so connecting to a server you do not control
+    hands it nothing you did not name. A question can be declined on the wire; an
+    unanswerable sampling or roots request fails the tool call instead.
     """
 
     elicitation: ElicitationPolicy = "decline"
+    """Whether a server's question reaches your own human.
+
+    ``"ask"`` routes it to the agent's ``context.input()``; ``"decline"`` (the
+    default) advertises no elicitation capability at all.
+    """
+
     sampling: bool = False
+    """Whether a server may run a model completion on your model — and your budget.
+
+    A server without credentials of its own can still reason, and you pay for
+    every completion it asks for.
+
+    .. deprecated:: MCP 2026-07-28
+        SEP-2577 deprecates sampling. Prefer giving the server direct access to an
+        LLM provider API of its own.
+    """
+
     roots: Sequence[str | os.PathLike[str]] = ()
+    """Directories reported to a server that scopes its work to them.
+
+    .. deprecated:: MCP 2026-07-28
+        SEP-2577 deprecates roots. Prefer passing paths as tool arguments,
+        resource URIs, or the server's own configuration.
+    """
+
     max_rounds: int = 10
+    """How many times a server may come back asking before the call is abandoned.
+
+    Must be positive; a server that exhausts it fails the tool call.
+    """
 
 
 class InputRequestAnswerer:
@@ -101,7 +116,7 @@ class InputRequestAnswerer:
 
     __slots__ = ("_policy", "_context")
 
-    def __init__(self, policy: AnswerPolicy, context: Context) -> None:
+    def __init__(self, policy: MCPAnswerPolicy, context: Context) -> None:
         self._policy = policy
         self._context = context
 
@@ -272,4 +287,4 @@ def _model_name(config: "ModelConfig") -> str:
     return "unknown"
 
 
-__all__ = ("AnswerPolicy", "InputRequestAnswerer")
+__all__ = ("InputRequestAnswerer", "MCPAnswerPolicy")

@@ -14,9 +14,8 @@ standalone ``sampling/createMessage`` up to 2025-11-25, and from 2026-07-28 a
 request returned as the call's result and answered by the client's retry.
 """
 
-from typing import Any
-
 import pytest
+from mcp import MCPDeprecationWarning
 from mcp.client.session import ClientRequestContext
 from mcp.types import (
     CreateMessageRequest,
@@ -28,9 +27,11 @@ from mcp.types import (
 )
 
 from ag2 import Agent
-from ag2.mcp import ClientModel, MCPServer
+from ag2.mcp import MCPServer
 from ag2.mcp.testing import connect, connect_modern
 from ag2.testing import TestConfig
+
+from ._helpers import answer, ask, first_text, greeter, outstanding
 
 ASKED: list[CreateMessageRequestParams] = []
 
@@ -53,42 +54,39 @@ async def lends_its_model(context: ClientRequestContext, params: CreateMessageRe
 
 def borrowing(*, config: TestConfig | None = None) -> MCPServer:
     """A server whose agent has no model of its own unless one is passed."""
-    return MCPServer(Agent("borrower", config=config), client_model=ClientModel())
+    return MCPServer(Agent("borrower", config=config), client_model=True)
+
+
+def completed(text: str) -> CreateMessageResult:
+    """What a client sends back when its model answered with ``text``."""
+    return CreateMessageResult(
+        role="assistant",
+        content=TextContent(type="text", text=text),
+        model="caller-model-v1",
+    )
 
 
 @pytest.mark.asyncio
 async def test_true_is_the_whole_of_the_common_case() -> None:
-    """``client_model=True`` needs no class name, the way ``sessions=True`` does not.
-
-    The dataclass is for tuning; asking for the feature at all is one word.
-    """
+    """Asking for the feature at all is one boolean; there is no class to name."""
     server = MCPServer(Agent("borrower"), client_model=True)
 
     async with connect(server, sampling_callback=lends_its_model) as session:
         result = await session.call_tool("ask", {"message": "hi"})
 
     assert result.is_error is False
-    first = result.content[0]
-    assert isinstance(first, TextContent)
-    assert first.text == "the caller's model says hello"
-
-
-async def _call(session: Any, **kwargs: Any) -> Any:
-    return await session.call_tool("ask", {"message": "think about it"}, allow_input_required=True, **kwargs)
+    assert first_text(result) == "the caller's model says hello"
 
 
 @pytest.mark.asyncio
-class TestTheHandshakeEra:
-    async def test_the_agents_turn_runs_on_the_callers_model(self) -> None:
-        async with connect(borrowing(), sampling_callback=lends_its_model) as session:
-            result = await session.call_tool("ask", {"message": "think about it"})
+async def test_the_handshake_era_runs_the_agents_turn_on_the_callers_model() -> None:
+    async with connect(borrowing(), sampling_callback=lends_its_model) as session:
+        result = await session.call_tool("ask", {"message": "think about it"})
 
-        assert result.is_error is False
-        first = result.content[0]
-        assert isinstance(first, TextContent)
-        assert first.text == "the caller's model says hello"
-        [asked] = ASKED
-        assert [block.text for block in _texts(asked)] == ["think about it"]
+    assert result.is_error is False
+    assert first_text(result) == "the caller's model says hello"
+    [asked] = ASKED
+    assert [block.text for block in _texts(asked)] == ["think about it"]
 
 
 @pytest.mark.asyncio
@@ -96,34 +94,21 @@ class TestTheModernEra:
     async def test_the_completion_request_comes_back_as_the_calls_result(self) -> None:
         """No back-channel on this revision, so the request rides the same pause."""
         async with connect_modern(borrowing(), sampling_callback=lends_its_model) as session:
-            first = await _call(session)
+            first = await ask(session)
 
         assert isinstance(first, InputRequiredResult)
-        ((_key, request),) = (first.input_requests or {}).items()
+        _key, request = outstanding(first)
         assert isinstance(request, CreateMessageRequest)
 
     async def test_the_answered_retry_completes_the_turn(self) -> None:
         async with connect_modern(borrowing(), sampling_callback=lends_its_model) as session:
-            first = await _call(session)
+            first = await ask(session)
             assert isinstance(first, InputRequiredResult)
-            ((key, _request),) = (first.input_requests or {}).items()
-            final = await _call(
-                session,
-                input_responses={
-                    key: CreateMessageResult(
-                        role="assistant",
-                        content=TextContent(type="text", text="the caller's model says hello"),
-                        model="caller-model-v1",
-                    )
-                },
-                request_state=first.request_state,
-            )
+            final = await answer(session, first, completed("the caller's model says hello"))
 
         assert not isinstance(final, InputRequiredResult)
         assert final.is_error is False
-        reply = final.content[0]
-        assert isinstance(reply, TextContent)
-        assert reply.text == "the caller's model says hello"
+        assert first_text(final) == "the caller's model says hello"
 
 
 @pytest.mark.asyncio
@@ -137,46 +122,28 @@ class TestACompletionThisAgentCannotUse:
     """
 
     async def test_a_completion_with_no_text_block_is_refused_rather_than_read_as_silence(self) -> None:
+        picture = CreateMessageResult(
+            role="assistant",
+            content=ImageContent(type="image", data="aGk=", mimeType="image/png"),
+            model="caller-model-v1",
+        )
+
         async with connect_modern(borrowing(), raise_exceptions=False, sampling_callback=lends_its_model) as session:
-            first = await _call(session)
+            first = await ask(session)
             assert isinstance(first, InputRequiredResult)
-            ((key, _request),) = (first.input_requests or {}).items()
-            final = await _call(
-                session,
-                input_responses={
-                    key: CreateMessageResult(
-                        role="assistant",
-                        content=ImageContent(type="image", data="aGk=", mimeType="image/png"),
-                        model="caller-model-v1",
-                    )
-                },
-                request_state=first.request_state,
-            )
+            final = await answer(session, first, picture)
 
         assert not isinstance(final, InputRequiredResult)
         assert final.is_error is True
-        reported = final.content[0]
-        assert isinstance(reported, TextContent)
-        assert "carried no text" in reported.text
-        assert "image" in reported.text, "the failure does not say what the peer sent instead"
+        assert "carried no text" in first_text(final)
+        assert "image" in first_text(final), "the failure does not say what the peer sent instead"
 
     async def test_an_empty_text_block_is_an_answer_and_is_kept(self) -> None:
         """A model is allowed to say nothing; that is not the same as sending no text."""
         async with connect_modern(borrowing(), raise_exceptions=False, sampling_callback=lends_its_model) as session:
-            first = await _call(session)
+            first = await ask(session)
             assert isinstance(first, InputRequiredResult)
-            ((key, _request),) = (first.input_requests or {}).items()
-            final = await _call(
-                session,
-                input_responses={
-                    key: CreateMessageResult(
-                        role="assistant",
-                        content=TextContent(type="text", text=""),
-                        model="caller-model-v1",
-                    )
-                },
-                request_state=first.request_state,
-            )
+            final = await answer(session, first, completed(""))
 
         assert not isinstance(final, InputRequiredResult)
         assert final.is_error is False
@@ -186,7 +153,7 @@ class TestACompletionThisAgentCannotUse:
 class TestItIsADecision:
     async def test_a_server_that_did_not_enable_it_never_asks(self) -> None:
         """The default: the agent's own model answers, and the client is not touched."""
-        server = MCPServer(Agent("own-model", config=TestConfig("my own answer")))
+        server = MCPServer(greeter("my own answer", name="own-model"))
 
         async with connect(server, sampling_callback=lends_its_model) as session:
             result = await session.call_tool("ask", {"message": "hi"})
@@ -200,9 +167,7 @@ class TestItIsADecision:
             result = await session.call_tool("ask", {"message": "hi"})
 
         assert result.is_error is True
-        first = result.content[0]
-        assert isinstance(first, TextContent)
-        assert "advertised no sampling capability" in first.text
+        assert "advertised no sampling capability" in first_text(result)
         assert ASKED == []
 
     async def test_an_agent_with_a_model_of_its_own_falls_back_to_it(self) -> None:
@@ -218,9 +183,7 @@ class TestItIsADecision:
             result = await session.call_tool("ask", {"message": "hi"})
 
         assert result.is_error is False
-        first = result.content[0]
-        assert isinstance(first, TextContent)
-        assert first.text == "my own answer"
+        assert first_text(result) == "my own answer"
 
     async def test_a_turn_needing_tools_refuses_rather_than_losing_them(self) -> None:
         """An agent whose tools silently vanished would answer as though it had none."""
@@ -229,16 +192,28 @@ class TestItIsADecision:
             """Look something up."""
             return "found"
 
-        server = MCPServer(Agent("borrower", tools=[look_up]), client_model=ClientModel())
+        server = MCPServer(Agent("borrower", tools=[look_up]), client_model=True)
 
         async with connect(server, raise_exceptions=False, sampling_callback=lends_its_model) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
         assert result.is_error is True
-        first = result.content[0]
-        assert isinstance(first, TextContent)
-        assert "cannot borrow the calling client's model" in first.text
+        assert "cannot borrow the calling client's model" in first_text(result)
         assert ASKED == []
+
+
+@pytest.mark.asyncio
+async def test_the_sdk_s_deprecation_warning_reaches_the_operator() -> None:
+    """MCP deprecated sampling in 2026-07-28 (SEP-2577), and AG2 does not suppress the SDK's warning.
+
+    It is true and it is the protocol's; hiding it would leave an operator
+    believing a mechanism with an expiry date is ordinary.
+    """
+    with pytest.warns(MCPDeprecationWarning, match="sampling capability is deprecated"):
+        async with connect(borrowing(), sampling_callback=lends_its_model) as session:
+            result = await session.call_tool("ask", {"message": "think about it"})
+
+    assert result.is_error is False
 
 
 def _texts(params: CreateMessageRequestParams) -> list[TextContent]:

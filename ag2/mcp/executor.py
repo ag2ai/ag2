@@ -40,7 +40,7 @@ from .errors import MCPAgentConfigError, MCPSamplingUnavailableError, UnknownCon
 from .info import build_ask_tool, object_output_schema
 from .mappers import reply_to_content, to_structured_dict, tool_error
 from .pause import PauseState, PausedRuns, SuspendedTurn
-from .sampling import ClientModel, ClientModelConfig, client_can_sample
+from .sampling import CLIENT_MODEL_MAX_TOKENS, ClientModelConfig, client_can_sample
 from .sessions import CONVERSATION_META_KEY, STDIO_SESSION, Conversation, SessionStore
 
 if TYPE_CHECKING:
@@ -54,9 +54,9 @@ _LOGGER_NAME = "ag2.mcp"
 
 @dataclass(slots=True)
 class AskContext:
-    """Per-request context to inject into the agent turn — the kwargs
-    :meth:`Agent.ask` accepts. Returned by a ``context_provider``; any field
-    left ``None`` is omitted, so the default is the stateless behavior."""
+    """Per-request context to inject into the agent turn, as :meth:`Agent.ask` takes it.
+
+    Returned by a ``context_provider``; any field left ``None`` is omitted."""
 
     variables: dict[str, Any] | None = None
     tools: list[Any] | None = None
@@ -74,12 +74,9 @@ class AgentExecutor:
     """Bridge an MCP ``tools/call`` to a single :meth:`Agent.ask` turn.
 
     Without a ``session_store`` each call is stateless: a fresh
-    :class:`MemoryStream` is created per invocation (mirroring the A2A executor)
-    so any server replica can handle any request.
-
-    With one, which conversation a call lands in depends on the caller and the
-    era; :meth:`_conversation_cm` decides it and :class:`~ag2.mcp.MCPServer`
-    carries the table a user reads.
+    :class:`MemoryStream` per invocation, so any replica can handle any request.
+    With one, :meth:`_conversation_cm` decides which conversation a call lands
+    in.
     """
 
     __slots__ = (
@@ -104,7 +101,7 @@ class AgentExecutor:
         context_provider: "ContextProvider | None" = None,
         session_store: SessionStore | None = None,
         elicitation_policy: ElicitationPolicy = "ask",
-        client_model: ClientModel | None = None,
+        client_model: bool = False,
         paused_runs: PausedRuns | None = None,
     ) -> None:
         self._agent = agent
@@ -114,8 +111,8 @@ class AgentExecutor:
         self._context_provider = context_provider
         self._session_store = session_store
         self._elicitation_policy = elicitation_policy
-        # Off unless the operator passed one: borrowing the caller's model moves
-        # cost, capability and reproducibility to them.
+        # Off unless the operator turned it on: borrowing the caller's model
+        # moves cost, capability and reproducibility to them.
         self._client_model = client_model
         # Where a modern-era turn waits between rounds. ``None`` (an executor
         # built directly, with no ``requestState`` protection installed) leaves
@@ -155,7 +152,7 @@ class AgentExecutor:
 
         # A deployment running on its callers' models may hold none of its own; a
         # caller that cannot lend one is a different failure, reported elsewhere.
-        if self._agent.config is None and self._client_model is None:
+        if self._agent.config is None and not self._client_model:
             raise MCPAgentConfigError(self._agent.name)
         if not message:
             return tool_error("Missing required 'message' argument.")
@@ -232,9 +229,8 @@ class AgentExecutor:
     ) -> "CallToolResult | InputRequiredResult":
         """Continue the run this state names, from exactly where it stopped.
 
-        The state arrives boundary-verified — expiry, request binding, audience
-        and principal, fail-closed — so all that is left is whether the run it
-        names is still here.
+        The state arrives boundary-verified, so all that is left is whether the
+        run it names is still here.
         """
         if self._paused is None:
             return tool_error("This server does not pause calls, so there is no state to resume.")
@@ -278,8 +274,8 @@ class AgentExecutor:
     ) -> "CallToolResult | InputRequiredResult":
         """Run ``turn`` until it finishes or asks, and shape whichever happens.
 
-        Progress forwarding is scoped to this round: it holds the round's request
-        context, and notifications belong to the call being answered now.
+        Progress forwarding is scoped to this round, whose request context it
+        holds.
         """
         assert self._paused is not None
         with ExitStack() as stack:
@@ -305,8 +301,7 @@ class AgentExecutor:
         """One agent turn whose progress belongs to the call that started it.
 
         Only turns that finish inside one call come through here; a suspendable
-        one calls :meth:`_run` directly, and :meth:`_advance` scopes forwarding
-        to the round being answered instead.
+        one goes through :meth:`_advance`.
         """
         with ExitStack() as progress_stack:
             if self._stream_progress:
@@ -324,8 +319,8 @@ class AgentExecutor:
         """Put ``message`` to the agent and shape its reply into a tool result.
 
         ``suspended`` is present on the modern era, where a question comes back
-        as the call's result: the elicitor asks *through* it and the coroutine
-        stays parked here until a retry answers.
+        as the call's result and the coroutine stays parked here until a retry
+        answers it.
         """
         # Optional per-request context from the host; omitted fields keep
         # ``ask``'s defaults, so without a provider this is stateless.
@@ -381,14 +376,12 @@ class AgentExecutor:
         """The conversation this call runs in, resolved in the order the protocol allows.
 
         A named conversation wins in either era; otherwise the handshake era
-        falls back to its MCP session and the modern era, which has none and may
-        not derive one from the connection, starts fresh. An unknown handle
-        raises rather than falling through, which would let a caller name a
-        conversation of their choosing and evict others' out of the bound.
+        falls back to its MCP session and the modern era, which may not derive
+        one from the connection, starts fresh.
 
-        The store revalidates a handle's principal on every call. An MCP session
-        id needs no check of ours: the transport already answers a session id
-        presented under another credential as though it did not exist.
+        Raises:
+            UnknownConversationError: The handle names no conversation this
+                principal may continue.
         """
         if self._session_store is None:
             return _stateless_conversation()
@@ -415,12 +408,10 @@ class AgentExecutor:
         """The peer-backed model for this turn, or ``None`` to use the agent's own.
 
         Raises:
-            MCPSamplingUnavailableError: Configured to run on the caller's model,
-                which this caller advertised none of, and the agent has none of
-                its own to fall back to. Raised before the turn starts, so nobody
-                is handed an answer from a model they did not lend.
+            MCPSamplingUnavailableError: The caller advertised no sampling
+                capability and the agent has no config to fall back to.
         """
-        if self._client_model is None:
+        if not self._client_model:
             return None
         if not client_can_sample(request_context.session):
             # Falling back needs something to fall back *to*, and the agent's own
@@ -432,7 +423,7 @@ class AgentExecutor:
         return ClientModelConfig(
             request_context,
             suspended=suspended,
-            max_tokens=self._client_model.max_tokens,
+            max_tokens=CLIENT_MODEL_MAX_TOKENS,
         )
 
     def _has_object_output(self) -> bool:
@@ -504,12 +495,10 @@ def _result(
 ) -> CallToolResult:
     """The tool result, carrying the conversation handle for both of its readers.
 
-    A text block, because the protocol puts recovery from an expired handle on
-    the model and the model does not read protocol metadata; and ``_meta``, for
-    clients threading it programmatically. ``structuredContent`` is deliberately
-    left alone: on this tool it is the agent's response schema, advertised
-    verbatim as ``outputSchema``, which MCP requires structured content to
-    conform to — a server field mixed in would break the tool's own contract.
+    A text block for the model, which does not read protocol metadata, and
+    ``_meta`` for clients threading the handle programmatically.
+    ``structuredContent`` is left to the agent's response schema, which MCP
+    requires it to conform to.
     """
     if handle is None:
         return CallToolResult(content=content, structuredContent=structured, isError=is_error)
@@ -528,9 +517,7 @@ def _handle_text(handle: str) -> str:
 def _principal() -> str | None:
     """Who this call is on behalf of, or ``None`` when no authentication is configured.
 
-    The access token's subject, falling back to its client id, which is always
-    present. With nothing to bind to, a conversation handle is the sole
-    credential for the conversation it names.
+    The access token's subject, falling back to its always-present client id.
     """
     token = get_access_token()
     if token is None:
@@ -541,22 +528,18 @@ def _principal() -> str | None:
 def _is_modern(request_context: "ServerRequestContext[Any, Any]") -> bool:
     """Whether this call arrived on a modern-era (2026-07-28) revision.
 
-    The negotiated protocol version is a first-class field of the request
-    context, so this reads the same over HTTP and over streams — the era is a
-    protocol fact, not a transport detail. The membership test comes from the
-    SDK's own registry so a new modern revision needs no change here.
+    Read from the negotiated protocol version, so it is the same over HTTP and
+    over streams, against the SDK's own registry of modern revisions.
     """
     return request_context.protocol_version in MODERN_PROTOCOL_VERSIONS
 
 
 def _session_id(request_context: "ServerRequestContext[Any, Any]") -> str | None:
-    """Extract the MCP session key for this call — handshake era only.
+    """The MCP session key for this call — handshake era only.
 
-    Over streamable HTTP the transport's ``Request`` carries an ``mcp-session-id``
-    header (present only when the transport runs stateful); over stdio there is no
-    HTTP request, so all turns share one per-process session. The modern era
-    issues no session id and forbids keying on the process, so callers must
-    establish the era before consulting this.
+    Over streamable HTTP that is the ``mcp-session-id`` header (stateful
+    transports only); over stdio all turns share one per-process session. The
+    modern era issues no session id, so callers must establish the era first.
     """
     request = getattr(request_context, "request", None)
     if request is None:

@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from mcp.types import CallToolResult
 from pydantic import BaseModel
 
 from ag2 import Agent
@@ -11,14 +10,11 @@ from ag2.events import ModelResponse
 from ag2.mcp.executor import AgentExecutor, AskContext
 from ag2.testing import TestConfig
 
+from ._helpers import first_text, greeter
+
 
 class _Weather(BaseModel):
     city: str
-
-
-def _text(result: CallToolResult) -> str:
-    block = result.content[0]
-    return getattr(block, "text", "")
 
 
 @pytest.mark.asyncio
@@ -31,7 +27,7 @@ class TestContextProvider:
             seen["access"] = access
             return AskContext(variables={"x": 1}, prompt="custom system prompt")
 
-        agent = Agent("greeter", config=TestConfig("hi"))
+        agent = greeter()
         executor = AgentExecutor(agent, stream_progress=False, context_provider=provider)
 
         result = await executor.call("ask", message="hello", context=None, request_context=None)
@@ -40,18 +36,18 @@ class TestContextProvider:
         # No auth context bound in this unit test, so the provider gets None.
         assert seen["access"] is None
         # The reply came back (the injected variables/prompt were accepted by ask()).
-        assert _text(result) == "hi"
+        assert first_text(result) == "hi"
 
     async def test_no_provider_is_stateless(self) -> None:
-        agent = Agent("greeter", config=TestConfig("hi"))
+        agent = greeter()
         executor = AgentExecutor(agent, stream_progress=False)
 
         result = await executor.call("ask", message="hello", context=None, request_context=None)
 
-        assert _text(result) == "hi"
+        assert first_text(result) == "hi"
 
     async def test_empty_message_is_error(self) -> None:
-        executor = AgentExecutor(Agent("greeter", config=TestConfig("hi")), stream_progress=False)
+        executor = AgentExecutor(greeter(), stream_progress=False)
 
         result = await executor.call("ask", message="", context=None, request_context=None)
 
@@ -63,13 +59,11 @@ class TestContextProvider:
         async def provider(access: object) -> AskContext:
             return AskContext(tools=[])
 
-        executor = AgentExecutor(
-            Agent("greeter", config=TestConfig("hi")), stream_progress=False, context_provider=provider
-        )
+        executor = AgentExecutor(greeter(), stream_progress=False, context_provider=provider)
 
         result = await executor.call("ask", message="hello", context=None, request_context=None)
 
-        assert _text(result) == "hi"
+        assert first_text(result) == "hi"
 
     async def test_structured_output_none_is_error(self) -> None:
         # Object response_schema + an empty model reply -> content() is None ->

@@ -6,21 +6,17 @@ import importlib.metadata
 
 import pytest
 from mcp.server import CacheHint
-from pydantic import BaseModel
 
 from ag2 import Agent
 from ag2.mcp import MCPServer, build_ask_tool
 from ag2.mcp.testing import serve
 from ag2.testing import TestConfig
 
-
-class Weather(BaseModel):
-    city: str
-    temp_c: float
+from ._helpers import Weather, greeter
 
 
 def test_server_exposes_agent() -> None:
-    agent = Agent("greeter", config=TestConfig("hi"))
+    agent = greeter()
 
     assert MCPServer(agent).agent is agent
 
@@ -60,7 +56,7 @@ class TestServerInfo:
         assert server.website_url == "https://example.com"
 
     def test_server_info_carries_presentation_fields(self) -> None:
-        agent = Agent("greeter", config=TestConfig("hi"))
+        agent = greeter()
 
         info = MCPServer(agent, title="Greeter", description="Answers greetings.").server.server_info
 
@@ -70,7 +66,7 @@ class TestServerInfo:
 
 class TestCacheHints:
     def test_rejects_uncacheable_method(self) -> None:
-        agent = Agent("greeter", config=TestConfig("hi"))
+        agent = greeter()
 
         with pytest.raises(ValueError, match="cacheable"):
             # The key set is closed for type-checked callers; the runtime gate is
@@ -82,7 +78,7 @@ class TestCacheHints:
         # Freshness hints are a 2026-07-28 surface: handshake-era serialization
         # drops ttlMs/cacheScope, so this goes over the modern per-request path.
         app = MCPServer(
-            Agent("greeter", config=TestConfig("hi")),
+            greeter(),
             json_response=True,
             cache_hints={"tools/list": CacheHint(ttl_ms=60_000, scope="public")},
         )
@@ -120,7 +116,7 @@ class TestCacheHints:
 
 class TestAskTool:
     def test_input_schema(self) -> None:
-        agent = Agent("greeter", config=TestConfig("hi"))
+        agent = greeter()
 
         tool = build_ask_tool(agent)
 
@@ -129,7 +125,7 @@ class TestAskTool:
         assert set(tool.input_schema["properties"]) == {"message", "context"}
 
     def test_custom_tool_name_and_description(self) -> None:
-        agent = Agent("greeter", config=TestConfig("hi"))
+        agent = greeter()
 
         tool = build_ask_tool(agent, tool_name="chat", tool_description="Talk to me")
 
@@ -137,7 +133,7 @@ class TestAskTool:
         assert tool.description == "Talk to me"
 
     def test_no_output_schema_without_response_schema(self) -> None:
-        agent = Agent("greeter", config=TestConfig("hi"))
+        agent = greeter()
 
         tool = build_ask_tool(agent, response_schema=agent._response_schema)
 

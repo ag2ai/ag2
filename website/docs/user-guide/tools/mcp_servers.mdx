@@ -11,15 +11,29 @@ It can be thought of as a superset of regular [Tools](/docs/user-guide/tools/too
 1. Each LLM provider had its own tool schema and types, making tools non-portable across providers.
 2. There was no standard way to give an LLM a scoped, context-optimized surface to invoke APIs, RPCs, and similar remote capabilities.
 
-!!! note "Serving, not consuming"
+!!! note "Consuming, not serving"
     This page is about wiring an existing MCP server into an agent. For the inverse — exposing an AG2 `Agent` **as** an MCP server other clients connect to — see [Serving an Agent as an MCP Server](/docs/user-guide/tools/serving_mcp).
 
-## Two ways to connect an MCP server
+## Quick start
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.tools import MCPToolkit
+
+agent = Agent(
+    name="Weather bot",
+    tools=[MCPToolkit("https://my-mcp-url.example.com")],
+)
+```
+
+That is the whole of the common case. `MCPToolkit` connects to the server, discovers its tools lazily, and exposes each one to the agent as an ordinary function tool. Nothing of yours is handed to the server unless you say so.
+
+### Which of the two connection styles you want
 
 Autogen supports both ways MCP servers are typically wired into an agent:
 
-- **Client-side connection** — Autogen connects to the MCP server itself, discovers the tools, and executes them locally. The LLM only ever sees ordinary function tools. Works with every provider. Supports both **remote** servers (HTTP / streamable-http) and **local** servers (subprocess speaking MCP over stdin/stdout).
-- **Provider-side connection** — the MCP server URL and credentials are forwarded to the LLM provider, which connects to the server and invokes the tools on its end. Only works with providers that natively support it (e.g. Anthropic).
+- **Client-side connection** (`MCPToolkit`) — Autogen connects to the MCP server itself, discovers the tools, and executes them locally. The LLM only ever sees ordinary function tools. Works with every provider. Supports both **remote** servers (HTTP / streamable-http) and **local** servers (subprocess speaking MCP over stdin/stdout).
+- **Provider-side connection** (`MCPServerTool`) — the MCP server URL and credentials are forwarded to the LLM provider, which connects to the server and invokes the tools on its end. Only works with providers that natively support it (e.g. Anthropic).
 
 | | `MCPToolkit` (client-side) | `MCPServerTool` (provider-side) |
 |---|---|---|
@@ -34,31 +48,19 @@ Autogen supports both ways MCP servers are typically wired into an agent:
 !!! tip
     Pick `MCPToolkit` when you want provider-agnostic behavior, local control over tool execution, when you need to run a local stdio MCP server, or when your MCP credentials must stay inside your infrastructure. Pick `MCPServerTool` when you're only targeting a provider that supports it and you'd rather let the provider manage the MCP lifecycle for you.
 
-## Client-side: `MCPToolkit`
+---
 
-`MCPToolkit` is a [Toolkit](/docs/user-guide/tools/toolkits) — it discovers the server's tools lazily and exposes each one as a regular function tool to the agent. It accepts either a remote URL/`MCPServerConfig` or an `MCPStdioServerConfig` for a locally-launched subprocess; the rest of the agent doesn't care which transport is in use.
+## Recipes
 
-### Remote servers (HTTP)
+### Authenticate to a remote server
 
-The simplest form takes a URL string and uses the streamable-http transport:
-
-```python linenums="1"
-from ag2 import Agent
-from ag2.tools import MCPToolkit
-
-agent_with_mcp = Agent(
-    name="Weather bot",
-    tools=[MCPToolkit("https://my-mcp-url.example.com")],
-)
-```
-
-Most real-world MCP servers require authentication. Use `MCPServerConfig` for typed configuration:
+Most real-world MCP servers require authentication. `MCPServerConfig` is keyword-only, so every setting names itself:
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.tools import MCPToolkit, MCPServerConfig
+from ag2.tools import MCPServerConfig, MCPToolkit
 
-agent_with_mcp = Agent(
+agent = Agent(
     name="Weather bot",
     tools=[
         MCPToolkit(
@@ -71,36 +73,15 @@ agent_with_mcp = Agent(
 )
 ```
 
-`MCPServerConfig` also accepts `headers`, `allowed_tools`, `blocked_tools`, `description`, and a `server_label` for logging, plus transport-level knobs `connection_timeout` (default `30.0`), `proxy`, and `verify` (TLS verification, default `True`). The first group — `server_url`, `server_label`, `authorization_token`, `description`, `allowed_tools`, `blocked_tools`, `headers` — can also be a `Variable` if the value is only known at runtime; `connection_timeout`, `proxy`, and `verify` take plain values only.
+### Launch a local server over stdio
 
-### Local servers (stdin/stdout)
-
-Many MCP servers ship as CLIs that speak MCP over their own stdin/stdout — `npx -y @modelcontextprotocol/server-filesystem`, `uvx some-mcp-server`, a Python script in your repo, etc. Use `MCPStdioServerConfig` to launch one as a subprocess; Autogen pipes the MCP protocol through its stdio.
+Many MCP servers ship as CLIs that speak MCP over their own stdin/stdout — `npx -y @modelcontextprotocol/server-filesystem`, `uvx some-mcp-server`, a Python script in your repo. `MCPStdioServerConfig` launches one as a subprocess and pipes the protocol through its stdio:
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.tools import MCPToolkit, MCPStdioServerConfig
+from ag2.tools import MCPStdioServerConfig, MCPToolkit
 
-agent_with_local_mcp = Agent(
-    name="Filesystem bot",
-    tools=[
-        MCPToolkit(
-            MCPStdioServerConfig(
-                command="npx",
-                args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp/workspace"],
-            )
-        )
-    ],
-)
-```
-
-You can pass environment variables, a working directory, and the usual filtering options:
-
-```python linenums="1"
-from ag2 import Agent
-from ag2.tools import MCPToolkit, MCPStdioServerConfig
-
-agent_with_local_mcp = Agent(
+agent = Agent(
     name="GitHub bot",
     tools=[
         MCPToolkit(
@@ -117,20 +98,18 @@ agent_with_local_mcp = Agent(
 )
 ```
 
-`MCPStdioServerConfig` accepts `command`, `args`, `env`, `cwd`, `server_label`, `description`, `allowed_tools`, `blocked_tools`, and `encoding` (default `"utf-8"`). All of these except `encoding` can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
-
 !!! note
     The subprocess is launched lazily, on the first tool-discovery / tool-call. A short-lived MCP session is opened for each operation, so there's no persistent process to manage from your code.
 
-### Multiple servers
+### Connect several servers at once
 
-`MCPToolkit` is just a toolkit, so you can register as many as you need — and freely mix remote and local ones:
+`MCPToolkit` is just a [Toolkit](/docs/user-guide/tools/toolkits), so you can register as many as you need — and freely mix remote and local ones:
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.tools import MCPToolkit, MCPStdioServerConfig
+from ag2.tools import MCPStdioServerConfig, MCPToolkit
 
-agent_with_mcp = Agent(
+agent = Agent(
     name="Mixed bot",
     tools=[
         MCPToolkit("https://my-mcp-url.example.com"),
@@ -145,16 +124,14 @@ agent_with_mcp = Agent(
 )
 ```
 
-### When a server asks *you* for something
+### Declare what a server may ask you for
 
-A tool call can come back asking for input instead of returning a result. A server may want a question put to your user, an LLM completion run, or the directories it should scope itself to. `MCPToolkit` answers what you have enabled and retries the call — the whole loop happens inside the one operation, so nothing is held between calls: the pause is on the remote server and your end is simply waiting.
-
-Everything is **off by default**, because each one hands a resource of yours to a server you may not control:
+A tool call can come back asking for input instead of returning a result. `answering=` is the one place you declare which of your own resources a server may use, and **everything in it is off by default**:
 
 ```python linenums="1"
 from ag2 import Agent
 from ag2.config import AnthropicConfig
-from ag2.tools import AnswerPolicy, MCPToolkit
+from ag2.tools import MCPAnswerPolicy, MCPServerConfig, MCPToolkit
 
 agent = Agent(
     name="researcher",
@@ -162,8 +139,11 @@ agent = Agent(
     hitl_hook=lambda event: input(event.content),  # where a server's question goes
     tools=[
         MCPToolkit(
-            "https://my-mcp-url.example.com",
-            answering=AnswerPolicy(
+            MCPServerConfig(
+                server_url="https://my-mcp-url.example.com",
+                protocol_mode="auto",       # needed for a modern-era server; see below
+            ),
+            answering=MCPAnswerPolicy(
                 elicitation="ask",          # route questions to this agent's human
                 sampling=True,              # let the server borrow this agent's model
                 roots=["/srv/project"],     # directories to report
@@ -174,22 +154,142 @@ agent = Agent(
 )
 ```
 
-| option | what it hands over | default |
+`MCPToolkit` answers what you have enabled and retries the call — the whole loop happens inside the one operation, so nothing is held between calls: the pause is on the remote server and your end is simply waiting.
+
+With no human-input hook configured, a question surfaces the usual "human input was requested but not provided" failure rather than a silent decline: an absent channel is not a refusal, and reporting it as one would hand the server a decline you never made.
+
+### Reach a server on the modern protocol era
+
+Pass `protocol_mode="auto"`. It probes `server/discover` and falls back to the handshake, which is what a server on revision 2026-07-28 needs — only that era can return a question as the *result* of a call. The default `"legacy"` performs the handshake only.
+
+---
+
+## Concepts
+
+### Protocol era
+
+A **protocol era** is which family of MCP revisions a connection speaks, and therefore how a request for input travels. `protocol_mode` chooses how the connection settles on one:
+
+| | `"legacy"` (default) | `"auto"` |
+|---|---|---|
+| on connect | the `initialize` handshake, nothing else | probes `server/discover`, falls back to the handshake |
+| a request for input arrives | as a standalone request on the back-channel | as the **result** of the call, which is then retried |
+| cost | none — byte-identical to previous behaviour | one probe round trip per connection |
+
+The default stays `"legacy"` so upgrading AG2 changes no existing connection. Choosing the modern era is a visible line in your code.
+
+### Paused run
+
+A **paused run** is a turn held mid-flight while someone is asked for something — and on this side of the protocol there never is one. The answer/retry loop runs inside the single operation that opened the session, so nothing is held between your calls: the pause is the remote server's, and your end is simply waiting. Nothing about sticky routing or restarts applies here. The [serving guide](/docs/user-guide/tools/serving_mcp) covers the side that does hold one.
+
+### Resolved parameter
+
+A server may declare a **resolved parameter** — a tool parameter whose value comes from asking you rather than from the model's arguments. You do not write these; you decide whether to answer them, which is what the answer policy is for. The [serving guide](/docs/user-guide/tools/serving_mcp) covers writing one.
+
+### What the MCP answer policy hands over
+
+| field | what it hands over | default |
 |---|---|---|
 | `elicitation` | your user's attention — the question goes to `context.input()`, and so to the agent's `hitl_hook` | `"decline"` |
 | `sampling` | **your model budget** — the completion runs on this agent's own model, and you pay for it | `False` |
 | `roots` | your filesystem layout — plain paths only, no `Variable`, since these are deployment configuration rather than a runtime value | `()` |
 | `max_rounds` | nothing; it bounds how many times a server may come back before the call is abandoned | `10` |
 
-**A capability is advertised only when you enabled it**, so a conforming server never asks for what you would refuse. Nothing to keep in step by hand: the client derives what it declares from which answering callbacks are supplied, and not enabling one *is* how it goes unadvertised. A server that asks anyway is refused, and the two refusals do not look alike: a question is declined on the wire, so the server can degrade deliberately, while sampling and roots have no decline arm — the error returned for one of those ends the request loop, so the *tool call* fails with that message rather than the server hearing an answer.
+`elicitation` reuses the same two-valued `ElicitationPolicy` as `ACPConfig.elicitation_policy`, so the word means one thing across AG2's protocol integrations. `sampling` is named for the protocol operation rather than "model" on purpose: this side **lends** your model, while [serving](/docs/user-guide/tools/serving_mcp)'s `client_model=` **borrows** the caller's — opposite directions that must not share a word.
 
-!!! note "What is *not* forwarded to your model"
-    The server's `max_tokens`, `temperature` and `stop_sequences` are ignored: AG2 fixes those on your config, and your configuration governs a call you are paying for. The completion is one call against the model client, not a turn of your agent — your tools, history and response schema stay out of it, so a borrowed model cannot reach back into the agent that lent it.
+!!! warning "MCP has deprecated sampling and roots"
+    SEP-2577 reached Final status on 2026-04-14 and deprecates sampling, roots and logging — not elicitation. The deprecation is annotation-only: each stays fully functional for a year past the release of every subsequent specification version. For `sampling`, the alternative SEP-2577 recommends is the server integrating an LLM provider API of its own. For `roots`, it recommends tool parameters, resource URIs, or the server's own configuration. Both fields stay here because a server that asks for one today needs an answer.
 
-With no human-input hook configured, a question surfaces the usual "human input was requested but not provided" failure rather than a silent decline: an absent channel is not a refusal, and reporting it as one would hand the server a decline you never made.
+### A capability is advertised only when you enabled it
 
-!!! note "Modern-era servers need `protocol_mode="auto"`"
-    A server on protocol revision 2026-07-28 returns its questions as the *result* of the call. Reaching that revision means probing for it: pass `protocol_mode="auto"` on `MCPServerConfig` / `MCPStdioServerConfig` (the default `"legacy"` performs the handshake only, which is byte-identical to previous behaviour).
+So a conforming server never asks for what you would refuse. There is nothing to keep in step by hand: the client derives what it declares from which answering callbacks are supplied, and not enabling one *is* how it goes unadvertised.
+
+### Refusal is asymmetric
+
+A server that asks anyway is refused, and the two refusals do not look alike:
+
+- **Elicitation has a `decline` action on the wire.** A question this agent will not answer is declined, and the server can degrade deliberately.
+- **Sampling and roots have no such arm.** The error returned for one of those ends the client session's request loop, so the **tool call** fails with that message rather than the server hearing an answer.
+
+### A question has to fit a one-line answer
+
+`context.input()` is one string in, one string out, so that is the only shape of question this side can answer. A form-mode elicitation with exactly one property is put to your human and answered on that property, carrying the text they typed verbatim — a server that declared the property as a number receives that text, not a number.
+
+Anything else is declined without your human ever seeing it: a URL-mode elicitation, because a text channel cannot confirm that an out-of-band browser flow happened, and a form with more than one property, because splitting one free-text answer across fields would be fabricating data.
+
+### What is *not* forwarded to your model
+
+The server's `max_tokens`, `temperature`, `stop_sequences`, `model_preferences` and `include_context` are all ignored: your configuration governs a call you are paying for, and a third party does not get to pick your model or redirect your spending. Only the messages and the system prompt it sent are used. The completion is one call against the model client, not a turn of your agent — your tools, history and response schema stay out of it, and any tool declarations the request carried are dropped with them, so a borrowed model cannot reach back into the agent that lent it.
+
+---
+
+## Operations
+
+### What a failing answer looks like
+
+- **A server exhausts `max_rounds`.** The tool call fails; the agent sees a tool error it can act on. Raise the bound only if a server legitimately needs that many rounds — an unbounded one could loop the agent.
+- **A server asks for something you did not enable.** Elicitation is declined on the wire; sampling and roots fail the tool call. See [Refusal is asymmetric](#refusal-is-asymmetric).
+- **A server asks a question and you configured no human-input hook.** The call surfaces the usual "human input was requested but not provided" failure rather than a silent decline.
+- **A server asks a question this side cannot shape an answer for.** A URL-mode elicitation, or a form with more than one property, is declined without your human seeing it. See [A question has to fit a one-line answer](#a-question-has-to-fit-a-one-line-answer).
+- **A server is only reachable on the modern era.** `"legacy"` performs the handshake and nothing else, so a server that announces itself through `server/discover` is never met there. Set `protocol_mode="auto"`.
+
+### Connections are per-operation
+
+A short-lived MCP session is opened for each operation — discovery, and each tool call — and closed after it. There is no persistent process or pool to manage from your code, and a stdio server's subprocess is launched lazily on the first one.
+
+That is also why the callbacks your `answering` policy implies are supplied per tool call rather than installed once on the toolkit: your human and your model are reachable only from the live context a call runs in. Discovery is opened without them, so nothing can be asked of you while the server's tools are being listed.
+
+### The `mcp` SDK is a hard dependency of this path
+
+`MCPToolkit` imports two private `mcp` modules at module scope, on the eager `ag2.tools` import path. A rename in a minor `mcp` release therefore breaks `import ag2.tools` for everyone with the `mcp` extra installed, not only users of `protocol_mode="auto"`. AG2 pins both with a test so an SDK upgrade fails in CI rather than at your import — but pin your `mcp` version if you deploy from a floating range.
+
+---
+
+## Constructor reference
+
+### `MCPToolkit(server, *, middleware=(), answering=None)`
+
+| parameter | what it is for |
+|---|---|
+| `server` | a URL string, an `MCPServerConfig`, or an `MCPStdioServerConfig` |
+| `middleware` | tool middleware applied to every call through this toolkit |
+| `answering` | an `MCPAnswerPolicy`; with none passed, nothing is advertised and nothing is answered |
+
+### `MCPServerConfig` (keyword-only)
+
+| field | default | what it is for |
+|---|---|---|
+| `server_url` | — | where the server listens, including the MCP endpoint path |
+| `authorization_token` | `None` | bearer token sent on every request |
+| `headers` | `None` | extra HTTP headers |
+| `connection_timeout` | `30.0` | seconds to wait on the server |
+| `proxy` | `None` | HTTP proxy to route through |
+| `verify` | `True` | verify the server's TLS certificate |
+| `protocol_mode` | `"legacy"` | `"auto"` probes for a modern-era peer and falls back |
+| `server_label` | `""` | name the toolkit reports itself under |
+| `description` | `None` | what this server is for |
+| `allowed_tools` | `None` | tool names to expose; all of them when unset |
+| `blocked_tools` | `None` | tool names to hide, applied after `allowed_tools` |
+
+### `MCPStdioServerConfig` (keyword-only)
+
+| field | default | what it is for |
+|---|---|---|
+| `command` | — | the executable to launch |
+| `args` | `[]` | arguments passed to it |
+| `env` | `None` | subprocess environment; inherits this process's when unset |
+| `cwd` | `None` | working directory |
+| `encoding` | `"utf-8"` | encoding of the stdio pipes |
+| `protocol_mode` | `"legacy"` | `"auto"` probes for a modern-era peer and falls back |
+| `server_label` / `description` / `allowed_tools` / `blocked_tools` | as above | as above |
+
+Every field of both configs except `connection_timeout`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
+
+### `MCPAnswerPolicy`
+
+`elicitation` (`"decline"`), `sampling` (`False`), `roots` (`()`), `max_rounds` (`10`) — see [What the MCP answer policy hands over](#what-the-mcp-answer-policy-hands-over).
+
+---
 
 ## Provider-side: `MCPServerTool`
 

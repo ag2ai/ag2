@@ -24,20 +24,14 @@ def build_ask_tool(
 ) -> MCPTool:
     """Build the single conversational MCP tool that fronts ``agent.ask()``.
 
-    The tool takes a required ``message`` and an optional ``context`` string —
-    mirroring :meth:`Agent.as_tool`'s ``objective`` / ``context`` shape. When
-    ``response_schema`` is an object schema, it is advertised as the tool's
-    ``outputSchema`` so MCP clients receive validated ``structuredContent``
-    (see :mod:`ag2.mcp.executor`).
+    The tool takes a required ``message`` and an optional ``context`` string. An
+    object ``response_schema`` is advertised as the tool's ``outputSchema``, so
+    clients receive validated ``structuredContent``.
 
     ``conversation_bounds`` — the registry's bound and idle expiry — adds the
-    optional ``conversation`` argument that continues a conversation, and is
-    worded into its description because the protocol requires a stateful
-    handle's lifetime to be documented there. Pass ``None`` when conversations
-    are off: advertising an argument that cannot work would invite a guaranteed
-    error, and suppressing it mirrors how ``outputSchema`` appears only when the
-    agent has a response schema. The variation is by server configuration, fixed
-    for the process — not by connection state, which the protocol forbids.
+    optional ``conversation`` argument that continues a conversation and words
+    its lifetime into the description, as the protocol requires. Pass ``None``
+    when conversations are off, so no argument that cannot work is advertised.
     """
     input_schema: dict[str, Any] = {
         "type": "object",
@@ -85,9 +79,8 @@ def _lifetime_sentence(bounds: ConversationBounds) -> str:
 def object_output_schema(response_schema: "ResponseProto[Any] | None") -> dict[str, Any] | None:
     """Return the JSON schema iff it is an object schema, else ``None``.
 
-    MCP ``outputSchema`` / ``structuredContent`` must be objects, so non-object
-    response schemas (scalars, unions) are not advertised — those replies still
-    flow back as plain text content.
+    MCP ``outputSchema`` must be an object, so scalar or union response schemas
+    are not advertised — those replies flow back as plain text content.
     """
     json_schema = response_schema.json_schema if response_schema is not None else None
     if isinstance(json_schema, dict) and json_schema.get("type") == "object":

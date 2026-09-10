@@ -3,17 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from pydantic import BaseModel
 
 from ag2 import Agent
 from ag2.mcp import MCPServer
 from ag2.mcp.testing import connect
 from ag2.testing import TestConfig
 
-
-class Weather(BaseModel):
-    city: str
-    temp_c: float
+from ._helpers import Weather
 
 
 @pytest.mark.asyncio
