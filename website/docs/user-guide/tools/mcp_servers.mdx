@@ -124,6 +124,52 @@ agent = Agent(
 )
 ```
 
+### Namespace the tool names
+
+When two servers expose the same tool name, set `tool_name_prefix` to keep them apart locally. The prefix is what the model sees; calls sent to the server keep the original name:
+
+```python linenums="1" hl_lines="10 16"
+from ag2 import Agent
+from ag2.tools import MCPServerConfig, MCPToolkit
+
+agent = Agent(
+    name="Mixed bot",
+    tools=[
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://github.example.com/mcp",
+                tool_name_prefix="github_",
+            )
+        ),
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://docs.example.com/mcp",
+                tool_name_prefix="docs_",
+            )
+        ),
+    ],
+)
+```
+
+Two remote `search` tools are then exposed locally as `github_search` and `docs_search`. `allowed_tools` and `blocked_tools` still match the original remote names.
+
+Like the other config fields, `tool_name_prefix` accepts a `Variable`, so the namespace can be resolved from the context at discovery time:
+
+```python linenums="1" hl_lines="7"
+from ag2 import Variable
+from ag2.tools import MCPServerConfig, MCPToolkit
+
+toolkit = MCPToolkit(
+    MCPServerConfig(
+        server_url="https://my-mcp-url.example.com",
+        tool_name_prefix=Variable("tenant_prefix"),
+    )
+)
+```
+
+!!! warning
+    Namespacing is opt-in. Two servers exposing the same tool name **without** distinct prefixes still collide: both proxies answer the same tool call, so the tool runs twice for one request.
+
 ### Declare what a server may ask you for
 
 A tool call can come back asking for input instead of returning a result. `answering=` is the one place you declare which of your own resources a server may use, and **everything in it is off by default**:
@@ -270,6 +316,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | `description` | `None` | what this server is for |
 | `allowed_tools` | `None` | tool names to expose; all of them when unset |
 | `blocked_tools` | `None` | tool names to hide, applied after `allowed_tools` |
+| `tool_name_prefix` | `""` | prefix put in front of the agent-visible tool names |
 
 ### `MCPStdioServerConfig` (keyword-only)
 
@@ -281,7 +328,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | `cwd` | `None` | working directory |
 | `encoding` | `"utf-8"` | encoding of the stdio pipes |
 | `protocol_mode` | `"legacy"` | `"auto"` probes for a modern-era peer and falls back |
-| `server_label` / `description` / `allowed_tools` / `blocked_tools` | as above | as above |
+| `server_label` / `description` / `allowed_tools` / `blocked_tools` / `tool_name_prefix` | as above | as above |
 
 Every field of both configs except `connection_timeout`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
 

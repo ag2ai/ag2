@@ -5,7 +5,7 @@ sidebarTitle: Built-in Tools
 
 # Built-in Provider Tools
 
-AG2 includes built-in tools that map to server-side capabilities offered by LLM providers. These tools are executed by the provider's API — not locally — and require no function implementation on your side.
+AG2 includes built-in tools that map to capabilities offered by LLM providers. Almost all of them are executed by the provider's API — not locally — and require no function implementation on your side. The one exception is marked in the table below.
 
 | Tool | Anthropic | OpenAI | Gemini | xAI | Z.AI |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -13,7 +13,8 @@ AG2 includes built-in tools that map to server-side capabilities offered by LLM 
 | `WebSearchTool` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `WebFetchTool` | ✓ | ✗ | ✓ | ✗ | ✗ |
 | `FileSearchTool` | ✗ | ✓ | ✓ | ✗ | ✗ |
-| `ShellTool` | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `ShellTool` | ✗ | ✓ | ✗ | ✗ | ✗ |
+| `AnthropicBashTool` | ✓ | ✗ | ✗ | ✗ | ✗ |
 | `SkillsTool` | ✓ | ✓ | ✗ | ✗ | ✗ |
 | `MCPServerTool` | ✓ | ✓ | ✗ | ✓ | ✗ |
 | `ImageGenerationTool` | ✗ | ✓ | ✗ | ✗ | ✗ |
@@ -21,6 +22,11 @@ AG2 includes built-in tools that map to server-side capabilities offered by LLM 
 | `XSearchTool` | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `RetrievalTool` | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `GoogleMapsTool` | ✗ | ✗ | ✓ | ✗ | ✗ |
+
+!!! note
+    `AnthropicBashTool` is the exception: Anthropic ships the tool definition
+    but does not run it, so AG2 executes the command on your machine and sends
+    the output back. See [Anthropic Bash](#anthropic-bash).
 
 ## Web Search
 
@@ -206,21 +212,7 @@ agent = Agent(
 
 ## Shell
 
-Gives the model the ability to run shell commands. The execution environment depends on the provider.
-
-```python linenums="1"
-from ag2 import Agent
-from ag2.config import AnthropicConfig
-from ag2.tools import ShellTool
-
-agent = Agent(
-    "devops",
-    config=AnthropicConfig(model="claude-sonnet-5"),
-    tools=[ShellTool()],
-)
-```
-
-OpenAI supports configuring the execution environment:
+Gives the model the ability to run shell commands inside a provider-hosted environment. Only OpenAI offers one; the environment carries the backend configuration.
 
 ```python linenums="1"
 from ag2 import Agent
@@ -258,6 +250,88 @@ agent = Agent(
 
 !!! warning
     `ShellTool` gives the model direct shell access. Use it only with trusted prompts and consider restricting the environment.
+
+!!! note "Not available on Anthropic"
+
+    Anthropic's own shell tool is client-executed — it defines the tool but runs
+    nothing, so a provider-hosted shell has no meaning there and `ShellTool`
+    raises `UnsupportedToolError`. Use [`AnthropicBashTool`](#anthropic-bash) for
+    Anthropic's tool, or [`SandboxShellTool`](/docs/user-guide/tools/local_shell)
+    for a provider-neutral shell.
+
+## Anthropic Bash
+
+`AnthropicBashTool` declares Anthropic's `bash_20250124` tool. Anthropic does not
+execute it: the model returns an ordinary `tool_use` block and waits for a
+`tool_result`, so **AG2 runs the command for you** and sends the output back.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import AnthropicBashTool
+
+agent = Agent(
+    "devops",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[AnthropicBashTool()],
+)
+
+reply = await agent.ask("How many Python files are in this directory?")
+print(await reply.content())
+```
+
+With no arguments, commands run in a local subprocess. Execution is backed by the
+same machinery as [`SandboxShellTool`](/docs/user-guide/tools/local_shell), so the
+first argument picks the backend and the keyword arguments restrict what the model
+may run:
+
+```python linenums="1"
+from ag2.extensions.docker import DockerEnvironment
+from ag2.tools import AnthropicBashTool
+
+bash = AnthropicBashTool(
+    DockerEnvironment(image="python:3.12-slim", network_mode="none"),
+    allowed=["ls", "cat", "python"],
+    ignore=["**/.env", "*.key"],
+)
+```
+
+| Parameter | Description |
+| :--- | :--- |
+| `environment` | Execution backend (`LocalEnvironment`, `DockerEnvironment`, `DaytonaEnvironment`, `TenkiEnvironment`, or a custom one). `None` means a local subprocess. |
+| `allowed` | Whitelist of command prefixes. |
+| `blocked` | Blacklist of command prefixes. Best-effort: it matches the head command only, so chaining bypasses it. |
+| `ignore` | Gitignore-style path patterns. A command referencing a matching path is refused. |
+| `readonly` | When `True` and `allowed` is unset, restricts to a built-in read-only command set (`cat`, `ls`, `grep`, …). |
+
+The semantics are identical to `SandboxShellTool`'s — see [Command Filtering](/docs/user-guide/tools/local_shell#command-filtering) for the details.
+
+### Which Anthropic tool runs shell commands
+
+Anthropic exposes bash twice, and the two are not interchangeable:
+
+| | Runs where | AG2 tool |
+| :--- | :--- | :--- |
+| `bash_20250124` | On your machine, in the environment you pass | `AnthropicBashTool` |
+| bash inside `code_execution_*` | In Anthropic's container | [`CodeExecutionTool`](#code-execution) |
+
+Pick `CodeExecutionTool` when a throwaway sandbox on Anthropic's side is enough;
+pick `AnthropicBashTool` when the commands must act on your own files.
+
+!!! note
+    Each command runs in a fresh sandbox, so there is no session to carry over.
+    When the model asks for a `restart`, AG2 answers that there was nothing to
+    restart rather than report a restart that never happened.
+
+!!! note
+    `AnthropicBashTool` is Anthropic-only; other providers reject the schema with
+    `UnsupportedToolError`. For a client-executed shell that works everywhere, use
+    [`SandboxShellTool`](/docs/user-guide/tools/local_shell).
+
+!!! warning
+    `AnthropicBashTool` executes model-authored commands on your machine. Use it
+    only with trusted prompts, and prefer a container environment together with an
+    `allowed` list.
 
 ## Provider Skills
 

@@ -62,6 +62,13 @@ class MCPServerConfig:
     blocked_tools: list[str] | Variable | None = None
     """Server tool names to hide, applied after ``allowed_tools``."""
 
+    tool_name_prefix: str | Variable = ""
+    """Prefix put in front of the agent-visible tool names, to keep two servers' generic names apart.
+
+    The server never sees it: ``allowed_tools``, ``blocked_tools`` and the outbound
+    call all use the server's own names.
+    """
+
 
 @dataclass(kw_only=True)
 class MCPStdioServerConfig:
@@ -107,3 +114,10 @@ class MCPStdioServerConfig:
 
     blocked_tools: list[str] | Variable | None = None
     """Server tool names to hide, applied after ``allowed_tools``."""
+
+    tool_name_prefix: str | Variable = ""
+    """Prefix put in front of the agent-visible tool names, to keep two servers' generic names apart.
+
+    The server never sees it: ``allowed_tools``, ``blocked_tools`` and the outbound
+    call all use the server's own names.
+    """

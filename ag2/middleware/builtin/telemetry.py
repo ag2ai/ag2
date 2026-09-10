@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
 import json
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, is_dataclass
@@ -30,6 +31,7 @@ from ag2.annotations import Context
 from ag2.events import (
     BaseEvent,
     BinaryInput,
+    BuiltinToolCallEvent,
     DataInput,
     FileIdInput,
     HumanInputRequest,
@@ -42,6 +44,7 @@ from ag2.events import (
     ToolErrorEvent,
     ToolResult,
     ToolResultEvent,
+    ToolResultsEvent,
     UrlInput,
     UsageEvent,
 )
@@ -125,6 +128,67 @@ def _serialize_tool_result(result: ToolResult, max_chars: int | None) -> tuple[s
         return rendered, False
     keep = max(max_chars - len(_TOOL_RESULT_TRUNCATION_MARKER), 0)
     return rendered[:keep] + _TOOL_RESULT_TRUNCATION_MARKER, True
+
+
+def _tool_result_message(event: ToolResultEvent, max_chars: int | None) -> dict[str, Any]:
+    """Render one tool result as an OpenAI-style ``tool`` message."""
+    rendered, _ = _serialize_tool_result(event.result, max_chars)
+    return {"role": "tool", "tool_call_id": event.parent_id, "content": rendered}
+
+
+def _tool_call_api(call: ToolCallEvent) -> dict[str, Any]:
+    """Serialise a tool call, keeping ``arguments`` as the provider sent it."""
+    # ``ToolCallEvent.to_api`` reparses the JSON; malformed arguments must not raise here.
+    return {"id": call.id, "type": "function", "function": {"arguments": call.arguments, "name": call.name}}
+
+
+def _response_message(response: ModelResponse) -> dict[str, Any]:
+    """Render a model reply as an OpenAI-style ``assistant`` message."""
+    message: dict[str, Any] = {"content": response.content, "role": "assistant"}
+    if response.tool_calls:
+        message["tool_calls"] = [_tool_call_api(c) for c in response.tool_calls.calls]
+    return message
+
+
+def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: int | None) -> list[dict[str, Any]]:
+    """Serialise the history sent to the model as OpenAI-style message dicts.
+
+    Binary user inputs are omitted; tool results honour ``max_tool_result_chars``.
+    """
+    # Local: a module-level import cycles via ``ag2.config`` mappers.
+    from ag2.compact import CompactionSummary
+
+    # Recorded as AG2 assembled it, repairing nothing: providers disagree on which
+    # half of an orphaned tool pair they drop, and dropping one hides the defect.
+    # History holds the loose result and its wrapper; emit at the wrapper only.
+    wrapped: set[str] = {
+        r.parent_id for event in events if isinstance(event, ToolResultsEvent) for r in event.results if r.parent_id
+    }
+    loose_seen: set[str] = set()
+
+    result: list[dict[str, Any]] = []
+    for event in events:
+        if isinstance(event, ModelRequest):
+            for inp in event.parts:
+                if isinstance(inp, TextInput):
+                    result.append(inp.to_api())
+        elif isinstance(event, ModelResponse):
+            result.append(_response_message(event))
+        elif isinstance(event, BuiltinToolCallEvent):
+            # Server-side tools are sent standalone, never via ``ModelResponse``.
+            result.append({"content": None, "role": "assistant", "tool_calls": [_tool_call_api(event)]})
+        elif isinstance(event, ToolResultsEvent):
+            for r in event.results:
+                result.append(_tool_result_message(r, max_tool_result_chars))
+        elif isinstance(event, ToolResultEvent):
+            # Fallback when the wrapper was never persisted; an id-less result cannot be paired.
+            if event.parent_id and event.parent_id not in wrapped and event.parent_id not in loose_seen:
+                loose_seen.add(event.parent_id)
+                result.append(_tool_result_message(event, max_tool_result_chars))
+        elif isinstance(event, CompactionSummary):
+            # The synthetic user turn the provider mappers send.
+            result.append({"role": "user", "content": f"[Summary of earlier conversation]\n{event.summary}"})
+    return result
 
 
 # At most one usage watcher per stream, process-wide. Keyed by the stream rather
@@ -410,14 +474,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
             if self._capture_content:
-                input_messages = json.dumps([
-                    inp.to_api()
-                    for event in events
-                    if isinstance(event, ModelRequest)
-                    for inp in event.parts
-                    if isinstance(inp, TextInput)
-                ])
-                span.set_attribute("gen_ai.input.messages", input_messages)
+                # Recording a call must never be able to fail it.
+                with contextlib.suppress(Exception):
+                    input_messages = _build_input_messages(events, self._max_tool_result_chars)
+                    span.set_attribute("gen_ai.input.messages", json.dumps(input_messages, default=_json_default))
 
             try:
                 response = await call_next(events, context)
@@ -452,8 +512,13 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if usage.thinking_tokens:
                 span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
 
-            if self._capture_content and response.message:
-                span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
+            # ``message`` is None on a tool-call-only reply, which still has the calls.
+            if self._capture_content and (response.message or response.tool_calls):
+                # Recording a reply must never be able to discard it.
+                with contextlib.suppress(Exception):
+                    span.set_attribute(
+                        "gen_ai.output.messages", json.dumps([_response_message(response)], default=_json_default)
+                    )
 
             return response
 

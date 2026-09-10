@@ -23,11 +23,12 @@ from mcp.types import (
 )
 from mcp.types import Tool as MCPTool
 
-from ag2 import Agent, Context
+from ag2 import Agent, Context, Variable
 from ag2.events import BinaryInput, BinaryType, TextInput, ToolCallEvent, ToolResultEvent, UrlInput
 from ag2.testing import TestConfig
 from ag2.tools import MCPStdioServerConfig, MCPToolkit
 from ag2.tools.toolkits.mcp_server import toolkit as _toolkit_module
+from ag2.tools.types import FunctionToolSchema
 
 MCPSessionPatch = Callable[[list[MCPTool], dict[str, CallToolResult] | None], "_FakeMCPSession"]
 
@@ -158,6 +159,117 @@ async def test_mcp_tool_result_is_returned_to_agent(
 
     assert result.body == "done"
     assert session.calls == [("echo", {})]
+
+
+@pytest.mark.asyncio
+async def test_tool_name_prefix_namespaces_local_name_but_calls_remote_name(
+    patch_mcp_session: MCPSessionPatch,
+    context: Context,
+) -> None:
+    session = patch_mcp_session(
+        [MCPTool(name="search", description="", inputSchema={"type": "object"})],
+        {
+            "search": CallToolResult(content=[TextContent(type="text", text="found")]),
+        },
+    )
+    toolkit = MCPToolkit(MCPStdioServerConfig(command="x", tool_name_prefix="github_"))
+    [schema] = list(await toolkit.schemas(context))
+    agent = Agent(
+        name="test",
+        tools=[toolkit],
+        config=TestConfig(
+            ToolCallEvent(name="github_search", arguments='{"query": "ag2"}'),
+            "done",
+        ),
+    )
+
+    result = await agent.ask("search")
+
+    assert result.body == "done"
+    assert isinstance(schema, FunctionToolSchema)
+    assert schema.function.name == "github_search"
+    assert session.calls == [("search", {"query": "ag2"})]
+
+
+@pytest.mark.asyncio
+async def test_discovery_filters_match_remote_names_not_prefixed_ones(
+    patch_mcp_session: MCPSessionPatch,
+    context: Context,
+) -> None:
+    """``allowed_tools`` / ``blocked_tools`` are written in the server's own names."""
+    patch_mcp_session([
+        MCPTool(name="keep", description="", inputSchema={"type": "object"}),
+        MCPTool(name="drop_blocked", description="", inputSchema={"type": "object"}),
+        MCPTool(name="drop_unlisted", description="", inputSchema={"type": "object"}),
+    ])
+
+    toolkit = MCPToolkit(
+        MCPStdioServerConfig(
+            command="x",
+            allowed_tools=["keep", "drop_blocked"],
+            blocked_tools=["drop_blocked"],
+            tool_name_prefix="github_",
+        )
+    )
+    schemas = list(await toolkit.schemas(context))
+
+    assert [s.function.name for s in schemas] == ["github_keep"]
+
+
+@pytest.mark.asyncio
+async def test_prefixes_keep_two_servers_exposing_the_same_tool_name_apart(
+    patch_mcp_session: MCPSessionPatch,
+    context: Context,
+) -> None:
+    """Without prefixes both proxies answer one call; with them, only the addressed one does."""
+    session = patch_mcp_session([MCPTool(name="search", description="", inputSchema={"type": "object"})])
+    github = MCPToolkit(MCPStdioServerConfig(command="github-mcp", tool_name_prefix="github_"))
+    docs = MCPToolkit(MCPStdioServerConfig(command="docs-mcp", tool_name_prefix="docs_"))
+
+    schemas = list(await github.schemas(context)) + list(await docs.schemas(context))
+    agent = Agent(
+        name="test",
+        tools=[github, docs],
+        config=TestConfig(
+            ToolCallEvent(name="docs_search", arguments="{}"),
+            "done",
+        ),
+    )
+
+    result = await agent.ask("search")
+
+    assert result.body == "done"
+    assert [s.function.name for s in schemas] == ["github_search", "docs_search"]
+    assert session.calls == [("search", {})]
+
+
+@pytest.mark.asyncio
+class TestToolNamePrefixVariable:
+    async def test_resolved(
+        self,
+        patch_mcp_session: MCPSessionPatch,
+        make_context: Callable[..., Context],
+    ) -> None:
+        patch_mcp_session([MCPTool(name="search", description="", inputSchema={"type": "object"})])
+        ctx = make_context(tenant="acme_")
+
+        toolkit = MCPToolkit(MCPStdioServerConfig(command="x", tool_name_prefix=Variable("tenant")))
+        [schema] = list(await toolkit.schemas(ctx))
+
+        assert isinstance(schema, FunctionToolSchema)
+        assert schema.function.name == "acme_search"
+
+    async def test_missing_raises(
+        self,
+        patch_mcp_session: MCPSessionPatch,
+        context: Context,
+    ) -> None:
+        patch_mcp_session([MCPTool(name="search", description="", inputSchema={"type": "object"})])
+
+        toolkit = MCPToolkit(MCPStdioServerConfig(command="x", tool_name_prefix=Variable("tenant")))
+
+        with pytest.raises(KeyError, match="tenant"):
+            await toolkit.schemas(context)
 
 
 @pytest.mark.asyncio
